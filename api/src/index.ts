@@ -1026,7 +1026,256 @@ async function router(req: Request, env: Env): Promise<Response> {
       },
     });
   }
+  
+  if (path === "/v1/integrations/wowboost/debug-export" && req.method === "POST") {
+    try {
+      const body = await readJsonBody(req);
+      const from = String(body.from ?? "").trim();
+      const to = String(body.to ?? "").trim();
 
+      if (!parseYmd(from) || !parseYmd(to)) {
+        return json({ ok: false, error: "bad_request", message: "from/to must be YYYY-MM-DD" }, 400);
+      }
+
+      const supabase = getSupabase(env);
+
+      const { data: creds, error } = await supabase
+        .from("integrations_credentials")
+        .select("*")
+        .in("platform", [wowSuiteKey("wowboost"), "wowboost", "wowsuite"])
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw new Error(`WOWSuite(wowboost) creds read failed: ${error.message}`);
+      if (!creds) throw new Error("WowBoost not connected. Save credentials first.");
+
+      const authBase = String(
+        (creds as any).base_url || env.DEFAULT_WOWSUITE_AUTH_BASE || DEFAULT_WOWSUITE_AUTH_BASE
+      ).replace(/\/+$/, "");
+
+      const exportBase = String(env.DEFAULT_WOWSUITE_EXPORT_BASE || DEFAULT_WOWSUITE_EXPORT_BASE).replace(/\/+$/, "");
+      const username = String((creds as any).username ?? "").trim();
+      const password = await decryptSecretFromCredRow(env, creds as any);
+
+      const bearer = await wowSuiteGetBearerToken({ authBase, username, password });
+
+      const exportUrl = new URL(`${exportBase}/order/export/1/10`);
+      exportUrl.searchParams.set("StartDate", from);
+      exportUrl.searchParams.set("EndDate", to);
+
+      const exportRes = await fetch(exportUrl.toString(), {
+        method: "GET",
+        headers: {
+          Authorization: `bearer ${bearer}`,
+          Accept: "application/json, text/plain, */*",
+        },
+      });
+
+      const exportText = await readTextSafe(exportRes);
+      const exportJson = safeJsonParse(exportText);
+      const link = String(exportJson?.link ?? "").trim();
+
+      let csvStatus: number | null = null;
+      let csvSnippet: string | null = null;
+      let csvHeaders: string[] = [];
+      let csvRowCount: number | null = null;
+
+      if (link) {
+        const csvRes = await fetch(link, { method: "GET" });
+        csvStatus = csvRes.status;
+        const csvText = await readTextSafe(csvRes);
+        csvSnippet = csvText.slice(0, 500);
+
+        if (csvRes.ok) {
+          const parsed = parseCsv(csvText);
+          csvHeaders = parsed.headers;
+          csvRowCount = parsed.rows.length;
+        }
+      }
+
+      return json({
+        ok: true,
+        platform: "wowsuite:wowboost",
+        from,
+        to,
+        authBase,
+        exportBase,
+        exportUrl: exportUrl.toString(),
+        exportStatus: exportRes.status,
+        exportOk: exportRes.ok,
+        exportJson,
+        exportSnippet: exportText.slice(0, 500),
+        csvLinkFound: Boolean(link),
+        csvStatus,
+        csvHeaders,
+        csvRowCount,
+        csvSnippet,
+      });
+    } catch (e: any) {
+      return json({
+        ok: false,
+        error: "wowboost_debug_failed",
+        message: e?.message || String(e),
+      }, 500);
+    }
+  }
+  
+    if (path === "/v1/integrations/wowboost/import-orders-now" && req.method === "POST") {
+    try {
+      const body = await readJsonBody(req);
+      const from = String(body.from ?? "").trim();
+      const to = String(body.to ?? "").trim();
+
+      if (!parseYmd(from) || !parseYmd(to)) {
+        return json({ ok: false, error: "bad_request", message: "from/to must be YYYY-MM-DD" }, 400);
+      }
+
+      const res = await runWowSuiteWowBoostImport(env, {
+        from,
+        to,
+        pageSize: Number(body.pageSize ?? 10),
+        debug: Boolean(body.debug),
+      });
+
+      return json({
+        ok: true,
+        platform: "wowsuite:wowboost",
+        from,
+        to,
+        ...res,
+      });
+    } catch (e: any) {
+      return json(
+        {
+          ok: false,
+          error: "wowboost_import_now_failed",
+          message: e?.message || String(e),
+        },
+        500
+      );
+    }
+  }
+  
+    if (path === "/v1/integrations/wowboost/import-one-page" && req.method === "POST") {
+    try {
+      const body = await readJsonBody(req);
+      const from = String(body.from ?? "").trim();
+      const to = String(body.to ?? "").trim();
+      const page = Math.max(1, Number(body.page ?? 1));
+      const pageSize = Math.max(1, Math.min(1000, Number(body.pageSize ?? 1000)));
+
+      if (!parseYmd(from) || !parseYmd(to)) {
+        return json({ ok: false, error: "bad_request", message: "from/to must be YYYY-MM-DD" }, 400);
+      }
+
+      const supabase = getSupabase(env);
+
+      const { data: creds, error } = await supabase
+        .from("integrations_credentials")
+        .select("*")
+        .in("platform", [wowSuiteKey("wowboost"), "wowboost", "wowsuite"])
+        .order("updated_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (error) throw new Error(error.message);
+      if (!creds) throw new Error("WowBoost not connected.");
+
+      const authBase = String((creds as any).base_url || env.DEFAULT_WOWSUITE_AUTH_BASE || DEFAULT_WOWSUITE_AUTH_BASE).replace(/\/+$/, "");
+      const exportBase = String(env.DEFAULT_WOWSUITE_EXPORT_BASE || DEFAULT_WOWSUITE_EXPORT_BASE).replace(/\/+$/, "");
+      const username = String((creds as any).username ?? "").trim();
+      const password = await decryptSecretFromCredRow(env, creds as any);
+
+      const bearer = await wowSuiteGetBearerToken({ authBase, username, password });
+
+      const exp = await wowBoostExportPage({
+        exportBase,
+        bearer,
+        page,
+        pageSize,
+        fromYmd: from,
+        toYmd: to,
+      });
+
+      const csvRes = await fetch(exp.link);
+      const csvText = await readTextSafe(csvRes);
+
+      if (!csvRes.ok) {
+        throw new Error(`CSV download failed ${csvRes.status}: ${csvText.slice(0, 200)}`);
+      }
+
+      const parsed = parseCsv(csvText);
+
+      const upserts = parsed.rows
+        .map((r) => {
+          const orderId =
+            pickField(r, ["Order ID", "OrderId", "OrderID", "order_id", "Id", "ID"]) ||
+            pickField(r, ["Order Number", "OrderNumber", "orderNumber"]);
+
+          if (!orderId) return null;
+
+          const status = wowSuiteNormalizeStatus(
+            pickField(r, ["Order Status Name", "OrderStatus", "orderStatus", "Status", "status"]) ||
+              pickField(r, ["Receipt Status Name", "PaymentStatus", "paymentStatus"])
+          );
+
+          let gross = parseMoneyMaybe(
+            pickField(r, ["Amount USD", "Amount", "Order Price USD", "Order Price", "Total", "OrderTotal"])
+          );
+
+          if (gross == null) gross = 0;
+          if ((status === "REFUNDED" || status === "CHARGEBACK" || status === "CANCELLED") && gross > 0) {
+            gross = -Math.abs(gross);
+          }
+
+          const isoTs =
+            parseDateToIsoMaybe(
+              pickField(r, ["Order Create Date", "Updated Date", "Create Date (Receipts)", "OrderDate", "Date"])
+            ) || `${from}T00:00:00.000Z`;
+
+          return {
+            platform: wowSuiteKey("wowboost"),
+            platform_order_id: `${wowSuiteKey("wowboost")}:${orderId}`,
+            order_ts: isoTs,
+            status,
+            gross_amount: gross,
+            currency: pickField(r, ["Currency Code", "Currency", "currencyCode"]) || "USD",
+          };
+        })
+        .filter(Boolean);
+
+      const deduped = dedupePlatformOrders(upserts);
+
+      if (deduped.length) {
+        const { error: upErr } = await supabase
+          .from("platform_orders")
+          .upsert(deduped as any[], { onConflict: "platform_order_id" });
+
+        if (upErr) throw new Error(upErr.message);
+      }
+
+      return json({
+        ok: true,
+        platform: "wowsuite:wowboost",
+        from,
+        to,
+        page,
+        pageSize,
+        fetched: parsed.rows.length,
+        upserted: deduped.length,
+        hasMore: exp.hasMore,
+        nextPage: exp.hasMore ? page + 1 : null,
+      });
+    } catch (e: any) {
+      return json({
+        ok: false,
+        error: "wowboost_import_one_page_failed",
+        message: e?.message || String(e),
+      }, 500);
+    }
+  }
+  
   return json({ ok: false, error: "not_found" }, 404);
 }
 
