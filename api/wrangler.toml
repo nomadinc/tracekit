@@ -1,0 +1,15 @@
+name = "tracekit-api"
+main = "src/index.ts"
+compatibility_date = "2024-06-20"
+
+[vars]
+  SUPABASE_URL = "https://uoeosoiegatlqtzemsfv.supabase.co"
+  SUPABASE_SERVICE_ROLE_KEY = ""
+  TRACEKIT_ROOT_DOMAIN = "buyecowatt.com"
+  TRACEKIT_AUTO_LINK_OUTBOUND = "true"
+  KONNEKTIVE_INGEST_TOKEN = "XKNQ7WbDxoNmgmWkSffc8jgO2cFtGWdaDsLwlnBmuWTuG"
+  EVERFLOW_INGEST_TOKEN = "h64Iz35DCmlH6J7oilasqPAFYwBIeRtQFr0ITAEOW5OfL"
+  INTEGRATIONS_ENC_KEY= ""
+  TK_SECRET_KEY = "Q8NNzCbOBVu1ZwTtOEtiC9lJAemW4vGH"
+  [triggers]
+crons = ["0 * * * *"] # every hour
