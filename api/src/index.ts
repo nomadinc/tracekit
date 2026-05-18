@@ -863,6 +863,104 @@ async function router(req: Request, env: Env): Promise<Response> {
       updated_at: creds.updated_at ?? null,
     });
   }
+  
+  async function runWowBoostImportPage(env: Env, args: { from: string; to: string; page: number; pageSize?: number }) {
+  const supabase = getSupabase(env);
+  const pageSize = Math.max(1, Math.min(1000, Number(args.pageSize ?? 1000)));
+
+  const { data: creds, error } = await supabase
+    .from("integrations_credentials")
+    .select("*")
+    .in("platform", [wowSuiteKey("wowboost"), "wowboost", "wowsuite"])
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!creds) throw new Error("WowBoost not connected.");
+
+  const authBase = String((creds as any).base_url || env.DEFAULT_WOWSUITE_AUTH_BASE || DEFAULT_WOWSUITE_AUTH_BASE).replace(/\/+$/, "");
+  const exportBase = String(env.DEFAULT_WOWSUITE_EXPORT_BASE || DEFAULT_WOWSUITE_EXPORT_BASE).replace(/\/+$/, "");
+  const username = String((creds as any).username ?? "").trim();
+  const password = await decryptSecretFromCredRow(env, creds as any);
+
+  const bearer = await wowSuiteGetBearerToken({ authBase, username, password });
+
+  const exp = await wowBoostExportPage({
+    exportBase,
+    bearer,
+    page: args.page,
+    pageSize,
+    fromYmd: args.from,
+    toYmd: args.to,
+  });
+
+  const csvRes = await fetch(exp.link);
+  const csvText = await readTextSafe(csvRes);
+
+  if (!csvRes.ok) {
+    throw new Error(`CSV download failed ${csvRes.status}: ${csvText.slice(0, 200)}`);
+  }
+
+  const parsed = parseCsv(csvText);
+
+  const upserts = parsed.rows
+    .map((r) => {
+      const orderId =
+        pickField(r, ["Order ID", "OrderId", "OrderID", "order_id", "Id", "ID"]) ||
+        pickField(r, ["Order Number", "OrderNumber", "orderNumber"]);
+
+      if (!orderId) return null;
+
+      const status = wowSuiteNormalizeStatus(
+        pickField(r, ["Order Status Name", "OrderStatus", "orderStatus", "Status", "status"]) ||
+          pickField(r, ["Receipt Status Name", "PaymentStatus", "paymentStatus"])
+      );
+
+      let gross = parseMoneyMaybe(
+        pickField(r, ["Amount USD", "Amount", "Order Price USD", "Order Price", "Total", "OrderTotal"])
+      );
+
+      if (gross == null) gross = 0;
+      if ((status === "REFUNDED" || status === "CHARGEBACK" || status === "CANCELLED") && gross > 0) {
+        gross = -Math.abs(gross);
+      }
+
+      const isoTs =
+        parseDateToIsoMaybe(
+          pickField(r, ["Order Create Date", "Updated Date", "Create Date (Receipts)", "OrderDate", "Date"])
+        ) || `${args.from}T00:00:00.000Z`;
+
+      return {
+        platform: wowSuiteKey("wowboost"),
+        platform_order_id: `${wowSuiteKey("wowboost")}:${orderId}`,
+        order_ts: isoTs,
+        status,
+        gross_amount: gross,
+        currency: pickField(r, ["Currency Code", "Currency", "currencyCode"]) || "USD",
+      };
+    })
+    .filter(Boolean);
+
+  const deduped = dedupePlatformOrders(upserts);
+
+  if (deduped.length) {
+    const { error: upErr } = await supabase
+      .from("platform_orders")
+      .upsert(deduped as any[], { onConflict: "platform_order_id" });
+
+    if (upErr) throw new Error(upErr.message);
+  }
+
+  return {
+    fetched: parsed.rows.length,
+    upserted: deduped.length,
+    page: args.page,
+    pageSize,
+    hasMore: exp.hasMore,
+    nextPage: exp.hasMore ? args.page + 1 : null,
+  };
+}
 
   if (path === "/v1/integrations/checkoutchamp/settings" && req.method === "GET") {
     const supabase = getSupabase(env);
@@ -1273,6 +1371,83 @@ async function router(req: Request, env: Env): Promise<Response> {
         error: "wowboost_import_one_page_failed",
         message: e?.message || String(e),
       }, 500);
+    }
+  }
+  
+    if (path === "/v1/integrations/wowboost/import-next-page" && req.method === "POST") {
+    try {
+      const body = await readJsonBody(req);
+      const jobId = String(body.job_id ?? body.jobId ?? "").trim();
+
+      if (!jobId) {
+        return json({ ok: false, error: "bad_request", message: "job_id is required" }, 400);
+      }
+
+      const job = await getImportJob(env, jobId);
+      if (!job) {
+        return json({ ok: false, error: "not_found", message: "Import job not found" }, 404);
+      }
+
+      if (job.status === "completed" || job.status === "failed") {
+        return json({ ok: true, job, done: job.status === "completed" });
+      }
+
+      const page = Math.max(1, Number(job.pages ?? 0) + 1);
+      const pageSize = Math.max(1, Math.min(1000, Number(body.pageSize ?? 1000)));
+
+      await updateImportJob(env, jobId, {
+        status: "running",
+        started_at: job.started_at || new Date().toISOString(),
+        error: null,
+      });
+
+      const result = await runWowBoostImportPage(env, {
+        from: job.from_date,
+        to: job.to_date,
+        page,
+        pageSize,
+      });
+
+      const nextFetched = Number(job.fetched ?? 0) + Number(result.fetched ?? 0);
+      const nextUpserted = Number(job.upserted ?? 0) + Number(result.upserted ?? 0);
+
+      const patch: any = {
+        fetched: nextFetched,
+        upserted: nextUpserted,
+        pages: page,
+        error: null,
+      };
+
+      if (!result.hasMore) {
+        patch.status = "completed";
+        patch.completed_at = new Date().toISOString();
+      } else {
+        patch.status = "running";
+      }
+
+      await updateImportJob(env, jobId, patch);
+
+      const updated = await getImportJob(env, jobId);
+
+      return json({
+        ok: true,
+        job: updated,
+        page: result.page,
+        fetched: result.fetched,
+        upserted: result.upserted,
+        hasMore: result.hasMore,
+        nextPage: result.nextPage,
+        done: !result.hasMore,
+      });
+    } catch (e: any) {
+      return json(
+        {
+          ok: false,
+          error: "wowboost_import_next_page_failed",
+          message: e?.message || String(e),
+        },
+        500
+      );
     }
   }
   
