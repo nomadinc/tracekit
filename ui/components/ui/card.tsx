@@ -1,0 +1,1 @@
+export function Card({ title, children, right }: any) { return (<section className="rounded-lg border bg-white dark:bg-ink/60 p-4"><div className="flex items-center justify-between mb-2"><h3 className="font-semibold">{title}</h3>{right}</div>{children}</section>); }
