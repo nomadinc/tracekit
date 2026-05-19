@@ -202,6 +202,72 @@ async function wowSuiteGetBearerToken(args: { authBase: string; username: string
   return token;
 }
 
+async function runWowPayImportPage(env: Env, args: { from: string; to: string; page: number; pageSize?: number }) {
+  const supabase = getSupabase(env);
+  const pageSize = Math.max(1, Math.min(1000, Number(args.pageSize ?? 1000)));
+
+  const creds = await getLatestCredential(env, "wowpay");
+  if (!creds) throw new Error("WowPay not connected.");
+
+  const authBase = String((creds as any).base_url || env.DEFAULT_WOWSUITE_AUTH_BASE || DEFAULT_WOWSUITE_AUTH_BASE).replace(/\/+$/, "");
+  const username = String((creds as any).username ?? "").trim();
+  const password = await decryptSecretFromCredRow(env, creds as any);
+  const bearer = await wowSuiteGetBearerToken({ authBase, username, password });
+
+  const url = new URL(`${authBase}/order/${args.page}/${pageSize}`);
+  url.searchParams.set("StartDate", `${args.from} 00:00:00`);
+  url.searchParams.set("EndDate", `${args.to} 23:59:59`);
+
+  const res = await fetch(url.toString(), {
+    headers: { Authorization: `bearer ${bearer}`, Accept: "application/json" },
+  });
+
+  const text = await readTextSafe(res);
+  if (!res.ok) throw new Error(`WowPay order query failed ${res.status}: ${text.slice(0, 300)}`);
+
+  const js = safeJsonParse(text);
+  if (!js) throw new Error(`WowPay returned invalid JSON: ${text.slice(0, 300)}`);
+
+  const orders = Array.isArray(js.customerOrders) ? js.customerOrders : Array.isArray(js.orders) ? js.orders : [];
+
+  const upserts = orders.map((o: any) => {
+    const orderId = String(o.orderId ?? o.orderNumber ?? "").trim();
+    if (!orderId) return null;
+
+    const receipts = Array.isArray(o.receipts) ? o.receipts : [];
+    const receipt = receipts[0] || {};
+    const status = wowSuiteNormalizeStatus(receipt.paymentStatus || o.orderStatus);
+    let gross = parseMoneyMaybe(receipt.amountUSD ?? receipt.amount ?? o.productPrice);
+    if (gross == null) gross = 0;
+    if ((status === "REFUNDED" || status === "CHARGEBACK" || status === "CANCELLED") && gross > 0) gross = -Math.abs(gross);
+
+    return {
+      platform: wowSuiteKey("wowpay"),
+      platform_order_id: `${wowSuiteKey("wowpay")}:${orderId}`,
+      order_ts: parseDateToIsoMaybe(receipt.createDate || o.orderDate || o.lastUpdateDate) || `${args.from}T00:00:00.000Z`,
+      status,
+      gross_amount: gross,
+      currency: receipt.currencyCode || "USD",
+    };
+  }).filter(Boolean);
+
+  const deduped = dedupePlatformOrders(upserts);
+
+  if (deduped.length) {
+    const { error } = await supabase.from("platform_orders").upsert(deduped as any[], { onConflict: "platform_order_id" });
+    if (error) throw new Error(error.message);
+  }
+
+  return {
+    fetched: orders.length,
+    upserted: deduped.length,
+    page: args.page,
+    pageSize,
+    hasMore: Boolean(js?.paging?.nextPage) || orders.length >= pageSize,
+    nextPage: (Boolean(js?.paging?.nextPage) || orders.length >= pageSize) ? args.page + 1 : null,
+  };
+}
+
 function parseCsv(text: string): { headers: string[]; rows: Record<string, string>[] } {
   const outRows: string[][] = [];
   let row: string[] = [];
@@ -1085,6 +1151,21 @@ async function router(req: Request, env: Env): Promise<Response> {
       updated_at: creds.updated_at ?? null,
     });
   }
+  
+  if (path === "/v1/integrations/wowpay/import-one-page" && req.method === "POST") {
+	  const body = await readJsonBody(req);
+	  const from = String(body.from ?? "").trim();
+	  const to = String(body.to ?? "").trim();
+	  const page = Math.max(1, Number(body.page ?? 1));
+	  const pageSize = Math.max(1, Math.min(1000, Number(body.pageSize ?? 1000)));
+	
+	  if (!parseYmd(from) || !parseYmd(to)) {
+	    return json({ ok: false, error: "bad_request", message: "from/to must be YYYY-MM-DD" }, 400);
+	  }
+	
+	  const result = await runWowPayImportPage(env, { from, to, page, pageSize });
+	  return json({ ok: true, platform: wowSuiteKey("wowpay"), from, to, ...result });
+	}
 
   if (path === "/v1/integrations/wowsuite/status" && req.method === "GET") {
     const supabase = getSupabase(env);
