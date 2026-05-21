@@ -230,28 +230,48 @@ async function runWowPayImportPage(env: Env, args: { from: string; to: string; p
 
   const orders = Array.isArray(js.customerOrders) ? js.customerOrders : Array.isArray(js.orders) ? js.orders : [];
 
-  const upserts = orders.map((o: any) => {
-    const orderId = String(o.orderId ?? o.orderNumber ?? "").trim();
-    if (!orderId) return null;
+  const upserts = await Promise.all(
+    orders.map(async (o: any) => {
+      const orderId = String(o.orderId ?? o.orderNumber ?? "").trim();
+      if (!orderId) return null;
 
-    const receipts = Array.isArray(o.receipts) ? o.receipts : [];
-    const receipt = receipts[0] || {};
-    const status = wowSuiteNormalizeStatus(receipt.paymentStatus || o.orderStatus);
-    let gross = parseMoneyMaybe(receipt.amountUSD ?? receipt.amount ?? o.productPrice);
-    if (gross == null) gross = 0;
-    if ((status === "REFUNDED" || status === "CHARGEBACK" || status === "CANCELLED") && gross > 0) gross = -Math.abs(gross);
+      const receipts = Array.isArray(o.receipts) ? o.receipts : [];
+      const receipt = receipts[0] || {};
+      const status = wowSuiteNormalizeStatus(receipt.paymentStatus || o.orderStatus);
 
-    return {
-      platform: wowSuiteKey("wowpay"),
-      platform_order_id: `${wowSuiteKey("wowpay")}:${orderId}`,
-      order_ts: parseDateToIsoMaybe(receipt.createDate || o.orderDate || o.lastUpdateDate) || `${args.from}T00:00:00.000Z`,
-      status,
-      gross_amount: gross,
-      currency: receipt.currencyCode || "USD",
-    };
-  }).filter(Boolean);
+      let gross = parseMoneyMaybe(receipt.amountUSD ?? receipt.amount ?? o.productPrice);
+      if (gross == null) gross = 0;
+      if ((status === "REFUNDED" || status === "CHARGEBACK" || status === "CANCELLED") && gross > 0) {
+        gross = -Math.abs(gross);
+      }
 
-  const deduped = dedupePlatformOrders(upserts);
+      const emailFields = await emailIdentityFields(
+        o.email || o.customerEmail || o.customer?.email || receipt.email
+      );
+
+      return {
+        platform: wowSuiteKey("wowpay"),
+        platform_order_id: `${wowSuiteKey("wowpay")}:${orderId}`,
+        order_ts: parseDateToIsoMaybe(receipt.createDate || o.orderDate || o.lastUpdateDate) || `${args.from}T00:00:00.000Z`,
+        status,
+        gross_amount: gross,
+        currency: receipt.currencyCode || o.currencyCode || "USD",
+
+        ...emailFields,
+        transaction_id: receipt.transactionId || receipt.transactionID || o.transactionId || null,
+        affiliate_id: o.affiliateId || o.affiliateID || o.affiliate_id || null,
+        source_id: o.sourceId || o.sourceID || o.source_id || null,
+        sub1: o.s1 || o.S1 || o.sub1 || null,
+        sub2: o.s2 || o.S2 || o.sub2 || null,
+        sub3: o.s3 || o.S3 || o.sub3 || null,
+        sub4: o.s4 || o.S4 || o.sub4 || null,
+        sub5: o.s5 || o.S5 || o.sub5 || null,
+        raw_json: o,
+      };
+    })
+  );
+
+  const deduped = dedupePlatformOrders(upserts.filter(Boolean));
 
   if (deduped.length) {
     const { error } = await supabase.from("platform_orders").upsert(deduped as any[], { onConflict: "platform_order_id" });
@@ -366,6 +386,31 @@ function normalizeOrderStatus(raw: any) {
   if (s.includes("PENDING") || s.includes("PROCESS") || s.includes("HOLD") || s.includes("REVIEW")) return "PENDING";
   if (s.includes("PAID") || s.includes("COMPLETE") || s.includes("SHIP") || s.includes("SUCCESS") || s.includes("NEW")) return "COMPLETED";
   return s;
+}
+
+function normalizeEmail(v: any) {
+  const email = String(v ?? "").trim().toLowerCase();
+  return email && email.includes("@") ? email : "";
+}
+
+async function sha256Hex(v: string) {
+  if (!v) return "";
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(v));
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function emailIdentityFields(emailRaw: any) {
+  const email = String(emailRaw ?? "").trim();
+  const emailNorm = normalizeEmail(email);
+  const emailHash = emailNorm ? await sha256Hex(emailNorm) : "";
+
+  return {
+    customer_email: email || null,
+    customer_email_normalized: emailNorm || null,
+    customer_email_hash: emailHash || null,
+  };
 }
 
 const wowSuiteNormalizeStatus = normalizeOrderStatus;
@@ -571,7 +616,7 @@ async function queryCheckoutChampOrders(args: {
   return js;
 }
 
-function normalizeCheckoutChampOrder(order: any) {
+async function normalizeCheckoutChampOrder(order: any) {
   const id = pickField(order, ["orderId", "order_id", "orderID", "id", "orderNumber", "order_number"]);
   if (!id) return null;
 
@@ -584,7 +629,13 @@ function normalizeCheckoutChampOrder(order: any) {
 
   let gross = parseMoneyMaybe(pickField(order, ["totalAmount", "orderTotal", "total", "amount", "price", "gross", "revenue"]));
   if (gross == null) gross = 0;
-  if ((status === "REFUNDED" || status === "CHARGEBACK" || status === "CANCELLED") && gross > 0) gross = -Math.abs(gross);
+  if ((status === "REFUNDED" || status === "CHARGEBACK" || status === "CANCELLED") && gross > 0) {
+    gross = -Math.abs(gross);
+  }
+
+  const emailFields = await emailIdentityFields(
+    pickField(order, ["email", "customerEmail", "emailAddress", "shipEmail", "billingEmail"])
+  );
 
   return {
     platform: "checkoutchamp",
@@ -593,6 +644,17 @@ function normalizeCheckoutChampOrder(order: any) {
     status,
     gross_amount: gross,
     currency: pickField(order, ["currency", "currencyCode"]) || "USD",
+
+    ...emailFields,
+    transaction_id: pickField(order, ["transactionId", "transaction_id", "authId", "orderId"]) || null,
+    affiliate_id: pickField(order, ["affiliateId", "affiliate_id"]) || null,
+    source_id: pickField(order, ["sourceId", "source_id"]) || null,
+    sub1: pickField(order, ["sub1", "s1", "S1"]) || null,
+    sub2: pickField(order, ["sub2", "s2", "S2"]) || null,
+    sub3: pickField(order, ["sub3", "s3", "S3"]) || null,
+    sub4: pickField(order, ["sub4", "s4", "S4"]) || null,
+    sub5: pickField(order, ["sub5", "s5", "S5"]) || null,
+    raw_json: order,
   };
 }
 
@@ -626,7 +688,8 @@ async function runCheckoutChampImport(env: Env, args: RunImportArgs) {
     const rawRows = extractArrayFromResponse(js);
     totalFetched += rawRows.length;
 
-    const rows = dedupePlatformOrders(rawRows.map(normalizeCheckoutChampOrder).filter(Boolean));
+    const normalizedRows = await Promise.all(rawRows.map((o: any) => normalizeCheckoutChampOrder(o)));
+	const rows = dedupePlatformOrders(normalizedRows.filter(Boolean));
 
     if (rows.length) {
       const { error } = await supabase.from("platform_orders").upsert(rows as any[], { onConflict: "platform_order_id" });
@@ -970,8 +1033,8 @@ async function router(req: Request, env: Env): Promise<Response> {
 
   const parsed = parseCsv(csvText);
 
-  const upserts = parsed.rows
-    .map((r) => {
+    const upserts = await Promise.all(
+    parsed.rows.map(async (r) => {
       const orderId =
         pickField(r, ["Order ID", "OrderId", "OrderID", "order_id", "Id", "ID"]) ||
         pickField(r, ["Order Number", "OrderNumber", "orderNumber"]);
@@ -997,6 +1060,8 @@ async function router(req: Request, env: Env): Promise<Response> {
           pickField(r, ["Order Create Date", "Updated Date", "Create Date (Receipts)", "OrderDate", "Date"])
         ) || `${args.from}T00:00:00.000Z`;
 
+      const emailFields = await emailIdentityFields(pickField(r, ["Email", "email"]));
+
       return {
         platform: wowSuiteKey("wowboost"),
         platform_order_id: `${wowSuiteKey("wowboost")}:${orderId}`,
@@ -1004,11 +1069,22 @@ async function router(req: Request, env: Env): Promise<Response> {
         status,
         gross_amount: gross,
         currency: pickField(r, ["Currency Code", "Currency", "currencyCode"]) || "USD",
+
+        ...emailFields,
+        transaction_id: pickField(r, ["TransactionId", "Transaction ID", "transaction_id"]) || null,
+        affiliate_id: pickField(r, ["Affiliate ID", "AffiliateId", "affiliate_id"]) || null,
+        source_id: null,
+        sub1: pickField(r, ["S1", "sub1"]) || null,
+        sub2: pickField(r, ["S2", "sub2"]) || null,
+        sub3: pickField(r, ["S3", "sub3"]) || null,
+        sub4: pickField(r, ["S4", "sub4"]) || null,
+        sub5: pickField(r, ["S5", "sub5"]) || null,
+        raw_json: r,
       };
     })
-    .filter(Boolean);
+  );
 
-  const deduped = dedupePlatformOrders(upserts);
+  const deduped = dedupePlatformOrders(upserts.filter(Boolean));
 
   if (deduped.length) {
     const { error: upErr } = await supabase
