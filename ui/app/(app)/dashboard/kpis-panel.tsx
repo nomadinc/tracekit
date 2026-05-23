@@ -149,7 +149,7 @@ function helperDeltaPp(deltaRatio: number) {
  */
 
 
-type LastImportState = {
+type DashboardLastImportState = {
   platform: "checkoutchamp";
   from: string;
   to: string;
@@ -159,7 +159,7 @@ type LastImportState = {
   importedAt: string; // ISO
 };
 
-function safeLoadLastImport(): LastImportState | null {
+function safeLoadLastImport(): DashboardLastImportState | null {
   try {
     const raw = localStorage.getItem(LAST_IMPORT_KEY);
     if (!raw) return null;
@@ -179,7 +179,7 @@ function safeLoadLastImport(): LastImportState | null {
   }
 }
 
-function safeSaveLastImport(v: LastImportState) {
+function safeSaveLastImport(v: DashboardLastImportState) {
   try {
     localStorage.setItem(LAST_IMPORT_KEY, JSON.stringify(v));
   } catch {}
