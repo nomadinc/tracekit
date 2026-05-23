@@ -7,6 +7,7 @@ const items = [
 
   // ✅ integrations lives under /settings/integrations
   { href: "/settings/integrations", label: "Integrations" },
+  { href: "/settings/integrations/gateway-wizard", label: "Gateway Wizard" },
 
   { href: "/scrubber", label: "Scrubber" },
   { href: "/reports", label: "Reports" },
