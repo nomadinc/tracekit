@@ -1239,6 +1239,108 @@ async function runPayDiverseClassicImportPage(env: Env, args: { from: string; to
   };
 }
 
+async function runGatewayClassicImportPage(env: Env, args: {
+  platform: string;
+  from: string;
+  to: string;
+  page?: number;
+  pageSize?: number;
+}) {
+  const supabase = getSupabase(env);
+  const platform = String(args.platform || "").trim();
+  const page = Math.max(0, Number(args.page ?? 0));
+  const pageSize = Math.max(1, Math.min(1000, Number(args.pageSize ?? 1000)));
+
+  if (!platform) throw new Error("platform is required");
+
+  const creds = await getLatestCredential(env, platform);
+  if (!creds) throw new Error(`${platform} not connected.`);
+
+  const securityKey = await decryptSecretFromCredRow(env, creds as any);
+  const baseUrl = String((creds as any).base_url || "https://secure.networkmerchants.com").replace(/\/+$/, "");
+
+  const form = new URLSearchParams();
+  form.set("security_key", securityKey.trim());
+  form.set("start_date", nmiClassicDate(args.from, false));
+  form.set("end_date", nmiClassicDate(args.to, true));
+  form.set("result_limit", String(pageSize));
+  form.set("page_number", String(page));
+  form.set("result_order", "standard");
+  form.set("condition", "pending,pendingsettlement,in_progress,abandoned,failed,canceled,complete,unknown");
+
+  const res = await fetch(`${baseUrl}/api/query.php`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: form.toString(),
+  });
+
+  const xml = await readTextSafe(res);
+  if (!res.ok) throw new Error(`Gateway classic query failed ${res.status}: ${xml.slice(0, 500)}`);
+
+  const transactions = xmlBlocks(xml, "transaction");
+
+  const upserts = transactions.map((tx) => {
+    const id = xmlValue(tx, "transaction_id");
+    if (!id) return null;
+
+    const condition = xmlValue(tx, "condition");
+    const currency = xmlValue(tx, "currency") || "USD";
+    const actions = xmlBlocks(tx, "action");
+    const primaryAction = actions.find((a) => xmlValue(a, "action_type") === "sale") || actions[0] || "";
+
+    const actionType = xmlValue(primaryAction, "action_type");
+    const actionDate = xmlValue(primaryAction, "date");
+    const amountRaw = xmlValue(primaryAction, "amount") || xmlValue(primaryAction, "requested_amount");
+
+    let status = normalizeOrderStatus(condition || actionType || xmlValue(primaryAction, "response_text"));
+    let gross = parseMoneyMaybe(amountRaw);
+    if (gross == null) gross = 0;
+
+    if (
+      actionType === "refund" ||
+      actionType === "credit" ||
+      actionType === "return" ||
+      status === "REFUNDED" ||
+      status === "CHARGEBACK" ||
+      status === "CANCELLED"
+    ) {
+      gross = -Math.abs(gross);
+    }
+
+    const isoTs = actionDate
+      ? `${actionDate.slice(0, 4)}-${actionDate.slice(4, 6)}-${actionDate.slice(6, 8)}T${actionDate.slice(8, 10)}:${actionDate.slice(10, 12)}:${actionDate.slice(12, 14)}.000Z`
+      : `${args.from}T00:00:00.000Z`;
+
+    return {
+      platform,
+      platform_order_id: `${platform}:${id}`,
+      order_ts: isoTs,
+      status,
+      gross_amount: gross,
+      currency,
+    };
+  }).filter(Boolean);
+
+  const deduped = dedupePlatformOrders(upserts);
+
+  if (deduped.length) {
+    const { error } = await supabase
+      .from("platform_orders")
+      .upsert(deduped as any[], { onConflict: "platform_order_id" });
+
+    if (error) throw new Error(error.message);
+  }
+
+  return {
+    fetched: transactions.length,
+    upserted: deduped.length,
+    page,
+    pageSize,
+    hasMore: transactions.length >= pageSize,
+    nextPage: transactions.length >= pageSize ? page + 1 : null,
+  };
+}
+
 async function router(req: Request, env: Env): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname;
@@ -1701,6 +1803,105 @@ async function router(req: Request, env: Env): Promise<Response> {
       );
     }
   }
+  
+  if (path === "/v1/integrations/gateway-classic/import-one-page" && req.method === "POST") {
+  try {
+    const body = await readJsonBody(req);
+    const platform = String(body.platform ?? "").trim();
+    const from = String(body.from ?? "").trim();
+    const to = String(body.to ?? "").trim();
+    const page = Math.max(0, Number(body.page ?? 0));
+    const pageSize = Math.max(1, Math.min(1000, Number(body.pageSize ?? 1000)));
+
+    if (!platform) return json({ ok: false, error: "bad_request", message: "platform is required" }, 400);
+    if (!parseYmd(from) || !parseYmd(to)) {
+      return json({ ok: false, error: "bad_request", message: "from/to must be YYYY-MM-DD" }, 400);
+    }
+
+    const result = await runGatewayClassicImportPage(env, { platform, from, to, page, pageSize });
+
+    return json({
+      ok: true,
+      platform,
+      connector: "classic_query",
+      from,
+      to,
+      ...result,
+    });
+  } catch (e: any) {
+    return json({
+      ok: false,
+      error: "gateway_classic_import_failed",
+      message: e?.message || String(e),
+    }, 500);
+  }
+}
+
+if (path === "/v1/integrations/gateway-classic/status" && req.method === "GET") {
+  try {
+    const url = new URL(req.url);
+    const platform = String(url.searchParams.get("platform") || "").trim();
+
+    if (!platform) {
+      return json({
+        ok: false,
+        error: "bad_request",
+        message: "platform is required",
+      }, 400);
+    }
+
+    const creds = await getLatestCredential(env, platform);
+
+    if (!creds) {
+      return json({
+        ok: true,
+        connected: false,
+        platform,
+      });
+    }
+
+    return json({
+      ok: true,
+      connected: true,
+      platform,
+      baseUrl: (creds as any).base_url || "",
+      username: (creds as any).username || "",
+      created_at: (creds as any).created_at || null,
+      updated_at: (creds as any).updated_at || null,
+    });
+  } catch (e: any) {
+    return json({
+      ok: false,
+      error: "gateway_status_failed",
+      message: e?.message || String(e),
+    }, 500);
+  }
+}
+
+if (path === "/v1/integrations/gateway-classic/list" && req.method === "GET") {
+  try {
+    const supabase = getSupabase(env);
+
+    const { data, error } = await supabase
+      .from("integrations_credentials")
+      .select("platform,base_url,username,created_at,updated_at")
+      .or("platform.like.nmi:%,platform.eq.paydiverse")
+      .order("updated_at", { ascending: false });
+
+    if (error) throw new Error(error.message);
+
+    return json({
+      ok: true,
+      accounts: data || [],
+    });
+  } catch (e: any) {
+    return json({
+      ok: false,
+      error: "gateway_list_failed",
+      message: e?.message || String(e),
+    }, 500);
+  }
+}
   
     if (path === "/v1/integrations/wowboost/import-one-page" && req.method === "POST") {
     try {
