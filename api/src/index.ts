@@ -162,6 +162,7 @@ function coercePlatformKey(raw: any) {
   if (s === "konnektive" || s === "konnective") return "checkoutchamp";
   if (s === "checkoutchamp") return "checkoutchamp";
   if (s === "wowsuite") return "wowsuite";
+  if (s === "nmi") return "nmi";
   return s;
 }
 
@@ -949,6 +950,295 @@ async function handleSaveCredentials(req: Request, env: Env) {
   return json({ ok: true, platform, message: "Credentials saved." });
 }
 
+async function runNmiImportPage(env: Env, args: { from: string; to: string; offset?: number; pageSize?: number }) {
+  const supabase = getSupabase(env);
+  const pageSize = Math.max(1, Math.min(1000, Number(args.pageSize ?? 1000)));
+  const offset = Math.max(0, Number(args.offset ?? 0));
+
+  const creds = await getLatestCredential(env, "nmi:lifeheater14090");
+  if (!creds) throw new Error("NMI not connected.");
+
+  const apiKey = await decryptSecretFromCredRow(env, creds as any);
+  const baseUrl = String((creds as any).base_url || "https://api.nmi.com").replace(/\/+$/, "");
+
+  const auth = btoa(`api_key:${apiKey}`);
+
+	const res = await fetch(`${baseUrl}/api/v4/transactions/reports`, {
+	  method: "POST",
+	  headers: {
+		  Authorization: apiKey.trim(),
+		  "Content-Type": "application/json",
+		  Accept: "application/json",
+		},
+	  body: JSON.stringify({
+	    maxResults: pageSize,
+	    offset,
+	    date: {
+	      startDate: args.from,
+	      endDate: args.to,
+	    },
+	  }),
+	});
+
+  const text = await readTextSafe(res);
+  if (!res.ok) throw new Error(`NMI transaction report failed ${res.status}: ${text.slice(0, 500)}`);
+
+  const js = safeJsonParse(text);
+  if (!js) throw new Error(`NMI returned invalid JSON: ${text.slice(0, 500)}`);
+
+  const rows =
+    Array.isArray(js.data) ? js.data :
+    Array.isArray(js.transactions) ? js.transactions :
+    Array.isArray(js.results) ? js.results :
+    [];
+
+  const upserts = rows.map((t: any) => {
+    const id = String(t.transactionId ?? t.transactionID ?? t.id ?? t.transaction_id ?? "").trim();
+    if (!id) return null;
+
+    const status = normalizeOrderStatus(t.status ?? t.condition ?? t.responseText ?? t.actionType);
+    let gross = parseMoneyMaybe(t.amount ?? t.amountAuthorized ?? t.settlementAmount ?? t.totalAmount);
+    if (gross == null) gross = 0;
+
+    if ((status === "REFUNDED" || status === "CHARGEBACK" || status === "CANCELLED") && gross > 0) {
+      gross = -Math.abs(gross);
+    }
+
+    return {
+      platform: "nmi:lifeheater14090",
+	  platform_order_id: `nmi:lifeheater14090:${id}`,
+      order_ts: parseDateToIsoMaybe(t.createdAt ?? t.date ?? t.transactionDate ?? t.actionDate) || `${args.from}T00:00:00.000Z`,
+      status,
+      gross_amount: gross,
+      currency: t.currency ?? "USD",
+    };
+  }).filter(Boolean);
+
+  const deduped = dedupePlatformOrders(upserts);
+
+  if (deduped.length) {
+    const { error } = await supabase
+      .from("platform_orders")
+      .upsert(deduped as any[], { onConflict: "platform_order_id" });
+
+    if (error) throw new Error(error.message);
+  }
+
+  return {
+    fetched: rows.length,
+    upserted: deduped.length,
+    offset,
+    pageSize,
+    hasMore: rows.length >= pageSize,
+    nextOffset: rows.length >= pageSize ? offset + pageSize : null,
+    rawKeys: Object.keys(js || {}),
+  };
+}
+
+function nmiClassicDate(ymd: string, end = false) {
+  return `${ymd.replace(/-/g, "")}${end ? "235959" : "000000"}`;
+}
+
+function xmlValue(block: string, tag: string) {
+  const re = new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, "i");
+  const m = re.exec(block);
+  return m ? m[1].trim() : "";
+}
+
+function xmlBlocks(xml: string, tag: string) {
+  const re = new RegExp(`<${tag}(?:\\s[^>]*)?>([\\s\\S]*?)<\\/${tag}>`, "gi");
+  const out: string[] = [];
+  let m;
+  while ((m = re.exec(xml))) out.push(m[1]);
+  return out;
+}
+
+async function runNmiClassicImportPage(env: Env, args: { from: string; to: string; page?: number; pageSize?: number }) {
+  const supabase = getSupabase(env);
+  const page = Math.max(0, Number(args.page ?? 0));
+  const pageSize = Math.max(1, Math.min(1000, Number(args.pageSize ?? 1000)));
+
+  const creds = await getLatestCredential(env, "nmi:lifeheater14090");
+  if (!creds) throw new Error("NMI LifeHeater14090 not connected.");
+
+  const securityKey = await decryptSecretFromCredRow(env, creds as any);
+  const baseUrl = String((creds as any).base_url || "https://secure.networkmerchants.com").replace(/\/+$/, "");
+
+  const form = new URLSearchParams();
+  form.set("security_key", securityKey.trim());
+  form.set("start_date", nmiClassicDate(args.from, false));
+  form.set("end_date", nmiClassicDate(args.to, true));
+  form.set("result_limit", String(pageSize));
+  form.set("page_number", String(page));
+  form.set("result_order", "standard");
+  form.set("condition", "pending,pendingsettlement,in_progress,abandoned,failed,canceled,complete,unknown");
+
+  const res = await fetch(`${baseUrl}/api/query.php`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: form.toString(),
+  });
+
+  const xml = await readTextSafe(res);
+  if (!res.ok) throw new Error(`NMI classic query failed ${res.status}: ${xml.slice(0, 500)}`);
+
+  const transactions = xmlBlocks(xml, "transaction");
+
+  const upserts = transactions.map((tx) => {
+    const id = xmlValue(tx, "transaction_id");
+    if (!id) return null;
+
+    const condition = xmlValue(tx, "condition");
+    const currency = xmlValue(tx, "currency") || "USD";
+    const actions = xmlBlocks(tx, "action");
+    const primaryAction = actions.find((a) => xmlValue(a, "action_type") === "sale") || actions[0] || "";
+
+    const actionType = xmlValue(primaryAction, "action_type");
+    const actionDate = xmlValue(primaryAction, "date");
+    const amountRaw = xmlValue(primaryAction, "amount") || xmlValue(primaryAction, "requested_amount");
+
+    let status = normalizeOrderStatus(condition || actionType || xmlValue(primaryAction, "response_text"));
+    let gross = parseMoneyMaybe(amountRaw);
+    if (gross == null) gross = 0;
+
+    if (
+      actionType === "refund" ||
+      actionType === "credit" ||
+      actionType === "return" ||
+      status === "REFUNDED" ||
+      status === "CHARGEBACK" ||
+      status === "CANCELLED"
+    ) {
+      gross = -Math.abs(gross);
+    }
+
+    const isoTs = actionDate
+      ? `${actionDate.slice(0, 4)}-${actionDate.slice(4, 6)}-${actionDate.slice(6, 8)}T${actionDate.slice(8, 10)}:${actionDate.slice(10, 12)}:${actionDate.slice(12, 14)}.000Z`
+      : `${args.from}T00:00:00.000Z`;
+
+    return {
+      platform: "nmi:lifeheater14090",
+      platform_order_id: `nmi:lifeheater14090:${id}`,
+      order_ts: isoTs,
+      status,
+      gross_amount: gross,
+      currency,
+    };
+  }).filter(Boolean);
+
+  const deduped = dedupePlatformOrders(upserts);
+
+  if (deduped.length) {
+    const { error } = await supabase
+      .from("platform_orders")
+      .upsert(deduped as any[], { onConflict: "platform_order_id" });
+
+    if (error) throw new Error(error.message);
+  }
+
+  return {
+    fetched: transactions.length,
+    upserted: deduped.length,
+    page,
+    pageSize,
+    hasMore: transactions.length >= pageSize,
+    nextPage: transactions.length >= pageSize ? page + 1 : null,
+  };
+}
+
+async function runPayDiverseClassicImportPage(env: Env, args: { from: string; to: string; page?: number; pageSize?: number }) {
+  const supabase = getSupabase(env);
+  const page = Math.max(0, Number(args.page ?? 0));
+  const pageSize = Math.max(1, Math.min(1000, Number(args.pageSize ?? 1000)));
+
+  const creds = await getLatestCredential(env, "paydiverse");
+  if (!creds) throw new Error("PayDiverse not connected.");
+
+  const securityKey = await decryptSecretFromCredRow(env, creds as any);
+  const baseUrl = String((creds as any).base_url || "https://paydiverse.transactiongateway.com").replace(/\/+$/, "");
+
+  const form = new URLSearchParams();
+  form.set("security_key", securityKey.trim());
+  form.set("start_date", nmiClassicDate(args.from, false));
+  form.set("end_date", nmiClassicDate(args.to, true));
+  form.set("result_limit", String(pageSize));
+  form.set("page_number", String(page));
+  form.set("result_order", "standard");
+  form.set("condition", "pending,pendingsettlement,in_progress,abandoned,failed,canceled,complete,unknown");
+
+  const res = await fetch(`${baseUrl}/api/query.php`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: form.toString(),
+  });
+
+  const xml = await readTextSafe(res);
+  if (!res.ok) throw new Error(`PayDiverse classic query failed ${res.status}: ${xml.slice(0, 500)}`);
+
+  const transactions = xmlBlocks(xml, "transaction");
+
+  const upserts = transactions.map((tx) => {
+    const id = xmlValue(tx, "transaction_id");
+    if (!id) return null;
+
+    const condition = xmlValue(tx, "condition");
+    const currency = xmlValue(tx, "currency") || "USD";
+    const actions = xmlBlocks(tx, "action");
+    const primaryAction = actions.find((a) => xmlValue(a, "action_type") === "sale") || actions[0] || "";
+
+    const actionType = xmlValue(primaryAction, "action_type");
+    const actionDate = xmlValue(primaryAction, "date");
+    const amountRaw = xmlValue(primaryAction, "amount") || xmlValue(primaryAction, "requested_amount");
+
+    let status = normalizeOrderStatus(condition || actionType || xmlValue(primaryAction, "response_text"));
+    let gross = parseMoneyMaybe(amountRaw);
+    if (gross == null) gross = 0;
+
+    if (
+      actionType === "refund" ||
+      actionType === "credit" ||
+      actionType === "return" ||
+      status === "REFUNDED" ||
+      status === "CHARGEBACK" ||
+      status === "CANCELLED"
+    ) {
+      gross = -Math.abs(gross);
+    }
+
+    const isoTs = actionDate
+      ? `${actionDate.slice(0, 4)}-${actionDate.slice(4, 6)}-${actionDate.slice(6, 8)}T${actionDate.slice(8, 10)}:${actionDate.slice(10, 12)}:${actionDate.slice(12, 14)}.000Z`
+      : `${args.from}T00:00:00.000Z`;
+
+    return {
+      platform: "paydiverse",
+      platform_order_id: `paydiverse:${id}`,
+      order_ts: isoTs,
+      status,
+      gross_amount: gross,
+      currency,
+    };
+  }).filter(Boolean);
+
+  const deduped = dedupePlatformOrders(upserts);
+
+  if (deduped.length) {
+    const { error } = await supabase
+      .from("platform_orders")
+      .upsert(deduped as any[], { onConflict: "platform_order_id" });
+
+    if (error) throw new Error(error.message);
+  }
+
+  return {
+    fetched: transactions.length,
+    upserted: deduped.length,
+    page,
+    pageSize,
+    hasMore: transactions.length >= pageSize,
+    nextPage: transactions.length >= pageSize ? page + 1 : null,
+  };
+}
+
 async function router(req: Request, env: Env): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname;
@@ -1608,6 +1898,214 @@ async function router(req: Request, env: Env): Promise<Response> {
     }
   }
   
+    if (path === "/v1/integrations/nmi/import-one-page" && req.method === "POST") {
+    try {
+      const body = await readJsonBody(req);
+      const from = String(body.from ?? "").trim();
+      const to = String(body.to ?? "").trim();
+      const offset = Math.max(0, Number(body.offset ?? 0));
+      const pageSize = Math.max(1, Math.min(1000, Number(body.pageSize ?? 1000)));
+
+      if (!parseYmd(from) || !parseYmd(to)) {
+        return json({ ok: false, error: "bad_request", message: "from/to must be YYYY-MM-DD" }, 400);
+      }
+
+      const result = await runNmiImportPage(env, { from, to, offset, pageSize });
+
+      return json({
+        ok: true,
+        platform: "nmi:lifeheater14090",
+        from,
+        to,
+        ...result,
+      });
+    } catch (e: any) {
+      return json({
+        ok: false,
+        error: "nmi_import_one_page_failed",
+        message: e?.message || String(e),
+      }, 500);
+    }
+  }
+  
+    if (path === "/v1/integrations/nmi/status" && req.method === "GET") {
+    const creds = await getLatestCredential(env, "nmi:lifeheater14090");
+
+    if (!creds) {
+      return json({
+        ok: true,
+        connected: false,
+        platform: "nmi:lifeheater14090",
+        baseUrl: null,
+        username: null,
+        created_at: null,
+        updated_at: null,
+      });
+    }
+
+    return json({
+      ok: true,
+      connected: true,
+      platform: "nmi:lifeheater14090",
+      baseUrl: creds.base_url ?? null,
+      username: creds.username ?? null,
+      created_at: creds.created_at ?? null,
+      updated_at: creds.updated_at ?? null,
+    });
+  }
+  
+  if (path === "/v1/integrations/nmi-lifeheater14090/import-one-page-classic" && req.method === "POST") {
+  try {
+    const body = await readJsonBody(req);
+    const from = String(body.from ?? "").trim();
+    const to = String(body.to ?? "").trim();
+    const page = Math.max(0, Number(body.page ?? 0));
+    const pageSize = Math.max(1, Math.min(1000, Number(body.pageSize ?? 1000)));
+
+    if (!parseYmd(from) || !parseYmd(to)) {
+      return json({ ok: false, error: "bad_request", message: "from/to must be YYYY-MM-DD" }, 400);
+    }
+
+    const result = await runNmiClassicImportPage(env, { from, to, page, pageSize });
+
+    return json({
+      ok: true,
+      platform: "nmi:lifeheater14090",
+      connector: "classic_query",
+      from,
+      to,
+      ...result,
+    });
+  } catch (e: any) {
+    return json({
+      ok: false,
+      error: "nmi_classic_import_failed",
+      message: e?.message || String(e),
+    }, 500);
+  }
+}
+
+if (path === "/v1/integrations/nmi-lifeheater14090/debug-classic" && req.method === "POST") {
+  try {
+    const body = await readJsonBody(req);
+    const from = String(body.from ?? "").trim();
+    const to = String(body.to ?? "").trim();
+
+    const creds = await getLatestCredential(env, "nmi:lifeheater14090");
+    if (!creds) throw new Error("NMI LifeHeater14090 not connected.");
+
+    const securityKey = await decryptSecretFromCredRow(env, creds as any);
+    const baseUrl = String((creds as any).base_url || "https://secure.networkmerchants.com").replace(/\/+$/, "");
+
+    const form = new URLSearchParams();
+    form.set("security_key", securityKey.trim());
+    form.set("start_date", nmiClassicDate(from, false));
+    form.set("end_date", nmiClassicDate(to, true));
+    form.set("result_limit", "10");
+    form.set("page_number", "0");
+    form.set("result_order", "standard");
+    form.set("condition", "pending,pendingsettlement,in_progress,abandoned,failed,canceled,complete,unknown");
+
+    const res = await fetch(`${baseUrl}/api/query.php`, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: form.toString(),
+    });
+
+    const xml = await readTextSafe(res);
+
+    return json({
+      ok: true,
+      status: res.status,
+      baseUrl,
+      submittedStartDate: nmiClassicDate(from, false),
+      submittedEndDate: nmiClassicDate(to, true),
+      transactionCount: xmlBlocks(xml, "transaction").length,
+      responseSnippet: xml.slice(0, 3000),
+      debugVersion: "nmi-classic-v3",
+    });
+  } catch (e: any) {
+    return json({ ok: false, error: "nmi_debug_failed", message: e?.message || String(e) }, 500);
+  }
+}
+
+
+  if (path === "/v1/integrations/paydiverse/debug-classic" && req.method === "POST") {
+    try {
+      const body = await readJsonBody(req);
+      const from = String(body.from ?? "").trim();
+      const to = String(body.to ?? "").trim();
+
+      const creds = await getLatestCredential(env, "paydiverse");
+      if (!creds) throw new Error("PayDiverse not connected.");
+
+      const securityKey = await decryptSecretFromCredRow(env, creds as any);
+      const baseUrl = String((creds as any).base_url || "https://paydiverse.transactiongateway.com").replace(/\/+$/, "");
+
+      const form = new URLSearchParams();
+      form.set("security_key", securityKey.trim());
+      form.set("start_date", nmiClassicDate(from, false));
+      form.set("end_date", nmiClassicDate(to, true));
+      form.set("result_limit", "10");
+      form.set("page_number", "0");
+      form.set("result_order", "standard");
+      form.set("condition", "pending,pendingsettlement,in_progress,abandoned,failed,canceled,complete,unknown");
+
+      const res = await fetch(`${baseUrl}/api/query.php`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: form.toString(),
+      });
+
+      const xml = await readTextSafe(res);
+
+      return json({
+        ok: true,
+        platform: "paydiverse",
+        status: res.status,
+        baseUrl,
+        submittedStartDate: nmiClassicDate(from, false),
+        submittedEndDate: nmiClassicDate(to, true),
+        transactionCount: xmlBlocks(xml, "transaction").length,
+        responseSnippet: xml.slice(0, 3000),
+        debugVersion: "paydiverse-classic-v1",
+      });
+    } catch (e: any) {
+      return json({ ok: false, error: "paydiverse_debug_failed", message: e?.message || String(e) }, 500);
+    }
+  }
+
+  if (path === "/v1/integrations/paydiverse/import-one-page" && req.method === "POST") {
+    try {
+      const body = await readJsonBody(req);
+      const from = String(body.from ?? "").trim();
+      const to = String(body.to ?? "").trim();
+      const page = Math.max(0, Number(body.page ?? 0));
+      const pageSize = Math.max(1, Math.min(1000, Number(body.pageSize ?? 1000)));
+
+      if (!parseYmd(from) || !parseYmd(to)) {
+        return json({ ok: false, error: "bad_request", message: "from/to must be YYYY-MM-DD" }, 400);
+      }
+
+      const result = await runPayDiverseClassicImportPage(env, { from, to, page, pageSize });
+
+      return json({
+        ok: true,
+        platform: "paydiverse",
+        connector: "classic_query",
+        from,
+        to,
+        ...result,
+      });
+    } catch (e: any) {
+      return json({
+        ok: false,
+        error: "paydiverse_classic_import_failed",
+        message: e?.message || String(e),
+      }, 500);
+    }
+  }
+
   return json({ ok: false, error: "not_found" }, 404);
 }
 
