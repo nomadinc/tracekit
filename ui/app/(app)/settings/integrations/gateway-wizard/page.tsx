@@ -2,7 +2,7 @@
 "use client";
 
 import * as React from "react";
-import { apiPostJson } from "@/lib/api";
+import { apiPostJson, apiGetJson } from "@/lib/api";
 
 type SaveResponse = {
   ok: boolean;
@@ -25,6 +25,21 @@ type ImportResponse = {
   nextPage?: number | null;
   message?: string;
   error?: string;
+};
+
+type GatewayAccount = {
+  platform: string;
+  base_url: string;
+  username: string;
+  created_at?: string;
+  updated_at?: string;
+};
+
+type GatewayListResponse = {
+  ok: boolean;
+  accounts: GatewayAccount[];
+  error?: string;
+  message?: string;
 };
 
 const PRESETS = [
@@ -60,8 +75,8 @@ export default function GatewayWizardPage() {
   const [preset, setPreset] = React.useState<(typeof PRESETS)[number]>(PRESETS[0]);
   const [displayName, setDisplayName] = React.useState("LifeHeater14090");
   const [platformKey, setPlatformKey] = React.useState("nmi:lifeheater14090");
-  const [baseUrl, setBaseUrl] = React.useState(PRESETS[0].baseUrl);
-  const [username, setUsername] = React.useState("api_key");
+  const [baseUrl, setBaseUrl] = React.useState<string>(PRESETS[0].baseUrl);
+  const [username, setUsername] = React.useState<string>("api_key");
   const [securityKey, setSecurityKey] = React.useState("");
 
   const [from, setFrom] = React.useState(daysAgoYmd(30));
@@ -74,6 +89,8 @@ export default function GatewayWizardPage() {
   const [importing, setImporting] = React.useState(false);
   const [message, setMessage] = React.useState<string | null>(null);
   const [lastResult, setLastResult] = React.useState<ImportResponse | null>(null);
+  const [accounts, setAccounts] = React.useState<GatewayAccount[]>([]);
+  const [loadingAccounts, setLoadingAccounts] = React.useState(false);
 
   function applyPreset(nextLabel: string) {
     const next = PRESETS.find((p) => p.label === nextLabel) || PRESETS[0];
@@ -95,6 +112,27 @@ export default function GatewayWizardPage() {
       setPlatformKey(`${preset.platformPrefix}${normalizePlatformKey(value || "new-account")}`);
     }
   }
+  
+  async function loadAccounts() {
+  setLoadingAccounts(true);
+  try {
+    const res = await apiGetJson<GatewayListResponse>("/v1/integrations/gateway-classic/list");
+
+    if (!res.ok) {
+      throw new Error(res.message || res.error || "Failed to load accounts");
+    }
+
+    setAccounts(res.accounts || []);
+  } catch (e: any) {
+    setMessage(e?.message || String(e));
+  } finally {
+    setLoadingAccounts(false);
+  }
+}
+
+React.useEffect(() => {
+  loadAccounts();
+}, []);
 
   async function saveCredentials() {
     setSaving(true);
@@ -168,6 +206,56 @@ export default function GatewayWizardPage() {
           Add NMI Classic or PayDiverse gateway accounts without hard-coding new routes.
         </p>
       </div>
+      
+   <section className="rounded-2xl border bg-white p-5 shadow-sm">
+  <div className="flex items-center justify-between gap-3">
+    <h2 className="text-lg font-medium">Saved gateway accounts</h2>
+
+    <button
+      className="rounded-lg border px-3 py-2 text-sm font-medium disabled:opacity-50"
+      disabled={loadingAccounts}
+      onClick={loadAccounts}
+    >
+      {loadingAccounts ? "Refreshing..." : "Refresh"}
+    </button>
+  </div>
+
+  <div className="mt-4 space-y-2">
+    {accounts.length === 0 ? (
+      <p className="text-sm text-gray-500">
+        No saved gateway accounts yet.
+      </p>
+    ) : (
+      accounts.map((acct) => (
+        <button
+          key={acct.platform}
+          className="w-full rounded-xl border p-3 text-left hover:bg-gray-50"
+          onClick={() => {
+            setPlatformKey(acct.platform);
+            setBaseUrl(acct.base_url || "");
+            setUsername(acct.username || "api_key");
+            setSecurityKey("");
+
+            setMessage(
+              `Loaded ${acct.platform}. Paste a new security key only if you want to replace saved credentials.`
+            );
+          }}
+        >
+          <div className="font-mono text-sm font-medium">
+            {acct.platform}
+          </div>
+
+          <div className="mt-1 text-xs text-gray-500">
+            {acct.base_url} · {acct.username} · Updated{" "}
+            {acct.updated_at
+              ? new Date(acct.updated_at).toLocaleString()
+              : "—"}
+          </div>
+        </button>
+      ))
+    )}
+  </div>
+</section>   
 
       <section className="rounded-2xl border bg-white p-5 shadow-sm">
         <h2 className="text-lg font-medium">1. Account setup</h2>

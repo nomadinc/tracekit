@@ -74,6 +74,23 @@ type RunNowResponse = {
   error?: string;
 };
 
+type AsyncImportStartResponse = {
+  ok: boolean;
+  job_id?: string;
+  status?: string;
+  platform?: string;
+  module?: string;
+  from?: string;
+  to?: string;
+  filter?: string;
+  message?: string;
+  error?: string;
+
+  fetched?: number;
+  upserted?: number;
+  pages?: number;
+};
+
 const DEFAULT_BASE_URL = "https://public-api.tryemanagecrm.com";
 
 // Import filters (match API)
