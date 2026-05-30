@@ -67,6 +67,26 @@ async function readTextSafe(res: Response) {
   }
 }
 
+async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs = 30000) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort("timeout"), timeoutMs);
+
+  try {
+    return await fetch(url, {
+      ...init,
+      signal: controller.signal,
+    });
+  } catch (e: any) {
+    if (String(e?.name || "").toLowerCase() === "aborterror" || String(e?.message || "").toLowerCase().includes("timeout")) {
+      throw new Error(`Request timed out after ${timeoutMs}ms: ${url}`);
+    }
+    throw e;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+
 async function readJsonBody(req: Request) {
   return (await req.json().catch(() => ({}))) as any;
 }
@@ -250,23 +270,45 @@ async function runWowPayImportPage(env: Env, args: { from: string; to: string; p
         o.email || o.customerEmail || o.customer?.email || receipt.email
       );
 
+      const transactionId = receipt.transactionId || receipt.transactionID || o.transactionId || o.paymentTrackingNumber || null;
+      const phone = normalizePhone(o.phoneNumber || o.customerPhone || o.phone || o.customer?.phoneNumber || "");
+
       return {
-        platform: wowSuiteKey("wowpay"),
-        platform_order_id: `${wowSuiteKey("wowpay")}:${orderId}`,
+        platform: "wowpay",
+        platform_order_id: `wowpay:${orderId}`,
+        platform_store_id: o.campaignId || o.campaignID || o.campaign_id || null,
+        order_id: String(orderId),
         order_ts: parseDateToIsoMaybe(receipt.createDate || o.orderDate || o.lastUpdateDate) || `${args.from}T00:00:00.000Z`,
         status,
+        status_norm: status,
         gross_amount: gross,
         currency: receipt.currencyCode || o.currencyCode || "USD",
 
         ...emailFields,
-        transaction_id: receipt.transactionId || receipt.transactionID || o.transactionId || null,
+        email: emailFields.customer_email,
+        phone: phone || null,
+
+        transaction_id: transactionId,
+        everflow_transaction_id: o._ef_transaction_id || o.ef_transaction_id || o.everflow_transaction_id || transactionId || null,
+        tkid: o.tkid || o.tk_id || o.tracekit_id || null,
         affiliate_id: o.affiliateId || o.affiliateID || o.affiliate_id || null,
+        everflow_offer_id: o.offerId || o.offerID || o.offer_id || o.campaignId || o.campaignID || null,
         source_id: o.sourceId || o.sourceID || o.source_id || null,
         sub1: o.s1 || o.S1 || o.sub1 || null,
         sub2: o.s2 || o.S2 || o.sub2 || null,
         sub3: o.s3 || o.S3 || o.sub3 || null,
         sub4: o.s4 || o.S4 || o.sub4 || null,
         sub5: o.s5 || o.S5 || o.sub5 || null,
+
+        product_subtotal: parseMoneyMaybe(o.productSubtotal ?? o.subtotal ?? o.productPrice) ?? null,
+        shipping_amount: parseMoneyMaybe(o.shippingAmount ?? o.shipping ?? o.shipAmount) ?? null,
+        tax_amount: parseMoneyMaybe(o.taxAmount ?? o.tax) ?? null,
+        product_cost: parseMoneyMaybe(o.productCost ?? o.product_cost) ?? null,
+        shipping_cost: parseMoneyMaybe(o.shippingCost ?? o.shipping_cost) ?? null,
+        gateway_fee: parseMoneyMaybe(receipt.gatewayFee ?? receipt.processorFee ?? o.gatewayFee) ?? null,
+        chargeback_fee: parseMoneyMaybe(o.chargebackFee ?? o.chargeback_fee) ?? null,
+        tracking_number: receipt.trackingNumber || o.trackingNumber || o.shipmentTrackingNumber || null,
+        shipping_carrier: o.shippingCarrier || o.carrier || null,
         raw_json: o,
       };
     })
@@ -414,6 +456,69 @@ async function emailIdentityFields(emailRaw: any) {
   };
 }
 
+function normalizePhone(v: any) {
+  const raw = String(v ?? "").trim();
+  if (!raw) return "";
+  const digits = raw.replace(/\D+/g, "");
+  if (!digits) return "";
+  if (digits.length === 10) return `+1${digits}`;
+  if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`;
+  return raw;
+}
+
+function firstNonEmpty(...vals: any[]) {
+  for (const v of vals) {
+    if (v !== undefined && v !== null && String(v).trim() !== "") return String(v).trim();
+  }
+  return "";
+}
+
+function rawPayloadPresent(v: any) {
+  if (!v) return false;
+  if (Array.isArray(v)) return v.length > 0;
+  if (typeof v === "object") return Object.keys(v).length > 0;
+  return String(v).trim() !== "";
+}
+
+function pickTrackingId(row: Record<string, any>) {
+  return (
+    pickField(row, [
+      "tkid",
+      "tk_id",
+      "tracekit_id",
+      "TraceKit ID",
+      "TraceKitID",
+      "custom1",
+      "custom2",
+      "custom3",
+      "custom4",
+      "custom5",
+      "customField1",
+      "customField2",
+      "customField3",
+      "customField4",
+      "customField5",
+    ]) || ""
+  );
+}
+
+function pickEverflowTid(row: Record<string, any>) {
+  return (
+    pickField(row, [
+      "_ef_transaction_id",
+      "ef_transaction_id",
+      "everflow_transaction_id",
+      "Everflow Transaction ID",
+      "EF Transaction ID",
+      "sub5",
+      "Sub5",
+      "SUB5",
+      "s5",
+      "S5",
+    ]) || ""
+  );
+}
+
 const wowSuiteNormalizeStatus = normalizeOrderStatus;
 
 function dedupePlatformOrders(rows: any[]) {
@@ -502,9 +607,9 @@ async function getImportJob(env: Env, jobId: string) {
 async function getLatestCredential(env: Env, platform: string) {
   const supabase = getSupabase(env);
   const keys =
-    platform === "checkoutchamp"
-      ? ["checkoutchamp", "konnektive", "konnective"]
-      : [coercePlatformKey(platform), platform];
+	  platform === "checkoutchamp"
+	    ? ["checkoutchamp"]
+	    : [coercePlatformKey(platform), platform];
 
   const { data, error } = await supabase
     .from("integrations_credentials")
@@ -621,40 +726,106 @@ async function normalizeCheckoutChampOrder(order: any) {
   const id = pickField(order, ["orderId", "order_id", "orderID", "id", "orderNumber", "order_number"]);
   if (!id) return null;
 
-  const statusRaw = pickField(order, ["orderStatus", "status", "order_status", "paymentStatus", "transactionStatus"]);
+  const statusRaw = pickField(order, [
+    "orderStatus",
+    "status",
+    "order_status",
+    "paymentStatus",
+    "transactionStatus",
+    "responseType",
+    "responseText",
+  ]);
   const status = normalizeOrderStatus(statusRaw);
 
   const ts =
-    parseDateToIsoMaybe(pickField(order, ["dateCreated", "createdAt", "createDate", "orderDate", "date", "lastUpdated", "updatedAt"])) ||
-    new Date().toISOString();
+    parseDateToIsoMaybe(
+      pickField(order, [
+        "dateCreated",
+        "createdAt",
+        "createDate",
+        "orderDate",
+        "date",
+        "lastUpdated",
+        "updatedAt",
+        "dateUpdated",
+      ])
+    ) || new Date().toISOString();
 
-  let gross = parseMoneyMaybe(pickField(order, ["totalAmount", "orderTotal", "total", "amount", "price", "gross", "revenue"]));
+  let gross = parseMoneyMaybe(
+    pickField(order, [
+      "totalAmount",
+      "orderTotal",
+      "total",
+      "amount",
+      "price",
+      "gross",
+      "revenue",
+      "order_total",
+      "total_amount",
+    ])
+  );
   if (gross == null) gross = 0;
   if ((status === "REFUNDED" || status === "CHARGEBACK" || status === "CANCELLED") && gross > 0) {
     gross = -Math.abs(gross);
   }
 
   const emailFields = await emailIdentityFields(
-    pickField(order, ["email", "customerEmail", "emailAddress", "shipEmail", "billingEmail"])
+    pickField(order, ["email", "customerEmail", "emailAddress", "shipEmail", "billingEmail", "billing_email"])
   );
+
+  const phone = normalizePhone(
+    pickField(order, ["phone", "customerPhone", "phoneNumber", "shipPhone", "billingPhone", "phone_number"])
+  );
+
+  const transactionId =
+    pickField(order, [
+      "transactionId",
+      "transaction_id",
+      "authId",
+      "paymentId",
+      "payment_id",
+      "gatewayTransactionId",
+      "gateway_transaction_id",
+    ]) || null;
+
+  const everflowTid = pickEverflowTid(order) || null;
 
   return {
     platform: "checkoutchamp",
     platform_order_id: `checkoutchamp:${id}`,
+    platform_store_id: pickField(order, ["campaignId", "campaign_id", "merchantId", "storeId"]) || null,
+    order_id: String(id),
     order_ts: ts,
     status,
+    status_norm: status,
     gross_amount: gross,
     currency: pickField(order, ["currency", "currencyCode"]) || "USD",
 
     ...emailFields,
-    transaction_id: pickField(order, ["transactionId", "transaction_id", "authId", "orderId"]) || null,
-    affiliate_id: pickField(order, ["affiliateId", "affiliate_id"]) || null,
-    source_id: pickField(order, ["sourceId", "source_id"]) || null,
+    email: emailFields.customer_email,
+    phone: phone || null,
+
+    transaction_id: transactionId,
+    everflow_transaction_id: everflowTid || null,
+    tkid: pickTrackingId(order) || null,
+    affiliate_id: pickField(order, ["affiliateId", "affiliate_id", "affId", "affid"]) || null,
+    everflow_offer_id: pickField(order, ["offerId", "offer_id", "campaignId", "campaign_id"]) || null,
+    source_id: pickField(order, ["sourceId", "source_id", "sid", "source"]) || null,
     sub1: pickField(order, ["sub1", "s1", "S1"]) || null,
     sub2: pickField(order, ["sub2", "s2", "S2"]) || null,
     sub3: pickField(order, ["sub3", "s3", "S3"]) || null,
     sub4: pickField(order, ["sub4", "s4", "S4"]) || null,
     sub5: pickField(order, ["sub5", "s5", "S5"]) || null,
+
+    product_subtotal: parseMoneyMaybe(pickField(order, ["productSubtotal", "product_subtotal", "subtotal", "subTotal"])) ?? null,
+    shipping_amount: parseMoneyMaybe(pickField(order, ["shippingAmount", "shipping", "shippingTotal", "shipping_total"])) ?? null,
+    tax_amount: parseMoneyMaybe(pickField(order, ["taxAmount", "tax", "salesTax", "sales_tax"])) ?? null,
+    product_cost: parseMoneyMaybe(pickField(order, ["productCost", "product_cost", "cogs"])) ?? null,
+    shipping_cost: parseMoneyMaybe(pickField(order, ["shippingCost", "shipping_cost"])) ?? null,
+    gateway_fee: parseMoneyMaybe(pickField(order, ["gatewayFee", "gateway_fee", "processorFee", "processor_fee"])) ?? null,
+    chargeback_fee: parseMoneyMaybe(pickField(order, ["chargebackFee", "chargeback_fee"])) ?? null,
+    tracking_number: pickField(order, ["trackingNumber", "tracking_number", "shipmentTrackingNumber"]) || null,
+    shipping_carrier: pickField(order, ["shippingCarrier", "shipping_carrier", "carrier"]) || null,
     raw_json: order,
   };
 }
@@ -714,13 +885,13 @@ async function wowBoostExportPage(args: { exportBase: string; bearer: string; pa
   url.searchParams.set("StartDate", args.fromYmd);
   url.searchParams.set("EndDate", args.toYmd);
 
-  const res = await fetch(url.toString(), {
+  const res = await fetchWithTimeout(url.toString(), {
     method: "GET",
     headers: {
       Authorization: `bearer ${args.bearer}`,
       Accept: "application/json, text/plain, */*",
     },
-  });
+  }, 30000);
 
   const text = await readTextSafe(res);
   if (!res.ok) throw new Error(`WowBoost export failed (${res.status}): ${text || res.statusText}`);
@@ -766,48 +937,108 @@ async function runWowSuiteWowBoostImport(env: Env, args: { from: string; to: str
   while (page <= maxPages) {
     const exp = await wowBoostExportPage({ exportBase, bearer, page, pageSize, fromYmd: args.from, toYmd: args.to });
 
-    const csvRes = await fetch(exp.link, { method: "GET" });
+    const csvRes = await fetchWithTimeout(exp.link, { method: "GET", headers: { Accept: "text/csv,*/*" } }, 30000);
     const csvText = await readTextSafe(csvRes);
     if (!csvRes.ok) throw new Error(`WowBoost CSV download failed (${csvRes.status}): ${csvText.slice(0, 160)}`);
 
     const parsed = parseCsv(csvText);
     totalFetched += parsed.rows.length;
 
-    const upserts = parsed.rows
-      .map((r) => {
+    const upserts = await Promise.all(
+      parsed.rows.map(async (r) => {
         const orderId =
-          pickField(r, ["OrderId", "OrderID", "order_id", "orderid", "Id", "ID"]) ||
-          pickField(r, ["Order Number", "OrderNumber", "orderNumber"]);
+          pickField(r, ["Order ID", "OrderId", "OrderID", "order_id", "orderid", "Id", "ID"]) ||
+          pickField(r, ["Order Number", "OrderNumber", "orderNumber", "Master Order Number", "MasterOrderNumber"]);
 
         if (!orderId) return null;
 
         const status = wowSuiteNormalizeStatus(
-          pickField(r, ["OrderStatus", "orderStatus", "Status", "status"]) ||
-            pickField(r, ["PaymentStatus", "paymentStatus", "ReceiptStatus", "receiptStatus"])
+          pickField(r, ["Order Status Name", "OrderStatus", "orderStatus", "Status", "status"]) ||
+            pickField(r, ["Receipt Status Name", "PaymentStatus", "paymentStatus", "Payment Status"])
         );
 
         const isoTs =
           parseDateToIsoMaybe(
-            pickField(r, ["createDate", "CreateDate", "orderDate", "OrderDate", "Date", "CreatedAt", "Created", "lastUpdateDate", "LastUpdateDate"])
+            pickField(r, ["Order Create Date", "createDate", "CreateDate", "orderDate", "OrderDate", "Date", "CreatedAt", "Created", "lastUpdateDate", "LastUpdateDate", "Updated Date"])
           ) || `${args.from}T00:00:00.000Z`;
 
         let gross = parseMoneyMaybe(
-          pickField(r, ["Total", "Amount", "OrderTotal", "Gross", "Revenue", "productPrice", "ProductPrice", "amount", "AmountUSD"])
+          pickField(r, [
+            "Order Price USD",
+            "Order Price",
+            "productPrice",
+            "Product Price",
+            "ProductPrice",
+            "Amount USD",
+            "Amount",
+            "AmountUSD",
+            "Total",
+            "OrderTotal",
+            "Gross",
+            "Revenue",
+            "amount",
+          ])
         );
 
         if (gross == null) gross = 0;
         if ((status === "REFUNDED" || status === "CHARGEBACK" || status === "CANCELLED") && gross > 0) gross = -Math.abs(gross);
 
+        const emailFields = await emailIdentityFields(
+          pickField(r, ["CustomerEmail", "Customer Email", "Email", "email", "customerEmail"])
+        );
+        const phone = normalizePhone(pickField(r, ["CustomerPhone", "Customer Phone", "Phone", "phone", "Phone Number"]));
+        const transactionId =
+          pickField(r, ["PaymentTrackingNumber", "Payment Tracking Number", "TransactionId", "Transaction ID", "transaction_id", "ReferenceId", "Reference ID"]) || null;
+        const efTid = pickEverflowTid(r) || null;
+
         return {
-          platform: wowSuiteKey("wowboost"),
-          platform_order_id: `${wowSuiteKey("wowboost")}:${orderId}`,
+          platform: "wowboost",
+          platform_order_id: `wowboost:${orderId}`,
+          platform_store_id: pickField(r, ["Campaign ID", "CampaignId", "Campaign", "Brand Campaign"]) || null,
+          order_id: String(orderId),
           order_ts: isoTs,
           status: status || "UNKNOWN",
+          status_norm: status || "UNKNOWN",
           gross_amount: gross,
-          currency: pickField(r, ["currencyCode", "CurrencyCode", "Currency", "currency"]) || "USD",
+          receipt_total: parseMoneyMaybe(pickField(r, ["Amount USD", "Amount", "AmountUSD", "amount"])) ?? null,
+          currency: pickField(r, ["currencyCode", "CurrencyCode", "Currency", "currency", "Transaction Currency"]) || "USD",
+
+          ...emailFields,
+          email: emailFields.customer_email,
+          phone: phone || null,
+
+          transaction_id: transactionId,
+          everflow_transaction_id: efTid,
+          tkid: pickTrackingId(r) || null,
+          affiliate_id: pickField(r, ["AffiliateId", "Affiliate ID", "affiliate_id", "Partner ID", "PartnerId"]) || null,
+          everflow_offer_id: pickField(r, ["Offer ID", "OfferId", "Campaign ID", "CampaignId"]) || null,
+          source_id: pickField(r, ["Source ID", "SourceId", "source_id"]) || null,
+          sub1: pickField(r, ["S1", "s1", "sub1", "Sub1"]) || null,
+          sub2: pickField(r, ["S2", "s2", "sub2", "Sub2"]) || null,
+          sub3: pickField(r, ["S3", "s3", "sub3", "Sub3"]) || null,
+          sub4: pickField(r, ["S4", "s4", "sub4", "Sub4"]) || null,
+          sub5: pickField(r, ["S5", "s5", "sub5", "Sub5"]) || null,
+
+          product_subtotal: parseMoneyMaybe(
+			  pickField(r, [
+			    "Order Price USD",
+			    "Order Price",
+			    "productPrice",
+			    "Product Price",
+			  ])
+			) ?? null,
+          shipping_amount: parseMoneyMaybe(pickField(r, ["Shipping Amount", "Shipping", "Shipping Price"])) ?? null,
+          tax_amount: parseMoneyMaybe(pickField(r, ["Tax Amount", "Tax"])) ?? null,
+          product_cost: parseMoneyMaybe(pickField(r, ["Product Cost", "COGS"])) ?? null,
+          shipping_cost: parseMoneyMaybe(pickField(r, ["Shipping Cost"])) ?? null,
+          gateway_fee: parseMoneyMaybe(pickField(r, ["Gateway Fee", "Processor Fee"])) ?? null,
+          chargeback_fee: parseMoneyMaybe(pickField(r, ["Chargeback Fee"])) ?? null,
+          tracking_number: pickField(r, ["ShipmentTrackingNumber", "Shipment Tracking Number", "FulfillmentTrackingNumber", "Tracking Number"]) || null,
+          shipping_carrier: pickField(r, ["Shipping Carrier", "Carrier"]) || null,
+          raw_json: r,
         };
       })
-      .filter(Boolean);
+    ).then((rows) => rows.filter(Boolean));
 
     const deduped = dedupePlatformOrders(upserts);
 
@@ -992,7 +1223,8 @@ async function runNmiImportPage(env: Env, args: { from: string; to: string; offs
     Array.isArray(js.results) ? js.results :
     [];
 
-  const upserts = rows.map((t: any) => {
+  const upserts = await Promise.all(
+    rows.map(async (t: any) => {
     const id = String(t.transactionId ?? t.transactionID ?? t.id ?? t.transaction_id ?? "").trim();
     if (!id) return null;
 
@@ -1004,15 +1236,28 @@ async function runNmiImportPage(env: Env, args: { from: string; to: string; offs
       gross = -Math.abs(gross);
     }
 
+    const emailFields = await emailIdentityFields(t.email ?? t.customerEmail ?? t.billingEmail ?? t.billing?.email);
+    const phone = normalizePhone(t.phone ?? t.customerPhone ?? t.billingPhone ?? t.billing?.phone);
+    const orderId = String(t.orderId ?? t.orderID ?? t.order_id ?? t.orderNumber ?? t.invoiceNumber ?? id).trim();
+
     return {
       platform: "nmi:lifeheater14090",
-	  platform_order_id: `nmi:lifeheater14090:${id}`,
+      platform_order_id: `nmi:lifeheater14090:${id}`,
+      order_id: orderId || id,
       order_ts: parseDateToIsoMaybe(t.createdAt ?? t.date ?? t.transactionDate ?? t.actionDate) || `${args.from}T00:00:00.000Z`,
       status,
+      status_norm: status,
       gross_amount: gross,
       currency: t.currency ?? "USD",
+
+      ...emailFields,
+      email: emailFields.customer_email,
+      phone: phone || null,
+      transaction_id: id,
+      raw_json: t,
     };
-  }).filter(Boolean);
+    })
+  ).then((rows) => rows.filter(Boolean));
 
   const deduped = dedupePlatformOrders(upserts);
 
@@ -1116,13 +1361,34 @@ async function runNmiClassicImportPage(env: Env, args: { from: string; to: strin
       ? `${actionDate.slice(0, 4)}-${actionDate.slice(4, 6)}-${actionDate.slice(6, 8)}T${actionDate.slice(8, 10)}:${actionDate.slice(10, 12)}:${actionDate.slice(12, 14)}.000Z`
       : `${args.from}T00:00:00.000Z`;
 
+    const rawJson = {
+      transaction_id: id,
+      condition,
+      action_type: actionType,
+      action_date: actionDate,
+      amount: amountRaw,
+      currency,
+      xml: tx,
+    };
+
+    const emailFields = {
+      customer_email: null,
+      customer_email_normalized: null,
+      customer_email_hash: null,
+    };
+
     return {
       platform: "nmi:lifeheater14090",
       platform_order_id: `nmi:lifeheater14090:${id}`,
+      order_id: id,
       order_ts: isoTs,
       status,
+      status_norm: status,
       gross_amount: gross,
       currency,
+      ...emailFields,
+      transaction_id: id,
+      raw_json: rawJson,
     };
   }).filter(Boolean);
 
@@ -1209,13 +1475,27 @@ async function runPayDiverseClassicImportPage(env: Env, args: { from: string; to
       ? `${actionDate.slice(0, 4)}-${actionDate.slice(4, 6)}-${actionDate.slice(6, 8)}T${actionDate.slice(8, 10)}:${actionDate.slice(10, 12)}:${actionDate.slice(12, 14)}.000Z`
       : `${args.from}T00:00:00.000Z`;
 
+    const rawJson = {
+      transaction_id: id,
+      condition,
+      action_type: actionType,
+      action_date: actionDate,
+      amount: amountRaw,
+      currency,
+      xml: tx,
+    };
+
     return {
       platform: "paydiverse",
       platform_order_id: `paydiverse:${id}`,
+      order_id: id,
       order_ts: isoTs,
       status,
+      status_norm: status,
       gross_amount: gross,
       currency,
+      transaction_id: id,
+      raw_json: rawJson,
     };
   }).filter(Boolean);
 
@@ -1311,13 +1591,27 @@ async function runGatewayClassicImportPage(env: Env, args: {
       ? `${actionDate.slice(0, 4)}-${actionDate.slice(4, 6)}-${actionDate.slice(6, 8)}T${actionDate.slice(8, 10)}:${actionDate.slice(10, 12)}:${actionDate.slice(12, 14)}.000Z`
       : `${args.from}T00:00:00.000Z`;
 
+    const rawJson = {
+      transaction_id: id,
+      condition,
+      action_type: actionType,
+      action_date: actionDate,
+      amount: amountRaw,
+      currency,
+      xml: tx,
+    };
+
     return {
       platform,
       platform_order_id: `${platform}:${id}`,
+      order_id: id,
       order_ts: isoTs,
       status,
+      status_norm: status,
       gross_amount: gross,
       currency,
+      transaction_id: id,
+      raw_json: rawJson,
     };
   }).filter(Boolean);
 
@@ -1340,6 +1634,119 @@ async function runGatewayClassicImportPage(env: Env, args: {
     nextPage: transactions.length >= pageSize ? page + 1 : null,
   };
 }
+
+
+async function rebuildCustomerProfiles(env: Env) {
+  const supabase = getSupabase(env);
+  const { error: deleteError } = await supabase
+	  .from("customer_profiles")
+	  .delete()
+	  .not("identity_key", "is", null);
+	
+	if (deleteError) {
+	  throw new Error(deleteError.message);
+	}
+  
+  const allOrders: any[] = [];
+  const pageSize = 1000;
+  let offset = 0;
+
+  while (true) {
+    const { data, error } = await supabase
+      .from("platform_orders")
+      .select(
+        "platform_order_id, identity_key, customer_email, customer_email_normalized, email, phone, gross_amount, order_ts"
+      )
+      .not("identity_key", "is", null)
+      .order("platform_order_id", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) throw new Error(error.message);
+
+    allOrders.push(...(data || []));
+
+    if (!data || data.length < pageSize) break;
+
+    offset += pageSize;
+  }
+
+  const grouped = new Map<string, any>();
+
+  for (const o of allOrders) {
+    const key = String(o.identity_key || "").trim();
+    if (!key) continue;
+
+    const gross = Number(o.gross_amount || 0);
+    const ts = o.order_ts ? new Date(o.order_ts).toISOString() : null;
+
+    const existing = grouped.get(key) || {
+      identity_key: key,
+      primary_email:
+        o.customer_email_normalized || o.customer_email || o.email || null,
+      primary_phone: o.phone || null,
+      order_count: 0,
+      lifetime_revenue: 0,
+      first_order_ts: ts,
+      last_order_ts: ts,
+    };
+
+    existing.order_count += 1;
+    existing.lifetime_revenue += Number.isFinite(gross) ? gross : 0;
+
+    if (!existing.primary_email) {
+      existing.primary_email =
+        o.customer_email_normalized || o.customer_email || o.email || null;
+    }
+
+    if (!existing.primary_phone && o.phone) {
+      existing.primary_phone = o.phone;
+    }
+
+    if (ts) {
+      if (!existing.first_order_ts || ts < existing.first_order_ts) {
+        existing.first_order_ts = ts;
+      }
+
+      if (!existing.last_order_ts || ts > existing.last_order_ts) {
+        existing.last_order_ts = ts;
+      }
+    }
+
+    grouped.set(key, existing);
+  }
+
+  const profiles = Array.from(grouped.values()).map((p) => ({
+    identity_key: p.identity_key,
+    primary_email: p.primary_email,
+    primary_phone: p.primary_phone,
+    order_count: p.order_count,
+    lifetime_revenue: p.lifetime_revenue,
+    average_order_value:
+      p.order_count > 0 ? p.lifetime_revenue / p.order_count : 0,
+    first_order_ts: p.first_order_ts,
+    last_order_ts: p.last_order_ts,
+    updated_at: new Date().toISOString(),
+  }));
+
+  const batchSize = 500;
+
+	for (let i = 0; i < profiles.length; i += batchSize) {
+	  const batch = profiles.slice(i, i + batchSize);
+	
+	  const { error: upsertError } = await supabase
+	    .from("customer_profiles")
+	    .upsert(batch, { onConflict: "identity_key" });
+	
+	  if (upsertError) throw new Error(upsertError.message);
+	}
+
+  return {
+    scanned_orders: allOrders.length,
+    rebuilt_profiles: profiles.length,
+  };
+}
+
+
 
 async function router(req: Request, env: Env): Promise<Response> {
   const url = new URL(req.url);
@@ -1385,6 +1792,284 @@ async function router(req: Request, env: Env): Promise<Response> {
     });
   }
   
+  if (path === "/v1/platform-orders/detail" && req.method === "GET") {
+	  try {
+	    const platformOrderId = String(
+	      url.searchParams.get("platform_order_id") || ""
+	    ).trim();
+	
+	    if (!platformOrderId) {
+	      return json(
+	        {
+	          ok: false,
+	          error: "bad_request",
+	          message: "platform_order_id is required",
+	        },
+	        400
+	      );
+	    }
+	
+	    const supabase = getSupabase(env);
+	
+	    const { data, error } = await supabase
+	      .from("platform_orders")
+	      .select("*")
+	      .eq("platform_order_id", platformOrderId)
+	      .maybeSingle();
+	
+	    if (error) throw new Error(error.message);
+	
+	    return json({
+	      ok: true,
+	      order: data || null,
+	    });
+	  } catch (e: any) {
+	    return json(
+	      {
+	        ok: false,
+	        error: "platform_order_detail_failed",
+	        message: e?.message || String(e),
+	      },
+	      500
+	    );
+	  }
+	}
+  
+  if (path === "/v1/customers/detail" && req.method === "GET") {
+	  const identityKey = url.searchParams.get("identity_key");
+	
+	  if (!identityKey) {
+	    return json({ ok: false, message: "identity_key required" }, 400);
+	  }
+	
+	  const supabase = getSupabase(env);
+	
+	  const { data: customer, error: customerError } = await supabase
+	    .from("customer_profiles")
+	    .select("*")
+	    .eq("identity_key", identityKey)
+	    .maybeSingle();
+	
+	  if (customerError) {
+	    return json({ ok: false, message: customerError.message }, 500);
+	  }
+	
+	  const { data: orders, error: ordersError } = await supabase
+	    .from("platform_orders")
+	    .select("*")
+	    .eq("identity_key", identityKey)
+	    .order("order_ts", { ascending: false })
+	    .limit(100);
+	
+	  if (ordersError) {
+	    return json({ ok: false, message: ordersError.message }, 500);
+	  }
+	
+	  return json({
+	    ok: true,
+	    customer,
+	    orders: orders || [],
+	  });
+	}
+	
+	if (path === "/v1/customers/search" && req.method === "GET") {
+  try {
+    const q = String(url.searchParams.get("q") || "").trim();
+
+    if (!q) {
+      return json({ ok: true, results: [] });
+    }
+
+    const supabase = getSupabase(env);
+    const safeQ = q.replace(/[%_]/g, "");
+
+    const { data: orders, error: orderError } = await supabase
+      .from("platform_orders")
+      .select(
+        "identity_key, customer_email, email, phone, order_id, platform_order_id, transaction_id, everflow_transaction_id, tkid, tracking_number, gross_amount, order_ts, platform"
+      )
+      .or(
+        [
+          `customer_email.ilike.%${safeQ}%`,
+          `email.ilike.%${safeQ}%`,
+          `phone.ilike.%${safeQ}%`,
+          `order_id.ilike.%${safeQ}%`,
+          `platform_order_id.ilike.%${safeQ}%`,
+          `transaction_id.ilike.%${safeQ}%`,
+          `everflow_transaction_id.ilike.%${safeQ}%`,
+          `tkid.ilike.%${safeQ}%`,
+          `tracking_number.ilike.%${safeQ}%`,
+        ].join(",")
+      )
+      .not("identity_key", "is", null)
+      .order("order_ts", { ascending: false })
+      .limit(50);
+
+    if (orderError) throw new Error(orderError.message);
+
+    const identityKeys = Array.from(
+      new Set((orders || []).map((o: any) => o.identity_key).filter(Boolean))
+    );
+
+    if (!identityKeys.length) {
+      return json({ ok: true, results: [] });
+    }
+
+    const { data: profiles, error: profileError } = await supabase
+      .from("customer_profiles")
+      .select("*")
+      .in("identity_key", identityKeys);
+
+    if (profileError) throw new Error(profileError.message);
+
+    const profileByKey = new Map(
+      (profiles || []).map((p: any) => [p.identity_key, p])
+    );
+
+    const results = identityKeys.map((identityKey) => {
+      const profile = profileByKey.get(identityKey) || null;
+      const matches = (orders || []).filter(
+        (o: any) => o.identity_key === identityKey
+      );
+
+      return {
+        identity_key: identityKey,
+        customer: profile,
+        matches,
+        match_count: matches.length,
+        latest_order_ts: matches[0]?.order_ts || profile?.last_order_ts || null,
+        latest_order_id: matches[0]?.order_id || null,
+        latest_platform: matches[0]?.platform || null,
+      };
+    });
+
+    return json({
+      ok: true,
+      q,
+      results,
+    });
+  } catch (e: any) {
+    return json(
+      {
+        ok: false,
+        error: "customer_search_failed",
+        message: e?.message || String(e),
+      },
+      500
+    );
+  }
+}
+	
+	if (path === "/v1/order-groups" && req.method === "GET") {
+		  const supabase = getSupabase(env);
+		  const identityKey = url.searchParams.get("identity_key");
+		
+		  let query = supabase
+		    .from("order_groups")
+		    .select("*")
+		    .order("first_order_ts", { ascending: false });
+		
+		  if (identityKey) {
+		    query = query.eq("identity_key", identityKey);
+		  }
+		
+		  const { data, error } = await query;
+		
+		  if (error) {
+		    return json(
+		      {
+		        ok: false,
+		        message: error.message,
+		      },
+		      500
+		    );
+		  }
+		
+		  return json({
+		    ok: true,
+		    groups: data || [],
+		  });
+		}
+		
+		  if (path === "/v1/customers/rebuild" && req.method === "POST") {
+		    try {
+		      const result = await rebuildCustomerProfiles(env);
+		
+		      return json({
+		        ok: true,
+		        ...result,
+		        message: `Rebuilt ${result.rebuilt_profiles} customer profiles.`,
+		      });
+		    } catch (e: any) {
+		      return json(
+		        {
+		          ok: false,
+		          error: "customers_rebuild_failed",
+		          message: e?.message || String(e),
+		        },
+		        500
+		      );
+		    }
+		  }
+  
+  
+
+  if (path === "/v1/customers/by-identity" && req.method === "GET") {
+    try {
+      const identityKey = String(url.searchParams.get("identity_key") ?? "").trim();
+
+      if (!identityKey) {
+        return json(
+          {
+            ok: false,
+            error: "bad_request",
+            message: "identity_key is required",
+          },
+          400
+        );
+      }
+
+      const supabase = getSupabase(env);
+
+      const { data, error } = await supabase
+        .from("customer_profiles")
+        .select("*")
+        .eq("identity_key", identityKey)
+        .maybeSingle();
+
+      if (error) throw new Error(error.message);
+
+      return json({
+        ok: true,
+        customer: data ?? null,
+      });
+    } catch (e: any) {
+      return json(
+        {
+          ok: false,
+          error: "customer_lookup_failed",
+          message: e?.message || String(e),
+        },
+        500
+      );
+    }
+  }
+
+if (path === "/v1/platforms" && req.method === "GET") {
+  return json({
+    ok: true,
+    platforms: [
+      { value: "checkoutchamp", label: "CheckoutChamp" },
+      { value: "wowsuite", label: "WowSuite" },
+      { value: "wowboost", label: "WowBoost" },
+      { value: "wowpay", label: "WowPay" },
+      { value: "nmi:lifeheater14090", label: "NMI • lifeheater14090" },
+      { value: "nmi:tpaul9204", label: "NMI • tpaul9204" },
+      { value: "paydiverse", label: "PayDiverse" },
+    ],
+  });
+}
+  
   async function runWowBoostImportPage(env: Env, args: { from: string; to: string; page: number; pageSize?: number }) {
   const supabase = getSupabase(env);
   const pageSize = Math.max(1, Math.min(1000, Number(args.pageSize ?? 1000)));
@@ -1416,7 +2101,7 @@ async function router(req: Request, env: Env): Promise<Response> {
     toYmd: args.to,
   });
 
-  const csvRes = await fetch(exp.link);
+  const csvRes = await fetchWithTimeout(exp.link, { method: "GET", headers: { Accept: "text/csv,*/*" } }, 30000);
   const csvText = await readTextSafe(csvRes);
 
   if (!csvRes.ok) {
@@ -1439,8 +2124,17 @@ async function router(req: Request, env: Env): Promise<Response> {
       );
 
       let gross = parseMoneyMaybe(
-        pickField(r, ["Amount USD", "Amount", "Order Price USD", "Order Price", "Total", "OrderTotal"])
-      );
+		  pickField(r, [
+		    "Order Price USD",
+		    "Order Price",
+		    "productPrice",
+		    "Product Price",
+		    "Amount USD",
+		    "Amount",
+		    "Total",
+		    "OrderTotal",
+		  ])
+		);
 
       if (gross == null) gross = 0;
       if ((status === "REFUNDED" || status === "CHARGEBACK" || status === "CANCELLED") && gross > 0) {
@@ -1454,25 +2148,97 @@ async function router(req: Request, env: Env): Promise<Response> {
 
       const emailFields = await emailIdentityFields(pickField(r, ["Email", "email"]));
 
-      return {
-        platform: wowSuiteKey("wowboost"),
-        platform_order_id: `${wowSuiteKey("wowboost")}:${orderId}`,
-        order_ts: isoTs,
-        status,
-        gross_amount: gross,
-        currency: pickField(r, ["Currency Code", "Currency", "currencyCode"]) || "USD",
+      const transactionId =
+        pickField(r, ["PaymentTrackingNumber", "Payment Tracking Number", "TransactionId", "Transaction ID", "transaction_id", "ReferenceId", "Reference ID"]) || null;
+      const efTid =
+		  pickField(r, [
+		    "_ef_transaction_id",
+		    "ef_transaction_id",
+		    "everflow_transaction_id",
+		    "sub5",
+		    "Sub5",
+		    "SUB5",
+		    "s5",
+		    "S5"
+		  ]) || null;
+      const phone = normalizePhone(pickField(r, ["CustomerPhone", "Customer Phone", "Phone", "phone", "Phone Number"]));
 
-        ...emailFields,
-        transaction_id: pickField(r, ["TransactionId", "Transaction ID", "transaction_id"]) || null,
-        affiliate_id: pickField(r, ["Affiliate ID", "AffiliateId", "affiliate_id"]) || null,
-        source_id: null,
-        sub1: pickField(r, ["S1", "sub1"]) || null,
-        sub2: pickField(r, ["S2", "sub2"]) || null,
-        sub3: pickField(r, ["S3", "sub3"]) || null,
-        sub4: pickField(r, ["S4", "sub4"]) || null,
-        sub5: pickField(r, ["S5", "sub5"]) || null,
-        raw_json: r,
-      };
+      return {
+		  platform: "wowboost",
+		  platform_order_id: `wowboost:${orderId}`,
+		  platform_store_id:
+		    pickField(r, ["Campaign ID", "CampaignId", "Campaign", "Brand Campaign"]) ||
+		    null,
+		  order_id: String(orderId),
+		  order_ts: isoTs,
+		  status,
+		  status_norm: status,
+		  gross_amount: gross,
+		
+		  receipt_total:
+		    parseMoneyMaybe(pickField(r, ["Amount USD", "Amount"])) ?? null,
+		
+		  currency:
+		    pickField(r, [
+		      "Currency Code",
+		      "Currency",
+		      "currencyCode",
+		      "Transaction Currency",
+		    ]) || "USD",
+		
+		  ...emailFields,
+		  email: emailFields.customer_email,
+		  phone: phone || null,
+		  transaction_id: transactionId,
+		  everflow_transaction_id: efTid,
+		  tkid: pickTrackingId(r) || null,
+		  affiliate_id:
+		    pickField(r, [
+		      "Affiliate ID",
+		      "AffiliateId",
+		      "affiliate_id",
+		      "Partner ID",
+		      "PartnerId",
+		    ]) || null,
+		  everflow_offer_id:
+		    pickField(r, ["Offer ID", "OfferId", "Campaign ID", "CampaignId"]) || null,
+		  source_id: pickField(r, ["Source ID", "SourceId", "source_id"]) || null,
+		  sub1: pickField(r, ["S1", "s1", "sub1", "Sub1"]) || null,
+		  sub2: pickField(r, ["S2", "s2", "sub2", "Sub2"]) || null,
+		  sub3: pickField(r, ["S3", "s3", "sub3", "Sub3"]) || null,
+		  sub4: pickField(r, ["S4", "s4", "sub4", "Sub4"]) || null,
+		  sub5: pickField(r, ["S5", "s5", "sub5", "Sub5"]) || null,
+		
+		  product_subtotal:
+		    parseMoneyMaybe(
+		      pickField(r, [
+		        "Order Price USD",
+		        "Order Price",
+		        "productPrice",
+		        "Product Price",
+		      ])
+		    ) ?? null,
+		
+		  shipping_amount:
+		    parseMoneyMaybe(
+		      pickField(r, ["Shipping Amount", "Shipping", "Shipping Price"])
+		    ) ?? null,
+		  tax_amount: parseMoneyMaybe(pickField(r, ["Tax Amount", "Tax"])) ?? null,
+		  product_cost: parseMoneyMaybe(pickField(r, ["Product Cost", "COGS"])) ?? null,
+		  shipping_cost: parseMoneyMaybe(pickField(r, ["Shipping Cost"])) ?? null,
+		  gateway_fee:
+		    parseMoneyMaybe(pickField(r, ["Gateway Fee", "Processor Fee"])) ?? null,
+		  chargeback_fee: parseMoneyMaybe(pickField(r, ["Chargeback Fee"])) ?? null,
+		  tracking_number:
+		    pickField(r, [
+		      "ShipmentTrackingNumber",
+		      "Shipment Tracking Number",
+		      "FulfillmentTrackingNumber",
+		      "Tracking Number",
+		    ]) || null,
+		  shipping_carrier: pickField(r, ["Shipping Carrier", "Carrier"]) || null,
+		  raw_json: r,
+		};
     })
   );
 
@@ -1674,6 +2440,87 @@ async function router(req: Request, env: Env): Promise<Response> {
     });
   }
   
+  if (path === "/v1/platform-orders" && req.method === "GET") {
+    try {
+      const platform = String(url.searchParams.get("platform") || "").trim();
+      const status = String(url.searchParams.get("status") || "").trim();
+      const from = String(url.searchParams.get("from") || "").trim();
+      const to = String(url.searchParams.get("to") || "").trim();
+      const limit = Math.max(1, Math.min(500, Number(url.searchParams.get("limit") || 200)));
+      const offset = Math.max(0, Number(url.searchParams.get("offset") || 0));
+      const search = String(url.searchParams.get("q") || "").trim();
+
+      const sortRaw = String(url.searchParams.get("sort") || "order_ts").trim();
+      const dirRaw = String(url.searchParams.get("dir") || "desc").trim().toLowerCase();
+
+      const allowedSorts = new Set([
+        "order_ts",
+        "gross_amount",
+        "status",
+        "platform",
+        "platform_order_id",
+        "transaction_id",
+        "customer_email",
+        "tkid",
+        "currency",
+      ]);
+
+      const sort = allowedSorts.has(sortRaw) ? sortRaw : "order_ts";
+      const dir = dirRaw === "asc" ? "asc" : "desc";
+
+      const supabase = getSupabase(env);
+
+      let q = supabase
+        .from("platform_orders")
+        .select("*", { count: "exact" });
+
+      if (platform) q = q.eq("platform", platform);
+      if (status && status !== "ALL_SALES") q = q.eq("status", status);
+      if (from) q = q.gte("order_ts", `${from}T00:00:00.000Z`);
+      if (to) q = q.lte("order_ts", `${to}T23:59:59.999Z`);
+
+      if (search) {
+        const safeSearch = search.replace(/[%_]/g, "");
+
+        q = q.or(
+          [
+            `platform_order_id.ilike.%${safeSearch}%`,
+            `transaction_id.ilike.%${safeSearch}%`,
+            `customer_email.ilike.%${safeSearch}%`,
+            `tkid.ilike.%${safeSearch}%`,
+          ].join(",")
+        );
+      }
+
+      q = q
+        .order(sort, { ascending: dir === "asc" })
+        .range(offset, offset + limit - 1);
+
+      const { data, error, count } = await q;
+      if (error) throw new Error(error.message);
+
+      return json({
+        ok: true,
+        orders: data || [],
+        count: data?.length || 0,
+        total: count || 0,
+        limit,
+        offset,
+        page: Math.floor(offset / limit) + 1,
+        totalPages: Math.max(1, Math.ceil((count || 0) / limit)),
+        sort,
+        dir,
+        search,
+      });
+    } catch (e: any) {
+      return json({
+        ok: false,
+        error: "platform_orders_failed",
+        message: e?.message || String(e),
+      }, 500);
+    }
+  }
+
   if (path === "/v1/integrations/wowboost/debug-export" && req.method === "POST") {
     try {
       const body = await readJsonBody(req);
@@ -1711,13 +2558,13 @@ async function router(req: Request, env: Env): Promise<Response> {
       exportUrl.searchParams.set("StartDate", from);
       exportUrl.searchParams.set("EndDate", to);
 
-      const exportRes = await fetch(exportUrl.toString(), {
+      const exportRes = await fetchWithTimeout(exportUrl.toString(), {
         method: "GET",
         headers: {
           Authorization: `bearer ${bearer}`,
           Accept: "application/json, text/plain, */*",
         },
-      });
+      }, 30000);
 
       const exportText = await readTextSafe(exportRes);
       const exportJson = safeJsonParse(exportText);
@@ -1729,7 +2576,7 @@ async function router(req: Request, env: Env): Promise<Response> {
       let csvRowCount: number | null = null;
 
       if (link) {
-        const csvRes = await fetch(link, { method: "GET" });
+        const csvRes = await fetchWithTimeout(link, { method: "GET", headers: { Accept: "text/csv,*/*" } }, 30000);
         csvStatus = csvRes.status;
         const csvText = await readTextSafe(csvRes);
         csvSnippet = csvText.slice(0, 500);
@@ -1746,6 +2593,8 @@ async function router(req: Request, env: Env): Promise<Response> {
         platform: "wowsuite:wowboost",
         from,
         to,
+        sort,
+        dir,
         authBase,
         exportBase,
         exportUrl: exportUrl.toString(),
@@ -1944,7 +2793,7 @@ if (path === "/v1/integrations/gateway-classic/list" && req.method === "GET") {
         toYmd: to,
       });
 
-      const csvRes = await fetch(exp.link);
+      const csvRes = await fetchWithTimeout(exp.link, { method: "GET", headers: { Accept: "text/csv,*/*" } }, 30000);
       const csvText = await readTextSafe(csvRes);
 
       if (!csvRes.ok) {
@@ -1953,8 +2802,8 @@ if (path === "/v1/integrations/gateway-classic/list" && req.method === "GET") {
 
       const parsed = parseCsv(csvText);
 
-      const upserts = parsed.rows
-        .map((r) => {
+      const upserts = await Promise.all(
+        parsed.rows.map(async (r) => {
           const orderId =
             pickField(r, ["Order ID", "OrderId", "OrderID", "order_id", "Id", "ID"]) ||
             pickField(r, ["Order Number", "OrderNumber", "orderNumber"]);
@@ -1967,7 +2816,17 @@ if (path === "/v1/integrations/gateway-classic/list" && req.method === "GET") {
           );
 
           let gross = parseMoneyMaybe(
-            pickField(r, ["Amount USD", "Amount", "Order Price USD", "Order Price", "Total", "OrderTotal"])
+            pickField(r, [
+              "Order Price USD",
+              "Order Price",
+              "productPrice",
+              "Product Price",
+              "ProductPrice",
+              "Amount USD",
+              "Amount",
+              "Total",
+              "OrderTotal",
+            ])
           );
 
           if (gross == null) gross = 0;
@@ -1980,16 +2839,63 @@ if (path === "/v1/integrations/gateway-classic/list" && req.method === "GET") {
               pickField(r, ["Order Create Date", "Updated Date", "Create Date (Receipts)", "OrderDate", "Date"])
             ) || `${from}T00:00:00.000Z`;
 
+          const emailFields = await emailIdentityFields(
+            pickField(r, ["CustomerEmail", "Customer Email", "Email", "email", "customerEmail"])
+          );
+          const transactionId =
+            pickField(r, ["PaymentTrackingNumber", "Payment Tracking Number", "TransactionId", "Transaction ID", "transaction_id", "ReferenceId", "Reference ID"]) || null;
+          const efTid = pickEverflowTid(r) || null;
+          const phone = normalizePhone(pickField(r, ["CustomerPhone", "Customer Phone", "Phone", "phone", "Phone Number"]));
+
           return {
-            platform: wowSuiteKey("wowboost"),
-            platform_order_id: `${wowSuiteKey("wowboost")}:${orderId}`,
+            platform: "wowboost",
+            platform_order_id: `wowboost:${orderId}`,
+            platform_store_id: pickField(r, ["Campaign ID", "CampaignId", "Campaign", "Brand Campaign"]) || null,
+            order_id: String(orderId),
             order_ts: isoTs,
             status,
+            status_norm: status,
             gross_amount: gross,
-            currency: pickField(r, ["Currency Code", "Currency", "currencyCode"]) || "USD",
+            receipt_total: parseMoneyMaybe(pickField(r, ["Amount USD", "Amount", "AmountUSD", "amount"])) ?? null,
+            currency: pickField(r, ["Currency Code", "Currency", "currencyCode", "Transaction Currency"]) || "USD",
+
+            ...emailFields,
+            email: emailFields.customer_email,
+            phone: phone || null,
+            transaction_id: transactionId,
+            everflow_transaction_id: efTid,
+            tkid: pickTrackingId(r) || null,
+            affiliate_id: pickField(r, ["Affiliate ID", "AffiliateId", "affiliate_id", "Partner ID", "PartnerId"]) || null,
+            everflow_offer_id: pickField(r, ["Offer ID", "OfferId", "Campaign ID", "CampaignId"]) || null,
+            source_id: pickField(r, ["Source ID", "SourceId", "source_id"]) || null,
+            sub1: pickField(r, ["S1", "s1", "sub1", "Sub1"]) || null,
+            sub2: pickField(r, ["S2", "s2", "sub2", "Sub2"]) || null,
+            sub3: pickField(r, ["S3", "s3", "sub3", "Sub3"]) || null,
+            sub4: pickField(r, ["S4", "s4", "sub4", "Sub4"]) || null,
+            sub5: pickField(r, ["S5", "s5", "sub5", "Sub5"]) || null,
+            product_subtotal: parseMoneyMaybe(
+              pickField(r, [
+                "Order Price USD",
+                "Order Price",
+                "productPrice",
+                "Product Price",
+                "ProductPrice",
+                "Product Subtotal",
+                "Subtotal",
+              ])
+            ) ?? null,
+            shipping_amount: parseMoneyMaybe(pickField(r, ["Shipping Amount", "Shipping", "Shipping Price"])) ?? null,
+            tax_amount: parseMoneyMaybe(pickField(r, ["Tax Amount", "Tax"])) ?? null,
+            product_cost: parseMoneyMaybe(pickField(r, ["Product Cost", "COGS"])) ?? null,
+            shipping_cost: parseMoneyMaybe(pickField(r, ["Shipping Cost"])) ?? null,
+            gateway_fee: parseMoneyMaybe(pickField(r, ["Gateway Fee", "Processor Fee"])) ?? null,
+            chargeback_fee: parseMoneyMaybe(pickField(r, ["Chargeback Fee"])) ?? null,
+            tracking_number: pickField(r, ["ShipmentTrackingNumber", "Shipment Tracking Number", "FulfillmentTrackingNumber", "Tracking Number"]) || null,
+            shipping_carrier: pickField(r, ["Shipping Carrier", "Carrier"]) || null,
+            raw_json: r,
           };
         })
-        .filter(Boolean);
+      ).then((rows) => rows.filter(Boolean));
 
       const deduped = dedupePlatformOrders(upserts);
 
@@ -2088,6 +2994,17 @@ if (path === "/v1/integrations/gateway-classic/list" && req.method === "GET") {
         done: !result.hasMore,
       });
     } catch (e: any) {
+      const body = await readJsonBody(req);
+      const jobId = String(body.job_id ?? body.jobId ?? "").trim();
+
+      if (jobId) {
+        await updateImportJob(env, jobId, {
+          status: "failed",
+          completed_at: new Date().toISOString(),
+          error: String(e?.message || e || "unknown"),
+        }).catch(() => {});
+      }
+
       return json(
         {
           ok: false,
