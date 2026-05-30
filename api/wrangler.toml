@@ -4,8 +4,11 @@ compatibility_date = "2024-06-20"
 
 [vars]
   SUPABASE_URL = "https://uoeosoiegatlqtzemsfv.supabase.co"
+  SUPABASE_SERVICE_ROLE_KEY = ""
   TRACEKIT_ROOT_DOMAIN = "buyecowatt.com"
   TRACEKIT_AUTO_LINK_OUTBOUND = "true"
+  INTEGRATIONS_ENC_KEY = ""
+  
 
 [triggers]
 crons = ["0 * * * *"] # every hour

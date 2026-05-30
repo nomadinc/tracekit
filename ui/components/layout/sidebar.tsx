@@ -4,6 +4,8 @@ const items = [
   { href: "/dashboard", label: "Dashboard" },
   { href: "/journeys", label: "Journeys" },
   { href: "/orders", label: "Orders" },
+  
+  { href: "/customers", label: "Customers" },
 
   // ✅ integrations lives under /settings/integrations
   { href: "/settings/integrations", label: "Integrations" },
