@@ -16,19 +16,18 @@ import {
 } from "recharts";
 
 type ApiPoint = {
-  date: string; // API may return ISO, we'll normalize to YYYY-MM-DD
-  revenue: number;
-  spend: number;
+  date?: string | null;
+  revenue?: number | null;
+  spend?: number | null;
 };
 
 type ApiResp = {
   ok?: boolean;
   error?: string;
   message?: string;
-  series: ApiPoint[];
+  series?: ApiPoint[];
 };
 
-// ---------- date helpers ----------
 function isoDateLocal(d: Date) {
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, "0");
@@ -38,59 +37,101 @@ function isoDateLocal(d: Date) {
 
 function parseYmdLocal(v: string | null): Date | null {
   if (!v) return null;
-  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(v.trim());
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(v).trim());
   if (!m) return null;
-  const y = Number(m[1]);
-  const mo = Number(m[2]);
-  const d = Number(m[3]);
-  const dt = new Date(y, mo - 1, d, 0, 0, 0, 0);
-  return isNaN(dt.getTime()) ? null : dt;
+
+  const dt = new Date(
+    Number(m[1]),
+    Number(m[2]) - 1,
+    Number(m[3]),
+    0,
+    0,
+    0,
+    0,
+  );
+
+  return Number.isNaN(dt.getTime()) ? null : dt;
 }
 
 function eachDayInclusive(from: Date, to: Date): string[] {
   const out: string[] = [];
-  const cur = new Date(from.getFullYear(), from.getMonth(), from.getDate(), 0, 0, 0, 0);
-  const end = new Date(to.getFullYear(), to.getMonth(), to.getDate(), 0, 0, 0, 0);
+
+  const cur = new Date(
+    from.getFullYear(),
+    from.getMonth(),
+    from.getDate(),
+    0,
+    0,
+    0,
+    0,
+  );
+
+  const end = new Date(
+    to.getFullYear(),
+    to.getMonth(),
+    to.getDate(),
+    0,
+    0,
+    0,
+    0,
+  );
 
   while (cur.getTime() <= end.getTime()) {
-    out.push(isoDateLocal(cur)); // YYYY-MM-DD
+    out.push(isoDateLocal(cur));
     cur.setDate(cur.getDate() + 1);
   }
+
   return out;
 }
 
-function ymdFromApiDate(d: string): string {
-  // If API sends ISO timestamps, normalize to YYYY-MM-DD.
-  // If it's already YYYY-MM-DD, keep it.
-  const s = String(d || "");
+function ymdFromApiDate(value: unknown): string {
+  const s = String(value || "").trim();
+
+  if (!s) return "";
+
   if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
 
   const dt = new Date(s);
   if (!Number.isNaN(dt.getTime())) return isoDateLocal(dt);
 
-  // fallback: slice first 10 chars
   return s.slice(0, 10);
 }
 
-// ---------- formatting ----------
-function formatMoney(n: number) {
-  return n.toLocaleString("en-US", { style: "currency", currency: "USD" });
+function formatMoney(value: unknown) {
+  const n = Number(value || 0);
+
+  return n.toLocaleString("en-US", {
+    style: "currency",
+    currency: "USD",
+  });
 }
 
 function isProbablyHtml(s: string) {
-  const t = s.trim().toLowerCase();
-  return t.startsWith("<!doctype") || t.startsWith("<html") || t.startsWith("<head");
+  const t = String(s || "").trim().toLowerCase();
+  return (
+    t.startsWith("<!doctype") ||
+    t.startsWith("<html") ||
+    t.startsWith("<head")
+  );
 }
 
-// ---------- component ----------
 export function RevenueSpendChart() {
   const searchParams = useSearchParams();
 
-  const fromQ = searchParams?.get("from") ?? null;
-  const toQ = searchParams?.get("to") ?? null;
+  const fromQ = searchParams?.get("from") || null;
+  const toQ = searchParams?.get("to") || null;
 
-  const fromDt = parseYmdLocal(fromQ);
-  const toDt = parseYmdLocal(toQ ?? fromQ);
+  const today = React.useMemo(() => new Date(), []);
+  const defaultTo = isoDateLocal(today);
+
+  const defaultFrom = React.useMemo(() => {
+    const d = new Date(today);
+    d.setDate(d.getDate() - 29);
+    return isoDateLocal(d);
+  }, [today]);
+
+  const fromDt = parseYmdLocal(fromQ || defaultFrom);
+  const toDt = parseYmdLocal(toQ || fromQ || defaultTo);
 
   const canFetch = Boolean(fromDt && toDt);
 
@@ -101,7 +142,7 @@ export function RevenueSpendChart() {
   React.useEffect(() => {
     let cancelled = false;
 
-    const run = async () => {
+    async function run() {
       if (!canFetch || !fromDt || !toDt) return;
 
       const from = isoDateLocal(fromDt);
@@ -111,65 +152,68 @@ export function RevenueSpendChart() {
         setLoading(true);
         setError(null);
 
-        // Use apiGetJson (already handles many failure cases),
-        // but we still guard for any weird response shapes.
         const json = await apiGetJson<ApiResp>(
-          `/v1/revenue-spend?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+          `/v1/revenue-spend?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
         );
 
-        // If API returns ok:false, surface it
-        if ((json as any)?.ok === false) {
-          throw new Error((json as any)?.message || (json as any)?.error || "API returned not ok");
+        if (json?.ok === false) {
+          throw new Error(
+            json.message || json.error || "API returned not ok",
+          );
         }
 
-        const apiSeries = Array.isArray(json.series) ? json.series : [];
+        const apiSeries = Array.isArray(json?.series) ? json.series : [];
 
-        // Normalize -> map by YYYY-MM-DD
         const byDay = new Map<string, ApiPoint>();
-        for (const p of apiSeries) {
-          byDay.set(ymdFromApiDate(p.date), {
-            date: ymdFromApiDate(p.date),
-            revenue: Number(p.revenue || 0),
-            spend: Number(p.spend || 0),
+
+        for (const point of apiSeries) {
+          const day = ymdFromApiDate(point?.date);
+
+          if (!day) continue;
+
+          byDay.set(day, {
+            date: day,
+            revenue: Number(point?.revenue || 0),
+            spend: Number(point?.spend || 0),
           });
         }
 
-        // Fill every day in the selected range
         const days = eachDayInclusive(fromDt, toDt);
-        const filled: ApiPoint[] = days.map((day) => {
+
+        const filled = days.map((day) => {
           const hit = byDay.get(day);
+
           return {
-            date: day, // YYYY-MM-DD
-            revenue: hit?.revenue ?? 0,
-            spend: hit?.spend ?? 0,
+            date: day,
+            revenue: Number(hit?.revenue || 0),
+            spend: Number(hit?.spend || 0),
           };
         });
 
         if (!cancelled) setSeries(filled);
       } catch (e: any) {
-        // Defensive: handle HTML accidentally returned from same-origin proxy, etc.
         const msg = String(e?.message || "Failed to load chart.");
+
         if (!cancelled) {
           setError(
             isProbablyHtml(msg)
-              ? "Chart unavailable: API returned HTML (check NEXT_PUBLIC_API_BASE_URL / proxy routing)."
-              : msg
+              ? "Chart unavailable: API returned HTML. Check API routing."
+              : msg,
           );
           setSeries([]);
         }
       } finally {
         if (!cancelled) setLoading(false);
       }
-    };
+    }
 
     run();
 
     return () => {
       cancelled = true;
     };
-  }, [canFetch, fromQ, toQ]); // using query strings avoids Date object identity issues
+  }, [canFetch, fromQ, toQ]);
 
-  // ---- UI ----
   if (!canFetch) {
     return (
       <div className="rounded-xl border p-4 text-sm text-slate-500">
@@ -187,28 +231,36 @@ export function RevenueSpendChart() {
     );
   }
 
+  const chartData = series.map((p) => ({
+    dateLabel: String(p.date || ""),
+    revenue: Number(p.revenue || 0),
+    spend: Number(p.spend || 0),
+  }));
+
   return (
     <div className="rounded-xl border p-4">
       <div className="mb-3 flex items-center justify-between">
         <div className="text-sm font-medium">Revenue vs Spend</div>
-        <div className="text-xs text-slate-500">{loading ? "loading…" : ""}</div>
+        <div className="text-xs text-slate-500">
+          {loading ? "loading…" : ""}
+        </div>
       </div>
 
       <div style={{ width: "100%", height: 260 }}>
-        <ResponsiveContainer>
+        <ResponsiveContainer width="100%" height="100%">
           <LineChart
-            data={series.map((p) => ({
-              ...p,
-              dateLabel: p.date, // already YYYY-MM-DD
-            }))}
+            data={chartData}
             margin={{ top: 8, right: 12, left: 0, bottom: 0 }}
           >
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="dateLabel" />
             <YAxis tickFormatter={(v) => `$${Number(v || 0).toFixed(0)}`} />
             <Tooltip
-              formatter={(value: any, name: any) => [formatMoney(Number(value)), name]}
-              labelFormatter={(label) => `Date: ${label}`}
+              formatter={(value: any, name: any) => [
+                formatMoney(value),
+                String(name || ""),
+              ]}
+              labelFormatter={(label) => `Date: ${String(label || "")}`}
             />
             <Line type="monotone" dataKey="revenue" dot={false} />
             <Line type="monotone" dataKey="spend" dot={false} />

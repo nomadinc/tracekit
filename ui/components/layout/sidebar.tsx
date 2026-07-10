@@ -13,6 +13,7 @@ const items = [
 
   { href: "/scrubber", label: "Scrubber" },
   { href: "/reports", label: "Reports" },
+  { href: "/settings/product-costs", label: "Product Costs" },
   { href: "/settings", label: "Settings" },
 ];
 
