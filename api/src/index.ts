@@ -3,6 +3,39 @@
 // Integrations: CheckoutChamp/Konnektive + WOWSuite (WowBoost + WowPay umbrella)
 
 import { createClient } from "@supabase/supabase-js";
+type LedgerType =
+  | "sale"
+  | "refund"
+  | "chargeback"
+  | "chargeback_fee"
+  | "processor_fee"
+  | "bank_fee"
+  | "shipping_cost"
+  | "tax"
+  | "cogs"
+  | "affiliate_payout"
+  | "ad_spend"
+  | "reversal"
+  | "adjustment";
+
+const NEGATIVE_LEDGER_TYPES: LedgerType[] = [
+  "refund",
+  "chargeback",
+  "chargeback_fee",
+  "processor_fee",
+  "bank_fee",
+  "shipping_cost",
+  "cogs",
+  "affiliate_payout",
+  "ad_spend",
+  "reversal",
+];
+
+function normalizeLedgerAmount(ledgerType: LedgerType, amountCents: number) {
+  return NEGATIVE_LEDGER_TYPES.includes(ledgerType)
+    ? -Math.abs(amountCents)
+    : Math.abs(amountCents);
+}
 
 type Env = {
   SUPABASE_URL: string;
@@ -37,6 +70,31 @@ function json(data: any, status = 200, extraHeaders: Record<string, string> = {}
       ...extraHeaders,
     },
   });
+}
+
+function toCents(value: unknown): number {
+  const n = Number(value ?? 0);
+  return Math.round(n * 100);
+}
+
+function detectLedgerType(payload: any): LedgerType {
+  const raw = String(
+    payload.ledger_type ||
+      payload.type ||
+      payload.event ||
+      payload.status ||
+      ""
+  ).toLowerCase();
+
+  if (raw.includes("chargeback_fee")) return "chargeback_fee";
+  if (raw.includes("processor_fee")) return "processor_fee";
+  if (raw.includes("bank_fee")) return "bank_fee";
+  if (raw.includes("chargeback") || raw.includes("dispute")) return "chargeback";
+  if (raw.includes("refund")) return "refund";
+  if (raw.includes("reversal")) return "reversal";
+  if (raw.includes("adjustment")) return "adjustment";
+
+  return "sale";
 }
 
 function corsPreflight() {
@@ -260,7 +318,19 @@ async function runWowPayImportPage(env: Env, args: { from: string; to: string; p
       const receipt = receipts[0] || {};
       const status = wowSuiteNormalizeStatus(receipt.paymentStatus || o.orderStatus);
 
-      let gross = parseMoneyMaybe(receipt.amountUSD ?? receipt.amount ?? o.productPrice);
+      let gross =
+		  parseMoneyMaybe(
+		    receipt.amountUSD ??
+		      receipt.amount ??
+		      o.amountUSD ??
+		      o.amount ??
+		      o.totalAmount ??
+		      o.orderTotal ??
+		      o.total ??
+		      o.price ??
+		      o.productPrice ??
+		      o.formattedProductPrice,
+		  ) ?? 0;
       if (gross == null) gross = 0;
       if ((status === "REFUNDED" || status === "CHARGEBACK" || status === "CANCELLED") && gross > 0) {
         gross = -Math.abs(gross);
@@ -272,17 +342,48 @@ async function runWowPayImportPage(env: Env, args: { from: string; to: string; p
 
       const transactionId = receipt.transactionId || receipt.transactionID || o.transactionId || o.paymentTrackingNumber || null;
       const phone = normalizePhone(o.phoneNumber || o.customerPhone || o.phone || o.customer?.phoneNumber || "");
-
+	  
+	  console.log(
+		  "WOWPAY AMOUNTS",
+		  {
+		    amountUSD: o.amountUSD,
+		    amount: o.amount,
+		    totalAmount: o.totalAmount,
+		    orderTotal: o.orderTotal,
+		    total: o.total,
+		    price: o.price,
+		    productPrice: o.productPrice,
+		  }
+		);
+	  
       return {
-        platform: "wowpay",
-        platform_order_id: `wowpay:${orderId}`,
-        platform_store_id: o.campaignId || o.campaignID || o.campaign_id || null,
-        order_id: String(orderId),
-        order_ts: parseDateToIsoMaybe(receipt.createDate || o.orderDate || o.lastUpdateDate) || `${args.from}T00:00:00.000Z`,
-        status,
-        status_norm: status,
-        gross_amount: gross,
-        currency: receipt.currencyCode || o.currencyCode || "USD",
+		  platform: "wowpay",
+		  platform_order_id: `wowpay:${orderId}`,
+		  platform_store_id: o.campaignId || o.campaignID || o.campaign_id || null,
+		  order_id: String(orderId),
+		  order_ts: parseDateToIsoMaybe(
+		    receipt.createDate || o.orderDate || o.lastUpdateDate
+		  ) || `${args.from}T00:00:00.000Z`,
+		  status,
+		  status_norm: status,
+		
+		  gross_amount: gross,
+		
+		  receipt_total:
+		    parseMoneyMaybe(
+		      receipt.amountUSD ??
+		      receipt.amount ??
+		      o.amountUSD ??
+		      o.amount ??
+		      o.totalAmount ??
+		      o.orderTotal ??
+		      o.total ??
+		      o.price ??
+		      o.productPrice ??
+		      o.formattedProductPrice
+		    ) ?? null,
+		
+		  currency: receipt.currencyCode || o.currencyCode || "USD",
 
         ...emailFields,
         email: emailFields.customer_email,
@@ -1747,7 +1848,6 @@ async function rebuildCustomerProfiles(env: Env) {
 }
 
 
-
 async function router(req: Request, env: Env): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname;
@@ -1757,6 +1857,68 @@ async function router(req: Request, env: Env): Promise<Response> {
   if (path === "/__ping" && req.method === "GET") {
     return json({ ok: true, path, now: new Date().toISOString() });
   }
+  
+  if (path.startsWith("/v1/postbacks/") && req.method === "POST") {
+  const platform = path.split("/").pop() || "unknown";
+  const payload = await readJsonBody(req);
+
+  const ledgerType = detectLedgerType(payload);
+
+  const amountCents = normalizeLedgerAmount(
+    ledgerType,
+    toCents(
+      payload.amount ??
+        payload.sale_amount ??
+        payload.total ??
+        payload.fee ??
+        payload.chargeback_fee ??
+        payload.refund_amount
+    )
+  );
+
+  const ledgerRow = {
+    workspace_id: payload.workspace_id || "default",
+    ledger_type: ledgerType,
+    tkid: payload.tkid || null,
+    email: payload.email || payload.customer_email || null,
+    phone: payload.phone || null,
+    order_id: payload.order_id || payload.orderNumber || payload.order_number || null,
+    transaction_id: payload.transaction_id || payload.transactionId || null,
+    parent_transaction_id:
+      payload.parent_transaction_id || payload.parentTransactionId || null,
+    amount: amountCents / 100,
+    currency: payload.currency || "USD",
+    platform,
+    source_system: platform,
+    network: payload.network || null,
+    affiliate_id: payload.affiliate_id || payload.affid || null,
+    campaign_id: payload.campaign_id || payload.oid || null,
+    offer_id: payload.offer_id || payload.oid || null,
+    status: payload.status || ledgerType,
+    reason: payload.reason || null,
+    raw: payload,
+    meta: payload,
+    occurred_at:
+      payload.occurred_at || payload.created_at || new Date().toISOString(),
+  };
+
+  const supabase = getSupabase(env);
+
+  const { data, error } = await supabase
+    .from("conversions")
+    .insert(ledgerRow)
+    .select("*")
+    .single();
+
+  if (error) {
+    return json(
+      { ok: false, error: "ledger_insert_failed", message: error.message },
+      500
+    );
+  }
+
+  return json({ ok: true, ledger: data });
+}
 
   if (path === "/v1/integrations/test-connect" && req.method === "POST") {
     return handleTestConnect(req, env);
@@ -2069,198 +2231,812 @@ if (path === "/v1/platforms" && req.method === "GET") {
     ],
   });
 }
-  
-  async function runWowBoostImportPage(env: Env, args: { from: string; to: string; page: number; pageSize?: number }) {
-  const supabase = getSupabase(env);
-  const pageSize = Math.max(1, Math.min(1000, Number(args.pageSize ?? 1000)));
 
-  const { data: creds, error } = await supabase
-    .from("integrations_credentials")
-    .select("*")
-    .in("platform", [wowSuiteKey("wowboost"), "wowboost", "wowsuite"])
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+if (path === "/v1/product-costs/detected" && req.method === "GET") {
+  try {
+    const supabase = getSupabase(env);
 
-  if (error) throw new Error(error.message);
-  if (!creds) throw new Error("WowBoost not connected.");
+    const { data, error } = await supabase
+      .from("detected_products")
+      .select("*")
+      .order("revenue", { ascending: false })
+      .limit(500);
 
-  const authBase = String((creds as any).base_url || env.DEFAULT_WOWSUITE_AUTH_BASE || DEFAULT_WOWSUITE_AUTH_BASE).replace(/\/+$/, "");
-  const exportBase = String(env.DEFAULT_WOWSUITE_EXPORT_BASE || DEFAULT_WOWSUITE_EXPORT_BASE).replace(/\/+$/, "");
-  const username = String((creds as any).username ?? "").trim();
-  const password = await decryptSecretFromCredRow(env, creds as any);
+    if (error) throw new Error(error.message);
 
-  const bearer = await wowSuiteGetBearerToken({ authBase, username, password });
-
-  const exp = await wowBoostExportPage({
-    exportBase,
-    bearer,
-    page: args.page,
-    pageSize,
-    fromYmd: args.from,
-    toYmd: args.to,
-  });
-
-  const csvRes = await fetchWithTimeout(exp.link, { method: "GET", headers: { Accept: "text/csv,*/*" } }, 30000);
-  const csvText = await readTextSafe(csvRes);
-
-  if (!csvRes.ok) {
-    throw new Error(`CSV download failed ${csvRes.status}: ${csvText.slice(0, 200)}`);
+    return json({
+      ok: true,
+      products: data || [],
+    });
+  } catch (e: any) {
+    return json(
+      {
+        ok: false,
+        error: "product_costs_detected_failed",
+        message: e?.message || String(e),
+      },
+      500,
+    );
   }
+}
 
-  const parsed = parseCsv(csvText);
+if (path === "/v1/product-catalog/rebuild" && req.method === "POST") {
+  try {
+    const supabase = getSupabase(env);
 
-    const upserts = await Promise.all(
-    parsed.rows.map(async (r) => {
-      const orderId =
-        pickField(r, ["Order ID", "OrderId", "OrderID", "order_id", "Id", "ID"]) ||
-        pickField(r, ["Order Number", "OrderNumber", "orderNumber"]);
+    const { data: orders, error } = await supabase
+      .from("platform_orders")
+      .select("platform, gross_amount, order_ts, raw_json")
+      .not("raw_json", "is", null)
+      .order("order_ts", { ascending: false, nullsFirst: false })
+      .range(0, 49999)
 
-      if (!orderId) return null;
+    if (error) throw new Error(error.message);
 
-      const status = wowSuiteNormalizeStatus(
-        pickField(r, ["Order Status Name", "OrderStatus", "orderStatus", "Status", "status"]) ||
-          pickField(r, ["Receipt Status Name", "PaymentStatus", "paymentStatus"])
-      );
+    const usableOrders = (orders || []).filter((order: any) => {
+      const raw =
+		  typeof order.raw_json === "string"
+		    ? JSON.parse(order.raw_json || "{}")
+		    : order.raw_json || {};
+      return raw && typeof raw === "object" && Object.keys(raw).length > 0;
+    });
 
-      let gross = parseMoneyMaybe(
-		  pickField(r, [
-		    "Order Price USD",
-		    "Order Price",
-		    "productPrice",
-		    "Product Price",
-		    "Amount USD",
-		    "Amount",
-		    "Total",
-		    "OrderTotal",
-		  ])
-		);
+    const products = new Map<string, any>();
+    const now = new Date().toISOString();
 
-      if (gross == null) gross = 0;
-      if ((status === "REFUNDED" || status === "CHARGEBACK" || status === "CANCELLED") && gross > 0) {
-        gross = -Math.abs(gross);
+    for (const order of usableOrders) {
+      const raw = order.raw_json || {};
+      const statusText = String(
+		  raw["Order Status Name"] ||
+		    raw["Receipt Status Name"] ||
+		    raw.status ||
+		    raw.orderStatus ||
+		    order.status ||
+		    "",
+		).toLowerCase();
+		
+		const isNonSale =
+		  statusText.includes("abandon") ||
+		  statusText.includes("aborted") ||
+		  statusText.includes("declin") ||
+		  statusText.includes("cancel") ||
+		  statusText.includes("void") ||
+		  statusText.includes("failed");
+		
+		if (isNonSale || Number(order.gross_amount || 0) < 0) {
+		  continue;
+		}
+      const ts = order.order_ts ? new Date(order.order_ts).toISOString() : null;
+
+      let items: any[] = [];
+
+      if (raw.items && typeof raw.items === "object" && !Array.isArray(raw.items)) {
+        items = Object.values(raw.items);
+      } else if (Array.isArray(raw.items)) {
+        items = raw.items;
+      } else if (Array.isArray(raw.line_items)) {
+        items = raw.line_items;
+      } else if (Array.isArray(raw.lineItems)) {
+        items = raw.lineItems;
+      } else if (Array.isArray(raw.products)) {
+        items = raw.products;
+      } else if (Array.isArray(raw.orderItems)) {
+        items = raw.orderItems;
+      } else if (
+		  raw["Product Name"] ||
+		  raw.productName ||
+		  raw.product_name ||
+		  raw.name ||
+		  raw.SKUId ||
+		  raw.sku ||
+		  raw.productSku ||
+		  raw.productId ||
+		  raw.product_id
+		) {
+		  items = [raw];
+	  }
+	  
+	  const isWowBoost =
+		  order.platform === "wowboost" ||
+		  order.platform === "wowsuite:wowboost";
+
+      for (const item of items) {
+        const sku =
+		  item.SKUId ||
+		  item.skuId ||
+		  item.productSku ||
+		  item.product_sku ||
+		  item.sku ||
+		  item.SKU ||
+		  null;
+
+        const productId =
+		  isWowBoost
+		    ? item.SKUId ||
+		      item.skuId ||
+		      item.sku ||
+		      item.SKU ||
+		      null
+		    : item.productId ||
+		      item.product_id ||
+		      item.actualProductId ||
+		      item.currentProductId ||
+		      item.externalProductId ||
+		      item.id ||
+		      null;
+
+        const name =
+		  item["Product Name"] ||
+		  item.name ||
+		  item.productName ||
+		  item.product_name ||
+		  item.title ||
+		  item.productDescription ||
+		  null;
+
+        if (!productId && !sku && !name) continue;
+
+        const key = [
+          order.platform || "",
+          productId || "",
+          sku || "",
+          name || "",
+        ].join("|");
+
+        if (!products.has(key)) {
+          products.set(key, {
+            platform: order.platform,
+            external_product_id: productId ? String(productId) : null,
+            sku: sku ? String(sku) : null,
+            name: name ? String(name) : null,
+            campaign_id:
+              raw.campaignId ||
+              raw.campaign_id ||
+              item.campaignId ||
+              item.campaign_id ||
+              null,
+            campaign_name:
+              raw.campaignName ||
+              raw.campaign_name ||
+              item.campaignName ||
+              item.campaign_name ||
+              null,
+            first_seen: ts,
+            last_seen: ts,
+            order_count: 0,
+            revenue: 0,
+            updated_at: now,
+          });
+        }
+
+        const existing = products.get(key);
+
+        const qty = Math.max(
+          1,
+          Number(item.qty || item.quantity || item.currentQty || 1) || 1,
+        );
+        // Skip abandoned/refunded WowBoost records
+		if (
+		  isWowBoost &&
+		  Number(raw["Order Quantity (Units Sold)"] || 1) <= 0
+		) {
+		  continue;
+		}
+        let itemRevenue =
+		  parseMoneyMaybe(
+		    item.price ??
+		      item.amount ??
+		      item.total ??
+		      item.productPrice ??
+		      item.product_price ??
+		      item.currentPrice ??
+		      item.current_price ??
+		      item.linePrice ??
+		      item.line_price ??
+		      item.finalLinePrice ??
+		      item.final_line_price ??
+		      item.discountedPrice ??
+		      item.discounted_price ??
+		      item.productSubtotal ??
+		      item.product_subtotal ??
+		      raw.productPrice ??
+		      raw.product_price,
+		  ) ?? 0;
+		
+		if (isWowBoost) {
+		  itemRevenue =
+		    parseMoneyMaybe(
+		      item["Order Price USD"] ??
+		      item["Order Price"] ??
+		      raw["Order Price USD"] ??
+		      raw["Order Price"]
+		    ) ?? Number(order.gross_amount || 0);
+		} else if (itemRevenue === 0) {
+		  itemRevenue = Number(order.gross_amount || 0);
+		}
+
+        existing.order_count += 1;
+        existing.revenue += itemRevenue;
+
+        if (ts) {
+          if (!existing.first_seen || ts < existing.first_seen) {
+            existing.first_seen = ts;
+          }
+
+          if (!existing.last_seen || ts > existing.last_seen) {
+            existing.last_seen = ts;
+          }
+        }
+      }
+    }
+
+    const rows = Array.from(products.values());
+
+    const { error: deleteError } = await supabase
+      .from("product_catalog")
+      .delete()
+      .neq("id", 0);
+
+    if (deleteError) throw new Error(deleteError.message);
+
+    if (rows.length) {
+      const { error: upsertError } = await supabase
+        .from("product_catalog")
+        .upsert(rows, {
+          onConflict: "platform,external_product_id,sku,name,campaign_id",
+        });
+
+      if (upsertError) throw new Error(upsertError.message);
+    }
+
+    return json({
+      ok: true,
+      products_found: rows.length,
+      orders_scanned: usableOrders.length,
+      total_orders_checked: orders?.length || 0,
+      skipped_empty_raw_json: (orders?.length || 0) - usableOrders.length,
+    });
+  } catch (e: any) {
+    return json(
+      {
+        ok: false,
+        error: "product_catalog_rebuild_failed",
+        message: e?.message || String(e),
+      },
+      500,
+    );
+  }
+}
+
+if (path === "/v1/product-catalog" && req.method === "GET") {
+  try {
+    const supabase = getSupabase(env);
+
+    const { data, error } = await supabase
+      .from("product_catalog")
+      .select("*")
+      .order("revenue", { ascending: false, nullsFirst: false })
+      .limit(50000);
+
+    if (error) throw new Error(error.message);
+
+    return json({
+      ok: true,
+      products: data || [],
+    });
+  } catch (e: any) {
+    return json({
+      ok: false,
+      error: "product_catalog_failed",
+      message: e?.message || String(e),
+    }, 500);
+  }
+}
+
+if (path === "/v1/product-costs/rules" && req.method === "GET") {
+  try {
+    const supabase = getSupabase(env);
+
+    const { data, error } = await supabase
+      .from("product_cost_rules")
+      .select("*")
+      .order("platform", { ascending: true })
+      .order("product_name", { ascending: true })
+      .order("package_quantity", { ascending: true });
+
+    if (error) throw new Error(error.message);
+
+    return json({
+      ok: true,
+      rules: data || [],
+    });
+  } catch (e: any) {
+    return json(
+      {
+        ok: false,
+        error: "product_costs_rules_failed",
+        message: e?.message || String(e),
+      },
+      500,
+    );
+  }
+}
+
+if (path === "/v1/product-costs/apply" && req.method === "POST") {
+  try {
+    const supabase = getSupabase(env);
+
+    const { data: orders, error: ordersError } = await supabase
+      .from("platform_orders")
+      .select("id, platform, gross_amount, raw_json")
+      .not("raw_json", "is", null)
+      .limit(50000);
+
+    if (ordersError) throw new Error(ordersError.message);
+
+    const { data: rules, error: rulesError } = await supabase
+      .from("product_cost_rules")
+      .select("*")
+      .eq("is_active", true);
+
+    if (rulesError) throw new Error(rulesError.message);
+
+    let updated = 0;
+    let unmatched = 0;
+
+    for (const order of orders || []) {
+      const raw = order.raw_json || {};
+      const items =
+        raw.items && typeof raw.items === "object"
+          ? Object.values(raw.items)
+          : Array.isArray(raw.items)
+            ? raw.items
+            : Array.isArray(raw.line_items)
+              ? raw.line_items
+              : [];
+
+      let productCost = 0;
+      let shippingCost = 0;
+      let matchedRuleId: number | null = null;
+
+      for (const item of items as any[]) {
+        const sku =
+          item.productSku ||
+          item.product_sku ||
+          item.sku ||
+          null;
+
+        const name =
+          item.name ||
+          item.productName ||
+          item.product_name ||
+          item.title ||
+          null;
+
+        const qty = Number(item.qty || item.quantity || 1);
+
+        const rule = (rules || []).find((r: any) => {
+          return (
+            r.platform === order.platform &&
+            (
+              (r.sku && sku && r.sku === sku) ||
+              (r.product_name && name && r.product_name === name)
+            )
+          );
+        });
+
+        if (rule) {
+          matchedRuleId = rule.id;
+          productCost += Number(rule.package_cost || 0);
+          shippingCost += Number(rule.shipping_cost || 0);
+        }
       }
 
-      const isoTs =
-        parseDateToIsoMaybe(
-          pickField(r, ["Order Create Date", "Updated Date", "Create Date (Receipts)", "OrderDate", "Date"])
-        ) || `${args.from}T00:00:00.000Z`;
+      if (!matchedRuleId) {
+        unmatched++;
+        continue;
+      }
 
-      const emailFields = await emailIdentityFields(pickField(r, ["Email", "email"]));
+      const totalCost = productCost + shippingCost;
+      const grossProfit = gross - totalCost;
+      const marginPct = gross > 0 ? (grossProfit / gross) * 100 : 0;
 
-      const transactionId =
-        pickField(r, ["PaymentTrackingNumber", "Payment Tracking Number", "TransactionId", "Transaction ID", "transaction_id", "ReferenceId", "Reference ID"]) || null;
-      const efTid =
-		  pickField(r, [
-		    "_ef_transaction_id",
-		    "ef_transaction_id",
-		    "everflow_transaction_id",
-		    "sub5",
-		    "Sub5",
-		    "SUB5",
-		    "s5",
-		    "S5"
-		  ]) || null;
-      const phone = normalizePhone(pickField(r, ["CustomerPhone", "Customer Phone", "Phone", "phone", "Phone Number"]));
+      const { error: updateError } = await supabase
+        .from("platform_orders")
+        .update({
+          applied_product_cost: productCost,
+          applied_shipping_cost: shippingCost,
+          applied_total_cost: totalCost,
+          gross_profit: grossProfit,
+          gross_margin_pct: marginPct,
+          cost_rule_id: matchedRuleId,
+          cost_applied_at: new Date().toISOString(),
+        })
+        .eq("id", order.id);
 
-      return {
-		  platform: "wowboost",
-		  platform_order_id: `wowboost:${orderId}`,
-		  platform_store_id:
-		    pickField(r, ["Campaign ID", "CampaignId", "Campaign", "Brand Campaign"]) ||
-		    null,
-		  order_id: String(orderId),
-		  order_ts: isoTs,
-		  status,
-		  status_norm: status,
-		  gross_amount: gross,
-		
-		  receipt_total:
-		    parseMoneyMaybe(pickField(r, ["Amount USD", "Amount"])) ?? null,
-		
-		  currency:
-		    pickField(r, [
-		      "Currency Code",
-		      "Currency",
-		      "currencyCode",
-		      "Transaction Currency",
-		    ]) || "USD",
-		
-		  ...emailFields,
-		  email: emailFields.customer_email,
-		  phone: phone || null,
-		  transaction_id: transactionId,
-		  everflow_transaction_id: efTid,
-		  tkid: pickTrackingId(r) || null,
-		  affiliate_id:
-		    pickField(r, [
-		      "Affiliate ID",
-		      "AffiliateId",
-		      "affiliate_id",
-		      "Partner ID",
-		      "PartnerId",
-		    ]) || null,
-		  everflow_offer_id:
-		    pickField(r, ["Offer ID", "OfferId", "Campaign ID", "CampaignId"]) || null,
-		  source_id: pickField(r, ["Source ID", "SourceId", "source_id"]) || null,
-		  sub1: pickField(r, ["S1", "s1", "sub1", "Sub1"]) || null,
-		  sub2: pickField(r, ["S2", "s2", "sub2", "Sub2"]) || null,
-		  sub3: pickField(r, ["S3", "s3", "sub3", "Sub3"]) || null,
-		  sub4: pickField(r, ["S4", "s4", "sub4", "Sub4"]) || null,
-		  sub5: pickField(r, ["S5", "s5", "sub5", "Sub5"]) || null,
-		
-		  product_subtotal:
-		    parseMoneyMaybe(
-		      pickField(r, [
-		        "Order Price USD",
-		        "Order Price",
-		        "productPrice",
-		        "Product Price",
-		      ])
-		    ) ?? null,
-		
-		  shipping_amount:
-		    parseMoneyMaybe(
-		      pickField(r, ["Shipping Amount", "Shipping", "Shipping Price"])
-		    ) ?? null,
-		  tax_amount: parseMoneyMaybe(pickField(r, ["Tax Amount", "Tax"])) ?? null,
-		  product_cost: parseMoneyMaybe(pickField(r, ["Product Cost", "COGS"])) ?? null,
-		  shipping_cost: parseMoneyMaybe(pickField(r, ["Shipping Cost"])) ?? null,
-		  gateway_fee:
-		    parseMoneyMaybe(pickField(r, ["Gateway Fee", "Processor Fee"])) ?? null,
-		  chargeback_fee: parseMoneyMaybe(pickField(r, ["Chargeback Fee"])) ?? null,
-		  tracking_number:
-		    pickField(r, [
-		      "ShipmentTrackingNumber",
-		      "Shipment Tracking Number",
-		      "FulfillmentTrackingNumber",
-		      "Tracking Number",
-		    ]) || null,
-		  shipping_carrier: pickField(r, ["Shipping Carrier", "Carrier"]) || null,
-		  raw_json: r,
-		};
-    })
-  );
+      if (updateError) throw new Error(updateError.message);
 
-  const deduped = dedupePlatformOrders(upserts.filter(Boolean));
+      updated++;
+    }
 
-  if (deduped.length) {
-    const { error: upErr } = await supabase
-      .from("platform_orders")
-      .upsert(deduped as any[], { onConflict: "platform_order_id" });
-
-    if (upErr) throw new Error(upErr.message);
+    return json({
+      ok: true,
+      orders_scanned: orders?.length || 0,
+      updated,
+      unmatched,
+    });
+  } catch (e: any) {
+    return json(
+      {
+        ok: false,
+        error: "cost_apply_failed",
+        message: e?.message || String(e),
+      },
+      500,
+    );
   }
-
-  return {
-    fetched: parsed.rows.length,
-    upserted: deduped.length,
-    page: args.page,
-    pageSize,
-    hasMore: exp.hasMore,
-    nextPage: exp.hasMore ? args.page + 1 : null,
-  };
 }
+
+if (path === "/v1/product-costs/rules" && req.method === "POST") {
+  try {
+    const body = await readJsonBody(req);
+    const supabase = getSupabase(env);
+
+    const payload = {
+      id: body.id || undefined,
+      platform: String(body.platform || "").trim() || null,
+      product_name: String(body.product_name || "").trim() || null,
+      sku: String(body.sku || "").trim() || null,
+      product_type: String(body.product_type || "physical").trim(),
+      package_quantity: Math.max(1, Number(body.package_quantity || 1)),
+      package_cost: Math.max(0, Number(body.package_cost || 0)),
+      shipping_cost: Math.max(0, Number(body.shipping_cost || 0)),
+      allow_unit_fallback: Boolean(body.allow_unit_fallback),
+      currency: String(body.currency || "USD").trim() || "USD",
+      effective_from: body.effective_from || new Date().toISOString(),
+      effective_to: body.effective_to || null,
+      is_active: body.is_active !== false,
+      notes: body.notes ? String(body.notes) : null,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { data, error } = await supabase
+      .from("product_cost_rules")
+      .upsert(payload as any)
+      .select("*")
+      .single();
+
+    if (error) throw new Error(error.message);
+
+    return json({
+      ok: true,
+      rule: data,
+      message: "Product cost rule saved.",
+    });
+  } catch (e: any) {
+    return json(
+      {
+        ok: false,
+        error: "product_costs_rule_save_failed",
+        message: e?.message || String(e),
+      },
+      500,
+    );
+  }
+}
+
+if (
+  path === "/v1/product-costs/import/preview" &&
+  req.method === "POST"
+) {
+  try {
+    const body = await readJsonBody(req);
+
+    const parsed = parseCsv(body.csv || "");
+    const rows = parsed.rows;
+
+    let newRules = 0;
+    let updates = 0;
+
+    const supabase = getSupabase(env);
+
+    for (const row of rows) {
+      const { data } = await supabase
+        .from("product_cost_rules")
+        .select("id")
+        .eq("platform", row.platform || "")
+        .eq("product_name", row.product_name || "")
+        .eq("sku", row.sku || "")
+        .limit(1);
+
+      if (data?.length) {
+        updates++;
+      } else {
+        newRules++;
+      }
+    }
+
+    return json({
+      ok: true,
+      total_rows: rows.length,
+      new_rules: newRules,
+      updates,
+    });
+  } catch (e: any) {
+    return json(
+      {
+        ok: false,
+        message: e?.message || String(e),
+      },
+      500,
+    );
+  }
+}
+
+
+
+if (
+  path === "/v1/product-costs/import" &&
+  req.method === "POST"
+) {
+  try {
+    const body = await readJsonBody(req);
+
+    const parsed = parseCsv(body.csv || "");
+    const rows = parsed.rows;
+
+    const supabase = getSupabase(env);
+
+    let inserted = 0;
+    let updated = 0;
+
+    for (const row of rows) {
+      const payload = {
+        platform: row.platform || null,
+        product_name: row.product_name || null,
+        sku: row.sku || null,
+        product_type: row.product_type || "physical",
+        package_quantity: Number(row.package_quantity || 1),
+        package_cost: Number(row.package_cost || 0),
+        shipping_cost: Number(row.shipping_cost || 0),
+        allow_unit_fallback: false,
+        currency: "USD",
+        is_active: true,
+      };
+
+      const { data: existing } = await supabase
+        .from("product_cost_rules")
+        .select("id")
+        .eq("platform", payload.platform)
+        .eq("product_name", payload.product_name)
+        .eq("sku", payload.sku)
+        .limit(1);
+
+      if (existing?.length) {
+        await supabase
+          .from("product_cost_rules")
+          .update(payload)
+          .eq("id", existing[0].id);
+
+        updated++;
+      } else {
+        await supabase
+          .from("product_cost_rules")
+          .insert(payload);
+
+        inserted++;
+      }
+    }
+
+    return json({
+      ok: true,
+      inserted,
+      updated,
+      total_rows: rows.length,
+    });
+  } catch (e: any) {
+    return json(
+      {
+        ok: false,
+        message: e?.message || String(e),
+      },
+      500,
+    );
+  }
+}
+
+
+
+if (path === "/v1/product-costs/import-csv" && req.method === "POST") {
+  try {
+    const body = await readJsonBody(req);
+    const preview = Boolean(body.preview);
+    const csvText = String(body.csv_text || "").trim();
+
+    if (!csvText) {
+      return json({ ok: false, message: "csv_text is required" }, 400);
+    }
+
+    const parsed = parseCsv(csvText);
+    const errors: any[] = [];
+    const rows: any[] = [];
+
+    for (let i = 0; i < parsed.rows.length; i++) {
+      const r = parsed.rows[i];
+      const rowNum = i + 2;
+
+      const platform = pickField(r, ["platform"]);
+      const productName = pickField(r, ["product_name", "product", "name"]);
+      const sku = pickField(r, ["sku"]);
+      const productType = pickField(r, ["product_type", "type"]) || "physical";
+      const packageQuantity = Number(pickField(r, ["package_quantity", "qty", "quantity"]) || 1);
+      const packageCost = Number(pickField(r, ["package_cost", "cost", "product_cost"]) || 0);
+      const shippingCost = Number(pickField(r, ["shipping_cost", "shipping"]) || 0);
+      const currency = pickField(r, ["currency"]) || "USD";
+
+      if (!platform) errors.push({ row: rowNum, message: "Missing platform" });
+      if (!productName && !sku) errors.push({ row: rowNum, message: "Missing product_name or sku" });
+      if (!Number.isFinite(packageQuantity) || packageQuantity < 1) errors.push({ row: rowNum, message: "Invalid package_quantity" });
+      if (!Number.isFinite(packageCost) || packageCost < 0) errors.push({ row: rowNum, message: "Invalid package_cost" });
+
+      rows.push({
+        platform,
+        product_name: productName || null,
+        sku: sku || null,
+        product_type: productType,
+        package_quantity: Math.max(1, packageQuantity || 1),
+        package_cost: Math.max(0, packageCost || 0),
+        shipping_cost: Math.max(0, shippingCost || 0),
+        allow_unit_fallback: false,
+        currency,
+        is_active: true,
+        updated_at: new Date().toISOString(),
+      });
+    }
+
+    if (errors.length) {
+      return json({
+        ok: false,
+        preview,
+        rows_found: parsed.rows.length,
+        valid_rows: rows.length - errors.length,
+        errors,
+      }, 400);
+    }
+
+    if (preview) {
+      return json({
+        ok: true,
+        preview: true,
+        rows_found: parsed.rows.length,
+        valid_rows: rows.length,
+        sample: rows.slice(0, 10),
+      });
+    }
+
+    const supabase = getSupabase(env);
+
+    const { error } = await supabase
+      .from("product_cost_rules")
+      .upsert(rows as any[]);
+
+    if (error) throw new Error(error.message);
+
+    return json({
+      ok: true,
+      imported: rows.length,
+      message: `Imported ${rows.length} cost rules.`,
+    });
+  } catch (e: any) {
+    return json({
+      ok: false,
+      error: "product_cost_csv_import_failed",
+      message: e?.message || String(e),
+    }, 500);
+  }
+}
+
+if (path === "/v1/product-costs/rules/update" && req.method === "POST") {
+  try {
+    const body = await readJsonBody(req);
+    const id = Number(body.id || 0);
+
+    if (!id) {
+      return json({ ok: false, message: "id is required" }, 400);
+    }
+
+    const supabase = getSupabase(env);
+
+    const payload = {
+      product_type: body.product_type || "physical",
+      package_quantity: Math.max(1, Number(body.package_quantity || 1)),
+      package_cost: Math.max(0, Number(body.package_cost || 0)),
+      shipping_cost: Math.max(0, Number(body.shipping_cost || 0)),
+      allow_unit_fallback: Boolean(body.allow_unit_fallback),
+      currency: body.currency || "USD",
+      is_active: body.is_active !== false,
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase
+      .from("product_cost_rules")
+      .update(payload)
+      .eq("id", id);
+
+    if (error) throw new Error(error.message);
+
+    return json({
+      ok: true,
+      updated_id: id,
+    });
+  } catch (e: any) {
+    return json(
+      {
+        ok: false,
+        error: "product_cost_rule_update_failed",
+        message: e?.message || String(e),
+      },
+      500,
+    );
+  }
+}
+
+if (path === "/v1/merchant-accounts/rebuild" && req.method === "POST") {
+  try {
+    const supabase = getSupabase(env);
+
+    const { data, error } = await supabase.rpc("rebuild_merchant_accounts");
+
+    if (error) throw new Error(error.message);
+
+    return json(data || { ok: true });
+  } catch (e: any) {
+    return json(
+      {
+        ok: false,
+        error: "merchant_accounts_rebuild_failed",
+        message: e?.message || String(e),
+      },
+      500,
+    );
+  }
+}
+
+if (path === "/v1/product-costs/rules/delete" && req.method === "POST") {
+  try {
+    const body = await readJsonBody(req);
+    const id = Number(body.id || 0);
+
+    if (!id) {
+      return json({ ok: false, message: "id is required" }, 400);
+    }
+
+    const supabase = getSupabase(env);
+
+    const { error } = await supabase
+      .from("product_cost_rules")
+      .delete()
+      .eq("id", id);
+
+    if (error) throw new Error(error.message);
+
+    return json({
+      ok: true,
+      deleted_id: id,
+    });
+  } catch (e: any) {
+    return json(
+      {
+        ok: false,
+        error: "product_cost_rule_delete_failed",
+        message: e?.message || String(e),
+      },
+      500,
+    );
+  }
+}
+  
+
 
   if (path === "/v1/integrations/checkoutchamp/settings" && req.method === "GET") {
     const supabase = getSupabase(env);
@@ -2801,6 +3577,9 @@ if (path === "/v1/integrations/gateway-classic/list" && req.method === "GET") {
       }
 
       const parsed = parseCsv(csvText);
+      
+      console.log("WOWBOOST CSV HEADERS", parsed.headers);
+	  console.log("WOWBOOST FIRST ROW", parsed.rows[0]);
 
       const upserts = await Promise.all(
         parsed.rows.map(async (r) => {
@@ -2929,92 +3708,15 @@ if (path === "/v1/integrations/gateway-classic/list" && req.method === "GET") {
   }
   
     if (path === "/v1/integrations/wowboost/import-next-page" && req.method === "POST") {
-    try {
-      const body = await readJsonBody(req);
-      const jobId = String(body.job_id ?? body.jobId ?? "").trim();
-
-      if (!jobId) {
-        return json({ ok: false, error: "bad_request", message: "job_id is required" }, 400);
-      }
-
-      const job = await getImportJob(env, jobId);
-      if (!job) {
-        return json({ ok: false, error: "not_found", message: "Import job not found" }, 404);
-      }
-
-      if (job.status === "completed" || job.status === "failed") {
-        return json({ ok: true, job, done: job.status === "completed" });
-      }
-
-      const page = Math.max(1, Number(job.pages ?? 0) + 1);
-      const pageSize = Math.max(1, Math.min(1000, Number(body.pageSize ?? 1000)));
-
-      await updateImportJob(env, jobId, {
-        status: "running",
-        started_at: job.started_at || new Date().toISOString(),
-        error: null,
-      });
-
-      const result = await runWowBoostImportPage(env, {
-        from: job.from_date,
-        to: job.to_date,
-        page,
-        pageSize,
-      });
-
-      const nextFetched = Number(job.fetched ?? 0) + Number(result.fetched ?? 0);
-      const nextUpserted = Number(job.upserted ?? 0) + Number(result.upserted ?? 0);
-
-      const patch: any = {
-        fetched: nextFetched,
-        upserted: nextUpserted,
-        pages: page,
-        error: null,
-      };
-
-      if (!result.hasMore) {
-        patch.status = "completed";
-        patch.completed_at = new Date().toISOString();
-      } else {
-        patch.status = "running";
-      }
-
-      await updateImportJob(env, jobId, patch);
-
-      const updated = await getImportJob(env, jobId);
-
-      return json({
-        ok: true,
-        job: updated,
-        page: result.page,
-        fetched: result.fetched,
-        upserted: result.upserted,
-        hasMore: result.hasMore,
-        nextPage: result.nextPage,
-        done: !result.hasMore,
-      });
-    } catch (e: any) {
-      const body = await readJsonBody(req);
-      const jobId = String(body.job_id ?? body.jobId ?? "").trim();
-
-      if (jobId) {
-        await updateImportJob(env, jobId, {
-          status: "failed",
-          completed_at: new Date().toISOString(),
-          error: String(e?.message || e || "unknown"),
-        }).catch(() => {});
-      }
-
-      return json(
-        {
-          ok: false,
-          error: "wowboost_import_next_page_failed",
-          message: e?.message || String(e),
-        },
-        500
-      );
-    }
-  }
+  return json(
+    {
+      ok: false,
+      error: "deprecated_endpoint",
+      message: "import-next-page is deprecated. Use import-orders-async and queue status polling.",
+    },
+    410
+  );
+}
   
     if (path === "/v1/integrations/nmi/import-one-page" && req.method === "POST") {
     try {
@@ -3227,7 +3929,242 @@ if (path === "/v1/integrations/nmi-lifeheater14090/debug-classic" && req.method 
   return json({ ok: false, error: "not_found" }, 404);
 }
 
-export default {
+async function runWowBoostImportPage(
+  env: Env,
+  args: { from: string; to: string; page: number; pageSize?: number }
+) {
+  const supabase = getSupabase(env);
+  const pageSize = Math.max(1, Math.min(100, Number(args.pageSize ?? 100)));
+
+  const fromMs = Date.parse(`${args.from}T00:00:00.000Z`);
+  const toExclusive = new Date(`${args.to}T00:00:00.000Z`);
+  toExclusive.setUTCDate(toExclusive.getUTCDate() + 1);
+  const toMs = toExclusive.getTime();
+
+  const { data: creds, error } = await supabase
+    .from("integrations_credentials")
+    .select("*")
+    .in("platform", [wowSuiteKey("wowboost"), "wowboost", "wowsuite"])
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!creds) throw new Error("WowBoost not connected.");
+
+  const authBase = String((creds as any).base_url || env.DEFAULT_WOWSUITE_AUTH_BASE || DEFAULT_WOWSUITE_AUTH_BASE).replace(/\/+$/, "");
+  const exportBase = String(env.DEFAULT_WOWSUITE_EXPORT_BASE || DEFAULT_WOWSUITE_EXPORT_BASE).replace(/\/+$/, "");
+  const username = String((creds as any).username ?? "").trim();
+  const password = await decryptSecretFromCredRow(env, creds as any);
+
+  const bearer = await wowSuiteGetBearerToken({ authBase, username, password });
+
+  const exp = await wowBoostExportPage({
+    exportBase,
+    bearer,
+    page: args.page,
+    pageSize,
+    fromYmd: args.from,
+    toYmd: args.to,
+  });
+
+  const csvRes = await fetchWithTimeout(
+    exp.link,
+    { method: "GET", headers: { Accept: "text/csv,*/*" } },
+    30000
+  );
+
+  const csvText = await readTextSafe(csvRes);
+
+  if (!csvRes.ok) {
+    throw new Error(`CSV download failed ${csvRes.status}: ${csvText.slice(0, 200)}`);
+  }
+
+  const parsed = parseCsv(csvText);
+
+  const mapped = await Promise.all(
+    parsed.rows.map(async (r) => {
+      const orderId =
+        pickField(r, ["Order ID", "OrderId", "OrderID", "order_id", "Id", "ID"]) ||
+        pickField(r, ["Order Number", "OrderNumber", "orderNumber"]);
+
+      if (!orderId) return null;
+
+      const rawDate = pickField(r, [
+        "Order Create Date",
+        "Updated Date",
+        "Create Date (Receipts)",
+        "OrderDate",
+        "Date",
+      ]);
+
+      const isoTs = parseDateToIsoMaybe(rawDate);
+      if (!isoTs) return null;
+
+      const orderMs = Date.parse(isoTs);
+      if (!Number.isFinite(orderMs)) return null;
+
+      if (orderMs < fromMs || orderMs >= toMs) return null;
+
+      const status = wowSuiteNormalizeStatus(
+        pickField(r, ["Order Status Name", "OrderStatus", "orderStatus", "Status", "status"]) ||
+          pickField(r, ["Receipt Status Name", "PaymentStatus", "paymentStatus"])
+      );
+
+      let gross = parseMoneyMaybe(
+        pickField(r, [
+          "Order Price USD",
+          "Order Price",
+          "productPrice",
+          "Product Price",
+          "Amount USD",
+          "Amount",
+          "Total",
+          "OrderTotal",
+        ])
+      );
+
+      if (gross == null) gross = 0;
+
+      if ((status === "REFUNDED" || status === "CHARGEBACK" || status === "CANCELLED") && gross > 0) {
+        gross = -Math.abs(gross);
+      }
+
+      const emailFields = await emailIdentityFields(pickField(r, ["Email", "email"]));
+
+      const transactionId =
+        pickField(r, [
+          "PaymentTrackingNumber",
+          "Payment Tracking Number",
+          "TransactionId",
+          "Transaction ID",
+          "transaction_id",
+          "ReferenceId",
+          "Reference ID",
+        ]) || null;
+
+      const efTid =
+        pickField(r, [
+          "_ef_transaction_id",
+          "ef_transaction_id",
+          "everflow_transaction_id",
+          "sub5",
+          "Sub5",
+          "SUB5",
+          "s5",
+          "S5",
+        ]) || null;
+
+      const phone = normalizePhone(
+        pickField(r, ["CustomerPhone", "Customer Phone", "Phone", "phone", "Phone Number"])
+      );
+
+      return {
+        platform: "wowboost",
+        platform_order_id: `wowboost:${orderId}`,
+        platform_store_id:
+          pickField(r, ["Campaign ID", "CampaignId", "Campaign", "Brand Campaign"]) || null,
+        order_id: String(orderId),
+        order_ts: isoTs,
+        status,
+        status_norm: status,
+        gross_amount: gross,
+
+        receipt_total: parseMoneyMaybe(pickField(r, ["Amount USD", "Amount"])) ?? null,
+
+        currency:
+          pickField(r, [
+            "Currency Code",
+            "Currency",
+            "currencyCode",
+            "Transaction Currency",
+          ]) || "USD",
+
+        ...emailFields,
+        email: emailFields.customer_email,
+        phone: phone || null,
+        transaction_id: transactionId,
+        everflow_transaction_id: efTid,
+        tkid: pickTrackingId(r) || null,
+
+        affiliate_id:
+          pickField(r, [
+            "Affiliate ID",
+            "AffiliateId",
+            "affiliate_id",
+            "Partner ID",
+            "PartnerId",
+          ]) || null,
+
+        everflow_offer_id:
+          pickField(r, ["Offer ID", "OfferId", "Campaign ID", "CampaignId"]) || null,
+
+        source_id: pickField(r, ["Source ID", "SourceId", "source_id"]) || null,
+        sub1: pickField(r, ["S1", "s1", "sub1", "Sub1"]) || null,
+        sub2: pickField(r, ["S2", "s2", "sub2", "Sub2"]) || null,
+        sub3: pickField(r, ["S3", "s3", "sub3", "Sub3"]) || null,
+        sub4: pickField(r, ["S4", "s4", "sub4", "Sub4"]) || null,
+        sub5: pickField(r, ["S5", "s5", "sub5", "Sub5"]) || null,
+
+        product_subtotal:
+          parseMoneyMaybe(
+            pickField(r, ["Order Price USD", "Order Price", "productPrice", "Product Price"])
+          ) ?? null,
+
+        shipping_amount:
+          parseMoneyMaybe(pickField(r, ["Shipping Amount", "Shipping", "Shipping Price"])) ?? null,
+
+        tax_amount: parseMoneyMaybe(pickField(r, ["Tax Amount", "Tax"])) ?? null,
+        product_cost: parseMoneyMaybe(pickField(r, ["Product Cost", "COGS"])) ?? null,
+        shipping_cost: parseMoneyMaybe(pickField(r, ["Shipping Cost"])) ?? null,
+        gateway_fee: parseMoneyMaybe(pickField(r, ["Gateway Fee", "Processor Fee"])) ?? null,
+        chargeback_fee: parseMoneyMaybe(pickField(r, ["Chargeback Fee"])) ?? null,
+
+        tracking_number:
+          pickField(r, [
+            "ShipmentTrackingNumber",
+            "Shipment Tracking Number",
+            "FulfillmentTrackingNumber",
+            "Tracking Number",
+          ]) || null,
+
+        shipping_carrier: pickField(r, ["Shipping Carrier", "Carrier"]) || null,
+        raw_json: r,
+      };
+    })
+  );
+
+  const validRows = mapped.filter(Boolean);
+  const deduped = dedupePlatformOrders(validRows);
+
+  if (deduped.length) {
+    const { error: upErr } = await supabase
+      .from("platform_orders")
+      .upsert(deduped as any[], { onConflict: "platform_order_id" });
+
+    if (upErr) throw new Error(upErr.message);
+  }
+
+  const sourceRows = parsed.rows.length;
+  const validInRangeRows = validRows.length;
+
+  const hasMore =
+    sourceRows >= pageSize &&
+    validInRangeRows > 0 &&
+    Boolean(exp.hasMore);
+
+  return {
+    fetched: validInRangeRows,
+    sourceRows,
+    upserted: deduped.length,
+    page: args.page,
+    pageSize,
+    hasMore,
+    nextPage: hasMore ? args.page + 1 : null,
+  };
+}
+
+  export default {
   async fetch(req: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     try {
       const url = new URL(req.url);
@@ -3243,6 +4180,14 @@ export default {
           return json({ ok: false, error: "bad_request", message: "from/to must be YYYY-MM-DD" }, 400);
         }
 
+        if (!env.wowboost_imports) {
+          return json({
+            ok: false,
+            error: "queue_not_configured",
+            message: "wowboost_imports queue binding is missing. Check wrangler.toml.",
+          }, 500);
+        }
+
         const job = await createImportJob(env, {
           platform: wowSuiteKey("wowboost"),
           module: "wowboost",
@@ -3250,25 +4195,66 @@ export default {
           to,
           filter,
         });
+  
+  const pageSize = Math.max(1, Math.min(100, Number(body.pageSize ?? 100)));
 
-        ctx.waitUntil(
-          runWowBoostImportJob(env, { jobId: job.id, from, to, filter, pageSize: 1000 }).catch((e) =>
-            console.error("[TraceKit] wowboost async import failed", e)
-          )
-        );
+  await updateImportJob(env, job.id, {
+    status: "queued",
+    pages: 0,
+    fetched: 0,
+    upserted: 0,
+    retries: 0,
+    error: null,
+    started_at: new Date().toISOString(),
+  });
 
-        return json({
-          ok: true,
-          job_id: job.id,
-          status: job.status,
-          platform: wowSuiteKey("wowboost"),
-          module: "wowboost",
-          from,
-          to,
-          filter,
-          message: "Import job queued.",
-        });
-      }
+  await env.wowboost_imports.send({
+    job_id: job.id,
+    from,
+    to,
+    filter,
+    page: 1,
+    pageSize,
+    attempt: 1,
+  });
+
+  const updated = await getImportJob(env, job.id);
+
+  return json({
+    ok: true,
+    job_id: job.id,
+    job: updated,
+    status: updated?.status ?? "queued",
+    platform: wowSuiteKey("wowboost"),
+    module: "wowboost",
+    from,
+    to,
+    filter,
+    pageSize,
+    message: "Import job queued. Background worker will process pages.",
+  });
+}
+
+if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GET") {
+  const jobId = url.searchParams.get("job_id") || "";
+
+  if (!jobId) {
+    return json({ ok: false, error: "bad_request", message: "job_id is required" }, 400);
+  }
+
+  const job = await getImportJob(env, jobId);
+
+  if (!job) {
+    return json({ ok: false, error: "not_found", message: "Import job not found" }, 404);
+  }
+
+  return json({
+    ok: true,
+    job,
+    done: job.status === "completed" || job.status === "failed" || job.status === "cancelled",
+  });
+}
+
 
       return await router(req, env);
     } catch (e: any) {
@@ -3276,6 +4262,122 @@ export default {
       return json({ ok: false, error: "server_error", message: e?.message || "unknown" }, e?.status || 500);
     }
   },
+  
+  async queue(batch: MessageBatch<any>, env: Env, ctx: ExecutionContext) {
+  for (const msg of batch.messages) {
+    const body = msg.body || {};
+
+    const jobId = String(body.job_id ?? body.jobId ?? "").trim();
+    const page = Math.max(1, Number(body.page ?? 1));
+    const pageSize = Math.max(1, Math.min(100, Number(body.pageSize ?? 100)));
+    const attempt = Math.max(1, Number(body.attempt ?? 1));
+    const maxAttempts = 10;
+
+    if (!jobId) {
+      msg.ack();
+      continue;
+    }
+
+    try {
+      const job = await getImportJob(env, jobId);
+
+      if (!job) {
+        msg.ack();
+        continue;
+      }
+
+      if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
+        msg.ack();
+        continue;
+      }
+
+      await updateImportJob(env, jobId, {
+        status: "running",
+        started_at: job.started_at || new Date().toISOString(),
+        completed_at: null,
+        error: null,
+      });
+
+      const result = await runWowBoostImportPage(env, {
+        from: job.from_date,
+        to: job.to_date,
+        page,
+        pageSize,
+      });
+
+      const fetchedThisPage = Number(result.fetched ?? 0);
+      const upsertedThisPage = Number(result.upserted ?? 0);
+
+      const nextFetched = Number(job.fetched ?? 0) + fetchedThisPage;
+      const nextUpserted = Number(job.upserted ?? 0) + upsertedThisPage;
+
+      const hasMore = Boolean(result.hasMore);
+
+      await updateImportJob(env, jobId, {
+        status: hasMore ? "running" : "completed",
+        pages: Math.max(Number(job.pages ?? 0), page),
+        fetched: nextFetched,
+        upserted: nextUpserted,
+        retries: 0,
+        last_success_page: page,
+        last_success_at: new Date().toISOString(),
+        last_error_at: null,
+        completed_at: hasMore ? null : new Date().toISOString(),
+        error: null,
+      });
+
+      if (hasMore) {
+        await env.wowboost_imports.send({
+          job_id: jobId,
+          page: page + 1,
+          pageSize,
+          attempt: 1,
+        });
+      }
+
+      msg.ack();
+    } catch (e: any) {
+      const message = e?.message || String(e) || "unknown";
+
+      console.error("[TraceKit] wowboost queue import page failed", {
+        jobId,
+        page,
+        pageSize,
+        attempt,
+        message,
+      });
+
+      if (attempt >= maxAttempts) {
+        await updateImportJob(env, jobId, {
+          status: "failed",
+          completed_at: new Date().toISOString(),
+          error: `Page ${page} failed after ${attempt} attempts: ${message}`,
+          retries: 0,
+          last_error_at: new Date().toISOString(),
+        }).catch(() => {});
+
+        msg.ack();
+        continue;
+      }
+
+      await updateImportJob(env, jobId, {
+        status: "retrying",
+        completed_at: null,
+        error: `Page ${page} attempt ${attempt} failed: ${message}`,
+        last_error_at: new Date().toISOString(),
+      }).catch(() => {});
+
+      await env.wowboost_imports.send({
+        job_id: jobId,
+        page,
+        pageSize,
+        attempt: attempt + 1,
+      });
+
+      msg.ack();
+    }
+  }
+},
 
   async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil(runScheduledCheckoutChampImport(env));
