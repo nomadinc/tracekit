@@ -232,89 +232,86 @@ function SubWizard({ platform }: { platform: PlatformKey }) {
     return;
   }
 
-  // WOWBOOST = paged job flow
-if (platform === "wowboost") {
-  try {
-    setImpStatus("importing");
-    setImpMsg("Starting import…");
-    setViewOrdersHref(null);
+  if (platform === "wowboost") {
+    try {
+      setImpStatus("importing");
+      setImpMsg("Starting background import…");
+      setViewOrdersHref(null);
 
-    const json = await apiPostJson<any>(
-      "/v1/integrations/wowboost/import-orders-async",
-      { from, to, filter: impFilter }
-    );
-
-    if (!json.ok || !json.job_id) {
-      setImpStatus("error");
-      setImpMsg(json.message || "Import failed to start.");
-      return;
-    }
-
-    const jobId = String(json.job_id);
-
-    setImpMsg(`Import started. Job ID: ${jobId}`);
-
-    let done = false;
-    let lastJob: any = null;
-
-    while (!done) {
-      const nextJson = await apiPostJson<any>(
-        "/v1/integrations/wowboost/import-next-page",
-        {
-          job_id: jobId,
-          pageSize: 100,
-        }
+      const startJson = await apiPostJson<any>(
+        "/v1/integrations/wowboost/import-orders-async",
+        { from, to, filter: impFilter }
       );
 
-      if (!nextJson.ok) {
+      if (!startJson.ok || !startJson.job_id) {
         setImpStatus("error");
-        setImpMsg(nextJson.message || "WowBoost import failed.");
+        setImpMsg(startJson.message || "Import failed to start.");
         return;
       }
 
-      const job = nextJson.job;
-      lastJob = job;
+      const jobId = String(startJson.job_id);
+      let lastJob: any = startJson.job ?? null;
 
-      setImpStatus("importing");
+      setImpMsg(`Import queued. Job ID: ${jobId}`);
+
+      while (true) {
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+
+        const statusJson = await apiGetJson<any>(
+          `/v1/integrations/wowboost/import-job-status?job_id=${encodeURIComponent(jobId)}`
+        );
+
+        if (!statusJson.ok) {
+          setImpStatus("error");
+          setImpMsg(statusJson.message || "Could not check import status.");
+          return;
+        }
+
+        const job = statusJson.job;
+        lastJob = job;
+
+        const status = String(job?.status ?? "running");
+
+        setImpMsg(
+          `Import ${status}… fetched ${job?.fetched ?? 0} • upserted ${
+            job?.upserted ?? 0
+          } • pages ${job?.pages ?? 0}`
+        );
+
+        if (status === "completed") break;
+
+        if (status === "failed" || status === "cancelled") {
+          setImpStatus("error");
+          setImpMsg(job?.error || `Import ${status}.`);
+          return;
+        }
+      }
+
+      setImpStatus("done");
       setImpMsg(
-        `Import running… fetched ${job?.fetched ?? 0} • upserted ${
-          job?.upserted ?? 0
-        } • pages ${job?.pages ?? 0}`
+        `Imported ${lastJob?.upserted ?? 0} orders (fetched ${
+          lastJob?.fetched ?? 0
+        }) • pages ${lastJob?.pages ?? 0}`
       );
 
-      done = Boolean(nextJson.done);
+      setViewOrdersHref(
+        buildOrdersUrl(
+          "wowboost",
+          from,
+          to,
+          impFilter === "all_sales" ? undefined : impFilter.toUpperCase()
+        )
+      );
 
-      if (!done) {
-        await new Promise((resolve) => setTimeout(resolve, 500));
-      }
+      await refreshStatus();
+      return;
+    } catch (e: any) {
+      setImpStatus("error");
+      setImpMsg(e?.message || "Import failed.");
+      return;
     }
-
-    setImpStatus("done");
-    setImpMsg(
-      `Imported ${lastJob?.upserted ?? 0} orders (fetched ${
-        lastJob?.fetched ?? 0
-      }) • pages ${lastJob?.pages ?? 0}`
-    );
-
-    setViewOrdersHref(
-      buildOrdersUrl(
-        "wowboost",
-        from,
-        to,
-        impFilter === "all_sales" ? undefined : impFilter.toUpperCase()
-      )
-    );
-
-    await refreshStatus();
-    return;
-  } catch (e: any) {
-    setImpStatus("error");
-    setImpMsg(e?.message || "Import failed.");
-    return;
   }
-}
 
-  // ALL OTHER INTEGRATIONS = existing sync flow
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), 60000);
 
