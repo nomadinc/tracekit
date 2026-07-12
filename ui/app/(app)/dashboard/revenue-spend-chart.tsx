@@ -4,6 +4,7 @@
 import * as React from "react";
 import { useSearchParams } from "next/navigation";
 import { apiGetJson } from "@/lib/api";
+import type { RevenueSpendPoint, RevenueSpendResponse } from "@/lib/profit-types";
 
 import {
   ResponsiveContainer,
@@ -14,19 +15,6 @@ import {
   CartesianGrid,
   Tooltip,
 } from "recharts";
-
-type ApiPoint = {
-  date?: string | null;
-  revenue?: number | null;
-  spend?: number | null;
-};
-
-type ApiResp = {
-  ok?: boolean;
-  error?: string;
-  message?: string;
-  series?: ApiPoint[];
-};
 
 function isoDateLocal(d: Date) {
   const yyyy = d.getFullYear();
@@ -134,8 +122,10 @@ export function RevenueSpendChart() {
   const toDt = parseYmdLocal(toQ || fromQ || defaultTo);
 
   const canFetch = Boolean(fromDt && toDt);
+  const fromMs = fromDt?.getTime() ?? null;
+  const toMs = toDt?.getTime() ?? null;
 
-  const [series, setSeries] = React.useState<ApiPoint[]>([]);
+  const [series, setSeries] = React.useState<RevenueSpendPoint[]>([]);
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
 
@@ -143,16 +133,18 @@ export function RevenueSpendChart() {
     let cancelled = false;
 
     async function run() {
-      if (!canFetch || !fromDt || !toDt) return;
+      if (!canFetch || fromMs == null || toMs == null) return;
 
-      const from = isoDateLocal(fromDt);
-      const to = isoDateLocal(toDt);
+      const fromDate = new Date(fromMs);
+      const toDate = new Date(toMs);
+      const from = isoDateLocal(fromDate);
+      const to = isoDateLocal(toDate);
 
       try {
         setLoading(true);
         setError(null);
 
-        const json = await apiGetJson<ApiResp>(
+        const json = await apiGetJson<RevenueSpendResponse>(
           `/v1/revenue-spend?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`,
         );
 
@@ -164,7 +156,7 @@ export function RevenueSpendChart() {
 
         const apiSeries = Array.isArray(json?.series) ? json.series : [];
 
-        const byDay = new Map<string, ApiPoint>();
+        const byDay = new Map<string, RevenueSpendPoint>();
 
         for (const point of apiSeries) {
           const day = ymdFromApiDate(point?.date);
@@ -175,10 +167,13 @@ export function RevenueSpendChart() {
             date: day,
             revenue: Number(point?.revenue || 0),
             spend: Number(point?.spend || 0),
+            net_profit: Number(point?.net_profit || 0),
+            refunds: Number(point?.refunds || 0),
+            chargebacks: Number(point?.chargebacks || 0),
           });
         }
 
-        const days = eachDayInclusive(fromDt, toDt);
+        const days = eachDayInclusive(fromDate, toDate);
 
         const filled = days.map((day) => {
           const hit = byDay.get(day);
@@ -187,6 +182,9 @@ export function RevenueSpendChart() {
             date: day,
             revenue: Number(hit?.revenue || 0),
             spend: Number(hit?.spend || 0),
+            net_profit: Number(hit?.net_profit || 0),
+            refunds: Number(hit?.refunds || 0),
+            chargebacks: Number(hit?.chargebacks || 0),
           };
         });
 
@@ -212,7 +210,7 @@ export function RevenueSpendChart() {
     return () => {
       cancelled = true;
     };
-  }, [canFetch, fromQ, toQ]);
+  }, [canFetch, fromMs, toMs]);
 
   if (!canFetch) {
     return (
@@ -234,13 +232,34 @@ export function RevenueSpendChart() {
   const chartData = series.map((p) => ({
     dateLabel: String(p.date || ""),
     revenue: Number(p.revenue || 0),
-    spend: Number(p.spend || 0),
+    adSpend: Number(p.spend || 0),
+    netProfit: Number(p.net_profit || 0),
+    refunds: Number(p.refunds || 0),
+    chargebacks: Number(p.chargebacks || 0),
   }));
+
+  function ProfitTooltip({ active, payload, label }: any) {
+    if (!active || !payload?.length) return null;
+    const row = payload[0]?.payload || {};
+
+    return (
+      <div className="rounded-lg border bg-white p-3 text-xs shadow-lg dark:border-slate-700 dark:bg-slate-950">
+        <div className="mb-2 font-medium">Date: {String(label || "")}</div>
+        <div className="space-y-1">
+          <div>Revenue: {formatMoney(row.revenue)}</div>
+          <div>Ad Spend: {formatMoney(row.adSpend)}</div>
+          <div>Net Profit: {formatMoney(row.netProfit)}</div>
+          <div>Refunds: {formatMoney(row.refunds)}</div>
+          <div>Chargebacks: {formatMoney(row.chargebacks)}</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="rounded-xl border p-4">
       <div className="mb-3 flex items-center justify-between">
-        <div className="text-sm font-medium">Revenue vs Spend</div>
+        <div className="text-sm font-medium">Revenue, Spend, and Profit</div>
         <div className="text-xs text-slate-500">
           {loading ? "loading…" : ""}
         </div>
@@ -255,15 +274,10 @@ export function RevenueSpendChart() {
             <CartesianGrid strokeDasharray="3 3" />
             <XAxis dataKey="dateLabel" />
             <YAxis tickFormatter={(v) => `$${Number(v || 0).toFixed(0)}`} />
-            <Tooltip
-              formatter={(value: any, name: any) => [
-                formatMoney(value),
-                String(name || ""),
-              ]}
-              labelFormatter={(label) => `Date: ${String(label || "")}`}
-            />
-            <Line type="monotone" dataKey="revenue" dot={false} />
-            <Line type="monotone" dataKey="spend" dot={false} />
+            <Tooltip content={<ProfitTooltip />} />
+            <Line type="monotone" dataKey="revenue" name="Revenue" dot={false} stroke="#059669" strokeWidth={2} />
+            <Line type="monotone" dataKey="adSpend" name="Ad Spend" dot={false} stroke="#d97706" strokeWidth={2} />
+            <Line type="monotone" dataKey="netProfit" name="Net Profit" dot={false} stroke="#2563eb" strokeWidth={2} />
           </LineChart>
         </ResponsiveContainer>
       </div>

@@ -12,10 +12,16 @@ const RevenueSpendChart = dynamic(
   { ssr: false }
 );
 
+const ProfitSummaryPanel = dynamic(
+  () => import("./profit-summary-panel").then((m) => m.ProfitSummaryPanel),
+  { ssr: false }
+);
+
 export default function DashboardClient() {
   return (
     <div className="space-y-6">
       <KpisPanel />
+      <ProfitSummaryPanel />
       <RevenueSpendChart />
     </div>
   );
