@@ -1,0 +1,140 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import {
+  aggregateDailyProfitConversions,
+  aggregateProfitConversions,
+  profitDailyKeyFromConversion,
+  profitDailyKeyId,
+  profitOrderKeyFromConversion,
+  profitOrderKeyId,
+  toProfitDailyRollupRow,
+  toProfitOrderRollupRow,
+  type ProfitConversionRow,
+} from "./profit.ts";
+
+const base = {
+  workspace_id: "default",
+  order_id: "ord_1",
+  connector_id: "shop_1",
+  currency: "USD",
+  platform: "shopify",
+  event_source: "shopify",
+  occurred_at: "2026-07-01T12:00:00.000Z",
+};
+
+function row(ledgerType: string, amount: number, extra: Partial<ProfitConversionRow> = {}): ProfitConversionRow {
+  return {
+    ...base,
+    ledger_type: ledgerType,
+    amount,
+    ...extra,
+  };
+}
+
+test("aggregates sale-only profit", () => {
+  const result = aggregateProfitConversions([row("sale", 100)]);
+
+  assert.equal(result.gross_revenue, 100);
+  assert.equal(result.net_revenue, 100);
+  assert.equal(result.total_costs, 0);
+  assert.equal(result.net_profit, 100);
+  assert.equal(result.profit_margin_pct, 100);
+});
+
+test("aggregates sale plus partial refund", () => {
+  const result = aggregateProfitConversions([
+    row("sale", 100),
+    row("refund", -25, { occurred_at: "2026-07-02T12:00:00.000Z" }),
+  ]);
+
+  assert.equal(result.gross_revenue, 100);
+  assert.equal(result.refunds, -25);
+  assert.equal(result.net_revenue, 75);
+  assert.equal(result.net_profit, 75);
+  assert.equal(result.profit_margin_pct, 75);
+});
+
+test("aggregates sale with chargeback and chargeback fee", () => {
+  const result = aggregateProfitConversions([
+    row("sale", 100),
+    row("chargeback", -100),
+    row("chargeback_fee", -15),
+  ]);
+
+  assert.equal(result.chargebacks, -100);
+  assert.equal(result.chargeback_fees, -15);
+  assert.equal(result.net_revenue, 0);
+  assert.equal(result.total_costs, -15);
+  assert.equal(result.net_profit, -15);
+});
+
+test("aggregates multiple processor fees", () => {
+  const result = aggregateProfitConversions([
+    row("sale", 100),
+    row("processor_fee", -2.9),
+    row("processor_fee", -0.3),
+  ]);
+
+  assert.equal(result.processor_fees, -3.2);
+  assert.equal(result.total_costs, -3.2);
+  assert.equal(result.net_profit, 96.8);
+});
+
+test("keeps positive and negative adjustments signed as stored", () => {
+  const result = aggregateProfitConversions([
+    row("sale", 100),
+    row("adjustment", 10),
+    row("adjustment", -4),
+  ]);
+
+  assert.equal(result.adjustments, 6);
+  assert.equal(result.net_revenue, 100);
+  assert.equal(result.net_profit, 106);
+});
+
+test("returns null margin when gross revenue is zero", () => {
+  const result = aggregateProfitConversions([row("processor_fee", -2.5)]);
+
+  assert.equal(result.gross_revenue, 0);
+  assert.equal(result.net_profit, -2.5);
+  assert.equal(result.profit_margin_pct, null);
+});
+
+test("builds stable keys and deterministic upsert rows", () => {
+  const rows = [row("sale", 100), row("refund", -10)];
+  const key = profitOrderKeyFromConversion(rows[0]);
+
+  assert.ok(key);
+  assert.equal(profitOrderKeyId(key), "default\u001ford_1\u001fshop_1\u001fUSD");
+
+  const first = toProfitOrderRollupRow(key, aggregateProfitConversions(rows));
+  const second = toProfitOrderRollupRow(key, aggregateProfitConversions(rows));
+
+  assert.equal(first.workspace_id, second.workspace_id);
+  assert.equal(first.order_id, second.order_id);
+  assert.equal(first.connector_id, second.connector_id);
+  assert.equal(first.currency, second.currency);
+  assert.equal(first.net_profit, second.net_profit);
+});
+
+test("aggregates daily profit across multiple orders", () => {
+  const rows = [
+    row("sale", 100, { order_id: "ord_1" }),
+    row("processor_fee", -3, { order_id: "ord_1" }),
+    row("sale", 50, { order_id: "ord_2" }),
+    row("refund", -10, { order_id: "ord_2" }),
+  ];
+  const dailyKey = profitDailyKeyFromConversion(rows[0]);
+
+  assert.ok(dailyKey);
+  assert.equal(profitDailyKeyId(dailyKey), "default\u001f2026-07-01\u001fshop_1\u001fUSD");
+
+  const aggregate = aggregateDailyProfitConversions(rows);
+  const upsert = toProfitDailyRollupRow(dailyKey, aggregate);
+
+  assert.equal(upsert.order_count, 2);
+  assert.equal(upsert.gross_revenue, 150);
+  assert.equal(upsert.refunds, -10);
+  assert.equal(upsert.processor_fees, -3);
+  assert.equal(upsert.net_profit, 137);
+});
