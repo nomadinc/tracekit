@@ -344,13 +344,38 @@ async function refreshProfitOrderRollup(supabase: SupabaseClientAny, key: Profit
   if (!rows.length) return { refreshed: false, rows_scanned: 0, rollup: null };
 
   const rollup = toProfitOrderRollupRow(key, aggregateProfitConversions(rows));
+  const { data: existing, error: existingError } = await supabase
+    .from("profit_order_rollups")
+    .select("id")
+    .eq("workspace_id", rollup.workspace_id)
+    .eq("order_id", rollup.order_id)
+    .eq("connector_id", rollup.connector_id)
+    .eq("currency", rollup.currency)
+    .limit(1)
+    .maybeSingle();
+
+  if (existingError) throw new Error(`Profit order rollup lookup failed: ${existingError.message}`);
+
+  if (existing?.id) {
+    const { data, error } = await supabase
+      .from("profit_order_rollups")
+      .update(rollup)
+      .eq("id", existing.id)
+      .select("*")
+      .single();
+
+    if (error) throw new Error(`Profit order rollup update failed: ${error.message}`);
+
+    return { refreshed: true, rows_scanned: rows.length, rollup: data };
+  }
+
   const { data, error } = await supabase
     .from("profit_order_rollups")
-    .upsert(rollup, { onConflict: "workspace_id,order_id,connector_id,currency" })
+    .insert(rollup)
     .select("*")
     .single();
 
-  if (error) throw new Error(`Profit order rollup upsert failed: ${error.message}`);
+  if (error) throw new Error(`Profit order rollup insert failed: ${error.message}`);
 
   return { refreshed: true, rows_scanned: rows.length, rollup: data };
 }
