@@ -3,6 +3,17 @@
 // Integrations: CheckoutChamp/Konnektive + WOWSuite (WowBoost + WowPay umbrella)
 
 import { createClient } from "@supabase/supabase-js";
+import {
+  DEFAULT_SHOPIFY_API_VERSION,
+  SHOPIFY_CONNECTION_TEST_QUERY,
+  SHOPIFY_ORDERS_QUERY,
+  buildShopifyLedgerEventsFromOrder,
+  buildShopifyOrderSearchQuery,
+  normalizeShopifyApiVersion,
+  normalizeShopifyOrderForPlatformOrder,
+  normalizeShopifyShopDomain,
+  shopifyAdminGraphqlUrl,
+} from "./shopify";
 type LedgerType =
   | "sale"
   | "refund"
@@ -264,6 +275,7 @@ function coercePlatformKey(raw: any) {
   if (s === "wowsuite:wowpay") return wowSuiteKey("wowpay");
   if (s === "konnektive" || s === "konnective") return "checkoutchamp";
   if (s === "checkoutchamp") return "checkoutchamp";
+  if (s === "shopify") return "shopify";
   if (s === "wowsuite") return "wowsuite";
   if (s === "nmi") return "nmi";
   return s;
@@ -777,6 +789,273 @@ function extractArrayFromResponse(js: any): any[] {
   if (Array.isArray(js?.result?.data)) return js.result.data;
   if (Array.isArray(js?.results)) return js.results;
   return [];
+}
+
+function classifyShopifyGraphqlError(status: number, text: string, parsed: any) {
+  if (status === 429) return "Shopify Admin API rate limit exceeded. Try again after Shopify restores capacity.";
+  if (status === 401) return "Shopify rejected the Admin API token.";
+  if (status === 403) return "Shopify Admin API token is missing required access scopes.";
+
+  const errors = Array.isArray(parsed?.errors) ? parsed.errors : [];
+  const messages = errors.map((err: any) => String(err?.message ?? "")).filter(Boolean);
+  const codes = errors.map((err: any) => String(err?.extensions?.code ?? "")).filter(Boolean);
+  const combined = [...messages, ...codes].join(" ").toLowerCase();
+
+  if (combined.includes("access_denied") || combined.includes("access denied") || combined.includes("scope") || combined.includes("permission")) {
+    return "Shopify Admin API token is missing required access scopes.";
+  }
+
+  if (messages.length) return `Shopify Admin API error: ${messages.slice(0, 3).join("; ")}`;
+  return `Shopify Admin API failed (${status}): ${text.slice(0, 300)}`;
+}
+
+async function shopifyGraphql(args: {
+  shopDomain: string;
+  apiVersion: string;
+  token: string;
+  query: string;
+  variables?: Record<string, any>;
+  timeoutMs?: number;
+}) {
+  const url = shopifyAdminGraphqlUrl(args.shopDomain, args.apiVersion);
+  let res: Response;
+
+  try {
+    res = await fetchWithTimeout(
+      url,
+      {
+        method: "POST",
+        headers: {
+          Accept: "application/json",
+          "Content-Type": "application/json",
+          "X-Shopify-Access-Token": args.token,
+        },
+        body: JSON.stringify({
+          query: args.query,
+          variables: args.variables ?? {},
+        }),
+      },
+      args.timeoutMs ?? 30000,
+    );
+  } catch (e: any) {
+    const message = String(e?.message || e);
+    if (message.toLowerCase().includes("timed out")) {
+      throw new Error("Shopify Admin API request timed out.");
+    }
+    throw new Error(`Shopify Admin API request failed. Check the shop domain. ${message}`);
+  }
+
+  const text = await readTextSafe(res);
+  const parsed = safeJsonParse(text);
+
+  if (!res.ok || !parsed || (Array.isArray(parsed.errors) && parsed.errors.length)) {
+    throw new Error(classifyShopifyGraphqlError(res.status, text, parsed));
+  }
+
+  return parsed;
+}
+
+async function testShopifyConnection(args: { shopDomain: string; apiVersion?: string; token: string }) {
+  const shopDomain = normalizeShopifyShopDomain(args.shopDomain);
+  if (!shopDomain) {
+    return {
+      ok: false,
+      message: "Invalid Shopify shop domain. Use your-store.myshopify.com or the store handle.",
+    };
+  }
+
+  const apiVersion = normalizeShopifyApiVersion(args.apiVersion);
+  const parsed = await shopifyGraphql({
+    shopDomain,
+    apiVersion,
+    token: args.token,
+    query: SHOPIFY_CONNECTION_TEST_QUERY,
+    timeoutMs: 15000,
+  });
+
+  return {
+    ok: true,
+    message: "Connection successful.",
+    shopDomain,
+    apiVersion,
+    shop: parsed?.data?.shop ?? null,
+  };
+}
+
+async function getShopifyConnection(env: Env) {
+  const creds = await getLatestCredential(env, "shopify");
+  if (!creds) throw new Error("Shopify not connected. Save credentials first.");
+
+  const shopDomain = normalizeShopifyShopDomain(creds.base_url);
+  if (!shopDomain) throw new Error("Saved Shopify shop domain is invalid. Reconnect Shopify.");
+
+  return {
+    shopDomain,
+    apiVersion: normalizeShopifyApiVersion(creds.username || DEFAULT_SHOPIFY_API_VERSION),
+    token: await decryptSecretFromCredRow(env, creds),
+    creds,
+  };
+}
+
+async function normalizeShopifyOrderWithIdentity(order: any, shopDomain: string) {
+  const normalized = normalizeShopifyOrderForPlatformOrder(order, shopDomain);
+  if (!normalized) return null;
+
+  const emailFields = await emailIdentityFields(normalized.email);
+  const phone = normalizePhone(normalized.phone);
+
+  return {
+    ...normalized,
+    ...emailFields,
+    email: emailFields.customer_email,
+    phone: phone || null,
+    everflow_transaction_id: normalized.sub5 || null,
+  };
+}
+
+async function insertShopifyLedgerEvents(env: Env, shopDomain: string, orders: any[]) {
+  const eventsById = new Map<string, ReturnType<typeof buildShopifyLedgerEventsFromOrder>[number]>();
+
+  for (const order of orders) {
+    for (const event of buildShopifyLedgerEventsFromOrder(order, shopDomain)) {
+      eventsById.set(event.transactionId, event);
+    }
+  }
+
+  const events = Array.from(eventsById.values());
+  if (!events.length) return { inserted: 0, skipped: 0 };
+
+  const supabase = getSupabase(env);
+  const eventIds = events.map((event) => event.transactionId);
+  const existingIds = new Set<string>();
+
+  for (let i = 0; i < eventIds.length; i += 100) {
+    const chunk = eventIds.slice(i, i + 100);
+    const { data: existing, error: existingError } = await supabase
+      .from("conversions")
+      .select("transaction_id")
+      .eq("platform", "shopify")
+      .in("transaction_id", chunk);
+
+    if (existingError) throw new Error(`Shopify ledger dedupe failed: ${existingError.message}`);
+
+    for (const row of existing || []) {
+      existingIds.add(String((row as any).transaction_id || ""));
+    }
+  }
+
+  const rowsToInsert = events
+    .filter((event) => !existingIds.has(event.transactionId))
+    .map((event) => {
+      const sourceOrder = event.raw?.order || event.raw;
+      const normalizedOrder = normalizeShopifyOrderForPlatformOrder(sourceOrder, shopDomain);
+      const amountCents = normalizeLedgerAmount(event.ledgerType as LedgerType, toCents(event.amount));
+
+      return {
+        workspace_id: "default",
+        ledger_type: event.ledgerType,
+        event_source: "shopify",
+        ingestion_method: "api_import",
+        connector_id: shopDomain,
+        tkid: normalizedOrder?.tkid || null,
+        email: normalizedOrder?.email || null,
+        phone: normalizePhone(normalizedOrder?.phone || "") || null,
+        order_id: event.orderId,
+        transaction_id: event.transactionId,
+        parent_transaction_id: event.parentTransactionId || null,
+        amount: amountCents / 100,
+        currency: event.currency || "USD",
+        platform: "shopify",
+        source_system: "shopify",
+        network: null,
+        affiliate_id: normalizedOrder?.affiliate_id || null,
+        campaign_id: normalizedOrder?.source_id || null,
+        offer_id: normalizedOrder?.everflow_offer_id || null,
+        status: event.status,
+        reason: event.reason,
+        raw: event.raw,
+        meta: {
+          external_event_id: event.transactionId,
+          shop_domain: shopDomain,
+          source: "shopify_import",
+        },
+        occurred_at: event.occurredAt,
+      };
+    });
+
+  if (!rowsToInsert.length) return { inserted: 0, skipped: events.length };
+
+  const { error: insertError } = await supabase.from("conversions").insert(rowsToInsert);
+  if (insertError) throw new Error(`Shopify ledger insert failed: ${insertError.message}`);
+
+  return {
+    inserted: rowsToInsert.length,
+    skipped: events.length - rowsToInsert.length,
+  };
+}
+
+async function runShopifyImport(env: Env, args: RunImportArgs) {
+  if (!parseYmd(args.from) || !parseYmd(args.to)) throw new Error("from/to must be YYYY-MM-DD");
+
+  const connection = await getShopifyConnection(env);
+  const supabase = getSupabase(env);
+  const pageSize = Math.max(1, Math.min(100, Number(args.pageSize ?? 50)));
+  const searchQuery = buildShopifyOrderSearchQuery({ from: args.from, to: args.to, filter: args.filter });
+
+  let after: string | null = null;
+  let page = 1;
+  let totalFetched = 0;
+  let totalUpserted = 0;
+  let ledgerInserted = 0;
+  let ledgerSkipped = 0;
+  const maxPages = 250;
+
+  while (page <= maxPages) {
+    const parsed = await shopifyGraphql({
+      shopDomain: connection.shopDomain,
+      apiVersion: connection.apiVersion,
+      token: connection.token,
+      query: SHOPIFY_ORDERS_QUERY,
+      variables: {
+        first: pageSize,
+        after,
+        query: searchQuery,
+      },
+      timeoutMs: 30000,
+    });
+
+    const orderConnection = parsed?.data?.orders;
+    const edges = Array.isArray(orderConnection?.edges) ? orderConnection.edges : [];
+    const rawOrders = edges.map((edge: any) => edge?.node).filter(Boolean);
+    totalFetched += rawOrders.length;
+
+    const normalizedRows = await Promise.all(rawOrders.map((order: any) => normalizeShopifyOrderWithIdentity(order, connection.shopDomain)));
+    const rows = dedupePlatformOrders(normalizedRows.filter(Boolean));
+
+    if (rows.length) {
+      const { error } = await supabase.from("platform_orders").upsert(rows as any[], { onConflict: "platform_order_id" });
+      if (error) throw new Error(`Shopify DB upsert failed: ${error.message}`);
+      totalUpserted += rows.length;
+
+      const ledgerResult = await insertShopifyLedgerEvents(env, connection.shopDomain, rawOrders);
+      ledgerInserted += ledgerResult.inserted;
+      ledgerSkipped += ledgerResult.skipped;
+    }
+
+    const pageInfo = orderConnection?.pageInfo || {};
+    if (!rawOrders.length || !pageInfo.hasNextPage || !pageInfo.endCursor) break;
+
+    after = String(pageInfo.endCursor);
+    page += 1;
+  }
+
+  return {
+    fetched: totalFetched,
+    upserted: totalUpserted,
+    pages: page,
+    ledger_inserted: ledgerInserted,
+    ledger_skipped: ledgerSkipped,
+  };
 }
 
 async function testCheckoutChampConnection(args: { baseUrl: string; username: string; password: string }) {
@@ -1523,9 +1802,78 @@ async function runScheduledCheckoutChampImport(env: Env) {
   }
 }
 
+async function runScheduledShopifyImport(env: Env) {
+  const supabase = getSupabase(env);
+
+  await supabase.from("integrations_settings").upsert(
+    {
+      platform: "shopify",
+      auto_import_enabled: false,
+      auto_import_interval_minutes: 60,
+      auto_import_lookback_hours: 2,
+      updated_at: new Date().toISOString(),
+    } as any,
+    { onConflict: "platform" }
+  );
+
+  const { data: s, error } = await supabase.from("integrations_settings").select("*").eq("platform", "shopify").maybeSingle();
+  if (error) {
+    console.error("[cron] shopify settings read failed", error);
+    return;
+  }
+
+  if (!s || !(s as any).auto_import_enabled) return;
+
+  const lookbackHours = Math.max(1, Math.min(168, Number((s as any).auto_import_lookback_hours ?? 48)));
+  const now = new Date();
+  const from = isoYmdUTC(new Date(now.getTime() - lookbackHours * 3600000));
+  const to = isoYmdUTC(now);
+
+  await supabase
+    .from("integrations_settings")
+    .update({ last_run_at: new Date().toISOString(), last_error: null, updated_at: new Date().toISOString() })
+    .eq("platform", "shopify");
+
+  try {
+    const res = await runShopifyImport(env, { from, to, filter: "all_sales" });
+
+    await supabase
+      .from("integrations_settings")
+      .update({ last_success_at: new Date().toISOString(), last_error: null, updated_at: new Date().toISOString() })
+      .eq("platform", "shopify");
+
+    console.log("[cron] shopify import ok", { from, to, ...res });
+  } catch (e: any) {
+    await supabase
+      .from("integrations_settings")
+      .update({ last_error: String(e?.message || e), updated_at: new Date().toISOString() })
+      .eq("platform", "shopify");
+
+    console.error("[cron] shopify import failed", e);
+  }
+}
+
 async function handleTestConnect(req: Request, env: Env) {
   const body = await readJsonBody(req);
   const platform = coercePlatformKey(body.platform);
+
+  if (platform === "shopify") {
+    const shopDomain = normalizeShopifyShopDomain(body.shopDomain || body.shop_domain || body.baseUrl || body.base_url);
+    const token = String(body.adminAccessToken || body.admin_access_token || body.password || "").trim();
+    const apiVersion = normalizeShopifyApiVersion(body.apiVersion || body.api_version);
+
+    if (!shopDomain) {
+      return json({ ok: false, message: "Invalid Shopify shop domain. Use your-store.myshopify.com or the store handle." }, 400);
+    }
+
+    if (!token) {
+      return json({ ok: false, message: "Admin API access token is required." }, 400);
+    }
+
+    const result = await testShopifyConnection({ shopDomain, apiVersion, token });
+    return json({ platform, ...result }, result.ok ? 200 : 400);
+  }
+
   const baseUrl = String(
     body.baseUrl || body.base_url || (platform === "checkoutchamp" ? env.DEFAULT_CC_BASE || DEFAULT_CC_BASE : DEFAULT_WOWSUITE_AUTH_BASE)
   ).replace(/\/+$/, "");
@@ -1559,6 +1907,30 @@ async function handleTestConnect(req: Request, env: Env) {
 async function handleSaveCredentials(req: Request, env: Env) {
   const body = await readJsonBody(req);
   const platform = coercePlatformKey(body.platform);
+
+  if (platform === "shopify") {
+    const shopDomain = normalizeShopifyShopDomain(body.shopDomain || body.shop_domain || body.baseUrl || body.base_url);
+    const token = String(body.adminAccessToken || body.admin_access_token || body.password || "").trim();
+    const apiVersion = normalizeShopifyApiVersion(body.apiVersion || body.api_version);
+
+    if (!shopDomain) {
+      return json({ ok: false, message: "Invalid Shopify shop domain. Use your-store.myshopify.com or the store handle." }, 400);
+    }
+
+    if (!token) {
+      return json({ ok: false, message: "Admin API access token is required." }, 400);
+    }
+
+    await saveCredential(env, {
+      platform,
+      baseUrl: shopDomain,
+      username: apiVersion,
+      password: token,
+    });
+
+    return json({ ok: true, platform, shopDomain, apiVersion, message: "Credentials saved." });
+  }
+
   const baseUrl = String(
     body.baseUrl || body.base_url || (platform === "checkoutchamp" ? env.DEFAULT_CC_BASE || DEFAULT_CC_BASE : DEFAULT_WOWSUITE_AUTH_BASE)
   ).replace(/\/+$/, "");
@@ -2239,6 +2611,121 @@ async function router(req: Request, env: Env): Promise<Response> {
 
   if (path === "/v1/integrations/save-credentials" && req.method === "POST") {
     return handleSaveCredentials(req, env);
+  }
+
+  if (path === "/v1/integrations/shopify/status" && req.method === "GET") {
+    const creds = await getLatestCredential(env, "shopify");
+
+    if (!creds) {
+      return json({
+        ok: true,
+        connected: false,
+        platform: "shopify",
+        baseUrl: null,
+        apiVersion: null,
+        username: null,
+        created_at: null,
+        updated_at: null,
+      });
+    }
+
+    return json({
+      ok: true,
+      connected: true,
+      platform: "shopify",
+      baseUrl: normalizeShopifyShopDomain(creds.base_url) || creds.base_url || null,
+      apiVersion: normalizeShopifyApiVersion(creds.username || DEFAULT_SHOPIFY_API_VERSION),
+      username: null,
+      created_at: creds.created_at ?? null,
+      updated_at: creds.updated_at ?? null,
+    });
+  }
+
+  if (path === "/v1/integrations/shopify/settings" && req.method === "GET") {
+    const supabase = getSupabase(env);
+
+    await supabase.from("integrations_settings").upsert(
+      {
+        platform: "shopify",
+        auto_import_enabled: false,
+        auto_import_interval_minutes: 60,
+        auto_import_lookback_hours: 2,
+        updated_at: new Date().toISOString(),
+      } as any,
+      { onConflict: "platform" },
+    );
+
+    const { data, error } = await supabase.from("integrations_settings").select("*").eq("platform", "shopify").maybeSingle();
+    if (error) throw new Error(error.message);
+
+    return json({ ok: true, platform: "shopify", ...(data || {}) });
+  }
+
+  if (path === "/v1/integrations/shopify/settings" && req.method === "POST") {
+    const body = await readJsonBody(req);
+    const supabase = getSupabase(env);
+
+    const patch = {
+      platform: "shopify",
+      auto_import_enabled: Boolean(body.auto_import_enabled),
+      auto_import_interval_minutes: Math.max(15, Math.min(1440, Number(body.auto_import_interval_minutes ?? 60) || 60)),
+      auto_import_lookback_hours: Math.max(1, Math.min(168, Number(body.auto_import_lookback_hours ?? 2) || 2)),
+      updated_at: new Date().toISOString(),
+    };
+
+    const { error } = await supabase.from("integrations_settings").upsert(patch as any, { onConflict: "platform" });
+    if (error) throw new Error(error.message);
+
+    return json({ ok: true, message: "Settings saved." });
+  }
+
+  if ((path === "/v1/integrations/shopify/import-orders" || path === "/v1/integrations/shopify/run-now") && req.method === "POST") {
+    const body = await readJsonBody(req);
+    const from = String(body.from ?? "").trim();
+    const to = String(body.to ?? "").trim();
+    const filter = String(body.filter ?? "all_sales").trim();
+
+    if (!parseYmd(from) || !parseYmd(to)) {
+      return json({ ok: false, error: "bad_request", message: "from/to must be YYYY-MM-DD" }, 400);
+    }
+
+    const supabase = getSupabase(env);
+
+    if (path.endsWith("/run-now")) {
+      await supabase
+        .from("integrations_settings")
+        .update({ last_run_at: new Date().toISOString(), last_error: null, updated_at: new Date().toISOString() })
+        .eq("platform", "shopify");
+    }
+
+    try {
+      const res = await runShopifyImport(env, { from, to, filter });
+
+      if (path.endsWith("/run-now")) {
+        await supabase
+          .from("integrations_settings")
+          .update({ last_success_at: new Date().toISOString(), last_error: null, updated_at: new Date().toISOString() })
+          .eq("platform", "shopify");
+      }
+
+      return json({
+        ok: true,
+        platform: "shopify",
+        from,
+        to,
+        filter,
+        ...res,
+        message: `Imported ${res.upserted} orders (fetched ${res.fetched}).`,
+      });
+    } catch (e: any) {
+      if (path.endsWith("/run-now")) {
+        await supabase
+          .from("integrations_settings")
+          .update({ last_error: String(e?.message || e), updated_at: new Date().toISOString() })
+          .eq("platform", "shopify");
+      }
+      throw e;
+    }
   }
 
   if (path === "/v1/integrations/checkoutchamp/status" && req.method === "GET") {
@@ -4694,5 +5181,6 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 
   async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
     ctx.waitUntil(runScheduledCheckoutChampImport(env));
+    ctx.waitUntil(runScheduledShopifyImport(env));
   },
 };

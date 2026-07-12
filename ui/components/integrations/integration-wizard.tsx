@@ -27,6 +27,7 @@ type StatusResponse = ApiResponse & {
   connected?: boolean;
   platform?: string;
   baseUrl?: string | null;
+  apiVersion?: string | null;
   username?: string | null;
   created_at?: string | null;
   updated_at?: string | null;
@@ -707,7 +708,12 @@ export function IntegrationWizard({
             <div className="flex flex-wrap gap-x-6 gap-y-2">
               <Stat label="Connected" value={String(connected)} />
               <Stat label="Base URL" value={statusResponse?.baseUrl || "-"} mono />
-              <Stat label="Username" value={statusResponse?.username || "-"} mono />
+              {statusResponse?.apiVersion ? (
+                <Stat label="API Version" value={statusResponse.apiVersion} mono />
+              ) : null}
+              {statusResponse?.username ? (
+                <Stat label="Username" value={statusResponse.username} mono />
+              ) : null}
               <Stat
                 label="Updated"
                 value={toLocalDateTimeLabel(statusResponse?.updated_at)}
