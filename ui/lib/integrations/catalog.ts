@@ -81,9 +81,9 @@ export const integrationCatalog: IntegrationDefinition[] = [
         required: true,
       },
       {
-        key: "username",
-        label: "Username",
-        placeholder: "API username",
+        key: "loginId",
+        label: "Login ID",
+        placeholder: "Konnektive login ID",
         required: true,
       },
       {
