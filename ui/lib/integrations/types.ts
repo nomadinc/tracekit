@@ -20,6 +20,8 @@ export type IntegrationCredentialField = {
   type?: CredentialFieldType;
   required?: boolean;
   helpText?: string;
+  defaultValue?: string;
+  autoComplete?: string;
 };
 
 export type IntegrationTestEvent =
@@ -35,6 +37,13 @@ export type IntegrationPrimaryAction =
   | "manage"
   | "open"
   | "launch";
+
+export type IntegrationBackfillMode = "sync" | "async_job";
+
+export type IntegrationBackfillFilter = {
+  value: string;
+  label: string;
+};
 
 export type IntegrationDefinition = {
   id: string;
@@ -56,7 +65,22 @@ export type IntegrationDefinition = {
 
   postbackPath?: string;
   connectPath?: string;
+  testConnectionPath?: string;
+  saveCredentialsPath?: string;
+  statusPath?: string;
+  settingsPath?: string;
+  runNowPath?: string;
   backfillPath?: string;
+  backfillMode?: IntegrationBackfillMode;
+  backfillJobStatusPath?: string;
+  backfillFilters?: IntegrationBackfillFilter[];
+  backfillTimeoutMs?: number;
+
+  apiPlatform?: string;
+  defaultBackfillFrom?: string;
+  defaultBackfillTo?: string;
+  defaultAutoImportIntervalMinutes?: number;
+  defaultAutoImportLookbackHours?: number;
 
   documentation?: {
     credentialInstructions?: string[];

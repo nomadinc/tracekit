@@ -1,6 +1,6 @@
 // ui/lib/api.ts
 
-function getApiBaseUrl(): string {
+export function getApiBaseUrl(): string {
   // In Next.js client bundles, NEXT_PUBLIC_* values are inlined at build time.
   // Returning "" means "same origin" (useful if you proxy /v1/* through Next).
   const base =

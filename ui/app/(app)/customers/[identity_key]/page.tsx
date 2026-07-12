@@ -287,10 +287,11 @@ function uniqueTruthy(values: Array<string | null | undefined>) {
   );
 }
 
-function compactList(values: string[], max = 4) {
-  if (!values.length) return "—";
-  const head = values.slice(0, max);
-  const remaining = values.length - head.length;
+function compactList(values: Array<string | null | undefined>, max = 4) {
+  const cleanValues = values.map((value) => String(value || "").trim()).filter(Boolean);
+  if (!cleanValues.length) return "—";
+  const head = cleanValues.slice(0, max);
+  const remaining = cleanValues.length - head.length;
   return remaining > 0 ? `${head.join(", ")} +${remaining} more` : head.join(", ");
 }
 

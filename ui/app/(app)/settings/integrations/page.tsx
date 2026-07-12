@@ -1,6 +1,12 @@
 import Link from "next/link";
 import { Card } from "@/components/ui/card";
-import { getIntegrationsByCategory } from "@/lib/integrations/catalog";
+import {
+  getPopulatedIntegrationCategories,
+} from "@/lib/integrations/catalog";
+import type {
+  IntegrationDefinition,
+  IntegrationPrimaryAction,
+} from "@/lib/integrations/types";
 
 type ConnStatus = "not_connected" | "connected" | "syncing";
 
@@ -10,7 +16,15 @@ type IntegrationItem = {
   subtitle: string;
   status: ConnStatus;
   href: string;
-  primaryAction: "connect" | "configure" | "manage" | "open" | "launch";
+  primaryAction: IntegrationPrimaryAction;
+};
+
+const actionLabels: Record<IntegrationPrimaryAction, string> = {
+  connect: "Connect",
+  configure: "Configure",
+  manage: "Manage",
+  open: "Open",
+  launch: "Launch",
 };
 
 function StatusPill({ status }: { status: ConnStatus }) {
@@ -48,20 +62,12 @@ function getActionLabel(item: IntegrationItem) {
     return "Manage";
   }
 
-  const labels: Record<IntegrationItem["primaryAction"], string> = {
-    connect: "Connect",
-    configure: "Configure",
-    manage: "Manage",
-    open: "Open",
-    launch: "Launch",
-  };
-
-  return labels[item.primaryAction];
+  return actionLabels[item.primaryAction];
 }
 
 function IntegrationRow({ item }: { item: IntegrationItem }) {
   return (
-    <div className="flex flex-col gap-2 rounded-xl border p-3 sm:flex-row sm:items-center sm:justify-between">
+    <div className="flex flex-col gap-2 rounded-lg border p-3 sm:flex-row sm:items-center sm:justify-between">
       <div className="min-w-0">
         <div className="flex items-center gap-2">
           <div className="truncate font-medium">{item.name}</div>
@@ -76,7 +82,7 @@ function IntegrationRow({ item }: { item: IntegrationItem }) {
       <div className="flex shrink-0 items-center gap-2">
         <Link
           href={item.href}
-          className="rounded-lg border px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-white/5"
+          className="rounded-md border px-3 py-1.5 text-sm hover:bg-gray-50 dark:hover:bg-white/5"
         >
           {getActionLabel(item)}
         </Link>
@@ -85,12 +91,7 @@ function IntegrationRow({ item }: { item: IntegrationItem }) {
   );
 }
 
-function toIntegrationItem(integration: {
-  id: string;
-  name: string;
-  description: string;
-  primaryAction: IntegrationItem["primaryAction"];
-}): IntegrationItem {
+function toIntegrationItem(integration: IntegrationDefinition): IntegrationItem {
   return {
     key: integration.id,
     name: integration.name,
@@ -102,16 +103,7 @@ function toIntegrationItem(integration: {
 }
 
 export default function IntegrationsHubPage() {
-  const crms = getIntegrationsByCategory("crm").map(toIntegrationItem);
-
-  const gateways =
-    getIntegrationsByCategory("gateway").map(toIntegrationItem);
-
-  const tracking =
-    getIntegrationsByCategory("tracking").map(toIntegrationItem);
-
-  const developerTools =
-    getIntegrationsByCategory("developer").map(toIntegrationItem);
+  const sections = getPopulatedIntegrationCategories();
 
   return (
     <div className="space-y-6">
@@ -130,37 +122,18 @@ export default function IntegrationsHubPage() {
         </div>
       </Card>
 
-      <Card title="CRMs">
-        <div className="space-y-3">
-          {crms.map((item) => (
-            <IntegrationRow key={item.key} item={item} />
-          ))}
-        </div>
-      </Card>
-
-      <Card title="Payment Gateways">
-        <div className="space-y-3">
-          {gateways.map((item) => (
-            <IntegrationRow key={item.key} item={item} />
-          ))}
-        </div>
-      </Card>
-
-      <Card title="Tracking Platforms">
-        <div className="space-y-3">
-          {tracking.map((item) => (
-            <IntegrationRow key={item.key} item={item} />
-          ))}
-        </div>
-      </Card>
-
-      <Card title="Developer Tools">
-        <div className="space-y-3">
-          {developerTools.map((item) => (
-            <IntegrationRow key={item.key} item={item} />
-          ))}
-        </div>
-      </Card>
+      {sections.map((section) => (
+        <Card key={section.category} title={section.label}>
+          <div className="space-y-3">
+            {section.integrations.map((integration) => (
+              <IntegrationRow
+                key={integration.id}
+                item={toIntegrationItem(integration)}
+              />
+            ))}
+          </div>
+        </Card>
+      ))}
     </div>
   );
 }

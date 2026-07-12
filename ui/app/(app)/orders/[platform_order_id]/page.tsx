@@ -303,9 +303,10 @@ function rawProductName(order: any) {
 export default async function OrderDetailPage({
   params,
 }: {
-  params: { platform_order_id: string };
+  params: Promise<{ platform_order_id: string }>;
 }) {
-  const platformOrderId = decodeURIComponent(params.platform_order_id);
+  const { platform_order_id } = await params;
+  const platformOrderId = decodeURIComponent(platform_order_id);
 
   const data = await getOrder(platformOrderId);
 
