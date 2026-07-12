@@ -6,20 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { KpiCard } from "@/components/ui/kpi-card";
 import { TimeIntervalPicker } from "@/components/time-interval-picker";
 import { apiGetJson, apiPostJson } from "@/lib/api";
-
-type Kpis = {
-  gross_sales: number;
-  gross_sales_delta_pct: number;
-
-  net_profit: number;
-  net_margin: number;
-
-  refund_rate: number;
-  refund_rate_delta_pp: number;
-
-  chargebacks: number;
-  chargebacks_delta_pp: number;
-};
+import type { KpiResponse } from "@/lib/profit-types";
 
 // ---------- date helpers ----------
 function isoDateLocal(d: Date) {
@@ -281,7 +268,7 @@ export function KpisPanel() {
     if (li) setLastImport(li);
   }, [mounted]);
 
-  const [kpis, setKpis] = React.useState<Kpis | null>(null);
+  const [kpis, setKpis] = React.useState<KpiResponse | null>(null);
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
 
@@ -344,7 +331,7 @@ export function KpisPanel() {
     const from = isoDateLocal(range.from);
     const to = isoDateLocal(range.to ?? range.from);
 
-    const data = await apiGetJson<Kpis>(
+    const data = await apiGetJson<KpiResponse>(
       `/v1/kpis?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
     );
     setKpis(data);
@@ -482,9 +469,9 @@ export function KpisPanel() {
         </div>
       ) : null}
 
-      <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-4">
+      <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-5">
         <KpiCard
-          label="Gross Sales"
+          label="Gross Revenue"
           value={kpis ? formatMoney(kpis.gross_sales) : "—"}
           helper={kpis ? helperDeltaPct(kpis.gross_sales_delta_pct) : "—"}
         />
@@ -492,7 +479,12 @@ export function KpisPanel() {
         <KpiCard
           label="Net Profit"
           value={kpis ? formatMoney(kpis.net_profit) : "—"}
-          helper={kpis ? `${Math.round(kpis.net_margin * 100)}% margin` : "—"}
+        />
+
+        <KpiCard
+          label="Profit Margin"
+          value={kpis ? formatPctFromRatio(kpis.net_margin, 1) : "—"}
+          helper={kpis ? "Net profit / gross revenue" : "—"}
         />
 
         <KpiCard
@@ -502,7 +494,7 @@ export function KpisPanel() {
         />
 
         <KpiCard
-          label="Chargebacks"
+          label="Chargeback Rate"
           value={kpis ? formatPctFromRatio(kpis.chargebacks, 1) : "—"}
           helper={kpis ? helperDeltaPp(kpis.chargebacks_delta_pp) : "—"}
         />

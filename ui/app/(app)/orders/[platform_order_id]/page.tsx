@@ -1,6 +1,8 @@
 import Link from "next/link";
+import type { LedgerRow, OrderProfitResponse } from "@/lib/profit-types";
 
 const API_BASE =
+  process.env.NEXT_PUBLIC_API_BASE_URL ??
   process.env.NEXT_PUBLIC_API_BASE ??
   "https://tracekit-api.anthony-d15.workers.dev";
 
@@ -22,20 +24,53 @@ type TimelineEvent = {
 };
 
 async function getOrder(platformOrderId: string) {
-  const res = await fetch(
-    `${API_BASE}/v1/platform-orders/detail?platform_order_id=${encodeURIComponent(
-      platformOrderId,
-    )}`,
-    {
-      cache: "no-store",
-    },
-  );
+  const res = await fetch(`${API_BASE}/v1/platform-orders/detail?platform_order_id=${encodeURIComponent(platformOrderId)}`, {
+    cache: "no-store",
+  });
 
   if (!res.ok) {
     throw new Error("Failed to load order");
   }
 
   return res.json();
+}
+
+async function getOrderProfit(order: any): Promise<{
+  profit: OrderProfitResponse | null;
+  error: string | null;
+}> {
+  const orderId = String(order?.order_id || "").trim();
+  if (!orderId) return { profit: null, error: null };
+
+  const params = new URLSearchParams({ workspace_id: "default" });
+
+  if (order.platform_store_id) {
+    params.set("connector_id", String(order.platform_store_id));
+  }
+
+  if (order.currency) {
+    params.set("currency", String(order.currency).toUpperCase());
+  }
+
+  try {
+    const res = await fetch(
+      `${API_BASE}/v1/profit/orders/${encodeURIComponent(orderId)}?${params.toString()}`,
+      { cache: "no-store" },
+    );
+    const text = await res.text();
+    const json = text ? (JSON.parse(text) as OrderProfitResponse) : null;
+
+    if (!res.ok || json?.ok === false) {
+      return {
+        profit: null,
+        error: json?.message || json?.error || `Profit API ${res.status}`,
+      };
+    }
+
+    return { profit: json, error: null };
+  } catch (e: any) {
+    return { profit: null, error: e?.message || "Failed to load profit data" };
+  }
 }
 
 function formatMoney(n: number | null | undefined, currency?: string | null) {
@@ -46,6 +81,24 @@ function formatMoney(n: number | null | undefined, currency?: string | null) {
     style: "currency",
     currency: cur,
   });
+}
+
+function formatSignedMoney(n: number | string | null | undefined, currency?: string | null) {
+  const cur = currency || "USD";
+  const val = Number(n ?? 0);
+  const formatted = Math.abs(val).toLocaleString("en-US", {
+    style: "currency",
+    currency: cur,
+  });
+
+  if (val < 0) return `-${formatted}`;
+  if (val > 0) return `+${formatted}`;
+  return formatted;
+}
+
+function formatProfitMargin(n: number | null | undefined) {
+  const val = Number(n);
+  return Number.isFinite(val) ? `${val.toFixed(1)}%` : "—";
 }
 
 function parseDateSafe(v: any) {
@@ -82,6 +135,37 @@ function formatTimelineDate(v: any) {
     day: "numeric",
     hour: "numeric",
     minute: "2-digit",
+  });
+}
+
+function ledgerTypeLabel(value?: string | null) {
+  const s = String(value || "").trim();
+  if (!s) return "Unknown";
+
+  const labels: Record<string, string> = {
+    sale: "Sale",
+    refund: "Refund",
+    chargeback: "Chargeback",
+    chargeback_fee: "Chargeback fee",
+    processor_fee: "Processor fee",
+    affiliate_payout: "Affiliate payout",
+    shipping_cost: "Shipping cost",
+    bank_fee: "Bank fee",
+    tax: "Tax",
+    cogs: "COGS",
+    ad_spend: "Ad spend",
+    reversal: "Reversal",
+    adjustment: "Adjustment",
+  };
+
+  return labels[s] || s.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+function sortLedgerRows(rows: LedgerRow[]) {
+  return [...rows].sort((a, b) => {
+    const at = parseDateSafe(a.occurred_at)?.getTime() ?? 0;
+    const bt = parseDateSafe(b.occurred_at)?.getTime() ?? 0;
+    return at - bt;
   });
 }
 
@@ -321,6 +405,11 @@ export default async function OrderDetailPage({
   }
 
   const timeline = buildOrderTimeline(order);
+  const profitState = await getOrderProfit(order);
+  const profit = profitState.profit;
+  const rollup = profit?.rollup || null;
+  const ledgerRows = sortLedgerRows(profit?.ledger_rows || []);
+  const currency = rollup?.currency || order.currency || "USD";
 
   return (
     <div className="p-6 space-y-6">
@@ -508,6 +597,180 @@ export default async function OrderDetailPage({
             <div>{formatMoney(order.chargeback_fee, order.currency)}</div>
           </div>
         </div>
+      </div>
+
+      <div className="rounded-lg border p-4">
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="font-semibold">Ledger-Based Profit</h2>
+            <div className="text-xs text-slate-500">
+              Profit Engine rollup from append-only conversion events.
+            </div>
+          </div>
+          {rollup?.event_count != null ? (
+            <div className="rounded-full border px-2 py-1 text-xs text-slate-500">
+              {rollup.event_count} events
+            </div>
+          ) : null}
+        </div>
+
+        {profitState.error ? (
+          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
+            <span className="font-semibold">Profit data unavailable.</span>{" "}
+            <span className="font-mono text-xs opacity-80">{profitState.error}</span>
+          </div>
+        ) : null}
+
+        {!rollup ? (
+          <div className="rounded bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-300">
+            No ledger-based profit rollup is available for this order yet.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+              <div className="rounded-lg border bg-slate-50 p-4 dark:bg-slate-900">
+                <div className="text-xs text-slate-500">Net Profit</div>
+                <div className="mt-2 text-2xl font-semibold">
+                  {formatMoney(rollup.net_profit, currency)}
+                </div>
+              </div>
+              <div className="rounded-lg border bg-slate-50 p-4 dark:bg-slate-900">
+                <div className="text-xs text-slate-500">Profit Margin</div>
+                <div className="mt-2 text-2xl font-semibold">
+                  {formatProfitMargin(rollup.profit_margin_pct)}
+                </div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-4 text-sm md:grid-cols-3 xl:grid-cols-4">
+              <div>
+                <div className="text-slate-500">Gross Revenue</div>
+                <div>{formatMoney(rollup.gross_revenue, currency)}</div>
+              </div>
+              <div>
+                <div className="text-slate-500">Refunds</div>
+                <div>{formatSignedMoney(rollup.refunds, currency)}</div>
+              </div>
+              <div>
+                <div className="text-slate-500">Chargebacks</div>
+                <div>{formatSignedMoney(rollup.chargebacks, currency)}</div>
+              </div>
+              <div>
+                <div className="text-slate-500">Processor Fees</div>
+                <div>{formatSignedMoney(rollup.processor_fees, currency)}</div>
+              </div>
+              <div>
+                <div className="text-slate-500">Chargeback Fees</div>
+                <div>{formatSignedMoney(rollup.chargeback_fees, currency)}</div>
+              </div>
+              <div>
+                <div className="text-slate-500">Bank Fees</div>
+                <div>{formatSignedMoney(rollup.bank_fees, currency)}</div>
+              </div>
+              <div>
+                <div className="text-slate-500">Shipping</div>
+                <div>{formatSignedMoney(rollup.shipping_cost, currency)}</div>
+              </div>
+              <div>
+                <div className="text-slate-500">Tax</div>
+                <div>{formatSignedMoney(rollup.tax, currency)}</div>
+              </div>
+              <div>
+                <div className="text-slate-500">COGS</div>
+                <div>{formatSignedMoney(rollup.cogs, currency)}</div>
+              </div>
+              <div>
+                <div className="text-slate-500">Affiliate Payout</div>
+                <div>{formatSignedMoney(rollup.affiliate_payout, currency)}</div>
+              </div>
+              <div>
+                <div className="text-slate-500">Ad Spend</div>
+                <div>{formatSignedMoney(rollup.ad_spend, currency)}</div>
+              </div>
+              <div>
+                <div className="text-slate-500">Reversals</div>
+                <div>{formatSignedMoney(rollup.reversals, currency)}</div>
+              </div>
+              <div>
+                <div className="text-slate-500">Adjustments</div>
+                <div>{formatSignedMoney(rollup.adjustments, currency)}</div>
+              </div>
+              <div>
+                <div className="text-slate-500">Net Revenue</div>
+                <div>{formatMoney(rollup.net_revenue, currency)}</div>
+              </div>
+              <div>
+                <div className="text-slate-500">Total Costs</div>
+                <div>{formatSignedMoney(rollup.total_costs, currency)}</div>
+              </div>
+              <div>
+                <div className="text-slate-500">Event Count</div>
+                <div>{Number(rollup.event_count ?? 0).toLocaleString()}</div>
+              </div>
+              <div>
+                <div className="text-slate-500">First Event</div>
+                <div>{rollup.first_event_at ? formatTimelineDate(rollup.first_event_at) : "—"}</div>
+              </div>
+              <div>
+                <div className="text-slate-500">Last Event</div>
+                <div>{rollup.last_event_at ? formatTimelineDate(rollup.last_event_at) : "—"}</div>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      <div className="rounded-lg border p-4">
+        <div className="mb-4 flex items-start justify-between gap-4">
+          <div>
+            <h2 className="font-semibold">Ledger Events</h2>
+            <div className="text-xs text-slate-500">
+              Append-only financial events matched to this order.
+            </div>
+          </div>
+          <div className="text-xs text-slate-500">{ledgerRows.length} events</div>
+        </div>
+
+        {ledgerRows.length === 0 ? (
+          <div className="rounded bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-300">
+            No ledger events are available for this order.
+          </div>
+        ) : (
+          <div className="overflow-auto rounded-lg border">
+            <table className="min-w-full text-sm">
+              <thead className="bg-slate-100 dark:bg-slate-800">
+                <tr>
+                  <th className="px-4 py-2 text-left whitespace-nowrap">Timestamp</th>
+                  <th className="px-4 py-2 text-left whitespace-nowrap">Ledger Type</th>
+                  <th className="px-4 py-2 text-right whitespace-nowrap">Amount</th>
+                  <th className="px-4 py-2 text-left whitespace-nowrap">Source</th>
+                  <th className="px-4 py-2 text-left whitespace-nowrap">Ingestion</th>
+                  <th className="px-4 py-2 text-left whitespace-nowrap">Connector</th>
+                  <th className="px-4 py-2 text-left whitespace-nowrap">Transaction ID</th>
+                  <th className="px-4 py-2 text-left whitespace-nowrap">Reason</th>
+                </tr>
+              </thead>
+              <tbody>
+                {ledgerRows.map((row, idx) => (
+                  <tr key={`${row.transaction_id || row.ledger_type || "event"}-${idx}`} className="border-t">
+                    <td className="px-4 py-2 font-mono text-xs whitespace-nowrap">
+                      {row.occurred_at ? formatTimelineDate(row.occurred_at) : "—"}
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap">{ledgerTypeLabel(row.ledger_type)}</td>
+                    <td className="px-4 py-2 text-right font-mono whitespace-nowrap">
+                      {formatSignedMoney(row.amount, row.currency || currency)}
+                    </td>
+                    <td className="px-4 py-2 whitespace-nowrap">{row.event_source || "—"}</td>
+                    <td className="px-4 py-2 whitespace-nowrap">{row.ingestion_method || "—"}</td>
+                    <td className="px-4 py-2 font-mono text-xs whitespace-nowrap">{row.connector_id || "—"}</td>
+                    <td className="px-4 py-2 font-mono text-xs break-all">{row.transaction_id || "—"}</td>
+                    <td className="px-4 py-2">{row.reason || "—"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
 
       <div className="rounded-lg border p-4">
