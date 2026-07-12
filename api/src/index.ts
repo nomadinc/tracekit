@@ -14,6 +14,22 @@ import {
   normalizeShopifyShopDomain,
   shopifyAdminGraphqlUrl,
 } from "./shopify";
+import {
+  aggregateDailyProfitConversions,
+  aggregateProfitConversions,
+  conversionMatchesDailyKey,
+  conversionMatchesOrderKey,
+  profitDailyKeyFromConversion,
+  profitDailyKeyId,
+  profitOrderKeyFromConversion,
+  profitOrderKeyId,
+  sumProfitTotals,
+  toProfitDailyRollupRow,
+  toProfitOrderRollupRow,
+  type ProfitConversionRow,
+  type ProfitDailyKey,
+  type ProfitOrderKey,
+} from "./profit";
 type LedgerType =
   | "sale"
   | "refund"
@@ -220,6 +236,284 @@ function getSupabase(env: Env) {
   const key = String(env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim();
   if (!url || !key) throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
   return createClient(url, key, { auth: { persistSession: false } });
+}
+
+type SupabaseClientAny = ReturnType<typeof getSupabase>;
+
+const PROFIT_CONVERSION_SELECT =
+  "workspace_id,order_id,connector_id,currency,platform,event_source,ledger_type,amount,occurred_at,transaction_id,parent_transaction_id,status,reason,raw,meta";
+
+const PROFIT_ROLLUP_SELECT =
+  "workspace_id,day,platform,event_source,connector_id,currency,gross_revenue,refunds,chargebacks,chargeback_fees,processor_fees,bank_fees,shipping_cost,tax,cogs,affiliate_payout,ad_spend,reversals,adjustments,net_revenue,total_costs,net_profit,profit_margin_pct,order_count,event_count";
+
+function parseDateFilter(value: string | null) {
+  if (!value) return null;
+  const date = parseYmd(value);
+  return date ? isoYmdUTC(date) : null;
+}
+
+function dayStartIso(day: string) {
+  const date = parseYmd(day);
+  if (!date) throw new Error(`Invalid day: ${day}`);
+  return date.toISOString();
+}
+
+function nextDayStartIso(day: string) {
+  const date = parseYmd(day);
+  if (!date) throw new Error(`Invalid day: ${day}`);
+  return addDaysUTC(date, 1).toISOString();
+}
+
+async function selectAllProfitConversionsForOrder(supabase: SupabaseClientAny, key: ProfitOrderKey) {
+  const rows: ProfitConversionRow[] = [];
+  const pageSize = 1000;
+
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("conversions")
+      .select(PROFIT_CONVERSION_SELECT)
+      .eq("workspace_id", key.workspaceId)
+      .eq("order_id", key.orderId)
+      .order("occurred_at", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) throw new Error(`Profit order conversion read failed: ${error.message}`);
+
+    const pageRows = ((data || []) as ProfitConversionRow[]).filter((row) =>
+      conversionMatchesOrderKey(row, key)
+    );
+    rows.push(...pageRows);
+
+    if (!data || data.length < pageSize) break;
+  }
+
+  return rows;
+}
+
+async function selectAllProfitConversionsForDay(supabase: SupabaseClientAny, key: ProfitDailyKey) {
+  const rows: ProfitConversionRow[] = [];
+  const pageSize = 1000;
+
+  for (let offset = 0; ; offset += pageSize) {
+    const { data, error } = await supabase
+      .from("conversions")
+      .select(PROFIT_CONVERSION_SELECT)
+      .eq("workspace_id", key.workspaceId)
+      .gte("occurred_at", dayStartIso(key.day))
+      .lt("occurred_at", nextDayStartIso(key.day))
+      .order("occurred_at", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+
+    if (error) throw new Error(`Profit daily conversion read failed: ${error.message}`);
+
+    const pageRows = ((data || []) as ProfitConversionRow[]).filter((row) =>
+      conversionMatchesDailyKey(row, key)
+    );
+    rows.push(...pageRows);
+
+    if (!data || data.length < pageSize) break;
+  }
+
+  return rows;
+}
+
+function uniqueProfitOrderKeys(rows: ProfitConversionRow[]) {
+  const byId = new Map<string, ProfitOrderKey>();
+
+  for (const row of rows) {
+    const key = profitOrderKeyFromConversion(row);
+    if (key) byId.set(profitOrderKeyId(key), key);
+  }
+
+  return Array.from(byId.values());
+}
+
+function uniqueProfitDailyKeys(rows: ProfitConversionRow[]) {
+  const byId = new Map<string, ProfitDailyKey>();
+
+  for (const row of rows) {
+    const key = profitDailyKeyFromConversion(row);
+    if (key) byId.set(profitDailyKeyId(key), key);
+  }
+
+  return Array.from(byId.values());
+}
+
+async function refreshProfitOrderRollup(supabase: SupabaseClientAny, key: ProfitOrderKey) {
+  const rows = await selectAllProfitConversionsForOrder(supabase, key);
+  if (!rows.length) return { refreshed: false, rows_scanned: 0, rollup: null };
+
+  const rollup = toProfitOrderRollupRow(key, aggregateProfitConversions(rows));
+  const { data, error } = await supabase
+    .from("profit_order_rollups")
+    .upsert(rollup, { onConflict: "workspace_id,order_id,connector_id,currency" })
+    .select("*")
+    .single();
+
+  if (error) throw new Error(`Profit order rollup upsert failed: ${error.message}`);
+
+  return { refreshed: true, rows_scanned: rows.length, rollup: data };
+}
+
+async function refreshProfitDailyRollup(supabase: SupabaseClientAny, key: ProfitDailyKey) {
+  const rows = await selectAllProfitConversionsForDay(supabase, key);
+  if (!rows.length) return { refreshed: false, rows_scanned: 0, rollup: null };
+
+  const rollup = toProfitDailyRollupRow(key, aggregateDailyProfitConversions(rows));
+  const { data, error } = await supabase
+    .from("profit_daily_rollups")
+    .upsert(rollup, { onConflict: "workspace_id,day,connector_id,currency" })
+    .select("*")
+    .single();
+
+  if (error) throw new Error(`Profit daily rollup upsert failed: ${error.message}`);
+
+  return { refreshed: true, rows_scanned: rows.length, rollup: data };
+}
+
+async function refreshProfitRollupsForInsertedRows(env: Env, insertedRows: ProfitConversionRow[]) {
+  const supabase = getSupabase(env);
+  const orderKeys = uniqueProfitOrderKeys(insertedRows);
+  const dailyKeys = uniqueProfitDailyKeys(insertedRows);
+  const warnings: string[] = [];
+  let ordersRefreshed = 0;
+  let dailyRefreshed = 0;
+
+  for (const key of orderKeys) {
+    try {
+      const result = await refreshProfitOrderRollup(supabase, key);
+      if (result.refreshed) ordersRefreshed += 1;
+    } catch (e: any) {
+      warnings.push(`order ${key.orderId}: ${e?.message || String(e)}`);
+    }
+  }
+
+  for (const key of dailyKeys) {
+    try {
+      const result = await refreshProfitDailyRollup(supabase, key);
+      if (result.refreshed) dailyRefreshed += 1;
+    } catch (e: any) {
+      warnings.push(`day ${key.day}: ${e?.message || String(e)}`);
+    }
+  }
+
+  return {
+    orders_refreshed: ordersRefreshed,
+    daily_refreshed: dailyRefreshed,
+    warnings,
+  };
+}
+
+async function selectProfitDailyRollups(
+  supabase: SupabaseClientAny,
+  filters: {
+    workspace_id?: string | null;
+    from?: string | null;
+    to?: string | null;
+    connector_id?: string | null;
+    platform?: string | null;
+    event_source?: string | null;
+    currency?: string | null;
+  },
+) {
+  const rows: any[] = [];
+  const pageSize = 1000;
+  const workspaceId = String(filters.workspace_id || "default").trim() || "default";
+  const from = parseDateFilter(filters.from || null);
+  const to = parseDateFilter(filters.to || null);
+
+  for (let offset = 0; ; offset += pageSize) {
+    let query = supabase
+      .from("profit_daily_rollups")
+      .select(PROFIT_ROLLUP_SELECT)
+      .eq("workspace_id", workspaceId)
+      .order("day", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+
+    if (from) query = query.gte("day", from);
+    if (to) query = query.lte("day", to);
+    if (filters.connector_id) query = query.eq("connector_id", String(filters.connector_id));
+    if (filters.platform) query = query.eq("platform", String(filters.platform));
+    if (filters.event_source) query = query.eq("event_source", String(filters.event_source));
+    if (filters.currency) query = query.eq("currency", String(filters.currency).toUpperCase());
+
+    const { data, error } = await query;
+    if (error) throw new Error(`Profit daily rollups read failed: ${error.message}`);
+
+    rows.push(...(data || []));
+    if (!data || data.length < pageSize) break;
+  }
+
+  return rows;
+}
+
+function summarizeProfitRollups(rows: any[]) {
+  const totals = sumProfitTotals(rows);
+  const fees =
+    Number(totals.chargeback_fees || 0) +
+    Number(totals.processor_fees || 0) +
+    Number(totals.bank_fees || 0);
+
+  return {
+    ...totals,
+    fees,
+    shipping: totals.shipping_cost,
+  };
+}
+
+function ratio(numerator: number, denominator: number) {
+  return denominator !== 0 ? numerator / denominator : 0;
+}
+
+function deltaPct(current: number, previous: number) {
+  if (previous === 0) return current === 0 ? 0 : 1;
+  return (current - previous) / Math.abs(previous);
+}
+
+function kpiPayloadFromSummaries(current: ReturnType<typeof summarizeProfitRollups>, previous: ReturnType<typeof summarizeProfitRollups>) {
+  const grossSales = Number(current.gross_revenue || 0);
+  const previousGrossSales = Number(previous.gross_revenue || 0);
+  const refundRate = ratio(Math.abs(Number(current.refunds || 0)), Math.abs(grossSales));
+  const previousRefundRate = ratio(Math.abs(Number(previous.refunds || 0)), Math.abs(previousGrossSales));
+  const chargebackRate = ratio(Math.abs(Number(current.chargebacks || 0)), Math.abs(grossSales));
+  const previousChargebackRate = ratio(Math.abs(Number(previous.chargebacks || 0)), Math.abs(previousGrossSales));
+
+  return {
+    gross_sales: grossSales,
+    gross_sales_delta_pct: deltaPct(grossSales, previousGrossSales),
+    net_profit: Number(current.net_profit || 0),
+    net_margin: ratio(Number(current.net_profit || 0), grossSales),
+    refund_rate: refundRate,
+    refund_rate_delta_pp: refundRate - previousRefundRate,
+    chargebacks: chargebackRate,
+    chargebacks_delta_pp: chargebackRate - previousChargebackRate,
+  };
+}
+
+function inclusiveDaySpan(from: string, to: string) {
+  const fromDate = parseYmd(from);
+  const toDate = parseYmd(to);
+  if (!fromDate || !toDate) return 1;
+  return Math.max(1, Math.round((toDate.getTime() - fromDate.getTime()) / 86400000) + 1);
+}
+
+function previousDateRange(from: string, to: string) {
+  const fromDate = parseYmd(from);
+  if (!fromDate) return { from, to };
+  const days = inclusiveDaySpan(from, to);
+  const previousTo = addDaysUTC(fromDate, -1);
+  const previousFrom = addDaysUTC(previousTo, -(days - 1));
+  return {
+    from: isoYmdUTC(previousFrom),
+    to: isoYmdUTC(previousTo),
+  };
+}
+
+function defaultDashboardDateRange(url: URL) {
+  const now = new Date();
+  const to = parseDateFilter(url.searchParams.get("to")) || isoYmdUTC(now);
+  const from = parseDateFilter(url.searchParams.get("from")) || isoYmdUTC(addDaysUTC(parseYmd(to) || now, -6));
+  return { from, to };
 }
 
 function b64ToU8(b64: string): Uint8Array {
@@ -988,9 +1282,14 @@ async function insertShopifyLedgerEvents(env: Env, shopDomain: string, orders: a
   const { error: insertError } = await supabase.from("conversions").insert(rowsToInsert);
   if (insertError) throw new Error(`Shopify ledger insert failed: ${insertError.message}`);
 
+  const rollup = await refreshProfitRollupsForInsertedRows(env, rowsToInsert as ProfitConversionRow[]);
+
   return {
     inserted: rowsToInsert.length,
     skipped: events.length - rowsToInsert.length,
+    rollup_orders_refreshed: rollup.orders_refreshed,
+    rollup_daily_refreshed: rollup.daily_refreshed,
+    rollup_warnings: rollup.warnings,
   };
 }
 
@@ -1008,6 +1307,9 @@ async function runShopifyImport(env: Env, args: RunImportArgs) {
   let totalUpserted = 0;
   let ledgerInserted = 0;
   let ledgerSkipped = 0;
+  let rollupOrdersRefreshed = 0;
+  let rollupDailyRefreshed = 0;
+  const rollupWarnings: string[] = [];
   const maxPages = 250;
 
   while (page <= maxPages) {
@@ -1040,6 +1342,9 @@ async function runShopifyImport(env: Env, args: RunImportArgs) {
       const ledgerResult = await insertShopifyLedgerEvents(env, connection.shopDomain, rawOrders);
       ledgerInserted += ledgerResult.inserted;
       ledgerSkipped += ledgerResult.skipped;
+      rollupOrdersRefreshed += Number((ledgerResult as any).rollup_orders_refreshed || 0);
+      rollupDailyRefreshed += Number((ledgerResult as any).rollup_daily_refreshed || 0);
+      rollupWarnings.push(...((ledgerResult as any).rollup_warnings || []));
     }
 
     const pageInfo = orderConnection?.pageInfo || {};
@@ -1055,6 +1360,9 @@ async function runShopifyImport(env: Env, args: RunImportArgs) {
     pages: page,
     ledger_inserted: ledgerInserted,
     ledger_skipped: ledgerSkipped,
+    rollup_orders_refreshed: rollupOrdersRefreshed,
+    rollup_daily_refreshed: rollupDailyRefreshed,
+    rollup_warnings: rollupWarnings,
   };
 }
 
@@ -1484,9 +1792,14 @@ async function insertCheckoutChampLedgerEvents(env: Env, rows: any[]) {
   const { error: insertError } = await supabase.from("conversions").insert(rowsToInsert);
   if (insertError) throw new Error(`Konnektive ledger insert failed: ${insertError.message}`);
 
+  const rollup = await refreshProfitRollupsForInsertedRows(env, rowsToInsert as ProfitConversionRow[]);
+
   return {
     inserted: rowsToInsert.length,
     skipped: events.length - rowsToInsert.length,
+    rollup_orders_refreshed: rollup.orders_refreshed,
+    rollup_daily_refreshed: rollup.daily_refreshed,
+    rollup_warnings: rollup.warnings,
   };
 }
 
@@ -1505,6 +1818,9 @@ async function runCheckoutChampImport(env: Env, args: RunImportArgs) {
   let totalUpserted = 0;
   let ledgerInserted = 0;
   let ledgerSkipped = 0;
+  let rollupOrdersRefreshed = 0;
+  let rollupDailyRefreshed = 0;
+  const rollupWarnings: string[] = [];
   const maxPages = 250;
 
   while (page <= maxPages) {
@@ -1533,6 +1849,9 @@ async function runCheckoutChampImport(env: Env, args: RunImportArgs) {
       const ledgerResult = await insertCheckoutChampLedgerEvents(env, rows);
       ledgerInserted += ledgerResult.inserted;
       ledgerSkipped += ledgerResult.skipped;
+      rollupOrdersRefreshed += Number((ledgerResult as any).rollup_orders_refreshed || 0);
+      rollupDailyRefreshed += Number((ledgerResult as any).rollup_daily_refreshed || 0);
+      rollupWarnings.push(...((ledgerResult as any).rollup_warnings || []));
     }
 
     const totalResults = Number(js.totalResults ?? js.total_results ?? js.total ?? 0);
@@ -1547,6 +1866,9 @@ async function runCheckoutChampImport(env: Env, args: RunImportArgs) {
     pages: page,
     ledger_inserted: ledgerInserted,
     ledger_skipped: ledgerSkipped,
+    rollup_orders_refreshed: rollupOrdersRefreshed,
+    rollup_daily_refreshed: rollupDailyRefreshed,
+    rollup_warnings: rollupWarnings,
   };
 }
 
@@ -2521,6 +2843,336 @@ async function router(req: Request, env: Env): Promise<Response> {
   if (path === "/__ping" && req.method === "GET") {
     return json({ ok: true, path, now: new Date().toISOString() });
   }
+
+  if (path === "/v1/profit/rebuild-order" && req.method === "POST") {
+    try {
+      const body = await readJsonBody(req);
+      const workspaceId = String(body.workspace_id || "default").trim() || "default";
+      const orderId = String(body.order_id || "").trim();
+      const connectorId = String(body.connector_id || "").trim();
+      const currency = String(body.currency || "").trim().toUpperCase();
+
+      if (!orderId || !connectorId || !currency) {
+        return json({
+          ok: false,
+          error: "bad_request",
+          message: "workspace_id, order_id, connector_id, and currency are required",
+        }, 400);
+      }
+
+      const supabase = getSupabase(env);
+      const key = { workspaceId, orderId, connectorId, currency };
+      const orderResult = await refreshProfitOrderRollup(supabase, key);
+      const sourceRows = await selectAllProfitConversionsForOrder(supabase, key);
+      const dailyKeys = uniqueProfitDailyKeys(sourceRows);
+      const warnings: string[] = [];
+      let dailyRefreshed = 0;
+
+      for (const dailyKey of dailyKeys) {
+        try {
+          const dailyResult = await refreshProfitDailyRollup(supabase, dailyKey);
+          if (dailyResult.refreshed) dailyRefreshed += 1;
+        } catch (e: any) {
+          warnings.push(`day ${dailyKey.day}: ${e?.message || String(e)}`);
+        }
+      }
+
+      return json({
+        ok: true,
+        order_refreshed: orderResult.refreshed,
+        rows_scanned: sourceRows.length,
+        daily_refreshed: dailyRefreshed,
+        warnings,
+        rollup: orderResult.rollup,
+      });
+    } catch (e: any) {
+      return json({
+        ok: false,
+        error: "profit_rebuild_order_failed",
+        message: e?.message || String(e),
+      }, 500);
+    }
+  }
+
+  if (path === "/v1/profit/rebuild" && req.method === "POST") {
+    try {
+      const body = await readJsonBody(req);
+      const supabase = getSupabase(env);
+      const workspaceId = String(body.workspace_id || "default").trim() || "default";
+      const from = parseDateFilter(body.from ? String(body.from) : null);
+      const to = parseDateFilter(body.to ? String(body.to) : null);
+      const connectorId = String(body.connector_id || "").trim();
+      const orderId = String(body.order_id || "").trim();
+      const orderKeys = new Map<string, ProfitOrderKey>();
+      const dailyKeys = new Map<string, ProfitDailyKey>();
+      const warnings: string[] = [];
+      const pageSize = 1000;
+      let scannedConversions = 0;
+
+      for (let offset = 0; ; offset += pageSize) {
+        let query = supabase
+          .from("conversions")
+          .select(PROFIT_CONVERSION_SELECT)
+          .eq("workspace_id", workspaceId)
+          .not("order_id", "is", null)
+          .order("occurred_at", { ascending: true })
+          .range(offset, offset + pageSize - 1);
+
+        if (from) query = query.gte("occurred_at", `${from}T00:00:00.000Z`);
+        if (to) query = query.lt("occurred_at", nextDayStartIso(to));
+        if (connectorId) query = query.eq("connector_id", connectorId);
+        if (orderId) query = query.eq("order_id", orderId);
+
+        const { data, error } = await query;
+        if (error) throw new Error(`Profit rebuild conversion scan failed: ${error.message}`);
+
+        const rows = (data || []) as ProfitConversionRow[];
+        scannedConversions += rows.length;
+
+        for (const row of rows) {
+          const orderKey = profitOrderKeyFromConversion(row);
+          if (orderKey) orderKeys.set(profitOrderKeyId(orderKey), orderKey);
+
+          const dailyKey = profitDailyKeyFromConversion(row);
+          if (dailyKey) dailyKeys.set(profitDailyKeyId(dailyKey), dailyKey);
+        }
+
+        if (!data || data.length < pageSize) break;
+      }
+
+      let ordersRefreshed = 0;
+      let dailyRefreshed = 0;
+
+      for (const key of orderKeys.values()) {
+        try {
+          const result = await refreshProfitOrderRollup(supabase, key);
+          if (result.refreshed) ordersRefreshed += 1;
+        } catch (e: any) {
+          warnings.push(`order ${key.orderId}: ${e?.message || String(e)}`);
+        }
+      }
+
+      for (const key of dailyKeys.values()) {
+        try {
+          const result = await refreshProfitDailyRollup(supabase, key);
+          if (result.refreshed) dailyRefreshed += 1;
+        } catch (e: any) {
+          warnings.push(`day ${key.day}: ${e?.message || String(e)}`);
+        }
+      }
+
+      return json({
+        ok: true,
+        scanned_conversions: scannedConversions,
+        affected_orders: orderKeys.size,
+        affected_days: dailyKeys.size,
+        orders_refreshed: ordersRefreshed,
+        daily_refreshed: dailyRefreshed,
+        warnings,
+      });
+    } catch (e: any) {
+      return json({
+        ok: false,
+        error: "profit_rebuild_failed",
+        message: e?.message || String(e),
+      }, 500);
+    }
+  }
+
+  if (path.startsWith("/v1/profit/orders/") && req.method === "GET") {
+    try {
+      const orderId = decodeURIComponent(path.slice("/v1/profit/orders/".length)).trim();
+      const workspaceId = String(url.searchParams.get("workspace_id") || "default").trim() || "default";
+      const connectorId = String(url.searchParams.get("connector_id") || "").trim();
+      const currency = String(url.searchParams.get("currency") || "").trim().toUpperCase();
+
+      if (!orderId) {
+        return json({ ok: false, error: "bad_request", message: "order_id is required" }, 400);
+      }
+
+      const supabase = getSupabase(env);
+      let rollupQuery = supabase
+        .from("profit_order_rollups")
+        .select("*")
+        .eq("workspace_id", workspaceId)
+        .eq("order_id", orderId)
+        .order("updated_at", { ascending: false });
+
+      let ledgerQuery = supabase
+        .from("conversions")
+        .select(PROFIT_CONVERSION_SELECT)
+        .eq("workspace_id", workspaceId)
+        .eq("order_id", orderId)
+        .order("occurred_at", { ascending: true });
+
+      if (connectorId) {
+        rollupQuery = rollupQuery.eq("connector_id", connectorId);
+        ledgerQuery = ledgerQuery.eq("connector_id", connectorId);
+      }
+
+      if (currency) {
+        rollupQuery = rollupQuery.eq("currency", currency);
+        ledgerQuery = ledgerQuery.eq("currency", currency);
+      }
+
+      const [{ data: rollups, error: rollupError }, { data: ledgerRows, error: ledgerError }] =
+        await Promise.all([rollupQuery, ledgerQuery]);
+
+      if (rollupError) throw new Error(rollupError.message);
+      if (ledgerError) throw new Error(ledgerError.message);
+
+      const rows = (ledgerRows || []) as ProfitConversionRow[];
+      const breakdown = aggregateProfitConversions(rows);
+
+      return json({
+        ok: true,
+        order_id: orderId,
+        rollup: (rollups || [])[0] || null,
+        rollups: rollups || [],
+        category_breakdown: {
+          gross_revenue: breakdown.gross_revenue,
+          refunds: breakdown.refunds,
+          chargebacks: breakdown.chargebacks,
+          fees: breakdown.chargeback_fees + breakdown.processor_fees + breakdown.bank_fees,
+          shipping: breakdown.shipping_cost,
+          tax: breakdown.tax,
+          cogs: breakdown.cogs,
+          affiliate_payout: breakdown.affiliate_payout,
+          ad_spend: breakdown.ad_spend,
+          reversals: breakdown.reversals,
+          adjustments: breakdown.adjustments,
+          net_revenue: breakdown.net_revenue,
+          total_costs: breakdown.total_costs,
+          net_profit: breakdown.net_profit,
+          profit_margin_pct: breakdown.profit_margin_pct,
+        },
+        ledger_rows: rows,
+      });
+    } catch (e: any) {
+      return json({
+        ok: false,
+        error: "profit_order_read_failed",
+        message: e?.message || String(e),
+      }, 500);
+    }
+  }
+
+  if (path === "/v1/profit/summary" && req.method === "GET") {
+    try {
+      const supabase = getSupabase(env);
+      const rows = await selectProfitDailyRollups(supabase, {
+        workspace_id: url.searchParams.get("workspace_id") || "default",
+        from: url.searchParams.get("from"),
+        to: url.searchParams.get("to"),
+        connector_id: url.searchParams.get("connector_id"),
+        platform: url.searchParams.get("platform"),
+        event_source: url.searchParams.get("event_source"),
+        currency: url.searchParams.get("currency"),
+      });
+
+      return json({
+        ok: true,
+        ...summarizeProfitRollups(rows),
+      });
+    } catch (e: any) {
+      return json({
+        ok: false,
+        error: "profit_summary_failed",
+        message: e?.message || String(e),
+      }, 500);
+    }
+  }
+
+  if (path === "/v1/kpis" && req.method === "GET") {
+    try {
+      const supabase = getSupabase(env);
+      const currentRange = defaultDashboardDateRange(url);
+      const previousRange = previousDateRange(currentRange.from, currentRange.to);
+      const workspaceId = url.searchParams.get("workspace_id") || "default";
+
+      const [currentRows, previousRows] = await Promise.all([
+        selectProfitDailyRollups(supabase, {
+          workspace_id: workspaceId,
+          from: currentRange.from,
+          to: currentRange.to,
+          connector_id: url.searchParams.get("connector_id"),
+          platform: url.searchParams.get("platform"),
+          event_source: url.searchParams.get("event_source"),
+          currency: url.searchParams.get("currency"),
+        }),
+        selectProfitDailyRollups(supabase, {
+          workspace_id: workspaceId,
+          from: previousRange.from,
+          to: previousRange.to,
+          connector_id: url.searchParams.get("connector_id"),
+          platform: url.searchParams.get("platform"),
+          event_source: url.searchParams.get("event_source"),
+          currency: url.searchParams.get("currency"),
+        }),
+      ]);
+
+      return json(kpiPayloadFromSummaries(
+        summarizeProfitRollups(currentRows),
+        summarizeProfitRollups(previousRows),
+      ));
+    } catch (e: any) {
+      return json({
+        gross_sales: 0,
+        gross_sales_delta_pct: 0,
+        net_profit: 0,
+        net_margin: 0,
+        refund_rate: 0,
+        refund_rate_delta_pp: 0,
+        chargebacks: 0,
+        chargebacks_delta_pp: 0,
+        ok: false,
+        error: "kpis_failed",
+        message: e?.message || String(e),
+      }, 500);
+    }
+  }
+
+  if (path === "/v1/revenue-spend" && req.method === "GET") {
+    try {
+      const supabase = getSupabase(env);
+      const range = defaultDashboardDateRange(url);
+      const rows = await selectProfitDailyRollups(supabase, {
+        workspace_id: url.searchParams.get("workspace_id") || "default",
+        from: range.from,
+        to: range.to,
+        connector_id: url.searchParams.get("connector_id"),
+        platform: url.searchParams.get("platform"),
+        event_source: url.searchParams.get("event_source"),
+        currency: url.searchParams.get("currency"),
+      });
+
+      const byDay = new Map<string, any>();
+
+      for (const row of rows) {
+        const day = String(row.day || "").slice(0, 10);
+        if (!day) continue;
+        const existing = byDay.get(day) || { date: day, revenue: 0, spend: 0, net_profit: 0, refunds: 0, chargebacks: 0 };
+        existing.revenue += Number(row.net_revenue || 0);
+        existing.spend += Math.abs(Number(row.ad_spend || 0));
+        existing.net_profit += Number(row.net_profit || 0);
+        existing.refunds += Number(row.refunds || 0);
+        existing.chargebacks += Number(row.chargebacks || 0);
+        byDay.set(day, existing);
+      }
+
+      return json({
+        ok: true,
+        series: Array.from(byDay.values()).sort((a, b) => String(a.date).localeCompare(String(b.date))),
+      });
+    } catch (e: any) {
+      return json({
+        ok: false,
+        error: "revenue_spend_failed",
+        message: e?.message || String(e),
+        series: [],
+      }, 500);
+    }
+  }
   
   if (path.startsWith("/v1/postbacks/") && req.method === "POST") {
   const platform = path.split("/").pop() || "unknown";
@@ -2602,7 +3254,10 @@ async function router(req: Request, env: Env): Promise<Response> {
     );
   }
 
-  return json({ ok: true, ledger: data });
+  const rollup = await refreshProfitRollupsForInsertedRows(env, [(data || ledgerRow) as ProfitConversionRow]);
+  if (rollup.warnings.length) console.warn("[profit] postback rollup refresh warnings", rollup.warnings);
+
+  return json({ ok: true, ledger: data, rollup });
 }
 
   if (path === "/v1/integrations/test-connect" && req.method === "POST") {
