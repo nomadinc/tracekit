@@ -97,6 +97,31 @@ function detectLedgerType(payload: any): LedgerType {
   return "sale";
 }
 
+function normalizeLedgerDimension(
+  value: unknown,
+  fallback = "unknown"
+): string {
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  return normalized || fallback;
+}
+
+function normalizeEventSource(value: unknown): string {
+  return normalizeLedgerDimension(value);
+}
+
+function normalizeIngestionMethod(value: unknown): string {
+  return normalizeLedgerDimension(value);
+}
+
+function normalizeConnectorId(value: unknown): string {
+  return normalizeLedgerDimension(value);
+}
+
 function corsPreflight() {
   return new Response(null, {
     status: 204,
@@ -1137,9 +1162,18 @@ async function insertCheckoutChampLedgerEvents(env: Env, rows: any[]) {
       const amountCents = normalizeLedgerAmount(event.ledgerType, toCents(event.amount));
 
       return {
-        workspace_id: "default",
-        ledger_type: event.ledgerType,
-        tkid: row.tkid || null,
+		  workspace_id: "default",
+		  ledger_type: event.ledgerType,
+		
+		  event_source: "konnektive",
+		  ingestion_method: "api_import",
+		  connector_id: String(
+		    row.platform_store_id ||
+		      row.campaign_id ||
+		      "konnektive_default"
+		  ),
+		
+		  tkid: row.tkid || null,
         email: row.email || row.customer_email || null,
         phone: row.phone || null,
         order_id: row.order_id || null,
@@ -2135,8 +2169,29 @@ async function router(req: Request, env: Env): Promise<Response> {
   );
 
   const ledgerRow = {
-    workspace_id: payload.workspace_id || "default",
-    ledger_type: ledgerType,
+  workspace_id: payload.workspace_id || "default",
+  ledger_type: ledgerType,
+
+  event_source: normalizeEventSource(
+    payload.event_source ||
+      payload.source_system ||
+      payload.platform ||
+      platform
+  ),
+
+  ingestion_method: normalizeIngestionMethod(
+    payload.ingestion_method || "webhook"
+  ),
+
+  connector_id: normalizeConnectorId(
+    payload.connector_id ||
+      payload.integration_instance_id ||
+      payload.account_id ||
+      payload.store_id ||
+      payload.platform_store_id ||
+      platform
+  ),
+
     tkid: payload.tkid || null,
     email: payload.email || payload.customer_email || null,
     phone: payload.phone || null,

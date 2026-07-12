@@ -628,6 +628,9 @@ export function IntegrationWizard({
         transaction_id: `${type.toUpperCase()}-${timestamp}`,
         amount,
         currency: "USD",
+        event_source: "manual",
+		ingestion_method: "manual_postback",
+		connector_id: "manual_postback_default",
         platform: integration.id,
         reason: `${integration.name} wizard test`,
       });
