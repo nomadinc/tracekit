@@ -809,18 +809,88 @@ async function queryCheckoutChampOrders(args: {
   const filter = String(args.filter || "all_sales").toLowerCase();
   if (filter && filter !== "all_sales") url.searchParams.set("orderStatus", filter);
 
-  const res = await fetch(url.toString(), {
-    method: "GET",
-    headers: { Accept: "application/json, text/plain, */*" },
-  });
+  let lastError: Error | null = null;
 
-  const text = await readTextSafe(res);
-  if (!res.ok) throw new Error(`CheckoutChamp order query failed (${res.status}): ${text.slice(0, 300)}`);
+  for (let attempt = 1; attempt <= 3; attempt++) {
+    try {
+      const res = await fetchWithTimeout(
+        url.toString(),
+        {
+          method: "GET",
+          headers: { Accept: "application/json, text/plain, */*" },
+        },
+        30000,
+      );
 
-  const js = safeJsonParse(text);
-  if (!js) throw new Error(`CheckoutChamp order query returned invalid JSON: ${text.slice(0, 300)}`);
+      const text = await readTextSafe(res);
+      const retryableStatus = res.status === 429 || res.status >= 500;
 
-  return js;
+      if (!res.ok) {
+        const err = new Error(`CheckoutChamp order query failed (${res.status}): ${text.slice(0, 300)}`);
+        if (retryableStatus && attempt < 3) {
+          lastError = err;
+          await sleepMs(500 * attempt);
+          continue;
+        }
+        throw err;
+      }
+
+      const js = safeJsonParse(text);
+      if (!js) throw new Error(`CheckoutChamp order query returned invalid JSON: ${text.slice(0, 300)}`);
+
+      return js;
+    } catch (e: any) {
+      lastError = e instanceof Error ? e : new Error(String(e));
+      if (attempt >= 3) break;
+      await sleepMs(500 * attempt);
+    }
+  }
+
+  throw lastError || new Error("CheckoutChamp order query failed.");
+}
+
+function sleepMs(ms: number) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function pickProductName(row: Record<string, any>) {
+  return pickField(row, [
+    "productName",
+    "ProductName",
+    "Product Name",
+    "product_name",
+    "productDescription",
+    "Product Description",
+    "name",
+    "title",
+  ]);
+}
+
+function pickProductSku(row: Record<string, any>) {
+  return pickField(row, [
+    "sku",
+    "SKU",
+    "SKUId",
+    "skuId",
+    "productSku",
+    "product_sku",
+    "productId",
+    "product_id",
+  ]);
+}
+
+function enrichCheckoutChampRaw(order: any) {
+  const productName = pickProductName(order);
+  const sku = pickProductSku(order);
+
+  if (!productName && !sku) return order;
+
+  return {
+    ...order,
+    productName: order.productName ?? (productName || undefined),
+    product_name: order.product_name ?? (productName || undefined),
+    sku: order.sku ?? (sku || undefined),
+  };
 }
 
 async function normalizeCheckoutChampOrder(order: any) {
@@ -927,7 +997,183 @@ async function normalizeCheckoutChampOrder(order: any) {
     chargeback_fee: parseMoneyMaybe(pickField(order, ["chargebackFee", "chargeback_fee"])) ?? null,
     tracking_number: pickField(order, ["trackingNumber", "tracking_number", "shipmentTrackingNumber"]) || null,
     shipping_carrier: pickField(order, ["shippingCarrier", "shipping_carrier", "carrier"]) || null,
-    raw_json: order,
+    raw_json: enrichCheckoutChampRaw(order),
+  };
+}
+
+type CheckoutChampLedgerEvent = {
+  ledgerType: LedgerType;
+  transactionId: string;
+  parentTransactionId?: string | null;
+  amount: number;
+  status: string;
+  reason: string;
+  occurredAt: string;
+  row: any;
+};
+
+function stableCheckoutChampEventId(row: any, ledgerType: LedgerType) {
+  const base = String(
+    row.platform_order_id ||
+      (row.order_id ? `checkoutchamp:${row.order_id}` : "") ||
+      row.transaction_id ||
+      "unknown",
+  ).trim();
+  const externalTx = String(row.transaction_id || row.order_id || "").trim();
+  return `${base}:${externalTx || "no-transaction"}:${ledgerType}`;
+}
+
+function buildCheckoutChampLedgerEvents(row: any): CheckoutChampLedgerEvent[] {
+  const status = String(row.status || "").toUpperCase();
+  const gross = Number(row.gross_amount ?? 0) || 0;
+  const grossAbs = Math.abs(gross);
+  const occurredAt = String(row.order_ts || new Date().toISOString());
+  const events: CheckoutChampLedgerEvent[] = [];
+
+  if (status === "COMPLETED" && gross > 0) {
+    events.push({
+      ledgerType: "sale",
+      transactionId: stableCheckoutChampEventId(row, "sale"),
+      parentTransactionId: row.transaction_id || null,
+      amount: gross,
+      status,
+      reason: "Konnektive import sale",
+      occurredAt,
+      row,
+    });
+  }
+
+  if (status === "REFUNDED" && grossAbs > 0) {
+    events.push({
+      ledgerType: "refund",
+      transactionId: stableCheckoutChampEventId(row, "refund"),
+      parentTransactionId: row.transaction_id || null,
+      amount: grossAbs,
+      status,
+      reason: "Konnektive import refund",
+      occurredAt,
+      row,
+    });
+  }
+
+  if (status === "CHARGEBACK" && grossAbs > 0) {
+    events.push({
+      ledgerType: "chargeback",
+      transactionId: stableCheckoutChampEventId(row, "chargeback"),
+      parentTransactionId: row.transaction_id || null,
+      amount: grossAbs,
+      status,
+      reason: "Konnektive import chargeback",
+      occurredAt,
+      row,
+    });
+  }
+
+  const chargebackFee = Math.abs(Number(row.chargeback_fee ?? 0) || 0);
+  if (chargebackFee > 0) {
+    events.push({
+      ledgerType: "chargeback_fee",
+      transactionId: stableCheckoutChampEventId(row, "chargeback_fee"),
+      parentTransactionId: row.transaction_id || null,
+      amount: chargebackFee,
+      status: "chargeback_fee",
+      reason: "Konnektive import chargeback fee",
+      occurredAt,
+      row,
+    });
+  }
+
+  const processorFee = Math.abs(Number(row.gateway_fee ?? 0) || 0);
+  if (processorFee > 0) {
+    events.push({
+      ledgerType: "processor_fee",
+      transactionId: stableCheckoutChampEventId(row, "processor_fee"),
+      parentTransactionId: row.transaction_id || null,
+      amount: processorFee,
+      status: "processor_fee",
+      reason: "Konnektive import processor fee",
+      occurredAt,
+      row,
+    });
+  }
+
+  return events;
+}
+
+async function insertCheckoutChampLedgerEvents(env: Env, rows: any[]) {
+  const eventsById = new Map<string, CheckoutChampLedgerEvent>();
+
+  for (const row of rows) {
+    for (const event of buildCheckoutChampLedgerEvents(row)) {
+      eventsById.set(event.transactionId, event);
+    }
+  }
+
+  const events = Array.from(eventsById.values());
+  if (!events.length) return { inserted: 0, skipped: 0 };
+
+  const supabase = getSupabase(env);
+  const eventIds = events.map((event) => event.transactionId);
+  const existingIds = new Set<string>();
+
+  for (let i = 0; i < eventIds.length; i += 100) {
+    const chunk = eventIds.slice(i, i + 100);
+    const { data: existing, error: existingError } = await supabase
+      .from("conversions")
+      .select("transaction_id")
+      .eq("platform", "checkoutchamp")
+      .in("transaction_id", chunk);
+
+    if (existingError) throw new Error(`Konnektive ledger dedupe failed: ${existingError.message}`);
+
+    for (const row of existing || []) {
+      existingIds.add(String((row as any).transaction_id || ""));
+    }
+  }
+  const rowsToInsert = events
+    .filter((event) => !existingIds.has(event.transactionId))
+    .map((event) => {
+      const row = event.row;
+      const amountCents = normalizeLedgerAmount(event.ledgerType, toCents(event.amount));
+
+      return {
+        workspace_id: "default",
+        ledger_type: event.ledgerType,
+        tkid: row.tkid || null,
+        email: row.email || row.customer_email || null,
+        phone: row.phone || null,
+        order_id: row.order_id || null,
+        transaction_id: event.transactionId,
+        parent_transaction_id: event.parentTransactionId || null,
+        amount: amountCents / 100,
+        currency: row.currency || "USD",
+        platform: "checkoutchamp",
+        source_system: "konnektive",
+        network: null,
+        affiliate_id: row.affiliate_id || null,
+        campaign_id: row.platform_store_id || null,
+        offer_id: row.everflow_offer_id || null,
+        status: event.status,
+        reason: event.reason,
+        raw: row.raw_json || row,
+        meta: {
+          external_event_id: event.transactionId,
+          platform_order_id: row.platform_order_id || null,
+          original_transaction_id: row.transaction_id || null,
+          source: "konnektive_import",
+        },
+        occurred_at: event.occurredAt,
+      };
+    });
+
+  if (!rowsToInsert.length) return { inserted: 0, skipped: events.length };
+
+  const { error: insertError } = await supabase.from("conversions").insert(rowsToInsert);
+  if (insertError) throw new Error(`Konnektive ledger insert failed: ${insertError.message}`);
+
+  return {
+    inserted: rowsToInsert.length,
+    skipped: events.length - rowsToInsert.length,
   };
 }
 
@@ -944,6 +1190,8 @@ async function runCheckoutChampImport(env: Env, args: RunImportArgs) {
   let page = 1;
   let totalFetched = 0;
   let totalUpserted = 0;
+  let ledgerInserted = 0;
+  let ledgerSkipped = 0;
   const maxPages = 250;
 
   while (page <= maxPages) {
@@ -968,6 +1216,10 @@ async function runCheckoutChampImport(env: Env, args: RunImportArgs) {
       const { error } = await supabase.from("platform_orders").upsert(rows as any[], { onConflict: "platform_order_id" });
       if (error) throw new Error(`CheckoutChamp DB upsert failed: ${error.message}`);
       totalUpserted += rows.length;
+
+      const ledgerResult = await insertCheckoutChampLedgerEvents(env, rows);
+      ledgerInserted += ledgerResult.inserted;
+      ledgerSkipped += ledgerResult.skipped;
     }
 
     const totalResults = Number(js.totalResults ?? js.total_results ?? js.total ?? 0);
@@ -976,7 +1228,13 @@ async function runCheckoutChampImport(env: Env, args: RunImportArgs) {
     page += 1;
   }
 
-  return { fetched: totalFetched, upserted: totalUpserted, pages: page };
+  return {
+    fetched: totalFetched,
+    upserted: totalUpserted,
+    pages: page,
+    ledger_inserted: ledgerInserted,
+    ledger_skipped: ledgerSkipped,
+  };
 }
 
 type WowBoostExportResp = { link?: string; hasMoreToExport?: boolean; nextExport?: string };
@@ -1237,7 +1495,7 @@ async function handleTestConnect(req: Request, env: Env) {
   const baseUrl = String(
     body.baseUrl || body.base_url || (platform === "checkoutchamp" ? env.DEFAULT_CC_BASE || DEFAULT_CC_BASE : DEFAULT_WOWSUITE_AUTH_BASE)
   ).replace(/\/+$/, "");
-  const username = String(body.username || "").trim();
+  const username = String(body.username || body.loginId || body.login_id || "").trim();
   const password = String(body.password || "");
 
   if (!platform || !baseUrl || !username || !password) {
@@ -1270,7 +1528,7 @@ async function handleSaveCredentials(req: Request, env: Env) {
   const baseUrl = String(
     body.baseUrl || body.base_url || (platform === "checkoutchamp" ? env.DEFAULT_CC_BASE || DEFAULT_CC_BASE : DEFAULT_WOWSUITE_AUTH_BASE)
   ).replace(/\/+$/, "");
-  const username = String(body.username || "").trim();
+  const username = String(body.username || body.loginId || body.login_id || "").trim();
   const password = String(body.password || "");
 
   if (!platform || !baseUrl || !username || !password) {
