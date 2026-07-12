@@ -29,10 +29,79 @@ const orderImportFilters = [
   { value: "cancelled", label: "Cancelled" },
 ];
 
+const shopifyOrderImportFilters = [
+  { value: "all_sales", label: "All Orders" },
+  { value: "paid", label: "Paid" },
+  { value: "pending", label: "Pending" },
+  { value: "authorized", label: "Authorized" },
+  { value: "refunded", label: "Refunded" },
+  { value: "partially_refunded", label: "Partially Refunded" },
+  { value: "voided", label: "Voided" },
+  { value: "cancelled", label: "Cancelled" },
+];
+
 const checkoutChampBaseUrl = "https://api.checkoutchamp.com";
 const wowSuiteBaseUrl = "https://public-api.tryemanagecrm.com";
+const shopifyApiVersion = "2026-07";
 
 export const integrationCatalog: IntegrationDefinition[] = [
+  {
+    id: "shopify",
+    name: "Shopify",
+    category: "commerce",
+    description:
+      "Import Shopify orders, refunds, line items, discounts, tax, shipping, and attribution metadata.",
+    primaryAction: "connect",
+    authType: "api_key",
+    credentialFields: [
+      {
+        key: "shopDomain",
+        label: "Shop Domain",
+        placeholder: "your-store.myshopify.com",
+        required: true,
+        helpText: "Use the permanent myshopify.com domain or just the store handle.",
+      },
+      {
+        key: "adminAccessToken",
+        label: "Admin API Access Token",
+        type: "password",
+        required: true,
+        autoComplete: "new-password",
+        helpText: "Token is encrypted and cleared from the form after a successful save.",
+      },
+      {
+        key: "apiVersion",
+        label: "API Version",
+        placeholder: shopifyApiVersion,
+        defaultValue: shopifyApiVersion,
+        required: false,
+      },
+    ],
+    supportsWebhook: false,
+    supportsBackfill: true,
+    supportsTestConnection: true,
+    supportsTestEvents: false,
+    testConnectionPath: "/v1/integrations/test-connect",
+    saveCredentialsPath: "/v1/integrations/save-credentials",
+    statusPath: "/v1/integrations/shopify/status",
+    settingsPath: "/v1/integrations/shopify/settings",
+    runNowPath: "/v1/integrations/shopify/run-now",
+    backfillPath: "/v1/integrations/shopify/import-orders",
+    backfillMode: "sync",
+    backfillFilters: shopifyOrderImportFilters,
+    backfillTimeoutMs: 60000,
+    defaultBackfillFrom: "2024-01-01",
+    defaultBackfillTo: "2024-01-02",
+    defaultAutoImportIntervalMinutes: 60,
+    defaultAutoImportLookbackHours: 2,
+    documentation: {
+      credentialInstructions: [
+        "Create a Shopify Admin API access token with read_orders access.",
+        "Paste the permanent myshopify.com domain and Admin API token.",
+        "Webhook HMAC support and automatic webhook registration are left as a documented TODO for this pass.",
+      ],
+    },
+  },
   {
     id: "manual-postback",
     name: "Manual Postback",
