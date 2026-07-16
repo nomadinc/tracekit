@@ -1,0 +1,158 @@
+[
+  {
+    "workspace_id": "default",
+    "platform": "wowsuite:wowboost",
+    "platform_order_id": "wowsuite:wowboost:25001000",
+    "order_id": null,
+    "transaction_id": "fake-tx-prestaged-1000",
+    "order_ts": "2026-04-03T10:00:00.000Z",
+    "commerce_reference": null,
+    "raw_json": {
+      "Order Number": "25001000"
+    }
+  },
+  {
+    "workspace_id": "default",
+    "platform": "wowsuite:wowboost",
+    "platform_order_id": "wowsuite:wowboost:25001001",
+    "order_id": null,
+    "transaction_id": "fake-tx-1001",
+    "order_ts": "2026-04-04T10:00:00.000Z",
+    "commerce_reference": null,
+    "raw_json": {
+      "Order Number": "25001001"
+    }
+  },
+  {
+    "workspace_id": "default",
+    "platform": "wowsuite:wowboost",
+    "platform_order_id": "wowsuite:wowboost:25001002",
+    "order_id": null,
+    "transaction_id": "fake-tx-1002",
+    "order_ts": "2026-04-05T10:00:00.000Z",
+    "commerce_reference": null,
+    "raw_json": {
+      "Order Number": "25001002"
+    }
+  },
+  {
+    "workspace_id": "default",
+    "platform": "wowsuite:wowboost",
+    "platform_order_id": "wowsuite:wowboost:25001003",
+    "order_id": null,
+    "transaction_id": "fake-tx-ambiguous-1003",
+    "order_ts": "2026-04-06T10:00:00.000Z",
+    "commerce_reference": null,
+    "raw_json": {
+      "Order Number": "25001003"
+    }
+  },
+  {
+    "workspace_id": "default",
+    "platform": "wowsuite:wowboost",
+    "platform_order_id": "wowsuite:wowboost:25001004",
+    "order_id": null,
+    "transaction_id": "fake-tx-missing-map-1004",
+    "order_ts": "2026-04-07T10:00:00.000Z",
+    "commerce_reference": null,
+    "raw_json": {
+      "Order Number": "25001004"
+    }
+  },
+  {
+    "workspace_id": "default",
+    "platform": "wowsuite:wowboost",
+    "platform_order_id": "wowsuite:wowboost:25001005",
+    "order_id": null,
+    "transaction_id": "fake-tx-no-ref-1005",
+    "order_ts": "2026-04-08T10:00:00.000Z",
+    "commerce_reference": null,
+    "raw_json": {
+      "Order Number": "25001005"
+    }
+  },
+  {
+    "workspace_id": "default",
+    "platform": "wowsuite:wowboost",
+    "platform_order_id": "wowsuite:wowboost:25001006",
+    "order_id": null,
+    "transaction_id": "fake-tx-404-1006",
+    "order_ts": "2026-04-09T10:00:00.000Z",
+    "commerce_reference": null,
+    "raw_json": {
+      "Order Number": "25001006"
+    }
+  },
+  {
+    "workspace_id": "default",
+    "platform": "wowsuite:wowboost",
+    "platform_order_id": "wowsuite:wowboost:25001007",
+    "order_id": null,
+    "transaction_id": "fake-tx-already-1007",
+    "order_ts": "2026-04-10T10:00:00.000Z",
+    "commerce_reference": "REF-ALREADY-1007",
+    "raw_json": {
+      "Order Number": "25001007"
+    }
+  },
+  {
+    "workspace_id": "default",
+    "platform": "wowboost",
+    "platform_order_id": "wowboost:1008",
+    "order_id": "1008",
+    "transaction_id": "fake-tx-current-1008",
+    "order_ts": "2026-04-11T10:00:00.000Z",
+    "commerce_reference": null,
+    "raw_json": {
+      "Order ID": "1008"
+    }
+  },
+  {
+    "workspace_id": "default",
+    "platform": "wowsuite",
+    "platform_order_id": "wowsuite:1009",
+    "order_id": "1009",
+    "transaction_id": "fake-tx-legacy-alias-1009",
+    "order_ts": "2026-04-12T10:00:00.000Z",
+    "commerce_reference": null,
+    "raw_json": {
+      "Order ID": "1009"
+    }
+  },
+  {
+    "workspace_id": "default",
+    "platform": "wowboost",
+    "platform_order_id": "wowboost:1010",
+    "order_id": "1010",
+    "transaction_id": "fake-tx-current-already-1010",
+    "order_ts": "2026-04-13T10:00:00.000Z",
+    "commerce_reference": "REF-ALREADY-1010",
+    "raw_json": {
+      "Order ID": "1010"
+    }
+  },
+  {
+    "workspace_id": "default",
+    "platform": "paypal",
+    "platform_order_id": "paypal:fake-capture-1",
+    "order_id": "paypal-order-1",
+    "transaction_id": "fake-paypal-tx-1",
+    "order_ts": "2026-04-14T10:00:00.000Z",
+    "commerce_reference": null,
+    "raw_json": {
+      "source": "paypal"
+    }
+  },
+  {
+    "workspace_id": "other",
+    "platform": "wowsuite:wowboost",
+    "platform_order_id": "wowsuite:wowboost:26001001",
+    "order_id": null,
+    "transaction_id": "fake-tx-other-workspace",
+    "order_ts": "2026-04-15T10:00:00.000Z",
+    "commerce_reference": null,
+    "raw_json": {
+      "Order Number": "26001001"
+    }
+  }
+]
