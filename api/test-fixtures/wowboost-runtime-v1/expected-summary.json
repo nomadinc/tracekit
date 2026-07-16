@@ -1,0 +1,61 @@
+{
+  "fixture_version": "wowboost-runtime-v1",
+  "date_range": {
+    "from": "2026-04-01",
+    "to": "2026-07-13"
+  },
+  "workspace_id": "default",
+  "runtime_version": 1,
+  "execution_mode": "connector_runtime",
+  "phases": [
+    "stage_export_pages",
+    "reconcile_legacy_orders",
+    "fetch_order_details",
+    "validate_and_finalize"
+  ],
+  "export_pages_scanned": 3,
+  "export_rows_seen": 13,
+  "targets_total": 7,
+  "targets_mapped": 6,
+  "targets_unresolved": 1,
+  "staged_unique_mappings": 7,
+  "commerce_references_updated": 5,
+  "records_skipped": 4,
+  "transient_retries": 1,
+  "permanent_errors": 3,
+  "missing_reference": 1,
+  "invalid_reference": 1,
+  "remaining_blank_references": 4,
+  "unresolved_error_count": 3,
+  "final_status": "completed_with_errors",
+  "staging_stop_reason": "export_ended",
+  "target_driven_stop_reason": "all_targets_mapped",
+  "finalize_rpc": "wowboost_runtime_finalize_counts",
+  "expected_updated_references": {
+    "wowsuite:wowboost:25001000": "REF-1000",
+    "wowsuite:wowboost:25001001": "REF-1001",
+    "wowsuite:wowboost:25001002": "REF-1002",
+    "wowboost:1008": "REF-1008",
+    "wowsuite:1009": "REF-1009"
+  },
+  "expected_untouched": [
+    "wowsuite:wowboost:25001007",
+    "wowboost:1010",
+    "paypal:fake-capture-1"
+  ],
+  "order_detail_requests": [
+    "1000",
+    "1001",
+    "1002",
+    "1002",
+    "1005",
+    "1006",
+    "1008",
+    "1009"
+  ],
+  "error_classes": [
+    "ambiguous_legacy_order_number",
+    "missing_legacy_order_number_mapping",
+    "order_detail_not_found"
+  ]
+}
