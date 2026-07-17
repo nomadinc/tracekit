@@ -2,7 +2,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   CONNECTOR_RUNTIME_EXECUTION_MODE,
+  CONNECTOR_RUNTIME_TASK_DIAGNOSTIC_EVENT_LIMIT,
   CONNECTOR_RUNTIME_VERSION,
+  appendConnectorRuntimeTaskDiagnostic,
+  appendConnectorRuntimeTaskDiagnosticSample,
   classifyConnectorRuntimeFailure,
   compactConnectorRuntimeJobPayload,
   connectorRuntimeErrorSummary,
@@ -14,8 +17,10 @@ import {
   connectorRuntimeRerunFinalizeProgress,
   connectorRuntimeRetryDelayMs,
   connectorRuntimeTaskDedupeKey,
+  connectorRuntimeTaskHeartbeatTimestampMs,
   connectorRuntimeTaskMessage,
   createConnectorRuntimeProgress,
+  isConnectorRuntimeTaskStale,
   isActiveConnectorRuntimeJobStatus,
   isConnectorRuntimeV1Job,
   isTerminalConnectorRuntimeJobStatus,
@@ -23,6 +28,7 @@ import {
   normalizeConnectorRuntimeJobStatus,
   normalizeConnectorRuntimeTaskStatus,
   selectConnectorRuntimeJobForStart,
+  shouldWriteConnectorRuntimeDurableHeartbeat,
 } from "./connector-runtime.ts";
 
 test("creates compact runtime progress for durable connector jobs", () => {
@@ -266,6 +272,77 @@ test("queue messages contain identifiers only", () => {
     task_type: "stage_export_page",
     phase: "stage_export_pages",
   });
+});
+
+test("task diagnostics append bounded heartbeat breadcrumbs", () => {
+  let summary: Record<string, any> = {};
+  for (let index = 0; index < CONNECTOR_RUNTIME_TASK_DIAGNOSTIC_EVENT_LIMIT + 5; index += 1) {
+    summary = appendConnectorRuntimeTaskDiagnostic(summary, `event-${index}`, { index }, `2026-07-17T00:00:${String(index).padStart(2, "0")}.000Z`);
+  }
+
+  assert.equal(summary.heartbeat_event, `event-${CONNECTOR_RUNTIME_TASK_DIAGNOSTIC_EVENT_LIMIT + 4}`);
+  assert.equal(summary.heartbeat_count, CONNECTOR_RUNTIME_TASK_DIAGNOSTIC_EVENT_LIMIT + 5);
+  assert.equal(summary.diagnostic_events.length, CONNECTOR_RUNTIME_TASK_DIAGNOSTIC_EVENT_LIMIT);
+  assert.equal(summary.diagnostic_events[0].event, "event-5");
+});
+
+test("task diagnostic samples do not count as durable heartbeats", () => {
+  let summary: Record<string, any> = appendConnectorRuntimeTaskDiagnostic({}, "identity_resolve.entry", {}, "2026-07-17T00:00:00.000Z");
+  for (let recordIndex = 0; recordIndex < 10; recordIndex += 1) {
+    for (let operationIndex = 0; operationIndex < 12; operationIndex += 1) {
+      summary = appendConnectorRuntimeTaskDiagnosticSample(
+        summary,
+        `identity_repository.operation_${operationIndex}.after_await`,
+        { processed: recordIndex + 1, operation_index: operationIndex },
+        `2026-07-17T00:00:${String(recordIndex).padStart(2, "0")}.000Z`,
+      );
+    }
+  }
+
+  assert.equal(summary.heartbeat_count, 1);
+  assert.equal(summary.diagnostic_event_count, 120);
+  assert.equal(summary.diagnostic_events.length, CONNECTOR_RUNTIME_TASK_DIAGNOSTIC_EVENT_LIMIT);
+});
+
+test("durable heartbeat throttle writes only on interval or force", () => {
+  const last = Date.parse("2026-07-17T00:00:00.000Z");
+  assert.equal(shouldWriteConnectorRuntimeDurableHeartbeat({
+    last_heartbeat_ms: last,
+    now_ms: last + 9999,
+    min_interval_ms: 10000,
+  }), false);
+  assert.equal(shouldWriteConnectorRuntimeDurableHeartbeat({
+    last_heartbeat_ms: last,
+    now_ms: last + 10000,
+    min_interval_ms: 10000,
+  }), true);
+  assert.equal(shouldWriteConnectorRuntimeDurableHeartbeat({
+    force: true,
+    last_heartbeat_ms: last,
+    now_ms: last + 1,
+    min_interval_ms: 10000,
+  }), true);
+});
+
+test("task stale detection uses the newest heartbeat lock or update timestamp", () => {
+  const now = Date.parse("2026-07-17T00:05:00.000Z");
+  const staleTask = {
+    status: "running",
+    locked_at: "2026-07-17T00:00:00.000Z",
+    updated_at: "2026-07-17T00:00:10.000Z",
+    result_summary: { heartbeat_at: "2026-07-17T00:00:30.000Z" },
+  };
+  const freshTask = {
+    status: "running",
+    locked_at: "2026-07-17T00:00:00.000Z",
+    updated_at: "2026-07-17T00:00:10.000Z",
+    result_summary: { heartbeat_at: "2026-07-17T00:04:30.000Z" },
+  };
+
+  assert.equal(connectorRuntimeTaskHeartbeatTimestampMs(staleTask), Date.parse("2026-07-17T00:00:30.000Z"));
+  assert.equal(isConnectorRuntimeTaskStale(staleTask, { now_ms: now, stale_ms: 120000 }), true);
+  assert.equal(isConnectorRuntimeTaskStale(freshTask, { now_ms: now, stale_ms: 120000 }), false);
+  assert.equal(isConnectorRuntimeTaskStale({ ...staleTask, status: "queued" }, { now_ms: now, stale_ms: 120000 }), false);
 });
 
 test("failure classifier separates transient permanent and blocking errors", () => {

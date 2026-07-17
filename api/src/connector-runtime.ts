@@ -27,6 +27,8 @@ export const CONNECTOR_RUNTIME_WOWBOOST_PHASES = [
 
 export const CONNECTOR_RUNTIME_VERSION = 1;
 export const CONNECTOR_RUNTIME_EXECUTION_MODE = "connector_runtime";
+export const CONNECTOR_RUNTIME_TASK_DIAGNOSTIC_EVENT_LIMIT = 25;
+export const CONNECTOR_RUNTIME_DURABLE_HEARTBEAT_MIN_INTERVAL_MS = 10000;
 
 export type ConnectorRuntimeJobStatus = (typeof CONNECTOR_RUNTIME_JOB_STATUSES)[number];
 export type ConnectorRuntimeTaskStatus = (typeof CONNECTOR_RUNTIME_TASK_STATUSES)[number];
@@ -277,6 +279,96 @@ export function connectorRuntimeTaskMessage(task: {
     task_type: task.task_type,
     phase: task.phase,
   };
+}
+
+function connectorRuntimeTaskTimestampMs(value: unknown) {
+  const parsed = Date.parse(String(value || ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+export function appendConnectorRuntimeTaskDiagnostic(
+  summary: Record<string, any> | null | undefined,
+  event: string,
+  details: Record<string, any> = {},
+  now: string = new Date().toISOString(),
+) {
+  const base = summary && typeof summary === "object" ? { ...summary } : {};
+  const events = Array.isArray(base.diagnostic_events) ? base.diagnostic_events.slice(-CONNECTOR_RUNTIME_TASK_DIAGNOSTIC_EVENT_LIMIT + 1) : [];
+  return {
+    ...base,
+    heartbeat_at: now,
+    heartbeat_event: event,
+    heartbeat_count: Number(base.heartbeat_count || 0) + 1,
+    diagnostic_events: [
+      ...events,
+      {
+        at: now,
+        event,
+        ...details,
+      },
+    ],
+  };
+}
+
+export function appendConnectorRuntimeTaskDiagnosticSample(
+  summary: Record<string, any> | null | undefined,
+  event: string,
+  details: Record<string, any> = {},
+  now: string = new Date().toISOString(),
+) {
+  const base = summary && typeof summary === "object" ? { ...summary } : {};
+  const events = Array.isArray(base.diagnostic_events) ? base.diagnostic_events.slice(-CONNECTOR_RUNTIME_TASK_DIAGNOSTIC_EVENT_LIMIT + 1) : [];
+  return {
+    ...base,
+    diagnostic_event: event,
+    diagnostic_event_count: Number(base.diagnostic_event_count || 0) + 1,
+    diagnostic_events: [
+      ...events,
+      {
+        at: now,
+        event,
+        ...details,
+      },
+    ],
+  };
+}
+
+export function shouldWriteConnectorRuntimeDurableHeartbeat(args: {
+  force?: boolean;
+  last_heartbeat_ms?: number | null;
+  now_ms?: number;
+  min_interval_ms?: number;
+}) {
+  if (args.force) return true;
+  const lastHeartbeatMs = Number(args.last_heartbeat_ms || 0);
+  if (!lastHeartbeatMs) return true;
+  const nowMs = Number(args.now_ms ?? Date.now());
+  const minIntervalMs = Math.max(1, Number(args.min_interval_ms || CONNECTOR_RUNTIME_DURABLE_HEARTBEAT_MIN_INTERVAL_MS));
+  return Math.max(0, nowMs - lastHeartbeatMs) >= minIntervalMs;
+}
+
+export function connectorRuntimeTaskHeartbeatTimestampMs(task: {
+  locked_at?: string | null;
+  updated_at?: string | null;
+  result_summary?: Record<string, any> | null;
+}) {
+  return Math.max(
+    connectorRuntimeTaskTimestampMs(task.result_summary?.heartbeat_at),
+    connectorRuntimeTaskTimestampMs(task.locked_at),
+    connectorRuntimeTaskTimestampMs(task.updated_at),
+  );
+}
+
+export function isConnectorRuntimeTaskStale(task: {
+  status?: string | null;
+  locked_at?: string | null;
+  updated_at?: string | null;
+  result_summary?: Record<string, any> | null;
+}, args: { now_ms?: number; stale_ms: number }) {
+  if (task.status !== "running") return false;
+  const heartbeatMs = connectorRuntimeTaskHeartbeatTimestampMs(task);
+  if (!heartbeatMs) return false;
+  return Math.max(0, Number(args.now_ms ?? Date.now()) - heartbeatMs) >= args.stale_ms;
 }
 
 export function classifyConnectorRuntimeFailure(args: {

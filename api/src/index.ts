@@ -31,6 +31,9 @@ import {
   type ProfitOrderKey,
 } from "./profit";
 import {
+  CONNECTOR_RUNTIME_DURABLE_HEARTBEAT_MIN_INTERVAL_MS,
+  appendConnectorRuntimeTaskDiagnosticSample,
+  appendConnectorRuntimeTaskDiagnostic,
   classifyConnectorRuntimeFailure,
   compactConnectorRuntimeJobPayload,
   connectorRuntimeErrorSummary,
@@ -43,11 +46,13 @@ import {
   connectorRuntimeTaskDedupeKey,
   connectorRuntimeTaskMessage,
   createConnectorRuntimeProgress,
+  isConnectorRuntimeTaskStale,
   isActiveConnectorRuntimeJobStatus,
   isConnectorRuntimeV1Job,
   isTerminalConnectorRuntimeJobStatus,
   mergeConnectorRuntimeCounters,
   normalizeConnectorRuntimeJobStatus,
+  shouldWriteConnectorRuntimeDurableHeartbeat,
   type ConnectorRuntimeProgress,
   type ConnectorRuntimeTaskPlan,
 } from "./connector-runtime";
@@ -73,6 +78,8 @@ import {
   createIdentityService,
   createSupabaseIdentityRepository,
   resolveIdentityForSourceRecord,
+  withIdentityOperationTimeout,
+  type IdentityDiagnostics,
   type IdentityInputIdentifier,
   type IdentityResolutionEvent,
 } from "./identity-service";
@@ -82,6 +89,7 @@ import {
   IDENTITY_BACKFILL_DISCOVERY_SELECT,
   IDENTITY_BACKFILL_JOB_TYPE,
   IDENTITY_BACKFILL_RESOLVE_SELECT,
+  IDENTITY_BACKFILL_RESOLVE_TASK_BUDGET_MS,
   IDENTITY_BACKFILL_TASK_TYPES,
   createIdentityBackfillDiscoveryState,
   dateRangeToTimestamps,
@@ -90,7 +98,9 @@ import {
   identityBackfillDiscoverySummary,
   identityBackfillDryRunFinalizeCounts,
   identityBackfillFinalizeStatus,
+  identityBackfillResolveContinuationDedupeKey,
   identityBackfillResolveDedupeKey,
+  identityBackfillResolveRemainingIds,
   isSupportedIdentityBackfillPlatformOrder,
   markIdentityBackfillPlatformDiscovery,
   mergeIdentityBackfillResolveMetricMetadata,
@@ -102,6 +112,7 @@ import {
   parseIdentityBackfillCursor,
   previewIdentityResolutionReadOnly,
   serializeIdentityBackfillCursor,
+  shouldCheckpointIdentityBackfillResolveBatch,
 } from "./identity-backfill-runtime";
 import { matchIdentityRoute } from "./identity-routes";
 import {
@@ -407,8 +418,8 @@ function getSupabase(env: Env) {
 
 type SupabaseClientAny = ReturnType<typeof getSupabase>;
 
-function getIdentityService(env: Env) {
-  return createIdentityService(createSupabaseIdentityRepository(getSupabase(env)));
+function getIdentityService(env: Env, diagnostics?: IdentityDiagnostics | null) {
+  return createIdentityService(createSupabaseIdentityRepository(getSupabase(env), diagnostics), diagnostics);
 }
 
 function compactIdentityMetadata(metadata: any) {
@@ -1480,6 +1491,9 @@ const WOWBOOST_RUNTIME_DEFAULT_RECONCILE_LIMIT = 100;
 const WOWBOOST_RUNTIME_DEFAULT_DETAILS_LIMIT = 5;
 const WOWBOOST_RUNTIME_MAX_DETAILS_LIMIT = 20;
 const WOWBOOST_RUNTIME_DEFAULT_PACING_MS = 650;
+const IDENTITY_RESOLVE_TASK_STALE_MS = 120000;
+const IDENTITY_RESOLVE_TASK_RECHECK_DELAY_SECONDS = 30;
+const IDENTITY_RESOLVE_OPERATION_TIMEOUT_MS = 15000;
 
 async function createConnectorRuntimeTask(env: Env, plan: ConnectorRuntimeTaskPlan) {
   const supabase = getSupabase(env);
@@ -1539,6 +1553,148 @@ async function updateConnectorRuntimeTask(env: Env, taskId: string, patch: Parti
   if (error) throw new Error(`Failed to update connector runtime task: ${error.message}`);
 }
 
+function isIdentityResolveRuntimeTask(task: ConnectorImportTaskRow | null | undefined) {
+  return Boolean(
+    task
+    && task.connector_id === IDENTITY_BACKFILL_CONNECTOR_ID
+    && task.task_type === IDENTITY_BACKFILL_TASK_TYPES.resolve
+  );
+}
+
+function connectorRuntimeTaskLogDetails(task: ConnectorImportTaskRow, event: string, details: Record<string, any> = {}) {
+  return {
+    event,
+    task_id: task.id,
+    job_id: task.job_id,
+    connector_id: task.connector_id,
+    task_type: task.task_type,
+    phase: task.phase,
+    status: task.status,
+    attempt_count: Number(task.attempt_count || 0),
+    ...details,
+  };
+}
+
+function logConnectorRuntimeTaskEvent(task: ConnectorImportTaskRow, event: string, details: Record<string, any> = {}, level: "log" | "error" = "log") {
+  const payload = connectorRuntimeTaskLogDetails(task, event, details);
+  if (level === "error") console.error("[TraceKit] connector runtime task", payload);
+  else console.log("[TraceKit] connector runtime task", payload);
+}
+
+type ConnectorRuntimeTaskDiagnosticState = {
+  summary: Record<string, any>;
+  last_durable_heartbeat_ms: number;
+};
+
+function connectorRuntimeTaskDiagnosticState(task: ConnectorImportTaskRow): ConnectorRuntimeTaskDiagnosticState {
+  const summary = task.result_summary && typeof task.result_summary === "object" ? { ...task.result_summary } : {};
+  const heartbeatMs = Date.parse(String(summary.heartbeat_at || task.locked_at || task.updated_at || ""));
+  return {
+    summary,
+    last_durable_heartbeat_ms: Number.isFinite(heartbeatMs) ? heartbeatMs : 0,
+  };
+}
+
+function recordConnectorRuntimeTaskDiagnosticSample(
+  state: ConnectorRuntimeTaskDiagnosticState,
+  event: string,
+  details: Record<string, any> = {},
+) {
+  state.summary = appendConnectorRuntimeTaskDiagnosticSample(state.summary, event, details);
+}
+
+async function heartbeatConnectorRuntimeTask(
+  env: Env,
+  task: ConnectorImportTaskRow,
+  state: ConnectorRuntimeTaskDiagnosticState,
+  event: string,
+  details: Record<string, any> = {},
+  options: { force?: boolean; min_interval_ms?: number } = {},
+) {
+  const nowMs = Date.now();
+  if (!shouldWriteConnectorRuntimeDurableHeartbeat({
+    force: options.force,
+    last_heartbeat_ms: state.last_durable_heartbeat_ms,
+    now_ms: nowMs,
+    min_interval_ms: options.min_interval_ms || CONNECTOR_RUNTIME_DURABLE_HEARTBEAT_MIN_INTERVAL_MS,
+  })) {
+    recordConnectorRuntimeTaskDiagnosticSample(state, event, details);
+    return false;
+  }
+  const now = new Date().toISOString();
+  state.summary = appendConnectorRuntimeTaskDiagnostic(state.summary, event, details, now);
+  state.last_durable_heartbeat_ms = nowMs;
+  await updateConnectorRuntimeTask(env, task.id, {
+    locked_at: now,
+    result_summary: state.summary,
+  });
+  return true;
+}
+
+async function traceIdentityResolveAwait<T>(
+  env: Env,
+  task: ConnectorImportTaskRow,
+  state: ConnectorRuntimeTaskDiagnosticState,
+  event: string,
+  operation: () => Promise<T>,
+  options: { durable_before?: boolean; durable_after?: boolean; details?: Record<string, any> } = {},
+) {
+  logConnectorRuntimeTaskEvent(task, `${event}.before_await`, options.details || {});
+  recordConnectorRuntimeTaskDiagnosticSample(state, `${event}.before_await`, options.details || {});
+  if (options.durable_before) await heartbeatConnectorRuntimeTask(env, task, state, `${event}.before_await`, options.details || {}, { force: true });
+  const started = Date.now();
+  try {
+    const result = await withIdentityOperationTimeout(event, operation(), IDENTITY_RESOLVE_OPERATION_TIMEOUT_MS);
+    const elapsedDetails = { ...(options.details || {}), elapsed_ms: Date.now() - started };
+    logConnectorRuntimeTaskEvent(task, `${event}.after_await`, elapsedDetails);
+    recordConnectorRuntimeTaskDiagnosticSample(state, `${event}.after_await`, elapsedDetails);
+    if (options.durable_after) await heartbeatConnectorRuntimeTask(env, task, state, `${event}.after_await`, elapsedDetails, { force: true });
+    return result;
+  } catch (error: any) {
+    logConnectorRuntimeTaskEvent(task, `${event}.await_error`, {
+      ...(options.details || {}),
+      elapsed_ms: Date.now() - started,
+      timed_out: error?.name === "IdentityOperationTimeoutError",
+      message: error?.message || String(error),
+    }, "error");
+    await heartbeatConnectorRuntimeTask(env, task, state, `${event}.await_error`, {
+      ...(options.details || {}),
+      elapsed_ms: Date.now() - started,
+      timed_out: error?.name === "IdentityOperationTimeoutError",
+      error_name: error?.name || "Error",
+    }, { force: true }).catch(() => {});
+    throw error;
+  }
+}
+
+function identityResolveServiceDiagnostics(
+  env: Env,
+  task: ConnectorImportTaskRow,
+  state: ConnectorRuntimeTaskDiagnosticState,
+  base: { platform?: string | null; platform_order_id: string; processed: number },
+): IdentityDiagnostics {
+  return {
+    timeout_ms: IDENTITY_RESOLVE_OPERATION_TIMEOUT_MS,
+    emit: (event) => {
+      const details = {
+        platform: base.platform || null,
+        platform_order_id: base.platform_order_id,
+        processed: base.processed,
+        operation: event.operation,
+        elapsed_ms: event.elapsed_ms ?? null,
+        timed_out: Boolean(event.timed_out),
+        error_name: event.error_name || null,
+        ...(event.metadata || {}),
+      };
+      recordConnectorRuntimeTaskDiagnosticSample(state, `${event.operation}.${event.phase}`, details);
+    },
+  };
+}
+
+function identityResolveRecordHeartbeatOptions(processed: number) {
+  return { force: processed > 0 && processed % 5 === 0 };
+}
+
 async function enqueueConnectorRuntimeTask(env: Env, task: ConnectorImportTaskRow) {
   if (!env.wowboost_imports) throw new Error("wowboost_imports queue binding is missing. Check wrangler.toml.");
   await env.wowboost_imports.send(connectorRuntimeTaskMessage({
@@ -1548,6 +1704,107 @@ async function enqueueConnectorRuntimeTask(env: Env, task: ConnectorImportTaskRo
     task_type: task.task_type,
     phase: task.phase,
   }));
+}
+
+async function enqueueConnectorRuntimeTaskWithDelay(env: Env, task: ConnectorImportTaskRow, delaySeconds: number) {
+  if (!env.wowboost_imports) throw new Error("wowboost_imports queue binding is missing. Check wrangler.toml.");
+  await env.wowboost_imports.send(connectorRuntimeTaskMessage({
+    id: task.id,
+    job_id: task.job_id,
+    connector_id: task.connector_id,
+    task_type: task.task_type,
+    phase: task.phase,
+  }), { delaySeconds: Math.max(1, Math.floor(delaySeconds)) } as any);
+}
+
+async function recoverStaleIdentityResolveTask(env: Env, task: ConnectorImportTaskRow, args: { enqueue?: boolean; reason?: string } = {}) {
+  if (!isIdentityResolveRuntimeTask(task)) return task;
+  const now = new Date().toISOString();
+  const attempt = Math.max(1, Number(task.attempt_count || 1));
+  const maxAttempts = Math.max(1, Number(task.max_attempts || 5));
+  const canRetry = attempt < maxAttempts;
+  const lastError = `Recovered stale Identity Backfill resolve task after missing heartbeat for ${Math.round(IDENTITY_RESOLVE_TASK_STALE_MS / 1000)} seconds.`;
+  const state = connectorRuntimeTaskDiagnosticState(task);
+  state.summary = appendConnectorRuntimeTaskDiagnostic(state.summary, "identity_resolve.stale_recovered", {
+    reason: args.reason || "stale_running_task",
+    previous_status: task.status,
+    attempt_count: attempt,
+    max_attempts: maxAttempts,
+    retrying: canRetry,
+  }, now);
+
+  const nextStatus = canRetry ? "queued" : "failed";
+  await updateConnectorRuntimeTask(env, task.id, {
+    status: nextStatus,
+    available_at: now,
+    locked_at: null,
+    completed_at: canRetry ? null : now,
+    last_error: lastError,
+    result_summary: state.summary,
+  });
+
+  await insertConnectorRuntimeError(env, {
+    job_id: task.job_id,
+    task_id: task.id,
+    connector_id: task.connector_id,
+    record_identifier: task.dedupe_key,
+    error_class: canRetry ? "identity_backfill_resolve_stale_recovered" : "identity_backfill_resolve_stale_exhausted",
+    attempt,
+    message: lastError,
+    classification: canRetry ? "transient" : "permanent",
+  }).catch(() => {});
+
+  const job = await getImportJob(env, task.job_id).catch(() => null);
+  if (job) {
+    const progress = connectorRuntimeProgressFromJob(job);
+    const nextProgress = mergeConnectorRuntimeCounters(progress, canRetry ? { retries: 1 } : { records_failed: 1 }, {
+      status: canRetry ? "retrying" : "completed_with_errors",
+      phase: task.phase,
+      last_error: lastError,
+      next_run_at: canRetry ? now : null,
+      metadata: {
+        stale_resolve_tasks_recovered: Number(progress.metadata?.stale_resolve_tasks_recovered || 0) + 1,
+        stale_resolve_task_ids: [...(progress.metadata?.stale_resolve_task_ids || []), task.id].slice(-10),
+      },
+    });
+    await updateConnectorRuntimeJobProgress(env, job, nextProgress).catch(() => {});
+  }
+
+  const recoveredTask = {
+    ...task,
+    status: nextStatus,
+    available_at: now,
+    locked_at: null,
+    completed_at: canRetry ? null : now,
+    last_error: lastError,
+    result_summary: state.summary,
+  };
+  if (canRetry && args.enqueue !== false) await enqueueConnectorRuntimeTask(env, recoveredTask);
+  return recoveredTask;
+}
+
+async function recoverStaleIdentityResolveTasks(env: Env, args: { job_id?: string | null; limit?: number } = {}) {
+  const supabase = getSupabase(env);
+  const staleBefore = new Date(Date.now() - IDENTITY_RESOLVE_TASK_STALE_MS).toISOString();
+  let query = supabase
+    .from("connector_import_tasks")
+    .select("*")
+    .eq("connector_id", IDENTITY_BACKFILL_CONNECTOR_ID)
+    .eq("task_type", IDENTITY_BACKFILL_TASK_TYPES.resolve)
+    .eq("status", "running")
+    .lt("locked_at", staleBefore)
+    .order("locked_at", { ascending: true })
+    .limit(Math.max(1, Math.min(25, Number(args.limit || 10))));
+  if (args.job_id) query = query.eq("job_id", args.job_id);
+  const { data, error } = await query;
+  if (error) throw new Error(`Failed to scan stale identity resolve tasks: ${error.message}`);
+  let recovered = 0;
+  for (const task of (data || []) as ConnectorImportTaskRow[]) {
+    if (!isConnectorRuntimeTaskStale(task, { stale_ms: IDENTITY_RESOLVE_TASK_STALE_MS })) continue;
+    await recoverStaleIdentityResolveTask(env, task, { enqueue: true, reason: "status_recovery_scan" });
+    recovered += 1;
+  }
+  return recovered;
 }
 
 async function createAndEnqueueConnectorRuntimeTask(env: Env, plan: ConnectorRuntimeTaskPlan) {
@@ -1673,6 +1930,14 @@ function connectorRuntimeProgressFromJob(job: ImportJobRow): ConnectorRuntimePro
 
 async function connectorRuntimeJobPayload(env: Env, job: ImportJobRow | null, options: { recent_errors?: boolean } = {}) {
   if (!job) return null;
+  if (!isTerminalConnectorRuntimeJobStatus(normalizeConnectorRuntimeJobStatus(job.status))) {
+    await recoverStaleIdentityResolveTasks(env, { job_id: job.id }).catch((error) => {
+      console.error("[TraceKit] stale identity resolve recovery scan failed", {
+        job_id: job.id,
+        message: error?.message || String(error),
+      });
+    });
+  }
   const supabase = getSupabase(env);
   const [{ count: queuedTasks }, { count: runningTasks }, { count: failedTasks }] = await Promise.all([
     supabase.from("connector_import_tasks").select("id", { count: "exact", head: true }).eq("job_id", job.id).eq("status", "queued"),
@@ -3951,267 +4216,482 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
   const platformOrderIds = Array.from(new Set((Array.isArray(task.payload?.platform_order_ids) ? task.payload.platform_order_ids : [])
     .map((value: any) => String(value || "").trim())
     .filter(Boolean)));
-  if (!platformOrderIds.length) return { processed: 0, attached: 0, skipped: 0 };
+  const diagnostics = connectorRuntimeTaskDiagnosticState(task);
+  const entryDetails = { dry_run: dryRun, platform_order_ids: platformOrderIds.length };
+  let finalSummary: Record<string, any> | null = null;
+  let caughtError: any = null;
+  logConnectorRuntimeTaskEvent(task, "identity_resolve.entry.before_first_await", entryDetails);
 
-  const supabase = getSupabase(env);
-  const { data, error } = await supabase
-    .from("platform_orders")
-    .select(IDENTITY_BACKFILL_RESOLVE_SELECT)
-    .eq("workspace_id", progress.workspace_id || "default")
-    .in("platform_order_id", platformOrderIds);
-  if (error) throw runtimeSupabaseError("Identity backfill platform order reload failed", error);
-
-  const rowsById = new Map((data || []).map((row: any) => [String(row.platform_order_id), row]));
-  const service = dryRun ? null : getIdentityService(env);
-  let processed = 0;
-  let peopleCreated = 0;
-  let peopleMatched = 0;
-  let attached = 0;
-  let alreadyLinked = 0;
-  let skippedNoIdentifiers = 0;
-  let reviewRequired = 0;
-  let permanentErrors = 0;
-  let transientRetries = 0;
-  let attachmentConflicts = 0;
-  let wouldCreatePerson = 0;
-  let wouldMatchExisting = 0;
-  let wouldRequireReview = 0;
-  let wouldSkipNoIdentifiers = 0;
-  const recentWarnings: string[] = [];
-  const transientRetryIds: string[] = [];
-  const retryAttempt = Math.max(0, Number(task.payload?.retry_attempt || 0));
-  const maxRecordRetryAttempts = Math.max(1, Number(task.max_attempts || 5));
-
-  for (const platformOrderId of platformOrderIds) {
-    processed += 1;
-    const row = rowsById.get(platformOrderId);
-    if (!row) {
-      permanentErrors += 1;
-      await insertConnectorRuntimeError(env, {
-        job_id: job.id,
-        task_id: task.id,
-        connector_id: progress.connector_id,
-        record_identifier: platformOrderId,
-        error_class: "identity_backfill_row_gone",
-        message: "Platform order no longer exists.",
-        classification: "permanent",
-      }).catch(() => {});
-      continue;
-    }
-    if (row.person_id) {
-      alreadyLinked += 1;
-      continue;
-    }
-    if (!isSupportedIdentityBackfillPlatformOrder(row)) {
-      permanentErrors += 1;
-      continue;
+  try {
+    await heartbeatConnectorRuntimeTask(env, task, diagnostics, "identity_resolve.entry", entryDetails, { force: true });
+    if (!platformOrderIds.length) {
+      finalSummary = { processed: 0, attached: 0, skipped: 0, diagnostics: diagnostics.summary };
+      return finalSummary;
     }
 
-    const evidence = await extractIdentityEvidenceFromPlatformOrder(row);
-    if (!hasIdentityEvidence(evidence)) {
-      if (dryRun) {
-        wouldSkipNoIdentifiers += 1;
-      } else {
-        skippedNoIdentifiers += 1;
-        await insertConnectorRuntimeError(env, {
-          job_id: job.id,
-          task_id: task.id,
-          connector_id: progress.connector_id,
-          record_identifier: platformOrderId,
-          error_class: "identity_backfill_no_identifiers",
-          message: "Platform order has no deterministic person identity identifiers.",
-          classification: "permanent",
-        }).catch(() => {});
-      }
-      continue;
-    }
-    for (const warning of evidence.warnings) recentWarnings.push(warning);
+    const supabase = getSupabase(env);
+    const { data, error } = await traceIdentityResolveAwait(env, task, diagnostics, "identity_resolve.reload_platform_orders", async () => await supabase
+      .from("platform_orders")
+      .select(IDENTITY_BACKFILL_RESOLVE_SELECT)
+      .eq("workspace_id", progress.workspace_id || "default")
+      .in("platform_order_id", platformOrderIds), {
+      durable_after: true,
+      details: { platform_order_ids: platformOrderIds.length },
+    });
+    if (error) throw runtimeSupabaseError("Identity backfill platform order reload failed", error);
 
-    try {
-      if (dryRun) {
-        const preview = await previewIdentityResolution(env, {
-          workspace_id: progress.workspace_id || "default",
-          identifiers: evidence.identifiers,
-        });
-        if (preview.preview_action === "would_create_person") wouldCreatePerson += 1;
-        if (preview.preview_action === "would_match_existing") wouldMatchExisting += 1;
-        if (preview.preview_action === "would_require_review") {
-          wouldRequireReview += 1;
-        }
-        if (preview.preview_action === "would_skip_no_identifiers") wouldSkipNoIdentifiers += 1;
-        continue;
+    const rowsById = new Map((data || []).map((row: any) => [String(row.platform_order_id), row]));
+    let processed = 0;
+    let peopleCreated = 0;
+    let peopleMatched = 0;
+    let attached = 0;
+    let alreadyLinked = 0;
+    let skippedNoIdentifiers = 0;
+    let reviewRequired = 0;
+    let permanentErrors = 0;
+    let transientRetries = 0;
+    let attachmentConflicts = 0;
+    let wouldCreatePerson = 0;
+    let wouldMatchExisting = 0;
+    let wouldRequireReview = 0;
+    let wouldSkipNoIdentifiers = 0;
+    const recentWarnings: string[] = [];
+	    const transientRetryIds: string[] = [];
+	    const retryAttempt = Math.max(0, Number(task.payload?.retry_attempt || 0));
+	    const maxRecordRetryAttempts = Math.max(1, Number(task.max_attempts || 5));
+	    const taskStartedMs = Date.now();
+	    const completedRecordIds: string[] = [];
+	    let budgetCheckpointReached = false;
+	    let budgetContinuationIds: string[] = [];
+	    const deferNextPhase = Boolean(task.payload?.defer_next_phase);
+	    const markRecordCompleteAndMaybeCheckpoint = async (platformOrderId: string, options: { completed?: boolean } = {}) => {
+	      if (options.completed !== false) completedRecordIds.push(platformOrderId);
+	      if (!shouldCheckpointIdentityBackfillResolveBatch({
+	        started_ms: taskStartedMs,
+	        budget_ms: IDENTITY_BACKFILL_RESOLVE_TASK_BUDGET_MS,
+	        processed,
+	        total: platformOrderIds.length,
+	      })) {
+	        return false;
+	      }
+	      budgetCheckpointReached = true;
+	      budgetContinuationIds = identityBackfillResolveRemainingIds(platformOrderIds, processed);
+	      await heartbeatConnectorRuntimeTask(env, task, diagnostics, "identity_resolve.budget_checkpoint", {
+	        processed,
+	        total: platformOrderIds.length,
+	        remaining: budgetContinuationIds.length,
+	        completed_record_ids: completedRecordIds.length,
+	        elapsed_ms: Date.now() - taskStartedMs,
+	      }, { force: true });
+	      return true;
+	    };
+
+	    for (const platformOrderId of platformOrderIds) {
+      processed += 1;
+      logConnectorRuntimeTaskEvent(task, "identity_resolve.record.start", { platform_order_id: platformOrderId, processed });
+      await heartbeatConnectorRuntimeTask(env, task, diagnostics, "identity_resolve.record.start", {
+        platform_order_id: platformOrderId,
+        processed,
+      }, identityResolveRecordHeartbeatOptions(processed));
+      if (processed === 1 || processed % 10 === 0 || processed === platformOrderIds.length) {
+        logConnectorRuntimeTaskEvent(task, "identity_resolve.record_progress_heartbeat.before_await", { processed, total: platformOrderIds.length });
+        await heartbeatConnectorRuntimeTask(env, task, diagnostics, "identity_resolve.record_progress", {
+          processed,
+          total: platformOrderIds.length,
+          platform_order_id: platformOrderId,
+        }, identityResolveRecordHeartbeatOptions(processed));
+        logConnectorRuntimeTaskEvent(task, "identity_resolve.record_progress_heartbeat.after_await", { processed, total: platformOrderIds.length });
       }
 
-      const result = await resolveIdentityForSourceRecord(service!, {
-        workspace_id: progress.workspace_id || row.workspace_id || "default",
-        connector_id: IDENTITY_BACKFILL_CONNECTOR_ID,
-        connector_job_id: job.id,
-        platform: row.platform,
-        record_type: "platform_order",
-        record_id: platformOrderId,
-        identifiers: evidence.identifiers,
-        attributes: evidence.attributes,
-        observed_at: evidence.observed_at,
-      });
-
-      if (result.review_required || result.action === "review_required") {
-        reviewRequired += 1;
-        continue;
-      }
-      if (result.action === "created_person") peopleCreated += 1;
-      if (result.action === "matched_existing_person") peopleMatched += 1;
-
-      if (!result.person_id) {
+      const row = rowsById.get(platformOrderId);
+      if (!row) {
         permanentErrors += 1;
-        continue;
-      }
-
-      const { data: updated, error: updateError } = await supabase
-        .from("platform_orders")
-        .update({ person_id: result.person_id })
-        .eq("workspace_id", progress.workspace_id || "default")
-        .eq("platform_order_id", platformOrderId)
-        .is("person_id", null)
-        .select("platform_order_id,person_id")
-        .maybeSingle();
-      if (updateError) throw runtimeSupabaseError("Identity backfill person attachment failed", updateError);
-      if (updated?.person_id) attached += 1;
-      else attachmentConflicts += 1;
-    } catch (e: any) {
-      const classification = classifyConnectorRuntimeFailure({ message: e?.message || e });
-      if (classification === "blocking") throw e;
-      if (classification === "transient" && retryAttempt < maxRecordRetryAttempts) {
-        transientRetries += 1;
-        transientRetryIds.push(platformOrderId);
-        await insertConnectorRuntimeError(env, {
+        await traceIdentityResolveAwait(env, task, diagnostics, "identity_resolve.insert_row_gone_error", async () => await insertConnectorRuntimeError(env, {
           job_id: job.id,
           task_id: task.id,
           connector_id: progress.connector_id,
           record_identifier: platformOrderId,
-          error_class: "identity_backfill_transient_retry",
+          error_class: "identity_backfill_row_gone",
+          message: "Platform order no longer exists.",
+          classification: "permanent",
+        }).catch(() => {}), { details: { platform_order_id: platformOrderId } });
+	        await heartbeatConnectorRuntimeTask(env, task, diagnostics, "identity_resolve.record.error", {
+	          platform_order_id: platformOrderId,
+	          processed,
+	          operation: "row_lookup",
+	          permanent: true,
+	        }, { force: true });
+	        if (await markRecordCompleteAndMaybeCheckpoint(platformOrderId)) break;
+	        continue;
+	      }
+	      if (row.person_id) {
+        alreadyLinked += 1;
+        await heartbeatConnectorRuntimeTask(env, task, diagnostics, "identity_resolve.record.complete", {
+          platform: row.platform,
+          platform_order_id: platformOrderId,
+	          processed,
+	          already_linked: true,
+	        }, identityResolveRecordHeartbeatOptions(processed));
+	        if (await markRecordCompleteAndMaybeCheckpoint(platformOrderId)) break;
+	        continue;
+	      }
+	      if (!isSupportedIdentityBackfillPlatformOrder(row)) {
+        permanentErrors += 1;
+        await heartbeatConnectorRuntimeTask(env, task, diagnostics, "identity_resolve.record.complete", {
+          platform: row.platform,
+          platform_order_id: platformOrderId,
+	          processed,
+	          unsupported_platform: true,
+	        }, identityResolveRecordHeartbeatOptions(processed));
+	        if (await markRecordCompleteAndMaybeCheckpoint(platformOrderId)) break;
+	        continue;
+	      }
+
+      const evidence = await traceIdentityResolveAwait(env, task, diagnostics, "identity_resolve.extract_evidence", async () => await extractIdentityEvidenceFromPlatformOrder(row), {
+        details: { platform_order_id: platformOrderId },
+      });
+      if (!hasIdentityEvidence(evidence)) {
+        if (dryRun) {
+          wouldSkipNoIdentifiers += 1;
+        } else {
+          skippedNoIdentifiers += 1;
+          await traceIdentityResolveAwait(env, task, diagnostics, "identity_resolve.insert_no_identifier_error", async () => await insertConnectorRuntimeError(env, {
+            job_id: job.id,
+            task_id: task.id,
+            connector_id: progress.connector_id,
+            record_identifier: platformOrderId,
+            error_class: "identity_backfill_no_identifiers",
+            message: "Platform order has no deterministic person identity identifiers.",
+            classification: "permanent",
+          }).catch(() => {}), { details: { platform_order_id: platformOrderId } });
+        }
+        await heartbeatConnectorRuntimeTask(env, task, diagnostics, "identity_resolve.record.complete", {
+          platform: row.platform,
+          platform_order_id: platformOrderId,
+          processed,
+	          identifier_count: 0,
+	          skipped_no_identifiers: true,
+	        }, identityResolveRecordHeartbeatOptions(processed));
+	        if (await markRecordCompleteAndMaybeCheckpoint(platformOrderId)) break;
+	        continue;
+	      }
+      for (const warning of evidence.warnings) recentWarnings.push(warning);
+
+      try {
+        if (dryRun) {
+          const preview = await traceIdentityResolveAwait(env, task, diagnostics, "identity_resolve.preview_identity", async () => await previewIdentityResolution(env, {
+            workspace_id: progress.workspace_id || "default",
+            identifiers: evidence.identifiers,
+          }), { details: { platform_order_id: platformOrderId, identifiers: evidence.identifiers.length } });
+          if (preview.preview_action === "would_create_person") wouldCreatePerson += 1;
+          if (preview.preview_action === "would_match_existing") wouldMatchExisting += 1;
+          if (preview.preview_action === "would_require_review") {
+            wouldRequireReview += 1;
+          }
+          if (preview.preview_action === "would_skip_no_identifiers") wouldSkipNoIdentifiers += 1;
+          await heartbeatConnectorRuntimeTask(env, task, diagnostics, "identity_resolve.record.complete", {
+            platform: row.platform,
+            platform_order_id: platformOrderId,
+            processed,
+	            operation: "previewIdentityResolution",
+	            preview_action: preview.preview_action,
+	          }, identityResolveRecordHeartbeatOptions(processed));
+	          if (await markRecordCompleteAndMaybeCheckpoint(platformOrderId)) break;
+	          continue;
+	        }
+
+        const recordDiagnostics = identityResolveServiceDiagnostics(env, task, diagnostics, {
+          platform: row.platform,
+          platform_order_id: platformOrderId,
+          processed,
+        });
+        const service = getIdentityService(env, recordDiagnostics);
+        const result = await traceIdentityResolveAwait(env, task, diagnostics, "identity_resolve.resolve_identity", async () => await resolveIdentityForSourceRecord(service!, {
+          workspace_id: progress.workspace_id || row.workspace_id || "default",
+          connector_id: IDENTITY_BACKFILL_CONNECTOR_ID,
+          connector_job_id: job.id,
+          platform: row.platform,
+          record_type: "platform_order",
+          record_id: platformOrderId,
+          identifiers: evidence.identifiers,
+          attributes: evidence.attributes,
+          observed_at: evidence.observed_at,
+        }, recordDiagnostics), { details: { platform: row.platform, platform_order_id: platformOrderId, identifier_count: evidence.identifiers.length } });
+
+        if (result.review_required || result.action === "review_required") {
+          reviewRequired += 1;
+          await heartbeatConnectorRuntimeTask(env, task, diagnostics, "identity_resolve.record.complete", {
+            platform: row.platform,
+            platform_order_id: platformOrderId,
+            processed,
+	            review_required: true,
+	            identity_action: result.action,
+	          }, identityResolveRecordHeartbeatOptions(processed));
+	          if (await markRecordCompleteAndMaybeCheckpoint(platformOrderId)) break;
+	          continue;
+	        }
+        if (result.action === "created_person") peopleCreated += 1;
+        if (result.action === "matched_existing_person") peopleMatched += 1;
+
+        if (!result.person_id) {
+          permanentErrors += 1;
+          await heartbeatConnectorRuntimeTask(env, task, diagnostics, "identity_resolve.record.error", {
+            platform: row.platform,
+            platform_order_id: platformOrderId,
+            processed,
+	            operation: "resolveIdentityForSourceRecord",
+	            missing_person_id: true,
+	          }, { force: true });
+	          if (await markRecordCompleteAndMaybeCheckpoint(platformOrderId)) break;
+	          continue;
+	        }
+
+        const { data: updated, error: updateError } = await traceIdentityResolveAwait(env, task, diagnostics, "identity_resolve.link_source_record", async () => await supabase
+          .from("platform_orders")
+          .update({ person_id: result.person_id })
+          .eq("workspace_id", progress.workspace_id || "default")
+          .eq("platform_order_id", platformOrderId)
+          .is("person_id", null)
+          .select("platform_order_id,person_id")
+          .maybeSingle(), { details: { platform_order_id: platformOrderId } });
+        if (updateError) throw runtimeSupabaseError("Identity backfill person attachment failed", updateError);
+        if (updated?.person_id) attached += 1;
+        else attachmentConflicts += 1;
+        await heartbeatConnectorRuntimeTask(env, task, diagnostics, "identity_resolve.record.complete", {
+          platform: row.platform,
+          platform_order_id: platformOrderId,
+          processed,
+          operation: "link_source_record",
+          identity_action: result.action,
+	          attached: Boolean(updated?.person_id),
+	          attachment_conflict: !updated?.person_id,
+	        }, identityResolveRecordHeartbeatOptions(processed));
+	        if (await markRecordCompleteAndMaybeCheckpoint(platformOrderId)) break;
+	      } catch (e: any) {
+        const classification = classifyConnectorRuntimeFailure({ message: e?.message || e });
+        if (classification === "blocking") throw e;
+        if (classification === "transient" && retryAttempt < maxRecordRetryAttempts) {
+          transientRetries += 1;
+          transientRetryIds.push(platformOrderId);
+          await traceIdentityResolveAwait(env, task, diagnostics, "identity_resolve.insert_transient_retry_error", async () => await insertConnectorRuntimeError(env, {
+            job_id: job.id,
+            task_id: task.id,
+            connector_id: progress.connector_id,
+            record_identifier: platformOrderId,
+            error_class: "identity_backfill_transient_retry",
+            message: e?.message || String(e),
+            classification,
+          }).catch(() => {}), { details: { platform_order_id: platformOrderId } });
+          await heartbeatConnectorRuntimeTask(env, task, diagnostics, "identity_resolve.record.error", {
+            platform: row.platform,
+            platform_order_id: platformOrderId,
+            processed,
+            classification,
+            retrying: true,
+	            timed_out: e?.name === "IdentityOperationTimeoutError",
+	            operation: e?.operation || null,
+	          }, { force: true });
+	          if (await markRecordCompleteAndMaybeCheckpoint(platformOrderId, { completed: false })) break;
+	          continue;
+	        }
+        permanentErrors += 1;
+        await traceIdentityResolveAwait(env, task, diagnostics, "identity_resolve.insert_record_error", async () => await insertConnectorRuntimeError(env, {
+          job_id: job.id,
+          task_id: task.id,
+          connector_id: progress.connector_id,
+          record_identifier: platformOrderId,
+          error_class: classification === "transient"
+            ? "identity_backfill_transient_exhausted"
+            : "identity_backfill_record_error",
           message: e?.message || String(e),
           classification,
-        }).catch(() => {});
-        continue;
-      }
-      permanentErrors += 1;
-      await insertConnectorRuntimeError(env, {
-        job_id: job.id,
-        task_id: task.id,
-        connector_id: progress.connector_id,
-        record_identifier: platformOrderId,
-        error_class: classification === "transient"
-          ? "identity_backfill_transient_exhausted"
-          : "identity_backfill_record_error",
-        message: e?.message || String(e),
-        classification,
-      }).catch(() => {});
-    }
-  }
+        }).catch(() => {}), { details: { platform_order_id: platformOrderId, classification } });
+        await heartbeatConnectorRuntimeTask(env, task, diagnostics, "identity_resolve.record.error", {
+          platform: row.platform,
+          platform_order_id: platformOrderId,
+          processed,
+          classification,
+          retrying: false,
+	          timed_out: e?.name === "IdentityOperationTimeoutError",
+	          operation: e?.operation || null,
+	        }, { force: true });
+	        if (await markRecordCompleteAndMaybeCheckpoint(platformOrderId)) break;
+	      }
+	    }
 
-  const nextDiscoveryCursor = String(task.payload?.next_discovery_cursor || "").trim() || null;
-  const retryingTransientRecords = transientRetryIds.length && retryAttempt < maxRecordRetryAttempts;
-  const nextPhase = retryingTransientRecords
-    ? "resolve_identity_batch"
-    : nextDiscoveryCursor
-      ? "discover_unlinked_records"
-      : "validate_and_finalize";
-  const rawMetricSummary = {
-    people_created: peopleCreated,
-    people_matched: peopleMatched,
-    attached,
-    skipped_no_identifiers: skippedNoIdentifiers,
-    review_required: reviewRequired,
-    would_create_person: wouldCreatePerson,
-    would_match_existing: wouldMatchExisting,
-    would_require_review: wouldRequireReview,
-    would_skip_no_identifiers: wouldSkipNoIdentifiers,
-  };
-  const metricSummary = normalizeIdentityBackfillDryRunResolveSummary(rawMetricSummary, dryRun);
-  const nextMetadata = mergeIdentityBackfillResolveMetricMetadata(progress.metadata, rawMetricSummary, dryRun);
-  const nextProgress = mergeConnectorRuntimeCounters(progress, {
-    records_processed: processed,
-    records_succeeded: Number(metricSummary.attached || 0),
-    records_failed: permanentErrors + Number(metricSummary.attachment_conflicts || attachmentConflicts),
-    records_skipped: alreadyLinked + Number(metricSummary.skipped_no_identifiers || 0) + Number(metricSummary.review_required || 0),
-    retries: transientRetries,
-  }, {
-    status: "running",
-    phase: nextPhase,
-    cursor: nextDiscoveryCursor,
-    metadata: {
-      ...nextMetadata,
-      already_linked: Number(progress.metadata?.already_linked || 0) + alreadyLinked,
-      permanent_errors: Number(progress.metadata?.permanent_errors || 0) + permanentErrors,
-      transient_retries: Number(progress.metadata?.transient_retries || 0) + transientRetries,
-      attachment_conflicts: Number(progress.metadata?.attachment_conflicts || 0) + attachmentConflicts,
-      dry_run_records_simulated: Number(progress.metadata?.dry_run_records_simulated || 0) + (dryRun ? processed : 0),
-      recent_warnings: [...(progress.metadata?.recent_warnings || []), ...recentWarnings].slice(-10),
-    },
-  });
-  await updateConnectorRuntimeJobProgress(env, job, nextProgress);
-
-  if (retryingTransientRecords) {
-    await createAndEnqueueConnectorRuntimeTask(env, {
-      job_id: job.id,
-      workspace_id: progress.workspace_id,
-      connector_id: progress.connector_id,
-      task_type: IDENTITY_BACKFILL_TASK_TYPES.resolve,
-      phase: "resolve_identity_batch",
-      payload: {
-        platform_order_ids: transientRetryIds,
-        next_discovery_cursor: nextDiscoveryCursor,
-        has_more_discovery: Boolean(nextDiscoveryCursor),
-        dry_run: dryRun,
-        retry_attempt: retryAttempt + 1,
-      },
-      dedupe_key: identityBackfillResolveDedupeKey(job.id, transientRetryIds) + `:retry:${retryAttempt + 1}`,
-      max_attempts: maxRecordRetryAttempts,
-    });
-  } else if (nextDiscoveryCursor) {
-    await createAndEnqueueConnectorRuntimeTask(env, {
-      job_id: job.id,
-      workspace_id: progress.workspace_id,
-      connector_id: progress.connector_id,
-      task_type: IDENTITY_BACKFILL_TASK_TYPES.discover,
-      phase: "discover_unlinked_records",
+	    const nextDiscoveryCursor = String(task.payload?.next_discovery_cursor || "").trim() || null;
+	    const retryingTransientRecords = transientRetryIds.length && retryAttempt < maxRecordRetryAttempts;
+	    const nextPhase = budgetCheckpointReached || retryingTransientRecords || deferNextPhase
+	      ? "resolve_identity_batch"
+	      : nextDiscoveryCursor
+	        ? "discover_unlinked_records"
+	        : "validate_and_finalize";
+    const rawMetricSummary = {
+      people_created: peopleCreated,
+      people_matched: peopleMatched,
+      attached,
+      skipped_no_identifiers: skippedNoIdentifiers,
+      review_required: reviewRequired,
+      would_create_person: wouldCreatePerson,
+      would_match_existing: wouldMatchExisting,
+      would_require_review: wouldRequireReview,
+      would_skip_no_identifiers: wouldSkipNoIdentifiers,
+    };
+    const metricSummary = normalizeIdentityBackfillDryRunResolveSummary(rawMetricSummary, dryRun);
+    const nextMetadata = mergeIdentityBackfillResolveMetricMetadata(progress.metadata, rawMetricSummary, dryRun);
+    const nextProgress = mergeConnectorRuntimeCounters(progress, {
+      records_processed: processed,
+      records_succeeded: Number(metricSummary.attached || 0),
+      records_failed: permanentErrors + Number(metricSummary.attachment_conflicts || attachmentConflicts),
+      records_skipped: alreadyLinked + Number(metricSummary.skipped_no_identifiers || 0) + Number(metricSummary.review_required || 0),
+      retries: transientRetries,
+    }, {
+      status: "running",
+      phase: nextPhase,
       cursor: nextDiscoveryCursor,
-      payload: { cursor: nextDiscoveryCursor, limit: progress.metadata?.batch_size || IDENTITY_BACKFILL_DEFAULT_BATCH_SIZE },
-      dedupe_key: `identity_discover:${nextDiscoveryCursor}`,
-      max_attempts: 5,
+      metadata: {
+        ...nextMetadata,
+        already_linked: Number(progress.metadata?.already_linked || 0) + alreadyLinked,
+        permanent_errors: Number(progress.metadata?.permanent_errors || 0) + permanentErrors,
+        transient_retries: Number(progress.metadata?.transient_retries || 0) + transientRetries,
+        attachment_conflicts: Number(progress.metadata?.attachment_conflicts || 0) + attachmentConflicts,
+        dry_run_records_simulated: Number(progress.metadata?.dry_run_records_simulated || 0) + (dryRun ? processed : 0),
+	        recent_warnings: [...(progress.metadata?.recent_warnings || []), ...recentWarnings].slice(-10),
+	        recent_completed_record_ids: [
+	          ...((Array.isArray(progress.metadata?.recent_completed_record_ids) ? progress.metadata.recent_completed_record_ids : []) as string[]),
+	          ...completedRecordIds,
+	        ].slice(-100),
+	        last_identity_resolve_budget_checkpoint: budgetCheckpointReached
+	          ? {
+	            task_id: task.id,
+	            processed,
+	            remaining: budgetContinuationIds.length,
+	            completed_record_ids: completedRecordIds.length,
+	            elapsed_ms: Date.now() - taskStartedMs,
+	          }
+	          : progress.metadata?.last_identity_resolve_budget_checkpoint || null,
+	      },
+	    });
+    await traceIdentityResolveAwait(env, task, diagnostics, "identity_resolve.update_job_progress", async () => await updateConnectorRuntimeJobProgress(env, job, nextProgress), {
+      durable_before: true,
+      durable_after: true,
+      details: { processed, next_phase: nextPhase },
     });
-  } else {
-    await createAndEnqueueConnectorRuntimeTask(env, {
-      job_id: job.id,
-      workspace_id: progress.workspace_id,
-      connector_id: progress.connector_id,
-      task_type: IDENTITY_BACKFILL_TASK_TYPES.finalize,
-      phase: "validate_and_finalize",
-      payload: {},
-      dedupe_key: "identity_validate_and_finalize",
-      max_attempts: 3,
-    });
-  }
 
-  return {
-    processed,
-    people_created: Number(metricSummary.people_created || 0),
-    people_matched: Number(metricSummary.people_matched || 0),
-    attached: Number(metricSummary.attached || 0),
-    already_linked: alreadyLinked,
-    skipped_no_identifiers: Number(metricSummary.skipped_no_identifiers || 0),
-    would_create_person: Number(metricSummary.would_create_person || 0),
-    would_match_existing: Number(metricSummary.would_match_existing || 0),
-    would_require_review: Number(metricSummary.would_require_review || 0),
-    would_skip_no_identifiers: Number(metricSummary.would_skip_no_identifiers || 0),
-    review_required: Number(metricSummary.review_required || 0),
-    permanent_errors: permanentErrors,
-    transient_retries: transientRetries,
-    transient_retry_ids: transientRetryIds.length,
-    attachment_conflicts: attachmentConflicts,
-    dry_run: dryRun,
-    next_phase: nextPhase,
-  };
+	    if (retryingTransientRecords) {
+	      await traceIdentityResolveAwait(env, task, diagnostics, "identity_resolve.enqueue_retry_batch", async () => await createAndEnqueueConnectorRuntimeTask(env, {
+	        job_id: job.id,
+	        workspace_id: progress.workspace_id,
+        connector_id: progress.connector_id,
+        task_type: IDENTITY_BACKFILL_TASK_TYPES.resolve,
+        phase: "resolve_identity_batch",
+	        payload: {
+	          platform_order_ids: transientRetryIds,
+	          next_discovery_cursor: budgetCheckpointReached ? null : nextDiscoveryCursor,
+	          has_more_discovery: !budgetCheckpointReached && Boolean(nextDiscoveryCursor),
+	          dry_run: dryRun,
+	          retry_attempt: retryAttempt + 1,
+	          defer_next_phase: budgetCheckpointReached || deferNextPhase,
+	        },
+	        dedupe_key: identityBackfillResolveDedupeKey(job.id, transientRetryIds) + `:retry:${retryAttempt + 1}`,
+	        max_attempts: maxRecordRetryAttempts,
+	      }), { durable_before: true, durable_after: true, details: { transient_retry_ids: transientRetryIds.length } });
+	    }
+	    if (budgetCheckpointReached && budgetContinuationIds.length) {
+	      await traceIdentityResolveAwait(env, task, diagnostics, "identity_resolve.enqueue_budget_continuation", async () => await createAndEnqueueConnectorRuntimeTask(env, {
+	        job_id: job.id,
+	        workspace_id: progress.workspace_id,
+	        connector_id: progress.connector_id,
+	        task_type: IDENTITY_BACKFILL_TASK_TYPES.resolve,
+	        phase: "resolve_identity_batch",
+	        payload: {
+	          platform_order_ids: budgetContinuationIds,
+	          next_discovery_cursor: nextDiscoveryCursor,
+	          has_more_discovery: Boolean(nextDiscoveryCursor),
+	          dry_run: dryRun,
+	          retry_attempt: retryAttempt,
+	          continuation_of_task_id: task.id,
+	        },
+	        dedupe_key: identityBackfillResolveContinuationDedupeKey({
+	          job_id: job.id,
+	          task_id: task.id,
+	          processed,
+	          remaining_platform_order_ids: budgetContinuationIds,
+	        }),
+	        max_attempts: maxRecordRetryAttempts,
+	      }), { durable_before: true, durable_after: true, details: { remaining_platform_order_ids: budgetContinuationIds.length } });
+	    } else if (!retryingTransientRecords && !deferNextPhase && nextDiscoveryCursor) {
+	      await traceIdentityResolveAwait(env, task, diagnostics, "identity_resolve.enqueue_discovery", async () => await createAndEnqueueConnectorRuntimeTask(env, {
+	        job_id: job.id,
+	        workspace_id: progress.workspace_id,
+        connector_id: progress.connector_id,
+        task_type: IDENTITY_BACKFILL_TASK_TYPES.discover,
+        phase: "discover_unlinked_records",
+        cursor: nextDiscoveryCursor,
+        payload: { cursor: nextDiscoveryCursor, limit: progress.metadata?.batch_size || IDENTITY_BACKFILL_DEFAULT_BATCH_SIZE },
+        dedupe_key: `identity_discover:${nextDiscoveryCursor}`,
+        max_attempts: 5,
+      }), { durable_before: true, durable_after: true, details: { next_discovery_cursor: nextDiscoveryCursor } });
+	    } else if (!retryingTransientRecords && !deferNextPhase) {
+	      await traceIdentityResolveAwait(env, task, diagnostics, "identity_resolve.enqueue_finalize", async () => await createAndEnqueueConnectorRuntimeTask(env, {
+	        job_id: job.id,
+	        workspace_id: progress.workspace_id,
+        connector_id: progress.connector_id,
+        task_type: IDENTITY_BACKFILL_TASK_TYPES.finalize,
+        phase: "validate_and_finalize",
+        payload: {},
+        dedupe_key: "identity_validate_and_finalize",
+        max_attempts: 3,
+      }), { durable_before: true, durable_after: true });
+    }
+
+    finalSummary = {
+      processed,
+      people_created: Number(metricSummary.people_created || 0),
+      people_matched: Number(metricSummary.people_matched || 0),
+      attached: Number(metricSummary.attached || 0),
+      already_linked: alreadyLinked,
+      skipped_no_identifiers: Number(metricSummary.skipped_no_identifiers || 0),
+      would_create_person: Number(metricSummary.would_create_person || 0),
+      would_match_existing: Number(metricSummary.would_match_existing || 0),
+      would_require_review: Number(metricSummary.would_require_review || 0),
+      would_skip_no_identifiers: Number(metricSummary.would_skip_no_identifiers || 0),
+      review_required: Number(metricSummary.review_required || 0),
+      permanent_errors: permanentErrors,
+      transient_retries: transientRetries,
+	      transient_retry_ids: transientRetryIds.length,
+	      attachment_conflicts: attachmentConflicts,
+	      dry_run: dryRun,
+	      budget_checkpoint_reached: budgetCheckpointReached,
+	      completed_record_ids: completedRecordIds,
+	      continuation_platform_order_ids: budgetContinuationIds,
+	      next_phase: nextPhase,
+	      diagnostics: diagnostics.summary,
+	    };
+    return finalSummary;
+  } catch (error: any) {
+    caughtError = error;
+    logConnectorRuntimeTaskEvent(task, "identity_resolve.top_level_catch", { message: error?.message || String(error) }, "error");
+    await heartbeatConnectorRuntimeTask(env, task, diagnostics, "identity_resolve.top_level_catch", {
+      error_name: error?.name || "Error",
+      timed_out: error?.name === "IdentityOperationTimeoutError",
+      operation: error?.operation || null,
+    }, { force: true }).catch(() => {});
+    throw error;
+  } finally {
+    const outcome = caughtError ? "error" : "success";
+    logConnectorRuntimeTaskEvent(task, "identity_resolve.top_level_finally.before_await", { outcome });
+    await heartbeatConnectorRuntimeTask(env, task, diagnostics, "identity_resolve.top_level_finally", {
+      outcome,
+      processed: Number(finalSummary?.processed || 0),
+    }, { force: true }).catch((heartbeatError) => {
+      console.error("[TraceKit] connector runtime task final heartbeat failed", connectorRuntimeTaskLogDetails(task, "identity_resolve.top_level_finally.heartbeat_error", {
+        message: heartbeatError?.message || String(heartbeatError),
+      }));
+    });
+    if (finalSummary) finalSummary.diagnostics = diagnostics.summary;
+    logConnectorRuntimeTaskEvent(task, "identity_resolve.top_level_finally.after_await", { outcome });
+  }
 }
 
 async function validateAndFinalizeIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, task: ConnectorImportTaskRow) {
@@ -4343,12 +4823,21 @@ async function executeConnectorRuntimeTask(env: Env, task: ConnectorImportTaskRo
   }
 
   if (task.status === "completed") return { skipped: true, reason: "task_completed" };
-  await updateConnectorRuntimeTask(env, task.id, {
+  const lockNow = new Date().toISOString();
+  const runningPatch: Partial<ConnectorImportTaskRow> & Record<string, any> = {
     status: "running",
-    locked_at: new Date().toISOString(),
+    locked_at: lockNow,
     attempt_count: Number(task.attempt_count || 0) + 1,
     last_error: null,
-  });
+  };
+  if (isIdentityResolveRuntimeTask(task)) {
+    runningPatch.result_summary = appendConnectorRuntimeTaskDiagnostic(task.result_summary, "identity_resolve.lock_acquired", {
+      previous_status: task.status,
+      attempt_count: Number(task.attempt_count || 0) + 1,
+    }, lockNow);
+  }
+  await updateConnectorRuntimeTask(env, task.id, runningPatch);
+  task = { ...task, ...runningPatch } as ConnectorImportTaskRow;
 
   let summary: Record<string, any>;
   if (task.task_type === "wowboost_stage_export_page") {
@@ -11549,10 +12038,24 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 
 	    if (runtimeTaskId) {
 	      try {
-	        const task = await getConnectorRuntimeTask(env, runtimeTaskId);
+	        let task = await getConnectorRuntimeTask(env, runtimeTaskId);
 	        if (!task || task.status === "completed" || task.status === "cancelled") {
 	          msg.ack();
 	          continue;
+	        }
+
+	        if (isIdentityResolveRuntimeTask(task) && task.status === "running") {
+	          if (isConnectorRuntimeTaskStale(task, { stale_ms: IDENTITY_RESOLVE_TASK_STALE_MS })) {
+	            task = await recoverStaleIdentityResolveTask(env, task, { enqueue: false, reason: "queue_redelivery_stale" });
+	            if (task.status === "failed") {
+	              msg.ack();
+	              continue;
+	            }
+	          } else {
+	            await enqueueConnectorRuntimeTaskWithDelay(env, task, IDENTITY_RESOLVE_TASK_RECHECK_DELAY_SECONDS);
+	            msg.ack();
+	            continue;
+	          }
 	        }
 
 	        const availableAt = task.available_at ? Date.parse(task.available_at) : 0;

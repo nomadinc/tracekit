@@ -7,7 +7,9 @@ import {
   normalizeIdentityPhone,
 } from "./identity-normalization.ts";
 import {
+  IdentityOperationTimeoutError,
   type IdentityIdentifier,
+  type IdentityDiagnosticEvent,
   type IdentityPerson,
   type IdentityRepository,
   createIdentityService,
@@ -241,6 +243,78 @@ test("identity resolution creates matches conflicts and preserves workspace isol
   assert.equal(noIdentifiers.action, "no_match");
   const addressOnly = await service.resolveIdentity({ workspace_id: "default", source_record_id: "address:1", metadata: { address: "1 Main" } });
   assert.equal(addressOnly.action, "created_person");
+});
+
+test("identity diagnostics identify awaited operations without raw PII", async () => {
+  const repo = new MemoryIdentityRepository();
+  const events: IdentityDiagnosticEvent[] = [];
+  const service = createIdentityService(repo, {
+    timeout_ms: 100,
+    emit: (event) => {
+      events.push(event);
+    },
+  });
+
+  const result = await service.resolveIdentity({
+    workspace_id: "default",
+    source_platform: "wowboost",
+    source_record_type: "platform_order",
+    source_record_id: "wowboost:diagnostic",
+    identifiers: [
+      { identifier_type: "email", value: "diagnostic@example.com" },
+      { identifier_type: "phone", value: "(415) 555-0101", country: "US" },
+    ],
+    person_attributes: { first_name: "Diagnostic" },
+  });
+
+  assert.equal(result.action, "created_person");
+  assert.ok(events.some((event) => event.operation === "identity_resolve.lookup_identifiers" && event.phase === "before_await"));
+  assert.ok(events.some((event) => event.operation === "identity_resolve.lookup_identifiers" && event.phase === "after_await"));
+  assert.ok(events.some((event) => event.operation === "identity_resolve.create_person" && event.phase === "after_await"));
+  assert.ok(events.some((event) => event.operation === "identity_resolve.attach_identifier.persist" && event.phase === "after_await"));
+  assert.ok(events.some((event) => event.operation === "identity_resolve.insert_resolution_event" && event.phase === "after_await"));
+
+  const serialized = JSON.stringify(events);
+  assert.equal(serialized.includes("diagnostic@example.com"), false);
+  assert.equal(serialized.includes("4155550101"), false);
+  assert.equal(serialized.includes("+14155550101"), false);
+  assert.equal(serialized.includes("Diagnostic"), false);
+});
+
+test("identity diagnostics timeout a never-resolving repository await as transient", async () => {
+  class HangingIdentifierRepository extends MemoryIdentityRepository {
+    async findIdentifiers(): Promise<IdentityIdentifier[]> {
+      return await new Promise<IdentityIdentifier[]>(() => {});
+    }
+  }
+
+  const repo = new HangingIdentifierRepository();
+  const events: IdentityDiagnosticEvent[] = [];
+  const service = createIdentityService(repo, {
+    timeout_ms: 20,
+    emit: (event) => {
+      events.push(event);
+    },
+  });
+
+  const started = Date.now();
+  await assert.rejects(async () => await service.resolveIdentity({
+    workspace_id: "default",
+    source_record_id: "wowboost:hang",
+    identifiers: [{ identifier_type: "email", value: "hang@example.com" }],
+  }), (error: any) => {
+    assert.equal(error instanceof IdentityOperationTimeoutError, true);
+    assert.equal(error.transient, true);
+    assert.equal(error.operation, "identity_resolve.lookup_identifiers");
+    return true;
+  });
+  assert.ok(Date.now() - started < 1000);
+
+  assert.ok(events.some((event) => event.operation === "identity_resolve.lookup_identifiers" && event.phase === "before_await"));
+  const timeoutEvent = events.find((event) => event.operation === "identity_resolve.lookup_identifiers" && event.phase === "error");
+  assert.equal(timeoutEvent?.timed_out, true);
+  assert.equal(timeoutEvent?.error_name, "IdentityOperationTimeoutError");
+  assert.equal(JSON.stringify(events).includes("hang@example.com"), false);
 });
 
 test("identity identifier attachment and merge framework are safe and auditable", async () => {

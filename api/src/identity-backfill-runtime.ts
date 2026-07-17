@@ -25,6 +25,7 @@ export const IDENTITY_BACKFILL_ALLOWED_PLATFORMS = ["wowboost", "wowsuite:wowboo
 export const IDENTITY_BACKFILL_EXCLUDED_PLATFORMS = new Set(["wowpay", "wowsuite:wowpay"]);
 export const IDENTITY_BACKFILL_DEFAULT_BATCH_SIZE = 25;
 export const IDENTITY_BACKFILL_MAX_BATCH_SIZE = 100;
+export const IDENTITY_BACKFILL_RESOLVE_TASK_BUDGET_MS = 18000;
 export const IDENTITY_BACKFILL_DISCOVERY_SELECT = "workspace_id,platform,platform_order_id,order_ts,person_id,raw_json";
 export const IDENTITY_BACKFILL_DISCOVERY_INDEX = {
   name: "platform_orders_identity_backfill_scan_idx",
@@ -439,6 +440,37 @@ export function hasIdentityEvidence(evidence: IdentityBackfillEvidence) {
 export function identityBackfillResolveDedupeKey(jobId: string, platformOrderIds: string[]) {
   const ids = platformOrderIds.map((id) => cleanText(id)).filter(Boolean);
   return `identity_resolve_batch:${jobId}:${ids[0] || "empty"}:${ids[ids.length - 1] || "empty"}:${ids.length}`;
+}
+
+export function shouldCheckpointIdentityBackfillResolveBatch(args: {
+  started_ms: number;
+  now_ms?: number;
+  budget_ms?: number;
+  processed: number;
+  total: number;
+}) {
+  const processed = Math.max(0, Number(args.processed || 0));
+  const total = Math.max(0, Number(args.total || 0));
+  if (!processed || processed >= total) return false;
+  const startedMs = Number(args.started_ms || 0);
+  if (!startedMs) return false;
+  const nowMs = Number(args.now_ms ?? Date.now());
+  const budgetMs = Math.max(1000, Number(args.budget_ms || IDENTITY_BACKFILL_RESOLVE_TASK_BUDGET_MS));
+  return Math.max(0, nowMs - startedMs) >= budgetMs;
+}
+
+export function identityBackfillResolveRemainingIds(platformOrderIds: string[], processed: number) {
+  return platformOrderIds.map((id) => cleanText(id)).filter(Boolean).slice(Math.max(0, Number(processed || 0)));
+}
+
+export function identityBackfillResolveContinuationDedupeKey(args: {
+  job_id: string;
+  task_id: string;
+  processed: number;
+  remaining_platform_order_ids: string[];
+}) {
+  const base = identityBackfillResolveDedupeKey(args.job_id, args.remaining_platform_order_ids);
+  return `${base}:continuation:${cleanText(args.task_id) || "task"}:${Math.max(0, Number(args.processed || 0))}`;
 }
 
 export function normalizeIdentityBackfillDryRunResolveSummary(
