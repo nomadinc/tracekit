@@ -94,6 +94,41 @@ staging, duplicate export rows, preexisting staged mappings, ambiguous and
 missing legacy order-number mappings, sequential Order Details retries, 404s,
 missing `referenceId`, idempotent finalization, and non-WowBoost safety.
 
+## Identity Backfill Runtime
+
+`POST /v1/identity/backfill-platform-orders` creates or resumes a Connector
+Runtime v1 job for durable `platform_orders.person_id` backfill.
+
+Runtime connector:
+
+```json
+{
+  "runtime_version": 1,
+  "execution_mode": "connector_runtime",
+  "runtime_connector": "identity-backfill-platform-orders"
+}
+```
+
+Runtime phases:
+
+1. `discover_unlinked_records`: scan unlinked `platform_orders` by workspace,
+   platform, date range, and compound cursor.
+2. `resolve_identity_batch`: reload a bounded batch, extract deterministic
+   person identity evidence, call Identity Service v1, and conditionally attach
+   `person_id`.
+3. `validate_and_finalize`: call
+   `public.identity_backfill_finalize_counts(...)` and mark the job `completed`
+   or `completed_with_errors`.
+
+Focused tests:
+
+```bash
+cd api
+npm run test:identity-backfill-runtime
+```
+
+See [Identity Backfill Runtime v1](../identity/IDENTITY_BACKFILL_RUNTIME_V1.md).
+
 ## Production Benchmark
 
 The completed live WowBoost commerce-reference backfill is an operational
@@ -143,6 +178,7 @@ Not planned:
 - `GET /v1/operations/jobs`
 - `GET /v1/operations/jobs/{job_id}`
 - `GET /v1/operations/connectors/health`
+- `GET /v1/operations/identity`
 
 Responses are compact by default and keep detailed histories in
 `integration_import_errors` instead of unbounded progress JSON arrays.

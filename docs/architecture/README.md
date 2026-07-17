@@ -8,8 +8,10 @@ services, REST APIs, Public APIs, MCP tools, admin UI, and customer UI.
 Read them in this order:
 
 1. [Identity Model](./IDENTITY_MODEL.md)
-2. [Attribution Engine](./ATTRIBUTION_ENGINE.md)
-3. [Journey Model](./JOURNEY_MODEL.md)
+2. [Identity Service v1](../identity/IDENTITY_SERVICE_V1.md)
+3. [Identity Backfill Runtime v1](../identity/IDENTITY_BACKFILL_RUNTIME_V1.md)
+4. [Attribution Engine](./ATTRIBUTION_ENGINE.md)
+5. [Journey Model](./JOURNEY_MODEL.md)
 
 The dependency is intentional:
 
@@ -36,7 +38,8 @@ reconciliation, ledger, or profit logic.
 | Service | Responsibility |
 | --- | --- |
 | Import Service | Pulls or receives source records from connectors, stores raw evidence, and hands records to downstream services. |
-| Identity Service | Resolves deterministic and heuristic identity relationships while preserving source-specific identifiers. |
+| Connector Runtime | Runs bounded connector imports and maintenance jobs with durable progress before downstream enrichment, including identity backfills for existing source records. |
+| Identity Service | Resolves deterministic identity relationships while preserving source-specific identifiers and audit evidence. |
 | Attribution Service | Stores immutable touchpoints and derives attribution conclusions from observed evidence. |
 | Reconciliation Service | Links commerce, payment, affiliate, subscription, and customer records using auditable evidence. |
 | Journey Service | Builds the lifecycle view across identity, attribution, orders, payments, ledger events, and profit. |
@@ -46,7 +49,8 @@ reconciliation, ledger, or profit logic.
 ```mermaid
 flowchart LR
   Sources["Connectors and Source Systems"] --> Import["Import Service"]
-  Import --> Identity["Identity Service"]
+  Import --> Runtime["Connector Runtime"]
+  Runtime --> Identity["Identity Service"]
   Import --> Attribution["Attribution Service"]
   Import --> Reconciliation["Reconciliation Service"]
   Identity --> Journey["Journey Service"]
@@ -77,13 +81,15 @@ the underlying decisions must remain in TraceKit services.
 Preserve this product and architecture roadmap order:
 
 1. Shared Import Framework
-2. Identity Model
-3. Attribution Engine
-4. Journey Model
-5. Reconciliation Center
-6. Public API
-7. MCP
-8. Premium UI
+2. Connector Runtime
+3. Identity Service
+4. Attribution Engine
+5. Ledger and Profit Enrichment
+6. Journey Model
+7. Reconciliation Center
+8. Public API
+9. MCP
+10. Premium UI
 
 This order keeps ingestion and evidence capture ahead of advanced user-facing
 experiences. TraceKit should not expose premium conclusions before the evidence
