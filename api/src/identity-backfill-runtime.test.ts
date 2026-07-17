@@ -16,7 +16,9 @@ import {
   identityBackfillDiscoverySummary,
   identityBackfillDryRunFinalizeCounts,
   identityBackfillFinalizeStatus,
+  identityBackfillResolveContinuationDedupeKey,
   identityBackfillResolveDedupeKey,
+  identityBackfillResolveRemainingIds,
   isSupportedIdentityBackfillPlatformOrder,
   markIdentityBackfillPlatformDiscovery,
   mergeIdentityBackfillResolveMetricMetadata,
@@ -25,6 +27,7 @@ import {
   parseIdentityBackfillCursor,
   previewIdentityResolutionReadOnly,
   serializeIdentityBackfillCursor,
+  shouldCheckpointIdentityBackfillResolveBatch,
 } from "./identity-backfill-runtime.ts";
 import {
   compactConnectorRuntimeMetrics,
@@ -241,6 +244,55 @@ test("does not use unsafe phone, order number, amount, shipping reference, or co
 test("stable resolve batch dedupe keys are deterministic", () => {
   const key = identityBackfillResolveDedupeKey("job-1", ["wowboost:1", "wowboost:2"]);
   assert.equal(key, "identity_resolve_batch:job-1:wowboost:1:wowboost:2:2");
+});
+
+test("resolve budget checkpoint triggers only after a completed record boundary", () => {
+  const started = Date.parse("2026-07-17T00:00:00.000Z");
+  assert.equal(shouldCheckpointIdentityBackfillResolveBatch({
+    started_ms: started,
+    now_ms: started + 20000,
+    budget_ms: 18000,
+    processed: 0,
+    total: 10,
+  }), false);
+  assert.equal(shouldCheckpointIdentityBackfillResolveBatch({
+    started_ms: started,
+    now_ms: started + 17999,
+    budget_ms: 18000,
+    processed: 8,
+    total: 10,
+  }), false);
+  assert.equal(shouldCheckpointIdentityBackfillResolveBatch({
+    started_ms: started,
+    now_ms: started + 18000,
+    budget_ms: 18000,
+    processed: 8,
+    total: 10,
+  }), true);
+  assert.equal(shouldCheckpointIdentityBackfillResolveBatch({
+    started_ms: started,
+    now_ms: started + 18000,
+    budget_ms: 18000,
+    processed: 10,
+    total: 10,
+  }), false);
+});
+
+test("resolve budget continuation contains only unprocessed records and has a distinct key", () => {
+  const ids = Array.from({ length: 10 }, (_, index) => `wowboost:${index + 1}`);
+  const remaining = identityBackfillResolveRemainingIds(ids, 8);
+  assert.deepEqual(remaining, ["wowboost:9", "wowboost:10"]);
+
+  const originalKey = identityBackfillResolveDedupeKey("job-1", ids);
+  const continuationKey = identityBackfillResolveContinuationDedupeKey({
+    job_id: "job-1",
+    task_id: "task-1",
+    processed: 8,
+    remaining_platform_order_ids: remaining,
+  });
+  assert.notEqual(continuationKey, originalKey);
+  assert.equal(continuationKey, "identity_resolve_batch:job-1:wowboost:9:wowboost:10:2:continuation:task-1:8");
+  assert.equal(remaining.includes("wowboost:8"), false);
 });
 
 test("dry run preview uses read-only repository methods and reports would-create", async () => {
