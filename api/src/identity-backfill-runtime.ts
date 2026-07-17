@@ -102,12 +102,29 @@ export type IdentityBackfillPreviewResult = {
 
 export type IdentityBackfillDiscoveryStatus = "pending" | "completed" | "failed";
 
+export type IdentityBackfillResolveMetricSummary = Record<string, any> & {
+  people_created?: number;
+  people_matched?: number;
+  attached?: number;
+  review_required?: number;
+  skipped_no_identifiers?: number;
+  would_create_person?: number;
+  would_match_existing?: number;
+  would_require_review?: number;
+  would_skip_no_identifiers?: number;
+};
+
 function firstNonEmpty(...values: unknown[]) {
   for (const value of values) {
     const text = cleanText(value);
     if (text) return text;
   }
   return "";
+}
+
+function metricNumber(value: unknown) {
+  const numberValue = Number(value || 0);
+  return Number.isFinite(numberValue) ? numberValue : 0;
 }
 
 function normalizedHeader(value: string) {
@@ -400,6 +417,63 @@ export function hasIdentityEvidence(evidence: IdentityBackfillEvidence) {
 export function identityBackfillResolveDedupeKey(jobId: string, platformOrderIds: string[]) {
   const ids = platformOrderIds.map((id) => cleanText(id)).filter(Boolean);
   return `identity_resolve_batch:${jobId}:${ids[0] || "empty"}:${ids[ids.length - 1] || "empty"}:${ids.length}`;
+}
+
+export function normalizeIdentityBackfillDryRunResolveSummary(
+  summary: IdentityBackfillResolveMetricSummary,
+  parentDryRun: boolean,
+): IdentityBackfillResolveMetricSummary {
+  if (!parentDryRun) return { ...summary };
+  return {
+    ...summary,
+    people_created: 0,
+    people_matched: 0,
+    attached: 0,
+    review_required: 0,
+    skipped_no_identifiers: 0,
+    would_create_person: metricNumber(summary.would_create_person) + metricNumber(summary.people_created),
+    would_match_existing: metricNumber(summary.would_match_existing) + metricNumber(summary.people_matched),
+    would_require_review: metricNumber(summary.would_require_review) + metricNumber(summary.review_required),
+    would_skip_no_identifiers: metricNumber(summary.would_skip_no_identifiers) + metricNumber(summary.skipped_no_identifiers),
+  };
+}
+
+export function normalizeIdentityBackfillDryRunMetadata(metadata: Record<string, any> | null | undefined) {
+  const next = { ...(metadata || {}) };
+  if (!next.dry_run) return next;
+  return {
+    ...next,
+    people_created: 0,
+    people_matched: 0,
+    attached: 0,
+    review_required: 0,
+    skipped_no_identifiers: 0,
+    would_create_person: metricNumber(next.would_create_person) + metricNumber(next.people_created),
+    would_match_existing: metricNumber(next.would_match_existing) + metricNumber(next.people_matched),
+    would_require_review: metricNumber(next.would_require_review) + metricNumber(next.review_required),
+    would_skip_no_identifiers: metricNumber(next.would_skip_no_identifiers) + metricNumber(next.skipped_no_identifiers),
+  };
+}
+
+export function mergeIdentityBackfillResolveMetricMetadata(
+  metadata: Record<string, any> | null | undefined,
+  summary: IdentityBackfillResolveMetricSummary,
+  parentDryRun: boolean,
+) {
+  const base = parentDryRun ? normalizeIdentityBackfillDryRunMetadata({ ...(metadata || {}), dry_run: true }) : { ...(metadata || {}) };
+  const normalized = normalizeIdentityBackfillDryRunResolveSummary(summary, parentDryRun);
+  return {
+    ...base,
+    people_created: metricNumber(base.people_created) + metricNumber(normalized.people_created),
+    people_matched: metricNumber(base.people_matched) + metricNumber(normalized.people_matched),
+    attached: metricNumber(base.attached) + metricNumber(normalized.attached),
+    review_required: metricNumber(base.review_required) + metricNumber(normalized.review_required),
+    skipped_no_identifiers: metricNumber(base.skipped_no_identifiers) + metricNumber(normalized.skipped_no_identifiers),
+    would_create_person: metricNumber(base.would_create_person) + metricNumber(normalized.would_create_person),
+    would_match_existing: metricNumber(base.would_match_existing) + metricNumber(normalized.would_match_existing),
+    would_require_review: metricNumber(base.would_require_review) + metricNumber(normalized.would_require_review),
+    would_skip_no_identifiers: metricNumber(base.would_skip_no_identifiers) + metricNumber(normalized.would_skip_no_identifiers),
+  };
 }
 
 export async function previewIdentityResolutionReadOnly(

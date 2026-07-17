@@ -16,6 +16,7 @@ import {
   identityBackfillResolveDedupeKey,
   isSupportedIdentityBackfillPlatformOrder,
   markIdentityBackfillPlatformDiscovery,
+  mergeIdentityBackfillResolveMetricMetadata,
   normalizeIdentityBackfillPlatforms,
   normalizeIdentityBackfillRequest,
   parseIdentityBackfillCursor,
@@ -515,4 +516,43 @@ test("compact metrics expose dry-run would counters and consistent retry counter
   assert.equal(metrics.transient_retries, 2);
   assert.equal(metrics.incomplete_discovery, true);
   assert.deepEqual(metrics.discovery_failed_platforms, ["wowsuite:wowboost"]);
+});
+
+test("dry-run parent reclassifies live-shaped first resolve batch metrics", () => {
+  let metadata: Record<string, any> = {
+    dry_run: true,
+    batch_size: 10,
+    people_created: 0,
+    people_matched: 0,
+    attached: 0,
+    would_create_person: 0,
+  };
+  const resolveSummaries = [
+    { processed: 10, people_created: 10, people_matched: 0, attached: 0, would_create_person: 0 },
+    { processed: 10, people_created: 0, people_matched: 0, attached: 0, would_create_person: 10 },
+    { processed: 10, people_created: 0, people_matched: 0, attached: 0, would_create_person: 10 },
+    { processed: 10, people_created: 0, people_matched: 0, attached: 0, would_create_person: 10 },
+    { processed: 10, people_created: 0, people_matched: 0, attached: 0, would_create_person: 10 },
+    { processed: 10, people_created: 0, people_matched: 0, attached: 0, would_create_person: 10 },
+    { processed: 4, people_created: 0, people_matched: 0, attached: 0, would_create_person: 4 },
+  ];
+
+  let recordsProcessed = 0;
+  for (const summary of resolveSummaries) {
+    recordsProcessed += Number(summary.processed || 0);
+    metadata = mergeIdentityBackfillResolveMetricMetadata(metadata, summary, Boolean(metadata.dry_run));
+  }
+
+  assert.equal(recordsProcessed, 64);
+  assert.equal(resolveSummaries.length, 7);
+  assert.equal(metadata.people_created, 0);
+  assert.equal(metadata.people_matched, 0);
+  assert.equal(metadata.attached, 0);
+  assert.equal(metadata.would_create_person, 64);
+
+  const metrics = compactConnectorRuntimeMetrics(metadata);
+  assert.equal(metrics.people_created, 0);
+  assert.equal(metrics.people_matched, 0);
+  assert.equal(metrics.attached, 0);
+  assert.equal(metrics.would_create_person, 64);
 });

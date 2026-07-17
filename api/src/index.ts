@@ -92,6 +92,9 @@ import {
   identityBackfillResolveDedupeKey,
   isSupportedIdentityBackfillPlatformOrder,
   markIdentityBackfillPlatformDiscovery,
+  mergeIdentityBackfillResolveMetricMetadata,
+  normalizeIdentityBackfillDryRunMetadata,
+  normalizeIdentityBackfillDryRunResolveSummary,
   nextIdentityBackfillPlatform,
   normalizeIdentityBackfillBatchSize,
   normalizeIdentityBackfillRequest,
@@ -3940,7 +3943,7 @@ async function discoverIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, 
 
 async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, task: ConnectorImportTaskRow) {
   const progress = connectorRuntimeProgressFromJob(job);
-  const dryRun = Boolean(task.payload?.dry_run ?? progress.metadata?.dry_run);
+  const dryRun = Boolean(progress.metadata?.dry_run);
   const platformOrderIds = Array.from(new Set((Array.isArray(task.payload?.platform_order_ids) ? task.payload.platform_order_ids : [])
     .map((value: any) => String(value || "").trim())
     .filter(Boolean)));
@@ -4030,7 +4033,6 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
         if (preview.preview_action === "would_match_existing") wouldMatchExisting += 1;
         if (preview.preview_action === "would_require_review") {
           wouldRequireReview += 1;
-          reviewRequired += 1;
         }
         if (preview.preview_action === "would_skip_no_identifiers") wouldSkipNoIdentifiers += 1;
         continue;
@@ -4110,28 +4112,32 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
     : nextDiscoveryCursor
       ? "discover_unlinked_records"
       : "validate_and_finalize";
+  const rawMetricSummary = {
+    people_created: peopleCreated,
+    people_matched: peopleMatched,
+    attached,
+    skipped_no_identifiers: skippedNoIdentifiers,
+    review_required: reviewRequired,
+    would_create_person: wouldCreatePerson,
+    would_match_existing: wouldMatchExisting,
+    would_require_review: wouldRequireReview,
+    would_skip_no_identifiers: wouldSkipNoIdentifiers,
+  };
+  const metricSummary = normalizeIdentityBackfillDryRunResolveSummary(rawMetricSummary, dryRun);
+  const nextMetadata = mergeIdentityBackfillResolveMetricMetadata(progress.metadata, rawMetricSummary, dryRun);
   const nextProgress = mergeConnectorRuntimeCounters(progress, {
     records_processed: processed,
-    records_succeeded: attached,
-    records_failed: permanentErrors + attachmentConflicts,
-    records_skipped: alreadyLinked + skippedNoIdentifiers + reviewRequired,
+    records_succeeded: Number(metricSummary.attached || 0),
+    records_failed: permanentErrors + Number(metricSummary.attachment_conflicts || attachmentConflicts),
+    records_skipped: alreadyLinked + Number(metricSummary.skipped_no_identifiers || 0) + Number(metricSummary.review_required || 0),
     retries: transientRetries,
   }, {
     status: "running",
     phase: nextPhase,
     cursor: nextDiscoveryCursor,
     metadata: {
-      ...(progress.metadata || {}),
-      people_created: Number(progress.metadata?.people_created || 0) + peopleCreated,
-      people_matched: Number(progress.metadata?.people_matched || 0) + peopleMatched,
-      attached: Number(progress.metadata?.attached || 0) + attached,
+      ...nextMetadata,
       already_linked: Number(progress.metadata?.already_linked || 0) + alreadyLinked,
-      skipped_no_identifiers: Number(progress.metadata?.skipped_no_identifiers || 0) + skippedNoIdentifiers,
-      review_required: Number(progress.metadata?.review_required || 0) + reviewRequired,
-      would_create_person: Number(progress.metadata?.would_create_person || 0) + wouldCreatePerson,
-      would_match_existing: Number(progress.metadata?.would_match_existing || 0) + wouldMatchExisting,
-      would_require_review: Number(progress.metadata?.would_require_review || 0) + wouldRequireReview,
-      would_skip_no_identifiers: Number(progress.metadata?.would_skip_no_identifiers || 0) + wouldSkipNoIdentifiers,
       permanent_errors: Number(progress.metadata?.permanent_errors || 0) + permanentErrors,
       transient_retries: Number(progress.metadata?.transient_retries || 0) + transientRetries,
       attachment_conflicts: Number(progress.metadata?.attachment_conflicts || 0) + attachmentConflicts,
@@ -4185,16 +4191,16 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
 
   return {
     processed,
-    people_created: peopleCreated,
-    people_matched: peopleMatched,
-    attached,
+    people_created: Number(metricSummary.people_created || 0),
+    people_matched: Number(metricSummary.people_matched || 0),
+    attached: Number(metricSummary.attached || 0),
     already_linked: alreadyLinked,
-    skipped_no_identifiers: skippedNoIdentifiers,
-    would_create_person: wouldCreatePerson,
-    would_match_existing: wouldMatchExisting,
-    would_require_review: wouldRequireReview,
-    would_skip_no_identifiers: wouldSkipNoIdentifiers,
-    review_required: reviewRequired,
+    skipped_no_identifiers: Number(metricSummary.skipped_no_identifiers || 0),
+    would_create_person: Number(metricSummary.would_create_person || 0),
+    would_match_existing: Number(metricSummary.would_match_existing || 0),
+    would_require_review: Number(metricSummary.would_require_review || 0),
+    would_skip_no_identifiers: Number(metricSummary.would_skip_no_identifiers || 0),
+    review_required: Number(metricSummary.review_required || 0),
     permanent_errors: permanentErrors,
     transient_retries: transientRetries,
     transient_retry_ids: transientRetryIds.length,
@@ -4221,14 +4227,15 @@ async function validateAndFinalizeIdentityBackfillRuntimeTask(env: Env, job: Imp
 
     const finalizeRow = Array.isArray(finalizeCounts) ? finalizeCounts[0] : finalizeCounts;
     const platforms = identityBackfillPlatformsFromProgress(progress);
-    const discoverySummary = identityBackfillDiscoverySummary(progress.metadata, platforms);
     const dryRun = Boolean(progress.metadata?.dry_run);
+    const baseMetadata = dryRun ? normalizeIdentityBackfillDryRunMetadata(progress.metadata) : progress.metadata || {};
+    const discoverySummary = identityBackfillDiscoverySummary(baseMetadata, platforms);
     const status = identityBackfillFinalizeStatus(finalizeRow || {}, {
       dry_run: dryRun,
       discovery_incomplete: discoverySummary.incomplete,
-      would_require_review: Number(progress.metadata?.would_require_review || 0),
-      permanent_errors: Number(progress.metadata?.permanent_errors || 0),
-      attachment_conflicts: Number(progress.metadata?.attachment_conflicts || 0),
+      would_require_review: Number(baseMetadata?.would_require_review || 0),
+      permanent_errors: Number(baseMetadata?.permanent_errors || 0),
+      attachment_conflicts: Number(baseMetadata?.attachment_conflicts || 0),
     });
     const now = new Date().toISOString();
     const lastError = discoverySummary.incomplete
@@ -4245,7 +4252,7 @@ async function validateAndFinalizeIdentityBackfillRuntimeTask(env: Env, job: Imp
       next_run_at: null,
       now,
       metadata: {
-        ...(progress.metadata || {}),
+        ...baseMetadata,
         finalize_summary_failed: false,
         discovery_platforms: discoverySummary.state,
         discovery_completed_platforms: discoverySummary.completed,
