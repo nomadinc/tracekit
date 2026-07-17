@@ -539,6 +539,11 @@ export function compactConnectorRuntimeJobPayload(
 }
 
 export function compactConnectorRuntimeMetrics(metadata: Record<string, any>) {
+  const dryRun = Boolean(metadata.dry_run);
+  const leakedPeopleCreated = dryRun ? Number(metadata.people_created ?? 0) : 0;
+  const leakedPeopleMatched = dryRun ? Number(metadata.people_matched ?? 0) : 0;
+  const leakedReviewRequired = dryRun ? Number(metadata.review_required ?? 0) : 0;
+  const leakedSkippedNoIdentifiers = dryRun ? Number(metadata.skipped_no_identifiers ?? 0) : 0;
   return {
     export_pages_scanned: Number(metadata.export_pages_scanned ?? metadata.export_pages_processed ?? 0),
     export_rows_seen: Number(metadata.export_rows_seen ?? metadata.export_rows_fetched ?? 0),
@@ -551,16 +556,16 @@ export function compactConnectorRuntimeMetrics(metadata: Record<string, any>) {
     discovered: Number(metadata.discovered ?? 0),
     eligible: Number(metadata.eligible ?? 0),
     batches_created: Number(metadata.batches_created ?? 0),
-    people_created: Number(metadata.people_created ?? 0),
-    people_matched: Number(metadata.people_matched ?? 0),
-    attached: Number(metadata.attached ?? 0),
-    would_create_person: Number(metadata.would_create_person ?? 0),
-    would_match_existing: Number(metadata.would_match_existing ?? 0),
-    would_require_review: Number(metadata.would_require_review ?? 0),
-    would_skip_no_identifiers: Number(metadata.would_skip_no_identifiers ?? 0),
+    people_created: dryRun ? 0 : Number(metadata.people_created ?? 0),
+    people_matched: dryRun ? 0 : Number(metadata.people_matched ?? 0),
+    attached: dryRun ? 0 : Number(metadata.attached ?? 0),
+    would_create_person: Number(metadata.would_create_person ?? 0) + leakedPeopleCreated,
+    would_match_existing: Number(metadata.would_match_existing ?? 0) + leakedPeopleMatched,
+    would_require_review: Number(metadata.would_require_review ?? 0) + leakedReviewRequired,
+    would_skip_no_identifiers: Number(metadata.would_skip_no_identifiers ?? 0) + leakedSkippedNoIdentifiers,
     already_linked: Number(metadata.already_linked ?? 0),
-    skipped_no_identifiers: Number(metadata.skipped_no_identifiers ?? 0),
-    review_required: Number(metadata.review_required ?? 0),
+    skipped_no_identifiers: dryRun ? 0 : Number(metadata.skipped_no_identifiers ?? 0),
+    review_required: dryRun ? 0 : Number(metadata.review_required ?? 0),
     attachment_conflicts: Number(metadata.attachment_conflicts ?? 0),
     permanent_errors: Number(metadata.permanent_errors ?? 0),
     transient_retries: Number(metadata.transient_retries ?? 0),
