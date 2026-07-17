@@ -2,22 +2,28 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import {
   IDENTITY_BACKFILL_CONNECTOR_ID,
+  IDENTITY_BACKFILL_DISCOVERY_INDEX,
   IDENTITY_BACKFILL_DISCOVERY_SELECT,
   IDENTITY_BACKFILL_JOB_TYPE,
   IDENTITY_BACKFILL_RESOLVE_SELECT,
   IDENTITY_BACKFILL_TASK_TYPES,
+  createIdentityBackfillDiscoveryState,
   dateRangeToTimestamps,
   extractIdentityEvidenceFromPlatformOrder,
   hasIdentityEvidence,
+  identityBackfillDiscoverySummary,
   identityBackfillFinalizeStatus,
   identityBackfillResolveDedupeKey,
   isSupportedIdentityBackfillPlatformOrder,
+  markIdentityBackfillPlatformDiscovery,
   normalizeIdentityBackfillPlatforms,
   normalizeIdentityBackfillRequest,
   parseIdentityBackfillCursor,
+  previewIdentityResolutionReadOnly,
   serializeIdentityBackfillCursor,
 } from "./identity-backfill-runtime.ts";
 import {
+  compactConnectorRuntimeMetrics,
   connectorRuntimeMetadata,
   createConnectorRuntimeProgress,
   isConnectorRuntimeV1Job,
@@ -110,6 +116,18 @@ test("runtime select lists use persisted platform_orders columns only", () => {
   assert.equal(resolveColumns.includes("customer_name"), false);
 });
 
+test("discovery scan contract matches the migration 015 keyset index", () => {
+  assert.equal(IDENTITY_BACKFILL_DISCOVERY_INDEX.name, "platform_orders_identity_backfill_scan_idx");
+  assert.deepEqual(IDENTITY_BACKFILL_DISCOVERY_INDEX.columns, ["workspace_id", "platform", "order_ts", "platform_order_id"]);
+  assert.equal(IDENTITY_BACKFILL_DISCOVERY_INDEX.predicate, "person_id is null and platform_order_id is not null");
+  assert.ok(IDENTITY_BACKFILL_DISCOVERY_INDEX.query_filters.includes("workspace_id = ?"));
+  assert.ok(IDENTITY_BACKFILL_DISCOVERY_INDEX.query_filters.includes("platform = ?"));
+  assert.ok(IDENTITY_BACKFILL_DISCOVERY_INDEX.query_filters.includes("order_ts >= ?"));
+  assert.ok(IDENTITY_BACKFILL_DISCOVERY_INDEX.query_filters.includes("order_ts < ?"));
+  assert.ok(IDENTITY_BACKFILL_DISCOVERY_INDEX.query_filters.includes("platform_order_id > ? when cursor exists"));
+  assert.deepEqual(IDENTITY_BACKFILL_DISCOVERY_INDEX.order_by, ["platform_order_id asc"]);
+});
+
 test("extracts deterministic identity evidence from WowBoost platform orders", async () => {
   const evidence = await extractIdentityEvidenceFromPlatformOrder({
     platform: "wowboost",
@@ -185,6 +203,93 @@ test("stable resolve batch dedupe keys are deterministic", () => {
   assert.equal(key, "identity_resolve_batch:job-1:wowboost:1:wowboost:2:2");
 });
 
+test("dry run preview uses read-only repository methods and reports would-create", async () => {
+  const mutations = {
+    createPerson: 0,
+    upsertIdentifier: 0,
+    appendResolutionEvent: 0,
+  };
+  const repo = {
+    async findIdentifiers() {
+      return [];
+    },
+    async listPeopleByIds() {
+      return [];
+    },
+    async createPerson() {
+      mutations.createPerson += 1;
+      throw new Error("must not mutate");
+    },
+    async upsertIdentifier() {
+      mutations.upsertIdentifier += 1;
+      throw new Error("must not mutate");
+    },
+    async appendResolutionEvent() {
+      mutations.appendResolutionEvent += 1;
+      throw new Error("must not mutate");
+    },
+  } as any;
+
+  const result = await previewIdentityResolutionReadOnly(repo, {
+    workspace_id: "default",
+    identifiers: [{ identifier_type: "email", value: "Customer@Example.com", verification_status: "observed" }],
+  });
+
+  assert.equal(result.preview_action, "would_create_person");
+  assert.equal(result.review_required, false);
+  assert.deepEqual(mutations, {
+    createPerson: 0,
+    upsertIdentifier: 0,
+    appendResolutionEvent: 0,
+  });
+});
+
+test("dry run preview reports existing matches and review without mutations", async () => {
+  const matched = await previewIdentityResolutionReadOnly({
+    async findIdentifiers() {
+      return [{ person_id: "person-1" }];
+    },
+    async listPeopleByIds() {
+      return [{ id: "person-1", status: "active" }];
+    },
+  } as any, {
+    workspace_id: "default",
+    identifiers: [{ identifier_type: "email", value: "known@example.com", verification_status: "observed" }],
+  });
+  assert.equal(matched.preview_action, "would_match_existing");
+  assert.equal(matched.person_id, "person-1");
+
+  const review = await previewIdentityResolutionReadOnly({
+    async findIdentifiers() {
+      return [{ person_id: "person-1" }, { person_id: "person-2" }];
+    },
+    async listPeopleByIds() {
+      return [{ id: "person-1", status: "active" }, { id: "person-2", status: "active" }];
+    },
+  } as any, {
+    workspace_id: "default",
+    identifiers: [{ identifier_type: "email", value: "shared@example.com", verification_status: "observed" }],
+  });
+  assert.equal(review.preview_action, "would_require_review");
+  assert.equal(review.review_required, true);
+});
+
+test("dry run preview skips records with no valid identifiers", async () => {
+  const result = await previewIdentityResolutionReadOnly({
+    async findIdentifiers() {
+      throw new Error("should not query identifiers without valid input");
+    },
+    async listPeopleByIds() {
+      throw new Error("should not query people without valid input");
+    },
+  } as any, {
+    workspace_id: "default",
+    identifiers: [{ identifier_type: "phone", value: "5551112222", verification_status: "observed" }],
+  });
+
+  assert.equal(result.preview_action, "would_skip_no_identifiers");
+});
+
 test("identity backfill runtime progress is marked as Connector Runtime v1", () => {
   const progress = createConnectorRuntimeProgress({
     workspace_id: "default",
@@ -202,6 +307,46 @@ test("identity backfill runtime progress is marked as Connector Runtime v1", () 
   assert.equal(isConnectorRuntimeV1Job({ progress }, IDENTITY_BACKFILL_CONNECTOR_ID), true);
   assert.equal(progress.phase, "discover_unlinked_records");
   assert.equal(progress.metadata.dry_run, true);
+});
+
+test("per-platform discovery state tracks completion, pending, and exhausted failures", () => {
+  const platforms = ["wowboost", "wowsuite:wowboost"];
+  const initial = createIdentityBackfillDiscoveryState(platforms);
+  assert.deepEqual(identityBackfillDiscoverySummary({ discovery_platforms: initial }, platforms), {
+    state: { wowboost: "pending", "wowsuite:wowboost": "pending" },
+    completed: [],
+    failed: [],
+    pending: ["wowboost", "wowsuite:wowboost"],
+    incomplete: true,
+  });
+
+  const afterWowBoost = markIdentityBackfillPlatformDiscovery({ discovery_platforms: initial }, "wowboost", "completed");
+  assert.deepEqual(identityBackfillDiscoverySummary({ discovery_platforms: afterWowBoost }, platforms), {
+    state: { wowboost: "completed", "wowsuite:wowboost": "pending" },
+    completed: ["wowboost"],
+    failed: [],
+    pending: ["wowsuite:wowboost"],
+    incomplete: true,
+  });
+
+  const afterTimeout = markIdentityBackfillPlatformDiscovery({ discovery_platforms: afterWowBoost }, "wowsuite:wowboost", "failed");
+  const summary = identityBackfillDiscoverySummary({ discovery_platforms: afterTimeout }, platforms);
+  assert.deepEqual(summary.failed, ["wowsuite:wowboost"]);
+  assert.equal(summary.incomplete, true);
+});
+
+test("keyset cursor preserves platform and platform_order_id without offset pagination", () => {
+  const platforms = ["wowboost", "wowsuite:wowboost"];
+  const cursor = serializeIdentityBackfillCursor({
+    current_platform: "wowsuite:wowboost",
+    platform_order_id: "wowsuite:wowboost:26116819",
+  });
+
+  assert.deepEqual(parseIdentityBackfillCursor(cursor, platforms), {
+    current_platform: "wowsuite:wowboost",
+    platform_order_id: "wowsuite:wowboost:26116819",
+  });
+  assert.ok(!IDENTITY_BACKFILL_DISCOVERY_INDEX.query_filters.some((filter) => filter.toLowerCase().includes("offset")));
 });
 
 test("legacy jobs are not reused for identity backfill runtime v1", () => {
@@ -323,4 +468,51 @@ test("finalize status reflects unresolved or review work", () => {
     no_identifier_count: 0,
     runtime_error_count: 0,
   }), "completed_with_errors");
+});
+
+test("dry run finalization allows expected remaining unlinked records", () => {
+  assert.equal(identityBackfillFinalizeStatus({
+    remaining_unlinked: 64,
+    review_required_count: 0,
+    no_identifier_count: 0,
+    runtime_error_count: 0,
+  }, { dry_run: true }), "completed");
+
+  assert.equal(identityBackfillFinalizeStatus({
+    remaining_unlinked: 64,
+    review_required_count: 0,
+    no_identifier_count: 0,
+    runtime_error_count: 0,
+  }, { dry_run: true, would_require_review: 1 }), "completed_with_errors");
+
+  assert.equal(identityBackfillFinalizeStatus({
+    remaining_unlinked: 0,
+    review_required_count: 0,
+    no_identifier_count: 0,
+    runtime_error_count: 0,
+  }, { dry_run: true, discovery_incomplete: true }), "completed_with_errors");
+});
+
+test("compact metrics expose dry-run would counters and consistent retry counters", () => {
+  const metrics = compactConnectorRuntimeMetrics({
+    people_created: 0,
+    attached: 0,
+    would_create_person: 64,
+    would_match_existing: 2,
+    would_require_review: 1,
+    would_skip_no_identifiers: 3,
+    transient_retries: 2,
+    incomplete_discovery: true,
+    discovery_failed_platforms: ["wowsuite:wowboost"],
+  });
+
+  assert.equal(metrics.people_created, 0);
+  assert.equal(metrics.attached, 0);
+  assert.equal(metrics.would_create_person, 64);
+  assert.equal(metrics.would_match_existing, 2);
+  assert.equal(metrics.would_require_review, 1);
+  assert.equal(metrics.would_skip_no_identifiers, 3);
+  assert.equal(metrics.transient_retries, 2);
+  assert.equal(metrics.incomplete_discovery, true);
+  assert.deepEqual(metrics.discovery_failed_platforms, ["wowsuite:wowboost"]);
 });

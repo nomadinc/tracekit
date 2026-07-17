@@ -4,6 +4,7 @@ import {
   isIdentityIdentifierType,
   normalizeIdentityIdentifier,
 } from "./identity-normalization.ts";
+import type { IdentityInputIdentifier, IdentityRepository } from "./identity-service.ts";
 
 export const IDENTITY_BACKFILL_CONNECTOR_ID = "identity-backfill-platform-orders";
 export const IDENTITY_BACKFILL_JOB_TYPE = "identity_backfill";
@@ -25,6 +26,21 @@ export const IDENTITY_BACKFILL_EXCLUDED_PLATFORMS = new Set(["wowpay", "wowsuite
 export const IDENTITY_BACKFILL_DEFAULT_BATCH_SIZE = 25;
 export const IDENTITY_BACKFILL_MAX_BATCH_SIZE = 100;
 export const IDENTITY_BACKFILL_DISCOVERY_SELECT = "workspace_id,platform,platform_order_id,order_ts,person_id,raw_json";
+export const IDENTITY_BACKFILL_DISCOVERY_INDEX = {
+  name: "platform_orders_identity_backfill_scan_idx",
+  columns: ["workspace_id", "platform", "order_ts", "platform_order_id"],
+  predicate: "person_id is null and platform_order_id is not null",
+  query_filters: [
+    "workspace_id = ?",
+    "platform = ?",
+    "person_id is null",
+    "platform_order_id is not null",
+    "order_ts >= ?",
+    "order_ts < ?",
+    "platform_order_id > ? when cursor exists",
+  ],
+  order_by: ["platform_order_id asc"],
+} as const;
 export const IDENTITY_BACKFILL_RESOLVE_SELECT = [
   "workspace_id",
   "platform",
@@ -77,6 +93,14 @@ export type IdentityBackfillCursor = {
   current_platform: string;
   platform_order_id: string | null;
 };
+
+export type IdentityBackfillPreviewResult = {
+  preview_action: "would_create_person" | "would_match_existing" | "would_require_review" | "would_skip_no_identifiers";
+  person_id: string | null;
+  review_required: boolean;
+};
+
+export type IdentityBackfillDiscoveryStatus = "pending" | "completed" | "failed";
 
 function firstNonEmpty(...values: unknown[]) {
   for (const value of values) {
@@ -135,6 +159,47 @@ export function normalizeIdentityBackfillBatchSize(value: unknown) {
   const numberValue = Number(value ?? IDENTITY_BACKFILL_DEFAULT_BATCH_SIZE);
   if (!Number.isFinite(numberValue)) return IDENTITY_BACKFILL_DEFAULT_BATCH_SIZE;
   return Math.max(1, Math.min(IDENTITY_BACKFILL_MAX_BATCH_SIZE, Math.floor(numberValue)));
+}
+
+export function createIdentityBackfillDiscoveryState(platforms: string[]) {
+  const state: Record<string, IdentityBackfillDiscoveryStatus> = {};
+  for (const platform of platforms) state[platform] = "pending";
+  return state;
+}
+
+export function markIdentityBackfillPlatformDiscovery(
+  metadata: Record<string, any> | null | undefined,
+  platform: string,
+  status: IdentityBackfillDiscoveryStatus,
+) {
+  return {
+    ...((metadata?.discovery_platforms || {}) as Record<string, IdentityBackfillDiscoveryStatus>),
+    [cleanText(platform).toLowerCase()]: status,
+  };
+}
+
+export function identityBackfillDiscoveryStateFromMetadata(metadata: Record<string, any> | null | undefined, platforms: string[]) {
+  const existing = ((metadata?.discovery_platforms || {}) as Record<string, IdentityBackfillDiscoveryStatus>) || {};
+  const state = createIdentityBackfillDiscoveryState(platforms);
+  for (const platform of platforms) {
+    const status = existing[platform];
+    if (status === "completed" || status === "failed" || status === "pending") state[platform] = status;
+  }
+  return state;
+}
+
+export function identityBackfillDiscoverySummary(metadata: Record<string, any> | null | undefined, platforms: string[]) {
+  const state = identityBackfillDiscoveryStateFromMetadata(metadata, platforms);
+  const completed = platforms.filter((platform) => state[platform] === "completed");
+  const failed = platforms.filter((platform) => state[platform] === "failed");
+  const pending = platforms.filter((platform) => state[platform] === "pending");
+  return {
+    state,
+    completed,
+    failed,
+    pending,
+    incomplete: failed.length > 0 || pending.length > 0,
+  };
 }
 
 export function normalizeIdentityBackfillRequest(body: Record<string, any>): { ok: true; value: IdentityBackfillRequest } | { ok: false; status: number; error: string; message: string } {
@@ -337,10 +402,62 @@ export function identityBackfillResolveDedupeKey(jobId: string, platformOrderIds
   return `identity_resolve_batch:${jobId}:${ids[0] || "empty"}:${ids[ids.length - 1] || "empty"}:${ids.length}`;
 }
 
-export function identityBackfillFinalizeStatus(counts: Record<string, any>) {
-  const remaining = Math.max(0, Number(counts.remaining_unlinked || 0));
-  const review = Math.max(0, Number(counts.review_required_count || 0));
-  const noIdentifier = Math.max(0, Number(counts.no_identifier_count || 0));
+export async function previewIdentityResolutionReadOnly(
+  repo: Pick<IdentityRepository, "findIdentifiers" | "listPeopleByIds">,
+  args: {
+    workspace_id: string;
+    identifiers: IdentityInputIdentifier[];
+  },
+): Promise<IdentityBackfillPreviewResult> {
+  const normalized = [];
+  for (const identifier of args.identifiers || []) {
+    const result = await normalizeIdentityIdentifier({
+      identifier_type: identifier.identifier_type,
+      value: identifier.value ?? identifier.raw_value,
+      country: identifier.country,
+    });
+    if (result.valid && result.identifier_type) {
+      normalized.push({
+        identifier_type: result.identifier_type,
+        normalized_value: result.normalized_value,
+      });
+    }
+  }
+
+  if (!normalized.length) {
+    return { preview_action: "would_skip_no_identifiers", person_id: null, review_required: false };
+  }
+
+  const matches = await repo.findIdentifiers(args.workspace_id, normalized);
+  const people = await repo.listPeopleByIds(args.workspace_id, Array.from(new Set(matches.map((match) => match.person_id))));
+  const activePeople = people.filter((person) => person.status === "active");
+  if (activePeople.length > 1) {
+    return { preview_action: "would_require_review", person_id: null, review_required: true };
+  }
+  if (activePeople.length === 1) {
+    return { preview_action: "would_match_existing", person_id: activePeople[0].id, review_required: false };
+  }
+  return { preview_action: "would_create_person", person_id: null, review_required: false };
+}
+
+export function identityBackfillFinalizeStatus(
+  counts: Record<string, any>,
+  args: {
+    dry_run?: boolean;
+    discovery_incomplete?: boolean;
+    would_require_review?: number;
+    permanent_errors?: number;
+    attachment_conflicts?: number;
+  } = {},
+) {
+  const dryRun = Boolean(args.dry_run);
+  const remaining = dryRun ? 0 : Math.max(0, Number(counts.remaining_unlinked || 0));
+  const review = Math.max(0, Number(counts.review_required_count || 0)) + Math.max(0, Number(args.would_require_review || 0));
+  const noIdentifier = dryRun ? 0 : Math.max(0, Number(counts.no_identifier_count || 0));
   const runtimeErrors = Math.max(0, Number(counts.runtime_error_count || 0));
-  return remaining || review || noIdentifier || runtimeErrors ? "completed_with_errors" : "completed";
+  const permanentErrors = Math.max(0, Number(args.permanent_errors || 0));
+  const attachmentConflicts = Math.max(0, Number(args.attachment_conflicts || 0));
+  return remaining || review || noIdentifier || runtimeErrors || permanentErrors || attachmentConflicts || args.discovery_incomplete
+    ? "completed_with_errors"
+    : "completed";
 }

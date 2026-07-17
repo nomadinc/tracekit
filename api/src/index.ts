@@ -83,19 +83,22 @@ import {
   IDENTITY_BACKFILL_JOB_TYPE,
   IDENTITY_BACKFILL_RESOLVE_SELECT,
   IDENTITY_BACKFILL_TASK_TYPES,
+  createIdentityBackfillDiscoveryState,
   dateRangeToTimestamps,
   extractIdentityEvidenceFromPlatformOrder,
   hasIdentityEvidence,
+  identityBackfillDiscoverySummary,
   identityBackfillFinalizeStatus,
   identityBackfillResolveDedupeKey,
   isSupportedIdentityBackfillPlatformOrder,
+  markIdentityBackfillPlatformDiscovery,
   nextIdentityBackfillPlatform,
   normalizeIdentityBackfillBatchSize,
   normalizeIdentityBackfillRequest,
   parseIdentityBackfillCursor,
+  previewIdentityResolutionReadOnly,
   serializeIdentityBackfillCursor,
 } from "./identity-backfill-runtime";
-import { normalizeIdentityIdentifier } from "./identity-normalization.ts";
 import { matchIdentityRoute } from "./identity-routes";
 import {
   PaypalApiError,
@@ -3773,62 +3776,33 @@ async function queryIdentityBackfillRows(env: Env, args: {
   const range = dateRangeToTimestamps(args.progress.requested_from, args.progress.requested_to);
   if (!range) throw new Error("Invalid identity backfill date range.");
   const platforms = identityBackfillPlatformsFromProgress(args.progress);
-  let cursorState = parseIdentityBackfillCursor(args.cursor, platforms);
+  const cursorState = parseIdentityBackfillCursor(args.cursor, platforms);
   const supabase = getSupabase(env);
 
-  for (;;) {
-    let query = supabase
-      .from("platform_orders")
-      .select(IDENTITY_BACKFILL_DISCOVERY_SELECT)
-      .eq("workspace_id", args.progress.workspace_id || "default")
-      .eq("platform", cursorState.current_platform)
-      .is("person_id", null)
-      .not("platform_order_id", "is", null)
-      .gte("order_ts", range.from_ts)
-      .lt("order_ts", range.to_exclusive_ts)
-      .order("platform_order_id", { ascending: true })
-      .limit(args.limit);
+  let query = supabase
+    .from("platform_orders")
+    .select(IDENTITY_BACKFILL_DISCOVERY_SELECT)
+    .eq("workspace_id", args.progress.workspace_id || "default")
+    .eq("platform", cursorState.current_platform)
+    .is("person_id", null)
+    .not("platform_order_id", "is", null)
+    .gte("order_ts", range.from_ts)
+    .lt("order_ts", range.to_exclusive_ts)
+    .order("platform_order_id", { ascending: true })
+    .limit(args.limit);
 
-    if (cursorState.platform_order_id) query = query.gt("platform_order_id", cursorState.platform_order_id);
-    const { data, error } = await query;
-    if (error) throw runtimeSupabaseError("Identity backfill platform_orders scan failed", error);
+  if (cursorState.platform_order_id) query = query.gt("platform_order_id", cursorState.platform_order_id);
+  const { data, error } = await query;
+  if (error) throw runtimeSupabaseError("Identity backfill platform_orders scan failed", error);
 
-    const rows = data || [];
-    if (rows.length) return { rows, cursorState, platforms };
-
-    const nextPlatform = nextIdentityBackfillPlatform(cursorState.current_platform, platforms);
-    if (!nextPlatform) return { rows: [], cursorState, platforms };
-    cursorState = { current_platform: nextPlatform, platform_order_id: null };
-  }
+  return { rows: data || [], cursorState, platforms };
 }
 
 async function previewIdentityResolution(env: Env, args: {
   workspace_id: string;
   identifiers: IdentityInputIdentifier[];
 }) {
-  const normalized = [];
-  for (const identifier of args.identifiers || []) {
-    const result = await normalizeIdentityIdentifier({
-      identifier_type: identifier.identifier_type,
-      value: identifier.value ?? identifier.raw_value,
-      country: identifier.country,
-    });
-    if (result.valid && result.identifier_type) {
-      normalized.push({
-        identifier_type: result.identifier_type,
-        normalized_value: result.normalized_value,
-      });
-    }
-  }
-  if (!normalized.length) return { action: "no_match", person_id: null, review_required: false };
-
-  const repo = createSupabaseIdentityRepository(getSupabase(env));
-  const matches = await repo.findIdentifiers(args.workspace_id, normalized);
-  const people = await repo.listPeopleByIds(args.workspace_id, Array.from(new Set(matches.map((match) => match.person_id))));
-  const activePeople = people.filter((person) => person.status === "active");
-  if (activePeople.length > 1) return { action: "review_required", person_id: null, review_required: true };
-  if (activePeople.length === 1) return { action: "matched_existing_person", person_id: activePeople[0].id, review_required: false };
-  return { action: "created_person", person_id: null, review_required: false };
+  return previewIdentityResolutionReadOnly(createSupabaseIdentityRepository(getSupabase(env)), args);
 }
 
 async function discoverIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, task: ConnectorImportTaskRow) {
@@ -3836,6 +3810,7 @@ async function discoverIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, 
   const limit = normalizeIdentityBackfillBatchSize(task.payload?.limit || progress.metadata?.batch_size || IDENTITY_BACKFILL_DEFAULT_BATCH_SIZE);
   const cursor = String(task.payload?.cursor || task.cursor || progress.current_cursor || "").trim() || null;
   const { rows, cursorState, platforms } = await queryIdentityBackfillRows(env, { progress, cursor, limit });
+  const currentPlatform = cursorState.current_platform;
 
   const eligibleIds: string[] = [];
   let unsupported = 0;
@@ -3854,18 +3829,24 @@ async function discoverIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, 
   }
 
   const lastRow = rows[rows.length - 1] as any;
+  const platformCompleted = rows.length < limit;
+  let discoveryPlatforms = progress.metadata?.discovery_platforms
+    ? { ...(progress.metadata.discovery_platforms as Record<string, any>) }
+    : createIdentityBackfillDiscoveryState(platforms);
   let nextCursor: string | null = null;
-  if (lastRow && rows.length >= limit) {
+  if (!platformCompleted && lastRow) {
     nextCursor = serializeIdentityBackfillCursor({
-      current_platform: cursorState.current_platform,
+      current_platform: currentPlatform,
       platform_order_id: String(lastRow.platform_order_id || ""),
     });
   } else {
-    const nextPlatform = nextIdentityBackfillPlatform(cursorState.current_platform, platforms);
+    discoveryPlatforms = markIdentityBackfillPlatformDiscovery({ discovery_platforms: discoveryPlatforms }, currentPlatform, "completed");
+    const nextPlatform = nextIdentityBackfillPlatform(currentPlatform, platforms);
     nextCursor = nextPlatform
       ? serializeIdentityBackfillCursor({ current_platform: nextPlatform, platform_order_id: null })
       : null;
   }
+  const discoverySummary = identityBackfillDiscoverySummary({ discovery_platforms: discoveryPlatforms }, platforms);
 
   const batchesCreated = eligibleIds.length ? 1 : 0;
   const nextPhase = eligibleIds.length
@@ -3885,6 +3866,11 @@ async function discoverIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, 
     metadata: {
       ...(progress.metadata || {}),
       current_platform: nextCursor ? parseIdentityBackfillCursor(nextCursor, platforms).current_platform : null,
+      discovery_platforms: discoveryPlatforms,
+      discovery_completed_platforms: discoverySummary.completed,
+      discovery_failed_platforms: discoverySummary.failed,
+      discovery_pending_platforms: discoverySummary.pending,
+      incomplete_discovery: discoverySummary.incomplete,
       discovered: Number(progress.metadata?.discovered || 0) + rows.length,
       eligible: Number(progress.metadata?.eligible || 0) + eligibleIds.length,
       unsupported_platform: Number(progress.metadata?.unsupported_platform || 0) + unsupported,
@@ -3942,6 +3928,10 @@ async function discoverIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, 
     unsupported_platform: unsupported,
     skipped_no_identifiers: 0,
     already_linked: alreadyLinked,
+    discovery_platforms: discoveryPlatforms,
+    discovery_completed_platforms: discoverySummary.completed,
+    discovery_pending_platforms: discoverySummary.pending,
+    discovery_failed_platforms: discoverySummary.failed,
     next_cursor: nextCursor,
     next_phase: nextPhase,
     batches_created: batchesCreated,
@@ -3965,7 +3955,7 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
   if (error) throw runtimeSupabaseError("Identity backfill platform order reload failed", error);
 
   const rowsById = new Map((data || []).map((row: any) => [String(row.platform_order_id), row]));
-  const service = getIdentityService(env);
+  const service = dryRun ? null : getIdentityService(env);
   let processed = 0;
   let peopleCreated = 0;
   let peopleMatched = 0;
@@ -3976,6 +3966,10 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
   let permanentErrors = 0;
   let transientRetries = 0;
   let attachmentConflicts = 0;
+  let wouldCreatePerson = 0;
+  let wouldMatchExisting = 0;
+  let wouldRequireReview = 0;
+  let wouldSkipNoIdentifiers = 0;
   const recentWarnings: string[] = [];
   const transientRetryIds: string[] = [];
   const retryAttempt = Math.max(0, Number(task.payload?.retry_attempt || 0));
@@ -4008,37 +4002,51 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
 
     const evidence = await extractIdentityEvidenceFromPlatformOrder(row);
     if (!hasIdentityEvidence(evidence)) {
-      skippedNoIdentifiers += 1;
-      await insertConnectorRuntimeError(env, {
-        job_id: job.id,
-        task_id: task.id,
-        connector_id: progress.connector_id,
-        record_identifier: platformOrderId,
-        error_class: "identity_backfill_no_identifiers",
-        message: "Platform order has no deterministic person identity identifiers.",
-        classification: "permanent",
-      }).catch(() => {});
+      if (dryRun) {
+        wouldSkipNoIdentifiers += 1;
+      } else {
+        skippedNoIdentifiers += 1;
+        await insertConnectorRuntimeError(env, {
+          job_id: job.id,
+          task_id: task.id,
+          connector_id: progress.connector_id,
+          record_identifier: platformOrderId,
+          error_class: "identity_backfill_no_identifiers",
+          message: "Platform order has no deterministic person identity identifiers.",
+          classification: "permanent",
+        }).catch(() => {});
+      }
       continue;
     }
     for (const warning of evidence.warnings) recentWarnings.push(warning);
 
     try {
-      const result = dryRun
-        ? await previewIdentityResolution(env, {
+      if (dryRun) {
+        const preview = await previewIdentityResolution(env, {
           workspace_id: progress.workspace_id || "default",
           identifiers: evidence.identifiers,
-        })
-        : await resolveIdentityForSourceRecord(service, {
-          workspace_id: progress.workspace_id || row.workspace_id || "default",
-          connector_id: IDENTITY_BACKFILL_CONNECTOR_ID,
-          connector_job_id: job.id,
-          platform: row.platform,
-          record_type: "platform_order",
-          record_id: platformOrderId,
-          identifiers: evidence.identifiers,
-          attributes: evidence.attributes,
-          observed_at: evidence.observed_at,
         });
+        if (preview.preview_action === "would_create_person") wouldCreatePerson += 1;
+        if (preview.preview_action === "would_match_existing") wouldMatchExisting += 1;
+        if (preview.preview_action === "would_require_review") {
+          wouldRequireReview += 1;
+          reviewRequired += 1;
+        }
+        if (preview.preview_action === "would_skip_no_identifiers") wouldSkipNoIdentifiers += 1;
+        continue;
+      }
+
+      const result = await resolveIdentityForSourceRecord(service!, {
+        workspace_id: progress.workspace_id || row.workspace_id || "default",
+        connector_id: IDENTITY_BACKFILL_CONNECTOR_ID,
+        connector_job_id: job.id,
+        platform: row.platform,
+        record_type: "platform_order",
+        record_id: platformOrderId,
+        identifiers: evidence.identifiers,
+        attributes: evidence.attributes,
+        observed_at: evidence.observed_at,
+      });
 
       if (result.review_required || result.action === "review_required") {
         reviewRequired += 1;
@@ -4047,7 +4055,6 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
       if (result.action === "created_person") peopleCreated += 1;
       if (result.action === "matched_existing_person") peopleMatched += 1;
 
-      if (dryRun) continue;
       if (!result.person_id) {
         permanentErrors += 1;
         continue;
@@ -4087,11 +4094,9 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
         task_id: task.id,
         connector_id: progress.connector_id,
         record_identifier: platformOrderId,
-        error_class: classification === "blocking"
-          ? "identity_backfill_blocking_error"
-          : classification === "transient"
-            ? "identity_backfill_transient_exhausted"
-            : "identity_backfill_record_error",
+        error_class: classification === "transient"
+          ? "identity_backfill_transient_exhausted"
+          : "identity_backfill_record_error",
         message: e?.message || String(e),
         classification,
       }).catch(() => {});
@@ -4123,6 +4128,10 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
       already_linked: Number(progress.metadata?.already_linked || 0) + alreadyLinked,
       skipped_no_identifiers: Number(progress.metadata?.skipped_no_identifiers || 0) + skippedNoIdentifiers,
       review_required: Number(progress.metadata?.review_required || 0) + reviewRequired,
+      would_create_person: Number(progress.metadata?.would_create_person || 0) + wouldCreatePerson,
+      would_match_existing: Number(progress.metadata?.would_match_existing || 0) + wouldMatchExisting,
+      would_require_review: Number(progress.metadata?.would_require_review || 0) + wouldRequireReview,
+      would_skip_no_identifiers: Number(progress.metadata?.would_skip_no_identifiers || 0) + wouldSkipNoIdentifiers,
       permanent_errors: Number(progress.metadata?.permanent_errors || 0) + permanentErrors,
       transient_retries: Number(progress.metadata?.transient_retries || 0) + transientRetries,
       attachment_conflicts: Number(progress.metadata?.attachment_conflicts || 0) + attachmentConflicts,
@@ -4181,6 +4190,10 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
     attached,
     already_linked: alreadyLinked,
     skipped_no_identifiers: skippedNoIdentifiers,
+    would_create_person: wouldCreatePerson,
+    would_match_existing: wouldMatchExisting,
+    would_require_review: wouldRequireReview,
+    would_skip_no_identifiers: wouldSkipNoIdentifiers,
     review_required: reviewRequired,
     permanent_errors: permanentErrors,
     transient_retries: transientRetries,
@@ -4207,19 +4220,38 @@ async function validateAndFinalizeIdentityBackfillRuntimeTask(env: Env, job: Imp
     if (finalizeError) throw runtimeSupabaseError("Identity backfill finalize count failed", finalizeError);
 
     const finalizeRow = Array.isArray(finalizeCounts) ? finalizeCounts[0] : finalizeCounts;
-    const status = identityBackfillFinalizeStatus(finalizeRow || {});
+    const platforms = identityBackfillPlatformsFromProgress(progress);
+    const discoverySummary = identityBackfillDiscoverySummary(progress.metadata, platforms);
+    const dryRun = Boolean(progress.metadata?.dry_run);
+    const status = identityBackfillFinalizeStatus(finalizeRow || {}, {
+      dry_run: dryRun,
+      discovery_incomplete: discoverySummary.incomplete,
+      would_require_review: Number(progress.metadata?.would_require_review || 0),
+      permanent_errors: Number(progress.metadata?.permanent_errors || 0),
+      attachment_conflicts: Number(progress.metadata?.attachment_conflicts || 0),
+    });
     const now = new Date().toISOString();
+    const lastError = discoverySummary.incomplete
+      ? `Identity backfill discovery incomplete. Failed platforms: ${discoverySummary.failed.join(",") || "none"}; pending platforms: ${discoverySummary.pending.join(",") || "none"}.`
+      : status === "completed_with_errors"
+        ? "Identity backfill completed with review items or runtime errors."
+        : null;
     const nextProgress = mergeConnectorRuntimeCounters(progress, {}, {
       status: status as any,
       phase: "validate_and_finalize",
       cursor: null,
       page: null,
-      last_error: status === "completed_with_errors" ? "Identity backfill completed with unresolved records, review items, or runtime errors." : null,
+      last_error: lastError,
       next_run_at: null,
       now,
       metadata: {
         ...(progress.metadata || {}),
         finalize_summary_failed: false,
+        discovery_platforms: discoverySummary.state,
+        discovery_completed_platforms: discoverySummary.completed,
+        discovery_failed_platforms: discoverySummary.failed,
+        discovery_pending_platforms: discoverySummary.pending,
+        incomplete_discovery: discoverySummary.incomplete,
         total_in_scope: Number(finalizeRow?.total_in_scope || 0),
         linked_person_id: Number(finalizeRow?.linked_person_id || 0),
         remaining_unlinked: Number(finalizeRow?.remaining_unlinked || 0),
@@ -4238,6 +4270,10 @@ async function validateAndFinalizeIdentityBackfillRuntimeTask(env: Env, job: Imp
       review_required_count: Number(finalizeRow?.review_required_count || 0),
       no_identifier_count: Number(finalizeRow?.no_identifier_count || 0),
       runtime_error_count: Number(finalizeRow?.runtime_error_count || 0),
+      incomplete_discovery: discoverySummary.incomplete,
+      discovery_completed_platforms: discoverySummary.completed,
+      discovery_pending_platforms: discoverySummary.pending,
+      discovery_failed_platforms: discoverySummary.failed,
     };
   } catch (error) {
     const summary = connectorRuntimeErrorSummary(error);
@@ -4664,6 +4700,7 @@ async function startIdentityBackfillRuntimeJob(env: Env, args: {
           batch_size: normalizeIdentityBackfillBatchSize(args.batch_size),
           dry_run: Boolean(args.dry_run),
           counters_version: 1,
+          discovery_platforms: createIdentityBackfillDiscoveryState(args.platforms),
         },
       }),
     });
@@ -11542,11 +11579,21 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 	                last_error: diagnostic.last_error,
 	              }).catch(() => {});
 	              if (job && progress) {
+	                let retryMetadata: Record<string, any> | undefined;
+	                if (task.connector_id === IDENTITY_BACKFILL_CONNECTOR_ID) {
+	                  retryMetadata = {
+	                    transient_retries: Number(progress.metadata?.transient_retries || 0) + 1,
+	                    discovery_transient_retries: task.task_type === IDENTITY_BACKFILL_TASK_TYPES.discover
+	                      ? Number(progress.metadata?.discovery_transient_retries || 0) + 1
+	                      : Number(progress.metadata?.discovery_transient_retries || 0),
+	                  };
+	                }
 	                const nextProgress = mergeConnectorRuntimeCounters(progress, { retries: 1 }, {
 	                  status: "retrying",
 	                  phase: task.phase,
 	                  last_error: diagnostic.last_error,
 	                  next_run_at: nextRunAt,
+	                  metadata: retryMetadata,
 	                });
 	              await updateConnectorRuntimeJobProgress(env, job, nextProgress).catch(() => {});
 	            }
@@ -11567,10 +11614,27 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 	              last_error: diagnostic.last_error,
 	            }).catch(() => {});
 	            if (job && progress) {
+	              let failureMetadata: Record<string, any> | undefined;
+	              if (task.connector_id === IDENTITY_BACKFILL_CONNECTOR_ID && task.task_type === IDENTITY_BACKFILL_TASK_TYPES.discover) {
+	                const platforms = identityBackfillPlatformsFromProgress(progress);
+	                const cursorValue = task.payload?.cursor || task.cursor || progress.current_cursor || null;
+	                const failedCursor = parseIdentityBackfillCursor(cursorValue, platforms);
+	                const discoveryPlatforms = markIdentityBackfillPlatformDiscovery(progress.metadata, failedCursor.current_platform, "failed");
+	                const discoverySummary = identityBackfillDiscoverySummary({ discovery_platforms: discoveryPlatforms }, platforms);
+	                failureMetadata = {
+	                  discovery_platforms: discoveryPlatforms,
+	                  discovery_completed_platforms: discoverySummary.completed,
+	                  discovery_failed_platforms: discoverySummary.failed,
+	                  discovery_pending_platforms: discoverySummary.pending,
+	                  incomplete_discovery: discoverySummary.incomplete,
+	                  exhausted_discovery_failures: Number(progress.metadata?.exhausted_discovery_failures || 0) + 1,
+	                };
+	              }
 	              const nextProgress = mergeConnectorRuntimeCounters(progress, { records_failed: 1 }, {
 	                status: classification === "blocking" ? "failed" : "completed_with_errors",
 	                phase: task.phase,
 	                last_error: diagnostic.last_error,
+	                metadata: failureMetadata,
 	              });
 	              if (classification === "blocking") nextProgress.completed_at = new Date().toISOString();
 	              await updateConnectorRuntimeJobProgress(env, job, nextProgress).catch(() => {});
