@@ -41,6 +41,28 @@ export const IDENTITY_BACKFILL_DISCOVERY_INDEX = {
   ],
   order_by: ["platform_order_id asc"],
 } as const;
+export const IDENTITY_BACKFILL_FINALIZE_COUNT_QUERIES = {
+  linked: {
+    index: "platform_orders_identity_backfill_linked_count_idx",
+    table: "platform_orders",
+    filters: ["workspace_id = ?", "platform = ?", "person_id is not null", "order_ts >= ?", "order_ts < ?"],
+  },
+  unlinked: {
+    index: "platform_orders_identity_backfill_unlinked_count_idx",
+    table: "platform_orders",
+    filters: ["workspace_id = ?", "platform = ?", "person_id is null", "order_ts >= ?", "order_ts < ?"],
+  },
+  review: {
+    index: "identity_resolution_events_backfill_review_idx",
+    table: "identity_resolution_events",
+    filters: ["workspace_id = ?", "connector_job_id = ?", "resolution_action in review actions"],
+  },
+  errors: {
+    index: "integration_import_errors_job_class_idx",
+    table: "integration_import_errors",
+    filters: ["job_id = ?", "error_class = ?"],
+  },
+} as const;
 export const IDENTITY_BACKFILL_RESOLVE_SELECT = [
   "workspace_id",
   "platform",
@@ -452,6 +474,31 @@ export function normalizeIdentityBackfillDryRunMetadata(metadata: Record<string,
     would_match_existing: metricNumber(next.would_match_existing) + metricNumber(next.people_matched),
     would_require_review: metricNumber(next.would_require_review) + metricNumber(next.review_required),
     would_skip_no_identifiers: metricNumber(next.would_skip_no_identifiers) + metricNumber(next.skipped_no_identifiers),
+  };
+}
+
+export function identityBackfillDryRunFinalizeCounts(progress: Record<string, any> | null | undefined) {
+  const metadata = normalizeIdentityBackfillDryRunMetadata({ ...((progress?.metadata || {}) as Record<string, any>), dry_run: true });
+  const previewTotal = metricNumber(metadata.would_create_person)
+    + metricNumber(metadata.would_match_existing)
+    + metricNumber(metadata.would_require_review)
+    + metricNumber(metadata.would_skip_no_identifiers);
+  const total = Math.max(
+    metricNumber(progress?.records_discovered),
+    metricNumber(progress?.records_processed),
+    previewTotal,
+  );
+  return {
+    total_in_scope: total,
+    linked_person_id: 0,
+    remaining_unlinked: total,
+    review_required_count: metricNumber(metadata.would_require_review),
+    no_identifier_count: metricNumber(metadata.would_skip_no_identifiers),
+    runtime_error_count: metricNumber(metadata.runtime_error_count)
+      + metricNumber(metadata.permanent_errors)
+      + metricNumber(metadata.attachment_conflicts)
+      + metricNumber(metadata.exhausted_discovery_failures)
+      + metricNumber(metadata.failed_tasks),
   };
 }
 

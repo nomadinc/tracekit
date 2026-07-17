@@ -297,7 +297,7 @@ export function classifyConnectorRuntimeFailure(args: {
     args.status === 425 ||
     args.status === 429 ||
     (Number(args.status) >= 500 && Number(args.status) <= 599) ||
-    /timeout|timed out|aborted|aborterror|deadline|network|fetch failed|headers timeout|socket hang up|econnreset|etimedout/i.test(String(args.message || ""))
+    /57014|statement timeout|canceling statement due to statement timeout|timeout|timed out|aborted|aborterror|deadline|network|fetch failed|headers timeout|socket hang up|econnreset|etimedout/i.test(String(args.message || ""))
   ) {
     return "transient";
   }

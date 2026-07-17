@@ -274,6 +274,7 @@ test("failure classifier separates transient permanent and blocking errors", () 
   assert.equal(classifyConnectorRuntimeFailure({ message: "fetch failed: network timeout" }), "transient");
   assert.equal(classifyConnectorRuntimeFailure({ message: "Request timed out after 30000ms" }), "transient");
   assert.equal(classifyConnectorRuntimeFailure({ message: "UND_ERR_HEADERS_TIMEOUT" }), "transient");
+  assert.equal(classifyConnectorRuntimeFailure({ message: "Postgres 57014 canceling statement due to statement timeout" }), "transient");
   assert.equal(classifyConnectorRuntimeFailure({ status: 404 }), "permanent");
   assert.equal(classifyConnectorRuntimeFailure({ message: "malformed identifier" }), "permanent");
   assert.equal(classifyConnectorRuntimeFailure({ status: 401 }), "blocking");
