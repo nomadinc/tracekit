@@ -11,7 +11,12 @@ export type IntegrationAuthType =
   | "username_password"
   | "oauth";
 
-export type CredentialFieldType = "text" | "password" | "url";
+export type CredentialFieldType = "text" | "password" | "url" | "select";
+
+export type IntegrationCredentialOption = {
+  value: string;
+  label: string;
+};
 
 export type IntegrationCredentialField = {
   key: string;
@@ -22,6 +27,7 @@ export type IntegrationCredentialField = {
   helpText?: string;
   defaultValue?: string;
   autoComplete?: string;
+  options?: IntegrationCredentialOption[];
 };
 
 export type IntegrationTestEvent =
@@ -75,6 +81,8 @@ export type IntegrationDefinition = {
   backfillJobStatusPath?: string;
   backfillFilters?: IntegrationBackfillFilter[];
   backfillTimeoutMs?: number;
+  backfillTitle?: string;
+  backfillDescription?: string;
 
   apiPlatform?: string;
   defaultBackfillFrom?: string;

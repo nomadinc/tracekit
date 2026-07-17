@@ -22,6 +22,9 @@ TraceKit is not a Hyros clone.
 TraceKit combines attribution evidence with identity, commerce, payments, ledger
 events, and profit.
 
+The Attribution Identity is one of the two canonical identity anchors used
+throughout TraceKit.
+
 ## Immutable Activity Model
 
 Every touchpoint must be stored as an immutable event.

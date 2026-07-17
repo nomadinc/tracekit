@@ -1,7 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  ImportProgressPanel,
+  type ImportProgressJob,
+} from "@/components/integrations/import-progress-panel";
 import {
   apiGetJson,
   apiPostJson,
@@ -29,6 +33,17 @@ type StatusResponse = ApiResponse & {
   baseUrl?: string | null;
   apiVersion?: string | null;
   username?: string | null;
+  environment?: string | null;
+  merchant_account_id?: string | null;
+  connector_id?: string | null;
+  last_successful_sync_at?: string | null;
+  capabilities?: {
+    transaction_reporting?: boolean;
+    disputes?: boolean;
+    fees?: boolean;
+    webhooks?: boolean;
+    warnings?: string[];
+  } | null;
   created_at?: string | null;
   updated_at?: string | null;
 };
@@ -60,6 +75,14 @@ type ImportJob = {
   upserted?: number;
   pages?: number;
   error?: string | null;
+};
+
+type SharedImportJobResponse = ApiResponse & {
+  job_id?: string;
+  job?: ImportProgressJob | null;
+  progress?: ImportProgressJob["progress"];
+  duplicate_prevented?: boolean;
+  done?: boolean;
 };
 
 type LastImportState = {
@@ -146,6 +169,13 @@ export function IntegrationWizard({
   const [importMessage, setImportMessage] = useState<string | null>(null);
   const [viewOrdersHref, setViewOrdersHref] = useState<string | null>(null);
   const [lastImport, setLastImport] = useState<LastImportState | null>(null);
+  const [activeImportJob, setActiveImportJob] =
+    useState<ImportProgressJob | null>(null);
+  const [sharedJobBusy, setSharedJobBusy] = useState(false);
+  const importLoopToken = useRef(0);
+  const continueSharedImportRef = useRef(
+    async (_jobId: string, _resume: boolean) => {}
+  );
 
   const postbackUrl = useMemo(() => {
     if (!integration.postbackPath) return null;
@@ -153,6 +183,7 @@ export function IntegrationWizard({
   }, [apiBase, integration.postbackPath]);
 
   const lastImportKey = `tracekit:lastImport:${apiPlatform}`;
+  const sharedImportEnabled = supportsSharedImportProgress(apiPlatform);
 
   const refreshStatus = useCallback(async () => {
     if (!integration.statusPath) return;
@@ -447,6 +478,11 @@ export function IntegrationWizard({
       return;
     }
 
+    if (sharedImportEnabled) {
+      await startSharedImport(from, to);
+      return;
+    }
+
     if (
       integration.backfillMode === "async_job" &&
       integration.backfillJobStatusPath
@@ -454,6 +490,118 @@ export function IntegrationWizard({
       await importOrdersWithJobPolling(from, to);
       return;
     }
+
+    await importOrdersLegacySync(from, to);
+  }
+
+  async function startSharedImport(from: string, to: string) {
+    try {
+      importLoopToken.current += 1;
+      setImportStatus("importing");
+      setImportMessage("Starting import...");
+      setViewOrdersHref(null);
+      setSharedJobBusy(true);
+
+      const start = await apiPostJson<SharedImportJobResponse>(
+        "/v1/integrations/import-jobs/start",
+        {
+          platform: apiPlatform,
+          connector_id: statusResponse?.connector_id || apiPlatform,
+          workspace_id: "default",
+          from,
+          to,
+          filter: importFilter,
+        }
+      );
+
+      if (!start.ok || !start.job) {
+        setImportStatus("error");
+        setImportMessage(start.message || "Import failed to start.");
+        return;
+      }
+
+      setActiveImportJob(start.job);
+      setImportMessage(
+        start.duplicate_prevented
+          ? "An active import already exists. Resuming progress..."
+          : "Import queued. Processing chunks..."
+      );
+
+      if (start.job.id) {
+        await continueSharedImport(start.job.id, false);
+      }
+    } catch (error) {
+      setImportStatus("error");
+      setImportMessage(error instanceof Error ? error.message : "Import failed.");
+    } finally {
+      setSharedJobBusy(false);
+    }
+  }
+
+  async function continueSharedImport(jobId: string, resume: boolean) {
+    const token = ++importLoopToken.current;
+    let endpoint = resume
+      ? "/v1/integrations/import-jobs/resume"
+      : "/v1/integrations/import-jobs/continue";
+
+    setImportStatus("importing");
+    setSharedJobBusy(true);
+
+    try {
+      for (;;) {
+        const json = await apiPostJson<SharedImportJobResponse>(endpoint, {
+          job_id: jobId,
+          resume,
+        });
+
+        if (token !== importLoopToken.current) return;
+        if (!json.ok) throw new Error(json.message || "Import failed.");
+
+        const job = json.job ?? null;
+        if (job) setActiveImportJob(job);
+
+        const status = getSharedJobStatus(job);
+        const progress = job?.progress;
+
+        if (status === "completed" || json.done) {
+          if (job) finishImportFromJob(job);
+          void refreshStatus();
+          void loadSettings();
+          return;
+        }
+
+        if (status === "failed") {
+          setImportStatus("error");
+          setImportMessage(progress?.last_error || "Import failed. Resume is available.");
+          return;
+        }
+
+        if (status === "cancelled") {
+          setImportStatus("idle");
+          setImportMessage("Import cancelled.");
+          return;
+        }
+
+        setImportMessage(
+          `Importing... processed ${Number(progress?.records_processed ?? 0)} records.`
+        );
+
+        endpoint = "/v1/integrations/import-jobs/continue";
+        resume = false;
+        await sleep(900);
+      }
+    } catch (error) {
+      setImportStatus("error");
+      setImportMessage(error instanceof Error ? error.message : "Import failed.");
+    } finally {
+      if (token === importLoopToken.current) setSharedJobBusy(false);
+    }
+  }
+
+  continueSharedImportRef.current = continueSharedImport;
+
+  async function importOrdersLegacySync(from: string, to: string) {
+    if (!integration.backfillPath) return;
 
     const ctrl = new AbortController();
     const timeout = window.setTimeout(
@@ -605,6 +753,93 @@ export function IntegrationWizard({
     setLastImport(saved);
   }
 
+  function finishImportFromJob(job: ImportProgressJob) {
+    const progress = job.progress;
+    if (!progress) return;
+
+    const from = String(progress.requested_from || importFrom);
+    const to = String(progress.requested_to || importTo);
+    const filter = String(progress.filter || importFilter);
+    const processed = Number(progress.records_processed || progress.records_fetched || 0);
+    const imported = Number(progress.rows_upserted || 0);
+    const ledger = Number(progress.ledger_inserted || 0);
+    const duplicates = Number(progress.duplicate_rows_skipped || 0);
+
+    finishImport(from, to, filter, {
+      ok: true,
+      fetched: processed,
+      upserted: imported,
+      pages: 0,
+      message: `Completed ${processed} processed, ${imported} imported, ${ledger} ledger events, and ${duplicates} duplicates skipped.`,
+    });
+  }
+
+  async function cancelSharedImport() {
+    const jobId = activeImportJob?.id;
+    if (!jobId) return;
+
+    try {
+      importLoopToken.current += 1;
+      setSharedJobBusy(true);
+      const json = await apiPostJson<SharedImportJobResponse>(
+        "/v1/integrations/import-jobs/cancel",
+        { job_id: jobId }
+      );
+
+      if (!json.ok) throw new Error(json.message || "Cancel failed.");
+      if (json.job) setActiveImportJob(json.job);
+      setImportStatus("idle");
+      setImportMessage(json.message || "Import cancelled.");
+    } catch (error) {
+      setImportStatus("error");
+      setImportMessage(error instanceof Error ? error.message : "Cancel failed.");
+    } finally {
+      setSharedJobBusy(false);
+    }
+  }
+
+  async function resumeSharedImport() {
+    const jobId = activeImportJob?.id;
+    if (!jobId) return;
+    await continueSharedImport(jobId, true);
+  }
+
+  useEffect(() => {
+    if (!mounted || !integration.supportsBackfill || !sharedImportEnabled) return;
+
+    let cancelled = false;
+
+    async function loadActiveImportJob() {
+      try {
+        const params = new URLSearchParams({
+          platform: apiPlatform,
+          workspace_id: "default",
+        });
+        const json = await apiGetJson<SharedImportJobResponse & { active?: boolean }>(
+          `/v1/integrations/import-jobs/active?${params.toString()}`
+        );
+
+        if (cancelled || !json.ok || !json.job) return;
+
+        setActiveImportJob(json.job);
+        if (isSharedJobActive(json.job) && json.job.id) {
+          setImportStatus("importing");
+          setImportMessage("Resuming active import...");
+          void continueSharedImportRef.current(json.job.id, false);
+        }
+      } catch {
+        if (!cancelled) setActiveImportJob(null);
+      }
+    }
+
+    void loadActiveImportJob();
+
+    return () => {
+      cancelled = true;
+      importLoopToken.current += 1;
+    };
+  }, [apiPlatform, integration.supportsBackfill, mounted, sharedImportEnabled]);
+
   async function sendTestEvent(type: IntegrationTestEvent) {
     if (!integration.postbackPath) return;
 
@@ -657,6 +892,33 @@ export function IntegrationWizard({
   }
 
   const connected = Boolean(statusResponse?.ok && statusResponse.connected);
+  const sharedJobStatus = getSharedJobStatus(activeImportJob);
+  const activeImportProgress = activeImportJob?.progress ?? null;
+  const persistedSharedJobBlocksNewImport =
+    sharedImportEnabled &&
+    Boolean(activeImportProgress) &&
+    sharedJobStatus !== "completed";
+  const displayedImportFrom =
+    persistedSharedJobBlocksNewImport && activeImportProgress?.requested_from
+      ? activeImportProgress.requested_from
+      : importFrom;
+  const displayedImportTo =
+    persistedSharedJobBlocksNewImport && activeImportProgress?.requested_to
+      ? activeImportProgress.requested_to
+      : importTo;
+  const displayedImportFilter =
+    persistedSharedJobBlocksNewImport && activeImportProgress?.filter
+      ? activeImportProgress.filter
+      : importFilter;
+  const persistedImportRangeLabel =
+    persistedSharedJobBlocksNewImport && (activeImportProgress?.requested_from || activeImportProgress?.requested_to)
+      ? `${dateRangeText(activeImportProgress.requested_from)} - ${dateRangeText(activeImportProgress.requested_to)}`
+      : null;
+  const importInProgress =
+    importStatus === "importing" ||
+    sharedJobBusy ||
+    (sharedImportEnabled && isSharedJobActive(activeImportJob));
+  const importFormLocked = importInProgress || persistedSharedJobBlocksNewImport;
 
   return (
     <div className="space-y-6">
@@ -714,12 +976,58 @@ export function IntegrationWizard({
               {statusResponse?.username ? (
                 <Stat label="Username" value={statusResponse.username} mono />
               ) : null}
+              {statusResponse?.environment ? (
+                <Stat label="Environment" value={statusResponse.environment} mono />
+              ) : null}
+              {statusResponse?.merchant_account_id ? (
+                <Stat
+                  label="Merchant"
+                  value={statusResponse.merchant_account_id}
+                  mono
+                />
+              ) : null}
+              {statusResponse?.connector_id ? (
+                <Stat label="Connector" value={statusResponse.connector_id} mono />
+              ) : null}
+              {statusResponse?.last_successful_sync_at ? (
+                <Stat
+                  label="Last sync"
+                  value={toLocalDateTimeLabel(statusResponse.last_successful_sync_at)}
+                />
+              ) : null}
               <Stat
                 label="Updated"
                 value={toLocalDateTimeLabel(statusResponse?.updated_at)}
               />
             </div>
           </div>
+
+          {statusResponse?.capabilities ? (
+            <div className="mt-3 flex flex-wrap gap-2 text-xs">
+              <CapabilityPill
+                label="Transaction reporting"
+                enabled={Boolean(statusResponse.capabilities.transaction_reporting)}
+              />
+              <CapabilityPill
+                label="Fees"
+                enabled={Boolean(statusResponse.capabilities.fees)}
+              />
+              <CapabilityPill
+                label="Disputes"
+                enabled={Boolean(statusResponse.capabilities.disputes)}
+              />
+              <CapabilityPill
+                label="Webhooks"
+                enabled={Boolean(statusResponse.capabilities.webhooks)}
+              />
+            </div>
+          ) : null}
+
+          {statusResponse?.capabilities?.warnings?.length ? (
+            <Message tone="warning" title="Capability warning">
+              {statusResponse.capabilities.warnings.join(" ")}
+            </Message>
+          ) : null}
         </section>
       ) : null}
 
@@ -851,25 +1159,41 @@ export function IntegrationWizard({
                 className={field.type === "password" ? "md:col-span-2" : ""}
               >
                 <div className="mb-1 text-sm font-medium">{field.label}</div>
-                <input
-                  type={
-                    field.type === "password"
-                      ? "password"
-                      : field.type === "url"
-                        ? "url"
-                        : "text"
-                  }
-                  value={credentials[field.key] ?? ""}
-                  placeholder={field.placeholder}
-                  autoComplete={field.autoComplete}
-                  autoCapitalize="none"
-                  autoCorrect="off"
-                  spellCheck={false}
-                  onChange={(event) =>
-                    updateCredential(field.key, event.target.value)
-                  }
-                  className="w-full rounded-md border bg-transparent px-3 py-2 text-sm"
-                />
+                {field.type === "select" ? (
+                  <select
+                    value={credentials[field.key] ?? ""}
+                    onChange={(event) =>
+                      updateCredential(field.key, event.target.value)
+                    }
+                    className="w-full rounded-md border bg-transparent px-3 py-2 text-sm"
+                  >
+                    {(field.options || []).map((option) => (
+                      <option key={option.value} value={option.value}>
+                        {option.label}
+                      </option>
+                    ))}
+                  </select>
+                ) : (
+                  <input
+                    type={
+                      field.type === "password"
+                        ? "password"
+                        : field.type === "url"
+                          ? "url"
+                          : "text"
+                    }
+                    value={credentials[field.key] ?? ""}
+                    placeholder={field.placeholder}
+                    autoComplete={field.autoComplete}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    onChange={(event) =>
+                      updateCredential(field.key, event.target.value)
+                    }
+                    className="w-full rounded-md border bg-transparent px-3 py-2 text-sm"
+                  />
+                )}
 
                 {field.helpText ? (
                   <div className="mt-1 text-xs text-gray-500">
@@ -934,14 +1258,20 @@ export function IntegrationWizard({
         <section className="rounded-lg border bg-white p-5 dark:bg-ink/60">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div>
-              <h2 className="font-semibold">Import Orders</h2>
+              <h2 className="font-semibold">
+                {integration.backfillTitle || "Import Orders"}
+              </h2>
               <p className="mt-1 text-xs text-gray-500">
-                Pulls transactions and upserts into{" "}
-                <span className="font-mono">platform_orders</span>.
+                {integration.backfillDescription || (
+                  <>
+                    Pulls transactions and upserts into{" "}
+                    <span className="font-mono">platform_orders</span>.
+                  </>
+                )}
               </p>
             </div>
             <div className="text-xs text-gray-500">
-              {importStatus === "importing" ? "importing..." : ""}
+              {importInProgress ? "importing..." : ""}
             </div>
           </div>
 
@@ -950,8 +1280,9 @@ export function IntegrationWizard({
               <div className="mb-1 font-medium">From</div>
               <input
                 className="w-full rounded-md border bg-transparent px-3 py-2 text-sm font-mono"
-                value={importFrom}
+                value={displayedImportFrom}
                 onChange={(event) => setImportFrom(event.target.value)}
+                disabled={importFormLocked}
                 placeholder="YYYY-MM-DD"
               />
             </label>
@@ -960,8 +1291,9 @@ export function IntegrationWizard({
               <div className="mb-1 font-medium">To</div>
               <input
                 className="w-full rounded-md border bg-transparent px-3 py-2 text-sm font-mono"
-                value={importTo}
+                value={displayedImportTo}
                 onChange={(event) => setImportTo(event.target.value)}
+                disabled={importFormLocked}
                 placeholder="YYYY-MM-DD"
               />
             </label>
@@ -970,8 +1302,9 @@ export function IntegrationWizard({
               <div className="mb-1 font-medium">Filter</div>
               <select
                 className="w-full rounded-md border bg-transparent px-3 py-2 text-sm"
-                value={importFilter}
+                value={displayedImportFilter}
                 onChange={(event) => setImportFilter(event.target.value)}
+                disabled={importFormLocked}
               >
                 {filters.map((filter) => (
                   <option key={filter.value} value={filter.value}>
@@ -984,17 +1317,33 @@ export function IntegrationWizard({
             <button
               type="button"
               onClick={importOrders}
-              disabled={importStatus === "importing"}
+              disabled={importInProgress || persistedSharedJobBlocksNewImport}
               className="rounded-md bg-black px-3 py-2 text-sm text-white disabled:opacity-60 dark:bg-white dark:text-black"
             >
-              {importStatus === "importing" ? "Importing..." : "Import"}
+              {importInProgress ? "Importing..." : "Import"}
             </button>
           </div>
+
+          {persistedImportRangeLabel ? (
+            <div className="mt-3 rounded-md border bg-gray-50 px-3 py-2 text-xs text-gray-700 dark:bg-slate2/30 dark:text-gray-300">
+              Resuming import for <span className="font-mono">{persistedImportRangeLabel}</span>. Resume uses the persisted job range.
+            </div>
+          ) : null}
 
           {importMessage ? (
             <Message tone={importStatus === "error" ? "error" : "success"}>
               {importMessage}
             </Message>
+          ) : null}
+
+          {sharedImportEnabled ? (
+            <ImportProgressPanel
+              job={activeImportJob}
+              platform={apiPlatform}
+              busy={sharedJobBusy}
+              onCancel={cancelSharedImport}
+              onResume={resumeSharedImport}
+            />
           ) : null}
 
           {mounted && lastImport ? (
@@ -1116,6 +1465,27 @@ function Stat({
   );
 }
 
+function CapabilityPill({
+  label,
+  enabled,
+}: {
+  label: string;
+  enabled: boolean;
+}) {
+  return (
+    <span
+      className={[
+        "rounded-full border px-2 py-1",
+        enabled
+          ? "border-emerald-200 bg-emerald-50 text-emerald-700"
+          : "border-gray-200 bg-gray-50 text-gray-600",
+      ].join(" ")}
+    >
+      {label}: {enabled ? "available" : "unavailable"}
+    </span>
+  );
+}
+
 function Message({
   children,
   title,
@@ -1189,6 +1559,11 @@ function toLocalDateTimeLabel(iso?: string | null) {
   return date.toLocaleString();
 }
 
+function dateRangeText(value: string | null | undefined) {
+  if (!value) return "-";
+  return String(value).slice(0, 10);
+}
+
 function isoYmdLocal(date: Date) {
   const yyyy = date.getFullYear();
   const mm = String(date.getMonth() + 1).padStart(2, "0");
@@ -1218,6 +1593,27 @@ function formatImportMessage(response: ImportResponse, fallbackVerb: string) {
 
 function isAbortError(error: unknown) {
   return error instanceof DOMException && error.name === "AbortError";
+}
+
+function supportsSharedImportProgress(platform: string) {
+  return new Set([
+    "paypal",
+    "shopify",
+    "checkoutchamp",
+    "konnektive",
+    "wowboost",
+    "wowsuite:wowboost",
+  ]).has(String(platform || "").trim().toLowerCase());
+}
+
+function getSharedJobStatus(job: ImportProgressJob | null | undefined) {
+  return String(job?.progress?.status || job?.status || "").toLowerCase();
+}
+
+function isSharedJobActive(job: ImportProgressJob | null | undefined) {
+  return ["queued", "preparing", "importing", "reconciling", "finalizing"].includes(
+    getSharedJobStatus(job)
+  );
 }
 
 function sleep(ms: number) {

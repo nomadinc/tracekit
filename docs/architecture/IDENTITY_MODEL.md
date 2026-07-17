@@ -12,6 +12,92 @@ without losing source-specific identity.
 
 Identity tells TraceKit who and what belongs together.
 
+## Core Identity Principle
+
+Every Journey should have two deterministic identity anchors whenever possible.
+
+### Commerce Identity
+
+The Commerce Identity represents the commercial transaction across commerce
+systems, payment processors, subscriptions, and financial events.
+
+Examples include:
+
+- Commerce Reference Number
+- Merchant Order ID
+- Invoice Number
+- External Reference
+- Parent Order Reference
+- Subscription ID
+
+These values answer:
+
+> Which commercial transaction does this financial event belong to?
+
+Whenever possible, TraceKit normalizes these values into the canonical Commerce
+Identity while preserving every original source identifier.
+
+### Attribution Identity
+
+The Attribution Identity represents the marketing event that introduced or
+influenced the customer.
+
+Examples include:
+
+- Everflow Transaction ID
+- Click ID
+- Voluum Click ID
+- Impact Click ID
+- Rakuten Click ID
+- CJ Click ID
+- Google GCLID
+- Meta FBCLID
+- TikTok TTCLID
+
+These values answer:
+
+> Where did this customer come from?
+
+Whenever possible, TraceKit preserves the original attribution identifier
+exactly as received.
+
+### Why Both Matter
+
+Neither identity is sufficient by itself.
+
+Commerce Identity connects:
+
+```text
+Commerce
+-> Payment Processor
+-> Ledger
+-> Profit
+```
+
+Attribution Identity connects:
+
+```text
+Affiliate
+-> Campaign
+-> Click
+-> Journey
+-> Customer Acquisition
+```
+
+Together they allow TraceKit to connect:
+
+```text
+Marketing
+-> Commerce
+-> Payments
+-> Ledger
+-> Profit
+```
+
+using deterministic identifiers instead of heuristic matching whenever possible.
+
+This is one of TraceKit's primary architectural principles.
+
 ## Canonical Identity Objects
 
 | Object | Definition |
@@ -226,6 +312,50 @@ Every connector must preserve:
 
 Connectors must not require perfect identity evidence before ingestion. Missing
 joins create unresolved records, not dropped records.
+
+## Connector Identity Requirements
+
+Every connector should expose deterministic identities whenever available.
+
+### Commerce Connectors
+
+Must preserve:
+
+- Commerce Reference
+- Merchant Order ID
+- Parent Order ID
+- Subscription ID
+- Customer ID
+
+### Tracking Connectors
+
+Must preserve:
+
+- Transaction ID
+- Click ID
+- Affiliate ID
+- Campaign ID
+- Offer ID
+- Source ID
+- Sub IDs
+- External click identifiers
+
+### Payment Processors
+
+Must preserve:
+
+- Processor Transaction ID
+- Parent Transaction ID
+- Commerce Reference
+- Invoice Number
+- Custom Reference
+- Authorization ID
+- Capture ID
+- Refund ID
+- Dispute ID
+
+Whenever two systems share the same deterministic identifier, TraceKit should
+prefer that relationship over heuristic matching.
 
 ## Future-State Onboarding Behavior
 

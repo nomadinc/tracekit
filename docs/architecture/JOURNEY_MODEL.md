@@ -9,6 +9,9 @@ TraceKit's primary business object is the Journey, not the individual order.
 A Journey is the complete acquisition, monetization, and financial lifecycle
 associated with a customer or acquisition path.
 
+Every Journey should reference both a Commerce Identity and an Attribution
+Identity whenever those identities exist.
+
 Identity tells TraceKit who the customer is.
 
 Attribution tells TraceKit where the customer came from.
