@@ -88,6 +88,7 @@ import {
   extractIdentityEvidenceFromPlatformOrder,
   hasIdentityEvidence,
   identityBackfillDiscoverySummary,
+  identityBackfillDryRunFinalizeCounts,
   identityBackfillFinalizeStatus,
   identityBackfillResolveDedupeKey,
   isSupportedIdentityBackfillPlatformOrder,
@@ -3708,6 +3709,9 @@ function describeRuntimeSupabaseError(error: any) {
 function runtimeSupabaseError(prefix: string, error: any) {
   const wrapped = new Error(`${prefix}: ${describeRuntimeSupabaseError(error)}`);
   (wrapped as any).cause = error;
+  (wrapped as any).code = error?.code ?? null;
+  (wrapped as any).status = error?.status ?? null;
+  (wrapped as any).transient = error?.code === "57014" || /statement timeout|canceling statement due to statement timeout/i.test(describeRuntimeSupabaseError(error));
   return wrapped;
 }
 
@@ -4215,27 +4219,31 @@ async function validateAndFinalizeIdentityBackfillRuntimeTask(env: Env, job: Imp
   try {
     const range = dateRangeToTimestamps(progress.requested_from, progress.requested_to);
     if (!range) throw new Error("Invalid identity backfill date range.");
-    const supabase = getSupabase(env);
-    const { data: finalizeCounts, error: finalizeError } = await supabase.rpc("identity_backfill_finalize_counts", {
-      p_job_id: job.id,
-      p_workspace_id: progress.workspace_id || "default",
-      p_requested_from: range.from_ts,
-      p_requested_to: range.to_exclusive_ts,
-      p_platforms: identityBackfillPlatformsFromProgress(progress),
-    });
-    if (finalizeError) throw runtimeSupabaseError("Identity backfill finalize count failed", finalizeError);
-
-    const finalizeRow = Array.isArray(finalizeCounts) ? finalizeCounts[0] : finalizeCounts;
     const platforms = identityBackfillPlatformsFromProgress(progress);
     const dryRun = Boolean(progress.metadata?.dry_run);
     const baseMetadata = dryRun ? normalizeIdentityBackfillDryRunMetadata(progress.metadata) : progress.metadata || {};
     const discoverySummary = identityBackfillDiscoverySummary(baseMetadata, platforms);
+    let finalizeRow: Record<string, any> | null | undefined;
+    if (dryRun) {
+      finalizeRow = identityBackfillDryRunFinalizeCounts({ ...progress, metadata: baseMetadata });
+    } else {
+      const supabase = getSupabase(env);
+      const { data: finalizeCounts, error: finalizeError } = await supabase.rpc("identity_backfill_finalize_counts", {
+        p_job_id: job.id,
+        p_workspace_id: progress.workspace_id || "default",
+        p_requested_from: range.from_ts,
+        p_requested_to: range.to_exclusive_ts,
+        p_platforms: platforms,
+      });
+      if (finalizeError) throw runtimeSupabaseError("Identity backfill finalize count failed", finalizeError);
+      finalizeRow = Array.isArray(finalizeCounts) ? finalizeCounts[0] : finalizeCounts;
+    }
     const status = identityBackfillFinalizeStatus(finalizeRow || {}, {
       dry_run: dryRun,
       discovery_incomplete: discoverySummary.incomplete,
-      would_require_review: Number(baseMetadata?.would_require_review || 0),
-      permanent_errors: Number(baseMetadata?.permanent_errors || 0),
-      attachment_conflicts: Number(baseMetadata?.attachment_conflicts || 0),
+      would_require_review: dryRun ? 0 : Number(baseMetadata?.would_require_review || 0),
+      permanent_errors: dryRun ? 0 : Number(baseMetadata?.permanent_errors || 0),
+      attachment_conflicts: dryRun ? 0 : Number(baseMetadata?.attachment_conflicts || 0),
     });
     const now = new Date().toISOString();
     const lastError = discoverySummary.incomplete
@@ -4285,6 +4293,11 @@ async function validateAndFinalizeIdentityBackfillRuntimeTask(env: Env, job: Imp
   } catch (error) {
     const summary = connectorRuntimeErrorSummary(error);
     const now = new Date().toISOString();
+    const classification = classifyConnectorRuntimeFailure({
+      status: (error as any)?.status,
+      message: summary.last_error,
+      transient: (error as any)?.transient || (error as any)?.code === "57014",
+    });
     await insertConnectorRuntimeError(env, {
       job_id: job.id,
       task_id: task.id,
@@ -4293,8 +4306,18 @@ async function validateAndFinalizeIdentityBackfillRuntimeTask(env: Env, job: Imp
       error_class: "identity_backfill_finalize_failed",
       message: summary.last_error,
       response_excerpt: summary.response_excerpt,
-      classification: "permanent",
+      classification,
     }).catch(() => {});
+
+    if (classification === "transient") {
+      if (error instanceof Error) {
+        (error as any).transient = true;
+        throw error;
+      }
+      const retryable = new Error(summary.message);
+      (retryable as any).transient = true;
+      throw retryable;
+    }
 
     const nextProgress = connectorRuntimeFinalizeFailureProgress(progress, {
       now,
@@ -11593,6 +11616,9 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 	                    discovery_transient_retries: task.task_type === IDENTITY_BACKFILL_TASK_TYPES.discover
 	                      ? Number(progress.metadata?.discovery_transient_retries || 0) + 1
 	                      : Number(progress.metadata?.discovery_transient_retries || 0),
+	                    finalize_transient_retries: task.task_type === IDENTITY_BACKFILL_TASK_TYPES.finalize
+	                      ? Number(progress.metadata?.finalize_transient_retries || 0) + 1
+	                      : Number(progress.metadata?.finalize_transient_retries || 0),
 	                  };
 	                }
 	                const nextProgress = mergeConnectorRuntimeCounters(progress, { retries: 1 }, {

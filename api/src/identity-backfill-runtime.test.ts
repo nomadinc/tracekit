@@ -1,9 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   IDENTITY_BACKFILL_CONNECTOR_ID,
   IDENTITY_BACKFILL_DISCOVERY_INDEX,
   IDENTITY_BACKFILL_DISCOVERY_SELECT,
+  IDENTITY_BACKFILL_FINALIZE_COUNT_QUERIES,
   IDENTITY_BACKFILL_JOB_TYPE,
   IDENTITY_BACKFILL_RESOLVE_SELECT,
   IDENTITY_BACKFILL_TASK_TYPES,
@@ -12,6 +14,7 @@ import {
   extractIdentityEvidenceFromPlatformOrder,
   hasIdentityEvidence,
   identityBackfillDiscoverySummary,
+  identityBackfillDryRunFinalizeCounts,
   identityBackfillFinalizeStatus,
   identityBackfillResolveDedupeKey,
   isSupportedIdentityBackfillPlatformOrder,
@@ -127,6 +130,42 @@ test("discovery scan contract matches the migration 015 keyset index", () => {
   assert.ok(IDENTITY_BACKFILL_DISCOVERY_INDEX.query_filters.includes("order_ts < ?"));
   assert.ok(IDENTITY_BACKFILL_DISCOVERY_INDEX.query_filters.includes("platform_order_id > ? when cursor exists"));
   assert.deepEqual(IDENTITY_BACKFILL_DISCOVERY_INDEX.order_by, ["platform_order_id asc"]);
+});
+
+test("finalize count contract uses per-platform index-supported predicates", () => {
+  assert.deepEqual(IDENTITY_BACKFILL_FINALIZE_COUNT_QUERIES.linked.filters, [
+    "workspace_id = ?",
+    "platform = ?",
+    "person_id is not null",
+    "order_ts >= ?",
+    "order_ts < ?",
+  ]);
+  assert.deepEqual(IDENTITY_BACKFILL_FINALIZE_COUNT_QUERIES.unlinked.filters, [
+    "workspace_id = ?",
+    "platform = ?",
+    "person_id is null",
+    "order_ts >= ?",
+    "order_ts < ?",
+  ]);
+  assert.equal(IDENTITY_BACKFILL_FINALIZE_COUNT_QUERIES.linked.index, "platform_orders_identity_backfill_linked_count_idx");
+  assert.equal(IDENTITY_BACKFILL_FINALIZE_COUNT_QUERIES.unlinked.index, "platform_orders_identity_backfill_unlinked_count_idx");
+  const serialized = JSON.stringify(IDENTITY_BACKFILL_FINALIZE_COUNT_QUERIES).toLowerCase();
+  assert.equal(serialized.includes("platform = any"), false);
+  assert.equal(serialized.includes(" unnest"), false);
+  assert.equal(serialized.includes(" raw_json"), false);
+  assert.equal(serialized.includes(" or "), false);
+});
+
+test("migration 016 replaces finalize counts with per-platform indexed counts", () => {
+  const migration = readFileSync(new URL("../../supabase/migrations/016_identity_backfill_finalize_count_indexes.sql", import.meta.url), "utf8").toLowerCase();
+
+  assert.match(migration, /platform_orders_identity_backfill_linked_count_idx/);
+  assert.match(migration, /platform_orders_identity_backfill_unlinked_count_idx/);
+  assert.match(migration, /foreach v_platform in array/);
+  assert.equal((migration.match(/po\.platform = v_platform/g) || []).length, 2);
+  assert.equal(migration.includes("platform = any"), false);
+  assert.equal(migration.includes("unnest"), false);
+  assert.equal(migration.includes("raw_json"), false);
 });
 
 test("extracts deterministic identity evidence from WowBoost platform orders", async () => {
@@ -492,6 +531,34 @@ test("dry run finalization allows expected remaining unlinked records", () => {
     no_identifier_count: 0,
     runtime_error_count: 0,
   }, { dry_run: true, discovery_incomplete: true }), "completed_with_errors");
+});
+
+test("dry-run finalize can complete from persisted metrics without table counts", () => {
+  const counts = identityBackfillDryRunFinalizeCounts({
+    records_discovered: 64,
+    records_processed: 64,
+    metadata: {
+      dry_run: true,
+      people_created: 0,
+      people_matched: 0,
+      attached: 0,
+      would_create_person: 64,
+      would_match_existing: 0,
+      would_require_review: 0,
+      would_skip_no_identifiers: 0,
+      incomplete_discovery: false,
+    },
+  });
+
+  assert.deepEqual(counts, {
+    total_in_scope: 64,
+    linked_person_id: 0,
+    remaining_unlinked: 64,
+    review_required_count: 0,
+    no_identifier_count: 0,
+    runtime_error_count: 0,
+  });
+  assert.equal(identityBackfillFinalizeStatus(counts, { dry_run: true }), "completed");
 });
 
 test("compact metrics expose dry-run would counters and consistent retry counters", () => {
