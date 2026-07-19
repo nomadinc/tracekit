@@ -32,9 +32,11 @@ import {
 } from "./profit";
 import {
   CONNECTOR_RUNTIME_DURABLE_HEARTBEAT_MIN_INTERVAL_MS,
+  appendConnectorRuntimeTaskDiagnosticBatch,
   appendConnectorRuntimeTaskDiagnosticSample,
   appendConnectorRuntimeTaskDiagnostic,
   classifyConnectorRuntimeFailure,
+  compactConnectorRuntimeInlineDebugDiagnostics,
   compactConnectorRuntimeJobPayload,
   connectorRuntimeErrorSummary,
   connectorRuntimeFinalizeFailureProgress,
@@ -42,11 +44,13 @@ import {
   connectorRuntimeMetadata,
   connectorRuntimeNextRunAt,
   connectorRuntimeRerunFinalizeProgress,
+  connectorRuntimeRequeueTaskDecision,
   connectorRuntimeRetryDelayMs,
   connectorRuntimeTaskDedupeKey,
   connectorRuntimeTaskMessage,
   createConnectorRuntimeProgress,
   isConnectorRuntimeTaskStale,
+  isCloudflareSubrequestLimitError,
   isActiveConnectorRuntimeJobStatus,
   isConnectorRuntimeV1Job,
   isTerminalConnectorRuntimeJobStatus,
@@ -75,12 +79,14 @@ import {
 import {
   compactIdentityIdentifier,
   compactIdentityPerson,
+  createIdentityResolutionDebugMetrics,
   createIdentityService,
   createSupabaseIdentityRepository,
   resolveIdentityForSourceRecord,
   withIdentityOperationTimeout,
   type IdentityDiagnostics,
   type IdentityInputIdentifier,
+  type IdentityResolutionDebugMetrics,
   type IdentityResolutionEvent,
 } from "./identity-service";
 import {
@@ -91,6 +97,7 @@ import {
   IDENTITY_BACKFILL_RESOLVE_SELECT,
   IDENTITY_BACKFILL_RESOLVE_TASK_BUDGET_MS,
   IDENTITY_BACKFILL_TASK_TYPES,
+  identityBackfillTargetDiagnosticEventName,
   createIdentityBackfillDiscoveryState,
   dateRangeToTimestamps,
   extractIdentityEvidenceFromPlatformOrder,
@@ -101,8 +108,10 @@ import {
   identityBackfillResolveContinuationDedupeKey,
   identityBackfillResolveDedupeKey,
   identityBackfillResolveRemainingIds,
+  isIdentityBackfillTargetDiagnosticRecord,
   isSupportedIdentityBackfillPlatformOrder,
   markIdentityBackfillPlatformDiscovery,
+  maskIdentityBackfillDiagnosticValue,
   mergeIdentityBackfillResolveMetricMetadata,
   normalizeIdentityBackfillDryRunMetadata,
   normalizeIdentityBackfillDryRunResolveSummary,
@@ -377,6 +386,17 @@ async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs =
 
 async function readJsonBody(req: Request) {
   return (await req.json().catch(() => ({}))) as any;
+}
+
+function adminAuthError(req: Request, env: Env) {
+  const expected = String(env.TK_SECRET_KEY || "").trim();
+  if (!expected) return json({ ok: false, error: "admin_auth_not_configured" }, 500);
+  const headerSecret = String(req.headers.get("x-tk-secret") || "").trim();
+  const authorization = String(req.headers.get("authorization") || "").trim();
+  const bearerMatch = /^Bearer\s+(.+)$/i.exec(authorization);
+  const supplied = headerSecret || String(bearerMatch?.[1] || "").trim();
+  if (supplied && supplied === expected) return null;
+  return json({ ok: false, error: "unauthorized" }, 401);
 }
 
 function parseYmd(v: string | null): Date | null {
@@ -996,9 +1016,9 @@ async function runWowPayImportPage(env: Env, args: { from: string; to: string; p
 		  ) || `${args.from}T00:00:00.000Z`,
 		  status,
 		  status_norm: status,
-		
+
 		  gross_amount: gross,
-		
+
 		  receipt_total:
 		    parseMoneyMaybe(
 		      receipt.amountUSD ??
@@ -1012,7 +1032,7 @@ async function runWowPayImportPage(env: Env, args: { from: string; to: string; p
 		      o.productPrice ??
 		      o.formattedProductPrice
 		    ) ?? null,
-		
+
 		  currency: receipt.currencyCode || o.currencyCode || "USD",
 
         ...emailFields,
@@ -1491,6 +1511,7 @@ const WOWBOOST_RUNTIME_DEFAULT_RECONCILE_LIMIT = 100;
 const WOWBOOST_RUNTIME_DEFAULT_DETAILS_LIMIT = 5;
 const WOWBOOST_RUNTIME_MAX_DETAILS_LIMIT = 20;
 const WOWBOOST_RUNTIME_DEFAULT_PACING_MS = 650;
+const CONNECTOR_RUNTIME_QUEUE_NAME = "wowboost-imports";
 const IDENTITY_RESOLVE_TASK_STALE_MS = 120000;
 const IDENTITY_RESOLVE_TASK_RECHECK_DELAY_SECONDS = 30;
 const IDENTITY_RESOLVE_OPERATION_TIMEOUT_MS = 15000;
@@ -1584,6 +1605,13 @@ function logConnectorRuntimeTaskEvent(task: ConnectorImportTaskRow, event: strin
 type ConnectorRuntimeTaskDiagnosticState = {
   summary: Record<string, any>;
   last_durable_heartbeat_ms: number;
+  subrequest_tracker?: IdentityResolveSubrequestTracker | null;
+  target_diagnostic_events?: IdentityResolveBufferedTargetDiagnosticEvent[];
+  identity_resolution_metrics?: IdentityResolutionDebugMetrics | null;
+};
+
+type ConnectorRuntimeTaskExecutionOptions = {
+  diagnostics?: ConnectorRuntimeTaskDiagnosticState | null;
 };
 
 function connectorRuntimeTaskDiagnosticState(task: ConnectorImportTaskRow): ConnectorRuntimeTaskDiagnosticState {
@@ -1601,6 +1629,145 @@ function recordConnectorRuntimeTaskDiagnosticSample(
   details: Record<string, any> = {},
 ) {
   state.summary = appendConnectorRuntimeTaskDiagnosticSample(state.summary, event, details);
+}
+
+type IdentityResolveSubrequestOperationStats = {
+  count: number;
+  completed: number;
+  errors: number;
+  timeouts: number;
+  elapsed_ms: number;
+  max_elapsed_ms: number;
+  operation: string;
+  repository_method: string | null;
+};
+
+type IdentityResolveSubrequestTracker = {
+  platform?: string | null;
+  platform_order_id: string;
+  processed: number;
+  record_index: number;
+  count: number;
+  completed: number;
+  errors: number;
+  timeouts: number;
+  started_at_ms: number;
+  by_operation: Record<string, IdentityResolveSubrequestOperationStats>;
+  pending: Record<string, Array<{ started_ms: number; count: number }>>;
+};
+
+type IdentityResolveBufferedTargetDiagnosticEvent = {
+  event: string;
+  details: Record<string, any>;
+};
+
+type IdentityResolveTargetDiagnosticContext = {
+  enabled: boolean;
+  platform?: string | null;
+  platform_order_id: string;
+  processed: number;
+  record_index?: number;
+  operation?: string | null;
+  identifier_type?: string | null;
+  identifier_value?: unknown;
+  person_id?: string | null;
+};
+
+function identityResolveTargetDiagnosticDetails(
+  task: ConnectorImportTaskRow,
+  target: IdentityResolveTargetDiagnosticContext,
+  operation: string,
+  details: Record<string, any> = {},
+) {
+  const { identifier_value: _rawIdentifierValue, ...safeDetails } = details;
+  const identifierValue = details.identifier_value_masked
+    || details.identifier_value_hash
+    || target.identifier_value
+    || null;
+  const personId = details.person_id ?? target.person_id ?? null;
+  return {
+    ...safeDetails,
+    task_id: task.id,
+    job_id: task.job_id,
+    platform: details.platform ?? target.platform ?? null,
+    platform_order_id: target.platform_order_id,
+    record_index: target.record_index ?? target.processed,
+    processed: target.processed,
+    operation: details.operation || target.operation || operation,
+    identifier_type: details.identifier_type ?? target.identifier_type ?? null,
+    identifier_value: maskIdentityBackfillDiagnosticValue(identifierValue),
+    person_id: personId,
+    elapsed_ms: details.elapsed_ms ?? null,
+    timestamp: new Date().toISOString(),
+    identifier_value_masked: details.identifier_value_masked || null,
+    identifier_value_hash: details.identifier_value_hash || null,
+  };
+}
+
+async function heartbeatIdentityResolveTargetDiagnostic(
+  _env: Env,
+  task: ConnectorImportTaskRow,
+  state: ConnectorRuntimeTaskDiagnosticState,
+  target: IdentityResolveTargetDiagnosticContext | null | undefined,
+  operation: string,
+  phase: string,
+  details: Record<string, any> = {},
+) {
+  if (!target?.enabled) return;
+  if (!state.target_diagnostic_events) state.target_diagnostic_events = [];
+  state.target_diagnostic_events.push({
+    event: identityBackfillTargetDiagnosticEventName(operation, phase),
+    details: identityResolveTargetDiagnosticDetails(task, target, operation, details),
+  });
+}
+
+async function flushIdentityResolveRecordDiagnostics(
+  env: Env,
+  task: ConnectorImportTaskRow,
+  state: ConnectorRuntimeTaskDiagnosticState,
+  tracker: IdentityResolveSubrequestTracker | null | undefined,
+) {
+  const targetEvents = state.target_diagnostic_events || [];
+  const batchEvents = [
+    ...targetEvents.map((item) => ({
+      event: item.event,
+      details: item.details,
+      at: typeof item.details?.timestamp === "string" ? item.details.timestamp : null,
+    })),
+    ...(tracker
+      ? [{
+        event: "identity_resolve.subrequest.summary",
+        details: identityResolveSubrequestSummaryDetails(tracker),
+      }]
+      : []),
+  ];
+  if (!batchEvents.length) return false;
+  const now = new Date().toISOString();
+  const targetEventEntries = targetEvents.map((item) => ({
+    at: typeof item.details?.timestamp === "string" ? item.details.timestamp : now,
+    event: item.event,
+    ...item.details,
+  }));
+  state.summary = appendConnectorRuntimeTaskDiagnosticBatch(
+    state.summary,
+    "identity_resolve.record.diagnostic_flush",
+    batchEvents,
+    now,
+  );
+  state.summary = {
+    ...state.summary,
+    target_diagnostic_batch_count: Number(state.summary.target_diagnostic_batch_count || 0) + (targetEvents.length ? 1 : 0),
+    target_diagnostic_event_count: Number(state.summary.target_diagnostic_event_count || 0) + targetEvents.length,
+    target_diagnostic_events: targetEventEntries,
+    target_diagnostic_platform_order_id: targetEvents[0]?.details?.platform_order_id || state.summary.target_diagnostic_platform_order_id || null,
+  };
+  state.target_diagnostic_events = [];
+  state.last_durable_heartbeat_ms = Date.now();
+  await updateConnectorRuntimeTask(env, task.id, {
+    locked_at: now,
+    result_summary: state.summary,
+  });
+  return true;
 }
 
 async function heartbeatConnectorRuntimeTask(
@@ -1622,13 +1789,241 @@ async function heartbeatConnectorRuntimeTask(
     return false;
   }
   const now = new Date().toISOString();
+  recordIdentityResolveSubrequestDiagnostic(state, {
+    operation: "connector_runtime.task_heartbeat",
+    repository_method: "heartbeatConnectorRuntimeTask",
+    phase: "before_await",
+    details: {
+      triggering_event: event,
+    },
+  });
   state.summary = appendConnectorRuntimeTaskDiagnostic(state.summary, event, details, now);
   state.last_durable_heartbeat_ms = nowMs;
   await updateConnectorRuntimeTask(env, task.id, {
     locked_at: now,
     result_summary: state.summary,
   });
+  recordIdentityResolveSubrequestDiagnostic(state, {
+    operation: "connector_runtime.task_heartbeat",
+    repository_method: "heartbeatConnectorRuntimeTask",
+    phase: "after_await",
+    details: {
+      triggering_event: event,
+    },
+  });
   return true;
+}
+
+function identityResolveSubrequestRepositoryMethod(operation: string, metadata: Record<string, any> = {}) {
+  const explicit = String(metadata.operation_name || "").trim();
+  if (explicit) {
+    if (explicit.startsWith("attachIdentifier.")) return "attachIdentifier";
+    return explicit;
+  }
+  if (operation.includes("findIdentifiers")) return "findIdentifiers";
+  if (operation.includes("getPersonIdentifiers")) return "getPersonIdentifiers";
+  if (operation.includes("listPeopleByIds")) return "listPeopleByIds";
+  if (operation.includes("createPerson")) return "createPerson";
+  if (operation.includes("updatePerson")) return "updatePerson";
+  if (operation.includes("insertResolutionEvent")) return "insertResolutionEvent";
+  if (operation.includes("updateIdentifier")) return "updateIdentifier";
+  if (operation === "identity_resolve.link_source_record") return "linkSourceRecord";
+  if (/identity_resolve\.insert_.*_error/.test(operation)) return "insertConnectorRuntimeError";
+  if (operation === "connector_runtime.task_heartbeat") return "heartbeatConnectorRuntimeTask";
+  return operation;
+}
+
+function isIdentityResolveSupabaseSubrequestOperation(operation: string, phase: string, metadata: Record<string, any> = {}) {
+  if (!["before_await", "after_await", "error"].includes(phase)) return false;
+  if (operation === "connector_runtime.task_heartbeat") return true;
+  if (operation.startsWith("identity_repository.")) {
+    if (operation === "identity_repository.attachIdentifier.entry") return false;
+    if (operation === "identity_repository.attachIdentifier.short_circuit_existing") return false;
+    return true;
+  }
+  if (operation === "identity_resolve.link_source_record") return true;
+  if (/identity_resolve\.insert_.*_error/.test(operation)) return true;
+  return Boolean(metadata.sql_shape);
+}
+
+function identityResolveSubrequestTrackerKey(operation: string, repositoryMethod: string | null) {
+  return `${repositoryMethod || "unknown"}:${operation}`;
+}
+
+function identityResolveSubrequestStats(
+  tracker: IdentityResolveSubrequestTracker,
+  operation: string,
+  repositoryMethod: string | null,
+) {
+  const key = identityResolveSubrequestTrackerKey(operation, repositoryMethod);
+  if (!tracker.by_operation[key]) {
+    tracker.by_operation[key] = {
+      count: 0,
+      completed: 0,
+      errors: 0,
+      timeouts: 0,
+      elapsed_ms: 0,
+      max_elapsed_ms: 0,
+      operation,
+      repository_method: repositoryMethod,
+    };
+  }
+  return { key, stats: tracker.by_operation[key] };
+}
+
+function recordIdentityResolveSubrequestDiagnostic(
+  state: ConnectorRuntimeTaskDiagnosticState,
+  args: {
+    operation: string;
+    repository_method?: string | null;
+    phase: "before_await" | "after_await" | "error";
+    elapsed_ms?: number | null;
+    timed_out?: boolean;
+    details?: Record<string, any>;
+  },
+) {
+  const tracker = state.subrequest_tracker;
+  if (!tracker) return;
+  const details = args.details || {};
+  if (!isIdentityResolveSupabaseSubrequestOperation(args.operation, args.phase, details)) return;
+  const repositoryMethod = args.repository_method || identityResolveSubrequestRepositoryMethod(args.operation, details);
+  const { key, stats } = identityResolveSubrequestStats(tracker, args.operation, repositoryMethod);
+  const nowMs = Date.now();
+  let count = tracker.count;
+  let elapsedMs = Number(args.elapsed_ms || 0);
+  if (args.phase === "before_await") {
+    tracker.count += 1;
+    stats.count += 1;
+    count = tracker.count;
+    if (!tracker.pending[key]) tracker.pending[key] = [];
+    tracker.pending[key].push({ started_ms: nowMs, count });
+  } else {
+    const pending = tracker.pending[key]?.shift();
+    count = pending?.count || tracker.count;
+    if (!elapsedMs && pending?.started_ms) elapsedMs = Math.max(0, nowMs - pending.started_ms);
+    if (args.phase === "after_await") {
+      tracker.completed += 1;
+      stats.completed += 1;
+    } else {
+      tracker.errors += 1;
+      stats.errors += 1;
+    }
+    if (args.timed_out) {
+      tracker.timeouts += 1;
+      stats.timeouts += 1;
+    }
+    stats.elapsed_ms += elapsedMs;
+    stats.max_elapsed_ms = Math.max(stats.max_elapsed_ms, elapsedMs);
+  }
+  recordConnectorRuntimeTaskDiagnosticSample(state, "identity_resolve.subrequest.count", {
+    current_count: count,
+    phase: args.phase,
+    operation: args.operation,
+    repository_method: repositoryMethod,
+    platform: tracker.platform || null,
+    platform_order_id: tracker.platform_order_id,
+    record_index: tracker.record_index,
+    processed: tracker.processed,
+    elapsed_ms: args.phase === "before_await" ? null : elapsedMs,
+    timed_out: Boolean(args.timed_out),
+    triggering_event: details.triggering_event || null,
+  });
+}
+
+function identityResolveSubrequestSummaryDetails(tracker: IdentityResolveSubrequestTracker) {
+  const byOperation = Object.fromEntries(
+    Object.entries(tracker.by_operation)
+      .sort((a, b) => b[1].count - a[1].count || a[0].localeCompare(b[0]))
+      .map(([key, stats]) => [key, {
+        operation: stats.operation,
+        repository_method: stats.repository_method,
+        count: stats.count,
+        completed: stats.completed,
+        errors: stats.errors,
+        timeouts: stats.timeouts,
+        elapsed_ms: stats.elapsed_ms,
+        max_elapsed_ms: stats.max_elapsed_ms,
+      }]),
+  );
+  return {
+    platform: tracker.platform || null,
+    platform_order_id: tracker.platform_order_id,
+    record_index: tracker.record_index,
+    processed: tracker.processed,
+    total_subrequests: tracker.count,
+    completed_subrequests: tracker.completed,
+    errored_subrequests: tracker.errors,
+    timed_out_subrequests: tracker.timeouts,
+    elapsed_ms: Date.now() - tracker.started_at_ms,
+    by_operation: byOperation,
+  };
+}
+
+function connectorRuntimeQueueDiagnosticDetails(args: {
+  task?: ConnectorImportTaskRow | null;
+  runtime_task_id?: string | null;
+  task_id?: string | null;
+  job_id?: string | null;
+  details?: Record<string, any>;
+}) {
+  const details = args.details || {};
+  return {
+    ...details,
+    runtime_task_id: String(args.runtime_task_id || args.task_id || args.task?.id || "").trim() || null,
+    task_id: String(args.task_id || args.runtime_task_id || args.task?.id || "").trim() || null,
+    job_id: String(args.job_id || args.task?.job_id || "").trim() || null,
+    queue_name: CONNECTOR_RUNTIME_QUEUE_NAME,
+    timestamp: new Date().toISOString(),
+  };
+}
+
+function connectorRuntimeQueueErrorDetails(error: any) {
+  return {
+    error_name: error?.name || "Error",
+    error_message: error?.message || String(error),
+    error_stack: error?.stack || null,
+  };
+}
+
+async function heartbeatConnectorRuntimeQueueEvent(
+  env: Env,
+  task: ConnectorImportTaskRow,
+  state: ConnectorRuntimeTaskDiagnosticState,
+  event: string,
+  details: Record<string, any> = {},
+) {
+  await heartbeatConnectorRuntimeTask(
+    env,
+    task,
+    state,
+    event,
+    connectorRuntimeQueueDiagnosticDetails({ task, details }),
+    { force: true },
+  );
+}
+
+function connectorRuntimeInlineRecordLimit(body: any) {
+  const raw = body?.max_records ?? body?.maxRecords ?? body?.record_limit ?? body?.recordLimit ?? null;
+  if (raw === null || raw === undefined || raw === "") return null;
+  const parsed = Math.floor(Number(raw));
+  if (!Number.isFinite(parsed) || parsed < 1) return "invalid";
+  return Math.min(parsed, 100);
+}
+
+function connectorRuntimeInlinePlatformOrderId(body: any) {
+  return String(body?.platform_order_id ?? body?.platformOrderId ?? "").trim() || null;
+}
+
+function connectorRuntimePayloadPlatformOrderIds(payload: any) {
+  const seen = new Set<string>();
+  const ids: string[] = [];
+  for (const value of Array.isArray(payload?.platform_order_ids) ? payload.platform_order_ids : []) {
+    const id = String(value || "").trim();
+    if (!id || seen.has(id)) continue;
+    seen.add(id);
+    ids.push(id);
+  }
+  return ids;
 }
 
 async function traceIdentityResolveAwait<T>(
@@ -1637,29 +2032,59 @@ async function traceIdentityResolveAwait<T>(
   state: ConnectorRuntimeTaskDiagnosticState,
   event: string,
   operation: () => Promise<T>,
-  options: { durable_before?: boolean; durable_after?: boolean; details?: Record<string, any> } = {},
+  options: { durable_before?: boolean; durable_after?: boolean; details?: Record<string, any>; target?: IdentityResolveTargetDiagnosticContext | null } = {},
 ) {
   logConnectorRuntimeTaskEvent(task, `${event}.before_await`, options.details || {});
+  recordIdentityResolveSubrequestDiagnostic(state, {
+    operation: event,
+    repository_method: identityResolveSubrequestRepositoryMethod(event, options.details || {}),
+    phase: "before_await",
+    details: options.details || {},
+  });
   recordConnectorRuntimeTaskDiagnosticSample(state, `${event}.before_await`, options.details || {});
+  await heartbeatIdentityResolveTargetDiagnostic(env, task, state, options.target, event, "before_await", options.details || {});
   if (options.durable_before) await heartbeatConnectorRuntimeTask(env, task, state, `${event}.before_await`, options.details || {}, { force: true });
   const started = Date.now();
   try {
     const result = await withIdentityOperationTimeout(event, operation(), IDENTITY_RESOLVE_OPERATION_TIMEOUT_MS);
     const elapsedDetails = { ...(options.details || {}), elapsed_ms: Date.now() - started };
     logConnectorRuntimeTaskEvent(task, `${event}.after_await`, elapsedDetails);
+    recordIdentityResolveSubrequestDiagnostic(state, {
+      operation: event,
+      repository_method: identityResolveSubrequestRepositoryMethod(event, elapsedDetails),
+      phase: "after_await",
+      elapsed_ms: elapsedDetails.elapsed_ms,
+      details: elapsedDetails,
+    });
     recordConnectorRuntimeTaskDiagnosticSample(state, `${event}.after_await`, elapsedDetails);
+    await heartbeatIdentityResolveTargetDiagnostic(env, task, state, options.target, event, "after_await", elapsedDetails);
     if (options.durable_after) await heartbeatConnectorRuntimeTask(env, task, state, `${event}.after_await`, elapsedDetails, { force: true });
     return result;
   } catch (error: any) {
+    const elapsedMs = Date.now() - started;
     logConnectorRuntimeTaskEvent(task, `${event}.await_error`, {
       ...(options.details || {}),
-      elapsed_ms: Date.now() - started,
+      elapsed_ms: elapsedMs,
       timed_out: error?.name === "IdentityOperationTimeoutError",
       message: error?.message || String(error),
     }, "error");
+    recordIdentityResolveSubrequestDiagnostic(state, {
+      operation: event,
+      repository_method: identityResolveSubrequestRepositoryMethod(event, options.details || {}),
+      phase: "error",
+      elapsed_ms: elapsedMs,
+      timed_out: error?.name === "IdentityOperationTimeoutError",
+      details: options.details || {},
+    });
+    await heartbeatIdentityResolveTargetDiagnostic(env, task, state, options.target, event, error?.name === "IdentityOperationTimeoutError" ? "operation_timeout" : "error", {
+      ...(options.details || {}),
+      elapsed_ms: elapsedMs,
+      operation_timeout: error?.name === "IdentityOperationTimeoutError",
+      error_name: error?.name || "Error",
+    }).catch(() => {});
     await heartbeatConnectorRuntimeTask(env, task, state, `${event}.await_error`, {
       ...(options.details || {}),
-      elapsed_ms: Date.now() - started,
+      elapsed_ms: elapsedMs,
       timed_out: error?.name === "IdentityOperationTimeoutError",
       error_name: error?.name || "Error",
     }, { force: true }).catch(() => {});
@@ -1673,20 +2098,47 @@ function identityResolveServiceDiagnostics(
   state: ConnectorRuntimeTaskDiagnosticState,
   base: { platform?: string | null; platform_order_id: string; processed: number },
 ): IdentityDiagnostics {
+  if (!state.identity_resolution_metrics) state.identity_resolution_metrics = createIdentityResolutionDebugMetrics();
   return {
     timeout_ms: IDENTITY_RESOLVE_OPERATION_TIMEOUT_MS,
-    emit: (event) => {
+    metrics: state.identity_resolution_metrics,
+    emit: async (event) => {
       const details = {
+        task_id: task.id,
+        job_id: task.job_id,
         platform: base.platform || null,
         platform_order_id: base.platform_order_id,
+        record_index: base.processed,
         processed: base.processed,
         operation: event.operation,
         elapsed_ms: event.elapsed_ms ?? null,
+        timestamp: new Date().toISOString(),
         timed_out: Boolean(event.timed_out),
         error_name: event.error_name || null,
         ...(event.metadata || {}),
       };
+      recordIdentityResolveSubrequestDiagnostic(state, {
+        operation: event.operation,
+        repository_method: identityResolveSubrequestRepositoryMethod(event.operation, event.metadata || {}),
+        phase: event.phase,
+        elapsed_ms: event.elapsed_ms,
+        timed_out: event.timed_out,
+        details,
+      });
       recordConnectorRuntimeTaskDiagnosticSample(state, `${event.operation}.${event.phase}`, details);
+      if (isIdentityBackfillTargetDiagnosticRecord(base.platform_order_id)) {
+        await heartbeatIdentityResolveTargetDiagnostic(env, task, state, {
+          enabled: true,
+          platform: base.platform || null,
+          platform_order_id: base.platform_order_id,
+          processed: base.processed,
+          record_index: base.processed,
+          operation: event.operation,
+          identifier_type: (event.metadata || {}).identifier_type || null,
+          identifier_value: (event.metadata || {}).identifier_value_masked || (event.metadata || {}).identifier_value_hash || null,
+          person_id: (event.metadata || {}).person_id || null,
+        }, event.operation, event.timed_out ? "operation_timeout" : event.phase, details);
+      }
     },
   };
 }
@@ -2987,7 +3439,7 @@ async function insertCheckoutChampLedgerEvents(env: Env, rows: any[]) {
       return {
 		  workspace_id: "default",
 		  ledger_type: event.ledgerType,
-		
+
 		  event_source: "konnektive",
 		  ingestion_method: "api_import",
 		  connector_id: String(
@@ -2995,7 +3447,7 @@ async function insertCheckoutChampLedgerEvents(env: Env, rows: any[]) {
 		      row.campaign_id ||
 		      "konnektive_default"
 		  ),
-		
+
 		  tkid: row.tkid || null,
         email: row.email || row.customer_email || null,
         phone: row.phone || null,
@@ -4210,14 +4662,26 @@ async function discoverIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, 
   };
 }
 
-async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, task: ConnectorImportTaskRow) {
+async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, task: ConnectorImportTaskRow, options: ConnectorRuntimeTaskExecutionOptions = {}) {
   const progress = connectorRuntimeProgressFromJob(job);
   const dryRun = Boolean(progress.metadata?.dry_run);
-  const platformOrderIds = Array.from(new Set((Array.isArray(task.payload?.platform_order_ids) ? task.payload.platform_order_ids : [])
+  const allPlatformOrderIds = Array.from(new Set((Array.isArray(task.payload?.platform_order_ids) ? task.payload.platform_order_ids : [])
     .map((value: any) => String(value || "").trim())
     .filter(Boolean)));
-  const diagnostics = connectorRuntimeTaskDiagnosticState(task);
-  const entryDetails = { dry_run: dryRun, platform_order_ids: platformOrderIds.length };
+  const inlineRecordLimit = Math.max(0, Math.floor(Number(task.payload?.inline_record_limit || 0)));
+  const inlineKeepTaskQueuedOnLimit = Boolean(task.payload?.inline_keep_task_queued_on_limit);
+  const platformOrderIds = inlineRecordLimit > 0
+    ? allPlatformOrderIds.slice(0, inlineRecordLimit)
+    : allPlatformOrderIds;
+  const resolveTotal = inlineRecordLimit > 0 ? allPlatformOrderIds.length : platformOrderIds.length;
+  const diagnostics = options.diagnostics || connectorRuntimeTaskDiagnosticState(task);
+  const entryDetails = {
+    dry_run: dryRun,
+    platform_order_ids: platformOrderIds.length,
+    total_platform_order_ids: allPlatformOrderIds.length,
+    inline_record_limit: inlineRecordLimit || null,
+    inline_keep_task_queued_on_limit: inlineKeepTaskQueuedOnLimit,
+  };
   let finalSummary: Record<string, any> | null = null;
   let caughtError: any = null;
   logConnectorRuntimeTaskEvent(task, "identity_resolve.entry.before_first_await", entryDetails);
@@ -4266,33 +4730,66 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
 	    const deferNextPhase = Boolean(task.payload?.defer_next_phase);
 	    const markRecordCompleteAndMaybeCheckpoint = async (platformOrderId: string, options: { completed?: boolean } = {}) => {
 	      if (options.completed !== false) completedRecordIds.push(platformOrderId);
-	      if (!shouldCheckpointIdentityBackfillResolveBatch({
-	        started_ms: taskStartedMs,
-	        budget_ms: IDENTITY_BACKFILL_RESOLVE_TASK_BUDGET_MS,
-	        processed,
-	        total: platformOrderIds.length,
-	      })) {
-	        return false;
-	      }
-	      budgetCheckpointReached = true;
-	      budgetContinuationIds = identityBackfillResolveRemainingIds(platformOrderIds, processed);
-	      await heartbeatConnectorRuntimeTask(env, task, diagnostics, "identity_resolve.budget_checkpoint", {
-	        processed,
-	        total: platformOrderIds.length,
-	        remaining: budgetContinuationIds.length,
-	        completed_record_ids: completedRecordIds.length,
-	        elapsed_ms: Date.now() - taskStartedMs,
-	      }, { force: true });
-	      return true;
-	    };
+      const inlineLimitReached = inlineRecordLimit > 0 && processed >= inlineRecordLimit && processed < allPlatformOrderIds.length;
+      if (!inlineLimitReached && !shouldCheckpointIdentityBackfillResolveBatch({
+        started_ms: taskStartedMs,
+        budget_ms: IDENTITY_BACKFILL_RESOLVE_TASK_BUDGET_MS,
+        processed,
+        total: resolveTotal,
+      })) {
+        return false;
+      }
+      budgetCheckpointReached = true;
+      budgetContinuationIds = identityBackfillResolveRemainingIds(allPlatformOrderIds, processed);
+      await heartbeatConnectorRuntimeTask(env, task, diagnostics, "identity_resolve.budget_checkpoint", {
+        processed,
+        total: resolveTotal,
+        remaining: budgetContinuationIds.length,
+        completed_record_ids: completedRecordIds.length,
+        elapsed_ms: Date.now() - taskStartedMs,
+        inline_record_limit_reached: inlineLimitReached,
+      }, { force: true });
+      return true;
+    };
 
 	    for (const platformOrderId of platformOrderIds) {
       processed += 1;
-      logConnectorRuntimeTaskEvent(task, "identity_resolve.record.start", { platform_order_id: platformOrderId, processed });
-      await heartbeatConnectorRuntimeTask(env, task, diagnostics, "identity_resolve.record.start", {
+      const isTargetRecord = isIdentityBackfillTargetDiagnosticRecord(platformOrderId);
+      const targetRecordStartedMs = Date.now();
+      const targetRecordDiagnostic: IdentityResolveTargetDiagnosticContext | null = isTargetRecord
+        ? {
+          enabled: true,
+          platform_order_id: platformOrderId,
+          processed,
+          record_index: processed,
+	            operation: "record_processing",
+	          }
+	        : null;
+	      const recordSubrequestTracker: IdentityResolveSubrequestTracker | null = isTargetRecord
+	        ? {
+	          platform: null,
+	          platform_order_id: platformOrderId,
+	          processed,
+	          record_index: processed,
+	          count: 0,
+	          completed: 0,
+	          errors: 0,
+	          timeouts: 0,
+	          started_at_ms: Date.now(),
+	          by_operation: {},
+	          pending: {},
+	        }
+	        : null;
+	      diagnostics.subrequest_tracker = recordSubrequestTracker;
+	      logConnectorRuntimeTaskEvent(task, "identity_resolve.record.start", { platform_order_id: platformOrderId, processed });
+	      await heartbeatConnectorRuntimeTask(env, task, diagnostics, "identity_resolve.record.start", {
         platform_order_id: platformOrderId,
         processed,
       }, identityResolveRecordHeartbeatOptions(processed));
+      await heartbeatIdentityResolveTargetDiagnostic(env, task, diagnostics, targetRecordDiagnostic, "identity_resolve.record", "start", {
+        platform_order_id: platformOrderId,
+        processed,
+      });
       if (processed === 1 || processed % 10 === 0 || processed === platformOrderIds.length) {
         logConnectorRuntimeTaskEvent(task, "identity_resolve.record_progress_heartbeat.before_await", { processed, total: platformOrderIds.length });
         await heartbeatConnectorRuntimeTask(env, task, diagnostics, "identity_resolve.record_progress", {
@@ -4303,6 +4800,7 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
         logConnectorRuntimeTaskEvent(task, "identity_resolve.record_progress_heartbeat.after_await", { processed, total: platformOrderIds.length });
       }
 
+      try {
       const row = rowsById.get(platformOrderId);
       if (!row) {
         permanentErrors += 1;
@@ -4314,7 +4812,7 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
           error_class: "identity_backfill_row_gone",
           message: "Platform order no longer exists.",
           classification: "permanent",
-        }).catch(() => {}), { details: { platform_order_id: platformOrderId } });
+        }).catch(() => {}), { details: { platform_order_id: platformOrderId }, target: targetRecordDiagnostic });
 	        await heartbeatConnectorRuntimeTask(env, task, diagnostics, "identity_resolve.record.error", {
 	          platform_order_id: platformOrderId,
 	          processed,
@@ -4324,6 +4822,10 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
 	        if (await markRecordCompleteAndMaybeCheckpoint(platformOrderId)) break;
 	        continue;
 	      }
+	      const targetRowDiagnostic = targetRecordDiagnostic
+	        ? { ...targetRecordDiagnostic, platform: row.platform }
+	        : null;
+	      if (recordSubrequestTracker) recordSubrequestTracker.platform = row.platform;
 	      if (row.person_id) {
         alreadyLinked += 1;
         await heartbeatConnectorRuntimeTask(env, task, diagnostics, "identity_resolve.record.complete", {
@@ -4348,7 +4850,8 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
 	      }
 
       const evidence = await traceIdentityResolveAwait(env, task, diagnostics, "identity_resolve.extract_evidence", async () => await extractIdentityEvidenceFromPlatformOrder(row), {
-        details: { platform_order_id: platformOrderId },
+        details: { platform: row.platform, platform_order_id: platformOrderId },
+        target: targetRowDiagnostic,
       });
       if (!hasIdentityEvidence(evidence)) {
         if (dryRun) {
@@ -4363,7 +4866,7 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
             error_class: "identity_backfill_no_identifiers",
             message: "Platform order has no deterministic person identity identifiers.",
             classification: "permanent",
-          }).catch(() => {}), { details: { platform_order_id: platformOrderId } });
+          }).catch(() => {}), { details: { platform: row.platform, platform_order_id: platformOrderId }, target: targetRowDiagnostic });
         }
         await heartbeatConnectorRuntimeTask(env, task, diagnostics, "identity_resolve.record.complete", {
           platform: row.platform,
@@ -4378,11 +4881,11 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
       for (const warning of evidence.warnings) recentWarnings.push(warning);
 
       try {
-        if (dryRun) {
-          const preview = await traceIdentityResolveAwait(env, task, diagnostics, "identity_resolve.preview_identity", async () => await previewIdentityResolution(env, {
+	        if (dryRun) {
+	          const preview = await traceIdentityResolveAwait(env, task, diagnostics, "identity_resolve.preview_identity", async () => await previewIdentityResolution(env, {
             workspace_id: progress.workspace_id || "default",
             identifiers: evidence.identifiers,
-          }), { details: { platform_order_id: platformOrderId, identifiers: evidence.identifiers.length } });
+          }), { details: { platform: row.platform, platform_order_id: platformOrderId, identifiers: evidence.identifiers.length }, target: targetRowDiagnostic });
           if (preview.preview_action === "would_create_person") wouldCreatePerson += 1;
           if (preview.preview_action === "would_match_existing") wouldMatchExisting += 1;
           if (preview.preview_action === "would_require_review") {
@@ -4415,8 +4918,8 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
           record_id: platformOrderId,
           identifiers: evidence.identifiers,
           attributes: evidence.attributes,
-          observed_at: evidence.observed_at,
-        }, recordDiagnostics), { details: { platform: row.platform, platform_order_id: platformOrderId, identifier_count: evidence.identifiers.length } });
+	          observed_at: evidence.observed_at,
+        }, recordDiagnostics), { details: { platform: row.platform, platform_order_id: platformOrderId, identifier_count: evidence.identifiers.length }, target: targetRowDiagnostic });
 
         if (result.review_required || result.action === "review_required") {
           reviewRequired += 1;
@@ -4450,10 +4953,10 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
           .from("platform_orders")
           .update({ person_id: result.person_id })
           .eq("workspace_id", progress.workspace_id || "default")
-          .eq("platform_order_id", platformOrderId)
+	          .eq("platform_order_id", platformOrderId)
           .is("person_id", null)
           .select("platform_order_id,person_id")
-          .maybeSingle(), { details: { platform_order_id: platformOrderId } });
+          .maybeSingle(), { details: { platform: row.platform, platform_order_id: platformOrderId, person_id: result.person_id }, target: targetRowDiagnostic ? { ...targetRowDiagnostic, person_id: result.person_id } : null });
         if (updateError) throw runtimeSupabaseError("Identity backfill person attachment failed", updateError);
         if (updated?.person_id) attached += 1;
         else attachmentConflicts += 1;
@@ -4478,10 +4981,10 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
             task_id: task.id,
             connector_id: progress.connector_id,
             record_identifier: platformOrderId,
-            error_class: "identity_backfill_transient_retry",
+	            error_class: "identity_backfill_transient_retry",
             message: e?.message || String(e),
             classification,
-          }).catch(() => {}), { details: { platform_order_id: platformOrderId } });
+          }).catch(() => {}), { details: { platform: row.platform, platform_order_id: platformOrderId }, target: targetRowDiagnostic });
           await heartbeatConnectorRuntimeTask(env, task, diagnostics, "identity_resolve.record.error", {
             platform: row.platform,
             platform_order_id: platformOrderId,
@@ -4503,9 +5006,9 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
           error_class: classification === "transient"
             ? "identity_backfill_transient_exhausted"
             : "identity_backfill_record_error",
-          message: e?.message || String(e),
+	          message: e?.message || String(e),
           classification,
-        }).catch(() => {}), { details: { platform_order_id: platformOrderId, classification } });
+        }).catch(() => {}), { details: { platform: row.platform, platform_order_id: platformOrderId, classification }, target: targetRowDiagnostic });
         await heartbeatConnectorRuntimeTask(env, task, diagnostics, "identity_resolve.record.error", {
           platform: row.platform,
           platform_order_id: platformOrderId,
@@ -4517,7 +5020,23 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
 	        }, { force: true });
 	        if (await markRecordCompleteAndMaybeCheckpoint(platformOrderId)) break;
 	      }
-	    }
+	      } catch (targetRecordError: any) {
+	        await heartbeatIdentityResolveTargetDiagnostic(env, task, diagnostics, targetRecordDiagnostic, "identity_resolve.record", "error", {
+	          platform_order_id: platformOrderId,
+          processed,
+          operation: targetRecordError?.operation || "record_processing",
+          elapsed_ms: Date.now() - targetRecordStartedMs,
+          timed_out: targetRecordError?.name === "IdentityOperationTimeoutError",
+          error_name: targetRecordError?.name || "Error",
+	        }).catch(() => {});
+	        throw targetRecordError;
+	      } finally {
+	        if (recordSubrequestTracker) {
+	          await flushIdentityResolveRecordDiagnostics(env, task, diagnostics, recordSubrequestTracker).catch(() => {});
+	          if (diagnostics.subrequest_tracker === recordSubrequestTracker) diagnostics.subrequest_tracker = null;
+	        }
+	      }
+		    }
 
 	    const nextDiscoveryCursor = String(task.payload?.next_discovery_cursor || "").trim() || null;
 	    const retryingTransientRecords = transientRetryIds.length && retryAttempt < maxRecordRetryAttempts;
@@ -4597,8 +5116,8 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
 	        max_attempts: maxRecordRetryAttempts,
 	      }), { durable_before: true, durable_after: true, details: { transient_retry_ids: transientRetryIds.length } });
 	    }
-	    if (budgetCheckpointReached && budgetContinuationIds.length) {
-	      await traceIdentityResolveAwait(env, task, diagnostics, "identity_resolve.enqueue_budget_continuation", async () => await createAndEnqueueConnectorRuntimeTask(env, {
+		    if (budgetCheckpointReached && budgetContinuationIds.length && !inlineKeepTaskQueuedOnLimit) {
+		      await traceIdentityResolveAwait(env, task, diagnostics, "identity_resolve.enqueue_budget_continuation", async () => await createAndEnqueueConnectorRuntimeTask(env, {
 	        job_id: job.id,
 	        workspace_id: progress.workspace_id,
 	        connector_id: progress.connector_id,
@@ -4645,8 +5164,8 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
       }), { durable_before: true, durable_after: true });
     }
 
-    finalSummary = {
-      processed,
+	    finalSummary = {
+	      processed,
       people_created: Number(metricSummary.people_created || 0),
       people_matched: Number(metricSummary.people_matched || 0),
       attached: Number(metricSummary.attached || 0),
@@ -4662,9 +5181,13 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
 	      transient_retry_ids: transientRetryIds.length,
 	      attachment_conflicts: attachmentConflicts,
 	      dry_run: dryRun,
-	      budget_checkpoint_reached: budgetCheckpointReached,
-	      completed_record_ids: completedRecordIds,
-	      continuation_platform_order_ids: budgetContinuationIds,
+		      budget_checkpoint_reached: budgetCheckpointReached,
+		      inline_record_limit_reached: inlineRecordLimit > 0 && budgetCheckpointReached && budgetContinuationIds.length > 0,
+		      keep_task_queued: inlineKeepTaskQueuedOnLimit && budgetCheckpointReached && budgetContinuationIds.length > 0,
+		      inline_record_limit: inlineRecordLimit || null,
+		      remaining_records: budgetContinuationIds.length,
+		      completed_record_ids: completedRecordIds,
+		      continuation_platform_order_ids: budgetContinuationIds,
 	      next_phase: nextPhase,
 	      diagnostics: diagnostics.summary,
 	    };
@@ -4814,7 +5337,7 @@ async function validateAndFinalizeIdentityBackfillRuntimeTask(env: Env, job: Imp
   }
 }
 
-async function executeConnectorRuntimeTask(env: Env, task: ConnectorImportTaskRow) {
+async function executeConnectorRuntimeTask(env: Env, task: ConnectorImportTaskRow, options: ConnectorRuntimeTaskExecutionOptions = {}) {
   const job = await getImportJob(env, task.job_id);
   if (!job) return { skipped: true, reason: "job_not_found" };
   const progress = connectorRuntimeProgressFromJob(job);
@@ -4851,11 +5374,40 @@ async function executeConnectorRuntimeTask(env: Env, task: ConnectorImportTaskRo
   } else if (task.task_type === IDENTITY_BACKFILL_TASK_TYPES.discover) {
     summary = await discoverIdentityBackfillRuntimeTask(env, job, task);
   } else if (task.task_type === IDENTITY_BACKFILL_TASK_TYPES.resolve) {
-    summary = await resolveIdentityBackfillRuntimeTask(env, job, task);
+    summary = await resolveIdentityBackfillRuntimeTask(env, job, task, options);
   } else if (task.task_type === IDENTITY_BACKFILL_TASK_TYPES.finalize) {
     summary = await validateAndFinalizeIdentityBackfillRuntimeTask(env, job, task);
   } else {
     throw new Error(`Unsupported connector runtime task type: ${task.task_type}`);
+  }
+
+  if (summary?.keep_task_queued && Array.isArray(summary.continuation_platform_order_ids) && summary.continuation_platform_order_ids.length) {
+    const remainingPlatformOrderIds = summary.continuation_platform_order_ids
+      .map((value: any) => String(value || "").trim())
+      .filter(Boolean);
+    const nextPayload = {
+      ...(task.payload || {}),
+      platform_order_ids: remainingPlatformOrderIds,
+      continuation_of_task_id: task.payload?.continuation_of_task_id || task.id,
+    };
+    delete (nextPayload as any).inline_record_limit;
+    delete (nextPayload as any).inline_keep_task_queued_on_limit;
+    await updateConnectorRuntimeTask(env, task.id, {
+      status: "queued",
+      completed_at: null,
+      locked_at: null,
+      available_at: new Date().toISOString(),
+      payload: nextPayload,
+      result_summary: summary,
+      last_error: null,
+    });
+    return {
+      skipped: false,
+      partial: true,
+      processed: Number(summary.processed || 0),
+      remaining_records: remainingPlatformOrderIds.length,
+      summary,
+    };
   }
 
   await updateConnectorRuntimeTask(env, task.id, {
@@ -7786,7 +8338,7 @@ async function router(req: Request, env: Env): Promise<Response> {
     }
   }
 
-	  if (path === "/v1/integrations/import-jobs/cancel" && req.method === "POST") {
+  if (path === "/v1/integrations/import-jobs/cancel" && req.method === "POST") {
     const body = await readJsonBody(req);
     const jobId = String(body.job_id || body.jobId || "").trim();
     if (!jobId) return json({ ok: false, error: "bad_request", message: "job_id is required" }, 400);
@@ -7804,8 +8356,211 @@ async function router(req: Request, env: Env): Promise<Response> {
       job: publicImportJobPayload(latest),
       progress,
       message: "Import cancelled.",
+    });
+  }
+
+  if (path === "/v1/admin/connector-runtime/requeue-task" && req.method === "POST") {
+	    const authError = adminAuthError(req, env);
+	    if (authError) return authError;
+	    const body = await readJsonBody(req);
+	    const taskId = String(body.task_id || body.taskId || "").trim();
+	    const executeInline = Boolean(body.execute_inline ?? body.executeInline);
+	    const inlineRecordLimit = connectorRuntimeInlineRecordLimit(body);
+	    const inlinePlatformOrderId = connectorRuntimeInlinePlatformOrderId(body);
+	    if (!taskId) return json({ ok: false, error: "bad_request", message: "task_id is required." }, 400);
+	    if (inlineRecordLimit === "invalid") {
+	      return json({ ok: false, error: "bad_request", message: "max_records/record_limit must be a positive integer." }, 400);
+	    }
+	    if (!executeInline && !env.wowboost_imports) {
+	      return json({
+	        ok: false,
+	        error: "queue_not_configured",
+	        message: "wowboost_imports queue binding is missing. Check wrangler.toml.",
+      }, 500);
+    }
+
+    const task = await getConnectorRuntimeTask(env, taskId);
+    if (!task) return json({ ok: false, error: "not_found", message: "Connector runtime task not found." }, 404);
+    if (task.status !== "queued") {
+      return json({
+        ok: false,
+        error: "task_not_queued",
+        message: "Connector runtime task must be queued before it can be re-enqueued.",
+        task_id: task.id,
+        status: task.status,
+      }, 409);
+    }
+    if (executeInline && (inlineRecordLimit !== null || inlinePlatformOrderId) && !isIdentityResolveRuntimeTask(task)) {
+      return json({
+        ok: false,
+        error: "unsupported_inline_resolve_limit",
+        message: "max_records/record_limit and platform_order_id are currently supported only for Identity Backfill resolve tasks.",
+        task_id: task.id,
+        task_type: task.task_type,
+      }, 400);
+    }
+    let inlinePlatformOrderIds: string[] | null = null;
+    let inlineStartIndex: number | null = null;
+    if (executeInline && inlinePlatformOrderId) {
+      const payloadIds = connectorRuntimePayloadPlatformOrderIds(task.payload);
+      inlineStartIndex = payloadIds.indexOf(inlinePlatformOrderId);
+      if (inlineStartIndex < 0) {
+        return json({
+          ok: false,
+          error: "platform_order_id_not_in_task_payload",
+          message: "platform_order_id was not found in this task payload.",
+          task_id: task.id,
+          platform_order_id: inlinePlatformOrderId,
+          platform_order_ids: payloadIds.length,
+        }, 404);
+      }
+      inlinePlatformOrderIds = payloadIds.slice(inlineStartIndex);
+    }
+
+    const job = await getImportJob(env, task.job_id);
+    if (!job) return json({ ok: false, error: "job_not_found", message: "Import job not found for connector runtime task." }, 404);
+    const progress = connectorRuntimeProgressFromJob(job);
+    const now = new Date().toISOString();
+    const decision = connectorRuntimeRequeueTaskDecision({ task, job, progress, now });
+    if (!decision.ok) return json({ ok: false, error: decision.error, message: decision.message }, decision.status);
+
+	    if (decision.job_patch) {
+	      await updateConnectorRuntimeJobProgress(env, job, decision.job_patch);
+	    }
+
+	    if (executeInline) {
+	      let inlineTask = inlineRecordLimit !== null || inlinePlatformOrderIds
+	        ? {
+	          ...task,
+	          payload: {
+	            ...(task.payload || {}),
+	            ...(inlinePlatformOrderIds ? { platform_order_ids: inlinePlatformOrderIds } : {}),
+	            inline_record_limit: inlineRecordLimit,
+	            inline_keep_task_queued_on_limit: true,
+	          },
+	        } as ConnectorImportTaskRow
+	        : task;
+	      const inlineDiagnostics = connectorRuntimeTaskDiagnosticState(inlineTask);
+	      await heartbeatConnectorRuntimeQueueEvent(env, inlineTask, inlineDiagnostics, "connector_runtime.inline.execute.before", {
+	        runtime_task_id: inlineTask.id,
+	        execute_inline: true,
+	        max_records: inlineRecordLimit,
+	        platform_order_id: inlinePlatformOrderId,
+	        inline_start_index: inlineStartIndex,
+	      });
+	      const refreshedInlineTask = await getConnectorRuntimeTask(env, inlineTask.id);
+	      if (refreshedInlineTask) {
+	        inlineTask = inlineRecordLimit !== null || inlinePlatformOrderIds
+	          ? {
+	            ...refreshedInlineTask,
+	            payload: {
+	              ...(refreshedInlineTask.payload || {}),
+	              ...(inlinePlatformOrderIds ? { platform_order_ids: inlinePlatformOrderIds } : {}),
+	              inline_record_limit: inlineRecordLimit,
+	              inline_keep_task_queued_on_limit: true,
+	            },
+	          } as ConnectorImportTaskRow
+	          : refreshedInlineTask;
+	      }
+	      const inlineDebugResponseEnabled = Boolean(inlinePlatformOrderId && inlineRecordLimit === 1 && isIdentityResolveRuntimeTask(inlineTask));
+	      try {
+	        const result = await executeConnectorRuntimeTask(env, inlineTask, { diagnostics: inlineDiagnostics });
+	        inlineTask = await getConnectorRuntimeTask(env, inlineTask.id) || inlineTask;
+	        const afterDiagnostics = connectorRuntimeTaskDiagnosticState(inlineTask);
+	        await heartbeatConnectorRuntimeQueueEvent(env, inlineTask, afterDiagnostics, "connector_runtime.inline.execute.after", {
+	          runtime_task_id: inlineTask.id,
+	          execute_inline: true,
+	          max_records: inlineRecordLimit,
+	          platform_order_id: inlinePlatformOrderId,
+	          inline_start_index: inlineStartIndex,
+	          processed: Number(result?.summary?.processed || 0),
+	          remaining_records: Number(result?.summary?.remaining_records || 0),
+	          skipped: Boolean(result?.skipped),
+	          reason: result?.reason || null,
+	        });
+	        return json({
+	          ok: true,
+	          task_id: inlineTask.id,
+	          job_id: inlineTask.job_id,
+	          enqueued: false,
+	          executed_inline: true,
+	          max_records: inlineRecordLimit,
+	          platform_order_id: inlinePlatformOrderId,
+	          inline_start_index: inlineStartIndex,
+	          processed: Number(result?.summary?.processed || 0),
+	          remaining_records: Number(result?.summary?.remaining_records || 0),
+	          diagnostics: inlineDebugResponseEnabled
+	            ? compactConnectorRuntimeInlineDebugDiagnostics({
+	              summary: inlineDiagnostics.summary,
+	              target_diagnostic_events: inlineDiagnostics.target_diagnostic_events,
+	              subrequest_tracker: inlineDiagnostics.subrequest_tracker as any,
+	              identity_resolution_metrics: inlineDiagnostics.identity_resolution_metrics as any,
+	              limit: 50,
+	            })
+	            : undefined,
+	          result,
+	        });
+	      } catch (error: any) {
+	        if (inlineDebugResponseEnabled) {
+	          const subrequestLimit = isCloudflareSubrequestLimitError(error);
+	          return json({
+	            ok: false,
+	            error: subrequestLimit ? "worker_subrequest_limit" : "inline_execution_failed",
+	            task_id: inlineTask.id,
+	            job_id: inlineTask.job_id,
+	            enqueued: false,
+	            executed_inline: true,
+	            max_records: inlineRecordLimit,
+	            platform_order_id: inlinePlatformOrderId,
+	            inline_start_index: inlineStartIndex,
+	            cloudflare_subrequest_limit: subrequestLimit,
+	            diagnostics: compactConnectorRuntimeInlineDebugDiagnostics({
+	              summary: inlineDiagnostics.summary,
+	              target_diagnostic_events: inlineDiagnostics.target_diagnostic_events,
+	              subrequest_tracker: inlineDiagnostics.subrequest_tracker as any,
+	              identity_resolution_metrics: inlineDiagnostics.identity_resolution_metrics as any,
+	              error,
+	              limit: 50,
+	            }),
+	          }, subrequestLimit ? 507 : 500);
+	        }
+	        inlineTask = await getConnectorRuntimeTask(env, inlineTask.id).catch(() => inlineTask) || inlineTask;
+	        const errorDiagnostics = connectorRuntimeTaskDiagnosticState(inlineTask);
+	        await heartbeatConnectorRuntimeQueueEvent(env, inlineTask, errorDiagnostics, "connector_runtime.inline.execute.error", {
+	          runtime_task_id: inlineTask.id,
+	          execute_inline: true,
+	          max_records: inlineRecordLimit,
+	          platform_order_id: inlinePlatformOrderId,
+	          inline_start_index: inlineStartIndex,
+	          ...connectorRuntimeQueueErrorDetails(error),
+	        }).catch(() => {});
+	        throw error;
+	      }
+	    }
+
+	    const queueDiagnostics = connectorRuntimeTaskDiagnosticState(task);
+	    await heartbeatConnectorRuntimeQueueEvent(env, task, queueDiagnostics, "connector_runtime.queue.send.before", {
+	      runtime_task_id: task.id,
 	    });
-	  }
+	    try {
+	      await env.wowboost_imports!.send(decision.message);
+	      await heartbeatConnectorRuntimeQueueEvent(env, task, queueDiagnostics, "connector_runtime.queue.send.after", {
+	        runtime_task_id: task.id,
+	      });
+	    } catch (error: any) {
+	      await heartbeatConnectorRuntimeQueueEvent(env, task, queueDiagnostics, "connector_runtime.queue.send.error", {
+	        runtime_task_id: task.id,
+	        ...connectorRuntimeQueueErrorDetails(error),
+	      }).catch(() => {});
+	      throw error;
+	    }
+	    return json({
+	      ok: true,
+	      task_id: task.id,
+      job_id: task.job_id,
+      enqueued: true,
+    });
+  }
 
   const runtimeJobRoute = path.match(/^\/v1\/import-jobs\/([^/]+)(?:\/([^/]+))?$/);
   if (runtimeJobRoute) {
@@ -11263,6 +12018,10 @@ if (path === "/v1/integrations/gateway-classic/list" && req.method === "GET") {
   
     if (path === "/v1/integrations/wowboost/import-one-page" && req.method === "POST") {
     try {
+      const started = Date.now();
+      function logPhase(name: string) {
+        console.log(`[WowBoost Import] ${name}: ${Date.now() - started}ms`);
+      }
       const body = await readJsonBody(req);
       const from = String(body.from ?? "").trim();
       const to = String(body.to ?? "").trim();
@@ -11292,6 +12051,7 @@ if (path === "/v1/integrations/gateway-classic/list" && req.method === "GET") {
       const password = await decryptSecretFromCredRow(env, creds as any);
 
       const bearer = await wowSuiteGetBearerToken({ authBase, username, password });
+      logPhase("auth complete");
 
       const exp = await wowBoostExportPage({
         exportBase,
@@ -11301,26 +12061,41 @@ if (path === "/v1/integrations/gateway-classic/list" && req.method === "GET") {
         fromYmd: from,
         toYmd: to,
       });
+      logPhase("export complete");
 
       const csvRes = await fetchWithTimeout(exp.link, { method: "GET", headers: { Accept: "text/csv,*/*" } }, 30000);
       const csvText = await readTextSafe(csvRes);
+      logPhase("csv downloaded");
 
       if (!csvRes.ok) {
         throw new Error(`CSV download failed ${csvRes.status}: ${csvText.slice(0, 200)}`);
       }
 
       const parsed = parseCsv(csvText);
+      logPhase("csv parsed");
+      console.log({
+        page,
+        pageSize,
+        rows: parsed.rows.length,
+        headers: parsed.headers.length,
+        csvBytes: csvText.length,
+      });
       
       console.log("WOWBOOST CSV HEADERS", parsed.headers);
 	  console.log("WOWBOOST FIRST ROW", parsed.rows[0]);
 
-      const upserts = await Promise.all(
-        parsed.rows.map(async (r) => {
+      const upserts = [];
+      let current = 0;
+      for (const r of parsed.rows) {
+        current += 1;
+        if (current % 25 === 0) {
+          console.log(`[WowBoost Import] processed ${current}/${parsed.rows.length}`);
+        }
           const orderId =
             pickField(r, ["Order ID", "OrderId", "OrderID", "order_id", "Id", "ID"]) ||
             pickField(r, ["Order Number", "OrderNumber", "orderNumber"]);
 
-          if (!orderId) return null;
+          if (!orderId) continue;
 
           const status = wowSuiteNormalizeStatus(
             pickField(r, ["Order Status Name", "OrderStatus", "orderStatus", "Status", "status"]) ||
@@ -11361,7 +12136,7 @@ if (path === "/v1/integrations/gateway-classic/list" && req.method === "GET") {
           const efTid = pickEverflowTid(r) || null;
           const phone = normalizePhone(pickField(r, ["CustomerPhone", "Customer Phone", "Phone", "phone", "Phone Number"]));
 
-          return {
+          const row = {
             platform: "wowboost",
             platform_order_id: `wowboost:${orderId}`,
             platform_store_id: pickField(r, ["Campaign ID", "CampaignId", "Campaign", "Brand Campaign"]) || null,
@@ -11418,11 +12193,16 @@ if (path === "/v1/integrations/gateway-classic/list" && req.method === "GET") {
                 : null,
             },
           };
-        })
-      ).then((rows) => rows.filter(Boolean));
+          if (row) {
+            upserts.push(row);
+          }
+      }
+      logPhase("mapping complete");
 
       const deduped = dedupePlatformOrders(upserts);
+      logPhase("dedupe complete");
 
+      const upsertStarted = Date.now();
       if (deduped.length) {
         const { error: upErr } = await supabase
           .from("platform_orders")
@@ -11430,8 +12210,10 @@ if (path === "/v1/integrations/gateway-classic/list" && req.method === "GET") {
 
         if (upErr) throw new Error(upErr.message);
       }
+      console.log(`[WowBoost Import] upsert took ${Date.now() - upsertStarted}ms`);
+      logPhase("upsert complete");
 
-      return json({
+      const response = {
         ok: true,
         platform: "wowsuite:wowboost",
         from,
@@ -11442,7 +12224,9 @@ if (path === "/v1/integrations/gateway-classic/list" && req.method === "GET") {
         upserted: deduped.length,
         hasMore: exp.hasMore,
         nextPage: exp.hasMore ? page + 1 : null,
-      });
+      };
+      logPhase("response generated");
+      return json(response);
     } catch (e: any) {
       return json({
         ok: false,
@@ -12031,58 +12815,163 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
     }
   },
   
-	  async queue(batch: MessageBatch<any>, env: Env, ctx: ExecutionContext) {
-	  for (const msg of batch.messages) {
-	    const body = msg.body || {};
-	    const runtimeTaskId = String(body.runtime_task_id ?? body.task_id ?? "").trim();
+		  async queue(batch: MessageBatch<any>, env: Env, ctx: ExecutionContext) {
+		  console.log("[TraceKit] connector runtime queue", {
+		    event: "connector_runtime.queue.consumer.entry",
+		    queue_name: CONNECTOR_RUNTIME_QUEUE_NAME,
+		    message_count: batch.messages.length,
+		    timestamp: new Date().toISOString(),
+		  });
+		  for (const msg of batch.messages) {
+		    const body = msg.body || {};
+		    const runtimeTaskId = String(body.runtime_task_id ?? body.task_id ?? "").trim();
+		    const pendingQueueDiagnostics = [
+		      {
+		        event: "connector_runtime.queue.consumer.entry",
+		        details: {
+		          runtime_task_id: runtimeTaskId || null,
+		          task_id: runtimeTaskId || null,
+		          job_id: String(body.job_id ?? body.jobId ?? "").trim() || null,
+		          message_count: batch.messages.length,
+		        },
+		      },
+		      {
+		        event: "connector_runtime.queue.message.received",
+		        details: {
+		          runtime_task_id: runtimeTaskId || null,
+		          task_id: runtimeTaskId || null,
+		          job_id: String(body.job_id ?? body.jobId ?? "").trim() || null,
+		          has_runtime_task_id: Boolean(runtimeTaskId),
+		        },
+		      },
+		      {
+		        event: "connector_runtime.queue.message.parsed",
+		        details: {
+		          runtime_task_id: runtimeTaskId || null,
+		          task_id: runtimeTaskId || null,
+		          job_id: String(body.job_id ?? body.jobId ?? "").trim() || null,
+		          task_type: String(body.task_type ?? "").trim() || null,
+		          phase: String(body.phase ?? "").trim() || null,
+		        },
+		      },
+		    ];
 
-	    if (runtimeTaskId) {
-	      try {
-	        let task = await getConnectorRuntimeTask(env, runtimeTaskId);
-	        if (!task || task.status === "completed" || task.status === "cancelled") {
-	          msg.ack();
-	          continue;
-	        }
+		    if (runtimeTaskId) {
+		      let task: ConnectorImportTaskRow | null = null;
+		      let queueDiagnostics: ConnectorRuntimeTaskDiagnosticState | null = null;
+		      const forceQueueEvent = async (event: string, details: Record<string, any> = {}) => {
+		        if (!task) {
+		          console.log("[TraceKit] connector runtime queue", connectorRuntimeQueueDiagnosticDetails({
+		            runtime_task_id: runtimeTaskId,
+		            job_id: String(body.job_id ?? body.jobId ?? "").trim() || null,
+		            details: { event, ...details },
+		          }));
+		          return;
+		        }
+		        if (!queueDiagnostics) queueDiagnostics = connectorRuntimeTaskDiagnosticState(task);
+		        await heartbeatConnectorRuntimeQueueEvent(env, task, queueDiagnostics, event, {
+		          runtime_task_id: runtimeTaskId,
+		          ...details,
+		        });
+		      };
+		      const ackRuntimeMessage = async (details: Record<string, any> = {}) => {
+		        await forceQueueEvent("connector_runtime.queue.message.ack", details).catch(() => {});
+		        msg.ack();
+		      };
+		      try {
+		        task = await getConnectorRuntimeTask(env, runtimeTaskId);
+		        if (task) {
+		          queueDiagnostics = connectorRuntimeTaskDiagnosticState(task);
+		          for (const pending of pendingQueueDiagnostics) {
+		            await heartbeatConnectorRuntimeQueueEvent(env, task, queueDiagnostics, pending.event, pending.details);
+		          }
+		          await heartbeatConnectorRuntimeQueueEvent(env, task, queueDiagnostics, "connector_runtime.queue.task.loaded", {
+		            runtime_task_id: runtimeTaskId,
+		            loaded: true,
+		            task_status: task.status,
+		            available_at: task.available_at,
+		            locked_at: task.locked_at,
+		            completed_at: task.completed_at,
+		          });
+		        } else {
+		          console.log("[TraceKit] connector runtime queue", connectorRuntimeQueueDiagnosticDetails({
+		            runtime_task_id: runtimeTaskId,
+		            job_id: String(body.job_id ?? body.jobId ?? "").trim() || null,
+		            details: { event: "connector_runtime.queue.task.loaded", loaded: false },
+		          }));
+		        }
+		        if (!task || task.status === "completed" || task.status === "cancelled") {
+		          await ackRuntimeMessage({ reason: !task ? "task_not_found" : `task_${task.status}` });
+		          continue;
+		        }
 
-	        if (isIdentityResolveRuntimeTask(task) && task.status === "running") {
-	          if (isConnectorRuntimeTaskStale(task, { stale_ms: IDENTITY_RESOLVE_TASK_STALE_MS })) {
-	            task = await recoverStaleIdentityResolveTask(env, task, { enqueue: false, reason: "queue_redelivery_stale" });
-	            if (task.status === "failed") {
-	              msg.ack();
-	              continue;
-	            }
-	          } else {
-	            await enqueueConnectorRuntimeTaskWithDelay(env, task, IDENTITY_RESOLVE_TASK_RECHECK_DELAY_SECONDS);
-	            msg.ack();
-	            continue;
-	          }
-	        }
+		        if (isIdentityResolveRuntimeTask(task) && task.status === "running") {
+		          if (isConnectorRuntimeTaskStale(task, { stale_ms: IDENTITY_RESOLVE_TASK_STALE_MS })) {
+		            task = await recoverStaleIdentityResolveTask(env, task, { enqueue: false, reason: "queue_redelivery_stale" });
+		            queueDiagnostics = connectorRuntimeTaskDiagnosticState(task);
+		            if (task.status === "failed") {
+		              await ackRuntimeMessage({ reason: "stale_recovery_failed" });
+		              continue;
+		            }
+		          } else {
+		            await enqueueConnectorRuntimeTaskWithDelay(env, task, IDENTITY_RESOLVE_TASK_RECHECK_DELAY_SECONDS);
+		            await forceQueueEvent("connector_runtime.queue.message.retry", {
+		              reason: "identity_resolve_task_already_running",
+		              delay_seconds: IDENTITY_RESOLVE_TASK_RECHECK_DELAY_SECONDS,
+		            }).catch(() => {});
+		            await ackRuntimeMessage({ reason: "identity_resolve_task_already_running" });
+		            continue;
+		          }
+		        }
 
-	        const availableAt = task.available_at ? Date.parse(task.available_at) : 0;
-	        if (availableAt && availableAt > Date.now()) {
-	          const delaySeconds = Math.max(1, Math.ceil((availableAt - Date.now()) / 1000));
-	          if (env.wowboost_imports) {
-	            await env.wowboost_imports.send(connectorRuntimeTaskMessage({
+		        const availableAt = task.available_at ? Date.parse(task.available_at) : 0;
+		        if (availableAt && availableAt > Date.now()) {
+		          const delaySeconds = Math.max(1, Math.ceil((availableAt - Date.now()) / 1000));
+		          if (env.wowboost_imports) {
+		            await env.wowboost_imports.send(connectorRuntimeTaskMessage({
 	              id: task.id,
 	              job_id: task.job_id,
 	              connector_id: task.connector_id,
 	              task_type: task.task_type,
-	              phase: task.phase,
-	            }), { delaySeconds } as any);
-	          }
-	          msg.ack();
-	          continue;
-	        }
+		              phase: task.phase,
+		            }), { delaySeconds } as any);
+		          }
+		          await forceQueueEvent("connector_runtime.queue.message.retry", {
+		            reason: "task_not_available_yet",
+		            delay_seconds: delaySeconds,
+		            available_at: task.available_at,
+		          }).catch(() => {});
+		          await ackRuntimeMessage({ reason: "task_not_available_yet", delay_seconds: delaySeconds });
+		          continue;
+		        }
 
-	        await executeConnectorRuntimeTask(env, task);
-	        msg.ack();
-	        continue;
-	      } catch (e: any) {
-	        const diagnostic = connectorRuntimeErrorSummary(e);
-	        const task = await getConnectorRuntimeTask(env, runtimeTaskId).catch(() => null);
-	        const classification = classifyConnectorRuntimeFailure({
-	          status: e?.status,
-	          message: diagnostic.last_error,
+		        await forceQueueEvent("connector_runtime.queue.execute.before", {
+		          runtime_task_id: runtimeTaskId,
+		          task_status: task.status,
+		        });
+		        const executeResult = await executeConnectorRuntimeTask(env, task);
+		        task = await getConnectorRuntimeTask(env, task.id).catch(() => task) || task;
+		        queueDiagnostics = connectorRuntimeTaskDiagnosticState(task);
+		        await forceQueueEvent("connector_runtime.queue.execute.after", {
+		          runtime_task_id: runtimeTaskId,
+		          skipped: Boolean(executeResult?.skipped),
+		          reason: executeResult?.reason || null,
+		        });
+		        await ackRuntimeMessage({ reason: "runtime_task_processed" });
+		        continue;
+		      } catch (e: any) {
+		        const diagnostic = connectorRuntimeErrorSummary(e);
+		        task = await getConnectorRuntimeTask(env, runtimeTaskId).catch(() => task);
+		        if (task) {
+		          queueDiagnostics = connectorRuntimeTaskDiagnosticState(task);
+		          await forceQueueEvent("connector_runtime.queue.consumer.error", {
+		            runtime_task_id: runtimeTaskId,
+		            ...connectorRuntimeQueueErrorDetails(e),
+		          }).catch(() => {});
+		        }
+		        const classification = classifyConnectorRuntimeFailure({
+		          status: e?.status,
+		          message: diagnostic.last_error,
 	          transient: e?.transient,
 	        });
 	        if (task) {
@@ -12133,18 +13022,24 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 	                });
 	              await updateConnectorRuntimeJobProgress(env, job, nextProgress).catch(() => {});
 	            }
-	            if (env.wowboost_imports) {
-	              await env.wowboost_imports.send(connectorRuntimeTaskMessage({
-	                id: task.id,
-	                job_id: task.job_id,
-	                connector_id: task.connector_id,
-	                task_type: task.task_type,
-	                phase: task.phase,
-	              }), { delaySeconds: Math.max(1, Math.ceil(delayMs / 1000)) } as any);
-	            }
-	          } else {
-	            await updateConnectorRuntimeTask(env, task.id, {
-	              status: "failed",
+		            if (env.wowboost_imports) {
+		              await env.wowboost_imports.send(connectorRuntimeTaskMessage({
+		                id: task.id,
+		                job_id: task.job_id,
+		                connector_id: task.connector_id,
+		                task_type: task.task_type,
+		                phase: task.phase,
+		              }), { delaySeconds: Math.max(1, Math.ceil(delayMs / 1000)) } as any);
+		            }
+		            await forceQueueEvent("connector_runtime.queue.message.retry", {
+		              reason: "task_execution_transient_failure",
+		              delay_seconds: Math.max(1, Math.ceil(delayMs / 1000)),
+		              classification,
+		              next_run_at: nextRunAt,
+		            }).catch(() => {});
+		          } else {
+		            await updateConnectorRuntimeTask(env, task.id, {
+		              status: "failed",
 	              completed_at: new Date().toISOString(),
 	              locked_at: null,
 	              last_error: diagnostic.last_error,
@@ -12174,12 +13069,12 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 	              });
 	              if (classification === "blocking") nextProgress.completed_at = new Date().toISOString();
 	              await updateConnectorRuntimeJobProgress(env, job, nextProgress).catch(() => {});
-	            }
-	          }
-	        }
-	        msg.ack();
-	        continue;
-	      }
+		            }
+		          }
+		        }
+		        await ackRuntimeMessage({ reason: "runtime_task_error_handled", classification });
+		        continue;
+		      }
 	    }
 
 	    const jobId = String(body.job_id ?? body.jobId ?? "").trim();
