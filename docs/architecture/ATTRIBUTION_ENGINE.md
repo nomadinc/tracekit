@@ -266,6 +266,169 @@ identity evidence, commerce records, ledger events, and profit outputs.
 9. URL parameters are stored at every touch.
 10. Revenue attribution and profit attribution must be separately available.
 
+## Attribution Engine v1 Implementation
+
+Sprint 2B adds a deterministic, rebuildable attribution engine on top of:
+
+```text
+people
+journeys
+journey_events
+```
+
+Attribution results are derived data. They are not authoritative for orders,
+identities, ledger events, or profit.
+
+### Stored Credits
+
+Migration `019_attribution_engine_v1.sql` creates
+`journey_attribution_credits`.
+
+Each row stores:
+
+- workspace, person, journey, conversion event, and optional touchpoint event
+- model and model version
+- touchpoint eligibility version
+- credit fraction, percent, amount, and currency
+- normalized touchpoint dimensions
+- status and reason for unattributed conversions
+- calculation metadata and timestamps
+
+The initial models are:
+
+- `first_touch`
+- `last_touch`
+
+Credits are unique by:
+
+```text
+workspace_id
+conversion_event_id
+model
+model_version
+touchpoint_event_id
+```
+
+Unattributed conversions are stored with `touchpoint_event_id = null` and a
+separate uniqueness rule for the same conversion, model, and version.
+
+### Eligibility
+
+Touchpoint eligibility is centralized in application code.
+
+Eligible candidate event types are:
+
+- `click`
+- `email_click`
+- `landing_page`
+- `session_start`
+- `page_view`
+- `sms`
+- `call`
+- `custom`
+
+A candidate must also include acquisition context, such as:
+
+- `affiliate_id`
+- `campaign_id`
+- `source`
+- `medium`
+- `offer_id`
+- `touchpoint_id`
+- `transaction_id`
+
+Conversion eligibility is also centralized. The initial attributable conversion
+types are:
+
+- `purchase`
+- `upsell`
+- `subscription_started`
+- `subscription_renewed`
+
+Refunds, chargebacks, and cancellations remain part of the journey timeline but
+do not receive positive acquisition credit in v1.
+
+### Window Rules
+
+The default v1 attribution window is:
+
+- 30 days for clicks and most acquisition events
+- 7 days for email clicks
+- 7 days for SMS
+- 30 days for calls
+- 1 day for landing pages, session starts, and page views
+
+Journey-specific `attribution_window_config` can override these values using:
+
+```json
+{
+  "default_click_days": 30,
+  "default_view_days": 1,
+  "channels": {
+    "email": { "click_days": 7 },
+    "affiliate": { "click_days": 30 }
+  }
+}
+```
+
+Boundary equality is inclusive. A touchpoint is eligible when:
+
+```text
+conversion_time - touchpoint_time <= resolved_window
+```
+
+### First Touch And Last Touch
+
+Both models operate only within the same workspace, journey, and person.
+
+First Touch selects the earliest eligible touchpoint at or before the
+conversion:
+
+```text
+event_time ASC, event_id ASC
+```
+
+Last Touch selects the latest eligible touchpoint at or before the conversion:
+
+```text
+event_time DESC, event_id DESC
+```
+
+Each successful v1 result awards:
+
+```text
+credit_fraction = 1.000000
+credit_percent = 100.0000
+```
+
+If the conversion amount is missing, the credit percentage is still populated
+and `credit_amount` remains null.
+
+### Backfill And APIs
+
+`POST /v1/attribution/backfill` processes one bounded batch of journeys using a
+stable keyset cursor based on:
+
+```text
+started_at
+id
+```
+
+The backfill stores progress in `integration_import_jobs` and is safe to rerun.
+
+Read APIs:
+
+- `GET /v1/journeys/:journey_id/attribution`
+- `GET /v1/persons/:person_id/attribution`
+
+Recalculation API:
+
+- `POST /v1/journeys/:journey_id/attribution/recalculate`
+
+Recalculation replaces only derived attribution credits for the requested
+conversion/model/version groups. Source journey events and journey assignments
+are never mutated.
+
 ## Tracking Implementation Roadmap
 
 ### Browser

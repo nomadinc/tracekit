@@ -43,12 +43,17 @@ import {
   connectorRuntimeFinalizeSuccessProgress,
   connectorRuntimeMetadata,
   connectorRuntimeNextRunAt,
+  connectorRuntimeAttemptAlreadyIncremented,
+  connectorRuntimeQueuedTaskRepublishDecision,
   connectorRuntimeRerunFinalizeProgress,
   connectorRuntimeRequeueTaskDecision,
   connectorRuntimeRetryDelayMs,
+  connectorRuntimeStaleRunningTaskRequeueDecision,
+  connectorRuntimeStaleRunningTaskRecoveryDecision,
   connectorRuntimeTaskDedupeKey,
   connectorRuntimeTaskMessage,
   createConnectorRuntimeProgress,
+  sendConnectorRuntimeQueueMessageWithRetry,
   isConnectorRuntimeTaskStale,
   isCloudflareSubrequestLimitError,
   isActiveConnectorRuntimeJobStatus,
@@ -108,6 +113,8 @@ import {
   identityBackfillResolveContinuationDedupeKey,
   identityBackfillResolveDedupeKey,
   identityBackfillResolveRemainingIds,
+  identityBackfillResolveSubrequestLimitCheckpoint,
+  identityBackfillRuntimeConfigMatches,
   isIdentityBackfillTargetDiagnosticRecord,
   isSupportedIdentityBackfillPlatformOrder,
   markIdentityBackfillPlatformDiscovery,
@@ -124,6 +131,175 @@ import {
   shouldCheckpointIdentityBackfillResolveBatch,
 } from "./identity-backfill-runtime";
 import { matchIdentityRoute } from "./identity-routes";
+import {
+  JOURNEY_EVENTS_BACKFILL_JOB_TYPE,
+  JOURNEY_EVENTS_BACKFILL_PHASE,
+  JOURNEY_EVENTS_CONNECTOR_ID,
+  JOURNEY_EVENTS_PLATFORM_ORDER_SELECT,
+  createJourneyEventsBatch,
+  createSupabaseJourneyEventRepository,
+  getPersonTimeline,
+  journeyBackfillDateRange,
+  mapPlatformOrderToJourneyEvent,
+  matchJourneyTimelineRoute,
+  nextJourneyBackfillPlatform,
+  normalizeJourneyBackfillRequest,
+  normalizePersonTimelineParams,
+  parseJourneyBackfillCursor,
+  serializeJourneyBackfillCursor,
+  type JourneyBackfillRequest,
+  type JourneyEventBatchResult,
+  type JourneyEventInput,
+} from "./journey-events";
+import {
+  JOURNEY_EVENT_ASSIGNMENT_SELECT,
+  JOURNEY_ENGINE_CONNECTOR_ID,
+  JOURNEY_ENGINE_JOB_TYPE,
+  JOURNEY_ENGINE_PHASE,
+  JOURNEY_ASSIGNMENT_MAX_BATCH_SIZE,
+  JOURNEY_DEFAULT_TIMEOUT_SECONDS,
+  assignJourneyEvents,
+  createSupabaseJourneyRepository,
+  decodeJourneyBackfillCursor as decodeJourneyAssignmentBackfillCursor,
+  decodeJourneyListCursor,
+  encodeJourneyListCursor,
+  getJourneyDetail,
+  getPersonJourneys,
+  matchJourneyRoutes,
+  normalizeJourneyBackfillRequest as normalizeJourneyAssignmentBackfillRequest,
+  normalizeJourneyDetailParams,
+  normalizePersonJourneysParams,
+  serializeJourneyBackfillCursor as serializeJourneyAssignmentBackfillCursor,
+  type JourneyBackfillRequest as JourneyAssignmentBackfillRequest,
+  type JourneyBackfillResult as JourneyAssignmentBackfillResult,
+  type JourneyRow,
+} from "./journeys";
+import {
+  ATTRIBUTION_BACKFILL_CONNECTOR_ID,
+  ATTRIBUTION_BACKFILL_MAX_JOURNEY_BATCH_SIZE,
+  ATTRIBUTION_BACKFILL_JOB_TYPE,
+  ATTRIBUTION_BACKFILL_PHASE,
+  ATTRIBUTION_BACKFILL_DEFAULT_JOURNEY_BATCH_SIZE,
+  createSupabaseAttributionRepository,
+  getJourneyAttribution,
+  getPersonAttribution,
+  matchAttributionRoutes,
+  normalizeAttributionBackfillRequest,
+  normalizeJourneyAttributionParams,
+  normalizePersonAttributionParams,
+  normalizeRecalculateJourneyAttributionParams,
+  processAttributionBackfillJourneys,
+  recalculateJourneyAttribution,
+  type AttributionBackfillBatchResult,
+  type AttributionBackfillRequest,
+} from "./attribution";
+import {
+  createSupabasePayoutRepository,
+  generateAffiliateCommissions,
+  getPayoutAttributionPolicy,
+  listAffiliateCommissions,
+  matchPayoutRoutes,
+  normalizeAffiliateCommissionListParams,
+  normalizePayoutGenerationRequest,
+  normalizeWorkspaceAttributionPolicyRequest,
+  setPayoutAttributionPolicy,
+} from "./payouts";
+import {
+  getWorkspaceOnboardingState,
+  matchSetupWizardRoute,
+  upsertSetupProgressState,
+  upsertWorkspaceSetupState,
+} from "./setup-wizard";
+import {
+  getEventExplorerEventDetail,
+  listEventExplorerEvents,
+  matchEventExplorerRoute,
+  normalizeEventExplorerListParams,
+} from "./event-explorer";
+import {
+  auditDomainEventProjectionReplay,
+  buildAttributionPendingDomainEventFromJourneyEvent,
+  buildConnectorIncidentDomainEvent,
+  buildFinancialAdjustmentDomainEventFromJourneyEvent,
+  buildIdentityOutcomeDomainEvent,
+  buildPurchaseDomainEventsFromJourneyEvent,
+  buildReconciliationDomainEvent,
+  createWorkspaceEventStream,
+  getDomainEventProjectionStatus,
+  matchDomainEventRoute,
+  projectDomainEventsBatch,
+  publishDomainEvent,
+  runScheduledDomainEventProjectionReplay,
+} from "./domain-events";
+import {
+  getCustomerDetail,
+  getCustomerJourneyDetail,
+  listCustomers,
+  matchCustomerExplorerRoute,
+  normalizeCustomerJourneyDetailParams,
+  normalizeCustomerListParams,
+} from "./customer-explorer";
+import {
+  getWorkspaceHealthReport,
+  matchHealthRoute,
+  normalizeHealthParams,
+} from "./health";
+import {
+  buildHomeSummary,
+  matchHomeRoute,
+  normalizeHomeParams,
+} from "./home";
+import {
+  matchGlobalSearchRoute,
+  normalizeGlobalSearchParams,
+  searchWorkspace,
+} from "./search";
+import {
+  getEntityPreview,
+  matchEntityPreviewRoute,
+} from "./entities";
+import {
+  getWorkspaceNotification,
+  getWorkspaceNotificationReport,
+  matchNotificationRoute,
+  normalizeNotificationParams,
+  upsertNotificationReadState,
+} from "./notifications";
+import {
+  enrichHealthReportWithWorkItems,
+  getOperationsSummary,
+  getWorkItemDetail,
+  listWorkItems,
+  matchWorkItemRoute,
+  mutateWorkItem,
+  normalizeWorkItemParams,
+  syncHealthWorkItems,
+} from "./work-items";
+import {
+  BROWSER_EVENT_DEFAULT_BATCH_SIZE,
+  BROWSER_EVENT_MAX_BATCH_SIZE,
+  BROWSER_EVENT_NORMALIZE_TASK_TYPE,
+  BROWSER_EVENTS_CONNECTOR_ID,
+  BROWSER_EVENTS_JOB_TYPE,
+  BROWSER_EVENTS_PHASE,
+  BROWSER_EVENTS_RAW_TABLE,
+  browserCorsHeaders,
+  browserDateFromTimestamp,
+  browserEventPersonAttributes,
+  browserIdentityIdentifiers,
+  browserSetupSnippet,
+  browserWriteKeyHash,
+  browserOriginAllowed,
+  isBrowserEventIngestionPath,
+  matchBrowserEventRoute,
+  applyBrowserTkidIdentityToBatch,
+  buildBrowserJourneyEventInput,
+  normalizeBrowserEventForRawStorage,
+  parseBrowserEventCursor,
+  safeUrlForDiagnostics,
+  serializeBrowserEventCursor,
+  type BrowserRawEventRow,
+} from "./browser-events";
 import {
   PaypalApiError,
   buildPaypalLedgerEventsFromRecord,
@@ -251,6 +427,14 @@ type Env = {
   TRACEKIT_BUILD_LABEL?: string;
   TRACEKIT_BUILD_VERSION?: string;
   TRACEKIT_GIT_COMMIT?: string;
+  TRACEKIT_BROWSER_WRITE_KEY?: string;
+  TRACEKIT_BROWSER_WRITE_KEY_HASH?: string;
+  TRACEKIT_BROWSER_ALLOWED_ORIGINS?: string;
+  TRACEKIT_BROWSER_RATE_LIMIT_PER_MINUTE?: string;
+  TRACEKIT_BROWSER_IP_HASH_SALT?: string;
+  LIVE_WORKSPACE_PROJECTION_BATCH_SIZE?: string;
+  LIVE_WORKSPACE_PROJECTION_MAX_EVENTS?: string;
+  LIVE_WORKSPACE_PROJECTION_MAX_WORKSPACES?: string;
   wowboost_imports?: Queue<any>;
 };
 
@@ -442,6 +626,1269 @@ function getIdentityService(env: Env, diagnostics?: IdentityDiagnostics | null) 
   return createIdentityService(createSupabaseIdentityRepository(getSupabase(env), diagnostics), diagnostics);
 }
 
+function getJourneyEventRepository(env: Env) {
+  return createSupabaseJourneyEventRepository(getSupabase(env));
+}
+
+function getJourneyRepository(env: Env) {
+  return createSupabaseJourneyRepository(getSupabase(env));
+}
+
+function getAttributionRepository(env: Env) {
+  return createSupabaseAttributionRepository(getSupabase(env));
+}
+
+function getPayoutRepository(env: Env) {
+  return createSupabasePayoutRepository(getSupabase(env));
+}
+
+function journeyText(value: unknown) {
+  return String(value ?? "").trim();
+}
+
+type BrowserEventSourceConfig = {
+  workspace_id: string;
+  public_write_key_hash: string;
+  allowed_origins: string[];
+  cross_subdomain_cookie_domain?: string | null;
+  rate_limit_per_minute?: number | null;
+  is_active?: boolean | null;
+  metadata?: Record<string, any> | null;
+};
+
+const browserEventRateLimitBuckets = new Map<string, { window_start_ms: number; count: number }>();
+
+function browserEventWriteKeyFromRequest(req: Request) {
+  const authorization = String(req.headers.get("authorization") || "").trim();
+  const bearer = /^Bearer\s+(.+)$/i.exec(authorization)?.[1] || "";
+  return String(req.headers.get("x-tracekit-write-key") || bearer || "").trim();
+}
+
+function browserEventWorkspaceFromRequest(req: Request, body?: any) {
+  return journeyText(
+    body?.workspace_id ||
+    body?.workspaceId ||
+    req.headers.get("x-tracekit-workspace-id") ||
+    new URL(req.url).searchParams.get("workspace_id") ||
+    "default",
+  ) || "default";
+}
+
+function parseAllowedBrowserOrigins(value: unknown) {
+  if (Array.isArray(value)) return value.map(journeyText).filter(Boolean);
+  return journeyText(value).split(",").map(journeyText).filter(Boolean);
+}
+
+async function envBrowserEventSourceConfig(env: Env, workspaceId: string): Promise<BrowserEventSourceConfig | null> {
+  const rawHash = journeyText(env.TRACEKIT_BROWSER_WRITE_KEY_HASH);
+  const rawKey = journeyText(env.TRACEKIT_BROWSER_WRITE_KEY);
+  const hash = rawHash || (rawKey ? await browserWriteKeyHash(workspaceId, rawKey) : "");
+  if (!hash) return null;
+  return {
+    workspace_id: workspaceId,
+    public_write_key_hash: hash,
+    allowed_origins: parseAllowedBrowserOrigins(env.TRACEKIT_BROWSER_ALLOWED_ORIGINS || "*"),
+    rate_limit_per_minute: Math.max(1, Number(env.TRACEKIT_BROWSER_RATE_LIMIT_PER_MINUTE || 120) || 120),
+    is_active: true,
+  };
+}
+
+async function readBrowserEventSourceConfig(env: Env, workspaceId: string): Promise<BrowserEventSourceConfig | null> {
+  const supabase = getSupabase(env);
+  const { data, error } = await supabase
+    .from("browser_event_sources")
+    .select("*")
+    .eq("workspace_id", workspaceId)
+    .eq("is_active", true)
+    .maybeSingle();
+  if (error) {
+    const fallback = await envBrowserEventSourceConfig(env, workspaceId);
+    if (fallback) return fallback;
+    throw new Error(`Browser event source config lookup failed: ${error.message}`);
+  }
+  if (data) {
+    return {
+      workspace_id: journeyText((data as any).workspace_id) || workspaceId,
+      public_write_key_hash: journeyText((data as any).public_write_key_hash),
+      allowed_origins: parseAllowedBrowserOrigins((data as any).allowed_origins),
+      cross_subdomain_cookie_domain: journeyText((data as any).cross_subdomain_cookie_domain) || null,
+      rate_limit_per_minute: Math.max(1, Number((data as any).rate_limit_per_minute || 120) || 120),
+      is_active: Boolean((data as any).is_active),
+      metadata: ((data as any).metadata || {}) as Record<string, any>,
+    };
+  }
+  return envBrowserEventSourceConfig(env, workspaceId);
+}
+
+async function validateBrowserEventRequest(req: Request, env: Env, workspaceId: string, body?: any) {
+  const origin = journeyText(req.headers.get("origin"));
+  const config = await readBrowserEventSourceConfig(env, workspaceId);
+  if (!config || !config.public_write_key_hash || config.is_active === false) {
+    return { ok: false as const, status: 401, error: "browser_event_source_not_configured", message: "Browser event ingestion is not configured for this workspace.", cors_headers: browserCorsHeaders(origin, false) };
+  }
+  const allowedOrigin = browserOriginAllowed(origin, config.allowed_origins);
+  if (!allowedOrigin) {
+    return { ok: false as const, status: 403, error: "origin_not_allowed", message: "This origin is not allowed for browser event ingestion.", cors_headers: browserCorsHeaders(origin, false) };
+  }
+  const writeKey = browserEventWriteKeyFromRequest(req) || journeyText(body?.write_key || body?.writeKey);
+  const suppliedHash = writeKey ? await browserWriteKeyHash(workspaceId, writeKey) : "";
+  if (!suppliedHash || suppliedHash !== config.public_write_key_hash) {
+    return { ok: false as const, status: 401, error: "invalid_write_key", message: "Invalid browser event write key.", cors_headers: browserCorsHeaders(origin, true) };
+  }
+  return { ok: true as const, config, cors_headers: browserCorsHeaders(origin, true) };
+}
+
+async function browserEventRequestContext(req: Request, env: Env, receivedAt: string, workspaceId: string) {
+  const origin = journeyText(req.headers.get("origin")) || null;
+  const referer = journeyText(req.headers.get("referer")) || null;
+  const userAgent = journeyText(req.headers.get("user-agent")) || null;
+  const ip = journeyText(req.headers.get("cf-connecting-ip") || req.headers.get("x-forwarded-for")?.split(",")[0]);
+  const salt = journeyText(env.TRACEKIT_BROWSER_IP_HASH_SALT || workspaceId);
+  return {
+    received_at: receivedAt,
+    origin,
+    referer_url: safeUrlForDiagnostics(referer),
+    user_agent_present: Boolean(userAgent),
+    user_agent: userAgent || null,
+    ip_hash: ip ? await browserWriteKeyHash("request_ip", `${salt}:${ip}`) : null,
+    cf_ray: journeyText(req.headers.get("cf-ray")) || null,
+    source: "worker",
+  };
+}
+
+function checkBrowserEventRateLimit(args: { workspace_id: string; request_hash?: string | null; limit_per_minute: number }) {
+  const limit = Math.max(1, Math.min(10000, Math.floor(Number(args.limit_per_minute || 120)) || 120));
+  const now = Date.now();
+  const windowStart = Math.floor(now / 60000) * 60000;
+  const key = `${args.workspace_id}:${args.request_hash || "anonymous"}:${windowStart}`;
+  const bucket = browserEventRateLimitBuckets.get(key) || { window_start_ms: windowStart, count: 0 };
+  bucket.count += 1;
+  browserEventRateLimitBuckets.set(key, bucket);
+  if (browserEventRateLimitBuckets.size > 1000) {
+    for (const [bucketKey, value] of browserEventRateLimitBuckets) {
+      if (value.window_start_ms < windowStart - 60000) browserEventRateLimitBuckets.delete(bucketKey);
+    }
+  }
+  return { ok: bucket.count <= limit, limit, count: bucket.count, reset_at: new Date(windowStart + 60000).toISOString() };
+}
+
+function browserSupabaseUniqueViolation(error: any) {
+  const text = `${error?.message || ""} ${error?.details || ""} ${error?.hint || ""}`.toLowerCase();
+  return error?.code === "23505" || text.includes("duplicate key") || text.includes("browser_events_raw_workspace_event_uidx");
+}
+
+async function insertBrowserRawEvent(env: Env, raw: any) {
+  const supabase = getSupabase(env);
+  const { data, error } = await supabase.from(BROWSER_EVENTS_RAW_TABLE).insert(raw).select("*").single();
+  if (!error) return { row: data as BrowserRawEventRow, duplicate: false, conflict: false };
+  if (!browserSupabaseUniqueViolation(error)) throw new Error(`Browser raw event insert failed: ${error.message}`);
+  const { data: existing, error: lookupError } = await supabase
+    .from(BROWSER_EVENTS_RAW_TABLE)
+    .select("*")
+    .eq("workspace_id", raw.workspace_id)
+    .eq("event_id", raw.event_id)
+    .maybeSingle();
+  if (lookupError) throw new Error(`Browser raw event replay lookup failed: ${lookupError.message}`);
+  if (!existing) throw new Error(`Browser raw event replay lookup failed after unique violation.`);
+  const conflict = journeyText((existing as any).payload_hash) !== journeyText(raw.payload_hash);
+  return { row: existing as BrowserRawEventRow, duplicate: !conflict, conflict };
+}
+
+function createBrowserEventNormalizationProgress(args: { workspace_id: string; from: string; to: string; batch_size: number; cursor?: string | null }, now = new Date().toISOString()) {
+  return createConnectorRuntimeProgress({
+    workspace_id: args.workspace_id,
+    connector_id: BROWSER_EVENTS_CONNECTOR_ID,
+    job_type: BROWSER_EVENTS_JOB_TYPE,
+    phase: BROWSER_EVENTS_PHASE,
+    requested_from: args.from,
+    requested_to: args.to,
+    now,
+    metadata: connectorRuntimeMetadata({
+      connector_id: BROWSER_EVENTS_CONNECTOR_ID,
+      metadata: {
+        batch_size: Math.max(1, Math.min(BROWSER_EVENT_MAX_BATCH_SIZE, Number(args.batch_size || BROWSER_EVENT_DEFAULT_BATCH_SIZE))),
+        events_normalized: 0,
+        events_duplicate: 0,
+        events_invalid: 0,
+        events_review: 0,
+        people_resolved: 0,
+        anonymous_events_retained: 0,
+        journey_events_inserted: 0,
+        journey_events_already_present: 0,
+        journeys_assigned: 0,
+        attribution_recalculations: 0,
+      },
+    }),
+  });
+}
+
+function browserEventNormalizeTaskPlanForProgress(job: ImportJobRow, progress: ConnectorRuntimeProgress & Record<string, any>): ConnectorRuntimeTaskPlan {
+  const batchSize = Math.max(1, Math.min(BROWSER_EVENT_MAX_BATCH_SIZE, Number(progress.metadata?.batch_size || progress.batch_size || BROWSER_EVENT_DEFAULT_BATCH_SIZE)));
+  const cursor = journeyText(progress.current_cursor) || null;
+  return {
+    job_id: job.id,
+    workspace_id: progress.workspace_id || "default",
+    connector_id: BROWSER_EVENTS_CONNECTOR_ID,
+    task_type: BROWSER_EVENT_NORMALIZE_TASK_TYPE,
+    phase: BROWSER_EVENTS_PHASE,
+    cursor,
+    payload: {
+      cursor,
+      batch_size: batchSize,
+    },
+    dedupe_key: `browser_event_normalize:${cursor || "start"}:${batchSize}`,
+    max_attempts: 5,
+  };
+}
+
+async function startBrowserEventNormalizationRuntimeJob(env: Env, args: { workspace_id: string; event_time: string; cursor?: string | null; batch_size?: number | null }) {
+  if (!env.wowboost_imports) return { queued: false, reason: "queue_not_configured", job_id: null as string | null, task_id: null as string | null };
+  const from = browserDateFromTimestamp(args.event_time);
+  const to = from;
+  const batchSize = Math.max(1, Math.min(BROWSER_EVENT_MAX_BATCH_SIZE, Number(args.batch_size || BROWSER_EVENT_DEFAULT_BATCH_SIZE)));
+  let job = await findActiveConnectorRuntimeJob(env, {
+    workspace_id: args.workspace_id,
+    connector_id: BROWSER_EVENTS_CONNECTOR_ID,
+    job_type: BROWSER_EVENTS_JOB_TYPE,
+    from,
+    to,
+    matches: (_job, progress) => Math.max(1, Math.min(BROWSER_EVENT_MAX_BATCH_SIZE, Number(progress.metadata?.batch_size || progress.batch_size || BROWSER_EVENT_DEFAULT_BATCH_SIZE))) === batchSize,
+  });
+  const now = new Date().toISOString();
+  if (!job) {
+    const progress = createBrowserEventNormalizationProgress({
+      workspace_id: args.workspace_id,
+      from,
+      to,
+      batch_size: batchSize,
+      cursor: args.cursor || null,
+    }, now);
+    progress.status = "queued";
+    progress.current_cursor = args.cursor || null;
+    job = await createImportJob(env, {
+      platform: "browser",
+      module: "connector_runtime",
+      from,
+      to,
+      filter: BROWSER_EVENTS_JOB_TYPE,
+      workspace_id: args.workspace_id,
+      connector_id: BROWSER_EVENTS_CONNECTOR_ID,
+      progress,
+      status: "queued",
+    });
+    await updateConnectorRuntimeJobProgress(env, job, progress);
+    job = await getImportJob(env, job.id) || job;
+  }
+
+  let progress = connectorRuntimeProgressFromJob(job);
+  progress = {
+    ...progress,
+    status: "queued",
+    phase: BROWSER_EVENTS_PHASE,
+    started_at: progress.started_at || now,
+    updated_at: now,
+    completed_at: null,
+    last_error: null,
+    metadata: {
+      ...(progress.metadata || {}),
+      batch_size: batchSize,
+    },
+  };
+  await updateConnectorRuntimeJobProgress(env, job, progress);
+  job = await getImportJob(env, job.id) || job;
+  progress = connectorRuntimeProgressFromJob(job);
+  const reconciliation = await reconcileConnectorRuntimeJobQueue(env, job, {
+    force_republish_queued: true,
+    reason: "browser_event_accepted",
+  }).catch(() => null);
+  const task = await createAndEnqueueConnectorRuntimeTask(env, browserEventNormalizeTaskPlanForProgress(job, progress));
+  return { queued: true, reason: null, job_id: job.id, task_id: task.task.id, duplicate_task_prevented: !task.created, queue_reconciliation: reconciliation };
+}
+
+function createJourneyBackfillProgress(args: JourneyBackfillRequest, now = new Date().toISOString()) {
+  return {
+    workspace_id: args.workspace_id,
+    connector_id: JOURNEY_EVENTS_CONNECTOR_ID,
+    job_type: JOURNEY_EVENTS_BACKFILL_JOB_TYPE,
+    phase: JOURNEY_EVENTS_BACKFILL_PHASE,
+    status: "running",
+    requested_from: args.from,
+    requested_to: args.to,
+    platforms: args.platforms,
+    batch_size: args.batch_size,
+    records_discovered: 0,
+    records_processed: 0,
+    events_inserted: 0,
+    events_already_present: 0,
+    events_conflicted: 0,
+    records_failed: 0,
+    current_cursor: args.cursor || null,
+    last_error: null,
+    started_at: now,
+    updated_at: now,
+    completed_at: null,
+    warnings: [] as string[],
+  };
+}
+
+async function createJourneyBackfillJob(env: Env, args: JourneyBackfillRequest) {
+  const supabase = getSupabase(env);
+  const now = new Date().toISOString();
+  const progress = createJourneyBackfillProgress(args, now);
+  const payload = {
+    platform: "journey_events",
+    module: "platform_orders",
+    status: "running",
+    from_date: args.from,
+    to_date: args.to,
+    filter: JSON.stringify({ platforms: args.platforms }),
+    workspace_id: args.workspace_id,
+    connector_id: JOURNEY_EVENTS_CONNECTOR_ID,
+    job_type: JOURNEY_EVENTS_BACKFILL_JOB_TYPE,
+    phase: JOURNEY_EVENTS_BACKFILL_PHASE,
+    requested_from: args.from,
+    requested_to: args.to,
+    records_discovered: 0,
+    records_processed: 0,
+    records_succeeded: 0,
+    records_failed: 0,
+    records_skipped: 0,
+    current_cursor: args.cursor || null,
+    current_page: null,
+    last_error: null,
+    metadata: {
+      platforms: args.platforms,
+      batch_size: args.batch_size,
+      events_inserted: 0,
+      events_already_present: 0,
+      events_conflicted: 0,
+    },
+    progress,
+    requested_at: now,
+    started_at: now,
+    updated_at: now,
+    completed_at: null,
+  };
+  const { data, error } = await supabase.from("integration_import_jobs").insert(payload).select("*").single();
+  if (error) throw new Error(`Failed to create journey backfill job: ${error.message}`);
+  return data as ImportJobRow;
+}
+
+function journeyBackfillRequestFromJob(job: ImportJobRow, fallback: JourneyBackfillRequest): JourneyBackfillRequest {
+  const progress = (job.progress || {}) as Record<string, any>;
+  const metadata = ((job as any).metadata || {}) as Record<string, any>;
+  return {
+    workspace_id: journeyText((job as any).workspace_id || progress.workspace_id || fallback.workspace_id) || "default",
+    platforms: Array.isArray(progress.platforms) && progress.platforms.length
+      ? progress.platforms.map(journeyText).filter(Boolean)
+      : Array.isArray(metadata.platforms) && metadata.platforms.length
+        ? metadata.platforms.map(journeyText).filter(Boolean)
+        : fallback.platforms,
+    from: journeyText((job as any).requested_from || progress.requested_from || job.from_date || fallback.from),
+    to: journeyText((job as any).requested_to || progress.requested_to || job.to_date || fallback.to),
+    batch_size: Math.max(1, Math.min(100, Number(progress.batch_size || metadata.batch_size || fallback.batch_size || 100))),
+    cursor: journeyText((job as any).current_cursor || progress.current_cursor || fallback.cursor) || null,
+    job_id: job.id,
+  };
+}
+
+async function queryJourneyBackfillPlatformOrders(env: Env, args: {
+  request: JourneyBackfillRequest;
+  cursor: string | null;
+}) {
+  const range = journeyBackfillDateRange(args.request.from, args.request.to);
+  if (!range) throw new Error("Invalid journey backfill date range.");
+  const supabase = getSupabase(env);
+  let cursorState = parseJourneyBackfillCursor(args.cursor, args.request.platforms);
+
+  while (cursorState.current_platform) {
+    let query = supabase
+      .from("platform_orders")
+      .select(JOURNEY_EVENTS_PLATFORM_ORDER_SELECT)
+      .eq("workspace_id", args.request.workspace_id)
+      .eq("platform", cursorState.current_platform)
+      .not("person_id", "is", null)
+      .not("platform_order_id", "is", null)
+      .gte("order_ts", range.from_ts)
+      .lt("order_ts", range.to_exclusive_ts)
+      .order("platform_order_id", { ascending: true })
+      .limit(args.request.batch_size);
+
+    if (cursorState.platform_order_id) query = query.gt("platform_order_id", cursorState.platform_order_id);
+    const { data, error } = await query;
+    if (error) throw new Error(`Journey backfill platform_orders scan failed: ${error.message}`);
+    const rows = data || [];
+    if (rows.length) return { rows, cursorState };
+
+    const nextPlatform = nextJourneyBackfillPlatform(cursorState.current_platform, args.request.platforms);
+    if (!nextPlatform) return { rows: [], cursorState };
+    cursorState = { current_platform: nextPlatform, platform_order_id: null };
+  }
+
+  return { rows: [], cursorState };
+}
+
+function mergeJourneyBackfillProgress(
+  progress: Record<string, any>,
+  args: {
+    request: JourneyBackfillRequest;
+    batch: JourneyEventBatchResult;
+    discovered: number;
+    processed: number;
+    failed: number;
+    next_cursor: string | null;
+    has_more: boolean;
+    completed: boolean;
+  },
+) {
+  const now = new Date().toISOString();
+  return {
+    ...progress,
+    workspace_id: args.request.workspace_id,
+    connector_id: JOURNEY_EVENTS_CONNECTOR_ID,
+    job_type: JOURNEY_EVENTS_BACKFILL_JOB_TYPE,
+    phase: JOURNEY_EVENTS_BACKFILL_PHASE,
+    status: args.completed ? "completed" : "running",
+    requested_from: args.request.from,
+    requested_to: args.request.to,
+    platforms: args.request.platforms,
+    batch_size: args.request.batch_size,
+    records_discovered: Number(progress.records_discovered || 0) + args.discovered,
+    records_processed: Number(progress.records_processed || 0) + args.processed,
+    events_inserted: Number(progress.events_inserted || 0) + args.batch.inserted,
+    events_already_present: Number(progress.events_already_present || 0) + args.batch.already_present,
+    events_conflicted: Number(progress.events_conflicted || 0) + args.batch.conflicted,
+    records_failed: Number(progress.records_failed || 0) + args.failed + args.batch.malformed,
+    current_cursor: args.next_cursor,
+    has_more: args.has_more,
+    last_error: args.batch.ok ? null : "One or more journey events were malformed or conflicted.",
+    updated_at: now,
+    completed_at: args.completed ? now : null,
+  };
+}
+
+async function runJourneyPlatformOrderBackfill(env: Env, args: JourneyBackfillRequest) {
+  const started = Date.now();
+  let job: ImportJobRow | null = null;
+  if (args.job_id) {
+    job = await getImportJob(env, args.job_id);
+    if (!job) return { status: 404, body: { ok: false, error: "not_found", message: "Journey backfill job not found." } };
+  } else {
+    job = await createJourneyBackfillJob(env, args);
+  }
+
+  const effective = journeyBackfillRequestFromJob(job, args);
+  const progress = ((job.progress || {}) as Record<string, any>) || {};
+  const cursor = args.cursor || effective.cursor || null;
+  console.log("journey_backfill.started", {
+    workspace_id: effective.workspace_id,
+    job_id: job.id,
+    source_platforms: effective.platforms,
+    batch_size: effective.batch_size,
+  });
+  const { rows, cursorState } = await queryJourneyBackfillPlatformOrders(env, { request: effective, cursor });
+  const inputs: JourneyEventInput[] = [];
+  let skipped = 0;
+  let malformed = 0;
+  for (const row of rows as any[]) {
+    try {
+      const input = mapPlatformOrderToJourneyEvent(row);
+      if (input) inputs.push(input);
+      else skipped += 1;
+    } catch {
+      malformed += 1;
+    }
+  }
+
+  const repo = getJourneyEventRepository(env);
+  const batch = await createJourneyEventsBatch(repo, inputs, { max_batch_size: effective.batch_size });
+  await publishJourneyPurchaseDomainEvents(env, batch.events, {
+    job_id: job.id,
+    source: "platform_order_journey_backfill",
+  }).catch((error: any) => {
+    console.error("[TraceKit] platform order purchase domain event publish failed", {
+      workspace_id: effective.workspace_id,
+      job_id: job.id,
+      message: error?.message || String(error),
+    });
+  });
+  batch.malformed += malformed;
+  const lastRow = rows[rows.length - 1] as any;
+  const platformCompleted = rows.length < effective.batch_size;
+  const nextPlatform = platformCompleted ? nextJourneyBackfillPlatform(cursorState.current_platform, effective.platforms) : cursorState.current_platform;
+  const nextCursorState = rows.length
+    ? platformCompleted && nextPlatform
+      ? { current_platform: nextPlatform, platform_order_id: null }
+      : { current_platform: cursorState.current_platform, platform_order_id: journeyText(lastRow?.platform_order_id) || null }
+    : null;
+  const hasMore = Boolean(nextCursorState && (rows.length >= effective.batch_size || nextCursorState.current_platform));
+  const nextCursor = hasMore ? serializeJourneyBackfillCursor(nextCursorState) : null;
+  const completed = !hasMore;
+  const nextProgress = mergeJourneyBackfillProgress(progress, {
+    request: effective,
+    batch,
+    discovered: rows.length,
+    processed: inputs.length + skipped,
+    failed: malformed,
+    next_cursor: nextCursor,
+    has_more: hasMore,
+    completed,
+  });
+
+  await updateImportJob(env, job.id, {
+    status: completed ? "completed" : "running",
+    phase: JOURNEY_EVENTS_BACKFILL_PHASE,
+    current_cursor: nextCursor,
+    records_discovered: nextProgress.records_discovered,
+    records_processed: nextProgress.records_processed,
+    records_succeeded: nextProgress.events_inserted + nextProgress.events_already_present,
+    records_failed: nextProgress.records_failed,
+    records_skipped: Number(progress.records_skipped || 0) + skipped,
+    last_error: nextProgress.last_error,
+    metadata: {
+      platforms: effective.platforms,
+      batch_size: effective.batch_size,
+      events_inserted: nextProgress.events_inserted,
+      events_already_present: nextProgress.events_already_present,
+      events_conflicted: nextProgress.events_conflicted,
+      malformed_records: nextProgress.records_failed,
+      skipped_records: Number(progress.records_skipped || 0) + skipped,
+    },
+    progress: nextProgress,
+    completed_at: completed ? nextProgress.completed_at : null,
+  });
+
+  console.log("journey_backfill.batch_completed", {
+    workspace_id: effective.workspace_id,
+    job_id: job.id,
+    source_platforms: effective.platforms,
+    inserted_count: batch.inserted,
+    duplicate_count: batch.already_present,
+    conflict_count: batch.conflicted,
+    duration_ms: Date.now() - started,
+  });
+  if (completed) {
+    console.log("journey_backfill.completed", {
+      workspace_id: effective.workspace_id,
+      job_id: job.id,
+      source_platforms: effective.platforms,
+      records_processed: nextProgress.records_processed,
+      events_inserted: nextProgress.events_inserted,
+      duplicate_count: nextProgress.events_already_present,
+      conflict_count: nextProgress.events_conflicted,
+      duration_ms: Date.now() - started,
+    });
+  }
+
+  return {
+    status: 200,
+    body: {
+      ok: batch.ok,
+      job_id: job.id,
+      status: completed ? "completed" : "running",
+      workspace_id: effective.workspace_id,
+      from: effective.from,
+      to: effective.to,
+      platforms: effective.platforms,
+      records_discovered: rows.length,
+      records_processed: inputs.length + skipped,
+      events_inserted: batch.inserted,
+      events_already_present: batch.already_present,
+      events_conflicted: batch.conflicted,
+      records_failed: batch.malformed,
+      skipped,
+      has_more: hasMore,
+      next_cursor: nextCursor,
+      progress: nextProgress,
+      conflicts: batch.conflicts.slice(0, 10),
+      errors: batch.errors.slice(0, 10),
+    },
+  };
+}
+
+function createJourneyAssignmentProgress(args: JourneyAssignmentBackfillRequest, now = new Date().toISOString()) {
+  return {
+    workspace_id: args.workspace_id,
+    connector_id: JOURNEY_ENGINE_CONNECTOR_ID,
+    job_type: JOURNEY_ENGINE_JOB_TYPE,
+    phase: JOURNEY_ENGINE_PHASE,
+    status: "running",
+    requested_from: args.from,
+    requested_to: args.to,
+    batch_size: args.batch_size,
+    timeout_seconds: args.timeout_seconds,
+    events_scanned: 0,
+    journeys_created: 0,
+    events_linked: 0,
+    events_skipped: 0,
+    records_failed: 0,
+    current_cursor: args.cursor || null,
+    last_error: null,
+    started_at: now,
+    updated_at: now,
+    completed_at: null,
+    warnings: [] as string[],
+  };
+}
+
+async function createJourneyAssignmentJob(env: Env, args: JourneyAssignmentBackfillRequest) {
+  const supabase = getSupabase(env);
+  const now = new Date().toISOString();
+  const progress = createJourneyAssignmentProgress(args, now);
+  const payload = {
+    platform: "journeys",
+    module: "journey_events",
+    status: "running",
+    from_date: args.from,
+    to_date: args.to,
+    filter: JSON.stringify({ timeout_seconds: args.timeout_seconds }),
+    workspace_id: args.workspace_id,
+    connector_id: JOURNEY_ENGINE_CONNECTOR_ID,
+    job_type: JOURNEY_ENGINE_JOB_TYPE,
+    phase: JOURNEY_ENGINE_PHASE,
+    requested_from: args.from,
+    requested_to: args.to,
+    records_discovered: 0,
+    records_processed: 0,
+    records_succeeded: 0,
+    records_failed: 0,
+    records_skipped: 0,
+    current_cursor: args.cursor || null,
+    current_page: null,
+    last_error: null,
+    metadata: {
+      batch_size: args.batch_size,
+      timeout_seconds: args.timeout_seconds,
+      journeys_created: 0,
+      events_linked: 0,
+      events_skipped: 0,
+    },
+    progress,
+    requested_at: now,
+    started_at: now,
+    updated_at: now,
+    completed_at: null,
+  };
+  const { data, error } = await supabase.from("integration_import_jobs").insert(payload).select("*").single();
+  if (error) throw new Error(`Failed to create journey assignment job: ${error.message}`);
+  return data as ImportJobRow;
+}
+
+function journeyAssignmentRequestFromJob(job: ImportJobRow, fallback: JourneyAssignmentBackfillRequest): JourneyAssignmentBackfillRequest {
+  const progress = (job.progress || {}) as Record<string, any>;
+  const metadata = ((job as any).metadata || {}) as Record<string, any>;
+  return {
+    workspace_id: journeyText((job as any).workspace_id || progress.workspace_id || fallback.workspace_id) || "default",
+    from: journeyText((job as any).requested_from || progress.requested_from || job.from_date || fallback.from),
+    to: journeyText((job as any).requested_to || progress.requested_to || job.to_date || fallback.to),
+    batch_size: Math.max(1, Math.min(JOURNEY_ASSIGNMENT_MAX_BATCH_SIZE, Number(progress.batch_size || metadata.batch_size || fallback.batch_size || JOURNEY_ASSIGNMENT_MAX_BATCH_SIZE))),
+    cursor: journeyText((job as any).current_cursor || progress.current_cursor || fallback.cursor) || null,
+    job_id: job.id,
+    timeout_seconds: Math.max(60, Math.min(365 * 24 * 60 * 60, Number(progress.timeout_seconds || metadata.timeout_seconds || fallback.timeout_seconds))),
+  };
+}
+
+function mergeJourneyAssignmentProgress(
+  progress: Record<string, any>,
+  args: {
+    request: JourneyAssignmentBackfillRequest;
+    batch: JourneyAssignmentBackfillResult;
+    next_cursor: string | null;
+    has_more: boolean;
+    completed: boolean;
+  },
+) {
+  const now = new Date().toISOString();
+  return {
+    ...progress,
+    workspace_id: args.request.workspace_id,
+    connector_id: JOURNEY_ENGINE_CONNECTOR_ID,
+    job_type: JOURNEY_ENGINE_JOB_TYPE,
+    phase: JOURNEY_ENGINE_PHASE,
+    status: args.completed ? (args.batch.ok ? "completed" : "completed_with_errors") : "running",
+    requested_from: args.request.from,
+    requested_to: args.request.to,
+    batch_size: args.request.batch_size,
+    timeout_seconds: args.request.timeout_seconds,
+    events_scanned: Number(progress.events_scanned || 0) + args.batch.events_scanned,
+    journeys_created: Number(progress.journeys_created || 0) + args.batch.journeys_created,
+    events_linked: Number(progress.events_linked || 0) + args.batch.events_linked,
+    events_skipped: Number(progress.events_skipped || 0) + args.batch.events_skipped,
+    records_failed: Number(progress.records_failed || 0) + args.batch.records_failed,
+    current_cursor: args.next_cursor,
+    has_more: args.has_more,
+    last_error: args.batch.ok ? null : "One or more journey events failed assignment.",
+    updated_at: now,
+    completed_at: args.completed ? now : null,
+  };
+}
+
+async function runJourneyAssignmentBackfill(env: Env, args: JourneyAssignmentBackfillRequest) {
+  const started = Date.now();
+  let job: ImportJobRow | null = null;
+  if (args.job_id) {
+    job = await getImportJob(env, args.job_id);
+    if (!job) return { status: 404, body: { ok: false, error: "not_found", message: "Journey assignment job not found." } };
+  } else {
+    job = await createJourneyAssignmentJob(env, args);
+  }
+
+  const effective = journeyAssignmentRequestFromJob(job, args);
+  const progress = ((job.progress || {}) as Record<string, any>) || {};
+  const range = journeyBackfillDateRange(effective.from, effective.to);
+  if (!range) return { status: 400, body: { ok: false, error: "bad_request", message: "Invalid journey assignment date range." } };
+  const cursor = args.cursor || effective.cursor || null;
+  const decodedCursor = decodeJourneyAssignmentBackfillCursor(cursor);
+  const repo = getJourneyRepository(env);
+
+  console.log("journey.backfill.started", {
+    workspace_id: effective.workspace_id,
+    job_id: job.id,
+    batch_size: effective.batch_size,
+    timeout_seconds: effective.timeout_seconds,
+  });
+
+  const rows = await repo.queryUnassignedJourneyEvents({
+    workspace_id: effective.workspace_id,
+    from_ts: range.from_ts,
+    to_exclusive_ts: range.to_exclusive_ts,
+    cursor: decodedCursor,
+    limit: effective.batch_size + 1,
+  });
+  const batchRows = rows.slice(0, effective.batch_size);
+  const assignment = await assignJourneyEvents(repo, batchRows, {
+    timeout_seconds: effective.timeout_seconds,
+  });
+  const lastRow = batchRows[batchRows.length - 1] as any;
+  const hasMore = rows.length > effective.batch_size;
+  const nextCursor = hasMore && lastRow
+    ? serializeJourneyAssignmentBackfillCursor({
+      person_id: journeyText(lastRow.person_id),
+      event_time: new Date(Date.parse(String(lastRow.event_time))).toISOString(),
+      id: journeyText(lastRow.id),
+    })
+    : null;
+  const completed = !hasMore;
+  const nextProgress = mergeJourneyAssignmentProgress(progress, {
+    request: effective,
+    batch: { ...assignment, has_more: hasMore, next_cursor: nextCursor },
+    next_cursor: nextCursor,
+    has_more: hasMore,
+    completed,
+  });
+  const status = completed ? (assignment.ok ? "completed" : "completed_with_errors") : "running";
+
+  await updateImportJob(env, job.id, {
+    status,
+    phase: JOURNEY_ENGINE_PHASE,
+    current_cursor: nextCursor,
+    records_discovered: nextProgress.events_scanned,
+    records_processed: nextProgress.events_scanned,
+    records_succeeded: nextProgress.events_linked,
+    records_failed: nextProgress.records_failed,
+    records_skipped: nextProgress.events_skipped,
+    last_error: nextProgress.last_error,
+    metadata: {
+      batch_size: effective.batch_size,
+      timeout_seconds: effective.timeout_seconds,
+      journeys_created: nextProgress.journeys_created,
+      events_linked: nextProgress.events_linked,
+      events_skipped: nextProgress.events_skipped,
+      records_failed: nextProgress.records_failed,
+    },
+    progress: nextProgress,
+    completed_at: completed ? nextProgress.completed_at : null,
+  });
+
+  console.log("journey.assignment.completed", {
+    workspace_id: effective.workspace_id,
+    job_id: job.id,
+    events_processed: assignment.events_scanned,
+    journeys_created: assignment.journeys_created,
+    events_linked: assignment.events_linked,
+    duration_ms: Date.now() - started,
+  });
+  if (completed) {
+    console.log("journey.backfill.completed", {
+      workspace_id: effective.workspace_id,
+      job_id: job.id,
+      events_processed: nextProgress.events_scanned,
+      journeys_created: nextProgress.journeys_created,
+      duration_ms: Date.now() - started,
+    });
+  }
+
+  return {
+    status: 200,
+    body: {
+      ok: assignment.ok,
+      job_id: job.id,
+      status,
+      workspace_id: effective.workspace_id,
+      from: effective.from,
+      to: effective.to,
+      timeout_seconds: effective.timeout_seconds,
+      events_scanned: assignment.events_scanned,
+      journeys_created: assignment.journeys_created,
+      events_linked: assignment.events_linked,
+      events_skipped: assignment.events_skipped,
+      records_failed: assignment.records_failed,
+      has_more: hasMore,
+      next_cursor: nextCursor,
+      progress: nextProgress,
+      errors: assignment.errors.slice(0, 10),
+    },
+  };
+}
+
+async function executeJourneyAssignmentRuntimeTask(env: Env, job: ImportJobRow, task: ConnectorImportTaskRow) {
+  const progress = connectorRuntimeProgressFromJob(job);
+  const request = journeyAssignmentRequestFromJob(job, {
+    workspace_id: progress.workspace_id || "default",
+    from: progress.requested_from || job.from_date,
+    to: progress.requested_to || job.to_date,
+    batch_size: Math.max(1, Math.min(JOURNEY_ASSIGNMENT_MAX_BATCH_SIZE, Number(progress.metadata?.batch_size || progress.batch_size || JOURNEY_ASSIGNMENT_MAX_BATCH_SIZE))),
+    cursor: journeyText(task.payload?.cursor || task.cursor || progress.current_cursor) || null,
+    job_id: job.id,
+    timeout_seconds: Number(progress.metadata?.timeout_seconds || progress.timeout_seconds || JOURNEY_DEFAULT_TIMEOUT_SECONDS),
+  });
+  const cursor = journeyText(task.payload?.cursor || task.cursor || request.cursor) || null;
+  const result = await runJourneyAssignmentBackfill(env, {
+    ...request,
+    cursor,
+    job_id: job.id,
+  });
+  if (result.status >= 400 || result.body?.ok === false) {
+    throw new Error(result.body?.message || result.body?.error || "Journey assignment runtime batch failed.");
+  }
+
+  const refreshedJob = await getImportJob(env, job.id);
+  const refreshedProgress = refreshedJob ? connectorRuntimeProgressFromJob(refreshedJob) : connectorRuntimeProgressFromJob(job);
+  let nextTaskId: string | null = null;
+  let duplicateTaskPrevented = false;
+  if (result.body?.has_more && refreshedJob && !isTerminalConnectorRuntimeJobStatus(refreshedProgress.status)) {
+    const nextTask = await createAndEnqueueConnectorRuntimeTask(env, journeyAssignmentRuntimeTaskPlanForProgress(refreshedJob, refreshedProgress));
+    nextTaskId = nextTask.task.id;
+    duplicateTaskPrevented = !nextTask.created;
+  }
+
+  return {
+    ok: true,
+    job_id: job.id,
+    task_id: task.id,
+    status: result.body?.status || refreshedProgress.status,
+    phase: JOURNEY_ENGINE_PHASE,
+    events_scanned: Number(result.body?.events_scanned || 0),
+    journeys_created: Number(result.body?.journeys_created || 0),
+    events_linked: Number(result.body?.events_linked || 0),
+    events_skipped: Number(result.body?.events_skipped || 0),
+    records_failed: Number(result.body?.records_failed || 0),
+    has_more: Boolean(result.body?.has_more),
+    next_cursor: result.body?.next_cursor || null,
+    next_task_id: nextTaskId,
+    duplicate_task_prevented: duplicateTaskPrevented,
+  };
+}
+
+function createAttributionBackfillProgress(args: AttributionBackfillRequest, now = new Date().toISOString()) {
+  return {
+    workspace_id: args.workspace_id,
+    connector_id: ATTRIBUTION_BACKFILL_CONNECTOR_ID,
+    job_type: ATTRIBUTION_BACKFILL_JOB_TYPE,
+    phase: ATTRIBUTION_BACKFILL_PHASE,
+    status: "running",
+    requested_from: args.from,
+    requested_to: args.to,
+    models: args.models,
+    platforms: args.platforms,
+    batch_size: args.batch_size,
+    journey_batch_size: args.batch_size,
+    force_recalculate: args.force_recalculate,
+    records_discovered: 0,
+    records_processed: 0,
+    records_succeeded: 0,
+    journeys_discovered: 0,
+    journeys_processed: 0,
+    conversions_discovered: 0,
+    conversions_attributed_first_touch: 0,
+    conversions_attributed_last_touch: 0,
+    conversions_unattributed: 0,
+    credits_inserted: 0,
+    credits_replaced: 0,
+    credits_already_current: 0,
+    records_failed: 0,
+    transient_retries: 0,
+    current_cursor: args.cursor || null,
+    has_more: false,
+    last_error: null,
+    errors: [] as Array<{ journey_id: string | null; message: string }>,
+    warnings: [] as string[],
+    started_at: now,
+    updated_at: now,
+    completed_at: null,
+  };
+}
+
+async function createAttributionBackfillJob(env: Env, args: AttributionBackfillRequest) {
+  const supabase = getSupabase(env);
+  const now = new Date().toISOString();
+  const progress = createAttributionBackfillProgress(args, now);
+  const payload = {
+    platform: "attribution",
+    module: "journeys",
+    status: "running",
+    from_date: args.from,
+    to_date: args.to,
+    filter: JSON.stringify({ models: args.models, platforms: args.platforms, force_recalculate: args.force_recalculate }),
+    workspace_id: args.workspace_id,
+    connector_id: ATTRIBUTION_BACKFILL_CONNECTOR_ID,
+    job_type: ATTRIBUTION_BACKFILL_JOB_TYPE,
+    phase: ATTRIBUTION_BACKFILL_PHASE,
+    requested_from: args.from,
+    requested_to: args.to,
+    records_discovered: 0,
+    records_processed: 0,
+    records_succeeded: 0,
+    records_failed: 0,
+    records_skipped: 0,
+    current_cursor: args.cursor || null,
+    current_page: null,
+    last_error: null,
+    metadata: {
+      models: args.models,
+      platforms: args.platforms,
+      batch_size: args.batch_size,
+      journey_batch_size: args.batch_size,
+      force_recalculate: args.force_recalculate,
+      conversions_discovered: 0,
+      conversions_attributed_first_touch: 0,
+      conversions_attributed_last_touch: 0,
+      conversions_unattributed: 0,
+      credits_inserted: 0,
+      credits_replaced: 0,
+      credits_already_current: 0,
+    },
+    progress,
+    requested_at: now,
+    started_at: now,
+    updated_at: now,
+    completed_at: null,
+  };
+  const { data, error } = await supabase.from("integration_import_jobs").insert(payload).select("*").single();
+  if (error) throw new Error(`Failed to create attribution backfill job: ${error.message}`);
+  return data as ImportJobRow;
+}
+
+function attributionBackfillRequestFromJob(job: ImportJobRow, fallback: AttributionBackfillRequest): AttributionBackfillRequest {
+  const progress = (job.progress || {}) as Record<string, any>;
+  const metadata = ((job as any).metadata || {}) as Record<string, any>;
+  const progressModels = Array.isArray(progress.models) ? progress.models : [];
+  const metadataModels = Array.isArray(metadata.models) ? metadata.models : [];
+  const progressPlatforms = Array.isArray(progress.platforms) ? progress.platforms : [];
+  const metadataPlatforms = Array.isArray(metadata.platforms) ? metadata.platforms : [];
+  return {
+    workspace_id: journeyText((job as any).workspace_id || progress.workspace_id || fallback.workspace_id) || "default",
+    models: progressModels.length
+      ? progressModels
+      : metadataModels.length
+        ? metadataModels
+        : fallback.models,
+    platforms: progressPlatforms.length
+      ? progressPlatforms.map(journeyText).filter(Boolean)
+      : metadataPlatforms.length
+        ? metadataPlatforms.map(journeyText).filter(Boolean)
+        : fallback.platforms,
+    from: journeyText((job as any).requested_from || progress.requested_from || job.from_date || fallback.from),
+    to: journeyText((job as any).requested_to || progress.requested_to || job.to_date || fallback.to),
+    batch_size: attributionJourneyBatchSize(progress.journey_batch_size || metadata.journey_batch_size || progress.batch_size || metadata.batch_size || fallback.batch_size),
+    cursor: journeyText((job as any).current_cursor || progress.current_cursor || fallback.cursor) || null,
+    job_id: job.id,
+    force_recalculate: Boolean(progress.force_recalculate ?? metadata.force_recalculate ?? fallback.force_recalculate),
+  } as AttributionBackfillRequest;
+}
+
+function mergeAttributionBackfillProgress(
+  progress: Record<string, any>,
+  args: {
+    request: AttributionBackfillRequest;
+    batch: AttributionBackfillBatchResult;
+    next_cursor: string | null;
+    has_more: boolean;
+    completed: boolean;
+  },
+) {
+  const now = new Date().toISOString();
+  const previousErrors = Array.isArray(progress.errors) ? progress.errors : [];
+  const metadata = ((progress.metadata || {}) as Record<string, any>) || {};
+  const errors = [
+    ...previousErrors,
+    ...args.batch.errors,
+  ].slice(-20);
+  return {
+    ...progress,
+    workspace_id: args.request.workspace_id,
+    connector_id: ATTRIBUTION_BACKFILL_CONNECTOR_ID,
+    job_type: ATTRIBUTION_BACKFILL_JOB_TYPE,
+    phase: ATTRIBUTION_BACKFILL_PHASE,
+    status: args.completed ? (args.batch.ok ? "completed" : "completed_with_errors") : "running",
+    requested_from: args.request.from,
+    requested_to: args.request.to,
+    models: args.request.models,
+    platforms: args.request.platforms,
+    batch_size: args.request.batch_size,
+    journey_batch_size: args.request.batch_size,
+    force_recalculate: args.request.force_recalculate,
+    records_discovered: Number(progress.records_discovered || 0) + args.batch.journeys_discovered,
+    records_processed: Number(progress.records_processed || 0) + args.batch.journeys_processed,
+    records_succeeded: Number(progress.records_succeeded || 0) + args.batch.credits_inserted + args.batch.credits_already_current,
+    records_skipped: Number(progress.records_skipped || 0),
+    retries: Number(progress.retries || 0),
+    transient_retries: Number(progress.transient_retries || metadata.transient_retries || progress.retries || 0),
+    journeys_discovered: Number(progress.journeys_discovered || 0) + args.batch.journeys_discovered,
+    journeys_processed: Number(progress.journeys_processed || 0) + args.batch.journeys_processed,
+    conversions_discovered: Number(progress.conversions_discovered || 0) + args.batch.conversions_discovered,
+    conversions_attributed_first_touch: Number(progress.conversions_attributed_first_touch || 0) + args.batch.conversions_attributed_first_touch,
+    conversions_attributed_last_touch: Number(progress.conversions_attributed_last_touch || 0) + args.batch.conversions_attributed_last_touch,
+    conversions_unattributed: Number(progress.conversions_unattributed || 0) + args.batch.conversions_unattributed,
+    credits_inserted: Number(progress.credits_inserted || 0) + args.batch.credits_inserted,
+    credits_replaced: Number(progress.credits_replaced || 0) + args.batch.credits_replaced,
+    credits_already_current: Number(progress.credits_already_current || 0) + args.batch.credits_already_current,
+    records_failed: Number(progress.records_failed || 0) + args.batch.records_failed,
+    current_cursor: args.next_cursor,
+    has_more: args.has_more,
+    errors,
+    last_error: args.batch.ok ? null : "One or more journeys failed attribution calculation.",
+    updated_at: now,
+    completed_at: args.completed ? now : null,
+  };
+}
+
+async function runAttributionBackfill(env: Env, args: AttributionBackfillRequest) {
+  const started = Date.now();
+  let job: ImportJobRow | null = null;
+  if (args.job_id) {
+    job = await getImportJob(env, args.job_id);
+    if (!job) return { status: 404, body: { ok: false, error: "not_found", message: "Attribution backfill job not found." } };
+  } else {
+    job = await createAttributionBackfillJob(env, args);
+  }
+
+  const effective = attributionBackfillRequestFromJob(job, args);
+  const progress = ((job.progress || {}) as Record<string, any>) || {};
+  const range = journeyBackfillDateRange(effective.from, effective.to);
+  if (!range) return { status: 400, body: { ok: false, error: "bad_request", message: "Invalid attribution backfill date range." } };
+  const cursor = args.cursor || effective.cursor || null;
+  const decodedCursor = decodeJourneyListCursor(cursor);
+  const repo = getAttributionRepository(env);
+
+  console.log("attribution.backfill.started", {
+    workspace_id: effective.workspace_id,
+    job_id: job.id,
+    models: effective.models,
+    platforms: effective.platforms,
+    batch_size: effective.batch_size,
+    model_version: "v1",
+  });
+
+  const rows = await repo.queryBackfillJourneys({
+    workspace_id: effective.workspace_id,
+    from_ts: range.from_ts,
+    to_exclusive_ts: range.to_exclusive_ts,
+    cursor: decodedCursor,
+    limit: effective.batch_size + 1,
+  });
+  const batchRows = rows.slice(0, effective.batch_size) as JourneyRow[];
+  const publishAttributionDomainEvent = domainEventPublisher(env);
+  const batch = await processAttributionBackfillJourneys(repo, batchRows, effective, {
+    on_domain_event: async (event) => {
+      await publishAttributionDomainEvent({
+        ...event,
+        source: {
+          ...event.source,
+          ingestionId: job.id,
+        },
+      });
+    },
+  });
+  const lastRow = batchRows[batchRows.length - 1] as JourneyRow | undefined;
+  const hasMore = rows.length > effective.batch_size;
+  const nextCursor = hasMore && lastRow
+    ? encodeJourneyListCursor({
+      started_at: new Date(Date.parse(String(lastRow.started_at))).toISOString(),
+      id: journeyText(lastRow.id),
+    })
+    : null;
+  const completed = !hasMore;
+  const nextProgress = mergeAttributionBackfillProgress(progress, {
+    request: effective,
+    batch,
+    next_cursor: nextCursor,
+    has_more: hasMore,
+    completed,
+  });
+  const status = completed ? (batch.ok ? "completed" : "completed_with_errors") : "running";
+
+  await updateImportJob(env, job.id, {
+    status,
+    phase: ATTRIBUTION_BACKFILL_PHASE,
+    current_cursor: nextCursor,
+    records_discovered: nextProgress.journeys_discovered,
+    records_processed: nextProgress.journeys_processed,
+    records_succeeded: nextProgress.credits_inserted + nextProgress.credits_already_current,
+    records_failed: nextProgress.records_failed,
+    records_skipped: 0,
+    last_error: nextProgress.last_error,
+    metadata: {
+      models: effective.models,
+      platforms: effective.platforms,
+      batch_size: effective.batch_size,
+      force_recalculate: effective.force_recalculate,
+      conversions_discovered: nextProgress.conversions_discovered,
+      conversions_attributed_first_touch: nextProgress.conversions_attributed_first_touch,
+      conversions_attributed_last_touch: nextProgress.conversions_attributed_last_touch,
+      conversions_unattributed: nextProgress.conversions_unattributed,
+      credits_inserted: nextProgress.credits_inserted,
+      credits_replaced: nextProgress.credits_replaced,
+      credits_already_current: nextProgress.credits_already_current,
+      transient_retries: nextProgress.transient_retries,
+    },
+    progress: nextProgress,
+    completed_at: completed ? nextProgress.completed_at : null,
+  });
+
+  console.log("attribution.backfill.batch_completed", {
+    workspace_id: effective.workspace_id,
+    job_id: job.id,
+    models: effective.models,
+    journeys_processed: batch.journeys_processed,
+    conversions_discovered: batch.conversions_discovered,
+    credits_inserted: batch.credits_inserted,
+    credits_replaced: batch.credits_replaced,
+    duration_ms: Date.now() - started,
+  });
+  if (completed) {
+    console.log("attribution.backfill.completed", {
+      workspace_id: effective.workspace_id,
+      job_id: job.id,
+      models: effective.models,
+      journeys_processed: nextProgress.journeys_processed,
+      conversions_discovered: nextProgress.conversions_discovered,
+      credits_inserted: nextProgress.credits_inserted,
+      credits_replaced: nextProgress.credits_replaced,
+      duration_ms: Date.now() - started,
+    });
+  }
+
+  return {
+    status: 200,
+    body: {
+      ok: batch.ok,
+      job_id: job.id,
+      status,
+      workspace_id: effective.workspace_id,
+      from: effective.from,
+      to: effective.to,
+      models: effective.models,
+      platforms: effective.platforms,
+      journeys_discovered: batch.journeys_discovered,
+      journeys_processed: batch.journeys_processed,
+      conversions_discovered: batch.conversions_discovered,
+      conversions_attributed_first_touch: batch.conversions_attributed_first_touch,
+      conversions_attributed_last_touch: batch.conversions_attributed_last_touch,
+      conversions_unattributed: batch.conversions_unattributed,
+      credits_inserted: batch.credits_inserted,
+      credits_replaced: batch.credits_replaced,
+      credits_already_current: batch.credits_already_current,
+      records_failed: batch.records_failed,
+      has_more: hasMore,
+      next_cursor: nextCursor,
+      progress: nextProgress,
+      errors: batch.errors.slice(0, 10),
+    },
+  };
+}
+
+function attributionRuntimeArrayKey(values: unknown[]) {
+  return values.map((value) => journeyText(value).toLowerCase()).filter(Boolean).sort().join(",");
+}
+
+function attributionJourneyBatchSize(value: unknown, fallback = ATTRIBUTION_BACKFILL_DEFAULT_JOURNEY_BATCH_SIZE) {
+  return Math.max(1, Math.min(ATTRIBUTION_BACKFILL_MAX_JOURNEY_BATCH_SIZE, Number(value || fallback) || fallback));
+}
+
+function attributionRuntimeConfigMatches(progress: ConnectorRuntimeProgress & Record<string, any>, args: AttributionBackfillRequest & { batch_size: number }) {
+  const metadata = (progress.metadata || {}) as Record<string, any>;
+  const progressModels = Array.isArray(progress.models) ? progress.models : Array.isArray(metadata.models) ? metadata.models : [];
+  const progressPlatforms = Array.isArray(progress.platforms) ? progress.platforms : Array.isArray(metadata.platforms) ? metadata.platforms : [];
+  return (
+    attributionRuntimeArrayKey(progressModels) === attributionRuntimeArrayKey(args.models)
+    && attributionRuntimeArrayKey(progressPlatforms) === attributionRuntimeArrayKey(args.platforms)
+    && attributionJourneyBatchSize(metadata.journey_batch_size || metadata.batch_size || progress.journey_batch_size || progress.batch_size) === Number(args.batch_size)
+    && Boolean(metadata.force_recalculate ?? progress.force_recalculate) === Boolean(args.force_recalculate)
+  );
+}
+
+async function executeAttributionBackfillRuntimeTask(env: Env, job: ImportJobRow, task: ConnectorImportTaskRow) {
+  const progress = connectorRuntimeProgressFromJob(job);
+  const metadata = (progress.metadata || {}) as Record<string, any>;
+  const models = Array.isArray(metadata.models) ? metadata.models : Array.isArray((progress as any).models) ? (progress as any).models : [];
+  const platforms = Array.isArray(metadata.platforms) ? metadata.platforms : Array.isArray((progress as any).platforms) ? (progress as any).platforms : [];
+  const batchSize = attributionJourneyBatchSize(task.payload?.journey_batch_size || task.payload?.batch_size || metadata.journey_batch_size || metadata.batch_size || (progress as any).journey_batch_size || (progress as any).batch_size);
+  const request = attributionBackfillRequestFromJob(job, {
+    workspace_id: progress.workspace_id || "default",
+    from: progress.requested_from || job.from_date,
+    to: progress.requested_to || job.to_date,
+    models: models.length ? models as any : ["first_touch", "last_touch"],
+    platforms,
+    batch_size: batchSize,
+    cursor: journeyText(task.payload?.cursor || task.cursor || progress.current_cursor) || null,
+    job_id: job.id,
+    force_recalculate: Boolean(task.payload?.force_recalculate ?? metadata.force_recalculate ?? (progress as any).force_recalculate),
+  });
+  const cursor = journeyText(task.payload?.cursor || task.cursor || request.cursor) || null;
+  const result = await runAttributionBackfill(env, {
+    ...request,
+    batch_size: batchSize,
+    cursor,
+    job_id: job.id,
+  });
+  if (result.status >= 400) {
+    throw new Error(result.body?.message || result.body?.error || "Attribution runtime batch failed.");
+  }
+
+  const refreshedJob = await getImportJob(env, job.id);
+  const refreshedProgress = refreshedJob ? connectorRuntimeProgressFromJob(refreshedJob) : connectorRuntimeProgressFromJob(job);
+  let nextTaskId: string | null = null;
+  let duplicateTaskPrevented = false;
+  if (result.body?.has_more && refreshedJob && !isTerminalConnectorRuntimeJobStatus(refreshedProgress.status)) {
+    const nextTask = await createAndEnqueueConnectorRuntimeTask(env, attributionBackfillRuntimeTaskPlanForProgress(refreshedJob, refreshedProgress));
+    nextTaskId = nextTask.task.id;
+    duplicateTaskPrevented = !nextTask.created;
+  }
+
+  return {
+    ok: result.body?.ok !== false,
+    job_id: job.id,
+    task_id: task.id,
+    status: result.body?.status || refreshedProgress.status,
+    phase: ATTRIBUTION_BACKFILL_PHASE,
+    journeys_discovered: Number(result.body?.journeys_discovered || 0),
+    journeys_processed: Number(result.body?.journeys_processed || 0),
+    conversions_discovered: Number(result.body?.conversions_discovered || 0),
+    conversions_attributed_first_touch: Number(result.body?.conversions_attributed_first_touch || 0),
+    conversions_attributed_last_touch: Number(result.body?.conversions_attributed_last_touch || 0),
+    conversions_unattributed: Number(result.body?.conversions_unattributed || 0),
+    credits_inserted: Number(result.body?.credits_inserted || 0),
+    credits_replaced: Number(result.body?.credits_replaced || 0),
+    credits_already_current: Number(result.body?.credits_already_current || 0),
+    records_failed: Number(result.body?.records_failed || 0),
+    has_more: Boolean(result.body?.has_more),
+    next_cursor: result.body?.next_cursor || null,
+    next_task_id: nextTaskId,
+    duplicate_task_prevented: duplicateTaskPrevented,
+  };
+}
+
 function compactIdentityMetadata(metadata: any) {
   if (!metadata || typeof metadata !== "object" || Array.isArray(metadata)) return {};
   const compact: Record<string, any> = {};
@@ -501,6 +1948,91 @@ function buildFingerprint(env: Env) {
     git_commit: gitCommit || null,
     identity_service_v1: true,
   };
+}
+
+function domainEventPublisher(env: Env) {
+  const supabase = getSupabase(env);
+  return async (event: any) => {
+    await publishDomainEvent(supabase, event);
+  };
+}
+
+async function publishJourneyPurchaseDomainEvents(env: Env, events: any[], args: { job_id?: string | null; source?: string } = {}) {
+  const publisher = domainEventPublisher(env);
+  let published = 0;
+  for (const event of events || []) {
+    const domainEvents = [
+      ...buildPurchaseDomainEventsFromJourneyEvent(event),
+      buildAttributionPendingDomainEventFromJourneyEvent(event),
+      buildFinancialAdjustmentDomainEventFromJourneyEvent(event),
+    ].filter(Boolean) as any[];
+    for (const domainEvent of domainEvents) {
+      await publisher({
+        ...domainEvent,
+        source: {
+          ...domainEvent.source,
+          ingestionId: args.job_id || domainEvent.source.ingestionId,
+        },
+        payload: {
+          ...(domainEvent.payload || {}),
+          producer: args.source || "journey_event_persistence",
+        },
+      });
+      published += 1;
+    }
+  }
+  if (published) {
+    console.log("[TraceKit] journey purchase domain events published", {
+      job_id: args.job_id || null,
+      source: args.source || "journey_event_persistence",
+      events_published: published,
+    });
+  }
+  return published;
+}
+
+async function publishConnectorRuntimeIncidentEvent(env: Env, args: {
+  workspace_id?: unknown;
+  connector_id?: unknown;
+  connector_type?: unknown;
+  status?: "failed" | "recovered";
+  error_category?: unknown;
+  safe_summary?: unknown;
+  affected_record_count?: unknown;
+  job_id?: unknown;
+  task_id?: unknown;
+  occurred_at?: unknown;
+}) {
+  const event = buildConnectorIncidentDomainEvent(args);
+  if (!event) return null;
+  try {
+    return await publishDomainEvent(getSupabase(env), event);
+  } catch (error: any) {
+    console.error("[TraceKit] connector incident domain event publish failed", {
+      workspace_id: event.workspaceId,
+      connector_id: args.connector_id || null,
+      task_id: args.task_id || null,
+      status: args.status || "failed",
+      message: error?.message || String(error),
+    });
+    return null;
+  }
+}
+
+async function publishReconciliationDomainEvent(env: Env, args: Parameters<typeof buildReconciliationDomainEvent>[0]) {
+  const event = buildReconciliationDomainEvent(args);
+  if (!event) return null;
+  try {
+    return await publishDomainEvent(getSupabase(env), event);
+  } catch (error: any) {
+    console.error("[TraceKit] reconciliation domain event publish failed", {
+      workspace_id: event.workspaceId,
+      type: event.type,
+      subject_id: event.subject.id,
+      message: error?.message || String(error),
+    });
+    return null;
+  }
 }
 
 const PROFIT_CONVERSION_SELECT =
@@ -992,7 +2524,7 @@ async function runWowPayImportPage(env: Env, args: { from: string; to: string; p
 
       const transactionId = receipt.transactionId || receipt.transactionID || o.transactionId || o.paymentTrackingNumber || null;
       const phone = normalizePhone(o.phoneNumber || o.customerPhone || o.phone || o.customer?.phoneNumber || "");
-	  
+
 	  console.log(
 		  "WOWPAY AMOUNTS",
 		  {
@@ -1005,7 +2537,7 @@ async function runWowPayImportPage(env: Env, args: { from: string; to: string; p
 		    productPrice: o.productPrice,
 		  }
 		);
-	  
+
       return {
 		  platform: "wowpay",
 		  platform_order_id: `wowpay:${orderId}`,
@@ -1339,17 +2871,111 @@ function wowBoostIdentityIdentifiers(row: any): IdentityInputIdentifier[] {
   return identifiers;
 }
 
+type WowBoostIdentityAttachCounters = {
+  input_rows: number;
+  unique_emails: number;
+  unique_order_or_external_ids: number;
+  lookup_batches: number;
+  lookup_calls: number;
+  database_api_lookup_calls: number;
+  external_operations: number;
+  fetch_calls: number;
+  supabase_rest_calls: number;
+  database_helper_calls: number;
+  service_binding_calls: number;
+  per_row_lookup_helper_calls: number;
+  matched_identities: number;
+  unmatched_identities: number;
+  errors: number;
+  elapsed_ms: number;
+};
+
+function createWowBoostIdentityAttachCounters(): WowBoostIdentityAttachCounters {
+  return {
+    input_rows: 0,
+    unique_emails: 0,
+    unique_order_or_external_ids: 0,
+    lookup_batches: 0,
+    lookup_calls: 0,
+    database_api_lookup_calls: 0,
+    external_operations: 0,
+    fetch_calls: 0,
+    supabase_rest_calls: 0,
+    database_helper_calls: 0,
+    service_binding_calls: 0,
+    per_row_lookup_helper_calls: 0,
+    matched_identities: 0,
+    unmatched_identities: 0,
+    errors: 0,
+    elapsed_ms: 0,
+  };
+}
+
 async function attachIdentityToWowBoostPlatformRows(
   env: Env,
   rows: any[],
-  args: { workspace_id?: string | null; connector_job_id?: string | null } = {},
+  args: {
+    workspace_id?: string | null;
+    connector_job_id?: string | null;
+    diagnostics?: WowBoostIdentityAttachCounters | null;
+  } = {},
 ) {
+  const started = Date.now();
+  const diagnostics = args.diagnostics || createWowBoostIdentityAttachCounters();
+  const uniqueEmails = new Set<string>();
+  const uniqueOrderOrExternalIds = new Set<string>();
+
+  for (const row of rows) {
+    const email = String(row?.customer_email_normalized || row?.email || "").trim().toLowerCase();
+    if (email) uniqueEmails.add(email);
+
+    for (const value of [
+      row?.platform_order_id,
+      row?.order_id,
+      row?.transaction_id,
+      row?.commerce_reference,
+      row?.everflow_transaction_id,
+      row?.tkid,
+    ]) {
+      const normalized = String(value ?? "").trim();
+      if (normalized) uniqueOrderOrExternalIds.add(normalized);
+    }
+  }
+
+  Object.assign(diagnostics, {
+    input_rows: rows.length,
+    unique_emails: uniqueEmails.size,
+    unique_order_or_external_ids: uniqueOrderOrExternalIds.size,
+  });
+
+  console.log("[WowBoost Identity] ATTACH START", {
+    input_rows: diagnostics.input_rows,
+    unique_emails: diagnostics.unique_emails,
+    unique_order_or_external_ids: diagnostics.unique_order_or_external_ids,
+  });
+
   if (!envFlagEnabled(env.IDENTITY_WOWBOOST_RESOLUTION_ENABLED, true)) {
+    diagnostics.elapsed_ms = Date.now() - started;
+    console.log("[WowBoost Identity] ATTACH COMPLETE", {
+      input_rows: diagnostics.input_rows,
+      skipped: rows.length,
+      reason: "identity_resolution_disabled",
+      elapsed_ms: diagnostics.elapsed_ms,
+      counters: diagnostics,
+    });
     return { rows, attempted: 0, linked: 0, review_required: 0, skipped: rows.length, warnings: ["identity_resolution_disabled"] };
   }
 
   const maxRows = wowBoostIdentityMaxRows(env);
   if (!maxRows) {
+    diagnostics.elapsed_ms = Date.now() - started;
+    console.log("[WowBoost Identity] ATTACH COMPLETE", {
+      input_rows: diagnostics.input_rows,
+      skipped: rows.length,
+      reason: "identity_resolution_limit_zero",
+      elapsed_ms: diagnostics.elapsed_ms,
+      counters: diagnostics,
+    });
     return { rows, attempted: 0, linked: 0, review_required: 0, skipped: rows.length, warnings: ["identity_resolution_limit_zero"] };
   }
 
@@ -1360,12 +2986,33 @@ async function attachIdentityToWowBoostPlatformRows(
   let reviewRequired = 0;
   let identityUnavailable = false;
 
-  for (const row of rows.slice(0, maxRows)) {
+  const rowsToProcess = rows.slice(0, maxRows);
+  for (let rowIndex = 0; rowIndex < rowsToProcess.length; rowIndex += 1) {
+    const row = rowsToProcess[rowIndex];
     if (!row || row.person_id || identityUnavailable) continue;
     const identifiers = wowBoostIdentityIdentifiers(row);
     if (!identifiers.length) continue;
 
     attempted += 1;
+    diagnostics.lookup_batches += 1;
+    diagnostics.lookup_calls += 1;
+    diagnostics.database_api_lookup_calls += 1;
+    diagnostics.external_operations += 1;
+    diagnostics.database_helper_calls += 1;
+    diagnostics.service_binding_calls += 1;
+    diagnostics.per_row_lookup_helper_calls += 1;
+
+    const lookupNumber = diagnostics.lookup_calls;
+    const lookupStarted = Date.now();
+    console.log("[WowBoost Identity] LOOKUP START", {
+      lookup_number: lookupNumber,
+      lookup_type: "resolveIdentityForSourceRecord",
+      row_index: rowIndex + 1,
+      batch_size: 1,
+      platform_order_id_present: Boolean(row.platform_order_id),
+      identifier_count: identifiers.length,
+    });
+
     try {
       const result = await resolveIdentityForSourceRecord(service, {
         workspace_id: args.workspace_id || row.workspace_id || "default",
@@ -1385,6 +3032,19 @@ async function attachIdentityToWowBoostPlatformRows(
         observed_at: row.order_ts || null,
       });
 
+      if (result.person_id) diagnostics.matched_identities += 1;
+      else diagnostics.unmatched_identities += 1;
+
+      console.log("[WowBoost Identity] LOOKUP COMPLETE", {
+        lookup_number: lookupNumber,
+        lookup_type: "resolveIdentityForSourceRecord",
+        row_index: rowIndex + 1,
+        batch_size: 1,
+        matched: Boolean(result.person_id),
+        review_required: Boolean(result.review_required),
+        elapsed_ms: Date.now() - lookupStarted,
+      });
+
       if (result.person_id && !result.review_required) {
         row.person_id = result.person_id;
         linked += 1;
@@ -1392,8 +3052,23 @@ async function attachIdentityToWowBoostPlatformRows(
         reviewRequired += 1;
       }
     } catch (e: any) {
+      diagnostics.errors += 1;
+      diagnostics.unmatched_identities += 1;
       const message = String(e?.message || e || "identity_resolution_failed");
+      console.error("[WowBoost Identity] LOOKUP FAILED", {
+        lookup_number: lookupNumber,
+        lookup_type: "resolveIdentityForSourceRecord",
+        row_index: rowIndex + 1,
+        batch_size: 1,
+        elapsed_ms: Date.now() - lookupStarted,
+        message,
+        stack: e?.stack,
+      });
       warnings.push("identity_resolution_failed");
+      if (isCloudflareSubrequestLimitError(e)) {
+        warnings.push("identity_resolution_stopped_subrequest_limit");
+        break;
+      }
       if (message.includes("does not exist") || message.includes("relation") || message.includes("schema cache")) {
         identityUnavailable = true;
         warnings.push("identity_tables_unavailable");
@@ -1402,6 +3077,22 @@ async function attachIdentityToWowBoostPlatformRows(
   }
 
   const skipped = Math.max(0, rows.length - attempted);
+  diagnostics.elapsed_ms = Date.now() - started;
+  console.log("[WowBoost Identity] ATTACH COMPLETE", {
+    input_rows: diagnostics.input_rows,
+    attempted,
+    linked,
+    review_required: reviewRequired,
+    skipped,
+    matched_identities: diagnostics.matched_identities,
+    unmatched_identities: diagnostics.unmatched_identities,
+    lookup_batches: diagnostics.lookup_batches,
+    lookup_calls: diagnostics.lookup_calls,
+    database_api_lookup_calls: diagnostics.database_api_lookup_calls,
+    elapsed_ms: diagnostics.elapsed_ms,
+    counters: diagnostics,
+  });
+
   return { rows, attempted, linked, review_required: reviewRequired, skipped, warnings: Array.from(new Set(warnings)) };
 }
 
@@ -1512,9 +3203,15 @@ const WOWBOOST_RUNTIME_DEFAULT_DETAILS_LIMIT = 5;
 const WOWBOOST_RUNTIME_MAX_DETAILS_LIMIT = 20;
 const WOWBOOST_RUNTIME_DEFAULT_PACING_MS = 650;
 const CONNECTOR_RUNTIME_QUEUE_NAME = "wowboost-imports";
+const CONNECTOR_RUNTIME_ORPHAN_QUEUED_TASK_MS = 60000;
+const CONNECTOR_RUNTIME_RECOVERY_SCAN_LIMIT = 25;
 const IDENTITY_RESOLVE_TASK_STALE_MS = 120000;
 const IDENTITY_RESOLVE_TASK_RECHECK_DELAY_SECONDS = 30;
 const IDENTITY_RESOLVE_OPERATION_TIMEOUT_MS = 15000;
+const ATTRIBUTION_BACKFILL_TASK_STALE_MS = 120000;
+const ATTRIBUTION_BACKFILL_TASK_RECHECK_DELAY_SECONDS = 30;
+const JOURNEY_ASSIGNMENT_RUNTIME_TASK_TYPE = "journey_assignment_batch";
+const ATTRIBUTION_BACKFILL_RUNTIME_TASK_TYPE = "attribution_backfill_batch";
 
 async function createConnectorRuntimeTask(env: Env, plan: ConnectorRuntimeTaskPlan) {
   const supabase = getSupabase(env);
@@ -1574,11 +3271,32 @@ async function updateConnectorRuntimeTask(env: Env, taskId: string, patch: Parti
   if (error) throw new Error(`Failed to update connector runtime task: ${error.message}`);
 }
 
+async function updateConnectorRuntimeTaskIfCurrent(env: Env, task: ConnectorImportTaskRow, patch: Partial<ConnectorImportTaskRow> & Record<string, any>) {
+  const supabase = getSupabase(env);
+  let query = supabase
+    .from("connector_import_tasks")
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq("id", task.id)
+    .eq("status", task.status);
+  query = task.locked_at ? query.eq("locked_at", task.locked_at) : query.is("locked_at", null);
+  const { data, error } = await query.select("*").maybeSingle();
+  if (error) throw new Error(`Failed to atomically update connector runtime task: ${error.message}`);
+  return (data || null) as ConnectorImportTaskRow | null;
+}
+
 function isIdentityResolveRuntimeTask(task: ConnectorImportTaskRow | null | undefined) {
   return Boolean(
     task
     && task.connector_id === IDENTITY_BACKFILL_CONNECTOR_ID
     && task.task_type === IDENTITY_BACKFILL_TASK_TYPES.resolve
+  );
+}
+
+function isAttributionBackfillRuntimeTask(task: ConnectorImportTaskRow | null | undefined) {
+  return Boolean(
+    task
+    && task.connector_id === ATTRIBUTION_BACKFILL_CONNECTOR_ID
+    && task.task_type === ATTRIBUTION_BACKFILL_RUNTIME_TASK_TYPE
   );
 }
 
@@ -1608,10 +3326,12 @@ type ConnectorRuntimeTaskDiagnosticState = {
   subrequest_tracker?: IdentityResolveSubrequestTracker | null;
   target_diagnostic_events?: IdentityResolveBufferedTargetDiagnosticEvent[];
   identity_resolution_metrics?: IdentityResolutionDebugMetrics | null;
+  identity_resolve_cumulative_counts?: IdentityResolveResourceCounts | null;
 };
 
 type ConnectorRuntimeTaskExecutionOptions = {
   diagnostics?: ConnectorRuntimeTaskDiagnosticState | null;
+  already_locked?: boolean;
 };
 
 function connectorRuntimeTaskDiagnosticState(task: ConnectorImportTaskRow): ConnectorRuntimeTaskDiagnosticState {
@@ -1642,6 +3362,14 @@ type IdentityResolveSubrequestOperationStats = {
   repository_method: string | null;
 };
 
+type IdentityResolveResourceCounts = {
+  D1: number;
+  KV: number;
+  Queue: number;
+  DO: number;
+  Total: number;
+};
+
 type IdentityResolveSubrequestTracker = {
   platform?: string | null;
   platform_order_id: string;
@@ -1654,6 +3382,7 @@ type IdentityResolveSubrequestTracker = {
   started_at_ms: number;
   by_operation: Record<string, IdentityResolveSubrequestOperationStats>;
   pending: Record<string, Array<{ started_ms: number; count: number }>>;
+  resource_counts: IdentityResolveResourceCounts;
 };
 
 type IdentityResolveBufferedTargetDiagnosticEvent = {
@@ -1833,6 +3562,94 @@ function identityResolveSubrequestRepositoryMethod(operation: string, metadata: 
   return operation;
 }
 
+function createIdentityResolveResourceCounts(): IdentityResolveResourceCounts {
+  return { D1: 0, KV: 0, Queue: 0, DO: 0, Total: 0 };
+}
+
+function addIdentityResolveResourceCount(counts: IdentityResolveResourceCounts, resource: keyof Omit<IdentityResolveResourceCounts, "Total">) {
+  counts[resource] += 1;
+  counts.Total += 1;
+}
+
+function identityResolvePipelineResourceStage(operation: string) {
+  if (operation === "identity_resolve.extract_evidence") return "extractIdentityEvidenceFromPlatformOrder";
+  if (operation === "identity_resolve.link_source_record") return "linkPlatformOrderToPerson";
+  if (
+    operation.startsWith("identity_repository.") ||
+    operation.startsWith("identity_resolve.lookup_") ||
+    operation.startsWith("identity_resolve.create_person") ||
+    operation.startsWith("identity_resolve.update_person_seen") ||
+    operation.startsWith("identity_resolve.attach_identifier") ||
+    operation.startsWith("identity_resolve.sync_primary") ||
+    operation === "identity_resolve.insert_resolution_event"
+  ) {
+    return "resolveIdentityForSourceRecord";
+  }
+  return null;
+}
+
+function identityResolveLoggablePlatformOrderId(platformOrderId: string) {
+  return platformOrderId.includes(":") ? platformOrderId.split(":").pop() || platformOrderId : platformOrderId;
+}
+
+function logIdentityResolveResourceOperation(args: {
+  tracker: IdentityResolveSubrequestTracker;
+  stage: string;
+  operation: string;
+  repository_method: string | null;
+  resource: keyof Omit<IdentityResolveResourceCounts, "Total">;
+}) {
+  console.log("[TraceKit] identity resolve resource operation", {
+    platform_order_id: args.tracker.platform_order_id,
+    platform_order_id_value: identityResolveLoggablePlatformOrderId(args.tracker.platform_order_id),
+    platform: args.tracker.platform || null,
+    record_index: args.tracker.record_index,
+    processed: args.tracker.processed,
+    stage: args.stage,
+    operation: args.operation,
+    repository_method: args.repository_method,
+    resource: args.resource,
+    D1: args.tracker.resource_counts.D1,
+    KV: args.tracker.resource_counts.KV,
+    Queue: args.tracker.resource_counts.Queue,
+    DO: args.tracker.resource_counts.DO,
+    Total: args.tracker.resource_counts.Total,
+  });
+}
+
+function logIdentityResolveRecordResourceSummary(tracker: IdentityResolveSubrequestTracker) {
+  console.log(
+    `[TraceKit] identity resolve record resource summary platform_order_id=${identityResolveLoggablePlatformOrderId(tracker.platform_order_id)} D1=${tracker.resource_counts.D1} KV=${tracker.resource_counts.KV} Queue=${tracker.resource_counts.Queue} DO=${tracker.resource_counts.DO} Total=${tracker.resource_counts.Total}`,
+    {
+      platform_order_id: tracker.platform_order_id,
+      platform_order_id_value: identityResolveLoggablePlatformOrderId(tracker.platform_order_id),
+      platform: tracker.platform || null,
+      record_index: tracker.record_index,
+      processed: tracker.processed,
+      D1: tracker.resource_counts.D1,
+      KV: tracker.resource_counts.KV,
+      Queue: tracker.resource_counts.Queue,
+      DO: tracker.resource_counts.DO,
+      Total: tracker.resource_counts.Total,
+    },
+  );
+}
+
+function logIdentityResolveCumulativeResourceSummary(state: ConnectorRuntimeTaskDiagnosticState, event: string) {
+  const counts = state.identity_resolve_cumulative_counts || createIdentityResolveResourceCounts();
+  console.log(
+    `[TraceKit] identity resolve cumulative resource summary before ${event}.before_await D1=${counts.D1} KV=${counts.KV} Queue=${counts.Queue} DO=${counts.DO} Total=${counts.Total}`,
+    {
+      event,
+      D1: counts.D1,
+      KV: counts.KV,
+      Queue: counts.Queue,
+      DO: counts.DO,
+      Total: counts.Total,
+    },
+  );
+}
+
 function isIdentityResolveSupabaseSubrequestOperation(operation: string, phase: string, metadata: Record<string, any> = {}) {
   if (!["before_await", "after_await", "error"].includes(phase)) return false;
   if (operation === "connector_runtime.task_heartbeat") return true;
@@ -1897,6 +3714,19 @@ function recordIdentityResolveSubrequestDiagnostic(
     count = tracker.count;
     if (!tracker.pending[key]) tracker.pending[key] = [];
     tracker.pending[key].push({ started_ms: nowMs, count });
+    const pipelineStage = identityResolvePipelineResourceStage(args.operation);
+    if (pipelineStage) {
+      if (!state.identity_resolve_cumulative_counts) state.identity_resolve_cumulative_counts = createIdentityResolveResourceCounts();
+      addIdentityResolveResourceCount(tracker.resource_counts, "D1");
+      addIdentityResolveResourceCount(state.identity_resolve_cumulative_counts, "D1");
+      logIdentityResolveResourceOperation({
+        tracker,
+        stage: pipelineStage,
+        operation: args.operation,
+        repository_method: repositoryMethod,
+        resource: "D1",
+      });
+    }
   } else {
     const pending = tracker.pending[key]?.shift();
     count = pending?.count || tracker.count;
@@ -2147,9 +3977,62 @@ function identityResolveRecordHeartbeatOptions(processed: number) {
   return { force: processed > 0 && processed % 5 === 0 };
 }
 
-async function enqueueConnectorRuntimeTask(env: Env, task: ConnectorImportTaskRow) {
+async function sendConnectorRuntimeTaskQueueMessage(
+  env: Env,
+  task: ConnectorImportTaskRow,
+  message: Record<string, any>,
+  options?: Record<string, any>,
+  state?: ConnectorRuntimeTaskDiagnosticState | null,
+) {
   if (!env.wowboost_imports) throw new Error("wowboost_imports queue binding is missing. Check wrangler.toml.");
-  await env.wowboost_imports.send(connectorRuntimeTaskMessage({
+  const diagnostics = state || connectorRuntimeTaskDiagnosticState(task);
+  console.log("[TraceKit] connector runtime queue", connectorRuntimeQueueDiagnosticDetails({
+    task,
+    details: {
+      event: "connector_runtime.queue.publish.before",
+      task_type: task.task_type,
+      status: task.status,
+      delay_seconds: Number((options as any)?.delaySeconds || 0) || null,
+    },
+  }));
+  try {
+    const result = await sendConnectorRuntimeQueueMessageWithRetry({
+      send: async (body, sendOptions) => await env.wowboost_imports!.send(body, sendOptions as any),
+      message,
+      options,
+      runtime_task_id: task.id,
+      job_id: task.job_id,
+      onEvent: async ({ event, details }) => {
+        await heartbeatConnectorRuntimeQueueEvent(env, task, diagnostics, event, details);
+      },
+    });
+    console.log("[TraceKit] connector runtime queue", connectorRuntimeQueueDiagnosticDetails({
+      task,
+      details: {
+        event: "connector_runtime.queue.publish_succeeded",
+        task_type: task.task_type,
+        status: task.status,
+        attempts: result.attempts,
+        retried: result.retried,
+      },
+    }));
+    return result;
+  } catch (error: any) {
+    console.error("[TraceKit] connector runtime queue", connectorRuntimeQueueDiagnosticDetails({
+      task,
+      details: {
+        event: "connector_runtime.queue.publish_failed",
+        task_type: task.task_type,
+        status: task.status,
+        ...connectorRuntimeQueueErrorDetails(error),
+      },
+    }));
+    throw error;
+  }
+}
+
+async function enqueueConnectorRuntimeTask(env: Env, task: ConnectorImportTaskRow) {
+  await sendConnectorRuntimeTaskQueueMessage(env, task, connectorRuntimeTaskMessage({
     id: task.id,
     job_id: task.job_id,
     connector_id: task.connector_id,
@@ -2159,14 +4042,13 @@ async function enqueueConnectorRuntimeTask(env: Env, task: ConnectorImportTaskRo
 }
 
 async function enqueueConnectorRuntimeTaskWithDelay(env: Env, task: ConnectorImportTaskRow, delaySeconds: number) {
-  if (!env.wowboost_imports) throw new Error("wowboost_imports queue binding is missing. Check wrangler.toml.");
-  await env.wowboost_imports.send(connectorRuntimeTaskMessage({
+  await sendConnectorRuntimeTaskQueueMessage(env, task, connectorRuntimeTaskMessage({
     id: task.id,
     job_id: task.job_id,
     connector_id: task.connector_id,
     task_type: task.task_type,
     phase: task.phase,
-  }), { delaySeconds: Math.max(1, Math.floor(delaySeconds)) } as any);
+  }), { delaySeconds: Math.max(1, Math.floor(delaySeconds)) });
 }
 
 async function recoverStaleIdentityResolveTask(env: Env, task: ConnectorImportTaskRow, args: { enqueue?: boolean; reason?: string } = {}) {
@@ -2257,6 +4139,264 @@ async function recoverStaleIdentityResolveTasks(env: Env, args: { job_id?: strin
     recovered += 1;
   }
   return recovered;
+}
+
+async function recoverStaleAttributionBackfillTask(env: Env, task: ConnectorImportTaskRow, args: { reason?: string | null } = {}) {
+  if (!isAttributionBackfillRuntimeTask(task)) return task;
+  const lastError = `Recovered stale Attribution Backfill task after missing heartbeat for ${Math.round(ATTRIBUTION_BACKFILL_TASK_STALE_MS / 1000)} seconds.`;
+  const decision = connectorRuntimeStaleRunningTaskRecoveryDecision(task, {
+    stale_ms: ATTRIBUTION_BACKFILL_TASK_STALE_MS,
+    recovered_event: "attribution_backfill.stale_recovered",
+    exhausted_event: "attribution_backfill.stale_exhausted",
+    reason: args.reason || "stale_running_task",
+    last_error: lastError,
+  });
+  if (decision.action === "active") return task;
+
+  const updated = await updateConnectorRuntimeTaskIfCurrent(env, task, decision.patch as Record<string, any>);
+  if (!updated) return null;
+
+  await insertConnectorRuntimeError(env, {
+    job_id: task.job_id,
+    task_id: task.id,
+    connector_id: task.connector_id,
+    record_identifier: task.dedupe_key,
+    error_class: decision.action === "fail" ? "attribution_backfill_stale_exhausted" : "attribution_backfill_stale_recovered",
+    attempt: Math.max(1, Number(decision.attempt_count || task.attempt_count || 1)),
+    message: lastError,
+    classification: decision.action === "fail" ? "permanent" : "transient",
+  }).catch(() => {});
+
+  const job = await getImportJob(env, task.job_id).catch(() => null);
+  if (job) {
+    const progress = connectorRuntimeProgressFromJob(job);
+    const metadata = {
+      stale_attribution_tasks_recovered: Number(progress.metadata?.stale_attribution_tasks_recovered || 0) + (decision.action === "reclaim" ? 1 : 0),
+      stale_attribution_tasks_exhausted: Number(progress.metadata?.stale_attribution_tasks_exhausted || 0) + (decision.action === "fail" ? 1 : 0),
+      stale_attribution_task_ids: [...(progress.metadata?.stale_attribution_task_ids || []), task.id].slice(-10),
+      transient_retries: Number(progress.metadata?.transient_retries || progress.transient_retries || 0) + (decision.action === "reclaim" ? 1 : 0),
+    };
+    const nextProgress = mergeConnectorRuntimeCounters(progress, decision.action === "fail" ? { records_failed: 1 } : { retries: 1 }, {
+      status: decision.action === "fail" ? "completed_with_errors" : "retrying",
+      phase: task.phase,
+      last_error: decision.action === "fail" ? lastError : null,
+      next_run_at: decision.action === "fail" ? null : new Date().toISOString(),
+      metadata,
+    });
+    await updateConnectorRuntimeJobProgress(env, job, nextProgress).catch(() => {});
+  }
+
+  return updated;
+}
+
+function connectorRuntimeTaskStaleMs(task: ConnectorImportTaskRow) {
+  if (isIdentityResolveRuntimeTask(task)) return IDENTITY_RESOLVE_TASK_STALE_MS;
+  if (isAttributionBackfillRuntimeTask(task)) return ATTRIBUTION_BACKFILL_TASK_STALE_MS;
+  return 300000;
+}
+
+async function reconcileConnectorRuntimeJobQueue(env: Env, job: ImportJobRow, args: {
+  force_republish_queued?: boolean;
+  limit?: number;
+  reason?: string | null;
+} = {}) {
+  if (!env.wowboost_imports) {
+    return {
+      ok: false,
+      job_id: job.id,
+      error: "queue_not_configured",
+      message: "wowboost_imports queue binding is missing. Check wrangler.toml.",
+    };
+  }
+  const progress = connectorRuntimeProgressFromJob(job);
+  if (
+    progress.status === "paused" ||
+    progress.status === "cancelled" ||
+    isTerminalConnectorRuntimeJobStatus(progress.status)
+  ) {
+    return {
+      ok: true,
+      job_id: job.id,
+      skipped: true,
+      reason: `job_${progress.status}`,
+      stale_reclaimed: 0,
+      queued_republished: 0,
+      active_running: 0,
+      failed: 0,
+      races_lost: 0,
+    };
+  }
+
+  const supabase = getSupabase(env);
+  const { data, error } = await supabase
+    .from("connector_import_tasks")
+    .select("*")
+    .eq("job_id", job.id)
+    .in("status", ["queued", "retrying", "running"])
+    .order("updated_at", { ascending: true })
+    .limit(Math.max(1, Math.min(100, Number(args.limit || CONNECTOR_RUNTIME_RECOVERY_SCAN_LIMIT))));
+  if (error) throw new Error(`Failed to read connector runtime tasks for queue reconciliation: ${error.message}`);
+
+  const nowMs = Date.now();
+  const now = new Date(nowMs).toISOString();
+  const result = {
+    ok: true,
+    job_id: job.id,
+    skipped: false,
+    scanned: 0,
+    stale_reclaimed: 0,
+    queued_republished: 0,
+    active_running: 0,
+    failed: 0,
+    races_lost: 0,
+    task_ids: [] as string[],
+    errors: [] as Array<{ task_id: string; message: string }>,
+  };
+
+  for (const originalTask of (data || []) as ConnectorImportTaskRow[]) {
+    result.scanned += 1;
+    let task = originalTask;
+    let requeueReason = "orphan_queued_task";
+    let publishDiagnostics: ConnectorRuntimeTaskDiagnosticState | null = null;
+    try {
+      if (task.status === "running") {
+        const staleMs = connectorRuntimeTaskStaleMs(task);
+        if (!isConnectorRuntimeTaskStale(task, { now_ms: nowMs, stale_ms: staleMs })) {
+          result.active_running += 1;
+          continue;
+        }
+        const lastError = `Recovered stale Connector Runtime task after missing heartbeat for ${Math.round(staleMs / 1000)} seconds.`;
+        const decision = connectorRuntimeStaleRunningTaskRequeueDecision(task, {
+          stale_ms: staleMs,
+          now_ms: nowMs,
+          now,
+          recovered_event: "connector_runtime.task.stale_reclaimed",
+          exhausted_event: "connector_runtime.task.stale_exhausted",
+          reason: args.reason || "queue_reconciliation",
+          last_error: lastError,
+        });
+        if (decision.action === "active") {
+          result.active_running += 1;
+          continue;
+        }
+        const updated = await updateConnectorRuntimeTaskIfCurrent(env, task, decision.patch as Record<string, any>);
+        if (!updated) {
+          result.races_lost += 1;
+          continue;
+        }
+        task = updated;
+        await insertConnectorRuntimeError(env, {
+          job_id: task.job_id,
+          task_id: task.id,
+          connector_id: task.connector_id,
+          record_identifier: task.dedupe_key,
+          error_class: decision.action === "fail" ? "connector_runtime_stale_task_exhausted" : "connector_runtime_stale_task_reclaimed",
+          attempt: Math.max(1, Number(decision.attempt_count || task.attempt_count || 1)),
+          message: lastError,
+          classification: decision.action === "fail" ? "permanent" : "transient",
+        }).catch(() => {});
+
+        const latestJob = await getImportJob(env, task.job_id).catch(() => job);
+        if (latestJob) {
+          const latestProgress = connectorRuntimeProgressFromJob(latestJob);
+          const nextProgress = mergeConnectorRuntimeCounters(latestProgress, decision.action === "fail" ? { records_failed: 1 } : { retries: 1 }, {
+            status: decision.action === "fail" ? "completed_with_errors" : "retrying",
+            phase: task.phase,
+            last_error: decision.action === "fail" ? lastError : null,
+            next_run_at: decision.action === "fail" ? null : now,
+            metadata: {
+              queue_reconciliation_reclaimed_tasks: Number(latestProgress.metadata?.queue_reconciliation_reclaimed_tasks || 0) + (decision.action === "requeue" ? 1 : 0),
+              queue_reconciliation_failed_tasks: Number(latestProgress.metadata?.queue_reconciliation_failed_tasks || 0) + (decision.action === "fail" ? 1 : 0),
+              queue_reconciliation_task_ids: [...(latestProgress.metadata?.queue_reconciliation_task_ids || []), task.id].slice(-20),
+            },
+          });
+          await updateConnectorRuntimeJobProgress(env, latestJob, nextProgress).catch(() => {});
+        }
+
+        if (decision.action === "fail") {
+          result.failed += 1;
+          continue;
+        }
+        result.stale_reclaimed += 1;
+        requeueReason = "stale_running_reclaimed";
+      } else {
+        const decision = connectorRuntimeQueuedTaskRepublishDecision(task, {
+          now_ms: nowMs,
+          orphan_ms: CONNECTOR_RUNTIME_ORPHAN_QUEUED_TASK_MS,
+          force: Boolean(args.force_republish_queued),
+        });
+        if (decision.action !== "republish") continue;
+        publishDiagnostics = connectorRuntimeTaskDiagnosticState(task);
+        await heartbeatConnectorRuntimeQueueEvent(env, task, publishDiagnostics, "connector_runtime.queue.queued_task_republish.before", {
+          reason: decision.reason,
+          age_ms: decision.age_ms,
+        });
+        requeueReason = decision.reason;
+      }
+
+      await enqueueConnectorRuntimeTask(env, task);
+      if (!publishDiagnostics) publishDiagnostics = connectorRuntimeTaskDiagnosticState(task);
+      await heartbeatConnectorRuntimeQueueEvent(env, task, publishDiagnostics, "connector_runtime.queue.queued_task_republished", {
+        reason: requeueReason,
+      }).catch(() => {});
+      result.queued_republished += 1;
+      result.task_ids.push(task.id);
+    } catch (taskError: any) {
+      result.errors.push({ task_id: task.id, message: taskError?.message || String(taskError) });
+      await insertConnectorRuntimeError(env, {
+        job_id: task.job_id,
+        task_id: task.id,
+        connector_id: task.connector_id,
+        record_identifier: task.dedupe_key,
+        error_class: "connector_runtime_queue_reconciliation_failed",
+        attempt: Math.max(1, Number(task.attempt_count || 1)),
+        message: taskError?.message || String(taskError),
+        response_excerpt: taskError?.stack || null,
+        classification: classifyConnectorRuntimeFailure({ status: taskError?.status, message: taskError?.message, transient: taskError?.transient }),
+      }).catch(() => {});
+    }
+  }
+
+  return result;
+}
+
+async function reconcileActiveConnectorRuntimeQueues(env: Env, args: { limit_jobs?: number; tasks_per_job?: number } = {}) {
+  const supabase = getSupabase(env);
+  const { data, error } = await supabase
+    .from("integration_import_jobs")
+    .select("*")
+    .eq("module", "connector_runtime")
+    .in("status", ["queued", "running", "retrying"])
+    .order("updated_at", { ascending: true })
+    .limit(Math.max(1, Math.min(25, Number(args.limit_jobs || 10))));
+  if (error) throw new Error(`Failed to scan active Connector Runtime jobs for queue reconciliation: ${error.message}`);
+  const results = [];
+  for (const job of (data || []) as ImportJobRow[]) {
+    results.push(await reconcileConnectorRuntimeJobQueue(env, job, {
+      limit: args.tasks_per_job || CONNECTOR_RUNTIME_RECOVERY_SCAN_LIMIT,
+      reason: "scheduled_queue_reconciliation",
+    }));
+  }
+  return results;
+}
+
+async function findActiveAttributionBackfillTaskForJob(env: Env, jobId: string, progress: ConnectorRuntimeProgress & Record<string, any>) {
+  const cursor = journeyText(progress.current_cursor) || null;
+  const supabase = getSupabase(env);
+  const { data, error } = await supabase
+    .from("connector_import_tasks")
+    .select("*")
+    .eq("job_id", jobId)
+    .eq("connector_id", ATTRIBUTION_BACKFILL_CONNECTOR_ID)
+    .eq("task_type", ATTRIBUTION_BACKFILL_RUNTIME_TASK_TYPE)
+    .in("status", ["queued", "running", "retrying"])
+    .order("updated_at", { ascending: false })
+    .limit(25);
+  if (error) throw new Error(`Failed to read active Attribution Backfill tasks: ${error.message}`);
+  return ((data || []) as ConnectorImportTaskRow[]).find((task) => {
+    const taskCursor = journeyText(task.payload?.cursor || task.cursor) || null;
+    return taskCursor === cursor;
+  }) || null;
 }
 
 async function createAndEnqueueConnectorRuntimeTask(env: Env, plan: ConnectorRuntimeTaskPlan) {
@@ -2420,6 +4560,7 @@ async function findActiveConnectorRuntimeJob(env: Env, args: {
   job_type: string;
   from: string;
   to: string;
+  matches?: (job: ImportJobRow, progress: ConnectorRuntimeProgress & Record<string, any>) => boolean;
 }) {
   const supabase = getSupabase(env);
   const { data, error } = await supabase
@@ -2437,7 +4578,8 @@ async function findActiveConnectorRuntimeJob(env: Env, args: {
       progress.connector_id === args.connector_id &&
       progress.job_type === args.job_type &&
       progress.requested_from === args.from &&
-      progress.requested_to === args.to
+      progress.requested_to === args.to &&
+      (!args.matches || args.matches(job, progress))
     );
   }) || null;
 }
@@ -4725,10 +6867,11 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
 	    const maxRecordRetryAttempts = Math.max(1, Number(task.max_attempts || 5));
 	    const taskStartedMs = Date.now();
 	    const completedRecordIds: string[] = [];
-	    let budgetCheckpointReached = false;
-	    let budgetContinuationIds: string[] = [];
-	    const deferNextPhase = Boolean(task.payload?.defer_next_phase);
-	    const markRecordCompleteAndMaybeCheckpoint = async (platformOrderId: string, options: { completed?: boolean } = {}) => {
+			    let budgetCheckpointReached = false;
+			    let budgetContinuationIds: string[] = [];
+			    const deferNextPhase = Boolean(task.payload?.defer_next_phase);
+		    diagnostics.identity_resolve_cumulative_counts = createIdentityResolveResourceCounts();
+		    const markRecordCompleteAndMaybeCheckpoint = async (platformOrderId: string, options: { completed?: boolean } = {}) => {
 	      if (options.completed !== false) completedRecordIds.push(platformOrderId);
       const inlineLimitReached = inlineRecordLimit > 0 && processed >= inlineRecordLimit && processed < allPlatformOrderIds.length;
       if (!inlineLimitReached && !shouldCheckpointIdentityBackfillResolveBatch({
@@ -4765,21 +6908,20 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
 	            operation: "record_processing",
 	          }
 	        : null;
-	      const recordSubrequestTracker: IdentityResolveSubrequestTracker | null = isTargetRecord
-	        ? {
-	          platform: null,
-	          platform_order_id: platformOrderId,
-	          processed,
-	          record_index: processed,
+		      const recordSubrequestTracker: IdentityResolveSubrequestTracker = {
+		          platform: null,
+		          platform_order_id: platformOrderId,
+		          processed,
+		          record_index: processed,
 	          count: 0,
 	          completed: 0,
 	          errors: 0,
 	          timeouts: 0,
-	          started_at_ms: Date.now(),
-	          by_operation: {},
-	          pending: {},
-	        }
-	        : null;
+		          started_at_ms: Date.now(),
+		          by_operation: {},
+		          pending: {},
+		          resource_counts: createIdentityResolveResourceCounts(),
+		        };
 	      diagnostics.subrequest_tracker = recordSubrequestTracker;
 	      logConnectorRuntimeTaskEvent(task, "identity_resolve.record.start", { platform_order_id: platformOrderId, processed });
 	      await heartbeatConnectorRuntimeTask(env, task, diagnostics, "identity_resolve.record.start", {
@@ -4970,9 +7112,21 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
 	          attachment_conflict: !updated?.person_id,
 	        }, identityResolveRecordHeartbeatOptions(processed));
 	        if (await markRecordCompleteAndMaybeCheckpoint(platformOrderId)) break;
-	      } catch (e: any) {
-        const classification = classifyConnectorRuntimeFailure({ message: e?.message || e });
-        if (classification === "blocking") throw e;
+		      } catch (e: any) {
+		        if (isCloudflareSubrequestLimitError(e)) {
+		          const checkpoint = identityBackfillResolveSubrequestLimitCheckpoint({
+		            platform_order_ids: allPlatformOrderIds,
+		            completed_record_ids: completedRecordIds,
+		          });
+		          processed = checkpoint.processed;
+		          budgetCheckpointReached = true;
+		          budgetContinuationIds = checkpoint.remaining_platform_order_ids;
+		          transientRetries += 1;
+		          recentWarnings.push("identity_resolution_stopped_subrequest_limit");
+		          break;
+		        }
+	        const classification = classifyConnectorRuntimeFailure({ message: e?.message || e });
+	        if (classification === "blocking") throw e;
         if (classification === "transient" && retryAttempt < maxRecordRetryAttempts) {
           transientRetries += 1;
           transientRetryIds.push(platformOrderId);
@@ -5030,12 +7184,13 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
           error_name: targetRecordError?.name || "Error",
 	        }).catch(() => {});
 	        throw targetRecordError;
-	      } finally {
-	        if (recordSubrequestTracker) {
-	          await flushIdentityResolveRecordDiagnostics(env, task, diagnostics, recordSubrequestTracker).catch(() => {});
-	          if (diagnostics.subrequest_tracker === recordSubrequestTracker) diagnostics.subrequest_tracker = null;
-	        }
-	      }
+		      } finally {
+		        logIdentityResolveRecordResourceSummary(recordSubrequestTracker);
+		        if (isTargetRecord) {
+		          await flushIdentityResolveRecordDiagnostics(env, task, diagnostics, recordSubrequestTracker).catch(() => {});
+		        }
+		        if (diagnostics.subrequest_tracker === recordSubrequestTracker) diagnostics.subrequest_tracker = null;
+		      }
 		    }
 
 	    const nextDiscoveryCursor = String(task.payload?.next_discovery_cursor || "").trim() || null;
@@ -5080,15 +7235,15 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
 	          ...((Array.isArray(progress.metadata?.recent_completed_record_ids) ? progress.metadata.recent_completed_record_ids : []) as string[]),
 	          ...completedRecordIds,
 	        ].slice(-100),
-	        last_identity_resolve_budget_checkpoint: budgetCheckpointReached
-	          ? {
-	            task_id: task.id,
-	            processed,
-	            remaining: budgetContinuationIds.length,
-	            completed_record_ids: completedRecordIds.length,
-	            elapsed_ms: Date.now() - taskStartedMs,
-	          }
-	          : progress.metadata?.last_identity_resolve_budget_checkpoint || null,
+		        last_identity_resolve_budget_checkpoint: budgetCheckpointReached
+		          ? {
+		            task_id: task.id,
+		            processed,
+		            remaining: budgetContinuationIds.length,
+		            completed_record_ids: completedRecordIds.length,
+		            elapsed_ms: Date.now() - taskStartedMs,
+		          }
+		          : progress.metadata?.last_identity_resolve_budget_checkpoint || null,
 	      },
 	    });
     await traceIdentityResolveAwait(env, task, diagnostics, "identity_resolve.update_job_progress", async () => await updateConnectorRuntimeJobProgress(env, job, nextProgress), {
@@ -5139,10 +7294,11 @@ async function resolveIdentityBackfillRuntimeTask(env: Env, job: ImportJobRow, t
 	        }),
 	        max_attempts: maxRecordRetryAttempts,
 	      }), { durable_before: true, durable_after: true, details: { remaining_platform_order_ids: budgetContinuationIds.length } });
-	    } else if (!retryingTransientRecords && !deferNextPhase && nextDiscoveryCursor) {
-	      await traceIdentityResolveAwait(env, task, diagnostics, "identity_resolve.enqueue_discovery", async () => await createAndEnqueueConnectorRuntimeTask(env, {
-	        job_id: job.id,
-	        workspace_id: progress.workspace_id,
+		    } else if (!retryingTransientRecords && !deferNextPhase && nextDiscoveryCursor) {
+		      logIdentityResolveCumulativeResourceSummary(diagnostics, "identity_resolve.enqueue_discovery");
+		      await traceIdentityResolveAwait(env, task, diagnostics, "identity_resolve.enqueue_discovery", async () => await createAndEnqueueConnectorRuntimeTask(env, {
+		        job_id: job.id,
+		        workspace_id: progress.workspace_id,
         connector_id: progress.connector_id,
         task_type: IDENTITY_BACKFILL_TASK_TYPES.discover,
         phase: "discover_unlinked_records",
@@ -5346,21 +7502,34 @@ async function executeConnectorRuntimeTask(env: Env, task: ConnectorImportTaskRo
   }
 
   if (task.status === "completed") return { skipped: true, reason: "task_completed" };
-  const lockNow = new Date().toISOString();
-  const runningPatch: Partial<ConnectorImportTaskRow> & Record<string, any> = {
-    status: "running",
-    locked_at: lockNow,
-    attempt_count: Number(task.attempt_count || 0) + 1,
-    last_error: null,
-  };
-  if (isIdentityResolveRuntimeTask(task)) {
-    runningPatch.result_summary = appendConnectorRuntimeTaskDiagnostic(task.result_summary, "identity_resolve.lock_acquired", {
-      previous_status: task.status,
-      attempt_count: Number(task.attempt_count || 0) + 1,
-    }, lockNow);
+  if (!options.already_locked) {
+    const lockNow = new Date().toISOString();
+    const attemptAlreadyIncremented = connectorRuntimeAttemptAlreadyIncremented(task);
+    const nextAttemptCount = attemptAlreadyIncremented
+      ? Math.max(1, Number(task.attempt_count || 1))
+      : Number(task.attempt_count || 0) + 1;
+    const runningPatch: Partial<ConnectorImportTaskRow> & Record<string, any> = {
+      status: "running",
+      locked_at: lockNow,
+      attempt_count: nextAttemptCount,
+      last_error: null,
+    };
+    if (isIdentityResolveRuntimeTask(task)) {
+      runningPatch.result_summary = appendConnectorRuntimeTaskDiagnostic(task.result_summary, "identity_resolve.lock_acquired", {
+        previous_status: task.status,
+        attempt_count: nextAttemptCount,
+        attempt_already_incremented: attemptAlreadyIncremented,
+      }, lockNow);
+    } else {
+      runningPatch.result_summary = appendConnectorRuntimeTaskDiagnostic(task.result_summary, "connector_runtime.task.lock_acquired", {
+        previous_status: task.status,
+        attempt_count: nextAttemptCount,
+        attempt_already_incremented: attemptAlreadyIncremented,
+      }, lockNow);
+    }
+    await updateConnectorRuntimeTask(env, task.id, runningPatch);
+    task = { ...task, ...runningPatch } as ConnectorImportTaskRow;
   }
-  await updateConnectorRuntimeTask(env, task.id, runningPatch);
-  task = { ...task, ...runningPatch } as ConnectorImportTaskRow;
 
   let summary: Record<string, any>;
   if (task.task_type === "wowboost_stage_export_page") {
@@ -5377,6 +7546,12 @@ async function executeConnectorRuntimeTask(env: Env, task: ConnectorImportTaskRo
     summary = await resolveIdentityBackfillRuntimeTask(env, job, task, options);
   } else if (task.task_type === IDENTITY_BACKFILL_TASK_TYPES.finalize) {
     summary = await validateAndFinalizeIdentityBackfillRuntimeTask(env, job, task);
+  } else if (task.task_type === JOURNEY_ASSIGNMENT_RUNTIME_TASK_TYPE) {
+    summary = await executeJourneyAssignmentRuntimeTask(env, job, task);
+  } else if (task.task_type === ATTRIBUTION_BACKFILL_RUNTIME_TASK_TYPE) {
+    summary = await executeAttributionBackfillRuntimeTask(env, job, task);
+  } else if (task.task_type === BROWSER_EVENT_NORMALIZE_TASK_TYPE) {
+    summary = await executeBrowserEventNormalizeRuntimeTask(env, job, task);
   } else {
     throw new Error(`Unsupported connector runtime task type: ${task.task_type}`);
   }
@@ -5524,9 +7699,66 @@ function identityBackfillRuntimeTaskPlanForProgress(job: ImportJobRow, progress:
   };
 }
 
+function journeyAssignmentRuntimeTaskPlanForProgress(job: ImportJobRow, progress: ConnectorRuntimeProgress & Record<string, any>): ConnectorRuntimeTaskPlan {
+  const workspaceId = progress.workspace_id || "default";
+  const cursor = journeyText(progress.current_cursor) || null;
+  const batchSize = Math.max(1, Math.min(JOURNEY_ASSIGNMENT_MAX_BATCH_SIZE, Number(progress.metadata?.batch_size || progress.batch_size || JOURNEY_ASSIGNMENT_MAX_BATCH_SIZE)));
+  return {
+    job_id: job.id,
+    workspace_id: workspaceId,
+    connector_id: JOURNEY_ENGINE_CONNECTOR_ID,
+    task_type: JOURNEY_ASSIGNMENT_RUNTIME_TASK_TYPE,
+    phase: JOURNEY_ENGINE_PHASE,
+    cursor,
+    payload: {
+      cursor,
+      batch_size: batchSize,
+      timeout_seconds: Number(progress.metadata?.timeout_seconds || progress.timeout_seconds || JOURNEY_DEFAULT_TIMEOUT_SECONDS),
+    },
+    dedupe_key: `journey_assignment:${cursor || "start"}:${batchSize}`,
+    max_attempts: 5,
+  };
+}
+
+function attributionBackfillRuntimeTaskPlanForProgress(job: ImportJobRow, progress: ConnectorRuntimeProgress & Record<string, any>): ConnectorRuntimeTaskPlan {
+  const workspaceId = progress.workspace_id || "default";
+  const cursor = journeyText(progress.current_cursor) || null;
+  const batchSize = attributionJourneyBatchSize(progress.metadata?.journey_batch_size || progress.metadata?.batch_size || progress.journey_batch_size || progress.batch_size);
+  const models = Array.isArray(progress.metadata?.models) ? progress.metadata.models : Array.isArray(progress.models) ? progress.models : [];
+  const platforms = Array.isArray(progress.metadata?.platforms) ? progress.metadata.platforms : Array.isArray(progress.platforms) ? progress.platforms : [];
+  const forceRecalculate = Boolean(progress.metadata?.force_recalculate ?? progress.force_recalculate);
+  return {
+    job_id: job.id,
+    workspace_id: workspaceId,
+    connector_id: ATTRIBUTION_BACKFILL_CONNECTOR_ID,
+    task_type: ATTRIBUTION_BACKFILL_RUNTIME_TASK_TYPE,
+    phase: ATTRIBUTION_BACKFILL_PHASE,
+    cursor,
+    payload: {
+      cursor,
+      batch_size: batchSize,
+      journey_batch_size: batchSize,
+      models,
+      platforms,
+      force_recalculate: forceRecalculate,
+    },
+    dedupe_key: `attribution_backfill:${cursor || "start"}:${batchSize}:${attributionRuntimeArrayKey(models)}:${attributionRuntimeArrayKey(platforms)}:${forceRecalculate ? "1" : "0"}`,
+    max_attempts: 5,
+  };
+}
+
 function connectorRuntimeTaskPlanForProgress(job: ImportJobRow, progress: ConnectorRuntimeProgress & Record<string, any>): ConnectorRuntimeTaskPlan {
   if (progress.connector_id === IDENTITY_BACKFILL_CONNECTOR_ID) {
     return identityBackfillRuntimeTaskPlanForProgress(job, progress);
+  }
+  if (progress.connector_id === JOURNEY_ENGINE_CONNECTOR_ID) {
+    return journeyAssignmentRuntimeTaskPlanForProgress(job, progress);
+  }
+  if (progress.connector_id === ATTRIBUTION_BACKFILL_CONNECTOR_ID) {
+    return attributionBackfillRuntimeTaskPlanForProgress(job, progress);
+  }
+  if (progress.connector_id === BROWSER_EVENTS_CONNECTOR_ID) {
+    return browserEventNormalizeTaskPlanForProgress(job, progress);
   }
   return wowBoostRuntimeTaskPlanForProgress(job, progress);
 }
@@ -5741,13 +7973,16 @@ async function startIdentityBackfillRuntimeJob(env: Env, args: {
       job_type: IDENTITY_BACKFILL_JOB_TYPE,
       from: args.from,
       to: args.to,
+      matches: (_candidate, candidateProgress) => identityBackfillRuntimeConfigMatches(candidateProgress, {
+        workspace_id: args.workspace_id,
+        requested_from: args.from,
+        requested_to: args.to,
+        platforms: args.platforms,
+        batch_size: args.batch_size,
+        dry_run: Boolean(args.dry_run),
+      }),
     });
-    if (candidate) {
-      const candidateProgress = connectorRuntimeProgressFromJob(candidate);
-      const samePlatforms = JSON.stringify(identityBackfillPlatformsFromProgress(candidateProgress)) === JSON.stringify(args.platforms);
-      const sameDryRun = Boolean(candidateProgress.metadata?.dry_run) === Boolean(args.dry_run);
-      if (samePlatforms && sameDryRun) job = candidate;
-    }
+    if (candidate) job = candidate;
   }
 
   const now = new Date().toISOString();
@@ -5843,6 +8078,1080 @@ async function startIdentityBackfillRuntimeJob(env: Env, args: {
       progress: await connectorRuntimeJobPayload(env, job),
       operations_status_url: `/v1/import-jobs/${job.id}`,
     },
+  };
+}
+
+async function startJourneyAssignmentRuntimeJob(env: Env, args: JourneyAssignmentBackfillRequest & { force_new_job?: boolean | null }) {
+  if (!env.wowboost_imports) {
+    return {
+      ok: false,
+      status: 500,
+      body: {
+        ok: false,
+        error: "queue_not_configured",
+        message: "wowboost_imports queue binding is missing. Check wrangler.toml.",
+      },
+    };
+  }
+
+  const batchSize = Math.max(1, Math.min(JOURNEY_ASSIGNMENT_MAX_BATCH_SIZE, Number(args.batch_size || JOURNEY_ASSIGNMENT_MAX_BATCH_SIZE)));
+  let job: ImportJobRow | null = null;
+  const forceNewJob = Boolean(args.force_new_job);
+  if (args.job_id && !forceNewJob) {
+    job = await getImportJob(env, args.job_id);
+    if (!job) {
+      return {
+        ok: false,
+        status: 404,
+        body: {
+          ok: false,
+          error: "job_not_found",
+          message: `Import job ${args.job_id} was not found.`,
+        },
+      };
+    }
+    if (!isConnectorRuntimeV1Job(job as any, JOURNEY_ENGINE_CONNECTOR_ID)) {
+      return {
+        ok: false,
+        status: 400,
+        body: {
+          ok: false,
+          error: "legacy_job_not_runtime_v1",
+          message: "The supplied job_id is not a Connector Runtime v1 Journey Backfill job. Omit job_id to create a runtime job.",
+          job_id: job.id,
+        },
+      };
+    }
+  }
+
+  if (!job && !forceNewJob) {
+    const candidate = await findActiveConnectorRuntimeJob(env, {
+      workspace_id: args.workspace_id,
+      connector_id: JOURNEY_ENGINE_CONNECTOR_ID,
+      job_type: JOURNEY_ENGINE_JOB_TYPE,
+      from: args.from,
+      to: args.to,
+      matches: (_candidate, candidateProgress) => (
+        Number(candidateProgress.metadata?.batch_size || candidateProgress.batch_size || 0) === batchSize
+        && Number(candidateProgress.metadata?.timeout_seconds || candidateProgress.timeout_seconds || 0) === Number(args.timeout_seconds)
+      ),
+    });
+    if (candidate) job = candidate;
+  }
+
+  const now = new Date().toISOString();
+  if (!job) {
+    const progress = createConnectorRuntimeProgress({
+      workspace_id: args.workspace_id,
+      connector_id: JOURNEY_ENGINE_CONNECTOR_ID,
+      job_type: JOURNEY_ENGINE_JOB_TYPE,
+      phase: JOURNEY_ENGINE_PHASE,
+      requested_from: args.from,
+      requested_to: args.to,
+      now,
+      metadata: connectorRuntimeMetadata({
+        connector_id: JOURNEY_ENGINE_CONNECTOR_ID,
+        metadata: {
+          batch_size: batchSize,
+          timeout_seconds: args.timeout_seconds,
+        },
+      }),
+    });
+    progress.status = "queued";
+    progress.current_cursor = args.cursor || null;
+    progress.current_page = null;
+    job = await createImportJob(env, {
+      platform: "journeys",
+      module: "connector_runtime",
+      from: args.from,
+      to: args.to,
+      filter: JOURNEY_ENGINE_JOB_TYPE,
+      workspace_id: args.workspace_id,
+      connector_id: JOURNEY_ENGINE_CONNECTOR_ID,
+      progress,
+      status: "queued",
+    });
+    await updateConnectorRuntimeJobProgress(env, job, progress);
+    job = await getImportJob(env, job.id) || job;
+  }
+
+  let progress = connectorRuntimeProgressFromJob(job);
+  const explicitRuntimeResume = Boolean(args.job_id && !forceNewJob);
+  const canResumeFailedRuntimeJob = explicitRuntimeResume && progress.status === "failed";
+  if (
+    progress.status === "paused" ||
+    progress.status === "cancelled" ||
+    (isTerminalConnectorRuntimeJobStatus(progress.status) && !canResumeFailedRuntimeJob)
+  ) {
+    return {
+      ok: true,
+      status: 202,
+      body: {
+        ok: true,
+        job_id: job.id,
+        status: progress.status,
+        phase: progress.phase,
+        queued: false,
+        progress: await connectorRuntimeJobPayload(env, job),
+        operations_status_url: `/v1/import-jobs/${job.id}`,
+      },
+    };
+  }
+
+  progress = {
+    ...progress,
+    status: "queued",
+    phase: JOURNEY_ENGINE_PHASE,
+    started_at: progress.started_at || now,
+    updated_at: now,
+    completed_at: null,
+    last_error: null,
+    metadata: {
+      ...(progress.metadata || {}),
+      batch_size: Math.max(1, Math.min(JOURNEY_ASSIGNMENT_MAX_BATCH_SIZE, Number(progress.metadata?.batch_size || batchSize))),
+      timeout_seconds: Number(progress.metadata?.timeout_seconds || args.timeout_seconds),
+    },
+  };
+  await updateConnectorRuntimeJobProgress(env, job, progress);
+  job = await getImportJob(env, job.id) || job;
+  progress = connectorRuntimeProgressFromJob(job);
+  const task = await createAndEnqueueConnectorRuntimeTask(env, journeyAssignmentRuntimeTaskPlanForProgress(job, progress));
+
+  return {
+    ok: true,
+    status: 202,
+    body: {
+      ok: true,
+      job_id: job.id,
+      status: progress.status,
+      phase: progress.phase,
+      queued: true,
+      task_id: task.task.id,
+      duplicate_task_prevented: !task.created,
+      progress: await connectorRuntimeJobPayload(env, job),
+      operations_status_url: `/v1/import-jobs/${job.id}`,
+      message: "Journey backfill queued. The Connector Runtime will continue batches automatically.",
+    },
+  };
+}
+
+async function startAttributionBackfillRuntimeJob(env: Env, args: AttributionBackfillRequest & { force_new_job?: boolean | null }) {
+  if (!env.wowboost_imports) {
+    return {
+      ok: false,
+      status: 500,
+      body: {
+        ok: false,
+        error: "queue_not_configured",
+        message: "wowboost_imports queue binding is missing. Check wrangler.toml.",
+      },
+    };
+  }
+
+  const batchSize = attributionJourneyBatchSize(args.batch_size);
+  const normalizedArgs = { ...args, batch_size: batchSize };
+  let job: ImportJobRow | null = null;
+  const forceNewJob = Boolean(args.force_new_job);
+  if (args.job_id && !forceNewJob) {
+    job = await getImportJob(env, args.job_id);
+    if (!job) {
+      return {
+        ok: false,
+        status: 404,
+        body: {
+          ok: false,
+          error: "job_not_found",
+          message: `Import job ${args.job_id} was not found.`,
+        },
+      };
+    }
+    if (!isConnectorRuntimeV1Job(job as any, ATTRIBUTION_BACKFILL_CONNECTOR_ID)) {
+      return {
+        ok: false,
+        status: 400,
+        body: {
+          ok: false,
+          error: "legacy_job_not_runtime_v1",
+          message: "The supplied job_id is not a Connector Runtime v1 Attribution Backfill job. Omit job_id to create a runtime job.",
+          job_id: job.id,
+        },
+      };
+    }
+  }
+
+  if (!job && !forceNewJob) {
+    const candidate = await findActiveConnectorRuntimeJob(env, {
+      workspace_id: normalizedArgs.workspace_id,
+      connector_id: ATTRIBUTION_BACKFILL_CONNECTOR_ID,
+      job_type: ATTRIBUTION_BACKFILL_JOB_TYPE,
+      from: normalizedArgs.from,
+      to: normalizedArgs.to,
+      matches: (_candidate, candidateProgress) => attributionRuntimeConfigMatches(candidateProgress, normalizedArgs),
+    });
+    if (candidate) job = candidate;
+  }
+
+  const now = new Date().toISOString();
+  if (!job) {
+    const progress = createConnectorRuntimeProgress({
+      workspace_id: normalizedArgs.workspace_id,
+      connector_id: ATTRIBUTION_BACKFILL_CONNECTOR_ID,
+      job_type: ATTRIBUTION_BACKFILL_JOB_TYPE,
+      phase: ATTRIBUTION_BACKFILL_PHASE,
+      requested_from: normalizedArgs.from,
+      requested_to: normalizedArgs.to,
+      now,
+      metadata: connectorRuntimeMetadata({
+        connector_id: ATTRIBUTION_BACKFILL_CONNECTOR_ID,
+        metadata: {
+          models: normalizedArgs.models,
+          platforms: normalizedArgs.platforms,
+          batch_size: batchSize,
+          journey_batch_size: batchSize,
+          force_recalculate: normalizedArgs.force_recalculate,
+          transient_retries: 0,
+        },
+      }),
+    });
+    Object.assign(progress, {
+      status: "queued",
+      current_cursor: normalizedArgs.cursor || null,
+      current_page: null,
+      models: normalizedArgs.models,
+      platforms: normalizedArgs.platforms,
+      batch_size: batchSize,
+      journey_batch_size: batchSize,
+      force_recalculate: normalizedArgs.force_recalculate,
+      journeys_discovered: 0,
+      journeys_processed: 0,
+      conversions_discovered: 0,
+      conversions_attributed_first_touch: 0,
+      conversions_attributed_last_touch: 0,
+      conversions_unattributed: 0,
+      credits_inserted: 0,
+      credits_replaced: 0,
+      credits_already_current: 0,
+      transient_retries: 0,
+      has_more: false,
+    });
+    job = await createImportJob(env, {
+      platform: "attribution",
+      module: "connector_runtime",
+      from: normalizedArgs.from,
+      to: normalizedArgs.to,
+      filter: ATTRIBUTION_BACKFILL_JOB_TYPE,
+      workspace_id: normalizedArgs.workspace_id,
+      connector_id: ATTRIBUTION_BACKFILL_CONNECTOR_ID,
+      progress,
+      status: "queued",
+    });
+    await updateConnectorRuntimeJobProgress(env, job, progress);
+    job = await getImportJob(env, job.id) || job;
+  }
+
+  let progress = connectorRuntimeProgressFromJob(job);
+  const explicitRuntimeResume = Boolean(args.job_id && !forceNewJob);
+  const canResumeFailedRuntimeJob = explicitRuntimeResume && progress.status === "failed";
+  if (
+    progress.status === "paused" ||
+    progress.status === "cancelled" ||
+    (isTerminalConnectorRuntimeJobStatus(progress.status) && !canResumeFailedRuntimeJob)
+  ) {
+    return {
+      ok: true,
+      status: 202,
+      body: {
+        ok: true,
+        job_id: job.id,
+        status: progress.status,
+        phase: progress.phase,
+        queued: false,
+        progress: await connectorRuntimeJobPayload(env, job),
+        operations_status_url: `/v1/import-jobs/${job.id}`,
+      },
+    };
+  }
+
+  progress = {
+    ...progress,
+    status: "queued",
+    phase: ATTRIBUTION_BACKFILL_PHASE,
+    started_at: progress.started_at || now,
+    updated_at: now,
+    completed_at: null,
+    last_error: null,
+    current_cursor: progress.current_cursor || normalizedArgs.cursor || null,
+    metadata: {
+      ...(progress.metadata || {}),
+      models: Array.isArray(progress.metadata?.models) ? progress.metadata.models : normalizedArgs.models,
+      platforms: Array.isArray(progress.metadata?.platforms) ? progress.metadata.platforms : normalizedArgs.platforms,
+      batch_size: attributionJourneyBatchSize(progress.metadata?.journey_batch_size || progress.metadata?.batch_size || batchSize),
+      journey_batch_size: attributionJourneyBatchSize(progress.metadata?.journey_batch_size || progress.metadata?.batch_size || batchSize),
+      force_recalculate: Boolean(progress.metadata?.force_recalculate ?? normalizedArgs.force_recalculate),
+      transient_retries: Number(progress.metadata?.transient_retries || progress.transient_retries || 0),
+    },
+  };
+  await updateConnectorRuntimeJobProgress(env, job, progress);
+  job = await getImportJob(env, job.id) || job;
+  progress = connectorRuntimeProgressFromJob(job);
+  const queueReconciliation = await reconcileConnectorRuntimeJobQueue(env, job, {
+    force_republish_queued: true,
+    reason: "attribution_backfill_start",
+  });
+  const activeTask = await findActiveAttributionBackfillTaskForJob(env, job.id, progress);
+  if (activeTask) {
+    return {
+      ok: true,
+      status: 202,
+      body: {
+        ok: true,
+        job_id: job.id,
+        status: progress.status,
+        phase: progress.phase,
+        queued: true,
+        task_id: activeTask.id,
+        duplicate_task_prevented: true,
+        queue_reconciliation: queueReconciliation,
+        progress: await connectorRuntimeJobPayload(env, job),
+        operations_status_url: `/v1/import-jobs/${job.id}`,
+        message: "Attribution backfill queued. The Connector Runtime will continue batches automatically.",
+      },
+    };
+  }
+  const task = await createAndEnqueueConnectorRuntimeTask(env, attributionBackfillRuntimeTaskPlanForProgress(job, progress));
+
+  return {
+    ok: true,
+    status: 202,
+    body: {
+      ok: true,
+      job_id: job.id,
+      status: progress.status,
+      phase: progress.phase,
+      queued: true,
+      task_id: task.task.id,
+      duplicate_task_prevented: !task.created,
+      progress: await connectorRuntimeJobPayload(env, job),
+      operations_status_url: `/v1/import-jobs/${job.id}`,
+      message: "Attribution backfill queued. The Connector Runtime will continue batches automatically.",
+    },
+  };
+}
+
+async function queryBrowserRawEventsForNormalization(env: Env, args: { workspace_id: string; cursor: string | null; batch_size: number }) {
+  const supabase = getSupabase(env);
+  const cursor = parseBrowserEventCursor(args.cursor);
+  let query = supabase
+    .from(BROWSER_EVENTS_RAW_TABLE)
+    .select("*")
+    .eq("workspace_id", args.workspace_id)
+    .eq("normalization_status", "pending")
+    .order("received_at", { ascending: true })
+    .order("event_id", { ascending: true })
+    .limit(args.batch_size + 1);
+  if (cursor) {
+    query = query.or(`received_at.gt.${cursor.received_at},and(received_at.eq.${cursor.received_at},event_id.gt.${cursor.event_id})`);
+  }
+  const { data, error } = await query;
+  if (error) throw new Error(`Browser raw event normalization scan failed: ${error.message}`);
+  return (data || []) as BrowserRawEventRow[];
+}
+
+function browserIdentityPayloadDiagnostic(payload: Record<string, any>) {
+  const identity = payload.identity && typeof payload.identity === "object" ? payload.identity : {};
+  const properties = payload.properties && typeof payload.properties === "object" ? payload.properties : {};
+  const user = payload.user && typeof payload.user === "object" ? payload.user : {};
+  return {
+    has_identity_object: Boolean(payload.identity && typeof payload.identity === "object"),
+    has_email: Boolean(journeyText(payload.email || identity.email || properties.email || user.email)),
+    has_phone: Boolean(journeyText(payload.phone || identity.phone || properties.phone || user.phone)),
+    has_first_name: Boolean(journeyText(payload.first_name || payload.firstName || identity.first_name || identity.firstName || properties.first_name || user.first_name)),
+    has_last_name: Boolean(journeyText(payload.last_name || payload.lastName || identity.last_name || identity.lastName || properties.last_name || user.last_name)),
+    identity_keys: Object.keys(identity).sort().slice(0, 20),
+  };
+}
+
+async function resolveBrowserEventPerson(env: Env, job: ImportJobRow, raw: BrowserRawEventRow) {
+  const eventType = journeyText(raw.normalized_event_type);
+  if (eventType !== "identify" && eventType !== "lead" && eventType !== "purchase") {
+    console.log("[TraceKit] browser identity resolution skipped", {
+      job_id: job.id,
+      workspace_id: raw.workspace_id,
+      event_id: raw.event_id,
+      event_type: raw.normalized_event_type,
+      reason: "anonymous_event_type",
+    });
+    return { person_id: null as string | null, review_required: false, action: "anonymous" };
+  }
+  const payload = raw.raw_payload || {};
+  const identifiers = browserIdentityIdentifiers(payload);
+  console.log("[TraceKit] browser identity input", {
+    job_id: job.id,
+    workspace_id: raw.workspace_id,
+    event_id: raw.event_id,
+    event_type: raw.normalized_event_type,
+    tkid_present: Boolean(raw.tkid),
+    identifier_count: identifiers.length,
+    identifier_types: identifiers.map((identifier) => identifier.identifier_type),
+    identity_payload: browserIdentityPayloadDiagnostic(payload),
+  });
+  if (!identifiers.length) {
+    console.log("[TraceKit] browser identity resolution skipped", {
+      job_id: job.id,
+      workspace_id: raw.workspace_id,
+      event_id: raw.event_id,
+      event_type: raw.normalized_event_type,
+      reason: "no_identity_signal",
+    });
+    return { person_id: null as string | null, review_required: false, action: "no_identity_signal" };
+  }
+  try {
+    console.log("[TraceKit] browser identity service invocation", {
+      job_id: job.id,
+      workspace_id: raw.workspace_id,
+      event_id: raw.event_id,
+      event_type: raw.normalized_event_type,
+      connector_id: BROWSER_EVENTS_CONNECTOR_ID,
+      identifier_count: identifiers.length,
+      observed_at: raw.event_time || raw.received_at,
+    });
+    const result = await resolveIdentityForSourceRecord(getIdentityService(env), {
+      workspace_id: raw.workspace_id || "default",
+      connector_id: BROWSER_EVENTS_CONNECTOR_ID,
+      connector_job_id: job.id,
+      platform: "browser",
+      record_type: "browser_event",
+      record_id: raw.event_id,
+      identifiers,
+      attributes: browserEventPersonAttributes(payload),
+      observed_at: raw.event_time || raw.received_at,
+    });
+    console.log("[TraceKit] browser identity service result", {
+      job_id: job.id,
+      workspace_id: raw.workspace_id,
+      event_id: raw.event_id,
+      event_type: raw.normalized_event_type,
+      action: result.action,
+      review_required: Boolean(result.review_required),
+      person_id: result.person_id || null,
+      matched_identifier_count: result.matched_identifiers?.length || 0,
+      attached_identifier_count: result.attached_identifiers?.length || 0,
+      conflict_count: result.conflicts?.length || 0,
+    });
+    const identityDomainEvent = buildIdentityOutcomeDomainEvent(result, {
+      workspace_id: raw.workspace_id || "default",
+      source_platform: "browser",
+      source_record_type: "browser_event",
+      source_record_id: raw.event_id,
+      connector_job_id: job.id,
+      occurred_at: raw.event_time || raw.received_at,
+    });
+    if (identityDomainEvent) {
+      await domainEventPublisher(env)(identityDomainEvent).catch((error: any) => {
+        console.error("[TraceKit] browser identity domain event publish failed", {
+          job_id: job.id,
+          workspace_id: raw.workspace_id,
+          event_id: raw.event_id,
+          event_type: raw.normalized_event_type,
+          message: error?.message || String(error),
+        });
+      });
+    }
+    if (result.review_required) return { person_id: null, review_required: true, action: result.action };
+    return { person_id: result.person_id || null, review_required: false, action: result.action };
+  } catch (error: any) {
+    console.log("[TraceKit] browser event identity resolution deferred", {
+      workspace_id: raw.workspace_id,
+      event_id: raw.event_id,
+      event_type: raw.normalized_event_type,
+      message: error?.message || String(error),
+    });
+    return { person_id: null, review_required: false, action: "identity_resolution_deferred" };
+  }
+}
+
+async function findLinkedBrowserIdentityForPurchase(env: Env, raw: BrowserRawEventRow) {
+  if (journeyText(raw.normalized_event_type) !== "purchase") return null;
+  const workspaceId = raw.workspace_id || "default";
+  const eventTime = raw.event_time || raw.received_at;
+  const supabase = getSupabase(env);
+  const lookup = async (matchMethod: "tkid" | "session_id", value: string) => {
+    let query = supabase
+      .from("journey_events")
+      .select(JOURNEY_EVENT_ASSIGNMENT_SELECT)
+      .eq("workspace_id", workspaceId)
+      .eq("source_platform", "browser")
+      .eq("source_connector", BROWSER_EVENTS_CONNECTOR_ID)
+      .not("person_id", "is", null)
+      .not("journey_id", "is", null)
+      .lte("event_time", eventTime)
+      .neq("source_record_id", raw.event_id)
+      .order("event_time", { ascending: false })
+      .order("id", { ascending: false })
+      .limit(1)
+      .maybeSingle();
+    query = matchMethod === "tkid"
+      ? query.eq("metadata->>tkid", value)
+      : query.eq("session_id", value);
+    const { data, error } = await query;
+    if (error) throw new Error(`Browser purchase ${matchMethod} journey lookup failed: ${error.message}`);
+    const personId = journeyText((data as any)?.person_id);
+    const journeyId = journeyText((data as any)?.journey_id);
+    if (!personId || !journeyId) return null;
+    return {
+      person_id: personId,
+      journey_id: journeyId,
+      source_record_id: journeyText((data as any)?.source_record_id) || null,
+      match_method: matchMethod,
+    };
+  };
+
+  const tkid = journeyText(raw.tkid);
+  if (tkid) {
+    const match = await lookup("tkid", tkid);
+    if (match) return match;
+  }
+  const sessionId = journeyText(raw.session_id);
+  if (sessionId) return lookup("session_id", sessionId);
+  return null;
+}
+
+async function updateBrowserRawEventNormalization(env: Env, row: BrowserRawEventRow, patch: Record<string, any>) {
+  const supabase = getSupabase(env);
+  console.log("[TraceKit] browser raw event update started", {
+    workspace_id: row.workspace_id,
+    event_id: row.event_id,
+    status: patch.normalization_status || null,
+    person_id: patch.person_id || null,
+    journey_id: patch.journey_id || null,
+    normalized_journey_event_id: patch.normalized_journey_event_id || null,
+  });
+  let query = supabase
+    .from(BROWSER_EVENTS_RAW_TABLE)
+    .update({
+      ...patch,
+      normalization_attempts: Number(row.normalization_attempts || 0) + 1,
+      updated_at: new Date().toISOString(),
+    });
+  if (row.id) query = query.eq("id", row.id);
+  else query = query.eq("workspace_id", row.workspace_id).eq("event_id", row.event_id);
+  const { error } = await query;
+  if (error) throw new Error(`Browser raw event status update failed: ${error.message}`);
+  console.log("[TraceKit] browser raw event update completed", {
+    workspace_id: row.workspace_id,
+    event_id: row.event_id,
+    status: patch.normalization_status || null,
+    person_id: patch.person_id || null,
+    journey_id: patch.journey_id || null,
+  });
+}
+
+async function fetchJourneyIdsForBrowserEvents(env: Env, workspaceId: string, eventIds: string[]) {
+  if (!eventIds.length) return new Map<string, string | null>();
+  const supabase = getSupabase(env);
+  const { data, error } = await supabase
+    .from("journey_events")
+    .select("id,source_record_id,journey_id")
+    .eq("workspace_id", workspaceId)
+    .eq("source_platform", "browser")
+    .eq("source_connector", BROWSER_EVENTS_CONNECTOR_ID)
+    .in("source_record_id", eventIds);
+  if (error) throw new Error(`Browser journey event lookup failed: ${error.message}`);
+  return new Map((data || []).map((row: any) => [journeyText(row.source_record_id), journeyText(row.journey_id) || null]));
+}
+
+async function linkPriorAnonymousBrowserJourneyEventsByTkid(env: Env, args: {
+  workspace_id: string;
+  tkid: string | null;
+  person_id: string | null;
+  event_time: string;
+  source_record_id: string;
+}) {
+  const tkid = journeyText(args.tkid);
+  const personId = journeyText(args.person_id);
+  if (!tkid || !personId) return [];
+  console.log("[TraceKit] browser tkid journey_events update started", {
+    workspace_id: args.workspace_id || "default",
+    source_record_id: args.source_record_id,
+    person_id: personId,
+    tkid_present: Boolean(tkid),
+    event_time: args.event_time,
+  });
+  const supabase = getSupabase(env);
+  const { data, error } = await supabase
+    .from("journey_events")
+    .update({ person_id: personId, updated_at: new Date().toISOString() })
+    .eq("workspace_id", args.workspace_id || "default")
+    .eq("source_platform", "browser")
+    .eq("source_connector", BROWSER_EVENTS_CONNECTOR_ID)
+    .eq("metadata->>tkid", tkid)
+    .is("person_id", null)
+    .is("journey_id", null)
+    .lte("event_time", args.event_time)
+    .neq("source_record_id", args.source_record_id)
+    .select(JOURNEY_EVENT_ASSIGNMENT_SELECT);
+  if (error) throw new Error(`Browser tkid anonymous journey event link failed: ${error.message}`);
+  console.log("[TraceKit] browser tkid journey_events update completed", {
+    workspace_id: args.workspace_id || "default",
+    source_record_id: args.source_record_id,
+    person_id: personId,
+    linked_event_count: (data || []).length,
+  });
+  return (data || []) as any[];
+}
+
+async function linkCurrentAnonymousBrowserJourneyEventsByPerson(env: Env, args: {
+  workspace_id: string;
+  person_ids_by_event_id: Map<string, string | null>;
+}) {
+  const eventIdsByPersonId = new Map<string, string[]>();
+  for (const [eventId, personId] of args.person_ids_by_event_id.entries()) {
+    const normalizedEventId = journeyText(eventId);
+    const normalizedPersonId = journeyText(personId);
+    if (!normalizedEventId || !normalizedPersonId) continue;
+    const list = eventIdsByPersonId.get(normalizedPersonId) || [];
+    list.push(normalizedEventId);
+    eventIdsByPersonId.set(normalizedPersonId, list);
+  }
+  if (!eventIdsByPersonId.size) return [];
+
+  const supabase = getSupabase(env);
+  const linked: any[] = [];
+  for (const [personId, eventIds] of eventIdsByPersonId.entries()) {
+    console.log("[TraceKit] browser current journey_events person update started", {
+      workspace_id: args.workspace_id || "default",
+      person_id: personId,
+      event_count: eventIds.length,
+    });
+    const { data, error } = await supabase
+      .from("journey_events")
+      .update({ person_id: personId, updated_at: new Date().toISOString() })
+      .eq("workspace_id", args.workspace_id || "default")
+      .eq("source_platform", "browser")
+      .eq("source_connector", BROWSER_EVENTS_CONNECTOR_ID)
+      .in("source_record_id", eventIds)
+      .is("person_id", null)
+      .select(JOURNEY_EVENT_ASSIGNMENT_SELECT);
+    if (error) throw new Error(`Browser current journey event identity link failed: ${error.message}`);
+    linked.push(...(data || []));
+    console.log("[TraceKit] browser current journey_events person update completed", {
+      workspace_id: args.workspace_id || "default",
+      person_id: personId,
+      requested_event_count: eventIds.length,
+      linked_event_count: (data || []).length,
+    });
+  }
+  return linked;
+}
+
+async function updateBrowserRawEventsForRetroIdentity(env: Env, args: {
+  workspace_id: string;
+  person_id: string;
+  journey_ids_by_event_id: Map<string, string | null>;
+}) {
+  const eventIds = Array.from(args.journey_ids_by_event_id.keys()).map(journeyText).filter(Boolean);
+  if (!eventIds.length) return 0;
+  const supabase = getSupabase(env);
+  let updated = 0;
+  const idsByJourney = new Map<string, string[]>();
+  for (const eventId of eventIds) {
+    const journeyId = args.journey_ids_by_event_id.get(eventId) || "";
+    const list = idsByJourney.get(journeyId) || [];
+    list.push(eventId);
+    idsByJourney.set(journeyId, list);
+  }
+  for (const [journeyId, ids] of idsByJourney) {
+    console.log("[TraceKit] browser retro raw events update started", {
+      workspace_id: args.workspace_id || "default",
+      person_id: args.person_id,
+      journey_id: journeyId || null,
+      event_count: ids.length,
+    });
+    const { data, error } = await supabase
+      .from(BROWSER_EVENTS_RAW_TABLE)
+      .update({
+        person_id: args.person_id,
+        journey_id: journeyId || null,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("workspace_id", args.workspace_id || "default")
+      .in("event_id", ids)
+      .is("person_id", null)
+      .select("event_id");
+    if (error) throw new Error(`Browser raw tkid identity link failed: ${error.message}`);
+    updated += (data || []).length;
+    console.log("[TraceKit] browser retro raw events update completed", {
+      workspace_id: args.workspace_id || "default",
+      person_id: args.person_id,
+      journey_id: journeyId || null,
+      requested_event_count: ids.length,
+      updated_event_count: (data || []).length,
+    });
+  }
+  return updated;
+}
+
+async function executeBrowserEventNormalizeRuntimeTask(env: Env, job: ImportJobRow, task: ConnectorImportTaskRow) {
+  const started = Date.now();
+  const progress = connectorRuntimeProgressFromJob(job);
+  const batchSize = Math.max(1, Math.min(BROWSER_EVENT_MAX_BATCH_SIZE, Number(task.payload?.batch_size || progress.metadata?.batch_size || BROWSER_EVENT_DEFAULT_BATCH_SIZE)));
+  const cursor = journeyText(task.payload?.cursor || task.cursor || progress.current_cursor) || null;
+  const rows = await queryBrowserRawEventsForNormalization(env, {
+    workspace_id: progress.workspace_id || "default",
+    cursor,
+    batch_size: batchSize,
+  });
+  const batchRows = rows.slice(0, batchSize);
+  const inputs = [];
+  const rawByEventId = new Map<string, BrowserRawEventRow>();
+  const personIdByEventId = new Map<string, string | null>();
+  const invalidEventIds = new Set<string>();
+  const retroLinkedEventsById = new Map<string, any>();
+  const retroLinkedEventIdsByPersonId = new Map<string, Set<string>>();
+  let peopleResolved = 0;
+  let anonymousEventsRetained = 0;
+  let invalid = 0;
+  let review = 0;
+  let retroLinkedEvents = 0;
+  let retroLinkedRawEvents = 0;
+  const warnings: string[] = [];
+
+  console.log("[TraceKit] browser event normalization started", {
+    job_id: job.id,
+    task_id: task.id,
+    workspace_id: progress.workspace_id,
+    batch_size: batchSize,
+    cursor_present: Boolean(cursor),
+  });
+
+  for (const raw of batchRows) {
+    rawByEventId.set(raw.event_id, raw);
+    try {
+      const identity = await resolveBrowserEventPerson(env, job, raw);
+      if (identity.review_required) review += 1;
+      let personId = identity.person_id;
+      const eventType = journeyText(raw.normalized_event_type);
+      if (!personId && eventType === "purchase" && (raw.tkid || raw.session_id)) {
+        try {
+          const linkedIdentity = await findLinkedBrowserIdentityForPurchase(env, raw);
+          if (linkedIdentity?.person_id) {
+            personId = linkedIdentity.person_id;
+            console.log("[TraceKit] browser purchase reused linked journey identity", {
+              job_id: job.id,
+              task_id: task.id,
+              workspace_id: progress.workspace_id,
+              event_id: raw.event_id,
+              match_method: linkedIdentity.match_method,
+              source_record_id: linkedIdentity.source_record_id,
+              person_id: linkedIdentity.person_id,
+              journey_id: linkedIdentity.journey_id,
+            });
+          }
+        } catch (error: any) {
+          warnings.push(`browser_purchase_identity_lookup_deferred:${raw.event_id}`);
+          console.log("[TraceKit] browser purchase linked journey identity lookup deferred", {
+            job_id: job.id,
+            task_id: task.id,
+            workspace_id: progress.workspace_id,
+            event_id: raw.event_id,
+            message: error?.message || String(error),
+          });
+        }
+      }
+      if (personId) {
+        peopleResolved += 1;
+        if ((eventType === "identify" || eventType === "lead" || eventType === "purchase") && raw.tkid) {
+          try {
+            const linked = await linkPriorAnonymousBrowserJourneyEventsByTkid(env, {
+              workspace_id: progress.workspace_id || "default",
+              tkid: raw.tkid,
+              person_id: personId,
+              event_time: raw.event_time || raw.received_at,
+              source_record_id: raw.event_id,
+            });
+            for (const event of linked) {
+              if (!event?.id || retroLinkedEventsById.has(event.id)) continue;
+              retroLinkedEventsById.set(event.id, event);
+              const ids = retroLinkedEventIdsByPersonId.get(personId) || new Set<string>();
+              if (event.source_record_id) ids.add(journeyText(event.source_record_id));
+              retroLinkedEventIdsByPersonId.set(personId, ids);
+            }
+          } catch (error: any) {
+            warnings.push(`browser_tkid_retro_link_deferred:${raw.event_id}`);
+            console.log("[TraceKit] browser tkid retro link deferred", {
+              workspace_id: progress.workspace_id,
+              event_id: raw.event_id,
+              message: error?.message || String(error),
+            });
+          }
+        }
+      } else {
+        anonymousEventsRetained += 1;
+      }
+      personIdByEventId.set(raw.event_id, personId);
+    } catch (error: any) {
+      invalid += 1;
+      invalidEventIds.add(raw.event_id);
+      warnings.push(`invalid_event:${raw.event_id}`);
+      await updateBrowserRawEventNormalization(env, raw, {
+        normalization_status: "invalid",
+        normalization_error: String(error?.message || error).slice(0, 1000),
+        normalized_at: new Date().toISOString(),
+      }).catch(() => {});
+    }
+  }
+
+  const batchTkidIdentity = applyBrowserTkidIdentityToBatch(batchRows.filter((raw) => !invalidEventIds.has(raw.event_id)), personIdByEventId);
+  for (const [eventId, personId] of batchTkidIdentity.person_id_by_event_id.entries()) {
+    personIdByEventId.set(eventId, personId);
+  }
+  if (batchTkidIdentity.linked) {
+    anonymousEventsRetained = Math.max(0, anonymousEventsRetained - batchTkidIdentity.linked);
+    peopleResolved += batchTkidIdentity.linked;
+  }
+
+  for (const raw of batchRows) {
+    if (!rawByEventId.has(raw.event_id) || invalidEventIds.has(raw.event_id)) continue;
+    try {
+      const input = buildBrowserJourneyEventInput(raw, { person_id: personIdByEventId.get(raw.event_id) || null });
+      if (!input) {
+        invalid += 1;
+        continue;
+      }
+      inputs.push(input);
+    } catch (error: any) {
+      invalid += 1;
+      warnings.push(`invalid_event:${raw.event_id}`);
+      await updateBrowserRawEventNormalization(env, raw, {
+        normalization_status: "invalid",
+        normalization_error: String(error?.message || error).slice(0, 1000),
+        normalized_at: new Date().toISOString(),
+      }).catch(() => {});
+    }
+  }
+
+  const emptyJourneyBatch: JourneyEventBatchResult = { ok: true, inserted: 0, already_present: 0, conflicted: 0, malformed: 0, events: [], conflicts: [], errors: [] };
+  const journeyBatch: JourneyEventBatchResult = inputs.length
+    ? await createJourneyEventsBatch(getJourneyEventRepository(env), inputs, { max_batch_size: batchSize })
+    : emptyJourneyBatch;
+  await publishJourneyPurchaseDomainEvents(env, journeyBatch.events, {
+    job_id: job.id,
+    source: "browser_event_normalization",
+  }).catch((error: any) => {
+    warnings.push("browser_purchase_domain_event_publish_deferred");
+    console.error("[TraceKit] browser purchase domain event publish failed", {
+      workspace_id: progress.workspace_id,
+      job_id: job.id,
+      task_id: task.id,
+      message: error?.message || String(error),
+    });
+  });
+
+  const eventsBySourceId = new Map((journeyBatch.events || []).map((event: any) => [journeyText(event.source_record_id), event]));
+  let currentLinkedEvents = 0;
+  try {
+    const linkedCurrentEvents = await linkCurrentAnonymousBrowserJourneyEventsByPerson(env, {
+      workspace_id: progress.workspace_id || "default",
+      person_ids_by_event_id: personIdByEventId,
+    });
+    currentLinkedEvents = linkedCurrentEvents.length;
+    for (const event of linkedCurrentEvents) {
+      if (event?.source_record_id) eventsBySourceId.set(journeyText(event.source_record_id), event);
+    }
+  } catch (error: any) {
+    warnings.push("browser_current_identity_link_deferred");
+    console.log("[TraceKit] browser current journey event identity link deferred", {
+      job_id: job.id,
+      task_id: task.id,
+      workspace_id: progress.workspace_id,
+      message: error?.message || String(error),
+    });
+  }
+  const eventsWithPersonById = new Map<string, any>();
+  for (const event of Array.from(eventsBySourceId.values()).filter((item: any) => journeyText(item.person_id))) {
+    if (event?.id) eventsWithPersonById.set(event.id, event);
+  }
+  for (const event of retroLinkedEventsById.values()) {
+    if (event?.id) eventsWithPersonById.set(event.id, event);
+  }
+  const eventsWithPerson = Array.from(eventsWithPersonById.values());
+  retroLinkedEvents = retroLinkedEventsById.size;
+  let journeysAssigned = 0;
+  let attributionRecalculations = 0;
+  const touchedJourneyIds = new Set<string>();
+  const journeyLookupSourceIds = Array.from(new Set([
+    ...Array.from(eventsBySourceId.keys()),
+    ...Array.from(retroLinkedEventsById.values()).map((event: any) => journeyText(event.source_record_id)).filter(Boolean),
+  ]));
+  if (eventsWithPerson.length) {
+    console.log("[TraceKit] browser journey assignment started", {
+      job_id: job.id,
+      task_id: task.id,
+      workspace_id: progress.workspace_id,
+      events_with_person: eventsWithPerson.length,
+      current_batch_events: journeyBatch.events.length,
+      current_linked_events: currentLinkedEvents,
+      retro_linked_events: retroLinkedEventsById.size,
+    });
+    const assignment = await assignJourneyEvents(getJourneyRepository(env), eventsWithPerson as any, {
+      timeout_seconds: JOURNEY_DEFAULT_TIMEOUT_SECONDS,
+    });
+    journeysAssigned = assignment.events_linked;
+    console.log("[TraceKit] browser journey assignment completed", {
+      job_id: job.id,
+      task_id: task.id,
+      workspace_id: progress.workspace_id,
+      events_scanned: assignment.events_scanned,
+      events_linked: assignment.events_linked,
+      journeys_created: assignment.journeys_created,
+      events_skipped: assignment.events_skipped,
+      records_failed: assignment.records_failed,
+    });
+    const journeyIdsByEventId = await fetchJourneyIdsForBrowserEvents(env, progress.workspace_id || "default", journeyLookupSourceIds);
+    console.log("[TraceKit] browser journey id lookup completed", {
+      job_id: job.id,
+      task_id: task.id,
+      workspace_id: progress.workspace_id,
+      source_event_count: journeyLookupSourceIds.length,
+      journey_id_count: Array.from(journeyIdsByEventId.values()).filter(Boolean).length,
+    });
+    for (const [personId, eventIds] of retroLinkedEventIdsByPersonId.entries()) {
+      const retroJourneyIds = new Map<string, string | null>();
+      for (const eventId of eventIds) retroJourneyIds.set(eventId, journeyIdsByEventId.get(eventId) || null);
+      retroLinkedRawEvents += await updateBrowserRawEventsForRetroIdentity(env, {
+        workspace_id: progress.workspace_id || "default",
+        person_id: personId,
+        journey_ids_by_event_id: retroJourneyIds,
+      });
+    }
+    for (const journeyId of journeyIdsByEventId.values()) {
+      if (journeyId) touchedJourneyIds.add(journeyId);
+    }
+    for (const journeyId of touchedJourneyIds) {
+      try {
+        const journey = await getAttributionRepository(env).getJourneyById(progress.workspace_id || "default", journeyId);
+        if (journey && Number(journey.conversion_count || 0) > 0) {
+          await recalculateJourneyAttribution(getAttributionRepository(env), {
+            workspace_id: progress.workspace_id || "default",
+            journey_id: journeyId,
+            models: ["first_touch", "last_touch"],
+            force_recalculate: true,
+          }, {
+            on_domain_event: domainEventPublisher(env),
+          });
+          attributionRecalculations += 1;
+        }
+      } catch (error: any) {
+        warnings.push(`attribution_recalculation_deferred:${journeyId}`);
+      }
+    }
+  }
+
+  const journeyIdsByEventId = touchedJourneyIds.size
+    ? await fetchJourneyIdsForBrowserEvents(env, progress.workspace_id || "default", journeyLookupSourceIds)
+    : new Map<string, string | null>();
+
+  for (const raw of batchRows) {
+    if (!rawByEventId.has(raw.event_id)) continue;
+    const event = eventsBySourceId.get(raw.event_id);
+    const conflict = (journeyBatch.conflicts || []).some((item: any) => String(item.key || "").includes(raw.event_id));
+    const status = event ? "normalized" : conflict ? "review" : "error";
+    if (!event && !conflict) warnings.push(`journey_event_missing:${raw.event_id}`);
+    await updateBrowserRawEventNormalization(env, raw, {
+      normalization_status: status,
+      normalization_error: status === "error" ? "Journey event was not created." : status === "review" ? "Journey event conflict requires review." : null,
+      normalized_journey_event_id: event?.id || null,
+      person_id: personIdByEventId.get(raw.event_id) || null,
+      journey_id: journeyIdsByEventId.get(raw.event_id) || null,
+      normalized_at: new Date().toISOString(),
+    });
+  }
+
+  const lastRow = batchRows[batchRows.length - 1] || null;
+  const hasMore = rows.length > batchSize;
+  const nextCursor = hasMore && lastRow ? serializeBrowserEventCursor({ received_at: lastRow.received_at, event_id: lastRow.event_id }) : null;
+  const completed = !hasMore;
+  const now = new Date().toISOString();
+  const metadata = {
+    ...(progress.metadata || {}),
+    batch_size: batchSize,
+    events_normalized: Number(progress.metadata?.events_normalized || 0) + journeyBatch.inserted + journeyBatch.already_present,
+    events_duplicate: Number(progress.metadata?.events_duplicate || 0) + journeyBatch.already_present,
+    events_invalid: Number(progress.metadata?.events_invalid || 0) + invalid + journeyBatch.malformed,
+    events_review: Number(progress.metadata?.events_review || 0) + review + journeyBatch.conflicted,
+    people_resolved: Number(progress.metadata?.people_resolved || 0) + peopleResolved,
+    anonymous_events_retained: Number(progress.metadata?.anonymous_events_retained || 0) + anonymousEventsRetained,
+    retro_linked_events: Number(progress.metadata?.retro_linked_events || 0) + retroLinkedEvents,
+    retro_linked_raw_events: Number(progress.metadata?.retro_linked_raw_events || 0) + retroLinkedRawEvents,
+    current_identity_linked_events: Number(progress.metadata?.current_identity_linked_events || 0) + currentLinkedEvents,
+    journey_events_inserted: Number(progress.metadata?.journey_events_inserted || 0) + journeyBatch.inserted,
+    journey_events_already_present: Number(progress.metadata?.journey_events_already_present || 0) + journeyBatch.already_present,
+    journeys_assigned: Number(progress.metadata?.journeys_assigned || 0) + journeysAssigned,
+    attribution_recalculations: Number(progress.metadata?.attribution_recalculations || 0) + attributionRecalculations,
+    warnings: Array.from(new Set([...(progress.metadata?.warnings || []), ...warnings])).slice(-20),
+  };
+  const nextProgress = {
+    ...progress,
+    status: completed ? "completed" : "running",
+    phase: BROWSER_EVENTS_PHASE,
+    records_discovered: Number(progress.records_discovered || 0) + rows.length,
+    records_processed: Number(progress.records_processed || 0) + batchRows.length,
+    records_succeeded: Number(progress.records_succeeded || 0) + journeyBatch.inserted + journeyBatch.already_present,
+    records_failed: Number(progress.records_failed || 0) + invalid + journeyBatch.malformed + journeyBatch.conflicted,
+    current_cursor: nextCursor,
+    has_more: hasMore,
+    last_error: journeyBatch.ok ? null : "One or more browser events could not be normalized.",
+    updated_at: now,
+    completed_at: completed ? now : null,
+    metadata,
+  };
+  await updateConnectorRuntimeJobProgress(env, job, nextProgress as any);
+
+  let nextTaskId: string | null = null;
+  let duplicateTaskPrevented = false;
+  const latestJob = await getImportJob(env, job.id);
+  if (hasMore && latestJob) {
+    const nextTask = await createAndEnqueueConnectorRuntimeTask(env, browserEventNormalizeTaskPlanForProgress(latestJob, connectorRuntimeProgressFromJob(latestJob)));
+    nextTaskId = nextTask.task.id;
+    duplicateTaskPrevented = !nextTask.created;
+  }
+
+  console.log("[TraceKit] browser event normalization completed", {
+    job_id: job.id,
+    task_id: task.id,
+    workspace_id: progress.workspace_id,
+    processed: batchRows.length,
+    inserted: journeyBatch.inserted,
+    already_present: journeyBatch.already_present,
+    conflicted: journeyBatch.conflicted,
+    retro_linked_events: retroLinkedEvents,
+    retro_linked_raw_events: retroLinkedRawEvents,
+    has_more: hasMore,
+    duration_ms: Date.now() - started,
+  });
+
+  return {
+    ok: journeyBatch.ok,
+    job_id: job.id,
+    task_id: task.id,
+    phase: BROWSER_EVENTS_PHASE,
+    processed: batchRows.length,
+    events_normalized: journeyBatch.inserted + journeyBatch.already_present,
+    journey_events_inserted: journeyBatch.inserted,
+    journey_events_already_present: journeyBatch.already_present,
+    events_conflicted: journeyBatch.conflicted,
+    events_invalid: invalid + journeyBatch.malformed,
+    people_resolved: peopleResolved,
+    anonymous_events_retained: anonymousEventsRetained,
+    retro_linked_events: retroLinkedEvents,
+    retro_linked_raw_events: retroLinkedRawEvents,
+    journeys_assigned: journeysAssigned,
+    attribution_recalculations: attributionRecalculations,
+    has_more: hasMore,
+    next_cursor: nextCursor,
+    next_task_id: nextTaskId,
+    duplicate_task_prevented: duplicateTaskPrevented,
+    warnings: metadata.warnings,
   };
 }
 
@@ -7887,6 +11196,16 @@ async function rebuildCustomerProfiles(env: Env) {
 async function router(req: Request, env: Env): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname;
+  const browserRoute = matchBrowserEventRoute(req.method, path);
+  const browserPath = browserRoute?.path || path;
+
+  if (req.method === "OPTIONS" && isBrowserEventIngestionPath(browserPath)) {
+    const workspaceId = browserEventWorkspaceFromRequest(req);
+    const origin = req.headers.get("origin");
+    const config = await readBrowserEventSourceConfig(env, workspaceId).catch(() => null);
+    const allowed = config ? browserOriginAllowed(origin, config.allowed_origins) : false;
+    return new Response(null, { status: allowed ? 204 : 403, headers: browserCorsHeaders(origin, allowed) });
+  }
 
   if (req.method === "OPTIONS") return corsPreflight();
 
@@ -7899,7 +11218,673 @@ async function router(req: Request, env: Env): Promise<Response> {
     });
   }
 
-  const identityRoute = matchIdentityRoute(req.method, url.pathname);
+  const homeRoute = matchHomeRoute(req.method, path);
+  if (homeRoute?.kind === "method_not_allowed") {
+    return json({
+      ok: false,
+      error: "method_not_allowed",
+      message: `${homeRoute.path} requires ${homeRoute.allowed_methods.join(", ")}.`,
+      allowed_methods: homeRoute.allowed_methods,
+    }, 405, { Allow: homeRoute.allowed_methods.join(", ") });
+  }
+
+  if (homeRoute?.kind === "home_summary") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const params = normalizeHomeParams(Object.fromEntries(url.searchParams.entries()));
+      return json(await buildHomeSummary(getSupabase(env), params));
+    } catch (e: any) {
+      return json({ ok: false, error: e?.code || "home_summary_failed", message: e?.message || String(e) }, e?.status || 500);
+    }
+  }
+
+  const globalSearchRoute = matchGlobalSearchRoute(req.method, path);
+  if (globalSearchRoute?.kind === "method_not_allowed") {
+    return json({
+      ok: false,
+      error: "method_not_allowed",
+      message: `${globalSearchRoute.path} requires ${globalSearchRoute.allowed_methods.join(", ")}.`,
+      allowed_methods: globalSearchRoute.allowed_methods,
+    }, 405, { Allow: globalSearchRoute.allowed_methods.join(", ") });
+  }
+
+  if (globalSearchRoute?.kind === "global_search") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const params = normalizeGlobalSearchParams(Object.fromEntries(url.searchParams.entries()));
+      return json(await searchWorkspace(getSupabase(env), params));
+    } catch (e: any) {
+      return json({ ok: false, error: e?.code || "global_search_failed", message: e?.message || String(e) }, e?.status || 500);
+    }
+  }
+
+  const entityPreviewRoute = matchEntityPreviewRoute(req.method, path);
+  if (entityPreviewRoute?.kind === "method_not_allowed") {
+    return json({
+      ok: false,
+      error: "method_not_allowed",
+      message: `${entityPreviewRoute.path} requires ${entityPreviewRoute.allowed_methods.join(", ")}.`,
+      allowed_methods: entityPreviewRoute.allowed_methods,
+    }, 405, { Allow: entityPreviewRoute.allowed_methods.join(", ") });
+  }
+
+  if (entityPreviewRoute?.kind === "entity_preview") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      return json(await getEntityPreview(getSupabase(env), {
+        workspace_id: url.searchParams.get("workspace_id"),
+        entity_type: entityPreviewRoute.entity_type,
+        entity_id: entityPreviewRoute.entity_id,
+      }));
+    } catch (e: any) {
+      return json({ ok: false, error: e?.code || "entity_preview_failed", message: e?.message || String(e) }, e?.status || 500);
+    }
+  }
+
+  const healthRoute = matchHealthRoute(req.method, path);
+  if (healthRoute?.kind === "method_not_allowed") {
+    return json({
+      ok: false,
+      error: "method_not_allowed",
+      message: `${healthRoute.path} requires ${healthRoute.allowed_methods.join(", ")}.`,
+      allowed_methods: healthRoute.allowed_methods,
+    }, 405, { Allow: healthRoute.allowed_methods.join(", ") });
+  }
+
+  if (healthRoute?.kind === "health_report") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const params = normalizeHealthParams(Object.fromEntries(url.searchParams.entries()));
+      const result = await getWorkspaceHealthReport(getSupabase(env), params);
+      const workItems = await syncHealthWorkItems(getSupabase(env), result);
+      return json(enrichHealthReportWithWorkItems(result, workItems));
+    } catch (e: any) {
+      return json({ ok: false, error: e?.code || "health_report_failed", message: e?.message || String(e) }, e?.status || 500);
+    }
+  }
+
+  const workItemRoute = matchWorkItemRoute(req.method, path);
+  if (workItemRoute?.kind === "method_not_allowed") {
+    return json({
+      ok: false,
+      error: "method_not_allowed",
+      message: `${workItemRoute.path} requires ${workItemRoute.allowed_methods.join(", ")}.`,
+      allowed_methods: workItemRoute.allowed_methods,
+    }, 405, { Allow: workItemRoute.allowed_methods.join(", ") });
+  }
+
+  if (workItemRoute?.kind === "list_work_items") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const params = normalizeWorkItemParams(Object.fromEntries(url.searchParams.entries()));
+      return json(await listWorkItems(getSupabase(env), params));
+    } catch (e: any) {
+      return json({ ok: false, error: e?.code || "work_items_failed", message: e?.message || String(e) }, e?.status || 500);
+    }
+  }
+
+  if (workItemRoute?.kind === "operations_summary") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const workspaceId = identityWorkspace(url.searchParams.get("workspace_id"));
+      return json(await getOperationsSummary(getSupabase(env), { workspace_id: workspaceId }));
+    } catch (e: any) {
+      return json({ ok: false, error: e?.code || "operations_summary_failed", message: e?.message || String(e) }, e?.status || 500);
+    }
+  }
+
+  if (workItemRoute?.kind === "get_work_item") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const workspaceId = identityWorkspace(url.searchParams.get("workspace_id"));
+      return json(await getWorkItemDetail(getSupabase(env), {
+        workspace_id: workspaceId,
+        work_item_id: workItemRoute.work_item_id,
+      }));
+    } catch (e: any) {
+      return json({ ok: false, error: e?.code || "work_item_lookup_failed", message: e?.message || String(e) }, e?.status || 500);
+    }
+  }
+
+  if (
+    workItemRoute?.kind === "acknowledge"
+    || workItemRoute?.kind === "start"
+    || workItemRoute?.kind === "assign"
+    || workItemRoute?.kind === "priority"
+    || workItemRoute?.kind === "resolve"
+    || workItemRoute?.kind === "dismiss"
+    || workItemRoute?.kind === "reopen"
+    || workItemRoute?.kind === "add_note"
+  ) {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const body = await readJsonBody(req);
+      const workspaceId = identityWorkspace(body?.workspace_id || body?.workspaceId || url.searchParams.get("workspace_id"));
+      const action = workItemRoute.kind === "add_note" ? "note" : workItemRoute.kind === "acknowledge" ? "acknowledge" : workItemRoute.kind;
+      const supabase = getSupabase(env);
+      return json(await mutateWorkItem(supabase, {
+        workspace_id: workspaceId,
+        work_item_id: workItemRoute.work_item_id,
+        action: action as any,
+        actor_id: body?.actor_id || body?.actorId || body?.user_id || body?.userId || null,
+        assigned_to: body?.assigned_to ?? body?.assignedTo ?? null,
+        priority: body?.priority ?? null,
+        body: body?.body ?? body?.note ?? null,
+        resolution_code: body?.resolution_code || body?.resolutionCode || null,
+        resolution_note: body?.resolution_note || body?.resolutionNote || body?.body || null,
+        on_domain_event: async (event) => {
+          await publishDomainEvent(supabase, event);
+        },
+      }));
+    } catch (e: any) {
+      return json({ ok: false, error: e?.code || "work_item_update_failed", message: e?.message || String(e) }, e?.status || 500);
+    }
+  }
+
+  const notificationRoute = matchNotificationRoute(req.method, path);
+  if (notificationRoute?.kind === "method_not_allowed") {
+    return json({
+      ok: false,
+      error: "method_not_allowed",
+      message: `${notificationRoute.path} requires ${notificationRoute.allowed_methods.join(", ")}.`,
+      allowed_methods: notificationRoute.allowed_methods,
+    }, 405, { Allow: notificationRoute.allowed_methods.join(", ") });
+  }
+
+  if (notificationRoute?.kind === "list_notifications") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const params = normalizeNotificationParams(Object.fromEntries(url.searchParams.entries()));
+      const result = await getWorkspaceNotificationReport(getSupabase(env), params);
+      return json(result);
+    } catch (e: any) {
+      return json({ ok: false, error: e?.code || "notifications_failed", message: e?.message || String(e) }, e?.status || 500);
+    }
+  }
+
+  if (notificationRoute?.kind === "get_notification") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const workspaceId = String(url.searchParams.get("workspace_id") || "default").trim() || "default";
+      const notification = await getWorkspaceNotification(getSupabase(env), {
+        workspace_id: workspaceId,
+        notification_id: notificationRoute.notification_id,
+      });
+      if (!notification) return json({ ok: false, error: "notification_not_found" }, 404);
+      return json({ ok: true, workspace_id: workspaceId, notification });
+    } catch (e: any) {
+      return json({ ok: false, error: e?.code || "notification_lookup_failed", message: e?.message || String(e) }, e?.status || 500);
+    }
+  }
+
+  if (notificationRoute?.kind === "mark_read" || notificationRoute?.kind === "dismiss") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const body = await readJsonBody(req);
+      const workspaceId = String(body?.workspace_id || body?.workspaceId || url.searchParams.get("workspace_id") || "default").trim() || "default";
+      const notification = await upsertNotificationReadState(getSupabase(env), {
+        workspace_id: workspaceId,
+        notification_id: notificationRoute.notification_id,
+        dismissed: notificationRoute.kind === "dismiss",
+      });
+      return json({ ok: true, workspace_id: workspaceId, notification });
+    } catch (e: any) {
+      return json({ ok: false, error: e?.code || "notification_state_update_failed", message: e?.message || String(e) }, e?.status || 500);
+    }
+  }
+
+  const setupWizardRoute = matchSetupWizardRoute(req.method, path);
+  if (setupWizardRoute?.kind === "method_not_allowed") {
+    return json({
+      ok: false,
+      error: "method_not_allowed",
+      message: `${setupWizardRoute.path} requires ${setupWizardRoute.allowed_methods.join(", ")}.`,
+      allowed_methods: setupWizardRoute.allowed_methods,
+    }, 405, { Allow: setupWizardRoute.allowed_methods.join(", ") });
+  }
+
+  if (setupWizardRoute?.kind === "get_setup") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const workspaceId = identityWorkspace(url.searchParams.get("workspace_id"));
+      const onboarding = await getWorkspaceOnboardingState(getSupabase(env), workspaceId);
+      return json({ ok: true, onboarding });
+    } catch (e: any) {
+      return json({ ok: false, error: "setup_wizard_lookup_failed", message: e?.message || String(e) }, 500);
+    }
+  }
+
+  if (setupWizardRoute?.kind === "save_workspace") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const body = await readJsonBody(req);
+      const onboarding = await upsertWorkspaceSetupState(getSupabase(env), body);
+      return json({ ok: true, onboarding });
+    } catch (e: any) {
+      return json({ ok: false, error: "setup_wizard_workspace_save_failed", message: e?.message || String(e) }, 400);
+    }
+  }
+
+  if (setupWizardRoute?.kind === "save_progress") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const body = await readJsonBody(req);
+      const onboarding = await upsertSetupProgressState(getSupabase(env), body);
+      return json({ ok: true, onboarding });
+    } catch (e: any) {
+      return json({ ok: false, error: "setup_wizard_progress_save_failed", message: e?.message || String(e) }, 400);
+    }
+  }
+
+  if (browserRoute?.kind === "setup" && req.method === "GET") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    const workspaceId = identityWorkspace(url.searchParams.get("workspace_id"));
+    const endpoint = `${url.protocol}//${url.host}`;
+    const config = await readBrowserEventSourceConfig(env, workspaceId).catch(() => null);
+    const supabase = getSupabase(env);
+    const [{ data: latestReceived }, { data: latestNormalized }, { count: pendingCount }, { count: errorCount }] = await Promise.all([
+      supabase.from(BROWSER_EVENTS_RAW_TABLE).select("event_id,received_at,normalized_event_type,normalization_status,source").eq("workspace_id", workspaceId).order("received_at", { ascending: false }).limit(1).maybeSingle(),
+      supabase.from(BROWSER_EVENTS_RAW_TABLE).select("event_id,normalized_at,normalized_event_type,normalization_status,source").eq("workspace_id", workspaceId).eq("normalization_status", "normalized").order("normalized_at", { ascending: false }).limit(1).maybeSingle(),
+      supabase.from(BROWSER_EVENTS_RAW_TABLE).select("id", { count: "exact", head: true }).eq("workspace_id", workspaceId).eq("normalization_status", "pending"),
+      supabase.from(BROWSER_EVENTS_RAW_TABLE).select("id", { count: "exact", head: true }).eq("workspace_id", workspaceId).in("normalization_status", ["error", "review", "invalid"]),
+    ]);
+    return json({
+      ok: true,
+      workspace_id: workspaceId,
+      write_key_configured: Boolean(config?.public_write_key_hash),
+      allowed_origins: config?.allowed_origins || [],
+      cross_subdomain_cookie_domain: config?.cross_subdomain_cookie_domain || null,
+      install_snippet: browserSetupSnippet({ workspace_id: workspaceId, endpoint }),
+      test_event_endpoint: "/v1/browser/events",
+      legacy_event_endpoint: "/v1/event",
+      last_event_received: latestReceived || null,
+      last_event_normalized: latestNormalized || null,
+      health: {
+        pending_events: Number(pendingCount || 0),
+        events_needing_review: Number(errorCount || 0),
+      },
+      captured_parameter_summary: [
+        "utm_source",
+        "utm_medium",
+        "utm_campaign",
+        "utm_content",
+        "utm_term",
+        "affiliate_id",
+        "affid",
+        "aff_id",
+        "offer_id",
+        "oid",
+        "_ef_transaction_id",
+        "transaction_id",
+        "c1",
+        "sub1-sub10",
+        "gclid",
+        "fbclid",
+        "ttclid",
+        "msclkid",
+        "irclickid",
+        "click_id",
+      ],
+    });
+  }
+
+  if (browserRoute?.kind === "setup" && req.method === "POST") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    const body = await readJsonBody(req);
+    const workspaceId = browserEventWorkspaceFromRequest(req, body);
+    const writeKey = journeyText(body.write_key || body.writeKey) || `tk_pub_${crypto.randomUUID().replace(/-/g, "")}`;
+    const allowedOrigins = parseAllowedBrowserOrigins(body.allowed_origins || body.allowedOrigins || []);
+    if (!allowedOrigins.length) {
+      return json({ ok: false, error: "bad_request", message: "allowed_origins is required." }, 400);
+    }
+    const supabase = getSupabase(env);
+    const { error } = await supabase.from("browser_event_sources").upsert({
+      workspace_id: workspaceId,
+      public_write_key_hash: await browserWriteKeyHash(workspaceId, writeKey),
+      allowed_origins: allowedOrigins,
+      cross_subdomain_cookie_domain: journeyText(body.cross_subdomain_cookie_domain || body.crossSubdomainCookieDomain) || null,
+      rate_limit_per_minute: Math.max(1, Number(body.rate_limit_per_minute || body.rateLimitPerMinute || 120) || 120),
+      is_active: body.is_active ?? body.isActive ?? true,
+      metadata: {
+        created_by: "admin_setup_route",
+        sdk_version: "browser-touchpoint-v1",
+      },
+      updated_at: new Date().toISOString(),
+    }, { onConflict: "workspace_id" });
+    if (error) throw new Error(`Browser event source setup failed: ${error.message}`);
+    return json({
+      ok: true,
+      workspace_id: workspaceId,
+      write_key: writeKey,
+      write_key_returned_once: true,
+      allowed_origins: allowedOrigins,
+      install_snippet: browserSetupSnippet({ workspace_id: workspaceId, endpoint: `${url.protocol}//${url.host}` }),
+      test_event_endpoint: "/v1/browser/events",
+      legacy_event_endpoint: "/v1/event",
+    });
+  }
+
+  if (browserRoute?.kind === "method_not_allowed" && browserRoute.route === "browser_event_ingest") {
+    const headers = browserCorsHeaders(req.headers.get("origin"), false);
+    return json({
+      ok: false,
+      error: "method_not_allowed",
+      message: `${browserPath} requires POST.`,
+      allowed_methods: ["POST"],
+    }, 405, { ...headers, Allow: "POST" });
+  }
+
+  if (browserRoute?.kind === "method_not_allowed" && browserRoute.route === "browser_event_setup") {
+    return json({
+      ok: false,
+      error: "method_not_allowed",
+      message: `${browserPath} requires GET, POST.`,
+      allowed_methods: ["GET", "POST"],
+    }, 405, { Allow: "GET, POST" });
+  }
+
+	  if (browserRoute?.kind === "ingest" && req.method === "POST") {
+	    const contentLength = Number(req.headers.get("content-length") || 0);
+    if (contentLength > 65536) return json({ ok: false, error: "payload_too_large", message: "Browser event payload is too large." }, 413);
+    const body = await readJsonBody(req);
+    const workspaceId = browserEventWorkspaceFromRequest(req, body);
+    const validation = await validateBrowserEventRequest(req, env, workspaceId, body);
+    if (!validation.ok) return json({ ok: false, error: validation.error, message: validation.message }, validation.status, validation.cors_headers);
+    const receivedAt = new Date().toISOString();
+    const requestContext = await browserEventRequestContext(req, env, receivedAt, workspaceId);
+    const rate = checkBrowserEventRateLimit({
+      workspace_id: workspaceId,
+      request_hash: journeyText(requestContext.ip_hash || requestContext.origin || "unknown"),
+      limit_per_minute: validation.config.rate_limit_per_minute || 120,
+    });
+    if (!rate.ok) {
+      return json({
+        ok: false,
+        error: "rate_limited",
+        message: "Browser event rate limit exceeded.",
+        reset_at: rate.reset_at,
+      }, 429, validation.cors_headers);
+    }
+    const normalized = await normalizeBrowserEventForRawStorage(body, {
+      received_at: receivedAt,
+      event_id_fallback: crypto.randomUUID(),
+      request_context: requestContext,
+    });
+    if (!normalized.ok) return json({ ok: false, error: normalized.error, message: normalized.message }, normalized.status, validation.cors_headers);
+    const persisted = await insertBrowserRawEvent(env, normalized.value);
+    if (persisted.conflict) {
+      console.log("[TraceKit] browser event replay conflict", {
+        workspace_id: workspaceId,
+        event_id: normalized.value.event_id,
+        page_url: safeUrlForDiagnostics(body?.page_url || body?.pageUrl || body?.url),
+      });
+      return json({ ok: false, error: "event_id_conflict", message: "event_id already exists with a different payload." }, 409, validation.cors_headers);
+    }
+    let queued: any = { queued: false, reason: "duplicate_event" };
+    if (!persisted.duplicate) {
+      queued = await startBrowserEventNormalizationRuntimeJob(env, {
+        workspace_id: workspaceId,
+        event_time: normalized.value.event_time || receivedAt,
+      }).catch((error: any) => ({ queued: false, reason: error?.message || String(error) }));
+    }
+    console.log("[TraceKit] browser event accepted", {
+      workspace_id: workspaceId,
+      event_id: normalized.value.event_id,
+      event_type: normalized.value.normalized_event_type,
+      source: normalized.value.source,
+      duplicate: persisted.duplicate,
+      normalization_queued: Boolean(queued.queued),
+      page_url: safeUrlForDiagnostics(body?.page_url || body?.pageUrl || body?.url),
+    });
+    return json({
+      ok: true,
+      event_id: normalized.value.event_id,
+      status: persisted.duplicate ? "duplicate" : "accepted",
+      normalization_queued: Boolean(queued.queued),
+      normalization_job_id: queued.job_id || null,
+      normalization_task_id: queued.task_id || null,
+      warnings: normalized.warnings,
+	    }, 202, validation.cors_headers);
+	  }
+
+  const domainEventRoute = matchDomainEventRoute(req.method, path);
+  if (domainEventRoute?.kind === "method_not_allowed") {
+    return json({
+      ok: false,
+      error: "method_not_allowed",
+      message: `${domainEventRoute.path} requires ${domainEventRoute.allowed_methods.join(", ")}.`,
+      allowed_methods: domainEventRoute.allowed_methods,
+    }, 405, { Allow: domainEventRoute.allowed_methods.join(", ") });
+  }
+
+  if (domainEventRoute?.kind === "stream") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    const workspaceId = identityWorkspace(url.searchParams.get("workspace_id"));
+    return createWorkspaceEventStream(getSupabase(env), {
+      workspace_id: workspaceId,
+      last_event_id: req.headers.get("Last-Event-ID") || url.searchParams.get("cursor"),
+      signal: req.signal,
+    });
+  }
+
+  if (domainEventRoute?.kind === "replay_projections") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const body = await readJsonBody(req);
+      if (body?.consumer_name || body?.consumerName || body?.from_position || body?.fromPosition || body?.cursor || body?.continue_on_error !== undefined || body?.continueOnError !== undefined) {
+        return json({
+          ok: false,
+          error: "privileged_replay_controls_forbidden",
+          message: "Use /v1/internal/events/projections/replay with an administrative reason for consumer overrides or cursor repair.",
+        }, 403);
+      }
+      const workspaceId = identityWorkspace(body?.workspace_id || body?.workspaceId || url.searchParams.get("workspace_id"));
+      const result = await projectDomainEventsBatch(getSupabase(env), {
+        workspace_id: workspaceId,
+        limit: body?.limit,
+        continue_on_error: false,
+        runner_id: `compat:${crypto.randomUUID()}`,
+      });
+      await auditDomainEventProjectionReplay(getSupabase(env), {
+        workspace_id: workspaceId,
+        consumer_name: result.consumer_name,
+        action: "routine_run",
+        actor: "legacy_replay_route",
+        result: {
+          events_seen: result.events_seen,
+          events_projected: result.events_projected,
+          events_failed: result.events_failed,
+          locked: Boolean(result.locked),
+        },
+      }).catch(() => null);
+      return json(result);
+    } catch (e: any) {
+      return json({ ok: false, error: e?.code || "domain_event_projection_replay_failed", message: e?.message || String(e) }, e?.status || 500);
+    }
+  }
+
+  if (domainEventRoute?.kind === "internal_run_projections") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const body = await readJsonBody(req);
+      const workspaceId = body?.workspace_id || body?.workspaceId || url.searchParams.get("workspace_id");
+      const result = await runScheduledDomainEventProjectionReplay(getSupabase(env), {
+        workspaces: workspaceId ? [identityWorkspace(workspaceId)] : undefined,
+        batch_size: body?.batch_size || body?.batchSize || env.LIVE_WORKSPACE_PROJECTION_BATCH_SIZE,
+        max_events: body?.max_events || body?.maxEvents || env.LIVE_WORKSPACE_PROJECTION_MAX_EVENTS,
+        max_workspaces: body?.max_workspaces || body?.maxWorkspaces || env.LIVE_WORKSPACE_PROJECTION_MAX_WORKSPACES,
+        runner_id: `internal:${crypto.randomUUID()}`,
+      });
+      return json(result);
+    } catch (e: any) {
+      return json({ ok: false, error: e?.code || "domain_event_projection_run_failed", message: e?.message || String(e) }, e?.status || 500);
+    }
+  }
+
+  if (domainEventRoute?.kind === "internal_replay_projections") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const body = await readJsonBody(req);
+      const reason = String(body?.reason || "").trim();
+      if (!reason) return json({ ok: false, error: "replay_reason_required", message: "Manual projection repair requires a reason." }, 400);
+      const workspaceId = identityWorkspace(body?.workspace_id || body?.workspaceId || url.searchParams.get("workspace_id"));
+      const fromPosition = body?.from_position ?? body?.fromPosition ?? body?.cursor ?? null;
+      const result = await projectDomainEventsBatch(getSupabase(env), {
+        workspace_id: workspaceId,
+        consumer_name: body?.consumer_name || body?.consumerName || null,
+        from_position: fromPosition,
+        limit: body?.limit,
+        continue_on_error: Boolean(body?.continue_on_error ?? body?.continueOnError ?? false),
+        allow_rewind: true,
+        runner_id: `repair:${crypto.randomUUID()}`,
+      });
+      await auditDomainEventProjectionReplay(getSupabase(env), {
+        workspace_id: workspaceId,
+        consumer_name: result.consumer_name,
+        action: "manual_replay",
+        requested_from_position: fromPosition === null || fromPosition === undefined || String(fromPosition).trim() === "" ? null : Number(fromPosition),
+        reason,
+        actor: req.headers.get("authorization") ? "bearer_admin" : "tk_secret_admin",
+        result: {
+          events_seen: result.events_seen,
+          events_projected: result.events_projected,
+          events_failed: result.events_failed,
+          locked: Boolean(result.locked),
+        },
+      }).catch(() => null);
+      return json(result);
+    } catch (e: any) {
+      return json({ ok: false, error: e?.code || "domain_event_projection_manual_replay_failed", message: e?.message || String(e) }, e?.status || 500);
+    }
+  }
+
+  if (domainEventRoute?.kind === "internal_projection_status") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      return json(await getDomainEventProjectionStatus(getSupabase(env), {
+        workspace_id: url.searchParams.get("workspace_id"),
+        consumer_name: url.searchParams.get("consumer_name"),
+        limit: Number(url.searchParams.get("limit") || 10),
+      }));
+    } catch (e: any) {
+      return json({ ok: false, error: e?.code || "domain_event_projection_status_failed", message: e?.message || String(e) }, e?.status || 500);
+    }
+  }
+
+	  const eventExplorerRoute = matchEventExplorerRoute(req.method, path);
+	  if (eventExplorerRoute?.kind === "method_not_allowed") {
+	    return json({
+	      ok: false,
+	      error: "method_not_allowed",
+	      message: `${eventExplorerRoute.path} requires ${eventExplorerRoute.allowed_methods.join(", ")}.`,
+	      allowed_methods: eventExplorerRoute.allowed_methods,
+	    }, 405, { Allow: eventExplorerRoute.allowed_methods.join(", ") });
+	  }
+
+	  if (eventExplorerRoute?.kind === "event_list") {
+	    const auth = adminAuthError(req, env);
+	    if (auth) return auth;
+	    try {
+	      const params = normalizeEventExplorerListParams(Object.fromEntries(url.searchParams.entries()));
+	      const result = await listEventExplorerEvents(getSupabase(env), params);
+	      return json(result);
+	    } catch (e: any) {
+	      return json({ ok: false, error: e?.code || "event_explorer_failed", message: e?.message || String(e) }, e?.status || 500);
+	    }
+	  }
+
+	  if (eventExplorerRoute?.kind === "event_detail") {
+	    const auth = adminAuthError(req, env);
+	    if (auth) return auth;
+	    try {
+	      const workspaceId = identityWorkspace(url.searchParams.get("workspace_id"));
+	      const result = await getEventExplorerEventDetail(getSupabase(env), {
+	        workspace_id: workspaceId,
+	        event_key: eventExplorerRoute.event_key,
+	      });
+	      return json(result);
+	    } catch (e: any) {
+	      return json({ ok: false, error: e?.code || "event_explorer_detail_failed", message: e?.message || String(e) }, e?.status || 500);
+	    }
+	  }
+
+  const customerExplorerRoute = matchCustomerExplorerRoute(req.method, path);
+  if (customerExplorerRoute?.kind === "method_not_allowed") {
+    return json({
+      ok: false,
+      error: "method_not_allowed",
+      message: `${customerExplorerRoute.path} requires ${customerExplorerRoute.allowed_methods.join(", ")}.`,
+      allowed_methods: customerExplorerRoute.allowed_methods,
+    }, 405, { Allow: customerExplorerRoute.allowed_methods.join(", ") });
+  }
+
+  if (customerExplorerRoute?.kind === "customer_list") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const params = normalizeCustomerListParams(Object.fromEntries(url.searchParams.entries()));
+      const result = await listCustomers(getSupabase(env), params);
+      return json(result);
+    } catch (e: any) {
+      return json({ ok: false, error: e?.code || "customer_explorer_failed", message: e?.message || String(e) }, e?.status || 500);
+    }
+  }
+
+  if (customerExplorerRoute?.kind === "customer_detail") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const workspaceId = identityWorkspace(url.searchParams.get("workspace_id"));
+      const result = await getCustomerDetail(getSupabase(env), {
+        workspace_id: workspaceId,
+        person_id: customerExplorerRoute.person_id,
+      });
+      return json(result);
+    } catch (e: any) {
+      return json({ ok: false, error: e?.code || "customer_detail_failed", message: e?.message || String(e) }, e?.status || 500);
+    }
+  }
+
+  if (customerExplorerRoute?.kind === "customer_journey_detail") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const params = normalizeCustomerJourneyDetailParams({
+        workspace_id: url.searchParams.get("workspace_id"),
+        person_id: customerExplorerRoute.person_id,
+        journey_id: customerExplorerRoute.journey_id,
+        limit: url.searchParams.get("limit"),
+        cursor: url.searchParams.get("cursor"),
+      });
+      const result = await getCustomerJourneyDetail(getSupabase(env), params);
+      return json(result);
+    } catch (e: any) {
+      return json({ ok: false, error: e?.code || "customer_journey_detail_failed", message: e?.message || String(e) }, e?.status || 500);
+    }
+  }
+
+	  const identityRoute = matchIdentityRoute(req.method, url.pathname);
   if (identityRoute?.kind === "method_not_allowed") {
     return json({
       ok: false,
@@ -7958,6 +11943,84 @@ async function router(req: Request, env: Env): Promise<Response> {
       ok: false,
       error: "method_not_allowed",
       message: "/v1/identity/backfill-platform-orders requires POST.",
+      allowed_methods: ["POST"],
+    }, 405, { Allow: "POST" });
+  }
+
+  if (path === "/v1/journey-events/backfill-platform-orders" && req.method === "POST") {
+    try {
+      const body = await readJsonBody(req);
+      const parsed = normalizeJourneyBackfillRequest(body);
+      if (!parsed.ok) return json({ ok: false, error: parsed.error, message: parsed.message }, parsed.status);
+      const result = await runJourneyPlatformOrderBackfill(env, parsed.value);
+      return json(result.body, result.status);
+    } catch (e: any) {
+      console.error("journey_backfill.failed", {
+        message: e?.message || String(e),
+      });
+      return json({ ok: false, error: "journey_backfill_failed", message: e?.message || String(e) }, e?.status || 500);
+    }
+  }
+
+  if (path === "/v1/journey-events/backfill-platform-orders" && req.method !== "POST") {
+    return json({
+      ok: false,
+      error: "method_not_allowed",
+      message: "/v1/journey-events/backfill-platform-orders requires POST.",
+      allowed_methods: ["POST"],
+    }, 405, { Allow: "POST" });
+  }
+
+  if (path === "/v1/journeys/backfill" && req.method === "POST") {
+    try {
+      const body = await readJsonBody(req);
+      const parsed = normalizeJourneyAssignmentBackfillRequest(body);
+      if (!parsed.ok) return json({ ok: false, error: parsed.error, message: parsed.message }, parsed.status);
+      const result = await startJourneyAssignmentRuntimeJob(env, {
+        ...parsed.value,
+        force_new_job: Boolean(body?.force_new_job ?? body?.forceNewJob),
+      });
+      return json(result.body, result.status);
+    } catch (e: any) {
+      console.error("journey.backfill.failed", {
+        message: e?.message || String(e),
+      });
+      return json({ ok: false, error: "journey_backfill_failed", message: e?.message || String(e) }, e?.status || 500);
+    }
+  }
+
+  if (path === "/v1/journeys/backfill" && req.method !== "POST") {
+    return json({
+      ok: false,
+      error: "method_not_allowed",
+      message: "/v1/journeys/backfill requires POST.",
+      allowed_methods: ["POST"],
+    }, 405, { Allow: "POST" });
+  }
+
+  if (path === "/v1/attribution/backfill" && req.method === "POST") {
+    try {
+      const body = await readJsonBody(req);
+      const parsed = normalizeAttributionBackfillRequest(body);
+      if (!parsed.ok) return json({ ok: false, error: parsed.error, message: parsed.message }, parsed.status);
+      const result = await startAttributionBackfillRuntimeJob(env, {
+        ...parsed.value,
+        force_new_job: Boolean(body?.force_new_job ?? body?.forceNewJob),
+      });
+      return json(result.body, result.status);
+    } catch (e: any) {
+      console.error("attribution.backfill.failed", {
+        message: e?.message || String(e),
+      });
+      return json({ ok: false, error: "attribution_backfill_failed", message: e?.message || String(e) }, e?.status || 500);
+    }
+  }
+
+  if (path === "/v1/attribution/backfill" && req.method !== "POST") {
+    return json({
+      ok: false,
+      error: "method_not_allowed",
+      message: "/v1/attribution/backfill requires POST.",
       allowed_methods: ["POST"],
     }, 405, { Allow: "POST" });
   }
@@ -8062,6 +12125,242 @@ async function router(req: Request, env: Env): Promise<Response> {
       recent_identity_errors: (recentErrors as any).data || [],
       active_identity_backfill_jobs: activeBackfillJobs,
     });
+  }
+
+  const attributionRoute = matchAttributionRoutes(req.method, path);
+  if (attributionRoute?.kind === "journey_attribution") {
+    const started = Date.now();
+    try {
+      const params = normalizeJourneyAttributionParams({
+        workspace_id: url.searchParams.get("workspace_id"),
+        journey_id: attributionRoute.journey_id,
+        model: url.searchParams.get("model"),
+        conversion_event_id: url.searchParams.get("conversion_event_id"),
+      });
+      console.log("attribution.api.requested", {
+        workspace_id: params.workspace_id,
+        journey_id: params.journey_id,
+        models: params.models,
+      });
+      const result = await getJourneyAttribution(getAttributionRepository(env), params);
+      console.log("attribution.api.returned", {
+        workspace_id: params.workspace_id,
+        journey_id: params.journey_id,
+        returned_count: result.conversions.length,
+        duration_ms: Date.now() - started,
+      });
+      return json(result);
+    } catch (e: any) {
+      return json({ ok: false, error: e?.code || "journey_attribution_failed", message: e?.message || String(e) }, e?.status || 400);
+    }
+  }
+
+  if (attributionRoute?.kind === "journey_attribution_recalculate") {
+    const started = Date.now();
+    try {
+      const body = await readJsonBody(req);
+      const params = normalizeRecalculateJourneyAttributionParams({
+        ...body,
+        workspace_id: body?.workspace_id ?? body?.workspaceId,
+        journey_id: attributionRoute.journey_id,
+      });
+      console.log("attribution.api.requested", {
+        workspace_id: params.workspace_id,
+        journey_id: params.journey_id,
+        models: params.models,
+        action: "recalculate",
+      });
+      const result = await recalculateJourneyAttribution(getAttributionRepository(env), params, {
+        on_domain_event: domainEventPublisher(env),
+      });
+      console.log("attribution.api.returned", {
+        workspace_id: params.workspace_id,
+        journey_id: params.journey_id,
+        action: "recalculate",
+        duration_ms: Date.now() - started,
+      });
+      return json(result);
+    } catch (e: any) {
+      return json({ ok: false, error: e?.code || "journey_attribution_recalculate_failed", message: e?.message || String(e) }, e?.status || 400);
+    }
+  }
+
+  if (attributionRoute?.kind === "person_attribution") {
+    const started = Date.now();
+    try {
+      const params = normalizePersonAttributionParams({
+        workspace_id: url.searchParams.get("workspace_id"),
+        person_id: attributionRoute.person_id,
+        model: url.searchParams.get("model"),
+        from: url.searchParams.get("from"),
+        to: url.searchParams.get("to"),
+        limit: url.searchParams.get("limit"),
+        cursor: url.searchParams.get("cursor"),
+      });
+      console.log("attribution.api.requested", {
+        workspace_id: params.workspace_id,
+        person_id: params.person_id,
+        model: params.model,
+        limit: params.limit,
+      });
+      const result = await getPersonAttribution(getAttributionRepository(env), params);
+      console.log("attribution.api.returned", {
+        workspace_id: params.workspace_id,
+        person_id: params.person_id,
+        returned_count: result.attribution.length,
+        duration_ms: Date.now() - started,
+      });
+      return json(result);
+    } catch (e: any) {
+      return json({ ok: false, error: e?.code || "person_attribution_failed", message: e?.message || String(e) }, e?.status || 400);
+    }
+  }
+
+  if (attributionRoute?.kind === "method_not_allowed") {
+    return json({
+      ok: false,
+      error: "method_not_allowed",
+      message: `${attributionRoute.path} requires ${attributionRoute.allowed_methods.join(", ")}.`,
+      allowed_methods: attributionRoute.allowed_methods,
+    }, 405, { Allow: attributionRoute.allowed_methods.join(", ") });
+  }
+
+  const payoutRoute = matchPayoutRoutes(req.method, path);
+  if (payoutRoute?.kind === "get_policy") {
+    try {
+      const result = await getPayoutAttributionPolicy(getPayoutRepository(env), url.searchParams.get("workspace_id"));
+      return json(result);
+    } catch (e: any) {
+      return json({ ok: false, error: e?.code || "payout_policy_failed", message: e?.message || String(e) }, e?.status || 400);
+    }
+  }
+
+  if (payoutRoute?.kind === "set_policy") {
+    try {
+      const body = await readJsonBody(req);
+      const parsed = normalizeWorkspaceAttributionPolicyRequest(body);
+      if (!parsed.ok) return json({ ok: false, error: parsed.error, message: parsed.message }, parsed.status);
+      const result = await setPayoutAttributionPolicy(getPayoutRepository(env), parsed.value);
+      return json(result);
+    } catch (e: any) {
+      return json({ ok: false, error: e?.code || "payout_policy_save_failed", message: e?.message || String(e) }, e?.status || 400);
+    }
+  }
+
+  if (payoutRoute?.kind === "generate_commissions") {
+    try {
+      const body = await readJsonBody(req);
+      const parsed = normalizePayoutGenerationRequest(body);
+      if (!parsed.ok) return json({ ok: false, error: parsed.error, message: parsed.message }, parsed.status);
+      const result = await generateAffiliateCommissions(getPayoutRepository(env), parsed.value, {
+        on_domain_event: domainEventPublisher(env),
+      });
+      return json(result);
+    } catch (e: any) {
+      return json({ ok: false, error: e?.code || "affiliate_commission_generation_failed", message: e?.message || String(e) }, e?.status || 400);
+    }
+  }
+
+  if (payoutRoute?.kind === "list_commissions") {
+    try {
+      const parsed = normalizeAffiliateCommissionListParams(Object.fromEntries(url.searchParams.entries()));
+      if (!parsed.ok) return json({ ok: false, error: parsed.error, message: parsed.message }, parsed.status);
+      const result = await listAffiliateCommissions(getPayoutRepository(env), parsed.value);
+      return json(result);
+    } catch (e: any) {
+      return json({ ok: false, error: e?.code || "affiliate_commission_lookup_failed", message: e?.message || String(e) }, e?.status || 400);
+    }
+  }
+
+  if (payoutRoute?.kind === "method_not_allowed") {
+    return json({
+      ok: false,
+      error: "method_not_allowed",
+      message: `${payoutRoute.path} requires ${payoutRoute.allowed_methods.join(", ")}.`,
+      allowed_methods: payoutRoute.allowed_methods,
+    }, 405, { Allow: payoutRoute.allowed_methods.join(", ") });
+  }
+
+  const personTimelineRoute = matchJourneyTimelineRoute(req.method, path);
+  if (personTimelineRoute?.kind === "person_timeline") {
+    const started = Date.now();
+    const personId = personTimelineRoute.person_id;
+    try {
+      const params = normalizePersonTimelineParams({
+        workspace_id: url.searchParams.get("workspace_id"),
+        person_id: personId,
+        limit: url.searchParams.get("limit"),
+        cursor: url.searchParams.get("cursor"),
+        event_type: url.searchParams.get("event_type"),
+        from: url.searchParams.get("from"),
+        to: url.searchParams.get("to"),
+      });
+      console.log("person_timeline.requested", {
+        workspace_id: params.workspace_id,
+        person_id: params.person_id,
+        event_type: params.event_type || null,
+        limit: params.limit,
+      });
+      const result = await getPersonTimeline(getJourneyEventRepository(env), params);
+      console.log("person_timeline.returned", {
+        workspace_id: params.workspace_id,
+        person_id: params.person_id,
+        returned_count: result.events.length,
+        duration_ms: Date.now() - started,
+      });
+      return json(result);
+    } catch (e: any) {
+      return json({ ok: false, error: e?.code || "person_timeline_failed", message: e?.message || String(e) }, e?.status || 400);
+    }
+  }
+
+  if (personTimelineRoute?.kind === "method_not_allowed") {
+    return json({
+      ok: false,
+      error: "method_not_allowed",
+      message: `${personTimelineRoute.path} requires GET.`,
+      allowed_methods: personTimelineRoute.allowed_methods,
+    }, 405, { Allow: personTimelineRoute.allowed_methods.join(", ") });
+  }
+
+  const journeyRoute = matchJourneyRoutes(req.method, path);
+  if (journeyRoute?.kind === "person_journeys") {
+    try {
+      const params = normalizePersonJourneysParams({
+        workspace_id: url.searchParams.get("workspace_id"),
+        person_id: journeyRoute.person_id,
+        limit: url.searchParams.get("limit"),
+        cursor: url.searchParams.get("cursor"),
+      });
+      const result = await getPersonJourneys(getJourneyRepository(env), params);
+      return json(result);
+    } catch (e: any) {
+      return json({ ok: false, error: e?.code || "person_journeys_failed", message: e?.message || String(e) }, e?.status || 400);
+    }
+  }
+
+  if (journeyRoute?.kind === "journey_detail") {
+    try {
+      const params = normalizeJourneyDetailParams({
+        workspace_id: url.searchParams.get("workspace_id"),
+        journey_id: journeyRoute.journey_id,
+        limit: url.searchParams.get("limit"),
+        cursor: url.searchParams.get("cursor"),
+      });
+      const result = await getJourneyDetail(getJourneyRepository(env), params);
+      return json(result);
+    } catch (e: any) {
+      return json({ ok: false, error: e?.code || "journey_detail_failed", message: e?.message || String(e) }, e?.status || 400);
+    }
+  }
+
+  if (journeyRoute?.kind === "method_not_allowed") {
+    return json({
+      ok: false,
+      error: "method_not_allowed",
+      message: `${journeyRoute.path} requires GET.`,
+      allowed_methods: journeyRoute.allowed_methods,
+    }, 405, { Allow: journeyRoute.allowed_methods.join(", ") });
   }
 
   if (path === "/v1/people/search" && req.method === "GET") {
@@ -8543,7 +12842,7 @@ async function router(req: Request, env: Env): Promise<Response> {
 	      runtime_task_id: task.id,
 	    });
 	    try {
-	      await env.wowboost_imports!.send(decision.message);
+	      await sendConnectorRuntimeTaskQueueMessage(env, task, decision.message, undefined, queueDiagnostics);
 	      await heartbeatConnectorRuntimeQueueEvent(env, task, queueDiagnostics, "connector_runtime.queue.send.after", {
 	        runtime_task_id: task.id,
 	      });
@@ -8576,6 +12875,23 @@ async function router(req: Request, env: Env): Promise<Response> {
     if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405);
 
     const progress = connectorRuntimeProgressFromJob(job);
+    if (action === "reconcile-queue") {
+      if (!isConnectorRuntimeV1Job(job, progress.connector_id)) {
+        return json({ ok: false, error: "not_runtime_job", message: "Only Connector Runtime v1 jobs support queue reconciliation." }, 409);
+      }
+      const body = await readJsonBody(req).catch(() => ({}));
+      const reconciliation = await reconcileConnectorRuntimeJobQueue(env, job, {
+        force_republish_queued: Boolean(body.force_republish_queued ?? body.forceRepublishQueued ?? true),
+        reason: "manual_job_reconcile_queue",
+      });
+      return json({
+        ok: reconciliation.ok,
+        job_id: job.id,
+        queue_reconciliation: reconciliation,
+        job: await connectorRuntimeJobPayload(env, await getImportJob(env, job.id)),
+      }, reconciliation.ok ? 200 : 500);
+    }
+
     if (action === "pause") {
       const nextProgress = mergeConnectorRuntimeCounters(progress, {}, { status: "paused", last_error: null });
       await updateConnectorRuntimeJobProgress(env, job, nextProgress);
@@ -8591,6 +12907,25 @@ async function router(req: Request, env: Env): Promise<Response> {
       nextProgress.completed_at = null;
       await updateConnectorRuntimeJobProgress(env, job, nextProgress);
       const latest = await getImportJob(env, job.id) || job;
+      const reconciliation = await reconcileConnectorRuntimeJobQueue(env, latest, {
+        force_republish_queued: true,
+        reason: "job_resume",
+      });
+      if (
+        Number((reconciliation as any).queued_republished || 0) > 0 ||
+        Number((reconciliation as any).stale_reclaimed || 0) > 0 ||
+        Number((reconciliation as any).active_running || 0) > 0
+      ) {
+        return json({
+          ok: true,
+          job_id: job.id,
+          status: "queued",
+          task_ids: (reconciliation as any).task_ids || [],
+          queued: Number((reconciliation as any).queued_republished || 0) > 0,
+          queue_reconciliation: reconciliation,
+          job: await connectorRuntimeJobPayload(env, await getImportJob(env, job.id)),
+        });
+      }
       const task = await createAndEnqueueConnectorRuntimeTask(env, connectorRuntimeTaskPlanForProgress(latest, connectorRuntimeProgressFromJob(latest)));
       return json({
         ok: true,
@@ -9335,6 +13670,21 @@ async function router(req: Request, env: Env): Promise<Response> {
         );
         if (updateError) throw new Error(`PayPal commerce-reference reconciliation update failed: ${updateError.message}`);
         updated = (updatedRows || []).length;
+        for (const row of (updatedRows || []) as any[]) {
+          await publishReconciliationDomainEvent(env, {
+            workspace_id: workspaceId,
+            type: "reconciliation.matched",
+            case_id: `paypal_commerce_reference:${row.id}`,
+            entity_type: "order",
+            entity_id: row.matched_platform_order_id || row.matched_order_id || row.transaction_id,
+            category: "commerce_reference",
+            status: "matched",
+            connector_id: "paypal",
+            platform: "paypal",
+            safe_summary: "PayPal transaction matched to a commerce order by exact commerce reference.",
+            occurred_at: new Date().toISOString(),
+          });
+        }
       }
 
       return json({
@@ -11857,8 +16207,6 @@ if (path === "/v1/product-costs/rules/delete" && req.method === "POST") {
         platform: "wowsuite:wowboost",
         from,
         to,
-        sort,
-        dir,
         authBase,
         exportBase,
         exportUrl: exportUrl.toString(),
@@ -12460,16 +16808,67 @@ if (path === "/v1/integrations/nmi-lifeheater14090/debug-classic" && req.method 
 
 async function runWowBoostImportPage(
   env: Env,
-  args: { from: string; to: string; page: number; pageSize?: number; connector_job_id?: string | null }
+  args: { from: string; to: string; page: number; pageSize?: number; connector_job_id?: string | null; filter?: string | null }
 ) {
-  const supabase = getSupabase(env);
+  const started = Date.now();
   const pageSize = Math.max(1, Math.min(100, Number(args.pageSize ?? 100)));
+  const jobId = args.connector_job_id || null;
+  const filter = args.filter ?? null;
+  let currentStage = "start";
+  let sourceRows = 0;
+  let validInRangeRows = 0;
+  let dedupedRows = 0;
+  let upsertedRows = 0;
+  const externalOperationCounters = {
+    supabase_rest_calls: 0,
+    wowboost_auth_calls: 0,
+    wowboost_export_calls: 0,
+    csv_download_calls: 0,
+    identity_attach_calls: 0,
+    final_upsert_calls: 0,
+  };
+  const identityLookupCounters = createWowBoostIdentityAttachCounters();
+
+  function logStageStart(stage: string, details: Record<string, any> = {}) {
+    currentStage = stage;
+    console.log("[WowBoost Import] STAGE START", {
+      stage,
+      elapsed_ms: Date.now() - started,
+      page: args.page,
+      pageSize,
+      ...details,
+    });
+  }
+
+  function logStageComplete(stage: string, details: Record<string, any> = {}) {
+    console.log("[WowBoost Import] STAGE COMPLETE", {
+      stage,
+      elapsed_ms: Date.now() - started,
+      page: args.page,
+      pageSize,
+      ...details,
+    });
+  }
+
+  console.log("[WowBoost Import] PAGE START", {
+    jobId,
+    page: args.page,
+    pageSize,
+    from: args.from,
+    to: args.to,
+    filter,
+  });
+
+  try {
+  const supabase = getSupabase(env);
 
   const fromMs = Date.parse(`${args.from}T00:00:00.000Z`);
   const toExclusive = new Date(`${args.to}T00:00:00.000Z`);
   toExclusive.setUTCDate(toExclusive.getUTCDate() + 1);
   const toMs = toExclusive.getTime();
 
+  logStageStart("WowBoost authentication");
+  externalOperationCounters.supabase_rest_calls += 1;
   const { data: creds, error } = await supabase
     .from("integrations_credentials")
     .select("*")
@@ -12486,8 +16885,16 @@ async function runWowBoostImportPage(
   const username = String((creds as any).username ?? "").trim();
   const password = await decryptSecretFromCredRow(env, creds as any);
 
+  externalOperationCounters.wowboost_auth_calls += 1;
   const bearer = await wowSuiteGetBearerToken({ authBase, username, password });
+  logStageComplete("WowBoost authentication", {
+    credentials_found: Boolean(creds),
+    supabase_rest_calls: externalOperationCounters.supabase_rest_calls,
+    wowboost_auth_calls: externalOperationCounters.wowboost_auth_calls,
+  });
 
+  logStageStart("export request");
+  externalOperationCounters.wowboost_export_calls += 1;
   const exp = await wowBoostExportPage({
     exportBase,
     bearer,
@@ -12496,7 +16903,14 @@ async function runWowBoostImportPage(
     fromYmd: args.from,
     toYmd: args.to,
   });
+  logStageComplete("export request", {
+    has_more: Boolean(exp.hasMore),
+    link_present: Boolean(exp.link),
+    wowboost_export_calls: externalOperationCounters.wowboost_export_calls,
+  });
 
+  logStageStart("CSV download");
+  externalOperationCounters.csv_download_calls += 1;
   const csvRes = await fetchWithTimeout(
     exp.link,
     { method: "GET", headers: { Accept: "text/csv,*/*" } },
@@ -12504,13 +16918,34 @@ async function runWowBoostImportPage(
   );
 
   const csvText = await readTextSafe(csvRes);
+  logStageComplete("CSV download", {
+    ok: csvRes.ok,
+    status: csvRes.status,
+    csvBytes: csvText.length,
+    csv_download_calls: externalOperationCounters.csv_download_calls,
+  });
 
   if (!csvRes.ok) {
     throw new Error(`CSV download failed ${csvRes.status}: ${csvText.slice(0, 200)}`);
   }
 
+  logStageStart("CSV parse", { csvBytes: csvText.length });
   const parsed = parseCsv(csvText);
+  sourceRows = parsed.rows.length;
+  logStageComplete("CSV parse", {
+    rows: parsed.rows.length,
+    headers: parsed.headers.length,
+    csvBytes: csvText.length,
+  });
+  console.log("[WowBoost Import] CSV STATS", {
+    page: args.page,
+    pageSize,
+    rows: parsed.rows.length,
+    headers: parsed.headers.length,
+    csvBytes: csvText.length,
+  });
 
+  logStageStart("row mapping", { sourceRows: parsed.rows.length });
   const mapped = await Promise.all(
     parsed.rows.map(async (r) => {
       const orderId =
@@ -12676,40 +17111,101 @@ async function runWowBoostImportPage(
   );
 
   const validRows = mapped.filter(Boolean);
-  const deduped = dedupePlatformOrders(validRows);
-  const identity = deduped.length
-    ? await attachIdentityToWowBoostPlatformRows(env, deduped, {
-        workspace_id: "default",
-        connector_job_id: args.connector_job_id || null,
-      })
-    : { attempted: 0, linked: 0, review_required: 0, skipped: 0, warnings: [] as string[] };
+  validInRangeRows = validRows.length;
+  logStageComplete("row mapping", {
+    sourceRows: parsed.rows.length,
+    mappedRows: mapped.length,
+    validRows: validRows.length,
+  });
 
+  logStageStart("deduplication", { validRows: validRows.length });
+  const deduped = dedupePlatformOrders(validRows);
+  dedupedRows = deduped.length;
+  logStageComplete("deduplication", {
+    validRows: validRows.length,
+    dedupedRows,
+    duplicateRows: Math.max(0, validRows.length - dedupedRows),
+  });
+
+  logStageStart("attachIdentityToWowBoostPlatformRows()", { inputRows: dedupedRows, deferred_to_runtime: Boolean(deduped.length) });
+  const identity = deduped.length
+    ? { attempted: 0, linked: 0, review_required: 0, skipped: deduped.length, warnings: ["identity_resolution_deferred_to_runtime"] as string[] }
+    : { attempted: 0, linked: 0, review_required: 0, skipped: 0, warnings: [] as string[] };
+  logStageComplete("attachIdentityToWowBoostPlatformRows()", {
+    inputRows: dedupedRows,
+    deferred_to_runtime: Boolean(deduped.length),
+    attempted: identity.attempted,
+    linked: identity.linked,
+    review_required: identity.review_required,
+    skipped: identity.skipped,
+    warnings: identity.warnings,
+    identity_lookup_counters: identityLookupCounters,
+  });
+
+  logStageStart("final upsert", { dedupedRows });
   if (deduped.length) {
+    const upsertStarted = Date.now();
+    externalOperationCounters.supabase_rest_calls += 1;
+    externalOperationCounters.final_upsert_calls += 1;
     const { error: upErr } = await supabase
       .from("platform_orders")
       .upsert(deduped as any[], { onConflict: "platform_order_id" });
 
     if (upErr) throw new Error(upErr.message);
+    console.log(`[WowBoost Import] upsert took ${Date.now() - upsertStarted}ms`);
   }
-
-  const sourceRows = parsed.rows.length;
-  const validInRangeRows = validRows.length;
+  upsertedRows = dedupedRows;
+  logStageComplete("final upsert", {
+    dedupedRows,
+    upserted: upsertedRows,
+    supabase_rest_calls: externalOperationCounters.supabase_rest_calls,
+    final_upsert_calls: externalOperationCounters.final_upsert_calls,
+  });
 
   const hasMore =
     sourceRows >= pageSize &&
     validInRangeRows > 0 &&
     Boolean(exp.hasMore);
 
+  console.log("[WowBoost Import] PAGE COMPLETE", {
+    page: args.page,
+    pageSize,
+    fetched: validInRangeRows,
+    sourceRows,
+    dedupedRows,
+    upserted: upsertedRows,
+    total_elapsed_ms: Date.now() - started,
+    identity_lookup_counters: identityLookupCounters,
+    external_operation_counters: externalOperationCounters,
+  });
+
   return {
     fetched: validInRangeRows,
     sourceRows,
-    upserted: deduped.length,
+    upserted: upsertedRows,
     page: args.page,
     pageSize,
     hasMore,
     nextPage: hasMore ? args.page + 1 : null,
     identity,
   };
+  } catch (e: any) {
+    console.error("[WowBoost Import] PAGE FAILED", {
+      current_stage: currentStage,
+      page: args.page,
+      pageSize,
+      elapsed_ms: Date.now() - started,
+      sourceRows,
+      validInRangeRows,
+      dedupedRows,
+      upserted: upsertedRows,
+      external_operation_counters: externalOperationCounters,
+      identity_lookup_counters: identityLookupCounters,
+      message: e?.message || String(e),
+      stack: e?.stack,
+    });
+    throw e;
+  }
 }
 
   export default {
@@ -12814,7 +17310,7 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
       return json({ ok: false, error: "server_error", message: e?.message || "unknown" }, e?.status || 500);
     }
   },
-  
+
 		  async queue(batch: MessageBatch<any>, env: Env, ctx: ExecutionContext) {
 		  console.log("[TraceKit] connector runtime queue", {
 		    event: "connector_runtime.queue.consumer.entry",
@@ -12822,9 +17318,19 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 		    message_count: batch.messages.length,
 		    timestamp: new Date().toISOString(),
 		  });
+
 		  for (const msg of batch.messages) {
 		    const body = msg.body || {};
 		    const runtimeTaskId = String(body.runtime_task_id ?? body.task_id ?? "").trim();
+
+			console.log("[WowBoost Queue] MESSAGE BODY", body);
+
+			console.log("[WowBoost Queue] ROUTING", {
+			  runtimeTaskId: runtimeTaskId || null,
+			  keys: Object.keys(body),
+			  jobId: String(body.job_id ?? body.jobId ?? "").trim() || null,
+			});
+
 		    const pendingQueueDiagnostics = [
 		      {
 		        event: "connector_runtime.queue.consumer.entry",
@@ -12859,6 +17365,7 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 		    if (runtimeTaskId) {
 		      let task: ConnectorImportTaskRow | null = null;
 		      let queueDiagnostics: ConnectorRuntimeTaskDiagnosticState | null = null;
+		      let executeAlreadyLocked = false;
 		      const forceQueueEvent = async (event: string, details: Record<string, any> = {}) => {
 		        if (!task) {
 		          console.log("[TraceKit] connector runtime queue", connectorRuntimeQueueDiagnosticDetails({
@@ -12901,6 +17408,11 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 		          }));
 		        }
 		        if (!task || task.status === "completed" || task.status === "cancelled") {
+		          if (task) {
+		            await forceQueueEvent("connector_runtime.queue.duplicate_execution_prevented", {
+		              reason: `task_${task.status}`,
+		            }).catch(() => {});
+		          }
 		          await ackRuntimeMessage({ reason: !task ? "task_not_found" : `task_${task.status}` });
 		          continue;
 		        }
@@ -12924,17 +17436,42 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 		          }
 		        }
 
+		        if (isAttributionBackfillRuntimeTask(task) && task.status === "running") {
+		          if (isConnectorRuntimeTaskStale(task, { stale_ms: ATTRIBUTION_BACKFILL_TASK_STALE_MS })) {
+		            const recovered = await recoverStaleAttributionBackfillTask(env, task, { reason: "queue_redelivery_stale" });
+		            if (!recovered) {
+		              await ackRuntimeMessage({ reason: "attribution_stale_recovery_race_lost" });
+		              continue;
+		            }
+		            task = recovered;
+		            queueDiagnostics = connectorRuntimeTaskDiagnosticState(task);
+		            if (task.status === "failed") {
+		              await ackRuntimeMessage({ reason: "attribution_stale_recovery_failed" });
+		              continue;
+		            }
+		            executeAlreadyLocked = true;
+		          } else {
+		            await enqueueConnectorRuntimeTaskWithDelay(env, task, ATTRIBUTION_BACKFILL_TASK_RECHECK_DELAY_SECONDS);
+		            await forceQueueEvent("connector_runtime.queue.message.retry", {
+		              reason: "attribution_backfill_task_already_running",
+		              delay_seconds: ATTRIBUTION_BACKFILL_TASK_RECHECK_DELAY_SECONDS,
+		            }).catch(() => {});
+		            await ackRuntimeMessage({ reason: "attribution_backfill_task_already_running" });
+		            continue;
+		          }
+		        }
+
 		        const availableAt = task.available_at ? Date.parse(task.available_at) : 0;
 		        if (availableAt && availableAt > Date.now()) {
 		          const delaySeconds = Math.max(1, Math.ceil((availableAt - Date.now()) / 1000));
 		          if (env.wowboost_imports) {
-		            await env.wowboost_imports.send(connectorRuntimeTaskMessage({
+		            await sendConnectorRuntimeTaskQueueMessage(env, task, connectorRuntimeTaskMessage({
 	              id: task.id,
 	              job_id: task.job_id,
 	              connector_id: task.connector_id,
 	              task_type: task.task_type,
 		              phase: task.phase,
-		            }), { delaySeconds } as any);
+		            }), { delaySeconds }, queueDiagnostics);
 		          }
 		          await forceQueueEvent("connector_runtime.queue.message.retry", {
 		            reason: "task_not_available_yet",
@@ -12949,7 +17486,8 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 		          runtime_task_id: runtimeTaskId,
 		          task_status: task.status,
 		        });
-		        const executeResult = await executeConnectorRuntimeTask(env, task);
+		        const taskBeforeExecute = task;
+		        const executeResult = await executeConnectorRuntimeTask(env, task, { already_locked: executeAlreadyLocked });
 		        task = await getConnectorRuntimeTask(env, task.id).catch(() => task) || task;
 		        queueDiagnostics = connectorRuntimeTaskDiagnosticState(task);
 		        await forceQueueEvent("connector_runtime.queue.execute.after", {
@@ -12957,6 +17495,19 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 		          skipped: Boolean(executeResult?.skipped),
 		          reason: executeResult?.reason || null,
 		        });
+		        if (!executeResult?.skipped && (Number(taskBeforeExecute.attempt_count || 0) > 1 || taskBeforeExecute.last_error || taskBeforeExecute.status === "retrying")) {
+		          await publishConnectorRuntimeIncidentEvent(env, {
+		            workspace_id: task.workspace_id,
+		            connector_id: task.connector_id,
+		            connector_type: task.connector_id,
+		            status: "recovered",
+		            safe_summary: "Connector Runtime task completed after a prior retry or error.",
+		            affected_record_count: 1,
+		            job_id: task.job_id,
+		            task_id: task.id,
+		            occurred_at: new Date().toISOString(),
+		          });
+		        }
 		        await ackRuntimeMessage({ reason: "runtime_task_processed" });
 		        continue;
 		      } catch (e: any) {
@@ -13012,6 +17563,10 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 	                      ? Number(progress.metadata?.finalize_transient_retries || 0) + 1
 	                      : Number(progress.metadata?.finalize_transient_retries || 0),
 	                  };
+	                } else if (task.connector_id === ATTRIBUTION_BACKFILL_CONNECTOR_ID) {
+	                  retryMetadata = {
+	                    transient_retries: Number(progress.metadata?.transient_retries || progress.transient_retries || 0) + 1,
+	                  };
 	                }
 	                const nextProgress = mergeConnectorRuntimeCounters(progress, { retries: 1 }, {
 	                  status: "retrying",
@@ -13023,13 +17578,13 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 	              await updateConnectorRuntimeJobProgress(env, job, nextProgress).catch(() => {});
 	            }
 		            if (env.wowboost_imports) {
-		              await env.wowboost_imports.send(connectorRuntimeTaskMessage({
+		              await sendConnectorRuntimeTaskQueueMessage(env, task, connectorRuntimeTaskMessage({
 		                id: task.id,
 		                job_id: task.job_id,
 		                connector_id: task.connector_id,
 		                task_type: task.task_type,
 		                phase: task.phase,
-		              }), { delaySeconds: Math.max(1, Math.ceil(delayMs / 1000)) } as any);
+		              }), { delaySeconds: Math.max(1, Math.ceil(delayMs / 1000)) }, queueDiagnostics);
 		            }
 		            await forceQueueEvent("connector_runtime.queue.message.retry", {
 		              reason: "task_execution_transient_failure",
@@ -13044,6 +17599,18 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 	              locked_at: null,
 	              last_error: diagnostic.last_error,
 	            }).catch(() => {});
+		            await publishConnectorRuntimeIncidentEvent(env, {
+		              workspace_id: task.workspace_id,
+		              connector_id: task.connector_id,
+		              connector_type: task.connector_id,
+		              status: "failed",
+		              error_category: classification,
+		              safe_summary: diagnostic.last_error,
+		              affected_record_count: 1,
+		              job_id: task.job_id,
+		              task_id: task.id,
+		              occurred_at: new Date().toISOString(),
+		            });
 	            if (job && progress) {
 	              let failureMetadata: Record<string, any> | undefined;
 	              if (task.connector_id === IDENTITY_BACKFILL_CONNECTOR_ID && task.task_type === IDENTITY_BACKFILL_TASK_TYPES.discover) {
@@ -13108,12 +17675,28 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
         error: null,
       });
 
+      console.log("[WowBoost Queue] PAGE START", {
+        jobId,
+        page,
+        pageSize,
+        attempt,
+      });
       const result = await runWowBoostImportPage(env, {
         from: job.from_date,
         to: job.to_date,
         page,
         pageSize,
         connector_job_id: jobId,
+        filter: job.filter,
+      });
+      console.log("[WowBoost Queue] PAGE IMPORT COMPLETE", {
+        jobId,
+        page,
+        fetched: result.fetched,
+        upserted: result.upserted,
+        hasMore: result.hasMore,
+        nextPage: result.nextPage,
+        identity: result.identity,
       });
 
       const fetchedThisPage = Number(result.fetched ?? 0);
@@ -13124,6 +17707,13 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 
       const hasMore = Boolean(result.hasMore);
 
+      console.log("[WowBoost Queue] UPDATING JOB", {
+        jobId,
+        page,
+        hasMore,
+        nextFetched,
+        nextUpserted,
+      });
       await updateImportJob(env, jobId, {
         status: hasMore ? "running" : "completed",
         pages: Math.max(Number(job.pages ?? 0), page),
@@ -13136,26 +17726,93 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
         completed_at: hasMore ? null : new Date().toISOString(),
         error: null,
       });
+      console.log("[WowBoost Queue] JOB UPDATED", {
+        jobId,
+        page,
+      });
+
+      if (!hasMore && nextUpserted > 0) {
+        const identityWorkspaceId = "default";
+        const identityPlatforms = ["wowboost"];
+        console.log("[WowBoost Queue] IDENTITY BACKFILL ENQUEUE", {
+          jobId,
+          workspaceId: identityWorkspaceId,
+          platforms: identityPlatforms,
+          from: job.from_date,
+          to: job.to_date,
+          importedRows: nextUpserted,
+        });
+        ctx.waitUntil((async () => {
+          try {
+            const identityBackfill = await startIdentityBackfillRuntimeJob(env, {
+              workspace_id: identityWorkspaceId,
+              from: job.from_date,
+              to: job.to_date,
+              platforms: identityPlatforms,
+              batch_size: IDENTITY_BACKFILL_DEFAULT_BATCH_SIZE,
+              dry_run: false,
+            });
+            if (identityBackfill.status >= 400 || identityBackfill.body?.ok === false) {
+              console.error("[WowBoost Queue] IDENTITY BACKFILL ENQUEUE FAILED", {
+                jobId,
+                status: identityBackfill.status,
+                error: identityBackfill.body?.error || null,
+                message: identityBackfill.body?.message || null,
+              });
+              return;
+            }
+            console.log("[WowBoost Queue] IDENTITY BACKFILL ENQUEUED", {
+              jobId,
+              identityJobId: identityBackfill.body?.job_id || null,
+              taskId: identityBackfill.body?.task_id || null,
+              status: identityBackfill.body?.status || null,
+              phase: identityBackfill.body?.phase || null,
+              queued: Boolean(identityBackfill.body?.queued),
+              duplicateTaskPrevented: Boolean(identityBackfill.body?.duplicate_task_prevented),
+            });
+          } catch (e: any) {
+            console.error("[WowBoost Queue] IDENTITY BACKFILL ENQUEUE ERROR", {
+              jobId,
+              message: e?.message || String(e),
+              stack: e?.stack,
+            });
+          }
+        })());
+      }
 
       if (hasMore) {
+        console.log("[WowBoost Queue] QUEUE NEXT PAGE", {
+          jobId,
+          currentPage: page,
+          nextPage: page + 1,
+        });
         await env.wowboost_imports.send({
           job_id: jobId,
           page: page + 1,
           pageSize,
           attempt: 1,
         });
+        console.log("[WowBoost Queue] NEXT PAGE QUEUED", {
+          jobId,
+          nextPage: page + 1,
+        });
       }
 
+      console.log("[WowBoost Queue] MESSAGE ACK", {
+        jobId,
+        page,
+      });
       msg.ack();
     } catch (e: any) {
       const message = e?.message || String(e) || "unknown";
 
-      console.error("[TraceKit] wowboost queue import page failed", {
+      console.error("[WowBoost Queue] PAGE FAILED", {
         jobId,
         page,
         pageSize,
         attempt,
         message,
+        stack: e?.stack,
       });
 
       if (attempt >= maxAttempts) {
@@ -13194,5 +17851,33 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
     ctx.waitUntil(runScheduledCheckoutChampImport(env));
     ctx.waitUntil(runScheduledShopifyImport(env));
     ctx.waitUntil(runScheduledPaypalImport(env));
+    ctx.waitUntil(runScheduledDomainEventProjectionReplay(getSupabase(env), {
+      batch_size: Number(env.LIVE_WORKSPACE_PROJECTION_BATCH_SIZE || 0) || undefined,
+      max_events: Number(env.LIVE_WORKSPACE_PROJECTION_MAX_EVENTS || 0) || undefined,
+      max_workspaces: Number(env.LIVE_WORKSPACE_PROJECTION_MAX_WORKSPACES || 0) || undefined,
+      runner_id: `scheduled-worker:${new Date().toISOString()}`,
+    }).then((result) => {
+      console.log("[TraceKit] scheduled domain event projection replay completed", {
+        ok: result.ok,
+        workspaces_seen: result.workspaces_seen,
+        consumers_seen: result.consumers_seen,
+        events_seen: result.events_seen,
+        events_projected: result.events_projected,
+        events_failed: result.events_failed,
+        has_more: result.has_more,
+        duration_ms: result.duration_ms,
+      });
+    }).catch((error) => {
+      console.error("[TraceKit] scheduled domain event projection replay failed", {
+        message: error?.message || String(error),
+        stack: error?.stack || null,
+      });
+    }));
+    ctx.waitUntil(reconcileActiveConnectorRuntimeQueues(env).catch((error) => {
+      console.error("[TraceKit] scheduled connector runtime queue reconciliation failed", {
+        message: error?.message || String(error),
+        stack: error?.stack || null,
+      });
+    }));
   },
 };

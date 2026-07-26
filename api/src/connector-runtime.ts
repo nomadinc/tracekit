@@ -29,6 +29,10 @@ export const CONNECTOR_RUNTIME_VERSION = 1;
 export const CONNECTOR_RUNTIME_EXECUTION_MODE = "connector_runtime";
 export const CONNECTOR_RUNTIME_TASK_DIAGNOSTIC_EVENT_LIMIT = 25;
 export const CONNECTOR_RUNTIME_DURABLE_HEARTBEAT_MIN_INTERVAL_MS = 10000;
+export const CONNECTOR_RUNTIME_QUEUE_ENQUEUE_MAX_ATTEMPTS = 4;
+export const CONNECTOR_RUNTIME_QUEUE_ENQUEUE_BASE_DELAY_MS = 250;
+export const CONNECTOR_RUNTIME_QUEUE_ENQUEUE_MAX_DELAY_MS = 2000;
+export const CONNECTOR_RUNTIME_QUEUE_ENQUEUE_JITTER_MS = 100;
 
 export type ConnectorRuntimeJobStatus = (typeof CONNECTOR_RUNTIME_JOB_STATUSES)[number];
 export type ConnectorRuntimeTaskStatus = (typeof CONNECTOR_RUNTIME_TASK_STATUSES)[number];
@@ -61,10 +65,29 @@ export type ConnectorRuntimeProgress = {
 
 export type ConnectorRuntimeTaskMessage = {
   runtime_task_id: string;
+  task_id: string;
   job_id: string;
   connector_id: string;
   task_type: string;
   phase: string;
+};
+
+export type ConnectorRuntimeAdminRequeueTaskMessage = {
+  runtime_task_id: string;
+  task_id: string;
+  job_id: string;
+  task_type: string;
+};
+
+export type ConnectorRuntimeQueueSendEvent = {
+  event: "connector_runtime.queue.enqueue_retry" | "connector_runtime.queue.enqueue_retry_success" | "connector_runtime.queue.enqueue_retry_exhausted";
+  details: Record<string, any>;
+};
+
+export type ConnectorRuntimeInlineDebugDiagnosticEvent = {
+  event?: string | null;
+  details?: Record<string, any> | null;
+  at?: string | null;
 };
 
 export type ConnectorRuntimeTaskPlan = {
@@ -274,10 +297,63 @@ export function connectorRuntimeTaskMessage(task: {
 }): ConnectorRuntimeTaskMessage {
   return {
     runtime_task_id: task.id,
+    task_id: task.id,
     job_id: task.job_id,
     connector_id: task.connector_id,
     task_type: task.task_type,
     phase: task.phase,
+  };
+}
+
+export function connectorRuntimeAdminRequeueTaskMessage(task: {
+  id: string;
+  job_id: string;
+  task_type: string;
+}): ConnectorRuntimeAdminRequeueTaskMessage {
+  return {
+    runtime_task_id: task.id,
+    task_id: task.id,
+    job_id: task.job_id,
+    task_type: task.task_type,
+  };
+}
+
+export function connectorRuntimeRequeueTaskDecision(args: {
+  task?: { id?: string | null; job_id?: string | null; task_type?: string | null; status?: string | null } | null;
+  job?: { id?: string | null; status?: string | null } | null;
+  progress?: ConnectorRuntimeProgress | null;
+  now: string;
+}) {
+  if (!args.task) {
+    return { ok: false as const, status: 404, error: "not_found", message: "Connector runtime task not found." };
+  }
+  if (args.task.status !== "queued") {
+    return { ok: false as const, status: 409, error: "task_not_queued", message: "Connector runtime task must be queued before it can be re-enqueued." };
+  }
+  if (!args.job) {
+    return { ok: false as const, status: 404, error: "job_not_found", message: "Import job not found for connector runtime task." };
+  }
+
+  const jobPatch = args.progress?.status === "completed_with_errors"
+    ? {
+      ...args.progress,
+      status: "retrying" as const,
+      completed_at: null,
+      records_failed: 0,
+      next_run_at: args.now,
+      updated_at: args.now,
+    }
+    : null;
+
+  return {
+    ok: true as const,
+    message: connectorRuntimeAdminRequeueTaskMessage({
+      id: cleanText(args.task.id),
+      job_id: cleanText(args.task.job_id),
+      task_type: cleanText(args.task.task_type),
+    }),
+    job_patch: jobPatch,
+    create_task: false,
   };
 }
 
@@ -307,6 +383,110 @@ export function appendConnectorRuntimeTaskDiagnostic(
         ...details,
       },
     ],
+  };
+}
+
+export function appendConnectorRuntimeTaskDiagnosticBatch(
+  summary: Record<string, any> | null | undefined,
+  heartbeatEvent: string,
+  eventsToAppend: Array<{ event: string; details?: Record<string, any>; at?: string | null }>,
+  now: string = new Date().toISOString(),
+) {
+  const base = summary && typeof summary === "object" ? { ...summary } : {};
+  const existingEvents = Array.isArray(base.diagnostic_events) ? base.diagnostic_events : [];
+  const batchEvents = eventsToAppend.map((item) => ({
+    at: item.at || now,
+    event: item.event,
+    ...(item.details || {}),
+  }));
+  const lastEvent = batchEvents[batchEvents.length - 1] || null;
+  return {
+    ...base,
+    heartbeat_at: now,
+    heartbeat_event: heartbeatEvent,
+    heartbeat_count: Number(base.heartbeat_count || 0) + 1,
+    diagnostic_event: lastEvent?.event || base.diagnostic_event || heartbeatEvent,
+    diagnostic_event_count: Number(base.diagnostic_event_count || 0) + batchEvents.length,
+    diagnostic_events: [
+      ...existingEvents,
+      ...batchEvents,
+    ].slice(-CONNECTOR_RUNTIME_TASK_DIAGNOSTIC_EVENT_LIMIT),
+  };
+}
+
+function connectorRuntimeErrorText(error: unknown) {
+  const message = (error as any)?.message || String(error || "");
+  const name = (error as any)?.name || "";
+  return `${name} ${message}`.trim();
+}
+
+export function isCloudflareSubrequestLimitError(error: unknown) {
+  return /too many subrequests/i.test(connectorRuntimeErrorText(error));
+}
+
+function normalizeConnectorRuntimeInlineDebugEvent(item: any) {
+  if (!item || typeof item !== "object") return null;
+  const event = String(item.event || "").trim();
+  if (!event) return null;
+  const details = item.details && typeof item.details === "object" ? item.details : item;
+  const { details: _nestedDetails, ...rest } = details || {};
+  return {
+    ...rest,
+    event,
+    at: item.at || details?.at || details?.timestamp || null,
+  };
+}
+
+export function compactConnectorRuntimeInlineDebugDiagnostics(args: {
+  summary?: Record<string, any> | null;
+  target_diagnostic_events?: ConnectorRuntimeInlineDebugDiagnosticEvent[] | null;
+  subrequest_tracker?: Record<string, any> | null;
+  identity_resolution_metrics?: Record<string, any> | null;
+  error?: unknown;
+  limit?: number;
+}) {
+  const limit = Math.max(1, Math.min(100, Math.floor(Number(args.limit || 50))));
+  const summary = args.summary && typeof args.summary === "object" ? args.summary : {};
+  const bufferedTargetEvents = [
+    ...(Array.isArray(args.target_diagnostic_events) ? args.target_diagnostic_events : []),
+    ...(Array.isArray(summary.target_diagnostic_events) ? summary.target_diagnostic_events : []),
+  ].map(normalizeConnectorRuntimeInlineDebugEvent).filter(Boolean) as Record<string, any>[];
+  const summaryEvents = (Array.isArray(summary.diagnostic_events) ? summary.diagnostic_events : [])
+    .map(normalizeConnectorRuntimeInlineDebugEvent)
+    .filter(Boolean) as Record<string, any>[];
+  const sourceEvents = bufferedTargetEvents.length ? bufferedTargetEvents : summaryEvents;
+  const tracker = args.subrequest_tracker && typeof args.subrequest_tracker === "object" ? args.subrequest_tracker : null;
+  const byOperation = tracker?.by_operation && typeof tracker.by_operation === "object"
+    ? Object.fromEntries(Object.entries(tracker.by_operation).map(([key, value]) => {
+      const stats = value && typeof value === "object" ? value as Record<string, any> : {};
+      return [key, {
+        operation: stats.operation || null,
+        repository_method: stats.repository_method || null,
+        count: Number(stats.count || 0),
+        completed: Number(stats.completed || 0),
+        errors: Number(stats.errors || 0),
+        timeouts: Number(stats.timeouts || 0),
+        elapsed_ms: Number(stats.elapsed_ms || 0),
+        max_elapsed_ms: Number(stats.max_elapsed_ms || 0),
+      }];
+    }))
+    : {};
+  const lastEvent = sourceEvents[sourceEvents.length - 1] || summaryEvents[summaryEvents.length - 1] || null;
+  return {
+    last_50_buffered_diagnostic_events: sourceEvents.slice(-limit),
+    buffered_diagnostic_event_count: sourceEvents.length,
+    diagnostic_event_source: bufferedTargetEvents.length ? "target_diagnostic_events" : "summary_diagnostic_events",
+    subrequest_tracker_count: Number(tracker?.count || 0),
+    subrequest_tracker_completed: Number(tracker?.completed || 0),
+    subrequest_tracker_errors: Number(tracker?.errors || 0),
+    subrequest_tracker_timeouts: Number(tracker?.timeouts || 0),
+    totals_grouped_by_operation: byOperation,
+    identity_resolution_metrics: args.identity_resolution_metrics && typeof args.identity_resolution_metrics === "object"
+      ? args.identity_resolution_metrics
+      : summary.identity_resolution_metrics || null,
+    last_successfully_entered_operation: lastEvent?.operation || lastEvent?.event || summary.diagnostic_event || null,
+    error_name: (args.error as any)?.name || "Error",
+    error_message: (args.error as any)?.message || String(args.error || ""),
   };
 }
 
@@ -369,6 +549,190 @@ export function isConnectorRuntimeTaskStale(task: {
   const heartbeatMs = connectorRuntimeTaskHeartbeatTimestampMs(task);
   if (!heartbeatMs) return false;
   return Math.max(0, Number(args.now_ms ?? Date.now()) - heartbeatMs) >= args.stale_ms;
+}
+
+export function connectorRuntimeStaleRunningTaskRecoveryDecision(task: {
+  status?: string | null;
+  locked_at?: string | null;
+  updated_at?: string | null;
+  attempt_count?: number | null;
+  max_attempts?: number | null;
+  cursor?: string | null;
+  payload?: Record<string, any> | null;
+  result_summary?: Record<string, any> | null;
+}, args: {
+  stale_ms: number;
+  now_ms?: number;
+  now?: string;
+  recovered_event: string;
+  exhausted_event: string;
+  reason?: string | null;
+  last_error: string;
+}) {
+  const nowMs = Number(args.now_ms ?? Date.now());
+  const now = args.now || new Date(nowMs).toISOString();
+  if (!isConnectorRuntimeTaskStale(task, { now_ms: nowMs, stale_ms: args.stale_ms })) {
+    return { action: "active" as const, patch: null, attempt_count: Number(task.attempt_count || 0) };
+  }
+  const currentAttempt = Math.max(0, Number(task.attempt_count || 0));
+  const maxAttempts = Math.max(1, Number(task.max_attempts || 5));
+  if (currentAttempt >= maxAttempts) {
+    return {
+      action: "fail" as const,
+      attempt_count: currentAttempt,
+      patch: {
+        status: "failed",
+        locked_at: null,
+        completed_at: now,
+        last_error: args.last_error,
+        result_summary: appendConnectorRuntimeTaskDiagnostic(task.result_summary, args.exhausted_event, {
+          reason: args.reason || "stale_running_task",
+          previous_status: task.status || null,
+          previous_locked_at: task.locked_at || null,
+          attempt_count: currentAttempt,
+          max_attempts: maxAttempts,
+          cursor_preserved: task.cursor || null,
+          payload_preserved: true,
+        }, now),
+      },
+    };
+  }
+  const nextAttempt = currentAttempt + 1;
+  return {
+    action: "reclaim" as const,
+    attempt_count: nextAttempt,
+    patch: {
+      status: "running",
+      locked_at: now,
+      completed_at: null,
+      attempt_count: nextAttempt,
+      last_error: null,
+      result_summary: appendConnectorRuntimeTaskDiagnostic(task.result_summary, args.recovered_event, {
+        reason: args.reason || "stale_running_task",
+        previous_status: task.status || null,
+        previous_locked_at: task.locked_at || null,
+        attempt_count: nextAttempt,
+        max_attempts: maxAttempts,
+        cursor_preserved: task.cursor || null,
+        payload_preserved: true,
+      }, now),
+    },
+  };
+}
+
+export function connectorRuntimeStaleRunningTaskRequeueDecision(task: {
+  status?: string | null;
+  locked_at?: string | null;
+  updated_at?: string | null;
+  attempt_count?: number | null;
+  max_attempts?: number | null;
+  cursor?: string | null;
+  payload?: Record<string, any> | null;
+  result_summary?: Record<string, any> | null;
+}, args: {
+  stale_ms: number;
+  now_ms?: number;
+  now?: string;
+  recovered_event: string;
+  exhausted_event: string;
+  reason?: string | null;
+  last_error: string;
+}) {
+  const nowMs = Number(args.now_ms ?? Date.now());
+  const now = args.now || new Date(nowMs).toISOString();
+  if (!isConnectorRuntimeTaskStale(task, { now_ms: nowMs, stale_ms: args.stale_ms })) {
+    return { action: "active" as const, patch: null, attempt_count: Number(task.attempt_count || 0) };
+  }
+  const currentAttempt = Math.max(0, Number(task.attempt_count || 0));
+  const maxAttempts = Math.max(1, Number(task.max_attempts || 5));
+  if (currentAttempt >= maxAttempts) {
+    return {
+      action: "fail" as const,
+      attempt_count: currentAttempt,
+      patch: {
+        status: "failed",
+        locked_at: null,
+        completed_at: now,
+        last_error: args.last_error,
+        result_summary: appendConnectorRuntimeTaskDiagnostic(task.result_summary, args.exhausted_event, {
+          reason: args.reason || "stale_running_task",
+          previous_status: task.status || null,
+          previous_locked_at: task.locked_at || null,
+          attempt_count: currentAttempt,
+          max_attempts: maxAttempts,
+          cursor_preserved: task.cursor || null,
+          payload_preserved: true,
+        }, now),
+      },
+    };
+  }
+  const nextAttempt = currentAttempt + 1;
+  return {
+    action: "requeue" as const,
+    attempt_count: nextAttempt,
+    patch: {
+      status: "queued",
+      available_at: now,
+      locked_at: null,
+      completed_at: null,
+      attempt_count: nextAttempt,
+      last_error: null,
+      result_summary: appendConnectorRuntimeTaskDiagnostic(task.result_summary, args.recovered_event, {
+        reason: args.reason || "stale_running_task",
+        previous_status: task.status || null,
+        previous_locked_at: task.locked_at || null,
+        attempt_count: nextAttempt,
+        max_attempts: maxAttempts,
+        cursor_preserved: task.cursor || null,
+        payload_preserved: true,
+        reclaimed_attempt_count: nextAttempt,
+      }, now),
+    },
+  };
+}
+
+export function connectorRuntimeQueuedTaskRepublishDecision(task: {
+  status?: string | null;
+  available_at?: string | null;
+  updated_at?: string | null;
+  created_at?: string | null;
+}, args: {
+  now_ms?: number;
+  orphan_ms: number;
+  force?: boolean;
+}) {
+  const status = cleanText(task.status);
+  if (status !== "queued" && status !== "retrying") {
+    return { action: "ignore" as const, reason: "task_not_queued", age_ms: 0 };
+  }
+  const nowMs = Number(args.now_ms ?? Date.now());
+  const availableMs = task.available_at ? Date.parse(task.available_at) : 0;
+  if (Number.isFinite(availableMs) && availableMs > nowMs) {
+    return { action: "ignore" as const, reason: "task_not_available_yet", age_ms: 0 };
+  }
+  const referenceMs = Math.max(
+    Number.isFinite(availableMs) ? availableMs : 0,
+    task.updated_at ? Date.parse(task.updated_at) : 0,
+    task.created_at ? Date.parse(task.created_at) : 0,
+  );
+  const ageMs = referenceMs ? Math.max(0, nowMs - referenceMs) : Number.POSITIVE_INFINITY;
+  if (!args.force && ageMs < Math.max(1, Number(args.orphan_ms || 1))) {
+    return { action: "ignore" as const, reason: "queued_recently", age_ms: ageMs };
+  }
+  return {
+    action: "republish" as const,
+    reason: status === "retrying" ? "retrying_task_available" : "orphan_queued_task",
+    age_ms: ageMs,
+  };
+}
+
+export function connectorRuntimeAttemptAlreadyIncremented(task: {
+  attempt_count?: number | null;
+  result_summary?: Record<string, any> | null;
+}) {
+  const attemptCount = Number(task.attempt_count || 0);
+  const events = Array.isArray(task.result_summary?.diagnostic_events) ? task.result_summary?.diagnostic_events : [];
+  return events.some((event: any) => Number(event?.reclaimed_attempt_count || 0) === attemptCount);
 }
 
 export function classifyConnectorRuntimeFailure(args: {
@@ -450,6 +814,149 @@ export function connectorRuntimeRetryDelayMs(args: {
   const random = args.random || Math.random;
   const exponential = Math.min(cap, base * 2 ** Math.max(0, attempt - 1));
   return Math.min(cap, Math.round(exponential + random() * jitter));
+}
+
+function headerValue(headers: unknown, name: string) {
+  if (!headers) return "";
+  const getter = (headers as any).get;
+  if (typeof getter === "function") return cleanText(getter.call(headers, name));
+  const record = headers as Record<string, any>;
+  return cleanText(record[name] ?? record[name.toLowerCase()] ?? record[name.toUpperCase()]);
+}
+
+export function connectorRuntimeQueueRetryAfterMs(error: unknown, nowMs = Date.now()) {
+  const record = error && typeof error === "object" ? error as Record<string, any> : {};
+  const retryAfter = cleanText(
+    headerValue(record.headers, "Retry-After") ||
+    headerValue(record.response?.headers, "Retry-After") ||
+    record.retry_after ||
+    record.retryAfter,
+  );
+  if (!retryAfter) return null;
+  const seconds = Number(retryAfter);
+  if (Number.isFinite(seconds)) return Math.max(0, Math.round(seconds * 1000));
+  const dateMs = Date.parse(retryAfter);
+  if (Number.isFinite(dateMs)) return Math.max(0, dateMs - nowMs);
+  return null;
+}
+
+export function isCloudflareQueueRateLimitError(error: unknown) {
+  const record = error && typeof error === "object" ? error as Record<string, any> : {};
+  const status = Number(record.status ?? record.statusCode ?? record.response?.status ?? 0);
+  const message = [
+    record.message,
+    record.statusText,
+    record.response?.statusText,
+    stringifyUnknownError(error),
+  ].map((value) => cleanText(value)).filter(Boolean).join(" ");
+  return status === 429 || /too many requests/i.test(message);
+}
+
+export function connectorRuntimeQueueEnqueueRetryDelayMs(args: {
+  attempt: number;
+  error?: unknown;
+  now_ms?: number;
+  random?: () => number;
+}) {
+  const retryAfterMs = connectorRuntimeQueueRetryAfterMs(args.error, Number(args.now_ms ?? Date.now()));
+  if (retryAfterMs !== null) return retryAfterMs;
+  return connectorRuntimeRetryDelayMs({
+    attempt: args.attempt,
+    base_ms: CONNECTOR_RUNTIME_QUEUE_ENQUEUE_BASE_DELAY_MS,
+    cap_ms: CONNECTOR_RUNTIME_QUEUE_ENQUEUE_MAX_DELAY_MS,
+    jitter_ms: CONNECTOR_RUNTIME_QUEUE_ENQUEUE_JITTER_MS,
+    random: args.random,
+  });
+}
+
+export class ConnectorRuntimeQueueEnqueueRetryExhaustedError extends Error {
+  status = 429;
+  transient = true;
+  attempts: number;
+  cause: unknown;
+
+  constructor(message: string, attempts: number, cause: unknown) {
+    super(message);
+    this.name = "ConnectorRuntimeQueueEnqueueRetryExhaustedError";
+    this.attempts = attempts;
+    this.cause = cause;
+  }
+}
+
+export async function sendConnectorRuntimeQueueMessageWithRetry<TMessage = unknown, TOptions = unknown>(args: {
+  send: (message: TMessage, options?: TOptions) => Promise<unknown>;
+  message: TMessage;
+  options?: TOptions;
+  runtime_task_id?: string | null;
+  job_id?: string | null;
+  max_attempts?: number;
+  random?: () => number;
+  sleep?: (delayMs: number) => Promise<void>;
+  onEvent?: (event: ConnectorRuntimeQueueSendEvent) => void | Promise<void>;
+  now_ms?: () => number;
+}) {
+  const maxAttempts = Math.max(1, Math.min(CONNECTOR_RUNTIME_QUEUE_ENQUEUE_MAX_ATTEMPTS, Math.floor(Number(args.max_attempts || CONNECTOR_RUNTIME_QUEUE_ENQUEUE_MAX_ATTEMPTS))));
+  const sleep = args.sleep || ((delayMs: number) => new Promise<void>((resolve) => setTimeout(resolve, delayMs)));
+  const startedMs = args.now_ms?.() ?? Date.now();
+  let lastError: unknown = null;
+  for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+    try {
+      await args.send(args.message, args.options);
+      if (attempt > 1) {
+        await Promise.resolve(args.onEvent?.({
+          event: "connector_runtime.queue.enqueue_retry_success",
+          details: {
+            attempt,
+            elapsed_ms: Math.max(0, (args.now_ms?.() ?? Date.now()) - startedMs),
+            runtime_task_id: cleanText(args.runtime_task_id) || null,
+            job_id: cleanText(args.job_id) || null,
+          },
+        })).catch(() => {});
+      }
+      return { ok: true, attempts: attempt, retried: attempt > 1 };
+    } catch (error: any) {
+      lastError = error;
+      if (!isCloudflareQueueRateLimitError(error)) throw error;
+      if (attempt >= maxAttempts) {
+        await Promise.resolve(args.onEvent?.({
+          event: "connector_runtime.queue.enqueue_retry_exhausted",
+          details: {
+            attempts: maxAttempts,
+            runtime_task_id: cleanText(args.runtime_task_id) || null,
+            job_id: cleanText(args.job_id) || null,
+            reason: cleanText(error?.message) || "Too Many Requests",
+          },
+        })).catch(() => {});
+        throw new ConnectorRuntimeQueueEnqueueRetryExhaustedError(
+          `Queue send failed after ${maxAttempts} attempts: ${cleanText(error?.message) || "Too Many Requests"}`,
+          maxAttempts,
+          error,
+        );
+      }
+      const delayMs = connectorRuntimeQueueEnqueueRetryDelayMs({
+        attempt,
+        error,
+        now_ms: args.now_ms?.() ?? Date.now(),
+        random: args.random,
+      });
+      await Promise.resolve(args.onEvent?.({
+        event: "connector_runtime.queue.enqueue_retry",
+        details: {
+          attempt,
+          delay_ms: delayMs,
+          reason: cleanText(error?.message) || "Too Many Requests",
+          runtime_task_id: cleanText(args.runtime_task_id) || null,
+          job_id: cleanText(args.job_id) || null,
+        },
+      })).catch(() => {});
+      await sleep(delayMs);
+    }
+  }
+  throw new ConnectorRuntimeQueueEnqueueRetryExhaustedError(
+    `Queue send failed after ${maxAttempts} attempts`,
+    maxAttempts,
+    lastError,
+  );
 }
 
 export function connectorRuntimeNextRunAt(args: {

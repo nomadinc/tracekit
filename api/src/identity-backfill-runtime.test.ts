@@ -3,25 +3,34 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
   IDENTITY_BACKFILL_CONNECTOR_ID,
+  IDENTITY_BACKFILL_DEFAULT_BATCH_SIZE,
   IDENTITY_BACKFILL_DISCOVERY_INDEX,
   IDENTITY_BACKFILL_DISCOVERY_SELECT,
   IDENTITY_BACKFILL_FINALIZE_COUNT_QUERIES,
   IDENTITY_BACKFILL_JOB_TYPE,
+  IDENTITY_BACKFILL_MAX_BATCH_SIZE,
   IDENTITY_BACKFILL_RESOLVE_SELECT,
+  IDENTITY_BACKFILL_TARGET_DIAGNOSTIC_PLATFORM_ORDER_ID,
   IDENTITY_BACKFILL_TASK_TYPES,
   createIdentityBackfillDiscoveryState,
   dateRangeToTimestamps,
   extractIdentityEvidenceFromPlatformOrder,
   hasIdentityEvidence,
+  identityBackfillTargetDiagnosticEventName,
   identityBackfillDiscoverySummary,
   identityBackfillDryRunFinalizeCounts,
   identityBackfillFinalizeStatus,
   identityBackfillResolveContinuationDedupeKey,
   identityBackfillResolveDedupeKey,
   identityBackfillResolveRemainingIds,
+  identityBackfillResolveSubrequestLimitCheckpoint,
+  identityBackfillRuntimeConfigMatches,
+  isIdentityBackfillTargetDiagnosticRecord,
   isSupportedIdentityBackfillPlatformOrder,
   markIdentityBackfillPlatformDiscovery,
+  maskIdentityBackfillDiagnosticValue,
   mergeIdentityBackfillResolveMetricMetadata,
+  normalizeIdentityBackfillBatchSize,
   normalizeIdentityBackfillPlatforms,
   normalizeIdentityBackfillRequest,
   parseIdentityBackfillCursor,
@@ -51,10 +60,45 @@ test("normalizes identity backfill request with defaults and force-new aliases",
   if (result.ok) {
     assert.equal(result.value.workspace_id, "default");
     assert.deepEqual(result.value.platforms, ["wowboost", "wowsuite:wowboost"]);
-    assert.equal(result.value.batch_size, 100);
+    assert.equal(result.value.batch_size, 3);
     assert.equal(result.value.dry_run, true);
     assert.equal(result.value.force_new_job, true);
   }
+});
+
+test("identity resolve default batch size is three and max remains unchanged", () => {
+  assert.equal(IDENTITY_BACKFILL_DEFAULT_BATCH_SIZE, 3);
+  assert.equal(IDENTITY_BACKFILL_MAX_BATCH_SIZE, 100);
+  assert.equal(normalizeIdentityBackfillBatchSize(4), 3);
+  assert.equal(normalizeIdentityBackfillBatchSize(250), 3);
+
+  const defaulted = normalizeIdentityBackfillRequest({
+    workspace_id: "default",
+    from: "2026-04-01",
+    to: "2026-07-13",
+  });
+
+  assert.equal(defaulted.ok, true);
+  if (defaulted.ok) assert.equal(defaulted.value.batch_size, 3);
+});
+
+test("target identity diagnostics are scoped and redact identifier values", () => {
+  assert.equal(isIdentityBackfillTargetDiagnosticRecord(IDENTITY_BACKFILL_TARGET_DIAGNOSTIC_PLATFORM_ORDER_ID), true);
+  assert.equal(isIdentityBackfillTargetDiagnosticRecord("wowboost:124726"), false);
+  assert.equal(
+    identityBackfillTargetDiagnosticEventName("identity_resolve.resolve_identity", "before_await"),
+    "identity_resolve.target.resolve_identity.before_await",
+  );
+  assert.equal(
+    identityBackfillTargetDiagnosticEventName("identity_repository.attachIdentifier.insert", "operation_timeout"),
+    "identity_resolve.target.identity_repository.attachIdentifier.insert.operation_timeout",
+  );
+  assert.equal(
+    identityBackfillTargetDiagnosticEventName("identity_resolve.attach_identifier.persist.sync_error", "error"),
+    "identity_resolve.target.attach_identifier.persist.sync_error",
+  );
+  assert.equal(maskIdentityBackfillDiagnosticValue("buyer@example.com"), "b***@example.com");
+  assert.equal(maskIdentityBackfillDiagnosticValue("+14155550101"), "***0101");
 });
 
 test("rejects invalid identity backfill date ranges", () => {
@@ -295,6 +339,47 @@ test("resolve budget continuation contains only unprocessed records and has a di
   assert.equal(remaining.includes("wowboost:8"), false);
 });
 
+test("three-record identity resolve batch completes without continuation", () => {
+  const ids = ["wowboost:1", "wowboost:2", "wowboost:3"];
+  assert.deepEqual(identityBackfillResolveRemainingIds(ids, 3), []);
+});
+
+test("subrequest-limit checkpoint preserves completed progress and retries only remaining ids", () => {
+  const ids = Array.from({ length: 8 }, (_, index) => `wowboost:${index + 1}`);
+  const checkpoint = identityBackfillResolveSubrequestLimitCheckpoint({
+    platform_order_ids: ids,
+    completed_record_ids: ["wowboost:1", "wowboost:2", "wowboost:3", "wowboost:4"],
+  });
+
+  assert.equal(checkpoint.processed, 4);
+  assert.deepEqual(checkpoint.remaining_platform_order_ids, ["wowboost:5", "wowboost:6", "wowboost:7", "wowboost:8"]);
+  assert.equal(checkpoint.remaining_platform_order_ids.includes("wowboost:4"), false);
+});
+
+test("continuation discovery excludes completed records", () => {
+  const ids = Array.from({ length: 6 }, (_, index) => `wowboost:${index + 1}`);
+  const completed = ["wowboost:1", "wowboost:2", "wowboost:3"];
+  const checkpoint = identityBackfillResolveSubrequestLimitCheckpoint({
+    platform_order_ids: ids,
+    completed_record_ids: completed,
+  });
+
+  assert.equal(checkpoint.processed, 3);
+  assert.deepEqual(checkpoint.remaining_platform_order_ids, ["wowboost:4", "wowboost:5", "wowboost:6"]);
+  assert.equal(checkpoint.remaining_platform_order_ids.some((id) => completed.includes(id)), false);
+});
+
+test("subrequest-limit checkpoint does not skip gaps after the last contiguous completed id", () => {
+  const ids = ["wowboost:1", "wowboost:2", "wowboost:3", "wowboost:4"];
+  const checkpoint = identityBackfillResolveSubrequestLimitCheckpoint({
+    platform_order_ids: ids,
+    completed_record_ids: ["wowboost:1", "wowboost:3"],
+  });
+
+  assert.equal(checkpoint.processed, 1);
+  assert.deepEqual(checkpoint.remaining_platform_order_ids, ["wowboost:2", "wowboost:3", "wowboost:4"]);
+});
+
 test("dry run preview uses read-only repository methods and reports would-create", async () => {
   const mutations = {
     createPerson: 0,
@@ -500,6 +585,126 @@ test("active identity runtime jobs dedupe while force_new_job bypasses reuse", (
     requested_to: "2026-07-13",
     force_new_job: true,
   }), null);
+});
+
+test("identity runtime config match reuses equivalent active jobs with batch size three", () => {
+  const existing = {
+    workspace_id: "default",
+    requested_from: "2026-04-01T00:00:00.000Z",
+    requested_to: "2026-07-13T00:00:00.000Z",
+    metadata: connectorRuntimeMetadata({
+      connector_id: IDENTITY_BACKFILL_CONNECTOR_ID,
+      metadata: {
+        platforms: ["wowsuite:wowboost", "wowboost"],
+        batch_size: 3,
+        dry_run: false,
+      },
+    }),
+  };
+
+  assert.equal(identityBackfillRuntimeConfigMatches(existing, {
+    workspace_id: "default",
+    from: "2026-04-01",
+    to: "2026-07-13",
+    platforms: ["wowboost", "wowsuite:wowboost"],
+    batch_size: 3,
+    dry_run: false,
+  }), true);
+  assert.equal(identityBackfillRuntimeConfigMatches(existing, {
+    workspace_id: "default",
+    from: "2026-04-01",
+    to: "2026-07-13",
+    platforms: ["wowboost", "wowsuite:wowboost"],
+    batch_size: 4,
+    dry_run: false,
+  }), true);
+});
+
+test("identity runtime config match rejects active jobs with stale batch size", () => {
+  const existing = {
+    workspace_id: "default",
+    requested_from: "2026-04-01",
+    requested_to: "2026-07-13",
+    metadata: connectorRuntimeMetadata({
+      connector_id: IDENTITY_BACKFILL_CONNECTOR_ID,
+      metadata: {
+        platforms: ["wowboost"],
+        batch_size: 4,
+        dry_run: false,
+      },
+    }),
+  };
+
+  assert.equal(identityBackfillRuntimeConfigMatches(existing, {
+    workspace_id: "default",
+    from: "2026-04-01",
+    to: "2026-07-13",
+    platforms: ["wowboost"],
+    batch_size: 3,
+    dry_run: false,
+  }), false);
+});
+
+test("identity runtime config match rejects differing platform date or dry-run requests", () => {
+  const existing = {
+    workspace_id: "default",
+    requested_from: "2026-04-01",
+    requested_to: "2026-07-13",
+    metadata: connectorRuntimeMetadata({
+      connector_id: IDENTITY_BACKFILL_CONNECTOR_ID,
+      metadata: {
+        platforms: ["wowboost"],
+        batch_size: 3,
+        dry_run: false,
+      },
+    }),
+  };
+
+  assert.equal(identityBackfillRuntimeConfigMatches(existing, {
+    workspace_id: "default",
+    from: "2026-04-01",
+    to: "2026-07-13",
+    platforms: ["wowboost", "wowsuite:wowboost"],
+    batch_size: 3,
+    dry_run: false,
+  }), false);
+  assert.equal(identityBackfillRuntimeConfigMatches(existing, {
+    workspace_id: "default",
+    from: "2026-04-02",
+    to: "2026-07-13",
+    platforms: ["wowboost"],
+    batch_size: 3,
+    dry_run: false,
+  }), false);
+  assert.equal(identityBackfillRuntimeConfigMatches(existing, {
+    workspace_id: "default",
+    from: "2026-04-01",
+    to: "2026-07-13",
+    platforms: ["wowboost"],
+    batch_size: 3,
+    dry_run: true,
+  }), false);
+});
+
+test("new identity runtime progress persists batch size three", () => {
+  const progress = createConnectorRuntimeProgress({
+    workspace_id: "default",
+    connector_id: IDENTITY_BACKFILL_CONNECTOR_ID,
+    job_type: IDENTITY_BACKFILL_JOB_TYPE,
+    phase: "discover_unlinked_records",
+    requested_from: "2026-04-01",
+    requested_to: "2026-07-13",
+    metadata: connectorRuntimeMetadata({
+      connector_id: IDENTITY_BACKFILL_CONNECTOR_ID,
+      metadata: {
+        platforms: ["wowboost"],
+        batch_size: IDENTITY_BACKFILL_DEFAULT_BATCH_SIZE,
+        dry_run: false,
+      },
+    }),
+  });
+
+  assert.equal(progress.metadata.batch_size, 3);
 });
 
 test("explicit identity runtime job_id resumes only marked runtime jobs", () => {
