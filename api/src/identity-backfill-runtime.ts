@@ -23,9 +23,10 @@ export const IDENTITY_BACKFILL_TASK_TYPES = {
 export const IDENTITY_BACKFILL_DEFAULT_PLATFORMS = ["wowboost", "wowsuite:wowboost"] as const;
 export const IDENTITY_BACKFILL_ALLOWED_PLATFORMS = ["wowboost", "wowsuite:wowboost", "wowsuite"] as const;
 export const IDENTITY_BACKFILL_EXCLUDED_PLATFORMS = new Set(["wowpay", "wowsuite:wowpay"]);
-export const IDENTITY_BACKFILL_DEFAULT_BATCH_SIZE = 25;
+export const IDENTITY_BACKFILL_DEFAULT_BATCH_SIZE = 3;
 export const IDENTITY_BACKFILL_MAX_BATCH_SIZE = 100;
 export const IDENTITY_BACKFILL_RESOLVE_TASK_BUDGET_MS = 18000;
+export const IDENTITY_BACKFILL_TARGET_DIAGNOSTIC_PLATFORM_ORDER_ID = "wowboost:124727";
 export const IDENTITY_BACKFILL_DISCOVERY_SELECT = "workspace_id,platform,platform_order_id,order_ts,person_id,raw_json";
 export const IDENTITY_BACKFILL_DISCOVERY_INDEX = {
   name: "platform_orders_identity_backfill_scan_idx",
@@ -183,6 +184,38 @@ function uniqueStrings(values: string[]) {
   return Array.from(new Set(values.map((value) => cleanText(value)).filter(Boolean)));
 }
 
+export function isIdentityBackfillTargetDiagnosticRecord(platformOrderId: unknown) {
+  return cleanText(platformOrderId) === IDENTITY_BACKFILL_TARGET_DIAGNOSTIC_PLATFORM_ORDER_ID;
+}
+
+export function maskIdentityBackfillDiagnosticValue(value: unknown) {
+  const text = cleanText(value);
+  if (!text) return null;
+  const atIndex = text.indexOf("@");
+  if (atIndex > 0) {
+    const domain = text.slice(atIndex + 1);
+    return `${text.slice(0, 1)}***@${domain || "masked"}`;
+  }
+  const digits = text.replace(/\D+/g, "");
+  if (digits.length >= 4) return `***${digits.slice(-4)}`;
+  if (text.length <= 2) return "***";
+  return `${text.slice(0, 1)}***${text.slice(-1)}`;
+}
+
+export function identityBackfillTargetDiagnosticEventName(operation: unknown, phase: unknown) {
+  const operationName = cleanText(operation)
+    .replace(/^identity_resolve\./, "")
+    .replace(/[^a-zA-Z0-9_.-]+/g, "_")
+    .slice(0, 120) || "operation";
+  const phaseName = cleanText(phase)
+    .replace(/[^a-zA-Z0-9_.-]+/g, "_")
+    .slice(0, 60) || "event";
+  if (operationName.endsWith(".sync_error") && phaseName === "error") {
+    return `identity_resolve.target.${operationName}`;
+  }
+  return `identity_resolve.target.${operationName}.${phaseName}`;
+}
+
 export function normalizeIdentityBackfillPlatforms(value: unknown) {
   const input = Array.isArray(value)
     ? value
@@ -198,7 +231,45 @@ export function normalizeIdentityBackfillPlatforms(value: unknown) {
 export function normalizeIdentityBackfillBatchSize(value: unknown) {
   const numberValue = Number(value ?? IDENTITY_BACKFILL_DEFAULT_BATCH_SIZE);
   if (!Number.isFinite(numberValue)) return IDENTITY_BACKFILL_DEFAULT_BATCH_SIZE;
+  return Math.max(1, Math.min(IDENTITY_BACKFILL_DEFAULT_BATCH_SIZE, Math.floor(numberValue)));
+}
+
+function normalizeIdentityBackfillConfigPlatforms(value: unknown) {
+  return normalizeIdentityBackfillPlatforms(value).slice().sort();
+}
+
+function normalizeIdentityBackfillConfigDate(value: unknown) {
+  const text = cleanText(value);
+  const ymd = parseYmd(text);
+  if (ymd) return ymd.toISOString().slice(0, 10);
+  const parsed = Date.parse(text);
+  if (Number.isFinite(parsed)) return new Date(parsed).toISOString().slice(0, 10);
+  return text;
+}
+
+function normalizeIdentityBackfillExistingConfigBatchSize(value: unknown) {
+  const numberValue = Number(value ?? IDENTITY_BACKFILL_DEFAULT_BATCH_SIZE);
+  if (!Number.isFinite(numberValue)) return IDENTITY_BACKFILL_DEFAULT_BATCH_SIZE;
   return Math.max(1, Math.min(IDENTITY_BACKFILL_MAX_BATCH_SIZE, Math.floor(numberValue)));
+}
+
+export function identityBackfillRuntimeConfigMatches(existing: Record<string, any>, requested: Record<string, any>) {
+  const existingMetadata = existing.metadata && typeof existing.metadata === "object" ? existing.metadata : {};
+  const requestedMetadata = requested.metadata && typeof requested.metadata === "object" ? requested.metadata : {};
+  const existingPlatforms = normalizeIdentityBackfillConfigPlatforms(existingMetadata.platforms ?? existing.platforms);
+  const requestedPlatforms = normalizeIdentityBackfillConfigPlatforms(requestedMetadata.platforms ?? requested.platforms);
+
+  return (
+    (cleanText(existing.workspace_id) || "default") === (cleanText(requested.workspace_id) || "default") &&
+    normalizeIdentityBackfillConfigDate(existing.requested_from ?? existing.from_date ?? existing.from) ===
+      normalizeIdentityBackfillConfigDate(requested.requested_from ?? requested.from_date ?? requested.from) &&
+    normalizeIdentityBackfillConfigDate(existing.requested_to ?? existing.to_date ?? existing.to) ===
+      normalizeIdentityBackfillConfigDate(requested.requested_to ?? requested.to_date ?? requested.to) &&
+    Boolean(existingMetadata.dry_run ?? existing.dry_run) === Boolean(requestedMetadata.dry_run ?? requested.dry_run) &&
+    normalizeIdentityBackfillExistingConfigBatchSize(existingMetadata.batch_size ?? existing.batch_size) ===
+      normalizeIdentityBackfillBatchSize(requestedMetadata.batch_size ?? requested.batch_size) &&
+    JSON.stringify(existingPlatforms) === JSON.stringify(requestedPlatforms)
+  );
 }
 
 export function createIdentityBackfillDiscoveryState(platforms: string[]) {
@@ -461,6 +532,23 @@ export function shouldCheckpointIdentityBackfillResolveBatch(args: {
 
 export function identityBackfillResolveRemainingIds(platformOrderIds: string[], processed: number) {
   return platformOrderIds.map((id) => cleanText(id)).filter(Boolean).slice(Math.max(0, Number(processed || 0)));
+}
+
+export function identityBackfillResolveSubrequestLimitCheckpoint(args: {
+  platform_order_ids: string[];
+  completed_record_ids: string[];
+}) {
+  const platformOrderIds = args.platform_order_ids.map((id) => cleanText(id)).filter(Boolean);
+  const completedRecordIds = new Set(args.completed_record_ids.map((id) => cleanText(id)).filter(Boolean));
+  let completedCount = 0;
+  for (const platformOrderId of platformOrderIds) {
+    if (!completedRecordIds.has(platformOrderId)) break;
+    completedCount += 1;
+  }
+  return {
+    processed: completedCount,
+    remaining_platform_order_ids: identityBackfillResolveRemainingIds(platformOrderIds, completedCount),
+  };
 }
 
 export function identityBackfillResolveContinuationDedupeKey(args: {

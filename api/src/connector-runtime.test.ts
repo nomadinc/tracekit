@@ -4,9 +4,12 @@ import {
   CONNECTOR_RUNTIME_EXECUTION_MODE,
   CONNECTOR_RUNTIME_TASK_DIAGNOSTIC_EVENT_LIMIT,
   CONNECTOR_RUNTIME_VERSION,
+  ConnectorRuntimeQueueEnqueueRetryExhaustedError,
   appendConnectorRuntimeTaskDiagnostic,
+  appendConnectorRuntimeTaskDiagnosticBatch,
   appendConnectorRuntimeTaskDiagnosticSample,
   classifyConnectorRuntimeFailure,
+  compactConnectorRuntimeInlineDebugDiagnostics,
   compactConnectorRuntimeJobPayload,
   connectorRuntimeErrorSummary,
   connectorRuntimeFinalizeFailureProgress,
@@ -14,13 +17,21 @@ import {
   connectorRuntimeMarkers,
   connectorRuntimeMetadata,
   connectorRuntimeNextRunAt,
+  connectorRuntimeAttemptAlreadyIncremented,
+  connectorRuntimeQueuedTaskRepublishDecision,
+  connectorRuntimeQueueEnqueueRetryDelayMs,
+  connectorRuntimeQueueRetryAfterMs,
+  connectorRuntimeRequeueTaskDecision,
   connectorRuntimeRerunFinalizeProgress,
   connectorRuntimeRetryDelayMs,
+  connectorRuntimeStaleRunningTaskRequeueDecision,
+  connectorRuntimeStaleRunningTaskRecoveryDecision,
   connectorRuntimeTaskDedupeKey,
   connectorRuntimeTaskHeartbeatTimestampMs,
   connectorRuntimeTaskMessage,
   createConnectorRuntimeProgress,
   isConnectorRuntimeTaskStale,
+  isCloudflareSubrequestLimitError,
   isActiveConnectorRuntimeJobStatus,
   isConnectorRuntimeV1Job,
   isTerminalConnectorRuntimeJobStatus,
@@ -28,6 +39,7 @@ import {
   normalizeConnectorRuntimeJobStatus,
   normalizeConnectorRuntimeTaskStatus,
   selectConnectorRuntimeJobForStart,
+  sendConnectorRuntimeQueueMessageWithRetry,
   shouldWriteConnectorRuntimeDurableHeartbeat,
 } from "./connector-runtime.ts";
 
@@ -267,11 +279,299 @@ test("queue messages contain identifiers only", () => {
     phase: "stage_export_pages",
   }), {
     runtime_task_id: "task-1",
+    task_id: "task-1",
     job_id: "job-1",
     connector_id: "wowboost-commerce-reference-backfill",
     task_type: "stage_export_page",
     phase: "stage_export_pages",
   });
+});
+
+test("queue enqueue succeeds immediately without retries", async () => {
+  const sends: any[] = [];
+  const events: any[] = [];
+  const result = await sendConnectorRuntimeQueueMessageWithRetry({
+    message: { runtime_task_id: "task-immediate", job_id: "job-1" },
+    runtime_task_id: "task-immediate",
+    job_id: "job-1",
+    send: async (message) => {
+      sends.push(message);
+    },
+    sleep: async () => {},
+    random: () => 0,
+    onEvent: (event) => events.push(event),
+  });
+
+  assert.deepEqual(result, { ok: true, attempts: 1, retried: false });
+  assert.equal(sends.length, 1);
+  assert.deepEqual(events, []);
+});
+
+test("queue enqueue retries one 429 then succeeds without duplicating the task message", async () => {
+  const message = { runtime_task_id: "task-retry-once", job_id: "job-1" };
+  const sends: any[] = [];
+  const delays: number[] = [];
+  const events: any[] = [];
+  let failures = 1;
+
+  const result = await sendConnectorRuntimeQueueMessageWithRetry({
+    message,
+    runtime_task_id: "task-retry-once",
+    job_id: "job-1",
+    send: async (body) => {
+      sends.push(body);
+      if (failures) {
+        failures -= 1;
+        const error: any = new Error("Queue send failed: Too Many Requests");
+        error.status = 429;
+        throw error;
+      }
+    },
+    sleep: async (delayMs) => {
+      delays.push(delayMs);
+    },
+    random: () => 0,
+    onEvent: (event) => events.push(event),
+  });
+
+  assert.equal(result.attempts, 2);
+  assert.equal(sends.length, 2);
+  assert.equal(new Set(sends).size, 1);
+  assert.equal(sends[0], message);
+  assert.deepEqual(delays, [250]);
+  assert.equal(events.filter((event) => event.event === "connector_runtime.queue.enqueue_retry").length, 1);
+  assert.equal(events.some((event) => event.event === "connector_runtime.queue.enqueue_retry_success" && event.details.attempt === 2), true);
+});
+
+test("queue enqueue uses exponential delays for multiple 429s before success", async () => {
+  const sends: any[] = [];
+  const delays: number[] = [];
+  const events: any[] = [];
+  let failures = 3;
+
+  const result = await sendConnectorRuntimeQueueMessageWithRetry({
+    message: { runtime_task_id: "task-eventual", job_id: "job-1" },
+    runtime_task_id: "task-eventual",
+    job_id: "job-1",
+    send: async (body) => {
+      sends.push(body);
+      if (failures > 0) {
+        failures -= 1;
+        const error: any = new Error("Too Many Requests");
+        error.status = 429;
+        throw error;
+      }
+    },
+    sleep: async (delayMs) => {
+      delays.push(delayMs);
+    },
+    random: () => 0,
+    onEvent: (event) => events.push(event),
+  });
+
+  assert.equal(result.attempts, 4);
+  assert.equal(sends.length, 4);
+  assert.deepEqual(delays, [250, 500, 1000]);
+  assert.deepEqual(
+    events.filter((event) => event.event === "connector_runtime.queue.enqueue_retry").map((event) => event.details.attempt),
+    [1, 2, 3],
+  );
+  assert.equal(events[events.length - 1].event, "connector_runtime.queue.enqueue_retry_success");
+});
+
+test("queue enqueue respects Retry-After for 429 retry delays", () => {
+  const error: any = new Error("Too Many Requests");
+  error.status = 429;
+  error.headers = { get: (name: string) => name.toLowerCase() === "retry-after" ? "2" : "" };
+
+  assert.equal(connectorRuntimeQueueRetryAfterMs(error, 0), 2000);
+  assert.equal(connectorRuntimeQueueEnqueueRetryDelayMs({ attempt: 1, error, random: () => 0, now_ms: 0 }), 2000);
+});
+
+test("queue enqueue exhausts 429s as transient retryable state without duplicating continuation message", async () => {
+  const message = { runtime_task_id: "task-exhausted", job_id: "job-1" };
+  const sends: any[] = [];
+  const delays: number[] = [];
+  const events: any[] = [];
+
+  await assert.rejects(async () => await sendConnectorRuntimeQueueMessageWithRetry({
+    message,
+    runtime_task_id: "task-exhausted",
+    job_id: "job-1",
+    send: async (body) => {
+      sends.push(body);
+      const error: any = new Error("Queue send failed: Too Many Requests");
+      error.status = 429;
+      throw error;
+    },
+    sleep: async (delayMs) => {
+      delays.push(delayMs);
+    },
+    random: () => 0,
+    onEvent: (event) => events.push(event),
+  }), (error: any) => {
+    assert.equal(error instanceof ConnectorRuntimeQueueEnqueueRetryExhaustedError, true);
+    assert.equal(error.status, 429);
+    assert.equal(error.transient, true);
+    assert.equal(error.attempts, 4);
+    assert.equal(classifyConnectorRuntimeFailure({
+      status: error.status,
+      message: error.message,
+      transient: error.transient,
+    }), "transient");
+    return true;
+  });
+
+  assert.equal(sends.length, 4);
+  assert.equal(new Set(sends).size, 1);
+  assert.equal(sends[0], message);
+  assert.deepEqual(delays, [250, 500, 1000]);
+  assert.equal(events[events.length - 1].event, "connector_runtime.queue.enqueue_retry_exhausted");
+});
+
+test("queue enqueue does not retry permanent queue failures", async () => {
+  const sends: any[] = [];
+  const delays: number[] = [];
+  const events: any[] = [];
+
+  await assert.rejects(async () => await sendConnectorRuntimeQueueMessageWithRetry({
+    message: { runtime_task_id: "task-permanent", job_id: "job-1" },
+    runtime_task_id: "task-permanent",
+    job_id: "job-1",
+    send: async (body) => {
+      sends.push(body);
+      const error: any = new Error("Queue validation failed: malformed payload");
+      error.status = 400;
+      throw error;
+    },
+    sleep: async (delayMs) => {
+      delays.push(delayMs);
+    },
+    random: () => 0,
+    onEvent: (event) => events.push(event),
+  }), /malformed payload/);
+
+  assert.equal(sends.length, 1);
+  assert.deepEqual(delays, []);
+  assert.deepEqual(events, []);
+});
+
+test("admin requeue publishes queued task message without creating duplicate task row", () => {
+  const progress = createConnectorRuntimeProgress({
+    workspace_id: "default",
+    connector_id: "identity-backfill-platform-orders",
+    job_type: "identity_backfill",
+    phase: "resolve_identity_batch",
+    requested_from: "2026-04-01",
+    requested_to: "2026-07-13",
+    now: "2026-07-17T00:00:00.000Z",
+  });
+  const decision = connectorRuntimeRequeueTaskDecision({
+    task: {
+      id: "task-queued",
+      job_id: "job-1",
+      task_type: "identity_backfill_resolve_identity_batch",
+      status: "queued",
+    },
+    job: { id: "job-1", status: "running" },
+    progress,
+    now: "2026-07-17T00:01:00.000Z",
+  });
+
+  assert.equal(decision.ok, true);
+  if (decision.ok) {
+    assert.deepEqual(decision.message, {
+      runtime_task_id: "task-queued",
+      task_id: "task-queued",
+      job_id: "job-1",
+      task_type: "identity_backfill_resolve_identity_batch",
+    });
+    assert.equal(decision.job_patch, null);
+    assert.equal(decision.create_task, false);
+  }
+});
+
+test("admin requeue rejects missing or non-queued tasks", () => {
+  const missing = connectorRuntimeRequeueTaskDecision({
+    task: null,
+    job: null,
+    progress: null,
+    now: "2026-07-17T00:01:00.000Z",
+  });
+  assert.equal(missing.ok, false);
+  if (!missing.ok) assert.equal(missing.status, 404);
+
+  const running = connectorRuntimeRequeueTaskDecision({
+    task: {
+      id: "task-running",
+      job_id: "job-1",
+      task_type: "identity_backfill_resolve_identity_batch",
+      status: "running",
+    },
+    job: { id: "job-1", status: "running" },
+    progress: null,
+    now: "2026-07-17T00:01:00.000Z",
+  });
+  assert.equal(running.ok, false);
+  if (!running.ok) {
+    assert.equal(running.status, 409);
+    assert.equal(running.error, "task_not_queued");
+  }
+
+  const missingJob = connectorRuntimeRequeueTaskDecision({
+    task: {
+      id: "task-queued",
+      job_id: "missing-job",
+      task_type: "identity_backfill_resolve_identity_batch",
+      status: "queued",
+    },
+    job: null,
+    progress: null,
+    now: "2026-07-17T00:01:00.000Z",
+  });
+  assert.equal(missingJob.ok, false);
+  if (!missingJob.ok) {
+    assert.equal(missingJob.status, 404);
+    assert.equal(missingJob.error, "job_not_found");
+  }
+});
+
+test("admin requeue reopens completed_with_errors job while preserving metadata", () => {
+  const progress = createConnectorRuntimeProgress({
+    workspace_id: "default",
+    connector_id: "identity-backfill-platform-orders",
+    job_type: "identity_backfill",
+    phase: "resolve_identity_batch",
+    requested_from: "2026-04-01",
+    requested_to: "2026-07-13",
+    now: "2026-07-17T00:00:00.000Z",
+    metadata: { recent_errors: ["historical"], custom: "kept" },
+  });
+  progress.status = "completed_with_errors";
+  progress.completed_at = "2026-07-17T00:00:30.000Z";
+  progress.records_failed = 7;
+
+  const decision = connectorRuntimeRequeueTaskDecision({
+    task: {
+      id: "task-queued",
+      job_id: "job-1",
+      task_type: "identity_backfill_resolve_identity_batch",
+      status: "queued",
+    },
+    job: { id: "job-1", status: "completed_with_errors" },
+    progress,
+    now: "2026-07-17T00:01:00.000Z",
+  });
+
+  assert.equal(decision.ok, true);
+  if (decision.ok) {
+    assert.equal(decision.job_patch?.status, "retrying");
+    assert.equal(decision.job_patch?.completed_at, null);
+    assert.equal(decision.job_patch?.records_failed, 0);
+    assert.equal(decision.job_patch?.next_run_at, "2026-07-17T00:01:00.000Z");
+    assert.deepEqual(decision.job_patch?.metadata.recent_errors, ["historical"]);
+    assert.equal(decision.job_patch?.metadata.custom, "kept");
+  }
 });
 
 test("task diagnostics append bounded heartbeat breadcrumbs", () => {
@@ -302,6 +602,127 @@ test("task diagnostic samples do not count as durable heartbeats", () => {
   assert.equal(summary.heartbeat_count, 1);
   assert.equal(summary.diagnostic_event_count, 120);
   assert.equal(summary.diagnostic_events.length, CONNECTOR_RUNTIME_TASK_DIAGNOSTIC_EVENT_LIMIT);
+});
+
+test("task diagnostic batch preserves event order with one durable heartbeat", () => {
+  const events = [
+    { event: "identity_resolve.target.resolve_identity.before_await", details: { operation_index: 1 }, at: "2026-07-17T00:00:01.000Z" },
+    { event: "identity_resolve.target.resolve_identity.after_await", details: { operation_index: 2 }, at: "2026-07-17T00:00:02.000Z" },
+    { event: "identity_resolve.subrequest.summary", details: { total_subrequests: 12 }, at: "2026-07-17T00:00:03.000Z" },
+  ];
+
+  const summary = appendConnectorRuntimeTaskDiagnosticBatch(
+    { heartbeat_count: 4, diagnostic_event_count: 10 },
+    "identity_resolve.record.diagnostic_flush",
+    events,
+    "2026-07-17T00:00:04.000Z",
+  );
+
+  assert.equal(summary.heartbeat_event, "identity_resolve.record.diagnostic_flush");
+  assert.equal(summary.heartbeat_count, 5);
+  assert.equal(summary.diagnostic_event_count, 13);
+  assert.deepEqual(summary.diagnostic_events.map((event: Record<string, any>) => event.event), [
+    "identity_resolve.target.resolve_identity.before_await",
+    "identity_resolve.target.resolve_identity.after_await",
+    "identity_resolve.subrequest.summary",
+  ]);
+  assert.deepEqual(summary.diagnostic_events.map((event: Record<string, any>) => event.at), [
+    "2026-07-17T00:00:01.000Z",
+    "2026-07-17T00:00:02.000Z",
+    "2026-07-17T00:00:03.000Z",
+  ]);
+});
+
+test("inline debug diagnostics compact buffered target events and subrequest totals", () => {
+  const diagnostics = compactConnectorRuntimeInlineDebugDiagnostics({
+    summary: {
+      diagnostic_events: [
+        { event: "older", operation: "older.operation" },
+      ],
+    },
+    target_diagnostic_events: [
+      { event: "identity_resolve.target.first.before_await", details: { operation: "first", processed: 1, timestamp: "2026-07-18T00:00:01.000Z" } },
+      { event: "identity_resolve.target.second.after_await", details: { operation: "second", processed: 1, timestamp: "2026-07-18T00:00:02.000Z" } },
+    ],
+    subrequest_tracker: {
+      count: 3,
+      completed: 2,
+      errors: 1,
+      timeouts: 0,
+      by_operation: {
+        "attachIdentifier:identity_repository.attachIdentifier.select_existing": {
+          operation: "identity_repository.attachIdentifier.select_existing",
+          repository_method: "attachIdentifier",
+          count: 2,
+          completed: 1,
+          errors: 1,
+          timeouts: 0,
+          elapsed_ms: 210,
+          max_elapsed_ms: 200,
+        },
+      },
+    },
+    identity_resolution_metrics: {
+      findIdentifiers: {
+        calls: 1,
+        identifiers_requested: 3,
+        rows_returned: 2,
+      },
+      getPersonIdentifiers: {
+        calls: 1,
+        rows_returned: 2,
+      },
+      attachIdentifier: {
+        calls: 3,
+        inserts: 1,
+        updates: 1,
+        noops: 1,
+        conflicts: 0,
+      },
+      updatePerson: {
+        calls: 2,
+        writes: 1,
+        skipped: 1,
+      },
+      syncPrimaryIdentifiers: {
+        calls: 1,
+        writes: 0,
+        skipped: 1,
+      },
+    },
+    error: new Error("Failed to update connector runtime task: Too many subrequests by single Worker invocation"),
+    limit: 50,
+  });
+
+  assert.equal(diagnostics.diagnostic_event_source, "target_diagnostic_events");
+  assert.equal(diagnostics.last_50_buffered_diagnostic_events.length, 2);
+  assert.deepEqual(diagnostics.last_50_buffered_diagnostic_events.map((event: Record<string, any>) => event.event), [
+    "identity_resolve.target.first.before_await",
+    "identity_resolve.target.second.after_await",
+  ]);
+  assert.equal(diagnostics.subrequest_tracker_count, 3);
+  assert.equal(
+    diagnostics.totals_grouped_by_operation["attachIdentifier:identity_repository.attachIdentifier.select_existing"].count,
+    2,
+  );
+  assert.deepEqual(diagnostics.identity_resolution_metrics.findIdentifiers, {
+    calls: 1,
+    identifiers_requested: 3,
+    rows_returned: 2,
+  });
+  assert.equal(diagnostics.identity_resolution_metrics.attachIdentifier.noops, 1);
+  assert.equal(diagnostics.identity_resolution_metrics.syncPrimaryIdentifiers.skipped, 1);
+  assert.equal(diagnostics.last_successfully_entered_operation, "second");
+  assert.equal(diagnostics.error_name, "Error");
+  assert.match(diagnostics.error_message, /Too many subrequests/);
+});
+
+test("detects Cloudflare Worker subrequest-limit errors", () => {
+  assert.equal(
+    isCloudflareSubrequestLimitError(new Error("Failed to update connector runtime task: Too many subrequests by single Worker invocation")),
+    true,
+  );
+  assert.equal(isCloudflareSubrequestLimitError(new Error("ordinary failure")), false);
 });
 
 test("durable heartbeat throttle writes only on interval or force", () => {
@@ -343,6 +764,214 @@ test("task stale detection uses the newest heartbeat lock or update timestamp", 
   assert.equal(isConnectorRuntimeTaskStale(staleTask, { now_ms: now, stale_ms: 120000 }), true);
   assert.equal(isConnectorRuntimeTaskStale(freshTask, { now_ms: now, stale_ms: 120000 }), false);
   assert.equal(isConnectorRuntimeTaskStale({ ...staleTask, status: "queued" }, { now_ms: now, stale_ms: 120000 }), false);
+});
+
+test("stale running task recovery leaves active tasks untouched", () => {
+  const decision = connectorRuntimeStaleRunningTaskRecoveryDecision({
+    status: "running",
+    locked_at: "2026-07-17T00:04:00.000Z",
+    updated_at: "2026-07-17T00:04:00.000Z",
+    attempt_count: 1,
+    max_attempts: 5,
+    result_summary: { heartbeat_at: "2026-07-17T00:04:30.000Z" },
+  }, {
+    now_ms: Date.parse("2026-07-17T00:05:00.000Z"),
+    stale_ms: 120000,
+    recovered_event: "attribution_backfill.stale_recovered",
+    exhausted_event: "attribution_backfill.stale_exhausted",
+    reason: "queue_redelivery_stale",
+    last_error: "stale attribution task",
+  });
+
+  assert.equal(decision.action, "active");
+  assert.equal(decision.patch, null);
+  assert.equal(decision.attempt_count, 1);
+});
+
+test("stale running task recovery atomically prepares a reclaim patch with preserved cursor and payload", () => {
+  const task = {
+    status: "running",
+    locked_at: "2026-07-17T00:00:00.000Z",
+    updated_at: "2026-07-17T00:00:10.000Z",
+    attempt_count: 1,
+    max_attempts: 5,
+    cursor: "eyJzdGFydGVkX2F0IjoiMjAyNi0wNy0yMSJ9",
+    payload: {
+      cursor: "eyJzdGFydGVkX2F0IjoiMjAyNi0wNy0yMSJ9",
+      models: ["first_touch", "last_touch"],
+      journey_batch_size: 1,
+    },
+    result_summary: { heartbeat_at: "2026-07-17T00:00:30.000Z" },
+  };
+  const decision = connectorRuntimeStaleRunningTaskRecoveryDecision(task, {
+    now: "2026-07-17T00:05:00.000Z",
+    now_ms: Date.parse("2026-07-17T00:05:00.000Z"),
+    stale_ms: 120000,
+    recovered_event: "attribution_backfill.stale_recovered",
+    exhausted_event: "attribution_backfill.stale_exhausted",
+    reason: "queue_redelivery_stale",
+    last_error: "stale attribution task",
+  });
+
+  assert.equal(decision.action, "reclaim");
+  assert.equal(decision.attempt_count, 2);
+  assert.equal(decision.patch?.status, "running");
+  assert.equal(decision.patch?.attempt_count, 2);
+  assert.equal(decision.patch?.locked_at, "2026-07-17T00:05:00.000Z");
+  assert.equal(decision.patch?.completed_at, null);
+  assert.equal(Object.hasOwn(decision.patch || {}, "cursor"), false);
+  assert.equal(Object.hasOwn(decision.patch || {}, "payload"), false);
+  assert.equal(task.payload.models.length, 2);
+  assert.equal(decision.patch?.result_summary.heartbeat_event, "attribution_backfill.stale_recovered");
+  assert.equal(decision.patch?.result_summary.diagnostic_events.at(-1).cursor_preserved, task.cursor);
+  assert.equal(decision.patch?.result_summary.diagnostic_events.at(-1).payload_preserved, true);
+});
+
+test("stale running task recovery fails exhausted tasks with useful diagnostics", () => {
+  const decision = connectorRuntimeStaleRunningTaskRecoveryDecision({
+    status: "running",
+    locked_at: "2026-07-17T00:00:00.000Z",
+    updated_at: "2026-07-17T00:00:10.000Z",
+    attempt_count: 5,
+    max_attempts: 5,
+    cursor: "cursor-1",
+    payload: { models: ["first_touch"], force_recalculate: true },
+    result_summary: { heartbeat_at: "2026-07-17T00:00:30.000Z" },
+  }, {
+    now: "2026-07-17T00:05:00.000Z",
+    now_ms: Date.parse("2026-07-17T00:05:00.000Z"),
+    stale_ms: 120000,
+    recovered_event: "attribution_backfill.stale_recovered",
+    exhausted_event: "attribution_backfill.stale_exhausted",
+    reason: "queue_redelivery_stale",
+    last_error: "Recovered stale Attribution Backfill task after missing heartbeat for 120 seconds.",
+  });
+
+  assert.equal(decision.action, "fail");
+  assert.equal(decision.attempt_count, 5);
+  assert.equal(decision.patch?.status, "failed");
+  assert.equal(decision.patch?.locked_at, null);
+  assert.equal(decision.patch?.completed_at, "2026-07-17T00:05:00.000Z");
+  assert.match(decision.patch?.last_error, /missing heartbeat/);
+  assert.equal(Object.hasOwn(decision.patch || {}, "cursor"), false);
+  assert.equal(Object.hasOwn(decision.patch || {}, "payload"), false);
+  assert.equal(decision.patch?.result_summary.heartbeat_event, "attribution_backfill.stale_exhausted");
+  assert.equal(decision.patch?.result_summary.diagnostic_events.at(-1).attempt_count, 5);
+  assert.equal(decision.patch?.result_summary.diagnostic_events.at(-1).max_attempts, 5);
+});
+
+test("queued task republish decision ignores fresh or unavailable tasks and republishes old queued tasks", () => {
+  const now = Date.parse("2026-07-22T00:10:00.000Z");
+  assert.deepEqual(connectorRuntimeQueuedTaskRepublishDecision({
+    status: "running",
+    updated_at: "2026-07-22T00:00:00.000Z",
+  }, { now_ms: now, orphan_ms: 60000 }), {
+    action: "ignore",
+    reason: "task_not_queued",
+    age_ms: 0,
+  });
+  assert.deepEqual(connectorRuntimeQueuedTaskRepublishDecision({
+    status: "queued",
+    available_at: "2026-07-22T00:11:00.000Z",
+    updated_at: "2026-07-22T00:00:00.000Z",
+  }, { now_ms: now, orphan_ms: 60000 }), {
+    action: "ignore",
+    reason: "task_not_available_yet",
+    age_ms: 0,
+  });
+  const fresh = connectorRuntimeQueuedTaskRepublishDecision({
+    status: "queued",
+    updated_at: "2026-07-22T00:09:30.000Z",
+  }, { now_ms: now, orphan_ms: 60000 });
+  assert.equal(fresh.action, "ignore");
+  assert.equal(fresh.reason, "queued_recently");
+
+  const orphan = connectorRuntimeQueuedTaskRepublishDecision({
+    status: "queued",
+    updated_at: "2026-07-22T00:00:00.000Z",
+    created_at: "2026-07-22T00:00:00.000Z",
+  }, { now_ms: now, orphan_ms: 60000 });
+  assert.equal(orphan.action, "republish");
+  assert.equal(orphan.reason, "orphan_queued_task");
+  assert.equal(orphan.age_ms, 600000);
+});
+
+test("force republish allows a queued task to be published immediately", () => {
+  const decision = connectorRuntimeQueuedTaskRepublishDecision({
+    status: "queued",
+    updated_at: "2026-07-22T00:09:55.000Z",
+  }, {
+    now_ms: Date.parse("2026-07-22T00:10:00.000Z"),
+    orphan_ms: 60000,
+    force: true,
+  });
+
+  assert.equal(decision.action, "republish");
+  assert.equal(decision.reason, "orphan_queued_task");
+});
+
+test("stale running task requeue decision republishes exact task state without changing cursor or payload", () => {
+  const task = {
+    status: "running",
+    locked_at: "2026-07-22T00:00:00.000Z",
+    updated_at: "2026-07-22T00:00:10.000Z",
+    attempt_count: 1,
+    max_attempts: 5,
+    cursor: "cursor-7",
+    payload: { cursor: "cursor-7", models: ["first_touch", "last_touch"], force_recalculate: false },
+    result_summary: { heartbeat_at: "2026-07-22T00:00:30.000Z" },
+  };
+  const decision = connectorRuntimeStaleRunningTaskRequeueDecision(task, {
+    now: "2026-07-22T00:05:00.000Z",
+    now_ms: Date.parse("2026-07-22T00:05:00.000Z"),
+    stale_ms: 120000,
+    recovered_event: "connector_runtime.task.stale_reclaimed",
+    exhausted_event: "connector_runtime.task.stale_exhausted",
+    reason: "queue_reconciliation",
+    last_error: "stale runtime task",
+  });
+
+  assert.equal(decision.action, "requeue");
+  assert.equal(decision.attempt_count, 2);
+  assert.equal(decision.patch?.status, "queued");
+  assert.equal(decision.patch?.attempt_count, 2);
+  assert.equal(decision.patch?.locked_at, null);
+  assert.equal(decision.patch?.available_at, "2026-07-22T00:05:00.000Z");
+  assert.equal(Object.hasOwn(decision.patch || {}, "cursor"), false);
+  assert.equal(Object.hasOwn(decision.patch || {}, "payload"), false);
+  assert.equal(decision.patch?.result_summary.heartbeat_event, "connector_runtime.task.stale_reclaimed");
+  assert.equal(decision.patch?.result_summary.diagnostic_events.at(-1).reclaimed_attempt_count, 2);
+  assert.equal(connectorRuntimeAttemptAlreadyIncremented({
+    attempt_count: 2,
+    result_summary: decision.patch?.result_summary,
+  }), true);
+});
+
+test("stale running task requeue decision fails max-attempt tasks without republishing", () => {
+  const decision = connectorRuntimeStaleRunningTaskRequeueDecision({
+    status: "running",
+    locked_at: "2026-07-22T00:00:00.000Z",
+    updated_at: "2026-07-22T00:00:10.000Z",
+    attempt_count: 5,
+    max_attempts: 5,
+    cursor: "cursor-7",
+    payload: { cursor: "cursor-7" },
+    result_summary: { heartbeat_at: "2026-07-22T00:00:30.000Z" },
+  }, {
+    now: "2026-07-22T00:05:00.000Z",
+    now_ms: Date.parse("2026-07-22T00:05:00.000Z"),
+    stale_ms: 120000,
+    recovered_event: "connector_runtime.task.stale_reclaimed",
+    exhausted_event: "connector_runtime.task.stale_exhausted",
+    reason: "queue_reconciliation",
+    last_error: "stale runtime task exhausted",
+  });
+
+  assert.equal(decision.action, "fail");
+  assert.equal(decision.patch?.status, "failed");
+  assert.equal(decision.patch?.locked_at, null);
+  assert.equal(decision.patch?.completed_at, "2026-07-22T00:05:00.000Z");
+  assert.equal(decision.patch?.result_summary.heartbeat_event, "connector_runtime.task.stale_exhausted");
 });
 
 test("failure classifier separates transient permanent and blocking errors", () => {

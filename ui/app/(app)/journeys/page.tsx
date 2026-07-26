@@ -1,6 +1,7 @@
 // ui/app/(app)/journeys/page.tsx
-import Link from "next/link";
 import { apiGetJson } from "@/lib/api";
+import { EntityLink } from "@/components/shared/entity-link";
+import { LiveRouteRefresh } from "@/components/live/live-route-refresh";
 
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8787";
 
@@ -66,6 +67,7 @@ export default async function JourneysPage({ searchParams }: Props) {
   // --------- Render ---------
   return (
     <div className="p-6 space-y-4 text-sm text-slate-900 dark:text-slate-100">
+      <LiveRouteRefresh workspaceId="default" types={["entity.changed", "metric.changed", "activity.created", "activity.updated"]} />
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-lg font-semibold">Journeys</h1>
@@ -139,12 +141,13 @@ export default async function JourneysPage({ searchParams }: Props) {
                 <div className="col-span-4 text-xs truncate">{j.site_key ?? "—"}</div>
                 <div className="col-span-2 text-xs">{j.has_orders ? "Yes" : "No"}</div>
                 <div className="col-span-1 text-right">
-                  <Link
+                  <EntityLink
+                    target={{ type: "journey", id: j.tkid, label: "Customer Journey", query: { workspace_id: "default" } }}
                     href={`/journeys/${encodeURIComponent(j.tkid)}`}
                     className="text-xs underline"
                   >
                     Open
-                  </Link>
+                  </EntityLink>
                 </div>
               </div>
             ))}

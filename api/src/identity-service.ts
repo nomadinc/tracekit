@@ -144,9 +144,70 @@ export type IdentityDiagnosticEvent = {
   metadata?: Record<string, any>;
 };
 
+export type IdentityResolutionDebugMetrics = {
+  findIdentifiers: {
+    calls: number;
+    identifiers_requested: number;
+    rows_returned: number;
+  };
+  getPersonIdentifiers: {
+    calls: number;
+    rows_returned: number;
+  };
+  attachIdentifier: {
+    calls: number;
+    inserts: number;
+    updates: number;
+    noops: number;
+    conflicts: number;
+  };
+  updatePerson: {
+    calls: number;
+    writes: number;
+    skipped: number;
+  };
+  syncPrimaryIdentifiers: {
+    calls: number;
+    writes: number;
+    skipped: number;
+  };
+};
+
+export function createIdentityResolutionDebugMetrics(): IdentityResolutionDebugMetrics {
+  return {
+    findIdentifiers: {
+      calls: 0,
+      identifiers_requested: 0,
+      rows_returned: 0,
+    },
+    getPersonIdentifiers: {
+      calls: 0,
+      rows_returned: 0,
+    },
+    attachIdentifier: {
+      calls: 0,
+      inserts: 0,
+      updates: 0,
+      noops: 0,
+      conflicts: 0,
+    },
+    updatePerson: {
+      calls: 0,
+      writes: 0,
+      skipped: 0,
+    },
+    syncPrimaryIdentifiers: {
+      calls: 0,
+      writes: 0,
+      skipped: 0,
+    },
+  };
+}
+
 export type IdentityDiagnostics = {
   timeout_ms?: number;
   emit?: (event: IdentityDiagnosticEvent) => void | Promise<void>;
+  metrics?: IdentityResolutionDebugMetrics | null;
 };
 
 export type IdentityRepository = {
@@ -185,6 +246,8 @@ const PAYMENT_CUSTOMER_TYPES = new Set<IdentityIdentifierType>([
   "paypal_payer_id",
   "stripe_customer_id",
 ]);
+const ACTIVE_IDENTIFIER_VERIFICATION_STATUSES = ["observed", "verified"] as const;
+const PERSON_IDENTIFIER_ACTIVE_VALUE_CONSTRAINT = "person_identifiers_active_value_uidx";
 
 function nowIso() {
   return new Date().toISOString();
@@ -243,12 +306,157 @@ function eventIdentifiers(identifiers: NormalizedIdentityIdentifier[]) {
   }));
 }
 
+function identifierLookupKey(identifier: { identifier_type: IdentityIdentifierType | string; normalized_value: string }) {
+  return `${identifier.identifier_type}:${identifier.normalized_value}`;
+}
+
+function buildIdentifierLookupMap(rows: IdentityIdentifier[]) {
+  const map = new Map<string, IdentityIdentifier[]>();
+  for (const row of rows) {
+    const key = identifierLookupKey(row);
+    const existing = map.get(key);
+    if (existing) existing.push(row);
+    else map.set(key, [row]);
+  }
+  return map;
+}
+
+function cachedIdentifierMatches(
+  map: Map<string, IdentityIdentifier[]> | null | undefined,
+  identifier: { identifier_type: IdentityIdentifierType | string; normalized_value: string },
+) {
+  return [...(map?.get(identifierLookupKey(identifier)) || [])];
+}
+
+function upsertCachedIdentifier(
+  map: Map<string, IdentityIdentifier[]> | null | undefined,
+  identifier: IdentityIdentifier,
+) {
+  if (!map) return;
+  const key = identifierLookupKey(identifier);
+  const rows = map.get(key) || [];
+  const index = rows.findIndex((row) => row.id === identifier.id);
+  if (index >= 0) rows[index] = identifier;
+  else rows.push(identifier);
+  map.set(key, rows);
+}
+
+function upsertCachedPersonIdentifier(identifiers: IdentityIdentifier[] | null | undefined, identifier: IdentityIdentifier) {
+  if (!identifiers) return;
+  const index = identifiers.findIndex((row) => row.id === identifier.id);
+  if (index >= 0) identifiers[index] = identifier;
+  else identifiers.push(identifier);
+}
+
+function identityResolutionMetrics(diagnostics?: IdentityDiagnostics | null) {
+  return diagnostics?.metrics || null;
+}
+
+function countFindIdentifiers(diagnostics: IdentityDiagnostics | null | undefined, requested: number, rows: number) {
+  const metrics = identityResolutionMetrics(diagnostics);
+  if (!metrics) return;
+  metrics.findIdentifiers.calls += 1;
+  metrics.findIdentifiers.identifiers_requested += requested;
+  metrics.findIdentifiers.rows_returned += rows;
+}
+
+function countGetPersonIdentifiers(diagnostics: IdentityDiagnostics | null | undefined, rows: number) {
+  const metrics = identityResolutionMetrics(diagnostics);
+  if (!metrics) return;
+  metrics.getPersonIdentifiers.calls += 1;
+  metrics.getPersonIdentifiers.rows_returned += rows;
+}
+
+function countUpdatePerson(diagnostics: IdentityDiagnostics | null | undefined, wrote: boolean) {
+  const metrics = identityResolutionMetrics(diagnostics);
+  if (!metrics) return;
+  metrics.updatePerson.calls += 1;
+  if (wrote) metrics.updatePerson.writes += 1;
+  else metrics.updatePerson.skipped += 1;
+}
+
+function countAttachIdentifierConflict(diagnostics: IdentityDiagnostics | null | undefined) {
+  const metrics = identityResolutionMetrics(diagnostics);
+  if (!metrics) return;
+  metrics.attachIdentifier.conflicts += 1;
+}
+
+function countAttachIdentifierResult(
+  diagnostics: IdentityDiagnostics | null | undefined,
+  args: Omit<IdentityIdentifier, "id" | "created_at" | "updated_at">,
+  result: { identifier: IdentityIdentifier; created: boolean },
+  previousSamePersonIdentifier?: IdentityIdentifier | null,
+) {
+  const metrics = identityResolutionMetrics(diagnostics);
+  if (!metrics) return;
+  metrics.attachIdentifier.calls += 1;
+  if (result.created) {
+    metrics.attachIdentifier.inserts += 1;
+    return;
+  }
+  if (previousSamePersonIdentifier) {
+    const patch = existingIdentifierUpdatePatch(previousSamePersonIdentifier, args);
+    if (existingIdentifierPatchIsNoop(previousSamePersonIdentifier, patch)) {
+      metrics.attachIdentifier.noops += 1;
+      return;
+    }
+  }
+  metrics.attachIdentifier.updates += 1;
+}
+
+function maskDiagnosticIdentifierValue(value: unknown) {
+  const text = cleanText(value);
+  if (!text) return null;
+  const atIndex = text.indexOf("@");
+  if (atIndex > 0) {
+    const domain = text.slice(atIndex + 1);
+    return `${text.slice(0, 1)}***@${domain || "masked"}`;
+  }
+  const digits = text.replace(/\D+/g, "");
+  if (digits.length >= 4) return `***${digits.slice(-4)}`;
+  if (text.length <= 2) return "***";
+  return `${text.slice(0, 1)}***${text.slice(-1)}`;
+}
+
+function identityDiagnosticText(value: unknown) {
+  return cleanText(value) || null;
+}
+
+function existingIdentifierUpdatePatch(
+  same: IdentityIdentifier,
+  args: Omit<IdentityIdentifier, "id" | "created_at" | "updated_at">,
+) {
+  return {
+    raw_value: same.raw_value || args.raw_value,
+    last_seen_at: args.last_seen_at,
+    source_platform: same.source_platform || args.source_platform,
+    source_record_type: same.source_record_type || args.source_record_type,
+    source_record_id: same.source_record_id || args.source_record_id,
+    source_connector_id: same.source_connector_id || args.source_connector_id,
+    updated_at: nowIso(),
+  } as Partial<IdentityIdentifier>;
+}
+
+function existingIdentifierPatchIsNoop(
+  same: IdentityIdentifier,
+  patch: Partial<IdentityIdentifier>,
+) {
+  return (
+    identityDiagnosticText(same.raw_value) === identityDiagnosticText(patch.raw_value) &&
+    identityDiagnosticText(same.last_seen_at) === identityDiagnosticText(patch.last_seen_at) &&
+    identityDiagnosticText(same.source_platform) === identityDiagnosticText(patch.source_platform) &&
+    identityDiagnosticText(same.source_record_type) === identityDiagnosticText(patch.source_record_type) &&
+    identityDiagnosticText(same.source_record_id) === identityDiagnosticText(patch.source_record_id) &&
+    identityDiagnosticText(same.source_connector_id) === identityDiagnosticText(patch.source_connector_id)
+  );
+}
+
 function safeDiagnosticMetadata(metadata: Record<string, any> | null | undefined) {
   const safe: Record<string, any> = {};
   for (const [key, value] of Object.entries(metadata || {})) {
     if (
       /email|phone|name|address|raw|value|identifier|token|secret/i.test(key) &&
-      !/count|type|created|found|matched|linked|operation|elapsed|timeout/i.test(key)
+      !/count|type|created|found|matched|linked|operation|elapsed|timeout|masked|hash|error/i.test(key)
     ) {
       continue;
     }
@@ -274,19 +482,74 @@ async function emitIdentityDiagnostic(
   });
 }
 
+function identityDiagnosticErrorMetadata(error: any) {
+  return {
+    error_name: error?.name || "Error",
+    error_message: error?.message || String(error),
+    error_stack: error?.stack || null,
+  };
+}
+
+function isPersonIdentifierActiveValueUniqueViolation(error: any) {
+  const code = cleanText(error?.code);
+  const text = [
+    error?.constraint,
+    error?.message,
+    error?.details,
+    error?.hint,
+  ].map((value) => cleanText(value)).filter(Boolean).join(" ");
+  return code === "23505" || text.includes(PERSON_IDENTIFIER_ACTIVE_VALUE_CONSTRAINT);
+}
+
+function supabaseErrorMessage(error: any) {
+  return cleanText(error?.message) || cleanText(error?.details) || String(error || "unknown");
+}
+
+function shortJitterDelayMs(attempt: number) {
+  return Math.min(50, 10 * Math.max(1, attempt)) + Math.floor(Math.random() * 8);
+}
+
+async function sleep(ms: number) {
+  await new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
+}
+
 export async function withIdentityOperationTimeout<T>(
   operation: string,
   promise: Promise<T>,
   timeoutMs = IDENTITY_OPERATION_TIMEOUT_MS,
+  diagnostics?: IdentityDiagnostics | null,
+  metadata: Record<string, any> = {},
 ): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | null = null;
+  await emitIdentityDiagnostic(diagnostics, {
+    operation: `${operation}.promise_race`,
+    phase: "before_await",
+    metadata: {
+      operation,
+      timeout_ms: timeoutMs,
+      promise_race_stage: "before_evaluate",
+      ...metadata,
+    },
+  });
   try {
-    return await Promise.race([
+    const raced = Promise.race([
       promise,
       new Promise<never>((_, reject) => {
         timer = setTimeout(() => reject(new IdentityOperationTimeoutError(operation, timeoutMs)), timeoutMs);
       }),
     ]);
+    await emitIdentityDiagnostic(diagnostics, {
+      operation: `${operation}.promise_race`,
+      phase: "after_await",
+      elapsed_ms: 0,
+      metadata: {
+        operation,
+        timeout_ms: timeoutMs,
+        promise_race_stage: "after_constructed",
+        ...metadata,
+      },
+    });
+    return await raced;
   } finally {
     if (timer) clearTimeout(timer);
   }
@@ -298,6 +561,7 @@ async function traceIdentityAwait<T>(
   fn: () => Promise<T>,
   metadata: Record<string, any> = {},
   summarize?: (result: T) => Record<string, any>,
+  options: { instrument_sync?: boolean } = {},
 ): Promise<T> {
   const timeoutMs = Math.max(1, Number(diagnostics?.timeout_ms || IDENTITY_OPERATION_TIMEOUT_MS));
   const started = Date.now();
@@ -307,7 +571,43 @@ async function traceIdentityAwait<T>(
     metadata: { operation, ...metadata },
   });
   try {
-    const result = await withIdentityOperationTimeout(operation, fn(), timeoutMs);
+    let operationPromise: Promise<T>;
+    try {
+      if (options.instrument_sync) {
+        await emitIdentityDiagnostic(diagnostics, {
+          operation: `${operation}.operation_promise`,
+          phase: "before_await",
+          metadata: { operation, ...metadata },
+        });
+      }
+      operationPromise = fn();
+      if (options.instrument_sync) {
+        await emitIdentityDiagnostic(diagnostics, {
+          operation: `${operation}.operation_promise`,
+          phase: "after_await",
+          elapsed_ms: Date.now() - started,
+          metadata: { operation, ...metadata },
+        });
+      }
+    } catch (error: any) {
+      if (options.instrument_sync) {
+        await emitIdentityDiagnostic(diagnostics, {
+          operation: `${operation}.sync_error`,
+          phase: "error",
+          elapsed_ms: Date.now() - started,
+          error_name: error?.name || "Error",
+          metadata: { operation, ...metadata, ...identityDiagnosticErrorMetadata(error) },
+        }).catch(() => {});
+      }
+      throw error;
+    }
+    const result = await withIdentityOperationTimeout(
+      operation,
+      operationPromise,
+      timeoutMs,
+      options.instrument_sync ? diagnostics : null,
+      metadata,
+    );
     await emitIdentityDiagnostic(diagnostics, {
       operation,
       phase: "after_await",
@@ -344,9 +644,11 @@ async function normalizeInputIdentifiers(input: ResolveIdentityInput, diagnostic
       identifier_index: index + 1,
       identifier_count: identifiers.length,
       identifier_type: type,
+      identifier_value_masked: maskDiagnosticIdentifierValue(value),
     }, (normalizedResult) => ({
       valid: Boolean(normalizedResult.valid),
       warning_count: normalizedResult.warnings.length,
+      identifier_value_hash: normalizedResult.normalized_hash || null,
     }));
     if (!result.identifier_type || !result.valid) continue;
     normalized.push({
@@ -401,24 +703,73 @@ function compactIdentifier(identifier: IdentityIdentifier) {
 }
 
 export function createIdentityService(repo: IdentityRepository, diagnostics?: IdentityDiagnostics | null) {
-  async function syncPrimaryIdentifiers(workspaceId: string, personId: string, activeDiagnostics: IdentityDiagnostics | null | undefined = diagnostics) {
-    const identifiers = await traceIdentityAwait(activeDiagnostics, "identity_resolve.sync_primary.lookup_identifiers", async () => await repo.getPersonIdentifiers(workspaceId, personId), {
-      operation_name: "getPersonIdentifiers",
-    }, (rows) => ({ identifier_count: rows.length }));
+  async function syncPrimaryIdentifiers(
+    workspaceId: string,
+    personId: string,
+    activeDiagnostics: IdentityDiagnostics | null | undefined = diagnostics,
+    cachedIdentifiers?: IdentityIdentifier[] | null,
+    currentPerson?: IdentityPerson | null,
+  ) {
+    const metrics = identityResolutionMetrics(activeDiagnostics);
+    if (metrics) metrics.syncPrimaryIdentifiers.calls += 1;
+    const identifiers = cachedIdentifiers
+      ? [...cachedIdentifiers]
+      : await traceIdentityAwait(activeDiagnostics, "identity_resolve.sync_primary.lookup_identifiers", async () => await repo.getPersonIdentifiers(workspaceId, personId), {
+        operation_name: "getPersonIdentifiers",
+        person_id: personId,
+      }, (rows) => {
+        countGetPersonIdentifiers(activeDiagnostics, rows.length);
+        return { identifier_count: rows.length };
+      });
     const usable = identifiers.filter((identifier) => identifier.verification_status !== "deprecated" && identifier.verification_status !== "disputed");
     const primaryEmail = usable.find((identifier) => identifier.identifier_type === "email" && identifier.is_primary) ||
       usable.find((identifier) => identifier.identifier_type === "email");
     const primaryPhone = usable.find((identifier) => identifier.identifier_type === "phone" && identifier.is_primary) ||
       usable.find((identifier) => identifier.identifier_type === "phone");
-    await traceIdentityAwait(activeDiagnostics, "identity_resolve.sync_primary.update_person", async () => await repo.updatePerson(workspaceId, personId, {
-      primary_email: primaryEmail?.normalized_value || null,
-      primary_phone: primaryPhone?.normalized_value || null,
+    const primaryEmailValue = primaryEmail?.normalized_value || null;
+    const primaryPhoneValue = primaryPhone?.normalized_value || null;
+    if (
+      currentPerson &&
+      identityDiagnosticText(currentPerson.primary_email) === identityDiagnosticText(primaryEmailValue) &&
+      identityDiagnosticText(currentPerson.primary_phone) === identityDiagnosticText(primaryPhoneValue)
+    ) {
+      await emitIdentityDiagnostic(activeDiagnostics, {
+        operation: "identity_resolve.sync_primary.update_person",
+        phase: "after_await",
+        elapsed_ms: 0,
+        metadata: {
+          operation_name: "updatePerson",
+          person_id: personId,
+          has_primary_email: Boolean(primaryEmail),
+          has_primary_phone: Boolean(primaryPhone),
+          update_skipped: true,
+          reason: "primary_identifiers_unchanged",
+        },
+      });
+      countUpdatePerson(activeDiagnostics, false);
+      if (metrics) metrics.syncPrimaryIdentifiers.skipped += 1;
+      return;
+    }
+    const updated = await traceIdentityAwait(activeDiagnostics, "identity_resolve.sync_primary.update_person", async () => await repo.updatePerson(workspaceId, personId, {
+      primary_email: primaryEmailValue,
+      primary_phone: primaryPhoneValue,
       updated_at: nowIso(),
     } as any), {
       operation_name: "updatePerson",
+      person_id: personId,
       has_primary_email: Boolean(primaryEmail),
       has_primary_phone: Boolean(primaryPhone),
     }, (person) => ({ person_found: Boolean(person) }));
+    countUpdatePerson(activeDiagnostics, Boolean(updated));
+    if (updated && currentPerson) {
+      currentPerson.primary_email = updated.primary_email ?? primaryEmailValue;
+      currentPerson.primary_phone = updated.primary_phone ?? primaryPhoneValue;
+      currentPerson.updated_at = updated.updated_at ?? currentPerson.updated_at;
+    }
+    if (metrics) {
+      if (updated) metrics.syncPrimaryIdentifiers.writes += 1;
+      else metrics.syncPrimaryIdentifiers.skipped += 1;
+    }
   }
 
   async function attachNormalizedIdentifier(args: {
@@ -428,23 +779,42 @@ export function createIdentityService(repo: IdentityRepository, diagnostics?: Id
     input: ResolveIdentityInput;
     observed_at: string;
     diagnostics?: IdentityDiagnostics | null;
+    ownershipCache?: Map<string, IdentityIdentifier[]> | null;
+    personIdentifiersCache?: IdentityIdentifier[] | null;
   }) {
     const activeDiagnostics = args.diagnostics || diagnostics || null;
-    const existing = await traceIdentityAwait(activeDiagnostics, "identity_resolve.attach_identifier.lookup_existing", async () => await repo.findIdentifiers(args.workspace_id, [{
-      identifier_type: args.identifier.identifier_type,
-      normalized_value: args.identifier.normalized_value,
-    }]), {
-      operation_name: "findIdentifiers",
-      identifier_type: args.identifier.identifier_type,
-      identifier_count: 1,
-    }, (rows) => ({ match_count: rows.length }));
-    const activeExisting = existing.filter((identifier) => identifier.verification_status === "observed" || identifier.verification_status === "verified");
+    const existing = args.ownershipCache
+      ? cachedIdentifierMatches(args.ownershipCache, args.identifier)
+      : await traceIdentityAwait(activeDiagnostics, "identity_resolve.attach_identifier.lookup_existing", async () => await repo.findIdentifiers(args.workspace_id, [{
+        identifier_type: args.identifier.identifier_type,
+        normalized_value: args.identifier.normalized_value,
+      }]), {
+        operation_name: "findIdentifiers",
+        identifier_type: args.identifier.identifier_type,
+        identifier_count: 1,
+        identifier_value_masked: maskDiagnosticIdentifierValue(args.identifier.raw_value || args.identifier.normalized_value),
+        identifier_value_hash: args.identifier.normalized_hash || null,
+        person_id: args.person_id,
+      }, (rows) => {
+        countFindIdentifiers(activeDiagnostics, 1, rows.length);
+        return { match_count: rows.length };
+      });
+    const activeExisting = existing.filter((identifier) => (ACTIVE_IDENTIFIER_VERIFICATION_STATUSES as readonly string[]).includes(identifier.verification_status));
     const conflicting = activeExisting.find((identifier) => identifier.person_id !== args.person_id);
-    if (conflicting) return { attached: null, conflict_person_id: conflicting.person_id };
+    if (conflicting) {
+      countAttachIdentifierConflict(activeDiagnostics);
+      return { attached: null, conflict_person_id: conflicting.person_id };
+    }
 
-    const existingPersonIdentifiers = await traceIdentityAwait(activeDiagnostics, "identity_resolve.attach_identifier.lookup_person_identifiers", async () => await repo.getPersonIdentifiers(args.workspace_id, args.person_id), {
-      operation_name: "getPersonIdentifiers",
-    }, (rows) => ({ identifier_count: rows.length }));
+    const existingPersonIdentifiers = args.personIdentifiersCache
+      ? args.personIdentifiersCache
+      : await traceIdentityAwait(activeDiagnostics, "identity_resolve.attach_identifier.lookup_person_identifiers", async () => await repo.getPersonIdentifiers(args.workspace_id, args.person_id), {
+        operation_name: "getPersonIdentifiers",
+        person_id: args.person_id,
+      }, (rows) => {
+        countGetPersonIdentifiers(activeDiagnostics, rows.length);
+        return { identifier_count: rows.length };
+      });
     const hasPrimary = existingPersonIdentifiers
       .some((identifier) => (
         identifier.identifier_type === args.identifier.identifier_type &&
@@ -453,32 +823,104 @@ export function createIdentityService(repo: IdentityRepository, diagnostics?: Id
         identifier.verification_status !== "disputed"
       ));
 
-    const result = await traceIdentityAwait(activeDiagnostics, "identity_resolve.attach_identifier.persist", async () => await repo.attachIdentifier({
-      workspace_id: args.workspace_id,
-      person_id: args.person_id,
-      identifier_type: args.identifier.identifier_type,
-      raw_value: args.identifier.raw_value,
-      normalized_value: args.identifier.normalized_value,
-      normalized_hash: args.identifier.normalized_hash,
-      source_platform: args.input.source_platform || null,
-      source_record_type: args.input.source_record_type || null,
-      source_record_id: args.input.source_record_id || null,
-      source_connector_id: args.input.source_connector_id || null,
-      verification_status: args.identifier.verification_status,
-      confidence: args.identifier.confidence,
-      is_primary: !hasPrimary && (args.identifier.identifier_type === "email" || args.identifier.identifier_type === "phone"),
-      first_seen_at: args.observed_at,
-      last_seen_at: args.observed_at,
-      metadata: {
-        ...args.identifier.metadata,
-        source: "identity_service_v1",
-      },
-    }), {
+    const persistMetadata = {
       operation_name: "attachIdentifier",
       identifier_type: args.identifier.identifier_type,
+      identifier_value_masked: maskDiagnosticIdentifierValue(args.identifier.raw_value || args.identifier.normalized_value),
+      identifier_value_hash: args.identifier.normalized_hash || null,
+      person_id: args.person_id,
       has_primary: hasPrimary,
-    }, (result) => ({ identifier_created: Boolean(result.created) }));
-    return { attached: result.identifier, conflict_person_id: null };
+    };
+    let persistedArgs: Omit<IdentityIdentifier, "id" | "created_at" | "updated_at"> | null = null;
+    const samePersonBeforeAttach = activeExisting.find((identifier) => identifier.person_id === args.person_id) || null;
+    const result = await traceIdentityAwait(activeDiagnostics, "identity_resolve.attach_identifier.persist", async () => {
+      let attachIdentifierArgs: Omit<IdentityIdentifier, "id" | "created_at" | "updated_at">;
+      try {
+        await emitIdentityDiagnostic(activeDiagnostics, {
+          operation: "identity_resolve.attach_identifier.persist.construct_args",
+          phase: "before_await",
+          metadata: persistMetadata,
+        });
+        attachIdentifierArgs = {
+          workspace_id: args.workspace_id,
+          person_id: args.person_id,
+          identifier_type: args.identifier.identifier_type,
+          raw_value: args.identifier.raw_value,
+          normalized_value: args.identifier.normalized_value,
+          normalized_hash: args.identifier.normalized_hash,
+          source_platform: args.input.source_platform || null,
+          source_record_type: args.input.source_record_type || null,
+          source_record_id: args.input.source_record_id || null,
+          source_connector_id: args.input.source_connector_id || null,
+          verification_status: args.identifier.verification_status,
+          confidence: args.identifier.confidence,
+          is_primary: !hasPrimary && (args.identifier.identifier_type === "email" || args.identifier.identifier_type === "phone"),
+          first_seen_at: args.observed_at,
+          last_seen_at: args.observed_at,
+          metadata: {
+            ...args.identifier.metadata,
+            source: "identity_service_v1",
+          },
+        };
+        persistedArgs = attachIdentifierArgs;
+        await emitIdentityDiagnostic(activeDiagnostics, {
+          operation: "identity_resolve.attach_identifier.persist.construct_args",
+          phase: "after_await",
+          elapsed_ms: 0,
+          metadata: {
+            ...persistMetadata,
+            argument_key_count: Object.keys(attachIdentifierArgs).length,
+            metadata_key_count: Object.keys(attachIdentifierArgs.metadata || {}).length,
+            has_raw_value: Boolean(attachIdentifierArgs.raw_value),
+            has_normalized_value: Boolean(attachIdentifierArgs.normalized_value),
+          },
+        });
+      } catch (error: any) {
+        await emitIdentityDiagnostic(activeDiagnostics, {
+          operation: "identity_resolve.attach_identifier.persist.sync_error",
+          phase: "error",
+          metadata: { ...persistMetadata, ...identityDiagnosticErrorMetadata(error) },
+        }).catch(() => {});
+        throw error;
+      }
+
+      let attachIdentifierPromise: Promise<{ identifier: IdentityIdentifier; created: boolean }>;
+      try {
+        await emitIdentityDiagnostic(activeDiagnostics, {
+          operation: "identity_resolve.attach_identifier.persist.invoke_repo",
+          phase: "before_await",
+          metadata: persistMetadata,
+        });
+        attachIdentifierPromise = repo.attachIdentifier(attachIdentifierArgs);
+        await emitIdentityDiagnostic(activeDiagnostics, {
+          operation: "identity_resolve.attach_identifier.persist.invoke_repo",
+          phase: "after_await",
+          elapsed_ms: 0,
+          metadata: persistMetadata,
+        });
+      } catch (error: any) {
+        await emitIdentityDiagnostic(activeDiagnostics, {
+          operation: "identity_resolve.attach_identifier.persist.sync_error",
+          phase: "error",
+          metadata: { ...persistMetadata, ...identityDiagnosticErrorMetadata(error) },
+        }).catch(() => {});
+        throw error;
+      }
+      return await attachIdentifierPromise;
+    }, {
+      operation_name: "attachIdentifier",
+      identifier_type: args.identifier.identifier_type,
+      identifier_value_masked: maskDiagnosticIdentifierValue(args.identifier.raw_value || args.identifier.normalized_value),
+      identifier_value_hash: args.identifier.normalized_hash || null,
+      person_id: args.person_id,
+      has_primary: hasPrimary,
+    }, (result) => ({ identifier_created: Boolean(result.created) }), { instrument_sync: true });
+    if (persistedArgs) countAttachIdentifierResult(activeDiagnostics, persistedArgs, result, samePersonBeforeAttach);
+    return {
+      attached: result.identifier,
+      conflict_person_id: null,
+      adopted_person_id: result.identifier.person_id !== args.person_id ? result.identifier.person_id : null,
+    };
   }
 
   async function resolveIdentity(input: ResolveIdentityInput, options: { diagnostics?: IdentityDiagnostics | null } = {}): Promise<IdentityResolutionResult> {
@@ -523,7 +965,11 @@ export function createIdentityService(repo: IdentityRepository, diagnostics?: Id
     const matches = normalized.length ? await traceIdentityAwait(activeDiagnostics, "identity_resolve.lookup_identifiers", async () => await repo.findIdentifiers(workspaceId, normalized), {
       operation_name: "findIdentifiers",
       identifier_count: normalized.length,
-    }, (rows) => ({ match_count: rows.length })) : [];
+    }, (rows) => {
+      countFindIdentifiers(activeDiagnostics, normalized.length, rows.length);
+      return { match_count: rows.length };
+    }) : [];
+    const ownershipCache = buildIdentifierLookupMap(matches);
     const candidatePersonIds = unique(matches.map((match) => match.person_id));
     const people = await traceIdentityAwait(activeDiagnostics, "identity_resolve.lookup_people", async () => await repo.listPeopleByIds(workspaceId, candidatePersonIds), {
       operation_name: "listPeopleByIds",
@@ -578,10 +1024,10 @@ export function createIdentityService(repo: IdentityRepository, diagnostics?: Id
 
     let person = activePeople[0] || null;
     let action: IdentityResolutionResult["action"] = "matched_existing_person";
-    const matchedIdentifiers = person
+    let matchedIdentifiers = person
       ? matchedInputIdentifiers(normalized, matches.filter((match) => match.person_id === person!.id))
       : [];
-    const best = bestMatchReason(matchedIdentifiers.length ? matchedIdentifiers : normalized);
+    let best = bestMatchReason(matchedIdentifiers.length ? matchedIdentifiers : normalized);
     if (!person) {
       action = "created_person";
       person = await traceIdentityAwait(activeDiagnostics, "identity_resolve.create_person", async () => await repo.createPerson({
@@ -600,14 +1046,26 @@ export function createIdentityService(repo: IdentityRepository, diagnostics?: Id
         has_last_name: Boolean(input.person_attributes?.last_name),
       }, (createdPerson) => ({ person_created: Boolean(createdPerson?.id) }));
     } else {
-      await traceIdentityAwait(activeDiagnostics, "identity_resolve.update_person_seen", async () => await repo.updatePerson(workspaceId, person!.id, {
+      const updated = await traceIdentityAwait(activeDiagnostics, "identity_resolve.update_person_seen", async () => await repo.updatePerson(workspaceId, person!.id, {
         last_seen_at: observedAt,
         updated_at: observedAt,
       } as any), {
         operation_name: "updatePerson",
+        person_id: person.id,
       }, (updatedPerson) => ({ person_found: Boolean(updatedPerson) }));
+      countUpdatePerson(activeDiagnostics, Boolean(updated));
+      if (updated) person = updated;
     }
 
+    let personIdentifiersCache = action === "created_person"
+      ? []
+      : await traceIdentityAwait(activeDiagnostics, "identity_resolve.lookup_person_identifiers", async () => await repo.getPersonIdentifiers(workspaceId, person.id), {
+        operation_name: "getPersonIdentifiers",
+        person_id: person.id,
+      }, (rows) => {
+        countGetPersonIdentifiers(activeDiagnostics, rows.length);
+        return { identifier_count: rows.length };
+      });
     const attached: IdentityIdentifier[] = [];
     const conflicts: IdentityResolutionResult["conflicts"] = [];
     for (const identifier of normalized) {
@@ -618,9 +1076,14 @@ export function createIdentityService(repo: IdentityRepository, diagnostics?: Id
         input,
         observed_at: observedAt,
         diagnostics: activeDiagnostics,
+        ownershipCache,
+        personIdentifiersCache,
       }), {
         operation_name: "attachNormalizedIdentifier",
         identifier_type: identifier.identifier_type,
+        identifier_value_masked: maskDiagnosticIdentifierValue(identifier.raw_value || identifier.normalized_value),
+        identifier_value_hash: identifier.normalized_hash || null,
+        person_id: person.id,
       }, (result) => ({
         attached: Boolean(result.attached),
         conflict: Boolean(result.conflict_person_id),
@@ -633,7 +1096,66 @@ export function createIdentityService(repo: IdentityRepository, diagnostics?: Id
         });
         continue;
       }
-      if (result.attached) attached.push(result.attached);
+      if (result.attached) {
+        attached.push(result.attached);
+        upsertCachedIdentifier(ownershipCache, result.attached);
+        if (result.adopted_person_id && result.adopted_person_id !== person.id) {
+          const losingPerson = person;
+          const winningPerson = await traceIdentityAwait(activeDiagnostics, "identity_resolve.concurrent_winner.lookup_person", async () => await repo.getPerson(workspaceId, result.adopted_person_id!), {
+            operation_name: "getPerson",
+            person_id: result.adopted_person_id,
+          }, (row) => ({ person_found: Boolean(row), active: row?.status === "active" }));
+          if (!winningPerson || winningPerson.status !== "active") {
+            conflicts.push({
+              identifier_type: identifier.identifier_type,
+              normalized_value: identifier.normalized_value,
+              candidate_person_ids: [result.adopted_person_id],
+            });
+            continue;
+          }
+          await emitIdentityDiagnostic(activeDiagnostics, {
+            operation: "identity_resolve.attach_identifier.concurrent_winner_adopted",
+            phase: "after_await",
+            elapsed_ms: 0,
+            metadata: {
+              operation_name: "attachNormalizedIdentifier.concurrentWinnerAdopted",
+              losing_person_id: losingPerson.id,
+              winning_person_id: winningPerson.id,
+              identifier_type: identifier.identifier_type,
+              identifier_value_masked: maskDiagnosticIdentifierValue(identifier.raw_value || identifier.normalized_value),
+              identifier_value_hash: identifier.normalized_hash || null,
+            },
+          });
+          if (action === "created_person" && losingPerson.id !== winningPerson.id) {
+            await traceIdentityAwait(activeDiagnostics, "identity_resolve.concurrent_winner.merge_losing_person", async () => await mergePeople({
+              workspace_id: workspaceId,
+              source_person_id: losingPerson.id,
+              target_person_id: winningPerson.id,
+              reason: "concurrent_identifier_conflict_recovered",
+            }), {
+              operation_name: "mergePeople",
+              losing_person_id: losingPerson.id,
+              winning_person_id: winningPerson.id,
+            }, (merge) => ({
+              merged: Boolean(merge?.merged),
+              idempotent: Boolean(merge?.idempotent),
+            }));
+          }
+          person = winningPerson;
+          action = "matched_existing_person";
+          matchedIdentifiers = unique([...matchedIdentifiers, identifier]);
+          best = bestMatchReason(matchedIdentifiers.length ? matchedIdentifiers : normalized);
+          personIdentifiersCache = await traceIdentityAwait(activeDiagnostics, "identity_resolve.concurrent_winner.lookup_person_identifiers", async () => await repo.getPersonIdentifiers(workspaceId, person.id), {
+            operation_name: "getPersonIdentifiers",
+            person_id: person.id,
+          }, (rows) => {
+            countGetPersonIdentifiers(activeDiagnostics, rows.length);
+            return { identifier_count: rows.length };
+          });
+        } else {
+          upsertCachedPersonIdentifier(personIdentifiersCache, result.attached);
+        }
+      }
     }
 
     if (conflicts.length) {
@@ -667,8 +1189,9 @@ export function createIdentityService(repo: IdentityRepository, diagnostics?: Id
       };
     }
 
-    await traceIdentityAwait(activeDiagnostics, "identity_resolve.sync_primary", async () => await syncPrimaryIdentifiers(workspaceId, person.id, activeDiagnostics), {
+    await traceIdentityAwait(activeDiagnostics, "identity_resolve.sync_primary", async () => await syncPrimaryIdentifiers(workspaceId, person.id, activeDiagnostics, personIdentifiersCache, person), {
       operation_name: "syncPrimaryIdentifiers",
+      person_id: person.id,
     });
     await traceIdentityAwait(activeDiagnostics, "identity_resolve.insert_resolution_event", async () => await repo.insertResolutionEvent({
       workspace_id: workspaceId,
@@ -687,6 +1210,7 @@ export function createIdentityService(repo: IdentityRepository, diagnostics?: Id
       operation_name: "insertResolutionEvent",
       resolution_action: action,
       candidate_count: 1,
+      person_id: person.id,
     }, (event) => ({ event_created: Boolean(event) }));
 
     return {
@@ -758,6 +1282,7 @@ export function createIdentityService(repo: IdentityRepository, diagnostics?: Id
       observed_at: cleanText(args.observed_at) || nowIso(),
     });
     if (attached.conflict_person_id) throw new Error("Identifier is already attached to another active person.");
+    if (attached.adopted_person_id && attached.adopted_person_id !== args.person_id) throw new Error("Identifier is already attached to another active person.");
     await syncPrimaryIdentifiers(workspaceId, args.person_id);
     return attached.attached;
   }
@@ -994,6 +1519,7 @@ export function createSupabaseIdentityRepository(supabase: any, diagnostics?: Id
         .select("*")
         .maybeSingle(), {
         operation_name: "updatePerson",
+        person_id: personId,
         patch_field_count: Object.keys(patch || {}).length,
       }, (result) => ({ person_found: Boolean(result?.data) }));
       if (error) throw new Error(`Identity person update failed: ${error.message}`);
@@ -1007,6 +1533,7 @@ export function createSupabaseIdentityRepository(supabase: any, diagnostics?: Id
         .eq("id", personId)
         .maybeSingle(), {
         operation_name: "getPerson",
+        person_id: personId,
       }, (result) => ({ person_found: Boolean(result?.data) }));
       if (error) throw new Error(`Identity person lookup failed: ${error.message}`);
       return data || null;
@@ -1026,56 +1553,168 @@ export function createSupabaseIdentityRepository(supabase: any, diagnostics?: Id
     },
     async findIdentifiers(workspaceId, identifiers) {
       if (!identifiers.length) return [];
-      const rows: IdentityIdentifier[] = [];
-      for (let index = 0; index < identifiers.length; index += 1) {
-        const identifier = identifiers[index];
-        const { data, error } = await traceIdentityAwait(diagnostics, "identity_repository.findIdentifiers.lookup", async () => await supabase
-          .from("person_identifiers")
-          .select("*")
-          .eq("workspace_id", workspaceId)
-          .eq("identifier_type", identifier.identifier_type)
-          .eq("normalized_value", identifier.normalized_value)
-          .in("verification_status", ["observed", "verified"]), {
-          operation_name: "findIdentifiers",
-          identifier_index: index + 1,
-          identifier_count: identifiers.length,
-          identifier_type: identifier.identifier_type,
-        }, (result) => ({ match_count: (result?.data || []).length }));
-        if (error) throw new Error(`Identity identifier lookup failed: ${error.message}`);
-        rows.push(...(data || []));
-      }
-      return rows;
+      const uniqueIdentifiers = Array.from(
+        new Map(identifiers.map((identifier) => [identifierLookupKey(identifier), identifier])).values(),
+      );
+      const lookupKeys = new Set(uniqueIdentifiers.map(identifierLookupKey));
+      const identifierTypes = unique(uniqueIdentifiers.map((identifier) => identifier.identifier_type));
+      const normalizedValues = unique(uniqueIdentifiers.map((identifier) => identifier.normalized_value));
+      const { data, error } = await traceIdentityAwait(diagnostics, "identity_repository.findIdentifiers.lookup", async () => await supabase
+        .from("person_identifiers")
+        .select("*")
+        .eq("workspace_id", workspaceId)
+        .in("identifier_type", identifierTypes)
+        .in("normalized_value", normalizedValues)
+        .in("verification_status", Array.from(ACTIVE_IDENTIFIER_VERIFICATION_STATUSES)), {
+        operation_name: "findIdentifiers",
+        identifier_count: uniqueIdentifiers.length,
+        identifier_type_count: identifierTypes.length,
+        normalized_value_count: normalizedValues.length,
+        sql_shape: "person_identifiers select * where workspace_id = ? and identifier_type in (?) and normalized_value in (?) and verification_status in (observed,verified)",
+      }, (result) => ({ match_count: (result?.data || []).length }));
+      if (error) throw new Error(`Identity identifier lookup failed: ${error.message}`);
+      return (data || []).filter((row: IdentityIdentifier) => (
+        lookupKeys.has(identifierLookupKey(row)) &&
+        (ACTIVE_IDENTIFIER_VERIFICATION_STATUSES as readonly string[]).includes(row.verification_status)
+      ));
     },
     async attachIdentifier(args) {
-      const existing = await traceIdentityAwait(diagnostics, "identity_repository.attachIdentifier.find_existing", async () => await repository.findIdentifiers(args.workspace_id, [{
+      await emitIdentityDiagnostic(diagnostics, {
+        operation: "identity_repository.attachIdentifier.entry",
+        phase: "before_await",
+        metadata: {
+          operation_name: "attachIdentifier.entry",
+          identifier_type: args.identifier_type,
+          person_id: args.person_id,
+        },
+      });
+      await emitIdentityDiagnostic(diagnostics, {
+        operation: "identity_repository.attachIdentifier.entry",
+        phase: "after_await",
+        elapsed_ms: 0,
+        metadata: {
+          operation_name: "attachIdentifier.entry",
+          identifier_type: args.identifier_type,
+          identifier_value_masked: maskDiagnosticIdentifierValue(args.raw_value || args.normalized_value),
+          identifier_value_hash: args.normalized_hash || null,
+          person_id: args.person_id,
+        },
+      });
+      const { data: existingRows, error: existingError } = await traceIdentityAwait(diagnostics, "identity_repository.attachIdentifier.select_existing", async () => await supabase
+        .from("person_identifiers")
+        .select("*")
+        .eq("workspace_id", args.workspace_id)
+        .eq("identifier_type", args.identifier_type)
+        .eq("normalized_value", args.normalized_value)
+        .in("verification_status", Array.from(ACTIVE_IDENTIFIER_VERIFICATION_STATUSES)), {
+        operation_name: "attachIdentifier.selectExistingIdentifier",
         identifier_type: args.identifier_type,
-        normalized_value: args.normalized_value,
-      }]), {
-        operation_name: "attachIdentifier.findIdentifiers",
-        identifier_type: args.identifier_type,
+        identifier_value_masked: maskDiagnosticIdentifierValue(args.raw_value || args.normalized_value),
+        identifier_value_hash: args.normalized_hash || null,
+        person_id: args.person_id,
         identifier_count: 1,
-      }, (rows) => ({ match_count: rows.length }));
+        sql_shape: "person_identifiers select * where workspace_id = ? and identifier_type = ? and normalized_value = ? and verification_status in (observed,verified)",
+      }, (result) => ({ match_count: (result?.data || []).length }));
+      if (existingError) throw new Error(`Identity identifier lookup failed: ${existingError.message}`);
+      const existing: IdentityIdentifier[] = existingRows || [];
       const same = existing.find((identifier) => identifier.person_id === args.person_id);
       if (same) {
-        const updated = await traceIdentityAwait(diagnostics, "identity_repository.attachIdentifier.update_existing", async () => await repository.updateIdentifier(args.workspace_id, same.id, {
-          raw_value: same.raw_value || args.raw_value,
-          last_seen_at: args.last_seen_at,
-          source_platform: same.source_platform || args.source_platform,
-          source_record_type: same.source_record_type || args.source_record_type,
-          source_record_id: same.source_record_id || args.source_record_id,
-          source_connector_id: same.source_connector_id || args.source_connector_id,
-          updated_at: nowIso(),
-        } as any), {
+        const patch = existingIdentifierUpdatePatch(same, args);
+        if (existingIdentifierPatchIsNoop(same, patch)) {
+          await emitIdentityDiagnostic(diagnostics, {
+            operation: "identity_repository.attachIdentifier.short_circuit_existing",
+            phase: "after_await",
+            elapsed_ms: 0,
+            metadata: {
+              operation_name: "attachIdentifier.shortCircuitExistingIdentifier",
+              identifier_type: args.identifier_type,
+              identifier_value_masked: maskDiagnosticIdentifierValue(args.raw_value || args.normalized_value),
+              identifier_value_hash: args.normalized_hash || null,
+              person_id: args.person_id,
+              update_skipped: true,
+              reason: "existing_identifier_unchanged",
+            },
+          });
+          return { identifier: same, created: false };
+        }
+        const { data: updated, error: updateError } = await traceIdentityAwait(diagnostics, "identity_repository.attachIdentifier.update_existing", async () => await supabase
+          .from("person_identifiers")
+          .update(patch)
+          .eq("workspace_id", args.workspace_id)
+          .eq("id", same.id)
+          .select("*")
+          .maybeSingle(), {
           operation_name: "attachIdentifier.updateIdentifier",
           identifier_type: args.identifier_type,
-        }, (identifier) => ({ identifier_updated: Boolean(identifier) }));
+          identifier_value_masked: maskDiagnosticIdentifierValue(args.raw_value || args.normalized_value),
+          identifier_value_hash: args.normalized_hash || null,
+          person_id: args.person_id,
+          identifier_id: same.id,
+          sql_shape: "person_identifiers update where workspace_id = ? and id = ? returning *",
+        }, (result) => ({ identifier_updated: Boolean(result?.data) }));
+        if (updateError) throw new Error(`Identity identifier update failed: ${updateError.message}`);
         return { identifier: updated || same, created: false };
       }
       const { data, error } = await traceIdentityAwait(diagnostics, "identity_repository.attachIdentifier.insert", async () => await supabase.from("person_identifiers").insert(args).select("*").single(), {
         operation_name: "attachIdentifier.insert",
         identifier_type: args.identifier_type,
+        identifier_value_masked: maskDiagnosticIdentifierValue(args.raw_value || args.normalized_value),
+        identifier_value_hash: args.normalized_hash || null,
+        person_id: args.person_id,
+        sql_shape: "person_identifiers insert returning *",
       }, (result) => ({ identifier_created: Boolean(result?.data?.id) }));
-      if (error) throw new Error(`Identity identifier attach failed: ${error.message}`);
+      if (error) {
+        if (isPersonIdentifierActiveValueUniqueViolation(error)) {
+          const attempts = 3;
+          let recovered: IdentityIdentifier | null = null;
+          for (let attempt = 1; attempt <= attempts; attempt += 1) {
+            if (attempt > 1) await sleep(shortJitterDelayMs(attempt));
+            const { data: concurrentRows, error: concurrentLookupError } = await traceIdentityAwait(diagnostics, "identity_repository.attachIdentifier.concurrent_conflict_lookup", async () => await supabase
+              .from("person_identifiers")
+              .select("*")
+              .eq("workspace_id", args.workspace_id)
+              .eq("identifier_type", args.identifier_type)
+              .eq("normalized_value", args.normalized_value)
+              .in("verification_status", Array.from(ACTIVE_IDENTIFIER_VERIFICATION_STATUSES)), {
+              operation_name: "attachIdentifier.concurrentConflictLookup",
+              identifier_type: args.identifier_type,
+              identifier_value_masked: maskDiagnosticIdentifierValue(args.raw_value || args.normalized_value),
+              identifier_value_hash: args.normalized_hash || null,
+              person_id: args.person_id,
+              attempt,
+              max_attempts: attempts,
+              sql_shape: "person_identifiers select * where workspace_id = ? and identifier_type = ? and normalized_value = ? and verification_status in (observed,verified)",
+            }, (result) => ({ match_count: (result?.data || []).length }));
+            if (concurrentLookupError) throw new Error(`Identity identifier attach recovery lookup failed: ${supabaseErrorMessage(concurrentLookupError)}`);
+            recovered = ((concurrentRows || []) as IdentityIdentifier[]).find((identifier) => (
+              identifier.workspace_id === args.workspace_id &&
+              identifier.identifier_type === args.identifier_type &&
+              identifier.normalized_value === args.normalized_value &&
+              (ACTIVE_IDENTIFIER_VERIFICATION_STATUSES as readonly string[]).includes(identifier.verification_status)
+            )) || null;
+            if (recovered) break;
+          }
+          if (recovered) {
+            await emitIdentityDiagnostic(diagnostics, {
+              operation: "identity_repository.attachIdentifier.concurrent_conflict_recovered",
+              phase: "after_await",
+              elapsed_ms: 0,
+              metadata: {
+                operation_name: "attachIdentifier.concurrentConflictRecovered",
+                identifier_type: args.identifier_type,
+                identifier_value_masked: maskDiagnosticIdentifierValue(args.raw_value || args.normalized_value),
+                identifier_value_hash: args.normalized_hash || null,
+                requested_person_id: args.person_id,
+                winning_person_id: recovered.person_id,
+                recovered_created: false,
+              },
+            });
+            return { identifier: recovered, created: false };
+          }
+          throw new Error(`Identity identifier attach failed after concurrent unique conflict recovery (${PERSON_IDENTIFIER_ACTIVE_VALUE_CONSTRAINT}): ${supabaseErrorMessage(error)}`);
+        }
+        throw new Error(`Identity identifier attach failed: ${supabaseErrorMessage(error)}`);
+      }
       return { identifier: data, created: true };
     },
     async updateIdentifier(workspaceId, identifierId, patch) {
@@ -1100,6 +1739,7 @@ export function createSupabaseIdentityRepository(supabase: any, diagnostics?: Id
         .eq("person_id", personId)
         .order("created_at", { ascending: true }), {
         operation_name: "getPersonIdentifiers",
+        person_id: personId,
       }, (result) => ({ identifier_count: (result?.data || []).length }));
       if (error) throw new Error(`Identity identifiers lookup failed: ${error.message}`);
       return data || [];
@@ -1114,6 +1754,7 @@ export function createSupabaseIdentityRepository(supabase: any, diagnostics?: Id
         operation_name: "insertResolutionEvent",
         resolution_action: event.resolution_action,
         candidate_count: (event.candidate_person_ids || []).length,
+        person_id: event.person_id || null,
       }, (result) => ({ event_created: Boolean(result?.data?.id) }));
       if (error) throw new Error(`Identity event insert failed: ${error.message}`);
       return data;
