@@ -1,14 +1,34 @@
 // ui/lib/api.ts
 
+const API_BASE_CONFIG_MESSAGE =
+  "TraceKit API base is not configured. Set NEXT_PUBLIC_API_BASE_URL to the Cloudflare Worker URL.";
+
+function isLocalHostname(hostname: string) {
+  return (
+    hostname === "localhost" ||
+    hostname === "127.0.0.1" ||
+    hostname === "::1" ||
+    hostname.endsWith(".local")
+  );
+}
+
+function isDeployedBrowserRuntime() {
+  return typeof window !== "undefined" && !isLocalHostname(window.location.hostname);
+}
+
 export function getApiBaseUrl(): string {
   // In Next.js client bundles, NEXT_PUBLIC_* values are inlined at build time.
-  // Returning "" means "same origin" (useful if you proxy /v1/* through Next).
+  // Returning "" means "same origin" only for local dev or a deliberate local proxy.
   const base =
     process.env.NEXT_PUBLIC_API_BASE_URL ??
     process.env.NEXT_PUBLIC_API_BASE ??
     "";
 
-  return String(base).replace(/\/+$/, ""); // trim trailing slashes
+  const normalized = String(base).trim().replace(/\/+$/, ""); // trim trailing slashes
+  if (!normalized && isDeployedBrowserRuntime()) {
+    throw new Error(API_BASE_CONFIG_MESSAGE);
+  }
+  return normalized;
 }
 
 function isProbablyHtml(s: string) {
@@ -35,6 +55,43 @@ function joinUrl(base: string, pathAndQuery: string) {
   return `${base}${p}`;
 }
 
+function requestPath(pathAndQuery: string) {
+  try {
+    return new URL(pathAndQuery).pathname || "/";
+  } catch {
+    const p = pathAndQuery.startsWith("/") ? pathAndQuery : `/${pathAndQuery}`;
+    return p.split("?")[0] || "/";
+  }
+}
+
+function compactSummary(value: unknown) {
+  return String(value ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+    .slice(0, 140);
+}
+
+function summarizeApiError(res: Response, text: string) {
+  if (!text || isProbablyHtml(text)) return compactSummary(res.statusText);
+
+  try {
+    const json = JSON.parse(text);
+    if (json && typeof json === "object") {
+      const record = json as Record<string, unknown>;
+      return compactSummary(record.message ?? record.error ?? res.statusText);
+    }
+  } catch {
+    // Non-JSON errors are intentionally summarized without echoing the body.
+  }
+
+  return compactSummary(res.statusText || "Non-JSON response");
+}
+
+function apiError(status: number, pathAndQuery: string, summary?: string) {
+  const suffix = summary ? ` — ${summary}` : "";
+  return new Error(`API request failed: ${status} ${requestPath(pathAndQuery)}${suffix}`);
+}
+
 export async function apiGetJson<T>(
   pathAndQuery: string,
   init?: RequestInit
@@ -55,20 +112,18 @@ export async function apiGetJson<T>(
   const text = await readTextSafe(res);
 
   if (!res.ok) {
-    throw new Error(`API ${res.status}: ${text || res.statusText}`);
+    throw apiError(res.status, pathAndQuery, summarizeApiError(res, text));
   }
 
   // Helpful error when API_BASE points to Next UI (HTML) instead of Worker API.
   if (isProbablyHtml(text)) {
-    throw new Error(
-      `Received HTML instead of JSON (wrong API base URL or route). ${res.status} ${res.statusText}`
-    );
+    throw apiError(res.status, pathAndQuery, "Expected JSON but received HTML");
   }
 
   try {
     return JSON.parse(text) as T;
   } catch {
-    throw new Error(`Invalid JSON from API: ${text.slice(0, 140)}`);
+    throw apiError(res.status, pathAndQuery, "Invalid JSON response");
   }
 }
 
@@ -135,18 +190,16 @@ export async function apiPostJson<TOut, TIn = any>(
   const text = await readTextSafe(res);
 
   if (!res.ok) {
-    throw new Error(`API ${res.status}: ${text || res.statusText}`);
+    throw apiError(res.status, pathAndQuery, summarizeApiError(res, text));
   }
 
   if (isProbablyHtml(text)) {
-    throw new Error(
-      `Received HTML instead of JSON (wrong API base URL or route). ${res.status} ${res.statusText}`
-    );
+    throw apiError(res.status, pathAndQuery, "Expected JSON but received HTML");
   }
 
   try {
     return JSON.parse(text) as TOut;
   } catch {
-    throw new Error(`Invalid JSON from API: ${text.slice(0, 140)}`);
+    throw apiError(res.status, pathAndQuery, "Invalid JSON response");
   }
 }
