@@ -3,26 +3,14 @@
 
 import dynamic from "next/dynamic";
 
-const KpisPanel = dynamic(() => import("./kpis-panel").then((m) => m.KpisPanel), {
-  ssr: false,
-});
-
-const RevenueSpendChart = dynamic(
-  () => import("./revenue-spend-chart").then((m) => m.RevenueSpendChart),
-  { ssr: false }
-);
-
-const ProfitSummaryPanel = dynamic(
-  () => import("./profit-summary-panel").then((m) => m.ProfitSummaryPanel),
-  { ssr: false }
+const DecisionHomeOverview = dynamic(
+  () =>
+    import("./decision-home-overview").then(
+      (module) => module.DecisionHomeOverview,
+    ),
+  { ssr: false },
 );
 
 export default function DashboardClient() {
-  return (
-    <div className="space-y-6">
-      <KpisPanel />
-      <ProfitSummaryPanel />
-      <RevenueSpendChart />
-    </div>
-  );
+  return <DecisionHomeOverview />;
 }
