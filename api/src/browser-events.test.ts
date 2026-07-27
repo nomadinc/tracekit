@@ -5,6 +5,7 @@ import {
   BROWSER_EVENT_CONFIG_PATH,
   BROWSER_EVENT_INGESTION_PATH,
   BROWSER_EVENT_LEGACY_INGESTION_PATH,
+  BROWSER_EVENT_DEFAULT_BATCH_SIZE,
   BROWSER_EVENT_LEGACY_SETUP_PATH,
   BROWSER_EVENT_NORMALIZE_TASK_TYPE,
   BROWSER_EVENT_SETUP_PATH,
@@ -642,6 +643,9 @@ test("browser SDK exposes required API and avoids blanket click capture", () => 
 
 test("Connector Runtime dispatch includes browser normalization task", () => {
   const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+  assert.equal(BROWSER_EVENT_DEFAULT_BATCH_SIZE, 3);
+  assert.match(source, /BROWSER_EVENT_NORMALIZE_RUNTIME_MAX_BATCH_SIZE = BROWSER_EVENT_DEFAULT_BATCH_SIZE/);
+  assert.match(source, /function browserEventNormalizeBatchSize/);
   assert.match(source, new RegExp(`task\\.task_type === ${BROWSER_EVENT_NORMALIZE_TASK_TYPE === "browser_event_normalize_batch" ? "BROWSER_EVENT_NORMALIZE_TASK_TYPE" : "never"}`));
   assert.match(source, /executeBrowserEventNormalizeRuntimeTask/);
   assert.match(source, /browserEventNormalizeTaskPlanForProgress/);
@@ -658,5 +662,23 @@ test("Connector Runtime dispatch includes browser normalization task", () => {
   assert.match(source, /updateBrowserRawEventsForRetroIdentity/);
   assert.match(source, /current_identity_linked_events/);
   assert.match(source, /retro_linked_events/);
+  assert.match(source, /isBrowserEventNormalizeRuntimeTask/);
+  assert.match(source, /BROWSER_EVENT_NORMALIZE_TASK_RECHECK_DELAY_SECONDS/);
+  assert.match(source, /browser_event_normalize_task_already_running/);
+  assert.match(source, /preserveBrowserRunningLease/);
+  assert.match(source, /lease_preserved: true/);
+  assert.match(source, /browser_event_normalize\.selection\.before/);
+  assert.match(source, /browser_event_normalize\.selection\.tail_recheck\.before/);
+  assert.match(source, /tail_pending/);
+  assert.match(source, /browser_event_normalize\.normalization\.after/);
+  assert.match(source, /browser_event_normalize\.purchase_domain_events\.before/);
+  assert.match(source, /browser_event_normalize\.current_identity_link\.after/);
+  assert.match(source, /browser_event_normalize\.journey_assignment\.after/);
+  assert.match(source, /browser_event_normalize\.attribution_recalculation\.get_journey\.before/);
+  assert.match(source, /browser_event_normalize\.attribution_recalculation\.error/);
+  assert.match(source, /browser_event_normalize\.raw_update\.after/);
+  assert.match(source, /browser_event_normalize\.commit\.after/);
+  assert.match(source, /browser_event_normalize\.failure/);
+  assert.match(source, /browser_event_normalize\.lock_release\.completed/);
   assert.doesNotMatch(source, /\.from\("events_raw"\)/);
 });

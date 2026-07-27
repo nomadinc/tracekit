@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   buildConnectorIncidentDomainEvent,
   buildFinancialAdjustmentDomainEventFromJourneyEvent,
@@ -16,11 +17,25 @@ import {
   normalizeDomainEventInput,
   projectDomainEventsBatch,
   publishDomainEvent,
+  publishDomainEventOutbox,
   redactDomainEventPayload,
   runScheduledDomainEventProjectionReplay,
   workspaceUpdateEnvelope,
   type DomainEventInput,
 } from "./domain-events.ts";
+
+test("migration 032 replaces claim consumer RPC with qualified aliases", () => {
+  const migration = readFileSync(new URL("../../supabase/migrations/032_live_workspace_claim_consumer_rpc_fix.sql", import.meta.url), "utf8");
+  assert.match(migration, /create or replace function public\.claim_domain_event_consumer/);
+  assert.match(migration, /p_consumer_name text/);
+  assert.match(migration, /returns table\(\s*claimed boolean,\s*consumer_name text,\s*workspace_id text/s);
+  assert.match(migration, /update public\.domain_event_consumer_state as state_row/s);
+  assert.match(migration, /state_row\.consumer_name = p_consumer_name/);
+  assert.match(migration, /on conflict on constraint domain_event_consumer_state_pkey do nothing/);
+  assert.match(migration, /state_row\.consumer_name as consumer_name/);
+  assert.match(migration, /get diagnostics v_updated_rows = row_count/);
+  assert.doesNotMatch(migration.toLowerCase(), /drop function|drop table|truncate table|delete from/);
+});
 
 class MemoryQuery {
   table: string;
@@ -244,6 +259,16 @@ test("publishing persists one event, creates workspace updates, and dedupes prod
   assert.equal(supabase.db.activity_groups[0].event_count, 1);
   assert.equal(supabase.db.domain_events[0].payload.token, "[redacted]");
   assert.equal(supabase.db.domain_events[0].payload.email, "[redacted:contact]");
+});
+
+test("outbox-only domain event publishing defers projection work", async () => {
+  const supabase = memorySupabase();
+  const result = await publishDomainEventOutbox(supabase, workItemEvent());
+  assert.equal(result.ok, true);
+  assert.equal(result.projection_deferred, true);
+  assert.equal(supabase.db.domain_events.length, 1);
+  assert.equal(supabase.db.workspace_updates?.length || 0, 0);
+  assert.equal(supabase.db.activity_groups?.length || 0, 0);
 });
 
 test("workspace update replay is ordered and workspace isolated", async () => {

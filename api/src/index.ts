@@ -229,6 +229,7 @@ import {
   matchDomainEventRoute,
   projectDomainEventsBatch,
   publishDomainEvent,
+  publishDomainEventOutbox,
   runScheduledDomainEventProjectionReplay,
 } from "./domain-events";
 import {
@@ -427,6 +428,9 @@ type Env = {
   TRACEKIT_BUILD_LABEL?: string;
   TRACEKIT_BUILD_VERSION?: string;
   TRACEKIT_GIT_COMMIT?: string;
+  TRACEKIT_DEPLOYED_AT?: string;
+  TRACEKIT_ENVIRONMENT?: string;
+  CF_PAGES_BRANCH?: string;
   TRACEKIT_BROWSER_WRITE_KEY?: string;
   TRACEKIT_BROWSER_WRITE_KEY_HASH?: string;
   TRACEKIT_BROWSER_ALLOWED_ORIGINS?: string;
@@ -454,8 +458,8 @@ const DEFAULT_CC_BASE = "https://api.checkoutchamp.com";
 const DEFAULT_WOWSUITE_AUTH_BASE = "https://public-api.tryemanagecrm.com";
 const DEFAULT_WOWSUITE_EXPORT_BASE = "https://ecrm-public-api-prod.azurewebsites.net";
 const TRACEKIT_SERVICE_NAME = "tracekit-api";
-const TRACEKIT_BUILD_LABEL = "identity-service-v1-route-fingerprint";
-const TRACEKIT_BUILD_VERSION = "identity-route-fix-2026-07-17";
+const TRACEKIT_BUILD_LABEL = "source-build";
+const TRACEKIT_BUILD_VERSION = "unversioned";
 
 function json(data: any, status = 200, extraHeaders: Record<string, string> = {}) {
   return new Response(JSON.stringify(data), {
@@ -794,6 +798,10 @@ async function insertBrowserRawEvent(env: Env, raw: any) {
   return { row: existing as BrowserRawEventRow, duplicate: !conflict, conflict };
 }
 
+function browserEventNormalizeBatchSize(value: unknown) {
+  return Math.max(1, Math.min(BROWSER_EVENT_NORMALIZE_RUNTIME_MAX_BATCH_SIZE, Number(value || BROWSER_EVENT_DEFAULT_BATCH_SIZE)));
+}
+
 function createBrowserEventNormalizationProgress(args: { workspace_id: string; from: string; to: string; batch_size: number; cursor?: string | null }, now = new Date().toISOString()) {
   return createConnectorRuntimeProgress({
     workspace_id: args.workspace_id,
@@ -806,7 +814,7 @@ function createBrowserEventNormalizationProgress(args: { workspace_id: string; f
     metadata: connectorRuntimeMetadata({
       connector_id: BROWSER_EVENTS_CONNECTOR_ID,
       metadata: {
-        batch_size: Math.max(1, Math.min(BROWSER_EVENT_MAX_BATCH_SIZE, Number(args.batch_size || BROWSER_EVENT_DEFAULT_BATCH_SIZE))),
+        batch_size: browserEventNormalizeBatchSize(args.batch_size),
         events_normalized: 0,
         events_duplicate: 0,
         events_invalid: 0,
@@ -823,7 +831,7 @@ function createBrowserEventNormalizationProgress(args: { workspace_id: string; f
 }
 
 function browserEventNormalizeTaskPlanForProgress(job: ImportJobRow, progress: ConnectorRuntimeProgress & Record<string, any>): ConnectorRuntimeTaskPlan {
-  const batchSize = Math.max(1, Math.min(BROWSER_EVENT_MAX_BATCH_SIZE, Number(progress.metadata?.batch_size || progress.batch_size || BROWSER_EVENT_DEFAULT_BATCH_SIZE)));
+  const batchSize = browserEventNormalizeBatchSize(progress.metadata?.batch_size || progress.batch_size);
   const cursor = journeyText(progress.current_cursor) || null;
   return {
     job_id: job.id,
@@ -845,14 +853,14 @@ async function startBrowserEventNormalizationRuntimeJob(env: Env, args: { worksp
   if (!env.wowboost_imports) return { queued: false, reason: "queue_not_configured", job_id: null as string | null, task_id: null as string | null };
   const from = browserDateFromTimestamp(args.event_time);
   const to = from;
-  const batchSize = Math.max(1, Math.min(BROWSER_EVENT_MAX_BATCH_SIZE, Number(args.batch_size || BROWSER_EVENT_DEFAULT_BATCH_SIZE)));
+  const batchSize = browserEventNormalizeBatchSize(args.batch_size);
   let job = await findActiveConnectorRuntimeJob(env, {
     workspace_id: args.workspace_id,
     connector_id: BROWSER_EVENTS_CONNECTOR_ID,
     job_type: BROWSER_EVENTS_JOB_TYPE,
     from,
     to,
-    matches: (_job, progress) => Math.max(1, Math.min(BROWSER_EVENT_MAX_BATCH_SIZE, Number(progress.metadata?.batch_size || progress.batch_size || BROWSER_EVENT_DEFAULT_BATCH_SIZE))) === batchSize,
+    matches: (_job, progress) => browserEventNormalizeBatchSize(progress.metadata?.batch_size || progress.batch_size) === batchSize,
   });
   const now = new Date().toISOString();
   if (!job) {
@@ -1941,11 +1949,15 @@ function identityWorkspace(value: unknown) {
 
 function buildFingerprint(env: Env) {
   const gitCommit = String(env.TRACEKIT_GIT_COMMIT || "").trim();
+  const deployedAt = String(env.TRACEKIT_DEPLOYED_AT || "").trim();
+  const environment = String(env.TRACEKIT_ENVIRONMENT || env.CF_PAGES_BRANCH || "").trim();
   return {
     service: TRACEKIT_SERVICE_NAME,
     build_label: String(env.TRACEKIT_BUILD_LABEL || TRACEKIT_BUILD_LABEL).trim() || TRACEKIT_BUILD_LABEL,
     build_version: String(env.TRACEKIT_BUILD_VERSION || TRACEKIT_BUILD_VERSION).trim() || TRACEKIT_BUILD_VERSION,
     git_commit: gitCommit || null,
+    environment: environment || null,
+    deployed_at: deployedAt || null,
     identity_service_v1: true,
   };
 }
@@ -1957,8 +1969,15 @@ function domainEventPublisher(env: Env) {
   };
 }
 
-async function publishJourneyPurchaseDomainEvents(env: Env, events: any[], args: { job_id?: string | null; source?: string } = {}) {
-  const publisher = domainEventPublisher(env);
+function domainEventOutboxPublisher(env: Env) {
+  const supabase = getSupabase(env);
+  return async (event: any) => {
+    await publishDomainEventOutbox(supabase, event);
+  };
+}
+
+async function publishJourneyPurchaseDomainEvents(env: Env, events: any[], args: { job_id?: string | null; source?: string; project_inline?: boolean } = {}) {
+  const publisher = args.project_inline === false ? domainEventOutboxPublisher(env) : domainEventPublisher(env);
   let published = 0;
   for (const event of events || []) {
     const domainEvents = [
@@ -3210,6 +3229,9 @@ const IDENTITY_RESOLVE_TASK_RECHECK_DELAY_SECONDS = 30;
 const IDENTITY_RESOLVE_OPERATION_TIMEOUT_MS = 15000;
 const ATTRIBUTION_BACKFILL_TASK_STALE_MS = 120000;
 const ATTRIBUTION_BACKFILL_TASK_RECHECK_DELAY_SECONDS = 30;
+const BROWSER_EVENT_NORMALIZE_TASK_STALE_MS = 120000;
+const BROWSER_EVENT_NORMALIZE_TASK_RECHECK_DELAY_SECONDS = 30;
+const BROWSER_EVENT_NORMALIZE_RUNTIME_MAX_BATCH_SIZE = BROWSER_EVENT_DEFAULT_BATCH_SIZE;
 const JOURNEY_ASSIGNMENT_RUNTIME_TASK_TYPE = "journey_assignment_batch";
 const ATTRIBUTION_BACKFILL_RUNTIME_TASK_TYPE = "attribution_backfill_batch";
 
@@ -3297,6 +3319,14 @@ function isAttributionBackfillRuntimeTask(task: ConnectorImportTaskRow | null | 
     task
     && task.connector_id === ATTRIBUTION_BACKFILL_CONNECTOR_ID
     && task.task_type === ATTRIBUTION_BACKFILL_RUNTIME_TASK_TYPE
+  );
+}
+
+function isBrowserEventNormalizeRuntimeTask(task: ConnectorImportTaskRow | null | undefined) {
+  return Boolean(
+    task
+    && task.connector_id === BROWSER_EVENTS_CONNECTOR_ID
+    && task.task_type === BROWSER_EVENT_NORMALIZE_TASK_TYPE
   );
 }
 
@@ -4192,6 +4222,7 @@ async function recoverStaleAttributionBackfillTask(env: Env, task: ConnectorImpo
 function connectorRuntimeTaskStaleMs(task: ConnectorImportTaskRow) {
   if (isIdentityResolveRuntimeTask(task)) return IDENTITY_RESOLVE_TASK_STALE_MS;
   if (isAttributionBackfillRuntimeTask(task)) return ATTRIBUTION_BACKFILL_TASK_STALE_MS;
+  if (isBrowserEventNormalizeRuntimeTask(task)) return BROWSER_EVENT_NORMALIZE_TASK_STALE_MS;
   return 300000;
 }
 
@@ -7585,14 +7616,21 @@ async function executeConnectorRuntimeTask(env: Env, task: ConnectorImportTaskRo
     };
   }
 
+  const completedAt = new Date().toISOString();
+  const resultSummary = isBrowserEventNormalizeRuntimeTask(task)
+    ? appendConnectorRuntimeTaskDiagnostic(summary, "browser_event_normalize.lock_release.completed", {
+      release_owner: "executeConnectorRuntimeTask",
+      previous_status: task.status,
+    }, completedAt)
+    : summary;
   await updateConnectorRuntimeTask(env, task.id, {
     status: "completed",
-    completed_at: new Date().toISOString(),
+    completed_at: completedAt,
     locked_at: null,
-    result_summary: summary,
+    result_summary: resultSummary,
     last_error: null,
   });
-  return { skipped: false, summary };
+  return { skipped: false, summary: resultSummary };
 }
 
 function wowBoostRuntimeTaskPlanForProgress(job: ImportJobRow, progress: ConnectorRuntimeProgress & Record<string, any>): ConnectorRuntimeTaskPlan {
@@ -8794,14 +8832,66 @@ async function updateBrowserRawEventsForRetroIdentity(env: Env, args: {
 async function executeBrowserEventNormalizeRuntimeTask(env: Env, job: ImportJobRow, task: ConnectorImportTaskRow) {
   const started = Date.now();
   const progress = connectorRuntimeProgressFromJob(job);
-  const batchSize = Math.max(1, Math.min(BROWSER_EVENT_MAX_BATCH_SIZE, Number(task.payload?.batch_size || progress.metadata?.batch_size || BROWSER_EVENT_DEFAULT_BATCH_SIZE)));
+  const batchSize = browserEventNormalizeBatchSize(task.payload?.batch_size || progress.metadata?.batch_size);
   const cursor = journeyText(task.payload?.cursor || task.cursor || progress.current_cursor) || null;
+  const diagnostics = connectorRuntimeTaskDiagnosticState(task);
+  let currentStage = "claim";
+  const lifecycle = async (event: string, details: Record<string, any> = {}, options: { durable?: boolean } = {}) => {
+    console.log("[TraceKit] browser event normalization lifecycle", {
+      event,
+      job_id: job.id,
+      task_id: task.id,
+      workspace_id: progress.workspace_id || "default",
+      batch_size: batchSize,
+      cursor_present: Boolean(cursor),
+      elapsed_ms: Date.now() - started,
+      ...details,
+    });
+    if (options.durable === false) {
+      recordConnectorRuntimeTaskDiagnosticSample(diagnostics, event, {
+        workspace_id: progress.workspace_id || "default",
+        batch_size: batchSize,
+        cursor_present: Boolean(cursor),
+        elapsed_ms: Date.now() - started,
+        ...details,
+      });
+      return;
+    }
+    await heartbeatConnectorRuntimeTask(env, task, diagnostics, event, {
+      workspace_id: progress.workspace_id || "default",
+      batch_size: batchSize,
+      cursor_present: Boolean(cursor),
+      elapsed_ms: Date.now() - started,
+      ...details,
+    }, { force: true }).catch((error: any) => {
+      console.error("[TraceKit] browser event normalization lifecycle heartbeat failed", {
+        event,
+        job_id: job.id,
+        task_id: task.id,
+        workspace_id: progress.workspace_id || "default",
+        message: error?.message || String(error),
+      });
+    });
+  };
+  await lifecycle("browser_event_normalize.claim.confirmed", {
+    task_status: task.status,
+    attempt_count: Number(task.attempt_count || 0),
+  });
+  try {
+  currentStage = "selection";
+  await lifecycle("browser_event_normalize.selection.before", {});
   const rows = await queryBrowserRawEventsForNormalization(env, {
     workspace_id: progress.workspace_id || "default",
     cursor,
     batch_size: batchSize,
   });
   const batchRows = rows.slice(0, batchSize);
+  await lifecycle("browser_event_normalize.selection.after", {
+    rows_fetched: rows.length,
+    batch_rows: batchRows.length,
+    has_more: rows.length > batchSize,
+  });
+  currentStage = "normalization";
   const inputs = [];
   const rawByEventId = new Map<string, BrowserRawEventRow>();
   const personIdByEventId = new Map<string, string | null>();
@@ -8822,6 +8912,9 @@ async function executeBrowserEventNormalizeRuntimeTask(env: Env, job: ImportJobR
     workspace_id: progress.workspace_id,
     batch_size: batchSize,
     cursor_present: Boolean(cursor),
+  });
+  await lifecycle("browser_event_normalize.normalization.before", {
+    batch_rows: batchRows.length,
   });
 
   for (const raw of batchRows) {
@@ -8934,21 +9027,19 @@ async function executeBrowserEventNormalizeRuntimeTask(env: Env, job: ImportJobR
   const journeyBatch: JourneyEventBatchResult = inputs.length
     ? await createJourneyEventsBatch(getJourneyEventRepository(env), inputs, { max_batch_size: batchSize })
     : emptyJourneyBatch;
-  await publishJourneyPurchaseDomainEvents(env, journeyBatch.events, {
-    job_id: job.id,
-    source: "browser_event_normalization",
-  }).catch((error: any) => {
-    warnings.push("browser_purchase_domain_event_publish_deferred");
-    console.error("[TraceKit] browser purchase domain event publish failed", {
-      workspace_id: progress.workspace_id,
-      job_id: job.id,
-      task_id: task.id,
-      message: error?.message || String(error),
-    });
+  await lifecycle("browser_event_normalize.normalization.after", {
+    input_count: inputs.length,
+    inserted: journeyBatch.inserted,
+    already_present: journeyBatch.already_present,
+    conflicted: journeyBatch.conflicted,
+    malformed: journeyBatch.malformed,
   });
-
   const eventsBySourceId = new Map((journeyBatch.events || []).map((event: any) => [journeyText(event.source_record_id), event]));
   let currentLinkedEvents = 0;
+  currentStage = "current_identity_link";
+  await lifecycle("browser_event_normalize.current_identity_link.before", {
+    person_event_count: Array.from(personIdByEventId.values()).filter(Boolean).length,
+  }, { durable: false });
   try {
     const linkedCurrentEvents = await linkCurrentAnonymousBrowserJourneyEventsByPerson(env, {
       workspace_id: progress.workspace_id || "default",
@@ -8967,6 +9058,9 @@ async function executeBrowserEventNormalizeRuntimeTask(env: Env, job: ImportJobR
       message: error?.message || String(error),
     });
   }
+  await lifecycle("browser_event_normalize.current_identity_link.after", {
+    linked_events: currentLinkedEvents,
+  }, { durable: false });
   const eventsWithPersonById = new Map<string, any>();
   for (const event of Array.from(eventsBySourceId.values()).filter((item: any) => journeyText(item.person_id))) {
     if (event?.id) eventsWithPersonById.set(event.id, event);
@@ -8984,6 +9078,13 @@ async function executeBrowserEventNormalizeRuntimeTask(env: Env, job: ImportJobR
     ...Array.from(retroLinkedEventsById.values()).map((event: any) => journeyText(event.source_record_id)).filter(Boolean),
   ]));
   if (eventsWithPerson.length) {
+    currentStage = "journey_assignment";
+    await lifecycle("browser_event_normalize.journey_assignment.before", {
+      events_with_person: eventsWithPerson.length,
+      current_batch_events: journeyBatch.events.length,
+      current_linked_events: currentLinkedEvents,
+      retro_linked_events: retroLinkedEventsById.size,
+    }, { durable: false });
     console.log("[TraceKit] browser journey assignment started", {
       job_id: job.id,
       task_id: task.id,
@@ -9007,6 +9108,17 @@ async function executeBrowserEventNormalizeRuntimeTask(env: Env, job: ImportJobR
       events_skipped: assignment.events_skipped,
       records_failed: assignment.records_failed,
     });
+    await lifecycle("browser_event_normalize.journey_assignment.after", {
+      events_scanned: assignment.events_scanned,
+      events_linked: assignment.events_linked,
+      journeys_created: assignment.journeys_created,
+      events_skipped: assignment.events_skipped,
+      records_failed: assignment.records_failed,
+    }, { durable: false });
+    currentStage = "journey_id_lookup";
+    await lifecycle("browser_event_normalize.journey_id_lookup.before", {
+      source_event_count: journeyLookupSourceIds.length,
+    }, { durable: false });
     const journeyIdsByEventId = await fetchJourneyIdsForBrowserEvents(env, progress.workspace_id || "default", journeyLookupSourceIds);
     console.log("[TraceKit] browser journey id lookup completed", {
       job_id: job.id,
@@ -9015,6 +9127,10 @@ async function executeBrowserEventNormalizeRuntimeTask(env: Env, job: ImportJobR
       source_event_count: journeyLookupSourceIds.length,
       journey_id_count: Array.from(journeyIdsByEventId.values()).filter(Boolean).length,
     });
+    await lifecycle("browser_event_normalize.journey_id_lookup.after", {
+      source_event_count: journeyLookupSourceIds.length,
+      journey_id_count: Array.from(journeyIdsByEventId.values()).filter(Boolean).length,
+    }, { durable: false });
     for (const [personId, eventIds] of retroLinkedEventIdsByPersonId.entries()) {
       const retroJourneyIds = new Map<string, string | null>();
       for (const eventId of eventIds) retroJourneyIds.set(eventId, journeyIdsByEventId.get(eventId) || null);
@@ -9027,30 +9143,16 @@ async function executeBrowserEventNormalizeRuntimeTask(env: Env, job: ImportJobR
     for (const journeyId of journeyIdsByEventId.values()) {
       if (journeyId) touchedJourneyIds.add(journeyId);
     }
-    for (const journeyId of touchedJourneyIds) {
-      try {
-        const journey = await getAttributionRepository(env).getJourneyById(progress.workspace_id || "default", journeyId);
-        if (journey && Number(journey.conversion_count || 0) > 0) {
-          await recalculateJourneyAttribution(getAttributionRepository(env), {
-            workspace_id: progress.workspace_id || "default",
-            journey_id: journeyId,
-            models: ["first_touch", "last_touch"],
-            force_recalculate: true,
-          }, {
-            on_domain_event: domainEventPublisher(env),
-          });
-          attributionRecalculations += 1;
-        }
-      } catch (error: any) {
-        warnings.push(`attribution_recalculation_deferred:${journeyId}`);
-      }
-    }
   }
 
   const journeyIdsByEventId = touchedJourneyIds.size
     ? await fetchJourneyIdsForBrowserEvents(env, progress.workspace_id || "default", journeyLookupSourceIds)
     : new Map<string, string | null>();
 
+  currentStage = "raw_update";
+  await lifecycle("browser_event_normalize.raw_update.before", {
+    batch_rows: batchRows.length,
+  }, { durable: false });
   for (const raw of batchRows) {
     if (!rawByEventId.has(raw.event_id)) continue;
     const event = eventsBySourceId.get(raw.event_id);
@@ -9066,10 +9168,119 @@ async function executeBrowserEventNormalizeRuntimeTask(env: Env, job: ImportJobR
       normalized_at: new Date().toISOString(),
     });
   }
+  await lifecycle("browser_event_normalize.raw_update.after", {
+    batch_rows: batchRows.length,
+  }, { durable: false });
+
+  currentStage = "purchase_domain_events";
+  await lifecycle("browser_event_normalize.purchase_domain_events.before", {
+    journey_event_count: journeyBatch.events.length,
+  }, { durable: false });
+  let purchaseDomainEventsPublished = 0;
+  await withIdentityOperationTimeout(
+    "browser_event_normalize.purchase_domain_events",
+    publishJourneyPurchaseDomainEvents(env, journeyBatch.events, {
+      job_id: job.id,
+      source: "browser_event_normalization",
+      project_inline: false,
+    }),
+    IDENTITY_RESOLVE_OPERATION_TIMEOUT_MS,
+  ).then((published) => {
+    purchaseDomainEventsPublished = Number(published || 0);
+  }).catch((error: any) => {
+    warnings.push("browser_purchase_domain_event_publish_deferred");
+    console.error("[TraceKit] browser purchase domain event publish failed", {
+      workspace_id: progress.workspace_id,
+      job_id: job.id,
+      task_id: task.id,
+      message: error?.message || String(error),
+    });
+  });
+  await lifecycle("browser_event_normalize.purchase_domain_events.after", {
+    journey_event_count: journeyBatch.events.length,
+    events_published: purchaseDomainEventsPublished,
+  }, { durable: false });
+
+  for (const journeyId of touchedJourneyIds) {
+    try {
+      currentStage = "attribution_recalculation";
+      await lifecycle("browser_event_normalize.attribution_recalculation.before", {
+        journey_id: journeyId,
+      }, { durable: false });
+      await lifecycle("browser_event_normalize.attribution_recalculation.get_journey.before", {
+        journey_id: journeyId,
+      }, { durable: false });
+      const journey = await withIdentityOperationTimeout(
+        "browser_event_normalize.attribution_recalculation.get_journey",
+        getAttributionRepository(env).getJourneyById(progress.workspace_id || "default", journeyId),
+        IDENTITY_RESOLVE_OPERATION_TIMEOUT_MS,
+      );
+      await lifecycle("browser_event_normalize.attribution_recalculation.get_journey.after", {
+        journey_id: journeyId,
+        found: Boolean(journey),
+        conversion_count: Number(journey?.conversion_count || 0),
+      }, { durable: false });
+      if (journey && Number(journey.conversion_count || 0) > 0) {
+        await lifecycle("browser_event_normalize.attribution_recalculation.recalculate.before", {
+          journey_id: journeyId,
+        }, { durable: false });
+          await withIdentityOperationTimeout(
+            "browser_event_normalize.attribution_recalculation.recalculate",
+            recalculateJourneyAttribution(getAttributionRepository(env), {
+              workspace_id: progress.workspace_id || "default",
+              journey_id: journeyId,
+              models: ["first_touch", "last_touch"],
+              force_recalculate: true,
+            }, {
+              on_domain_event: domainEventOutboxPublisher(env),
+            }),
+            IDENTITY_RESOLVE_OPERATION_TIMEOUT_MS,
+          );
+        await lifecycle("browser_event_normalize.attribution_recalculation.recalculate.after", {
+          journey_id: journeyId,
+        }, { durable: false });
+        attributionRecalculations += 1;
+      }
+      await lifecycle("browser_event_normalize.attribution_recalculation.after", {
+        journey_id: journeyId,
+        recalculated: Boolean(journey && Number(journey.conversion_count || 0) > 0),
+      }, { durable: false });
+    } catch (error: any) {
+      warnings.push(`attribution_recalculation_deferred:${journeyId}`);
+      await lifecycle("browser_event_normalize.attribution_recalculation.error", {
+        journey_id: journeyId,
+        message: error?.message || String(error),
+        error_name: error?.name || null,
+      }, { durable: false });
+    }
+  }
 
   const lastRow = batchRows[batchRows.length - 1] || null;
-  const hasMore = rows.length > batchSize;
-  const nextCursor = hasMore && lastRow ? serializeBrowserEventCursor({ received_at: lastRow.received_at, event_id: lastRow.event_id }) : null;
+  let hasMore = rows.length > batchSize;
+  let nextCursor = hasMore && lastRow ? serializeBrowserEventCursor({ received_at: lastRow.received_at, event_id: lastRow.event_id }) : null;
+  let tailPending = 0;
+  if (!hasMore && lastRow) {
+    currentStage = "tail_recheck";
+    const tailCursor = serializeBrowserEventCursor({ received_at: lastRow.received_at, event_id: lastRow.event_id });
+    await lifecycle("browser_event_normalize.selection.tail_recheck.before", {
+      tail_cursor_present: true,
+    });
+    const tailRows = await queryBrowserRawEventsForNormalization(env, {
+      workspace_id: progress.workspace_id || "default",
+      cursor: tailCursor,
+      batch_size: 1,
+    });
+    tailPending = tailRows.length;
+    if (tailRows.length > 0) {
+      hasMore = true;
+      nextCursor = tailCursor;
+    }
+    await lifecycle("browser_event_normalize.selection.tail_recheck.after", {
+      tail_pending: tailPending,
+      has_more: hasMore,
+      next_cursor_present: Boolean(nextCursor),
+    });
+  }
   const completed = !hasMore;
   const now = new Date().toISOString();
   const metadata = {
@@ -9105,6 +9316,13 @@ async function executeBrowserEventNormalizeRuntimeTask(env: Env, job: ImportJobR
     completed_at: completed ? now : null,
     metadata,
   };
+  currentStage = "commit";
+  await lifecycle("browser_event_normalize.commit.before", {
+    processed: batchRows.length,
+    has_more: hasMore,
+    next_cursor_present: Boolean(nextCursor),
+    tail_pending: tailPending,
+  });
   await updateConnectorRuntimeJobProgress(env, job, nextProgress as any);
 
   let nextTaskId: string | null = null;
@@ -9115,6 +9333,13 @@ async function executeBrowserEventNormalizeRuntimeTask(env: Env, job: ImportJobR
     nextTaskId = nextTask.task.id;
     duplicateTaskPrevented = !nextTask.created;
   }
+  await lifecycle("browser_event_normalize.commit.after", {
+    processed: batchRows.length,
+    has_more: hasMore,
+    next_task_id: nextTaskId,
+    duplicate_task_prevented: duplicateTaskPrevented,
+    tail_pending: tailPending,
+  });
 
   console.log("[TraceKit] browser event normalization completed", {
     job_id: job.id,
@@ -9128,6 +9353,18 @@ async function executeBrowserEventNormalizeRuntimeTask(env: Env, job: ImportJobR
     retro_linked_raw_events: retroLinkedRawEvents,
     has_more: hasMore,
     duration_ms: Date.now() - started,
+  });
+  currentStage = "completion";
+  await lifecycle("browser_event_normalize.completion", {
+    processed: batchRows.length,
+    events_normalized: journeyBatch.inserted + journeyBatch.already_present,
+    events_invalid: invalid + journeyBatch.malformed,
+    has_more: hasMore,
+    warnings_count: metadata.warnings.length,
+    tail_pending: tailPending,
+  });
+  await lifecycle("browser_event_normalize.lock_release.pending", {
+    release_owner: "executeConnectorRuntimeTask",
   });
 
   return {
@@ -9151,8 +9388,22 @@ async function executeBrowserEventNormalizeRuntimeTask(env: Env, job: ImportJobR
     next_cursor: nextCursor,
     next_task_id: nextTaskId,
     duplicate_task_prevented: duplicateTaskPrevented,
+    tail_pending: tailPending,
     warnings: metadata.warnings,
+    heartbeat_event: diagnostics.summary.heartbeat_event || null,
+    heartbeat_at: diagnostics.summary.heartbeat_at || null,
+    heartbeat_count: diagnostics.summary.heartbeat_count || null,
+    diagnostic_events: diagnostics.summary.diagnostic_events || [],
   };
+  } catch (error: any) {
+    await lifecycle("browser_event_normalize.failure", {
+      stage: currentStage,
+      message: error?.message || String(error),
+      error_name: error?.name || null,
+      stack_present: Boolean(error?.stack),
+    });
+    throw error;
+  }
 }
 
 async function runWowSuiteWowBoostImport(env: Env, args: { from: string; to: string; pageSize?: number; debug?: boolean }) {
@@ -17386,21 +17637,49 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 		        msg.ack();
 		      };
 		      try {
-		        task = await getConnectorRuntimeTask(env, runtimeTaskId);
-		        if (task) {
-		          queueDiagnostics = connectorRuntimeTaskDiagnosticState(task);
-		          for (const pending of pendingQueueDiagnostics) {
-		            await heartbeatConnectorRuntimeQueueEvent(env, task, queueDiagnostics, pending.event, pending.details);
-		          }
-		          await heartbeatConnectorRuntimeQueueEvent(env, task, queueDiagnostics, "connector_runtime.queue.task.loaded", {
-		            runtime_task_id: runtimeTaskId,
-		            loaded: true,
-		            task_status: task.status,
-		            available_at: task.available_at,
-		            locked_at: task.locked_at,
-		            completed_at: task.completed_at,
-		          });
-		        } else {
+			        task = await getConnectorRuntimeTask(env, runtimeTaskId);
+			        if (task) {
+			          queueDiagnostics = connectorRuntimeTaskDiagnosticState(task);
+			          const preserveBrowserRunningLease = isBrowserEventNormalizeRuntimeTask(task) && task.status === "running";
+			          if (preserveBrowserRunningLease) {
+			            for (const pending of pendingQueueDiagnostics) {
+			              console.log("[TraceKit] connector runtime queue", connectorRuntimeQueueDiagnosticDetails({
+			                task,
+			                runtime_task_id: runtimeTaskId,
+			                details: {
+			                  ...pending.details,
+			                  event: pending.event,
+			                  lease_preserved: true,
+			                },
+			              }));
+			            }
+			            console.log("[TraceKit] connector runtime queue", connectorRuntimeQueueDiagnosticDetails({
+			              task,
+			              runtime_task_id: runtimeTaskId,
+			              details: {
+			                event: "connector_runtime.queue.task.loaded",
+			                loaded: true,
+			                task_status: task.status,
+			                available_at: task.available_at,
+			                locked_at: task.locked_at,
+			                completed_at: task.completed_at,
+			                lease_preserved: true,
+			              },
+			            }));
+			          } else {
+			            for (const pending of pendingQueueDiagnostics) {
+			              await heartbeatConnectorRuntimeQueueEvent(env, task, queueDiagnostics, pending.event, pending.details);
+			            }
+			            await heartbeatConnectorRuntimeQueueEvent(env, task, queueDiagnostics, "connector_runtime.queue.task.loaded", {
+			              runtime_task_id: runtimeTaskId,
+			              loaded: true,
+			              task_status: task.status,
+			              available_at: task.available_at,
+			              locked_at: task.locked_at,
+			              completed_at: task.completed_at,
+			            });
+			          }
+			        } else {
 		          console.log("[TraceKit] connector runtime queue", connectorRuntimeQueueDiagnosticDetails({
 		            runtime_task_id: runtimeTaskId,
 		            job_id: String(body.job_id ?? body.jobId ?? "").trim() || null,
@@ -17457,6 +17736,49 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 		              delay_seconds: ATTRIBUTION_BACKFILL_TASK_RECHECK_DELAY_SECONDS,
 		            }).catch(() => {});
 		            await ackRuntimeMessage({ reason: "attribution_backfill_task_already_running" });
+		            continue;
+		          }
+		        }
+
+		        if (isBrowserEventNormalizeRuntimeTask(task) && task.status === "running") {
+		          if (isConnectorRuntimeTaskStale(task, { stale_ms: BROWSER_EVENT_NORMALIZE_TASK_STALE_MS })) {
+		            const lastError = `Recovered stale Browser Event normalization task after missing heartbeat for ${Math.round(BROWSER_EVENT_NORMALIZE_TASK_STALE_MS / 1000)} seconds.`;
+		            const decision = connectorRuntimeStaleRunningTaskRecoveryDecision(task, {
+		              stale_ms: BROWSER_EVENT_NORMALIZE_TASK_STALE_MS,
+		              recovered_event: "browser_event_normalize.stale_recovered",
+		              exhausted_event: "browser_event_normalize.stale_exhausted",
+		              reason: "queue_redelivery_stale",
+		              last_error: lastError,
+		            });
+		            if (decision.action === "active") {
+		              await ackRuntimeMessage({ reason: "browser_event_normalize_stale_race_lost" });
+		              continue;
+		            }
+		            const recovered = await updateConnectorRuntimeTaskIfCurrent(env, task, decision.patch as Record<string, any>);
+		            if (!recovered) {
+		              await ackRuntimeMessage({ reason: "browser_event_normalize_stale_recovery_race_lost" });
+		              continue;
+		            }
+		            task = recovered;
+		            queueDiagnostics = connectorRuntimeTaskDiagnosticState(task);
+		            if (task.status === "failed") {
+		              await ackRuntimeMessage({ reason: "browser_event_normalize_stale_recovery_failed" });
+		              continue;
+		            }
+		            executeAlreadyLocked = true;
+		          } else {
+		            await enqueueConnectorRuntimeTaskWithDelay(env, task, BROWSER_EVENT_NORMALIZE_TASK_RECHECK_DELAY_SECONDS);
+		            console.log("[TraceKit] connector runtime queue", connectorRuntimeQueueDiagnosticDetails({
+		              task,
+		              runtime_task_id: runtimeTaskId,
+		              details: {
+		                event: "connector_runtime.queue.message.retry",
+		                reason: "browser_event_normalize_task_already_running",
+		                delay_seconds: BROWSER_EVENT_NORMALIZE_TASK_RECHECK_DELAY_SECONDS,
+		                lease_preserved: true,
+		              },
+		            }));
+		            msg.ack();
 		            continue;
 		          }
 		        }
