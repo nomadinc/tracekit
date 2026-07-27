@@ -128,6 +128,35 @@ Suggested top-level shape:
 
 Until that endpoint exists, the UI may compose existing profit and revenue-spend endpoints, but decision modules should remain the product boundary.
 
+## Runtime API configuration
+
+The Decision Home dashboard currently uses existing Cloudflare Worker endpoints directly from browser-rendered UI modules:
+
+- `GET /v1/profit/summary`
+- `GET /v1/revenue-spend`
+
+The browser API helper reads only public API base variables:
+
+- `NEXT_PUBLIC_API_BASE_URL`
+- `NEXT_PUBLIC_API_BASE`
+
+For Vercel Preview and Production, set `NEXT_PUBLIC_API_BASE_URL` to the Cloudflare Worker origin, for example:
+
+```text
+NEXT_PUBLIC_API_BASE_URL=https://tracekit-api.anthony-d15.workers.dev
+```
+
+If this value is missing in a deployed browser environment, the dashboard must show a configuration error instead of silently requesting `/v1/*` from the Vercel UI origin.
+
+Server-side UI route handlers may use:
+
+```text
+TRACEKIT_API_BASE_URL=https://tracekit-api.anthony-d15.workers.dev
+TK_SECRET_KEY=<server-only matching secret>
+```
+
+`TK_SECRET_KEY` must remain server-only. Never expose it through a `NEXT_PUBLIC_*` variable or a browser bundle.
+
 ## Home page exclusions
 
 Do not place these on Home:
