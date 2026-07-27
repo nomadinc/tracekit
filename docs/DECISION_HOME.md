@@ -15,7 +15,7 @@ Primary outputs:
 - Net profit
 - Gross revenue
 - Net revenue
-- Total costs
+- Operating costs
 - Profit margin
 - Orders
 - Average order value when available
@@ -24,6 +24,21 @@ Required behavior:
 
 - Never imply that profit is complete when required cost inputs are missing.
 - Surface missing product cost, ad spend, affiliate payout, processing, and other financial inputs.
+
+Operating Costs represent all expenses required to operate the business. The current dashboard uses the existing Profit Engine `total_costs` field as the operating-cost source of truth and displays it as a positive number. When available, that calculation should include:
+
+- Advertising spend
+- Affiliate commissions and affiliate payouts
+- Product COGS
+- Shipping and fulfillment
+- Payment processing fees
+- Bank fees
+- Chargeback fees
+- Refund fees
+- Software and infrastructure
+- Miscellaneous mapped operating expenses
+
+Missing categories must not be treated as silently complete. They should continue to appear in Profit Confidence or attention modules until a source is connected or explicitly mapped.
 
 ### 2. Why did profit move?
 
@@ -43,6 +58,22 @@ Primary outputs:
 - Processing fees
 - Shipping
 - Other bank fees
+
+The operating-cost drill-down groups costs into:
+
+| Category | Description |
+| --- | --- |
+| Advertising | Paid media and tracked ad spend |
+| Affiliate Payouts | Affiliate commissions and partner payouts |
+| COGS | Product cost of goods sold |
+| Fulfillment | Shipping, fulfillment, and delivery costs |
+| Payment Processing | Processor fees and bank fees |
+| Chargebacks & Refunds | Chargeback fees and mapped refund fees |
+| Software & Infrastructure | Recurring SaaS and infrastructure costs |
+| General & Administrative | Tax and mapped administrative operating costs |
+| Other | Miscellaneous mapped operating expenses |
+
+The Software & Infrastructure category should be data-driven. Vendor mappings should support recurring SaaS and infrastructure providers such as Everflow, Stape, Zapier, HubSpot, Shopify, Cloudflare, AWS, OpenAI, Twilio, Retell, Postmark, Vercel, and future software vendors without requiring dashboard code changes.
 
 ### 4. Where are we losing revenue?
 

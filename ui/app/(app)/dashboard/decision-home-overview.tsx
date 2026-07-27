@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import {
   ResponsiveContainer,
@@ -51,6 +52,20 @@ function formatAov(summary: ProfitSummaryResponse | null) {
   return formatMoney(num(summary.gross_revenue) / orders);
 }
 
+function formatPercent(value: number) {
+  return Number.isFinite(value) ? `${value.toFixed(1)}%` : "—";
+}
+
+function positiveMoney(value: unknown) {
+  return formatMoney(Math.abs(num(value)));
+}
+
+function sumFields(summary: ProfitSummaryResponse | null, fields: string[]) {
+  if (!summary) return 0;
+  const record = summary as Record<string, unknown>;
+  return fields.reduce((total, field) => total + num(record[field]), 0);
+}
+
 function useDashboardRange() {
   const searchParams = useSearchParams();
   const fromQ = searchParams.get("from");
@@ -68,13 +83,41 @@ function useDashboardRange() {
   }, [fromQ, toQ]);
 }
 
-function Metric({ label, value, helper }: { label: string; value: string; helper?: string }) {
+function dateRangeQuery(range: { from: string; to: string }) {
+  const params = new URLSearchParams({ from: range.from, to: range.to });
+  return params.toString();
+}
+
+function dashboardDrilldown(range: { from: string; to: string }, section: string) {
+  return `/dashboard?${dateRangeQuery(range)}#${section}`;
+}
+
+function Metric({
+  label,
+  value,
+  helper,
+  href,
+  title,
+  id,
+}: {
+  label: string;
+  value: string;
+  helper?: string;
+  href: string;
+  title: string;
+  id?: string;
+}) {
   return (
-    <div className="rounded-xl bg-slate-50 p-4 dark:bg-slate-900/70">
+    <Link
+      id={id}
+      href={href}
+      title={title}
+      className="block rounded-xl bg-slate-50 p-4 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:bg-slate-900/70 dark:hover:bg-slate-900"
+    >
       <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</div>
       <div className="mt-2 text-2xl font-semibold tracking-tight">{value}</div>
       {helper ? <div className="mt-1 text-xs text-slate-500">{helper}</div> : null}
-    </div>
+    </Link>
   );
 }
 
@@ -87,6 +130,12 @@ function EmptyState({ children }: { children: React.ReactNode }) {
 }
 
 const PIE_COLORS = ["#0f766e", "#2563eb", "#d97706", "#dc2626", "#7c3aed", "#64748b", "#16a34a"];
+
+type CostCategory = {
+  name: string;
+  description: string;
+  value: number;
+};
 
 export function DecisionHomeOverview() {
   const range = useDashboardRange();
@@ -136,18 +185,71 @@ export function DecisionHomeOverview() {
   const chartData = series.map((point) => ({
     date: String(point.date || "").slice(0, 10),
     revenue: num(point.revenue),
-    expenses: Math.max(0, num(point.revenue) - num(point.net_profit)),
+    operatingCosts: Math.max(0, num(point.revenue) - num(point.net_profit)),
     netProfit: num(point.net_profit),
   }));
 
-  const costBreakdown = [
-    { name: "Product costs", value: Math.abs(num(summary?.cogs)) },
-    { name: "Ad spend", value: Math.abs(num(summary?.ad_spend)) },
-    { name: "Affiliate payouts", value: Math.abs(num(summary?.affiliate_payout)) },
-    { name: "Processing fees", value: Math.abs(num(summary?.processor_fees)) },
-    { name: "Shipping", value: Math.abs(num(summary?.shipping_cost ?? summary?.shipping)) },
-    { name: "Other bank fees", value: Math.abs(num(summary?.bank_fees) + num(summary?.chargeback_fees)) },
-  ].filter((row) => row.value > 0);
+  const knownOperatingCostCategories: CostCategory[] = [
+    {
+      name: "Advertising",
+      description: "Paid media and tracked ad spend",
+      value: Math.abs(num(summary?.ad_spend)),
+    },
+    {
+      name: "Affiliate Payouts",
+      description: "Affiliate commissions and partner payouts",
+      value: Math.abs(num(summary?.affiliate_payout)),
+    },
+    {
+      name: "COGS",
+      description: "Product cost of goods sold",
+      value: Math.abs(num(summary?.cogs)),
+    },
+    {
+      name: "Fulfillment",
+      description: "Shipping, fulfillment, and delivery costs",
+      value: Math.abs(num(summary?.shipping_cost ?? summary?.shipping)),
+    },
+    {
+      name: "Payment Processing",
+      description: "Processor fees and bank fees",
+      value: Math.abs(num(summary?.processor_fees) + num(summary?.bank_fees)),
+    },
+    {
+      name: "Chargebacks & Refunds",
+      description: "Chargeback fees and mapped refund fees",
+      value: Math.abs(num(summary?.chargeback_fees) + sumFields(summary, ["refund_fees", "refund_fee"])),
+    },
+    {
+      name: "Software & Infrastructure",
+      description: "Recurring SaaS and infrastructure costs when mapped",
+      value: Math.abs(sumFields(summary, [
+        "software_infrastructure",
+        "software_infrastructure_costs",
+        "software_costs",
+        "infrastructure_costs",
+      ])),
+    },
+    {
+      name: "General & Administrative",
+      description: "Tax and mapped administrative operating costs",
+      value: Math.abs(num(summary?.tax) + sumFields(summary, ["general_administrative", "g_and_a", "administrative_costs"])),
+    },
+  ];
+
+  const knownOperatingCostTotal = knownOperatingCostCategories.reduce((sum, row) => sum + row.value, 0);
+  const explicitOtherOperatingCosts = Math.abs(sumFields(summary, ["other_operating_expenses", "misc_operating_expenses"]));
+  const operatingCostTotal = Math.max(Math.abs(num(summary?.total_costs)), knownOperatingCostTotal + explicitOtherOperatingCosts);
+  const operatingCostOther = Math.max(0, explicitOtherOperatingCosts, operatingCostTotal - knownOperatingCostTotal);
+  const costBreakdown: CostCategory[] = [
+    ...knownOperatingCostCategories,
+    {
+      name: "Other",
+      description: "Miscellaneous mapped operating expenses",
+      value: operatingCostOther,
+    },
+  ];
+  const costDonutData = costBreakdown.filter((row) => row.value > 0);
 
   const leakageMix = [
     { name: "Retained revenue", value: Math.max(0, num(summary?.net_revenue)) },
@@ -155,36 +257,81 @@ export function DecisionHomeOverview() {
     { name: "Chargebacks", value: Math.abs(num(summary?.chargebacks)) },
   ].filter((row) => row.value > 0);
 
-  const missingInputs = [
-    num(summary?.cogs) === 0 ? "Product costs are missing or zero" : null,
-    num(summary?.ad_spend) === 0 ? "Ad spend is not connected or is zero" : null,
-    num(summary?.affiliate_payout) === 0 ? "Affiliate payout data is unavailable or zero" : null,
-  ].filter(Boolean) as string[];
+  const missingInputs = summary
+    ? ([
+        num(summary.cogs) === 0 ? "Product costs are missing or zero" : null,
+        num(summary.ad_spend) === 0 ? "Ad spend is not connected or is zero" : null,
+        num(summary.affiliate_payout) === 0 ? "Affiliate payout data is unavailable or zero" : null,
+        costBreakdown.find((row) => row.name === "Software & Infrastructure")?.value === 0
+          ? "Software and infrastructure expenses are not mapped"
+          : null,
+        costBreakdown.find((row) => row.name === "Other")?.value === 0
+          ? "Miscellaneous operating expense mapping is not configured"
+          : null,
+      ].filter(Boolean) as string[])
+    : [];
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-2xl border bg-white p-6 dark:bg-ink/60">
+      <section id="profit-statement" className="overflow-hidden rounded-2xl border bg-white p-6 dark:bg-ink/60">
         <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-          <div>
+          <Link
+            href={dashboardDrilldown(range, "profit-statement")}
+            title="Open Profit Statement"
+            className="rounded-xl transition focus:outline-none focus:ring-2 focus:ring-teal-500"
+          >
             <div className="text-sm font-medium text-slate-500">Did we make money?</div>
             <div className="mt-2 text-5xl font-semibold tracking-tight">
               {summary ? formatMoney(summary.net_profit) : "—"}
             </div>
             <div className="mt-2 text-sm text-slate-500">
-              Net profit for {range.from} through {range.to}
+              Net Profit for {range.from} through {range.to}
             </div>
-          </div>
+          </Link>
 
           <div className="grid flex-1 gap-3 sm:grid-cols-2 xl:max-w-5xl xl:grid-cols-6">
-            <Metric label="Gross revenue" value={summary ? formatMoney(summary.gross_revenue) : "—"} />
-            <Metric label="Net revenue" value={summary ? formatMoney(summary.net_revenue) : "—"} />
-            <Metric label="Total costs" value={summary ? formatMoney(summary.total_costs) : "—"} />
+            <Metric
+              label="Gross revenue"
+              value={summary ? formatMoney(summary.gross_revenue) : "—"}
+              href={dashboardDrilldown(range, "revenue-breakdown")}
+              title="Open Revenue Breakdown"
+              id="revenue-breakdown"
+            />
+            <Metric
+              label="Net revenue"
+              value={summary ? formatMoney(summary.net_revenue) : "—"}
+              helper="After refunds and chargebacks"
+              href={dashboardDrilldown(range, "revenue-after-leakage")}
+              title="Open Revenue after refunds and chargebacks"
+              id="revenue-after-leakage"
+            />
+            <Metric
+              label="Operating Costs"
+              value={summary ? positiveMoney(operatingCostTotal) : "—"}
+              href={dashboardDrilldown(range, "operating-cost-breakdown")}
+              title="Open Operating Cost Breakdown"
+              id="operating-cost-breakdown"
+            />
             <Metric
               label="Profit margin"
               value={summary ? `${num(summary.profit_margin_pct).toFixed(1)}%` : "—"}
+              href={dashboardDrilldown(range, "profit-analysis")}
+              title="Open Profit Analysis"
+              id="profit-analysis"
             />
-            <Metric label="Orders" value={summary ? num(summary.order_count).toLocaleString("en-US") : "—"} />
-            <Metric label="AOV" value={formatAov(summary)} helper="Gross revenue / orders" />
+            <Metric
+              label="Orders"
+              value={summary ? num(summary.order_count).toLocaleString("en-US") : "—"}
+              href={`/orders?${dateRangeQuery(range)}`}
+              title="Open Orders"
+            />
+            <Metric
+              label="AOV"
+              value={formatAov(summary)}
+              helper="Gross revenue / orders"
+              href={`/orders?${dateRangeQuery(range)}&analysis=order-value`}
+              title="Open Order Value Analysis"
+            />
           </div>
         </div>
       </section>
@@ -207,7 +354,7 @@ export function DecisionHomeOverview() {
         </Card>
       ) : null}
 
-      <Card title="Why did profit move?" right={<span className="text-xs text-slate-500">Revenue, expenses, and net profit</span>}>
+      <Card title="Why did profit move?" right={<span className="text-xs text-slate-500">Revenue, operating costs, and net profit</span>}>
         {loading ? (
           <EmptyState>Loading financial trend…</EmptyState>
         ) : chartData.length ? (
@@ -220,7 +367,7 @@ export function DecisionHomeOverview() {
                 <Tooltip formatter={(value) => formatMoney(value)} />
                 <Legend />
                 <Line type="monotone" dataKey="revenue" name="Revenue" dot={false} stroke="#0f766e" strokeWidth={2.5} />
-                <Line type="monotone" dataKey="expenses" name="Expenses" dot={false} stroke="#d97706" strokeWidth={2.5} />
+                <Line type="monotone" dataKey="operatingCosts" name="Operating Costs" dot={false} stroke="#d97706" strokeWidth={2.5} />
                 <Line type="monotone" dataKey="netProfit" name="Net Profit" dot={false} stroke="#2563eb" strokeWidth={3} />
               </LineChart>
             </ResponsiveContainer>
@@ -231,23 +378,57 @@ export function DecisionHomeOverview() {
       </Card>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <Card title="Where did the money go?" right={<span className="text-xs text-slate-500">Cost breakdown</span>}>
-          {costBreakdown.length ? (
-            <div className="h-72 w-full">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={costBreakdown} dataKey="value" nameKey="name" innerRadius={68} outerRadius={104} paddingAngle={2}>
-                    {costBreakdown.map((row, index) => (
-                      <Cell key={row.name} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+        <Card
+          title="Where did the money go?"
+          right={<span className="text-xs text-slate-500">Operating Cost Breakdown</span>}
+        >
+          {summary ? (
+            <div className="grid gap-6 2xl:grid-cols-[minmax(18rem,26rem)_1fr]">
+              {costDonutData.length ? (
+                <div className="h-72 w-full">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={costDonutData} dataKey="value" nameKey="name" innerRadius={68} outerRadius={104} paddingAngle={2}>
+                        {costDonutData.map((row, index) => (
+                          <Cell key={row.name} fill={PIE_COLORS[index % PIE_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value) => formatMoney(value)} />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <EmptyState>No operating cost categories are currently mapped.</EmptyState>
+              )}
+              <div className="overflow-auto rounded-lg border">
+                <table className="min-w-full text-sm">
+                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-900/60">
+                    <tr>
+                      <th className="px-4 py-3 text-left">Category</th>
+                      <th className="px-4 py-3 text-right">Amount</th>
+                      <th className="px-4 py-3 text-right">Percent of Operating Costs</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {costBreakdown.map((row) => (
+                      <tr key={row.name} className="border-t">
+                        <td className="px-4 py-3">
+                          <div className="font-medium">{row.name}</div>
+                          <div className="mt-1 text-xs text-slate-500">{row.description}</div>
+                        </td>
+                        <td className="px-4 py-3 text-right font-mono">{formatMoney(row.value)}</td>
+                        <td className="px-4 py-3 text-right font-mono">
+                          {operatingCostTotal > 0 ? formatPercent((row.value / operatingCostTotal) * 100) : "—"}
+                        </td>
+                      </tr>
                     ))}
-                  </Pie>
-                  <Tooltip formatter={(value) => formatMoney(value)} />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
+                  </tbody>
+                </table>
+              </div>
             </div>
           ) : (
-            <EmptyState>Connect cost sources to see the cost breakdown.</EmptyState>
+            <EmptyState>Connect operating cost sources to see the breakdown.</EmptyState>
           )}
         </Card>
 
