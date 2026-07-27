@@ -1,0 +1,31 @@
+{
+  "connector_id": "identity-backfill-platform-orders",
+  "job_type": "identity_backfill",
+  "phases": [
+    "discover_unlinked_records",
+    "resolve_identity_batch",
+    "validate_and_finalize"
+  ],
+  "default_platforms": [
+    "wowboost",
+    "wowsuite:wowboost"
+  ],
+  "excluded_platforms": [
+    "wowpay",
+    "wowsuite:wowpay"
+  ],
+  "expected_counters": [
+    "discovered",
+    "processed",
+    "people_created",
+    "people_matched",
+    "attached",
+    "already_linked",
+    "skipped_no_identifiers",
+    "review_required",
+    "transient_retries",
+    "permanent_errors",
+    "attachment_conflicts",
+    "remaining_unlinked"
+  ]
+}

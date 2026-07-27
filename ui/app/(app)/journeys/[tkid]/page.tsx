@@ -1,6 +1,8 @@
 // app/(app)/journeys/[tkid]/page.tsx
 import Link from "next/link";
 import { apiGetJson } from "@/lib/api";
+import { EntityHeader } from "@/components/shared/entity-header";
+import { LiveRouteRefresh } from "@/components/live/live-route-refresh";
 
 type TimelineEvent = {
   kind: "event";
@@ -93,12 +95,8 @@ export default async function JourneyDetailPage({ params }: Props) {
 
   return (
     <div className="p-6 space-y-4 text-sm text-slate-900 dark:text-slate-100">
-      <div className="flex items-center justify-between mb-2">
-        <div>
-          <div className="text-xs text-slate-500">Journey</div>
-          <div className="text-lg font-semibold">{tkid}</div>
-        </div>
-
+      <LiveRouteRefresh workspaceId="default" entity={{ type: "journey", id: decodedTkid }} types={["entity.changed", "metric.changed", "activity.created", "activity.updated"]} />
+      <div className="flex justify-end">
         <Link
           href="/journeys"
           className="text-sm underline underline-offset-4 text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-white"
@@ -106,6 +104,28 @@ export default async function JourneyDetailPage({ params }: Props) {
           Back
         </Link>
       </div>
+
+      <section className="rounded-xl border bg-white p-5 shadow-sm dark:border-white/10 dark:bg-ink/80">
+        <EntityHeader
+          entityType="journey"
+          title="Customer Journey"
+          subtitle={`TKID ${decodedTkid}`}
+          statuses={[
+            { label: timeline.some((event) => event.kind === "conversion") ? "Converted" : "Browsing", tone: timeline.some((event) => event.kind === "conversion") ? "success" : "info" },
+          ]}
+          metadata={[
+            { label: "Touchpoints", value: timeline.length },
+            { label: "Conversions", value: timeline.filter((event) => event.kind === "conversion").length },
+            { label: "First seen", value: stats.firstSeen || "Unknown" },
+            { label: "Last activity", value: stats.lastSeen || "Unknown" },
+          ]}
+          identifiers={[{ label: "TKID", value: decodedTkid }]}
+          actions={[
+            { id: "copy-journey-id", label: "Copy journey ID", kind: "copy", value: decodedTkid, safe: true },
+            { id: "copy-journey-link", label: "Copy link", kind: "copy", value: `/journeys/${encodeURIComponent(decodedTkid)}`, safe: true },
+          ]}
+        />
+      </section>
 
       {error ? (
         <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
