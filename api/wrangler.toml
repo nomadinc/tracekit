@@ -2,6 +2,7 @@ name = "tracekit-api"
 main = "src/index.ts"
 compatibility_date = "2024-06-20"
 
+
 [vars]
   SUPABASE_URL = "https://uoeosoiegatlqtzemsfv.supabase.co"
   SUPABASE_SERVICE_ROLE_KEY = ""

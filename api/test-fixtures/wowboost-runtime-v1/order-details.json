@@ -1,0 +1,85 @@
+{
+  "1000": [
+    {
+      "ok": true,
+      "payload": {
+        "id": "1000",
+        "referenceId": "REF-1000",
+        "TransactionId": "fake-detail-tx-1000",
+        "Order Number": "25001000",
+        "ShippingReference": "SHIP-1000"
+      }
+    }
+  ],
+  "1001": [
+    {
+      "ok": true,
+      "payload": {
+        "id": "1001",
+        "referenceId": "REF-1001",
+        "TransactionId": "fake-detail-tx-1001",
+        "Order Number": "25001001",
+        "ShippingReference": "SHIP-1001"
+      }
+    }
+  ],
+  "1002": [
+    {
+      "ok": false,
+      "status": null,
+      "error": "Request timed out after 30000ms"
+    },
+    {
+      "ok": true,
+      "payload": {
+        "id": "1002",
+        "referenceId": "REF-1002",
+        "TransactionId": "fake-detail-tx-1002",
+        "Order Number": "25001002",
+        "ShippingReference": "SHIP-1002"
+      }
+    }
+  ],
+  "1005": [
+    {
+      "ok": true,
+      "payload": {
+        "id": "1005",
+        "TransactionId": "fake-detail-tx-1005",
+        "Order Number": "25001005",
+        "ShippingReference": "SHIP-1005"
+      }
+    }
+  ],
+  "1006": [
+    {
+      "ok": false,
+      "status": 404,
+      "error": "Not Found"
+    }
+  ],
+  "1008": [
+    {
+      "ok": true,
+      "payload": {
+        "id": "1008",
+        "referenceId": "REF-1008",
+        "TransactionId": "fake-detail-tx-1008",
+        "Order Number": "25001008",
+        "ShippingReference": "SHIP-1008"
+      }
+    }
+  ],
+  "1009": [
+    {
+      "ok": true,
+      "payload": {
+        "id": "1009",
+        "referenceId": "REF-1009",
+        "TransactionId": "fake-detail-tx-1009",
+        "Order Number": "25001009",
+        "ShippingReference": "SHIP-1009"
+      }
+    }
+  ]
+}

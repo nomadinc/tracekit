@@ -1,0 +1,127 @@
+{
+  "preexistingStageMappings": [
+    {
+      "order_number": "25001000",
+      "order_id": "1000",
+      "export_page": 0
+    }
+  ],
+  "pages": [
+    {
+      "page": 1,
+      "hasMoreToExport": true,
+      "rows": [
+        {
+          "Order Number": "29999999",
+          "Order ID": "9999",
+          "TransactionId": "fake-unrelated-tx-9999",
+          "Order Create Date": "2026-04-03T09:00:00.000Z"
+        },
+        {
+          "Order Number": "25001001",
+          "Order ID": "1001",
+          "TransactionId": "fake-export-tx-1001-a",
+          "Order Create Date": "2026-04-04T09:00:00.000Z"
+        },
+        {
+          "Order Number": "25001001",
+          "Order ID": "1001",
+          "TransactionId": "fake-export-tx-1001-duplicate",
+          "Order Create Date": "2026-04-04T09:00:00.000Z"
+        },
+        {
+          "Order Number": "25001003",
+          "Order ID": "1003",
+          "TransactionId": "fake-export-tx-1003-a",
+          "Order Create Date": "2026-04-06T09:00:00.000Z"
+        },
+        {
+          "Order Number": "25001002",
+          "Order ID": "1002",
+          "TransactionId": "fake-export-tx-1002-a",
+          "Order Create Date": "2026-04-05T09:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "page": 2,
+      "hasMoreToExport": true,
+      "rows": [
+        {
+          "Order Number": "25001002",
+          "Order ID": "1002",
+          "TransactionId": "fake-export-tx-1002-duplicate",
+          "Order Create Date": "2026-04-05T09:00:00.000Z"
+        },
+        {
+          "Order Number": "25001003",
+          "Order ID": "1993",
+          "TransactionId": "fake-export-tx-1993-ambiguous",
+          "Order Create Date": "2026-04-06T09:30:00.000Z"
+        },
+        {
+          "Order Number": "25001005",
+          "Order ID": "1005",
+          "TransactionId": "fake-export-tx-1005",
+          "Order Create Date": "2026-04-08T09:00:00.000Z"
+        },
+        {
+          "Order Number": "28888888",
+          "Order ID": "8888",
+          "TransactionId": "fake-unrelated-tx-8888",
+          "Order Create Date": "2026-04-08T09:00:00.000Z"
+        }
+      ]
+    },
+    {
+      "page": 3,
+      "hasMoreToExport": false,
+      "rows": [
+        {
+          "Order Number": "25001006",
+          "Order ID": "1006",
+          "TransactionId": "fake-export-tx-1006",
+          "Order Create Date": "2026-04-09T09:00:00.000Z"
+        },
+        {
+          "Order Number": "25001007",
+          "Order ID": "1007",
+          "TransactionId": "fake-export-tx-already-1007",
+          "Order Create Date": "2026-04-10T09:00:00.000Z"
+        },
+        {
+          "Order Number": "25001001",
+          "Order ID": "1001",
+          "TransactionId": "fake-export-tx-1001-repeat-later",
+          "Order Create Date": "2026-04-04T09:00:00.000Z"
+        },
+        {
+          "Order Number": "27777777",
+          "Order ID": "7777",
+          "TransactionId": "fake-unrelated-tx-7777",
+          "Order Create Date": "2026-04-09T09:00:00.000Z"
+        }
+      ]
+    }
+  ],
+  "targetDrivenTerminationProbe": {
+    "page": 4,
+    "hasMoreToExport": true,
+    "target_total": 2,
+    "target_remaining": 0,
+    "rows": [
+      {
+        "Order Number": "25001998",
+        "Order ID": "1998",
+        "TransactionId": "fake-probe-tx-1998",
+        "Order Create Date": "2026-04-14T09:00:00.000Z"
+      },
+      {
+        "Order Number": "25001999",
+        "Order ID": "1999",
+        "TransactionId": "fake-probe-tx-1999",
+        "Order Create Date": "2026-04-14T09:05:00.000Z"
+      }
+    ]
+  }
+}
