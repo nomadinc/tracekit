@@ -11573,7 +11573,7 @@ async function router(req: Request, env: Env): Promise<Response> {
     if (auth) return auth;
     try {
       const params = normalizeWorkItemParams(Object.fromEntries(url.searchParams.entries()));
-      return json(await listWorkItems(getSupabase(env), params));
+      return json(await listWorkItems(getSupabase(env), params, { sync: false }));
     } catch (e: any) {
       return json({ ok: false, error: e?.code || "work_items_failed", message: e?.message || String(e) }, e?.status || 500);
     }
@@ -11584,7 +11584,7 @@ async function router(req: Request, env: Env): Promise<Response> {
     if (auth) return auth;
     try {
       const workspaceId = identityWorkspace(url.searchParams.get("workspace_id"));
-      return json(await getOperationsSummary(getSupabase(env), { workspace_id: workspaceId }));
+      return json(await getOperationsSummary(getSupabase(env), { workspace_id: workspaceId }, { sync: false }));
     } catch (e: any) {
       return json({ ok: false, error: e?.code || "operations_summary_failed", message: e?.message || String(e) }, e?.status || 500);
     }

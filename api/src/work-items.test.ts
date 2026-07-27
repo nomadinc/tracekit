@@ -270,3 +270,9 @@ test("operations UI and proxy routes are present", () => {
   assert.match(actionRoute, /\/v1\/work-items\/\$\{path\}/);
   assert.match(summaryRoute, /\/v1\/operations\/summary/);
 });
+
+test("work item read routes consume persisted rows without synchronous regeneration", () => {
+  const worker = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+  assert.match(worker, /listWorkItems\(getSupabase\(env\), params, \{ sync: false \}\)/);
+  assert.match(worker, /getOperationsSummary\(getSupabase\(env\), \{ workspace_id: workspaceId \}, \{ sync: false \}\)/);
+});

@@ -1,64 +1,188 @@
 // ui/app/(app)/journeys/page.tsx
-import { apiGetJson } from "@/lib/api";
 import { EntityLink } from "@/components/shared/entity-link";
 import { LiveRouteRefresh } from "@/components/live/live-route-refresh";
 
-const API_BASE = process.env.NEXT_PUBLIC_API_BASE ?? "http://127.0.0.1:8787";
-
-// ---- Types (keep whatever you already had; these are safe defaults) ----
-type Journey = {
-  tkid: string;
-  site_key?: string | null;
-  has_orders?: boolean | null;
-  last_seen?: string | null;
-  // add/keep any other fields your UI uses
+type EventExplorerItem = {
+  event_key?: string | null;
+  record_id?: string | null;
+  journey_id?: string | null;
+  person_id?: string | null;
+  person?: { id?: string | null; display_name?: string | null; email?: string | null } | null;
+  timestamp?: string | null;
+  event_time?: string | null;
+  event_type?: string | null;
+  source?: string | null;
+  affiliate_id?: string | null;
+  amount?: number | string | null;
+  currency?: string | null;
+  attribution_status?: string | null;
+  commission_status?: string | null;
+  status?: string | null;
+  tkid?: string | null;
 };
 
-type JourneysResponse = {
+type EventsResponse = {
   ok: boolean;
-  journeys: Journey[];
+  events: EventExplorerItem[];
+};
+
+type Journey = {
+  id: string;
+  person_id: string | null;
+  person_label: string | null;
+  source: string | null;
+  affiliate_id: string | null;
+  first_seen: string | null;
+  last_seen: string | null;
+  event_count: number;
+  purchase_count: number;
+  revenue: number;
+  currency: string;
+  attribution_status: string | null;
+  commission_status: string | null;
+  tkid: string | null;
 };
 
 type Props = {
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
+function apiBaseUrl() {
+  return String(
+    process.env.TRACEKIT_API_BASE_URL ||
+    process.env.NEXT_PUBLIC_API_BASE_URL ||
+    process.env.NEXT_PUBLIC_API_BASE ||
+    "http://127.0.0.1:8787"
+  ).replace(/\/+$/, "");
+}
+
+function adminSecret() {
+  return String(process.env.TK_SECRET_KEY || process.env.TRACEKIT_TK_SECRET || "").trim();
+}
+
+async function readJsonSafe(res: Response) {
+  const text = await res.text().catch(() => "");
+  try {
+    return text ? JSON.parse(text) : {};
+  } catch {
+    return { ok: false, error: "invalid_json", message: text.slice(0, 400) };
+  }
+}
+
+async function currentApiGet<T>(pathAndQuery: string): Promise<T> {
+  const secret = adminSecret();
+  if (!secret) throw new Error("TK_SECRET_KEY is required on the UI server for Journey Explorer requests.");
+  const res = await fetch(`${apiBaseUrl()}${pathAndQuery}`, {
+    method: "GET",
+    cache: "no-store",
+    headers: {
+      accept: "application/json",
+      "x-tk-secret": secret,
+    },
+  });
+  const body = await readJsonSafe(res);
+  if (!res.ok) throw new Error(body?.message || body?.error || `API ${res.status}`);
+  return body as T;
+}
+
+function eventTime(event: EventExplorerItem) {
+  return event.event_time || event.timestamp || null;
+}
+
+function amountValue(value: unknown) {
+  if (value === null || value === undefined || String(value).trim() === "") return 0;
+  const numeric = Number(value);
+  return Number.isFinite(numeric) ? numeric : 0;
+}
+
+function buildJourneyList(events: EventExplorerItem[]) {
+  const byJourney = new Map<string, Journey>();
+  for (const event of events) {
+    const id = String(event.journey_id || "").trim();
+    if (!id) continue;
+    const time = eventTime(event);
+    const current = byJourney.get(id) || {
+      id,
+      person_id: event.person_id || event.person?.id || null,
+      person_label: event.person?.display_name || event.person?.email || event.person_id || null,
+      source: event.source || null,
+      affiliate_id: event.affiliate_id || null,
+      first_seen: time,
+      last_seen: time,
+      event_count: 0,
+      purchase_count: 0,
+      revenue: 0,
+      currency: event.currency || "USD",
+      attribution_status: event.attribution_status || null,
+      commission_status: event.commission_status || null,
+      tkid: event.tkid || null,
+    };
+    current.event_count += 1;
+    if (time && (!current.first_seen || Date.parse(time) < Date.parse(current.first_seen))) current.first_seen = time;
+    if (time && (!current.last_seen || Date.parse(time) > Date.parse(current.last_seen))) current.last_seen = time;
+    if (!current.person_id) current.person_id = event.person_id || event.person?.id || null;
+    if (!current.person_label) current.person_label = event.person?.display_name || event.person?.email || event.person_id || null;
+    if (!current.source && event.source) current.source = event.source;
+    if (!current.affiliate_id && event.affiliate_id) current.affiliate_id = event.affiliate_id;
+    if (!current.tkid && event.tkid) current.tkid = event.tkid;
+    if (event.currency) current.currency = event.currency;
+    if (event.attribution_status === "attributed") current.attribution_status = event.attribution_status;
+    else if (!current.attribution_status && event.attribution_status) current.attribution_status = event.attribution_status;
+    if (event.commission_status && event.commission_status !== "not_commissioned") current.commission_status = event.commission_status;
+    else if (!current.commission_status && event.commission_status) current.commission_status = event.commission_status;
+    if (["purchase", "upsell", "subscription_started", "subscription_renewed"].includes(String(event.event_type || ""))) {
+      current.purchase_count += 1;
+      current.revenue += amountValue(event.amount);
+    }
+    byJourney.set(id, current);
+  }
+  return Array.from(byJourney.values()).sort((a, b) =>
+    Date.parse(b.last_seen || "") - Date.parse(a.last_seen || "") || a.id.localeCompare(b.id)
+  );
+}
+
+function formatTime(value: string | null) {
+  if (!value) return "Unknown";
+  const ms = Date.parse(value);
+  if (!Number.isFinite(ms)) return value;
+  return new Intl.DateTimeFormat("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" }).format(new Date(ms));
+}
+
+function formatMoney(amount: number, currency = "USD") {
+  try {
+    return amount.toLocaleString("en-US", { style: "currency", currency });
+  } catch {
+    return `${amount.toFixed(2)} ${currency}`;
+  }
+}
+
 export default async function JourneysPage({ searchParams }: Props) {
-  // ✅ Next.js 15.5: searchParams is a Promise
   const sp = await searchParams;
+  const workspaceId = typeof sp.workspace_id === "string" ? sp.workspace_id : "default";
 
   let journeys: Journey[] = [];
   let error: string | null = null;
 
   try {
-    const json = await apiGetJson<JourneysResponse>(`/v1/journeys`);
+    const json = await currentApiGet<EventsResponse>(`/v1/events?workspace_id=${encodeURIComponent(workspaceId)}&limit=100&normalized=true&dir=desc`);
     if (!json.ok) throw new Error("API returned not ok");
-    journeys = json.journeys || [];
+    journeys = buildJourneyList(json.events || []);
   } catch (e: any) {
     console.error("[Journeys] failed to load", e);
     error = e?.message ?? "Failed to load journeys";
   }
 
-  // --------- FILTERS (from query params) ---------
-  const siteFilter = typeof sp.site === "string" ? sp.site : "";
+  const sourceFilter = typeof sp.source === "string" ? sp.source : "";
   const hasOrdersOnly = typeof sp.hasOrders === "string" && sp.hasOrders === "1";
   const query = typeof sp.q === "string" ? sp.q.trim() : "";
 
-  // compute all site_keys BEFORE filtering, for dropdown
-  const allSites = Array.from(
-    new Set(
-      journeys
-        .map((j) => (j.site_key ?? "").trim())
-        .filter(Boolean)
-    )
-  ).sort();
+  const allSources = Array.from(new Set(journeys.map((j) => (j.source ?? "").trim()).filter(Boolean))).sort();
 
-  // Apply filters
   const filtered = journeys.filter((j) => {
-    if (siteFilter && (j.site_key ?? "") !== siteFilter) return false;
-    if (hasOrdersOnly && !j.has_orders) return false;
+    if (sourceFilter && (j.source ?? "") !== sourceFilter) return false;
+    if (hasOrdersOnly && j.purchase_count < 1) return false;
     if (query) {
-      const hay = `${j.tkid ?? ""} ${(j.site_key ?? "")}`.toLowerCase();
+      const hay = `${j.id} ${j.person_id ?? ""} ${j.person_label ?? ""} ${j.source ?? ""} ${j.affiliate_id ?? ""} ${j.tkid ?? ""}`.toLowerCase();
       if (!hay.includes(query.toLowerCase())) return false;
     }
     return true;
@@ -67,7 +191,7 @@ export default async function JourneysPage({ searchParams }: Props) {
   // --------- Render ---------
   return (
     <div className="p-6 space-y-4 text-sm text-slate-900 dark:text-slate-100">
-      <LiveRouteRefresh workspaceId="default" types={["entity.changed", "metric.changed", "activity.created", "activity.updated"]} />
+      <LiveRouteRefresh workspaceId={workspaceId} types={["entity.changed", "metric.changed", "activity.created", "activity.updated"]} />
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <div>
           <h1 className="text-lg font-semibold">Journeys</h1>
@@ -79,20 +203,21 @@ export default async function JourneysPage({ searchParams }: Props) {
         {/* Simple filter UI (keep/replace with your existing controls if you have them) */}
         <div className="flex items-center gap-2 flex-wrap">
           <form className="flex items-center gap-2">
+            <input type="hidden" name="workspace_id" value={workspaceId} />
             <input
               name="q"
               defaultValue={query}
-              placeholder="Search tkid / site"
+              placeholder="Search journey / person"
               className="h-9 w-56 rounded-md border px-3 text-sm bg-white dark:bg-slate-950"
             />
 
             <select
-              name="site"
-              defaultValue={siteFilter}
+              name="source"
+              defaultValue={sourceFilter}
               className="h-9 rounded-md border px-2 text-sm bg-white dark:bg-slate-950"
             >
-              <option value="">All sites</option>
-              {allSites.map((s) => (
+              <option value="">All sources</option>
+              {allSources.map((s) => (
                 <option key={s} value={s}>
                   {s}
                 </option>
@@ -125,9 +250,11 @@ export default async function JourneysPage({ searchParams }: Props) {
 
       <div className="rounded-xl border overflow-hidden">
         <div className="grid grid-cols-12 px-3 py-2 text-xs font-semibold bg-slate-50 dark:bg-slate-900/40">
-          <div className="col-span-5">TKID</div>
-          <div className="col-span-4">Site</div>
-          <div className="col-span-2">Has Orders</div>
+          <div className="col-span-4">Journey</div>
+          <div className="col-span-2">Person</div>
+          <div className="col-span-2">Last Seen</div>
+          <div className="col-span-1">Events</div>
+          <div className="col-span-2">Revenue</div>
           <div className="col-span-1 text-right">View</div>
         </div>
 
@@ -136,14 +263,19 @@ export default async function JourneysPage({ searchParams }: Props) {
         ) : (
           <div className="divide-y">
             {filtered.map((j) => (
-              <div key={j.tkid} className="grid grid-cols-12 px-3 py-2 items-center">
-                <div className="col-span-5 font-mono text-xs truncate">{j.tkid}</div>
-                <div className="col-span-4 text-xs truncate">{j.site_key ?? "—"}</div>
-                <div className="col-span-2 text-xs">{j.has_orders ? "Yes" : "No"}</div>
+              <div key={j.id} className="grid grid-cols-12 px-3 py-2 items-center gap-2">
+                <div className="col-span-4 min-w-0">
+                  <div className="font-mono text-xs truncate">{j.id}</div>
+                  <div className="text-[11px] text-slate-500 truncate">{j.source || "Unknown source"}{j.affiliate_id ? ` · ${j.affiliate_id}` : ""}</div>
+                </div>
+                <div className="col-span-2 text-xs truncate">{j.person_label || j.person_id || "Unlinked"}</div>
+                <div className="col-span-2 text-xs">{formatTime(j.last_seen)}</div>
+                <div className="col-span-1 text-xs">{j.event_count}</div>
+                <div className="col-span-2 text-xs">{j.purchase_count ? formatMoney(j.revenue, j.currency) : "—"}</div>
                 <div className="col-span-1 text-right">
                   <EntityLink
-                    target={{ type: "journey", id: j.tkid, label: "Customer Journey", query: { workspace_id: "default" } }}
-                    href={`/journeys/${encodeURIComponent(j.tkid)}`}
+                    target={{ type: "journey", id: j.id, label: "Customer Journey", query: { workspace_id: workspaceId } }}
+                    href={`/journeys/${encodeURIComponent(j.id)}?workspace_id=${encodeURIComponent(workspaceId)}`}
                     className="text-xs underline"
                   >
                     Open

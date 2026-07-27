@@ -180,3 +180,13 @@ test("entity investigation is reachable from Home, Operations, Notifications, an
   assert.match(journeyDetail, /<EntityHeader/);
   assert.match(journeyList, /EntityLink/);
 });
+
+test("journey explorer uses current event and journey APIs", () => {
+  const journeyDetail = readRepoFile("ui/app/(app)/journeys/[tkid]/page.tsx");
+  const journeyList = readRepoFile("ui/app/(app)/journeys/page.tsx");
+
+  assert.match(journeyList, /\/v1\/events\?workspace_id=/);
+  assert.match(journeyDetail, /\/v1\/journeys\/\$\{encodeURIComponent\(decodedJourneyId\)\}/);
+  assert.doesNotMatch(journeyList, /\/v1\/journeys[`'")?]/);
+  assert.doesNotMatch(journeyDetail, /\/v1\/journey\?tkid=/);
+});
