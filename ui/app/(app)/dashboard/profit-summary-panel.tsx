@@ -40,6 +40,13 @@ function formatSignedMoney(value: unknown, currency = "USD") {
   return formatted;
 }
 
+function formatPositiveMoney(value: unknown, currency = "USD") {
+  return Math.abs(Number(value ?? 0)).toLocaleString("en-US", {
+    style: "currency",
+    currency,
+  });
+}
+
 function formatProfitMargin(value: unknown) {
   const n = Number(value);
   return Number.isFinite(n) ? `${n.toFixed(1)}%` : "—";
@@ -153,8 +160,8 @@ export function ProfitSummaryPanel() {
           value={summary ? formatMoney(summary.net_revenue) : "—"}
         />
         <KpiCard
-          label="Total Costs"
-          value={summary ? formatSignedMoney(summary.total_costs) : "—"}
+          label="Operating Costs"
+          value={summary ? formatPositiveMoney(summary.total_costs) : "—"}
         />
         <KpiCard
           label="Net Profit"

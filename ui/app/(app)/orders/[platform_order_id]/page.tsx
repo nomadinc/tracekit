@@ -700,8 +700,8 @@ export default async function OrderDetailPage({
                 <div>{formatMoney(rollup.net_revenue, currency)}</div>
               </div>
               <div>
-                <div className="text-slate-500">Total Costs</div>
-                <div>{formatSignedMoney(rollup.total_costs, currency)}</div>
+                <div className="text-slate-500">Operating Costs</div>
+                <div>{formatMoney(Math.abs(Number(rollup.total_costs ?? 0)), currency)}</div>
               </div>
               <div>
                 <div className="text-slate-500">Event Count</div>
