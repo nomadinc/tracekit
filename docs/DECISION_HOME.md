@@ -32,10 +32,19 @@ Primary outputs:
 - Revenue trend
 - Expense trend
 - Net profit trend
-- Cost breakdown
-- Revenue composition when product-stage data is available
 
-### 3. Where are we losing revenue?
+### 3. Where did the money go?
+
+Primary outputs:
+
+- Product costs
+- Ad spend
+- Affiliate payouts
+- Processing fees
+- Shipping
+- Other bank fees
+
+### 4. Where are we losing revenue?
 
 Primary outputs:
 
@@ -45,7 +54,7 @@ Primary outputs:
 - Ethoca alerts
 - Prevented-loss reporting when available
 
-### 4. Where are customers dropping off?
+### 5. Where are customers dropping off?
 
 Primary outputs:
 
@@ -56,7 +65,7 @@ Primary outputs:
 
 This module stays in an honest empty state until normalized product-stage mapping exists.
 
-### 5. Which affiliates are profitable?
+### 6. Which affiliates are profitable?
 
 Primary outputs:
 
@@ -69,7 +78,7 @@ Primary outputs:
 
 The default ranking is net profit, not revenue.
 
-### 6. Can we trust the attribution?
+### 7. Can we trust the attribution?
 
 Primary outputs:
 
@@ -82,7 +91,7 @@ Primary outputs:
 - Unattributed orders
 - Integration delays
 
-### 7. What needs attention now?
+### 8. What needs attention now?
 
 Primary outputs:
 

@@ -45,6 +45,12 @@ function num(value: unknown) {
   return Number.isFinite(n) ? n : 0;
 }
 
+function formatAov(summary: ProfitSummaryResponse | null) {
+  const orders = num(summary?.order_count);
+  if (!summary || orders <= 0) return "—";
+  return formatMoney(num(summary.gross_revenue) / orders);
+}
+
 function useDashboardRange() {
   const searchParams = useSearchParams();
   const fromQ = searchParams.get("from");
@@ -169,7 +175,7 @@ export function DecisionHomeOverview() {
             </div>
           </div>
 
-          <div className="grid flex-1 gap-3 sm:grid-cols-2 xl:max-w-4xl xl:grid-cols-5">
+          <div className="grid flex-1 gap-3 sm:grid-cols-2 xl:max-w-5xl xl:grid-cols-6">
             <Metric label="Gross revenue" value={summary ? formatMoney(summary.gross_revenue) : "—"} />
             <Metric label="Net revenue" value={summary ? formatMoney(summary.net_revenue) : "—"} />
             <Metric label="Total costs" value={summary ? formatMoney(summary.total_costs) : "—"} />
@@ -178,6 +184,7 @@ export function DecisionHomeOverview() {
               value={summary ? `${num(summary.profit_margin_pct).toFixed(1)}%` : "—"}
             />
             <Metric label="Orders" value={summary ? num(summary.order_count).toLocaleString("en-US") : "—"} />
+            <Metric label="AOV" value={formatAov(summary)} helper="Gross revenue / orders" />
           </div>
         </div>
       </section>
@@ -278,14 +285,24 @@ export function DecisionHomeOverview() {
       </div>
 
       <Card title="What needs attention now?">
-        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
-          <div className="rounded-xl border p-4">
-            <div className="text-sm font-medium">Refunds</div>
-            <div className="mt-2 text-2xl font-semibold">{summary ? formatMoney(summary.refunds) : "—"}</div>
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-5">
+          <div className="rounded-xl border border-dashed p-4">
+            <div className="text-sm font-medium">Missing COGS</div>
+            <div className="mt-2 text-sm text-slate-500">
+              {summary && num(summary.cogs) > 0 ? "Product costs detected" : "Needs product cost source"}
+            </div>
           </div>
-          <div className="rounded-xl border p-4">
-            <div className="text-sm font-medium">Chargebacks</div>
-            <div className="mt-2 text-2xl font-semibold">{summary ? formatMoney(summary.chargebacks) : "—"}</div>
+          <div className="rounded-xl border border-dashed p-4">
+            <div className="text-sm font-medium">Missing ad spend</div>
+            <div className="mt-2 text-sm text-slate-500">
+              {summary && num(summary.ad_spend) > 0 ? "Ad spend detected" : "Needs ad platform data"}
+            </div>
+          </div>
+          <div className="rounded-xl border border-dashed p-4">
+            <div className="text-sm font-medium">Missing affiliate payout</div>
+            <div className="mt-2 text-sm text-slate-500">
+              {summary && num(summary.affiliate_payout) > 0 ? "Payout data detected" : "Needs commission or payout data"}
+            </div>
           </div>
           <div className="rounded-xl border border-dashed p-4">
             <div className="text-sm font-medium">RDR alerts</div>
