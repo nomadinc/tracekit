@@ -857,7 +857,7 @@ async function selectExistingDomainEvent(supabase: any, workspaceId: string, ded
   );
 }
 
-export async function publishDomainEvent(supabase: any, input: DomainEventInput) {
+export async function publishDomainEvent(supabase: any, input: DomainEventInput, options: { project_inline?: boolean } = {}) {
   const normalized = normalizeDomainEventInput(input);
   const row = {
     workspace_id: normalized.workspaceId,
@@ -901,6 +901,16 @@ export async function publishDomainEvent(supabase: any, input: DomainEventInput)
     });
   }
   if (!event) throw new Error("Domain event publish did not return an event.");
+  if (options.project_inline === false) {
+    return {
+      ok: true,
+      event,
+      cursor: event.event_position,
+      workspace_updates: [],
+      activity_group: null,
+      projection_deferred: true,
+    };
+  }
   const projection = await projectDomainEvent(supabase, event).catch((error: any) => {
     console.error("[TraceKit] domain event projection failed", {
       workspace_id: event?.workspace_id,
@@ -916,6 +926,10 @@ export async function publishDomainEvent(supabase: any, input: DomainEventInput)
     cursor: event.event_position,
     ...projection,
   };
+}
+
+export async function publishDomainEventOutbox(supabase: any, input: DomainEventInput) {
+  return publishDomainEvent(supabase, input, { project_inline: false });
 }
 
 function changedFieldsFromPayload(payload: Record<string, any>) {
