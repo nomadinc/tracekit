@@ -150,6 +150,31 @@ test("decision home links to dedicated refund and chargeback analysis routes", (
   assert.match(worker, /existing_ledger_issue/);
 });
 
+test("WowBoost and WowPay integration catalog routes are registered by the Worker", () => {
+  const catalog = readRepoFile("ui/lib/integrations/catalog.ts");
+  const worker = readRepoFile("api/src/index.ts");
+
+  for (const route of [
+    "/v1/integrations/wowboost/status",
+    "/v1/integrations/wowboost/settings",
+    "/v1/integrations/wowboost/run-now",
+    "/v1/integrations/wowboost/import-orders-async",
+    "/v1/integrations/wowboost/import-job-status",
+    "/v1/integrations/wowpay/status",
+    "/v1/integrations/wowpay/settings",
+    "/v1/integrations/wowpay/run-now",
+    "/v1/integrations/wowpay/import-orders",
+  ]) {
+    assert.match(catalog, new RegExp(route.replaceAll("/", "\\/")));
+    assert.match(worker, new RegExp(route.replaceAll("/", "\\/")));
+  }
+
+  assert.match(worker, /buildWowSuiteCredentialStatus\(sub, creds\)/);
+  assert.match(worker, /normalizeWowSuiteImportDateRange/);
+  assert.match(worker, /dry_run: true/);
+  assert.match(worker, /onConflict: "platform_order_id"/);
+});
+
 test("shared time interval picker keeps labels and dark-mode controls readable", () => {
   const picker = readRepoFile("ui/components/time-interval-picker.tsx");
 
