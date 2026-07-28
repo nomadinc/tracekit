@@ -132,6 +132,14 @@ test("decision home links to dedicated refund and chargeback analysis routes", (
   assert.match(chargebackPage, /<FinancialIssueAnalysisClient kind="chargeback" \/>/);
   assert.match(analysisClient, /\/v1\/refunds\/analysis/);
   assert.match(analysisClient, /\/v1\/chargebacks\/analysis/);
+  assert.match(analysisClient, /TimeIntervalPicker/);
+  assert.match(analysisClient, /Affiliate ID/);
+  assert.match(analysisClient, /Apply/);
+  assert.match(analysisClient, /Clear/);
+  assert.match(analysisClient, /Top 5 Affiliates by Refunds/);
+  assert.match(analysisClient, /Top 5 Affiliates by Chargebacks/);
+  assert.match(analysisClient, /No refund data was found/);
+  assert.doesNotMatch(analysisClient, /LineChart|TrendChart|DetailDrawer|SORT_OPTIONS|campaign_id|source_id|attribution_status/);
   assert.match(worker, /path === "\/v1\/refunds\/analysis"/);
   assert.match(worker, /path === "\/v1\/chargebacks\/analysis"/);
 });

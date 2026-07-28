@@ -119,10 +119,7 @@ export type FinancialIssueSummary = {
   event_count: number;
   affected_orders: number;
   rate_by_orders: number | null;
-  rate_by_revenue: number | null;
-  average_amount: number | null;
   total_orders: number;
-  total_revenue: number;
 };
 
 export type FinancialIssueTrendPoint = {
@@ -137,6 +134,7 @@ export type FinancialIssueSourceRow = {
   group_type: "affiliate" | "traffic_source" | "campaign" | "unknown" | string;
   source_name: string;
   affiliate_id?: string | null;
+  affiliate_name?: string | null;
   source_id?: string | null;
   campaign_id?: string | null;
   brand_id?: string | null;
@@ -179,6 +177,7 @@ export type FinancialIssueAnalysisResponse = {
   summary?: FinancialIssueSummary | null;
   trend?: FinancialIssueTrendPoint[];
   sources?: FinancialIssueSourceRow[];
+  affiliates?: FinancialIssueSourceRow[];
   affected_orders?: FinancialIssueAffectedOrder[];
   pagination?: {
     page: number;
@@ -187,6 +186,7 @@ export type FinancialIssueAnalysisResponse = {
     total_pages: number;
   };
   data_quality?: {
+    partial_scan?: boolean;
     attributed_order_coverage: number | null;
     missing_denominators: string[];
     warnings: string[];

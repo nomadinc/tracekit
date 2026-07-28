@@ -13691,9 +13691,11 @@ async function router(req: Request, env: Env): Promise<Response> {
         summary: null,
         trend: [],
         sources: [],
+        affiliates: [],
         affected_orders: [],
         pagination: { page: 1, limit: 25, total: 0, total_pages: 1 },
         data_quality: {
+          partial_scan: false,
           attributed_order_coverage: null,
           missing_denominators: [],
           warnings: [],

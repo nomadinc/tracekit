@@ -132,7 +132,15 @@ Primary outputs:
 - Ethoca alerts
 - Prevented-loss reporting when available
 
-Refund Analysis and Chargeback Analysis use the existing append-only Profit Engine ledger and matching platform order source fields. They do not create new accounting calculations or mutate attribution, orders, payouts, or ledger rows.
+Refund Analysis and Chargeback Analysis use the existing append-only Profit Engine ledger and matching `platform_orders.affiliate_id` values. They do not create new accounting calculations or mutate attribution, orders, payouts, or ledger rows.
+
+The first functional version is intentionally narrow:
+
+- Working date-range control
+- Optional Affiliate ID filter
+- Three summary KPIs
+- Top five affiliate table
+- No trend chart, source hierarchy, campaign grouping, or detail drawer
 
 Analysis metric definitions:
 
@@ -141,29 +149,21 @@ Analysis metric definitions:
 | Total Refund/Chargeback Amount | Absolute sum of matching `conversions.ledger_type` amounts in the selected period |
 | Event Count | Count of matching refund or chargeback ledger events |
 | Affected Orders | Distinct `order_id` values with at least one matching event |
-| Rate by Orders | Affected orders divided by total sale orders for the same source row |
-| Rate by Revenue | Refund or chargeback amount divided by total sale revenue for the same source row |
-| Average Affected Order Value | Refund or chargeback amount divided by distinct affected orders |
-
-Source grouping priority:
-
-1. Affiliate ID
-2. Traffic source ID
-3. Campaign ID or available campaign/sub identifier
-4. Unattributed / Unknown
+| Overall Rate | Distinct affected orders divided by total sale orders with affiliate IDs in the selected response |
+| Affiliate Rate | Distinct affected orders for that affiliate divided by total sale orders for that affiliate |
 
 Denominator rules:
 
-- Source rows use their own total orders and total revenue as denominators.
-- Do not calculate source rates against platform-wide totals unless the source row itself represents the overall total.
-- If sale order or revenue denominators are unavailable, show an unavailable state instead of `0%`.
+- Affiliate rows use their own total orders as denominators.
+- Do not use refund or chargeback event count as the numerator for rates.
+- If sale-order denominators are unavailable, show an unavailable state instead of `0%`.
 - Keep event count separate from affected-order count because one order may have multiple refund or chargeback ledger events.
 
 Known limitations:
 
-- Source ranking depends on normalized `platform_orders` source fields such as `affiliate_id`, `source_id`, campaign/sub identifiers, and raw source metadata.
-- If a refund or chargeback exists without a matching platform order, source detail and attribution coverage may be unavailable.
-- Trend buckets use the stored ledger event timestamp. For long date ranges, buckets may be weekly where supported by the analysis helper.
+- Affiliate ranking depends on normalized `platform_orders.affiliate_id`.
+- Refunds or chargebacks without a matching platform order affiliate are excluded from the affiliate table.
+- The Vercel Preview UI calls the configured Cloudflare Worker URL. A Vercel deploy does not deploy Worker route changes; preview validation requires a matching Worker deployment or local Worker test.
 - The analysis routes are read-only and intentionally preserve the Profit Engine API contracts.
 
 ### 5. Where are customers dropping off?
