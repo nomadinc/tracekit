@@ -66,7 +66,12 @@ Gross Revenue - Refunds - Chargebacks = Net Revenue
 
 Net Revenue - Operating Costs = Net Profit
 
-Refund and chargeback summary cards should preserve the active date range when linked to a detail destination. They should remain non-clickable until a real refund or chargeback analysis route exists with meaningful source, count, amount, rate, and date-range detail. Same-page anchors or placeholder navigation are not valid drill-downs.
+Refund and chargeback summary cards link to dedicated analysis routes and preserve the active date range:
+
+- `/dashboard/refunds?from=YYYY-MM-DD&to=YYYY-MM-DD`
+- `/dashboard/chargebacks?from=YYYY-MM-DD&to=YYYY-MM-DD`
+
+These pages are the meaningful drill-down destinations for revenue leakage. Same-page anchors or placeholder navigation are not valid drill-downs.
 
 Metric definitions:
 
@@ -126,6 +131,40 @@ Primary outputs:
 - RDR alerts
 - Ethoca alerts
 - Prevented-loss reporting when available
+
+Refund Analysis and Chargeback Analysis use the existing append-only Profit Engine ledger and matching platform order source fields. They do not create new accounting calculations or mutate attribution, orders, payouts, or ledger rows.
+
+Analysis metric definitions:
+
+| Metric | Definition |
+| --- | --- |
+| Total Refund/Chargeback Amount | Absolute sum of matching `conversions.ledger_type` amounts in the selected period |
+| Event Count | Count of matching refund or chargeback ledger events |
+| Affected Orders | Distinct `order_id` values with at least one matching event |
+| Rate by Orders | Affected orders divided by total sale orders for the same source row |
+| Rate by Revenue | Refund or chargeback amount divided by total sale revenue for the same source row |
+| Average Affected Order Value | Refund or chargeback amount divided by distinct affected orders |
+
+Source grouping priority:
+
+1. Affiliate ID
+2. Traffic source ID
+3. Campaign ID or available campaign/sub identifier
+4. Unattributed / Unknown
+
+Denominator rules:
+
+- Source rows use their own total orders and total revenue as denominators.
+- Do not calculate source rates against platform-wide totals unless the source row itself represents the overall total.
+- If sale order or revenue denominators are unavailable, show an unavailable state instead of `0%`.
+- Keep event count separate from affected-order count because one order may have multiple refund or chargeback ledger events.
+
+Known limitations:
+
+- Source ranking depends on normalized `platform_orders` source fields such as `affiliate_id`, `source_id`, campaign/sub identifiers, and raw source metadata.
+- If a refund or chargeback exists without a matching platform order, source detail and attribution coverage may be unavailable.
+- Trend buckets use the stored ledger event timestamp. For long date ranges, buckets may be weekly where supported by the analysis helper.
+- The analysis routes are read-only and intentionally preserve the Profit Engine API contracts.
 
 ### 5. Where are customers dropping off?
 

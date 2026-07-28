@@ -119,6 +119,23 @@ test("notification center route consumes Notification Engine APIs", () => {
   assert.match(actionProxy, /\/v1\/notifications\/\$\{path\}/);
 });
 
+test("decision home links to dedicated refund and chargeback analysis routes", () => {
+  const decisionHome = readRepoFile("ui/app/(app)/dashboard/decision-home-overview.tsx");
+  const refundPage = readRepoFile("ui/app/(app)/dashboard/refunds/page.tsx");
+  const chargebackPage = readRepoFile("ui/app/(app)/dashboard/chargebacks/page.tsx");
+  const analysisClient = readRepoFile("ui/app/(app)/dashboard/financial-issue-analysis-client.tsx");
+  const worker = readRepoFile("api/src/index.ts");
+
+  assert.match(decisionHome, /href=\{`\/dashboard\/refunds\?\$\{dateRangeQuery\(range\)\}`\}/);
+  assert.match(decisionHome, /href=\{`\/dashboard\/chargebacks\?\$\{dateRangeQuery\(range\)\}`\}/);
+  assert.match(refundPage, /<FinancialIssueAnalysisClient kind="refund" \/>/);
+  assert.match(chargebackPage, /<FinancialIssueAnalysisClient kind="chargeback" \/>/);
+  assert.match(analysisClient, /\/v1\/refunds\/analysis/);
+  assert.match(analysisClient, /\/v1\/chargebacks\/analysis/);
+  assert.match(worker, /path === "\/v1\/refunds\/analysis"/);
+  assert.match(worker, /path === "\/v1\/chargebacks\/analysis"/);
+});
+
 test("investigation drawer primitives are installed in the app shell", () => {
   const appShell = readRepoFile("ui/components/layout/app-shell.tsx");
   const provider = readRepoFile("ui/components/investigation/investigation-provider.tsx");
