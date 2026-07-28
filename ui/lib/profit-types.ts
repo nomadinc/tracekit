@@ -190,5 +190,17 @@ export type FinancialIssueAnalysisResponse = {
     attributed_order_coverage: number | null;
     missing_denominators: string[];
     warnings: string[];
+    diagnostics?: {
+      ledger_records_scanned?: number;
+      ledger_issue_records?: number;
+      platform_issue_records_scanned?: number;
+      platform_issue_records_included?: number;
+      platform_issue_records_excluded_by_reason?: Record<string, number>;
+      included_records?: number;
+      excluded_records_by_reason?: Record<string, number>;
+      unmatched_orders?: number;
+      missing_amounts?: number;
+      [key: string]: unknown;
+    };
   };
 };

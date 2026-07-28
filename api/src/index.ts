@@ -20,10 +20,12 @@ import {
   buildFinancialIssueAnalysis,
   conversionMatchesDailyKey,
   conversionMatchesOrderKey,
+  financialIssueLedgerRowFromPlatformOrder,
   profitDailyKeyFromConversion,
   profitDailyKeyId,
   profitOrderKeyFromConversion,
   profitOrderKeyId,
+  saleLedgerRowFromPlatformOrder,
   sumProfitTotals,
   toProfitDailyRollupRow,
   toProfitOrderRollupRow,
@@ -2068,9 +2070,11 @@ const FINANCIAL_ISSUE_ANALYSIS_CONVERSION_SELECT =
   "workspace_id,order_id,connector_id,currency,platform,event_source,ledger_type,amount,occurred_at,transaction_id,status";
 
 const FINANCIAL_ISSUE_ANALYSIS_PLATFORM_ORDER_SELECT =
-  "platform_order_id,order_id,platform,status,status_norm,gross_amount,receipt_total,currency,order_ts,customer_email,customer_email_normalized,email,affiliate_id,source_id,sub1,sub2,sub3,sub4,sub5,raw_json";
+  "workspace_id,platform_order_id,order_id,platform,status,status_norm,transaction_id,gross_amount,receipt_total,currency,order_ts,customer_email,customer_email_normalized,email,affiliate_id,source_id,sub1,sub2,sub3,sub4,sub5,raw_json";
 
 const FINANCIAL_ISSUE_ANALYSIS_LEDGER_SCAN_LIMIT = 10_000;
+const FINANCIAL_ISSUE_PLATFORM_SCAN_LIMIT = 10_000;
+const FINANCIAL_ISSUE_PLATFORM_FALLBACK_PLATFORMS = ["wowboost", "wowsuite:wowboost", "wowsuite"];
 
 function parseDateFilter(value: string | null) {
   if (!value) return null;
@@ -2395,22 +2399,193 @@ async function selectFinancialIssuePlatformOrders(
   return rows;
 }
 
+function financialIssueDateInRange(iso: string | null | undefined, from: string | null, to: string | null) {
+  if (!iso) return false;
+  const ms = Date.parse(iso);
+  if (!Number.isFinite(ms)) return false;
+  const fromDay = parseDateFilter(from || null);
+  const toDay = parseDateFilter(to || null);
+  if (fromDay && ms < Date.parse(`${fromDay}T00:00:00.000Z`)) return false;
+  if (toDay && ms >= Date.parse(nextDayStartIso(toDay))) return false;
+  return true;
+}
+
+function financialIssuePlatformStatusNorms(kind: FinancialIssueKind) {
+  return kind === "refund" ? ["REFUNDED"] : ["CHARGEBACK"];
+}
+
+function financialIssuePlatformRowKey(row: FinancialIssueOrderRow) {
+  return String(row.platform_order_id || row.order_id || "").trim();
+}
+
+function uniqueFinancialIssuePlatformRows(rows: FinancialIssueOrderRow[]) {
+  const byKey = new Map<string, FinancialIssueOrderRow>();
+  for (const row of rows) {
+    const key = financialIssuePlatformRowKey(row);
+    if (key && !byKey.has(key)) byKey.set(key, row);
+  }
+  return Array.from(byKey.values());
+}
+
+async function selectFinancialIssuePlatformRowsInOrderRange(
+  supabase: SupabaseClientAny,
+  workspaceId: string,
+  filters: {
+    from?: string | null;
+    to?: string | null;
+    currency?: string | null;
+  },
+) {
+  const rows: FinancialIssueOrderRow[] = [];
+  const pageSize = 1000;
+  const from = parseDateFilter(filters.from || null);
+  const to = parseDateFilter(filters.to || null);
+  let scannedAll = true;
+
+  for (const platform of FINANCIAL_ISSUE_PLATFORM_FALLBACK_PLATFORMS) {
+    let platformRows = 0;
+    for (let offset = 0; offset < FINANCIAL_ISSUE_PLATFORM_SCAN_LIMIT; offset += pageSize) {
+      let query = supabase
+        .from("platform_orders")
+        .select(FINANCIAL_ISSUE_ANALYSIS_PLATFORM_ORDER_SELECT)
+        .eq("workspace_id", workspaceId)
+        .eq("platform", platform)
+        .order("order_ts", { ascending: true })
+        .range(offset, offset + pageSize - 1);
+
+      if (from) query = query.gte("order_ts", `${from}T00:00:00.000Z`);
+      if (to) query = query.lt("order_ts", nextDayStartIso(to));
+      if (filters.currency) query = query.eq("currency", String(filters.currency).toUpperCase());
+
+      const { data, error } = await query;
+      if (error) throw new Error(`Financial issue platform order range read failed: ${error.message}`);
+
+      const batch = (data || []) as FinancialIssueOrderRow[];
+      rows.push(...batch);
+      platformRows += batch.length;
+      if (batch.length < pageSize) break;
+      if (platformRows >= FINANCIAL_ISSUE_PLATFORM_SCAN_LIMIT) scannedAll = false;
+    }
+  }
+
+  return { rows, scanned_all: scannedAll };
+}
+
+async function selectFinancialIssuePlatformRowsByStatus(
+  supabase: SupabaseClientAny,
+  workspaceId: string,
+  filters: {
+    kind: FinancialIssueKind;
+    currency?: string | null;
+  },
+) {
+  const rows: FinancialIssueOrderRow[] = [];
+  const pageSize = 1000;
+  const statuses = financialIssuePlatformStatusNorms(filters.kind);
+  let scannedAll = true;
+
+  for (const platform of FINANCIAL_ISSUE_PLATFORM_FALLBACK_PLATFORMS) {
+    let platformRows = 0;
+    for (let offset = 0; offset < FINANCIAL_ISSUE_PLATFORM_SCAN_LIMIT; offset += pageSize) {
+      let query = supabase
+        .from("platform_orders")
+        .select(FINANCIAL_ISSUE_ANALYSIS_PLATFORM_ORDER_SELECT)
+        .eq("workspace_id", workspaceId)
+        .eq("platform", platform)
+        .in("status_norm", statuses)
+        .order("platform_order_id", { ascending: true })
+        .range(offset, offset + pageSize - 1);
+
+      if (filters.currency) query = query.eq("currency", String(filters.currency).toUpperCase());
+
+      const { data, error } = await query;
+      if (error) throw new Error(`Financial issue platform status read failed: ${error.message}`);
+
+      const batch = (data || []) as FinancialIssueOrderRow[];
+      rows.push(...batch);
+      platformRows += batch.length;
+      if (batch.length < pageSize) break;
+      if (platformRows >= FINANCIAL_ISSUE_PLATFORM_SCAN_LIMIT) scannedAll = false;
+    }
+  }
+
+  return { rows, scanned_all: scannedAll };
+}
+
+function mergeFinancialIssueDiagnostics(analysis: any, extra: Record<string, any>) {
+  const diagnostics = analysis?.data_quality?.diagnostics || {};
+  analysis.data_quality = {
+    ...(analysis.data_quality || {}),
+    diagnostics: {
+      ...diagnostics,
+      ...extra,
+      platform_issue_records_excluded_by_reason: {
+        ...(diagnostics.platform_issue_records_excluded_by_reason || {}),
+        ...(extra.platform_issue_records_excluded_by_reason || {}),
+      },
+    },
+  };
+}
+
 async function readFinancialIssueAnalysis(env: Env, url: URL, kind: FinancialIssueKind) {
   const supabase = getSupabase(env);
   const workspaceId = String(url.searchParams.get("workspace_id") || "default").trim() || "default";
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to");
+  const currency = url.searchParams.get("currency");
   const ledger = await selectFinancialIssueLedgerRows(supabase, {
     workspace_id: workspaceId,
     from,
     to,
-    currency: url.searchParams.get("currency"),
+    currency,
     kind,
   });
-  const orderIds = ledger.rows.map((row) => String(row.order_id || "").trim()).filter(Boolean);
-  const platformOrders = await selectFinancialIssuePlatformOrders(supabase, workspaceId, orderIds);
+  const platformRange = await selectFinancialIssuePlatformRowsInOrderRange(supabase, workspaceId, { from, to, currency });
+  const platformStatus = await selectFinancialIssuePlatformRowsByStatus(supabase, workspaceId, { kind, currency });
+  const platformCandidateRows = uniqueFinancialIssuePlatformRows([...platformRange.rows, ...platformStatus.rows]);
+  const existingLedgerIssueOrderIds = new Set(
+    ledger.rows
+      .filter((row) => String(row.ledger_type || "") === kind)
+      .map((row) => String(row.order_id || "").trim())
+      .filter(Boolean)
+  );
+  const platformIssueExcluded: Record<string, number> = {};
+  let platformIssuesSeen = 0;
+  const platformIssueRows: FinancialIssueLedgerRow[] = [];
 
-  return buildFinancialIssueAnalysis(ledger.rows, platformOrders, {
+  for (const row of platformCandidateRows) {
+    const issueRow = financialIssueLedgerRowFromPlatformOrder(row, kind);
+    if (!issueRow) {
+      const saleRow = saleLedgerRowFromPlatformOrder(row);
+      if (!saleRow) platformIssueExcluded.not_financial_issue = (platformIssueExcluded.not_financial_issue || 0) + 1;
+      continue;
+    }
+
+    platformIssuesSeen += 1;
+    if (!financialIssueDateInRange(issueRow.occurred_at, from, to)) {
+      platformIssueExcluded.outside_date_range = (platformIssueExcluded.outside_date_range || 0) + 1;
+      continue;
+    }
+    if (existingLedgerIssueOrderIds.has(String(issueRow.order_id || ""))) {
+      platformIssueExcluded.existing_ledger_issue = (platformIssueExcluded.existing_ledger_issue || 0) + 1;
+      continue;
+    }
+    platformIssueRows.push(issueRow);
+  }
+
+  const platformSaleRows = platformRange.rows
+    .map((row) => saleLedgerRowFromPlatformOrder(row))
+    .filter(Boolean) as FinancialIssueLedgerRow[];
+  const combinedLedgerRows = [...ledger.rows, ...platformSaleRows, ...platformIssueRows];
+  const orderIds = combinedLedgerRows.map((row) => String(row.order_id || "").trim()).filter(Boolean);
+  const conversionPlatformOrders = await selectFinancialIssuePlatformOrders(supabase, workspaceId, orderIds);
+  const platformOrders = uniqueFinancialIssuePlatformRows([
+    ...conversionPlatformOrders,
+    ...platformRange.rows,
+    ...platformCandidateRows,
+  ]);
+
+  const analysis = buildFinancialIssueAnalysis(combinedLedgerRows, platformOrders, {
     kind,
     from,
     to,
@@ -2425,8 +2600,27 @@ async function readFinancialIssueAnalysis(env: Env, url: URL, kind: FinancialIss
     offer_id: url.searchParams.get("offer_id"),
     product_id: url.searchParams.get("product_id"),
     attribution_status: url.searchParams.get("attribution_status"),
-    scanned_all: ledger.scanned_all,
+    scanned_all: ledger.scanned_all && platformRange.scanned_all && platformStatus.scanned_all,
   });
+
+  const warnings = new Set(analysis.data_quality.warnings || []);
+  if (platformIssueRows.length > 0) {
+    warnings.add("WowBoost refund and chargeback analysis includes platform_orders compatibility rows until connector ledger events are backfilled.");
+  }
+  if (!platformRange.scanned_all || !platformStatus.scanned_all) {
+    warnings.add("WowBoost platform_order compatibility scan reached its safety limit; narrow the date range for complete source ranking.");
+  }
+  analysis.data_quality.warnings = Array.from(warnings);
+  mergeFinancialIssueDiagnostics(analysis, {
+    ledger_records_scanned: ledger.rows.length,
+    ledger_issue_records: ledger.rows.filter((row) => String(row.ledger_type || "") === kind).length,
+    platform_issue_records_scanned: platformCandidateRows.length,
+    platform_issue_records_included: platformIssueRows.length,
+    platform_issue_records_excluded_by_reason: platformIssueExcluded,
+    platform_issue_records_matching_status: platformIssuesSeen,
+    platform_sale_denominator_rows_included: platformSaleRows.length,
+  });
+  return analysis;
 }
 
 function summarizeProfitRollups(rows: any[]) {

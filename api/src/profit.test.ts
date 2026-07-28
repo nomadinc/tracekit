@@ -4,10 +4,13 @@ import {
   aggregateDailyProfitConversions,
   aggregateProfitConversions,
   buildFinancialIssueAnalysis,
+  financialIssueLedgerRowFromPlatformOrder,
   profitDailyKeyFromConversion,
   profitDailyKeyId,
   profitOrderKeyFromConversion,
   profitOrderKeyId,
+  saleLedgerRowFromPlatformOrder,
+  type FinancialIssueOrderRow,
   toProfitDailyRollupRow,
   toProfitOrderRollupRow,
   type ProfitConversionRow,
@@ -242,4 +245,153 @@ test("top-five affiliate ordering uses affected orders then rate", () => {
 
   assert.equal(result.affiliates.length, 5);
   assert.deepEqual(result.affiliates.map((entry: any) => entry.affiliate_id), ["aff-6", "aff-5", "aff-4", "aff-3", "aff-2"]);
+});
+
+test("maps explicit WowBoost refund platform rows into analysis ledger rows", () => {
+  const platformRow: FinancialIssueOrderRow = {
+    workspace_id: "default",
+    platform: "wowboost",
+    platform_order_id: "wowboost:105330",
+    order_id: "105330",
+    status: "REFUNDED",
+    status_norm: "REFUNDED",
+    gross_amount: -90.94,
+    currency: "USD",
+    order_ts: "2026-06-29T12:00:00.000Z",
+    affiliate_id: "affiliate-smoke-001",
+    raw_json: {
+      "Order Status Name": "Partially Refunded",
+      "Receipt Status Name": "Paid",
+      "Updated Date": "07/07/2026 12:46:01",
+      "Order Price USD": "90.94",
+    },
+  };
+
+  const refund = financialIssueLedgerRowFromPlatformOrder(platformRow, "refund");
+  assert.ok(refund);
+  assert.equal(refund.order_id, "105330");
+  assert.equal(refund.ledger_type, "refund");
+  assert.equal(refund.amount, -90.94);
+  assert.equal(refund.occurred_at, "2026-07-07T12:46:01.000Z");
+  assert.equal(refund.platform, "wowboost");
+  assert.match(String(refund.transaction_id), /^wowboost:wowboost:105330:refund:2026-07-07T12:46:01\.000Z:90\.94$/);
+});
+
+test("does not classify cancelled or declined WowBoost rows as refunds", () => {
+  const cancelled: FinancialIssueOrderRow = {
+    platform: "wowboost",
+    platform_order_id: "wowboost:cancelled",
+    order_id: "cancelled",
+    status: "CANCELLED",
+    status_norm: "CANCELLED",
+    gross_amount: -49,
+    currency: "USD",
+    order_ts: "2026-07-07T12:46:01.000Z",
+    raw_json: {
+      "Order Status Name": "Cancelled",
+      "Receipt Status Name": "Declined",
+      "Updated Date": "07/07/2026 12:46:01",
+      "Order Price USD": "49.00",
+    },
+  };
+
+  assert.equal(financialIssueLedgerRowFromPlatformOrder(cancelled, "refund"), null);
+  assert.equal(saleLedgerRowFromPlatformOrder(cancelled), null);
+});
+
+test("uses receipt refunded evidence from WowBoost raw payloads", () => {
+  const shippedRefunded: FinancialIssueOrderRow = {
+    platform: "wowboost",
+    platform_order_id: "wowboost:receipt-refund",
+    order_id: "receipt-refund",
+    status: "COMPLETED",
+    status_norm: "COMPLETED",
+    gross_amount: 96.94,
+    currency: "USD",
+    order_ts: "2026-07-02T11:00:00.000Z",
+    raw_json: {
+      "Order Status Name": "Shipped",
+      "Receipt Status Name": "Refunded",
+      "Updated Date": "07/18/2026 09:30:00",
+      "Order Price USD": "$96.94",
+    },
+  };
+
+  const refund = financialIssueLedgerRowFromPlatformOrder(shippedRefunded, "refund");
+  assert.ok(refund);
+  assert.equal(refund.amount, -96.94);
+  assert.equal(refund.occurred_at, "2026-07-18T09:30:00.000Z");
+});
+
+test("builds refund analysis from WowBoost platform fallback rows", () => {
+  const platformOrders: FinancialIssueOrderRow[] = [
+    {
+      workspace_id: "default",
+      platform: "wowboost",
+      platform_order_id: "wowboost:refund-a",
+      order_id: "refund-a",
+      status: "REFUNDED",
+      status_norm: "REFUNDED",
+      gross_amount: -90.94,
+      currency: "USD",
+      order_ts: "2026-06-29T12:00:00.000Z",
+      affiliate_id: "aff-1",
+      raw_json: {
+        "Order Status Name": "Partially Refunded",
+        "Receipt Status Name": "Paid",
+        "Updated Date": "07/07/2026 12:46:01",
+        "Order Price USD": "90.94",
+      },
+    },
+    {
+      workspace_id: "default",
+      platform: "wowboost",
+      platform_order_id: "wowboost:refund-b",
+      order_id: "refund-b",
+      status: "REFUNDED",
+      status_norm: "REFUNDED",
+      gross_amount: -125,
+      currency: "USD",
+      order_ts: "2026-07-04T12:00:00.000Z",
+      affiliate_id: "aff-2",
+      raw_json: {
+        "Order Status Name": "Refunded",
+        "Receipt Status Name": "Paid",
+        "Updated Date": "07/08/2026 08:15:00",
+        "Order Price USD": "125.00",
+      },
+    },
+  ];
+  const refundRows = platformOrders
+    .map((order) => financialIssueLedgerRowFromPlatformOrder(order, "refund"))
+    .filter(Boolean) as ProfitConversionRow[];
+  const saleRows = platformOrders.map((order) => ({
+    ...row("sale", 100, { order_id: order.order_id || "" }),
+    platform: order.platform,
+  }));
+
+  const result = buildFinancialIssueAnalysis([...saleRows, ...refundRows], platformOrders, { kind: "refund" });
+
+  assert.equal(result.summary.amount, 215.94);
+  assert.equal(result.summary.event_count, 2);
+  assert.equal(result.summary.affected_orders, 2);
+  assert.equal(result.affiliates.length, 2);
+  assert.equal(result.data_quality.diagnostics.included_records, 2);
+});
+
+test("refund analysis excludes unmatched ledger rows and reports diagnostics", () => {
+  const result = buildFinancialIssueAnalysis(
+    [
+      row("refund", -50, { order_id: "missing-platform-order" }),
+      row("refund", 0, { order_id: "missing-amount" }),
+    ],
+    [{ order_id: "missing-amount", affiliate_id: "aff-1" }],
+    { kind: "refund" },
+  );
+
+  assert.equal(result.summary.amount, 0);
+  assert.equal(result.data_quality.diagnostics.unmatched_orders, 1);
+  assert.equal(result.data_quality.diagnostics.missing_amounts, 1);
+  assert.equal(result.data_quality.diagnostics.excluded_records_by_reason.unmatched_order, 1);
+  assert.equal(result.data_quality.diagnostics.excluded_records_by_reason.missing_amount, 1);
 });

@@ -76,18 +76,23 @@ export type FinancialIssueKind = "refund" | "chargeback";
 export type FinancialIssueLedgerRow = ProfitConversionRow & {
   transaction_id?: string | null;
   status?: string | null;
+  raw?: Record<string, unknown> | null;
 };
 
 export type FinancialIssueOrderRow = {
+  workspace_id?: string | null;
   platform_order_id?: string | null;
   order_id?: string | null;
   platform?: string | null;
   status?: string | null;
   status_norm?: string | null;
+  transaction_id?: string | null;
   gross_amount?: number | string | null;
   receipt_total?: number | string | null;
   currency?: string | null;
   order_ts?: string | null;
+  updated_at?: string | null;
+  created_at?: string | null;
   customer_email?: string | null;
   customer_email_normalized?: string | null;
   email?: string | null;
@@ -120,6 +125,18 @@ export type FinancialIssueAnalysisOptions = FinancialIssueAnalysisFilters & {
   page?: number | null;
   limit?: number | null;
   scanned_all?: boolean;
+};
+
+export type FinancialIssueDiagnostics = {
+  ledger_records_scanned: number;
+  ledger_issue_records: number;
+  platform_issue_records_scanned: number;
+  platform_issue_records_included: number;
+  platform_issue_records_excluded_by_reason: Record<string, number>;
+  included_records: number;
+  excluded_records_by_reason: Record<string, number>;
+  unmatched_orders: number;
+  missing_amounts: number;
 };
 
 const COST_BUCKETS = [
@@ -249,10 +266,175 @@ function canonicalOrderId(row: { order_id?: string | null }) {
   return firstText(row.order_id);
 }
 
+function incrementReason(reasons: Record<string, number>, reason: string) {
+  reasons[reason] = (reasons[reason] || 0) + 1;
+}
+
 function safeLimit(value: number | null | undefined) {
   const n = Math.trunc(Number(value || 25));
   if (!Number.isFinite(n) || n <= 0) return 25;
   return Math.min(100, Math.max(1, n));
+}
+
+function parseFinancialIssueDate(value: unknown) {
+  const text = firstText(value);
+  if (!text) return "";
+
+  const us = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(text);
+  if (us) {
+    return new Date(Date.UTC(
+      Number(us[3]),
+      Number(us[1]) - 1,
+      Number(us[2]),
+      Number(us[4] || 0),
+      Number(us[5] || 0),
+      Number(us[6] || 0),
+    )).toISOString();
+  }
+
+  const direct = new Date(text);
+  if (!Number.isNaN(direct.getTime())) return direct.toISOString();
+
+  const normalized = new Date(text.replace(" ", "T") + (text.includes("Z") ? "" : "Z"));
+  if (!Number.isNaN(normalized.getTime())) return normalized.toISOString();
+
+  return "";
+}
+
+function rawMoney(raw: Record<string, unknown> | null | undefined, keys: string[]) {
+  for (const key of keys) {
+    const text = rawText(raw, [key]).replace(/[$,]/g, "");
+    if (!text) continue;
+    const amount = Number(text);
+    if (Number.isFinite(amount)) return amount;
+  }
+  return null;
+}
+
+function platformIssueStatusText(row: FinancialIssueOrderRow) {
+  const raw = row.raw_json;
+  return [
+    row.status_norm,
+    row.status,
+    rawText(raw, ["Order Status Name", "Order Status", "order_status", "status"]),
+    rawText(raw, ["Receipt Status Name", "Receipt Status", "Payment Status", "payment_status"]),
+    rawText(raw, ["Transaction Type", "Event Type", "type"]),
+  ].map((value) => String(value || "").trim()).filter(Boolean).join(" | ");
+}
+
+export function financialIssueOccurredAtFromPlatformOrder(row: FinancialIssueOrderRow, kind: FinancialIssueKind) {
+  const raw = row.raw_json;
+  if (kind === "refund") {
+    return parseFinancialIssueDate(rawText(raw, [
+      "Refund Date",
+      "Refund Created Date",
+      "Refund Create Date",
+      "Refund Completed Date",
+      "Updated Date",
+      "Order Update Date",
+    ]) || row.updated_at || row.order_ts || row.created_at);
+  }
+
+  return parseFinancialIssueDate(rawText(raw, [
+    "Chargeback Date",
+    "Dispute Date",
+    "Updated Date",
+    "Order Update Date",
+  ]) || row.updated_at || row.order_ts || row.created_at);
+}
+
+function platformIssueAmount(row: FinancialIssueOrderRow, kind: FinancialIssueKind) {
+  const raw = row.raw_json;
+  const sourceAmount = kind === "refund"
+    ? rawMoney(raw, [
+        "Refund Amount",
+        "Refunded Amount",
+        "Return Amount",
+        "Order Price USD",
+        "Order Price",
+        "Amount USD",
+        "Amount",
+      ])
+    : rawMoney(raw, [
+        "Chargeback Amount",
+        "Dispute Amount",
+        "Order Price USD",
+        "Order Price",
+        "Amount USD",
+        "Amount",
+      ]);
+
+  const amount = sourceAmount ?? (numberFrom(row.gross_amount) || numberFrom(row.receipt_total));
+  return Math.abs(amount);
+}
+
+function platformOrderMatchesFinancialIssue(row: FinancialIssueOrderRow, kind: FinancialIssueKind) {
+  const statusText = platformIssueStatusText(row).toLowerCase();
+  if (kind === "chargeback") return /chargeback|dispute|chargedback/.test(statusText);
+  if (/chargeback|dispute|chargedback/.test(statusText)) return false;
+  return /refund|refunded|partial refund|partially refunded|return|void|reversal/.test(statusText);
+}
+
+export function financialIssueLedgerRowFromPlatformOrder(
+  row: FinancialIssueOrderRow,
+  kind: FinancialIssueKind,
+): FinancialIssueLedgerRow | null {
+  if (!platformOrderMatchesFinancialIssue(row, kind)) return null;
+
+  const orderId = canonicalOrderId(row);
+  const platformOrderId = firstText(row.platform_order_id);
+  const occurredAt = financialIssueOccurredAtFromPlatformOrder(row, kind);
+  const amount = platformIssueAmount(row, kind);
+  if (!orderId || !occurredAt || amount <= 0) return null;
+
+  const eventKey = [
+    firstText(row.platform, "platform_order"),
+    platformOrderId || orderId,
+    kind,
+    occurredAt,
+    amount.toFixed(2),
+  ].join(":");
+
+  return {
+    workspace_id: normalizeProfitWorkspace(row.workspace_id),
+    order_id: orderId,
+    connector_id: firstText(row.platform, "platform_order"),
+    currency: firstText(row.currency, "USD").toUpperCase(),
+    platform: firstText(row.platform, "platform_order"),
+    event_source: firstText(row.platform, "platform_order"),
+    ledger_type: kind,
+    amount: -Math.abs(amount),
+    occurred_at: occurredAt,
+    transaction_id: eventKey,
+    status: firstText(row.status_norm, row.status, kind),
+    raw: {
+      source: "platform_orders",
+      platform_order_id: platformOrderId || null,
+      raw_status: platformIssueStatusText(row),
+    },
+  };
+}
+
+export function saleLedgerRowFromPlatformOrder(row: FinancialIssueOrderRow): FinancialIssueLedgerRow | null {
+  const orderId = canonicalOrderId(row);
+  const amount = numberFrom(row.gross_amount);
+  const statusText = platformIssueStatusText(row).toLowerCase();
+  if (!orderId || amount <= 0) return null;
+  if (/refund|chargeback|dispute|void|reversal|cancel|declin|reject|abandon|abort|failed|error/.test(statusText)) return null;
+
+  return {
+    workspace_id: normalizeProfitWorkspace(row.workspace_id),
+    order_id: orderId,
+    connector_id: firstText(row.platform, "platform_order"),
+    currency: firstText(row.currency, "USD").toUpperCase(),
+    platform: firstText(row.platform, "platform_order"),
+    event_source: firstText(row.platform, "platform_order"),
+    ledger_type: "sale",
+    amount,
+    occurred_at: parseFinancialIssueDate(row.order_ts || row.created_at) || null,
+    transaction_id: `${firstText(row.platform, "platform_order")}:${firstText(row.platform_order_id, orderId)}:sale`,
+    status: firstText(row.status_norm, row.status, "sale"),
+  };
 }
 
 export function buildFinancialIssueAnalysis(
@@ -281,6 +463,17 @@ export function buildFinancialIssueAnalysis(
   const saleOrderIds = new Set<string>();
   const issueOrderIds = new Set<string>();
   const warnings: string[] = [];
+  const diagnostics: FinancialIssueDiagnostics = {
+    ledger_records_scanned: ledgerRows.length,
+    ledger_issue_records: ledgerRows.filter((row) => String(row.ledger_type || "") === kind).length,
+    platform_issue_records_scanned: 0,
+    platform_issue_records_included: 0,
+    platform_issue_records_excluded_by_reason: {},
+    included_records: 0,
+    excluded_records_by_reason: {},
+    unmatched_orders: 0,
+    missing_amounts: 0,
+  };
   let issueAmount = 0;
   let issueEventCount = 0;
 
@@ -306,13 +499,27 @@ export function buildFinancialIssueAnalysis(
 
   for (const row of ledgerRows) {
     const orderId = canonicalOrderId(row);
-    if (!orderId) continue;
-    const affiliateId = affiliateForOrder(orderId);
-    if (!affiliateId) continue;
-    if (affiliateFilter && affiliateId !== affiliateFilter) continue;
-
     const ledgerType = String(row.ledger_type || "");
     const amount = numberFrom(row.amount);
+
+    if (!orderId) {
+      if (ledgerType === kind) incrementReason(diagnostics.excluded_records_by_reason, "missing_order_id");
+      continue;
+    }
+
+    const affiliateId = affiliateForOrder(orderId);
+    if (!affiliateId) {
+      if (ledgerType === kind) {
+        diagnostics.unmatched_orders += 1;
+        incrementReason(diagnostics.excluded_records_by_reason, ordersById.has(orderId) ? "missing_affiliate" : "unmatched_order");
+      }
+      continue;
+    }
+    if (affiliateFilter && affiliateId !== affiliateFilter) {
+      if (ledgerType === kind) incrementReason(diagnostics.excluded_records_by_reason, "affiliate_filter");
+      continue;
+    }
+
     const entry = entryFor(affiliateId);
 
     if (ledgerType === "sale" && amount > 0) {
@@ -321,9 +528,15 @@ export function buildFinancialIssueAnalysis(
     }
 
     if (ledgerType === kind) {
+      if (amount === 0) {
+        diagnostics.missing_amounts += 1;
+        incrementReason(diagnostics.excluded_records_by_reason, "missing_amount");
+        continue;
+      }
       const absoluteAmount = Math.abs(amount);
       issueAmount += absoluteAmount;
       issueEventCount += 1;
+      diagnostics.included_records += 1;
       issueOrderIds.add(orderId);
       entry.affected_orders.add(orderId);
       entry.event_count += 1;
@@ -391,6 +604,7 @@ export function buildFinancialIssueAnalysis(
       attributed_order_coverage: null,
       missing_denominators: [],
       warnings: uniqueWarnings,
+      diagnostics,
     },
   };
 }
