@@ -35,6 +35,209 @@ export type WowBoostImportPageContinuation = {
   next_page: number | null;
 };
 
+export type WowBoostImportPageDateDiagnostics = {
+  source_record_count: number;
+  first_record_date: string | null;
+  last_record_date: string | null;
+  earliest_record_date: string | null;
+  latest_record_date: string | null;
+  in_range_record_count: number;
+  out_of_range_record_count: number;
+  before_range_record_count: number;
+  after_range_record_count: number;
+  invalid_or_missing_date_count: number;
+  range_position: "empty" | "inside_or_overlapping" | "before_requested_window" | "after_requested_window" | "indeterminate";
+};
+
+export const WOWBOOST_IMPORT_MODES = [
+  "order_snapshot_import",
+  "receipt_event_backfill",
+] as const;
+
+export type WowBoostImportMode = (typeof WOWBOOST_IMPORT_MODES)[number];
+
+export const WOWBOOST_SNAPSHOT_BEFORE_RANGE_PAGE_THRESHOLD = 2;
+export const WOWBOOST_ORDER_SNAPSHOT_MAX_PAGES = 100;
+export const WOWBOOST_RECEIPT_BACKFILL_DEFAULT_MAX_PAGES = 50;
+export const WOWBOOST_RECEIPT_BACKFILL_MAX_PAGES = 250;
+export const WOWBOOST_RECEIPT_BACKFILL_DEFAULT_MAX_SOURCE_ROWS = 5_000;
+export const WOWBOOST_RECEIPT_BACKFILL_MAX_SOURCE_ROWS = 25_000;
+
+export const WOWBOOST_IMPORT_MUTABLE_JOB_STATUSES = [
+  "queued",
+  "running",
+  "importing",
+  "retrying",
+] as const;
+
+export type WowBoostImportContinuationDecision = {
+  mode: WowBoostImportMode;
+  status: "importing" | "paused" | "completed";
+  has_more: boolean;
+  enqueue_next: boolean;
+  next_page: number | null;
+  continuation_page: number | null;
+  termination_reason:
+    | "upstream_has_more"
+    | "upstream_exhausted"
+    | "order_snapshot_window_passed"
+    | "order_snapshot_max_pages_reached"
+    | "receipt_backfill_max_pages_reached"
+    | "receipt_backfill_max_source_rows_reached";
+  partial: boolean;
+  snapshot_phase_complete: boolean;
+  consecutive_pages_before_range: number;
+  receipt_pages_processed: number;
+  receipt_source_rows_processed: number;
+};
+
+export function normalizeWowBoostImportMode(
+  value: unknown,
+  fallback: WowBoostImportMode = "order_snapshot_import",
+): WowBoostImportMode {
+  const normalized = cleanText(value).toLowerCase();
+  return WOWBOOST_IMPORT_MODES.includes(normalized as WowBoostImportMode)
+    ? normalized as WowBoostImportMode
+    : fallback;
+}
+
+export function normalizeWowBoostReceiptBackfillMaxPages(value: unknown) {
+  const parsed = Math.floor(Number(value));
+  if (!Number.isFinite(parsed) || parsed <= 0) return WOWBOOST_RECEIPT_BACKFILL_DEFAULT_MAX_PAGES;
+  return Math.min(WOWBOOST_RECEIPT_BACKFILL_MAX_PAGES, parsed);
+}
+
+export function normalizeWowBoostReceiptBackfillMaxSourceRows(value: unknown) {
+  const parsed = Math.floor(Number(value));
+  if (!Number.isFinite(parsed) || parsed <= 0) return WOWBOOST_RECEIPT_BACKFILL_DEFAULT_MAX_SOURCE_ROWS;
+  return Math.min(WOWBOOST_RECEIPT_BACKFILL_MAX_SOURCE_ROWS, parsed);
+}
+
+export function wowBoostImportJobCanProcess(status: unknown) {
+  return WOWBOOST_IMPORT_MUTABLE_JOB_STATUSES.includes(
+    cleanText(status).toLowerCase() as (typeof WOWBOOST_IMPORT_MUTABLE_JOB_STATUSES)[number],
+  );
+}
+
+export function decideWowBoostImportContinuation(args: {
+  mode: WowBoostImportMode;
+  current_page: number;
+  upstream_has_more: unknown;
+  page_range_position: WowBoostImportPageDateDiagnostics["range_position"];
+  previous_consecutive_pages_before_range?: number;
+  snapshot_before_range_page_threshold?: number;
+  snapshot_max_pages?: number;
+  previous_receipt_pages_processed?: number;
+  previous_receipt_source_rows_processed?: number;
+  source_rows?: number;
+  receipt_max_pages?: number;
+  receipt_max_source_rows?: number;
+}): WowBoostImportContinuationDecision {
+  const mode = normalizeWowBoostImportMode(args.mode);
+  const currentPage = Math.max(1, Math.floor(Number(args.current_page) || 1));
+  const upstreamHasMore = Boolean(args.upstream_has_more);
+  const priorBeforeRange = Math.max(0, Math.floor(Number(args.previous_consecutive_pages_before_range) || 0));
+  const consecutivePagesBeforeRange = args.page_range_position === "before_requested_window"
+    ? priorBeforeRange + 1
+    : 0;
+  const snapshotThreshold = Math.max(
+    1,
+    Math.floor(Number(args.snapshot_before_range_page_threshold) || WOWBOOST_SNAPSHOT_BEFORE_RANGE_PAGE_THRESHOLD),
+  );
+  const snapshotMaxPages = Math.max(
+    snapshotThreshold,
+    Math.floor(Number(args.snapshot_max_pages) || WOWBOOST_ORDER_SNAPSHOT_MAX_PAGES),
+  );
+  const receiptPagesProcessed = Math.max(
+    0,
+    Math.floor(Number(args.previous_receipt_pages_processed) || 0),
+  ) + 1;
+  const receiptSourceRowsProcessed = Math.max(
+    0,
+    Math.floor(Number(args.previous_receipt_source_rows_processed) || 0),
+  ) + Math.max(0, Math.floor(Number(args.source_rows) || 0));
+  const receiptMaxPages = normalizeWowBoostReceiptBackfillMaxPages(args.receipt_max_pages);
+  const receiptMaxSourceRows = normalizeWowBoostReceiptBackfillMaxSourceRows(args.receipt_max_source_rows);
+
+  const completed = (terminationReason: WowBoostImportContinuationDecision["termination_reason"]) => ({
+    mode,
+    status: "completed" as const,
+    has_more: false,
+    enqueue_next: false,
+    next_page: null,
+    continuation_page: null,
+    termination_reason: terminationReason,
+    partial: false,
+    snapshot_phase_complete: mode === "order_snapshot_import",
+    consecutive_pages_before_range: consecutivePagesBeforeRange,
+    receipt_pages_processed: receiptPagesProcessed,
+    receipt_source_rows_processed: receiptSourceRowsProcessed,
+  });
+
+  const paused = (terminationReason: WowBoostImportContinuationDecision["termination_reason"]) => ({
+    mode,
+    status: "paused" as const,
+    has_more: true,
+    enqueue_next: false,
+    next_page: null,
+    continuation_page: currentPage + 1,
+    termination_reason: terminationReason,
+    partial: true,
+    snapshot_phase_complete: false,
+    consecutive_pages_before_range: consecutivePagesBeforeRange,
+    receipt_pages_processed: receiptPagesProcessed,
+    receipt_source_rows_processed: receiptSourceRowsProcessed,
+  });
+
+  if (!upstreamHasMore) return completed("upstream_exhausted");
+
+  if (mode === "order_snapshot_import") {
+    if (consecutivePagesBeforeRange >= snapshotThreshold) {
+      return completed("order_snapshot_window_passed");
+    }
+    if (currentPage >= snapshotMaxPages) {
+      return paused("order_snapshot_max_pages_reached");
+    }
+  } else {
+    if (receiptPagesProcessed >= receiptMaxPages) {
+      return paused("receipt_backfill_max_pages_reached");
+    }
+    if (receiptSourceRowsProcessed >= receiptMaxSourceRows) {
+      return paused("receipt_backfill_max_source_rows_reached");
+    }
+  }
+
+  return {
+    mode,
+    status: "importing",
+    has_more: true,
+    enqueue_next: true,
+    next_page: currentPage + 1,
+    continuation_page: currentPage + 1,
+    termination_reason: "upstream_has_more",
+    partial: false,
+    snapshot_phase_complete: false,
+    consecutive_pages_before_range: consecutivePagesBeforeRange,
+    receipt_pages_processed: receiptPagesProcessed,
+    receipt_source_rows_processed: receiptSourceRowsProcessed,
+  };
+}
+
+export function wowBoostRefundEventIsInRange(
+  event: { occurred_at?: unknown },
+  from: string,
+  to: string,
+) {
+  const range = normalizeWowSuiteImportDateRange(from, to);
+  const occurredAt = wowBoostEventTimestamp(event?.occurred_at);
+  if (!range.ok || !occurredAt) return false;
+  const timestamp = Date.parse(occurredAt);
+  const fromTimestamp = Date.parse(`${range.from}T00:00:00.000Z`);
+  const toExclusive = new Date(`${range.to}T00:00:00.000Z`);
+  toExclusive.setUTCDate(toExclusive.getUTCDate() + 1);
+  return Number.isFinite(timestamp) && timestamp >= fromTimestamp && timestamp < toExclusive.getTime();
+}
+
 export const WOWBOOST_COMMERCE_REFERENCE_FIELDS = [
   "ReferenceId",
   "Reference ID",
@@ -794,6 +997,71 @@ export function wowBoostImportPageContinuation(
   return {
     has_more: hasMore,
     next_page: hasMore ? Math.max(1, Number(currentPage) || 1) + 1 : null,
+  };
+}
+
+export function summarizeWowBoostImportPageDates(
+  values: unknown[],
+  from: string,
+  to: string,
+): WowBoostImportPageDateDiagnostics {
+  const range = normalizeWowSuiteImportDateRange(from, to);
+  const sourceValues = Array.isArray(values) ? values : [];
+  const parsedValues = sourceValues.map((value) => wowBoostEventTimestamp(value));
+  const validDates = parsedValues
+    .filter((value): value is string => Boolean(value))
+    .map((value) => ({ iso: value, timestamp: Date.parse(value) }))
+    .filter((value) => Number.isFinite(value.timestamp));
+
+  if (!range.ok) {
+    return {
+      source_record_count: sourceValues.length,
+      first_record_date: parsedValues[0] || null,
+      last_record_date: parsedValues.length ? parsedValues[parsedValues.length - 1] || null : null,
+      earliest_record_date: null,
+      latest_record_date: null,
+      in_range_record_count: 0,
+      out_of_range_record_count: 0,
+      before_range_record_count: 0,
+      after_range_record_count: 0,
+      invalid_or_missing_date_count: sourceValues.length - validDates.length,
+      range_position: sourceValues.length ? "indeterminate" : "empty",
+    };
+  }
+
+  const fromTimestamp = Date.parse(`${range.from}T00:00:00.000Z`);
+  const toExclusive = new Date(`${range.to}T00:00:00.000Z`);
+  toExclusive.setUTCDate(toExclusive.getUTCDate() + 1);
+  const toTimestamp = toExclusive.getTime();
+  const beforeRange = validDates.filter((value) => value.timestamp < fromTimestamp).length;
+  const afterRange = validDates.filter((value) => value.timestamp >= toTimestamp).length;
+  const inRange = validDates.length - beforeRange - afterRange;
+  const invalidOrMissing = sourceValues.length - validDates.length;
+  const timestamps = validDates.map((value) => value.timestamp);
+
+  let rangePosition: WowBoostImportPageDateDiagnostics["range_position"] = "indeterminate";
+  if (!sourceValues.length) {
+    rangePosition = "empty";
+  } else if (inRange > 0 || (beforeRange > 0 && afterRange > 0)) {
+    rangePosition = "inside_or_overlapping";
+  } else if (beforeRange === sourceValues.length) {
+    rangePosition = "before_requested_window";
+  } else if (afterRange === sourceValues.length) {
+    rangePosition = "after_requested_window";
+  }
+
+  return {
+    source_record_count: sourceValues.length,
+    first_record_date: parsedValues[0] || null,
+    last_record_date: parsedValues.length ? parsedValues[parsedValues.length - 1] || null : null,
+    earliest_record_date: timestamps.length ? new Date(Math.min(...timestamps)).toISOString() : null,
+    latest_record_date: timestamps.length ? new Date(Math.max(...timestamps)).toISOString() : null,
+    in_range_record_count: inRange,
+    out_of_range_record_count: beforeRange + afterRange,
+    before_range_record_count: beforeRange,
+    after_range_record_count: afterRange,
+    invalid_or_missing_date_count: invalidOrMissing,
+    range_position: rangePosition,
   };
 }
 

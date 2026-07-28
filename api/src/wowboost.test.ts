@@ -8,6 +8,7 @@ import {
   buildWowSuiteCredentialStatus,
   capWowBoostPermanentMissingOrderIds,
   classifyWowBoostOrderDetailsLookupFailure,
+  decideWowBoostImportContinuation,
   appendWowBoostRuntimePageFingerprint,
   extractWowBoostCommerceReference,
   extractWowBoostCommerceReferenceEvidence,
@@ -26,6 +27,8 @@ import {
   normalizeWowBoostOrderDetailsPacingMs,
   normalizeWowSuiteImportDateRange,
   normalizeWowBoostCommerceReferenceExportRow,
+  normalizeWowBoostImportMode,
+  normalizeWowBoostReceiptBackfillMaxPages,
   normalizeWowBoostExportHeader,
   normalizeWowBoostRuntimeMaxExportPages,
   normalizeWowBoostLegacyMaxExportPagesPerInvocation,
@@ -39,6 +42,7 @@ import {
   serializeWowBoostOrderDetailsBackfillCursor,
   summarizeWowBoostCommerceReferenceBackfillBatch,
   summarizeWowBoostCommerceReferenceExportBackfill,
+  summarizeWowBoostImportPageDates,
   summarizeWowBoostOrderDetailsReferenceBackfillDecisions,
   mergeWowBoostPlatformOrderSnapshot,
   wowBoostExportContinuationTokenWithDateRange,
@@ -55,6 +59,9 @@ import {
   wowBoostRuntimeRepeatedPageDetected,
   wowBoostRuntimeStagingStopDecision,
   wowBoostImportPageContinuation,
+  wowBoostImportJobCanProcess,
+  wowBoostRefundEventIsInRange,
+  WOWBOOST_RECEIPT_BACKFILL_MAX_PAGES,
 } from "./wowboost.ts";
 
 test("reports connected WowSuite credentials without exposing the encrypted secret", () => {
@@ -1839,6 +1846,227 @@ test("upstream hasMore controls pagination even for short or zero in-range pages
     has_more: false,
     next_page: null,
   });
+});
+
+test("import page date diagnostics distinguish in-range, older, newer, and invalid records", () => {
+  assert.deepEqual(
+    summarizeWowBoostImportPageDates([
+      "2026-07-02T09:00:00Z",
+      "2026-06-30T23:59:59Z",
+      "2026-08-01T00:00:00Z",
+      "",
+    ], "2026-07-01", "2026-07-31"),
+    {
+      source_record_count: 4,
+      first_record_date: "2026-07-02T09:00:00.000Z",
+      last_record_date: null,
+      earliest_record_date: "2026-06-30T23:59:59.000Z",
+      latest_record_date: "2026-08-01T00:00:00.000Z",
+      in_range_record_count: 1,
+      out_of_range_record_count: 2,
+      before_range_record_count: 1,
+      after_range_record_count: 1,
+      invalid_or_missing_date_count: 1,
+      range_position: "inside_or_overlapping",
+    },
+  );
+});
+
+test("import page date diagnostics identify pages entirely before the requested window", () => {
+  const diagnostics = summarizeWowBoostImportPageDates([
+    "2026-05-05T19:23:09Z",
+    "2026-05-05T02:53:28Z",
+  ], "2026-07-01", "2026-07-31");
+
+  assert.equal(diagnostics.first_record_date, "2026-05-05T19:23:09.000Z");
+  assert.equal(diagnostics.last_record_date, "2026-05-05T02:53:28.000Z");
+  assert.equal(diagnostics.in_range_record_count, 0);
+  assert.equal(diagnostics.out_of_range_record_count, 2);
+  assert.equal(diagnostics.range_position, "before_requested_window");
+});
+
+test("snapshot continuation stops after consecutive pages before the requested range", () => {
+  const firstOlderPage = decideWowBoostImportContinuation({
+    mode: "order_snapshot_import",
+    current_page: 20,
+    upstream_has_more: true,
+    page_range_position: "before_requested_window",
+    previous_consecutive_pages_before_range: 0,
+  });
+  assert.equal(firstOlderPage.status, "importing");
+  assert.equal(firstOlderPage.enqueue_next, true);
+  assert.equal(firstOlderPage.next_page, 21);
+
+  const secondOlderPage = decideWowBoostImportContinuation({
+    mode: "order_snapshot_import",
+    current_page: 21,
+    upstream_has_more: true,
+    page_range_position: "before_requested_window",
+    previous_consecutive_pages_before_range: firstOlderPage.consecutive_pages_before_range,
+  });
+  assert.equal(secondOlderPage.status, "completed");
+  assert.equal(secondOlderPage.enqueue_next, false);
+  assert.equal(secondOlderPage.snapshot_phase_complete, true);
+  assert.equal(secondOlderPage.termination_reason, "order_snapshot_window_passed");
+});
+
+test("an in-range refund on an older order remains eligible for receipt backfill", () => {
+  const [event] = extractWowBoostRefundEventsFromCsvRows([
+    {
+      "Order ID": "older-order-july-refund",
+      "Order Create Date": "06/15/2026 10:00:00",
+      "Receipt Status Name": "Refunded",
+      "Create Date (Receipts)": "07/07/2026 12:30:00",
+      "Amount USD": "25.00",
+    },
+  ]);
+
+  assert.ok(event);
+  assert.equal(
+    summarizeWowBoostImportPageDates(["06/15/2026 10:00:00"], "2026-07-01", "2026-07-31").range_position,
+    "before_requested_window",
+  );
+  assert.equal(wowBoostRefundEventIsInRange(event, "2026-07-01", "2026-07-31"), true);
+  assert.equal(wowBoostRefundEventIsInRange(event, "2026-08-01", "2026-08-31"), false);
+});
+
+test("snapshot completion does not terminate an explicit receipt-event backfill", () => {
+  const snapshotDecision = decideWowBoostImportContinuation({
+    mode: "order_snapshot_import",
+    current_page: 21,
+    upstream_has_more: true,
+    page_range_position: "before_requested_window",
+    previous_consecutive_pages_before_range: 1,
+  });
+  const receiptDecision = decideWowBoostImportContinuation({
+    mode: "receipt_event_backfill",
+    current_page: 21,
+    upstream_has_more: true,
+    page_range_position: "before_requested_window",
+    previous_receipt_pages_processed: 20,
+    previous_receipt_source_rows_processed: 2_000,
+    source_rows: 100,
+  });
+
+  assert.equal(snapshotDecision.status, "completed");
+  assert.equal(receiptDecision.status, "importing");
+  assert.equal(receiptDecision.enqueue_next, true);
+});
+
+test("normal snapshot imports pause at the hard page bound even when upstream has more", () => {
+  const decision = decideWowBoostImportContinuation({
+    mode: "order_snapshot_import",
+    current_page: 100,
+    upstream_has_more: true,
+    page_range_position: "indeterminate",
+    snapshot_max_pages: 100,
+  });
+
+  assert.equal(decision.status, "paused");
+  assert.equal(decision.partial, true);
+  assert.equal(decision.enqueue_next, false);
+  assert.equal(decision.continuation_page, 101);
+  assert.equal(decision.termination_reason, "order_snapshot_max_pages_reached");
+});
+
+test("receipt backfill pauses at its page bound and persists a stable continuation page", () => {
+  const decision = decideWowBoostImportContinuation({
+    mode: "receipt_event_backfill",
+    current_page: 50,
+    upstream_has_more: true,
+    page_range_position: "before_requested_window",
+    previous_receipt_pages_processed: 49,
+    previous_receipt_source_rows_processed: 4_900,
+    source_rows: 100,
+    receipt_max_pages: 50,
+    receipt_max_source_rows: 10_000,
+  });
+
+  assert.equal(decision.status, "paused");
+  assert.equal(decision.has_more, true);
+  assert.equal(decision.enqueue_next, false);
+  assert.equal(decision.continuation_page, 51);
+  assert.equal(decision.termination_reason, "receipt_backfill_max_pages_reached");
+});
+
+test("receipt backfill bounds are clamped and source-row bounds are explicit", () => {
+  assert.equal(
+    normalizeWowBoostReceiptBackfillMaxPages(WOWBOOST_RECEIPT_BACKFILL_MAX_PAGES + 100),
+    WOWBOOST_RECEIPT_BACKFILL_MAX_PAGES,
+  );
+  const decision = decideWowBoostImportContinuation({
+    mode: "receipt_event_backfill",
+    current_page: 5,
+    upstream_has_more: true,
+    page_range_position: "inside_or_overlapping",
+    previous_receipt_pages_processed: 4,
+    previous_receipt_source_rows_processed: 450,
+    source_rows: 100,
+    receipt_max_pages: 50,
+    receipt_max_source_rows: 500,
+  });
+  assert.equal(decision.status, "paused");
+  assert.equal(decision.continuation_page, 6);
+  assert.equal(decision.termination_reason, "receipt_backfill_max_source_rows_reached");
+});
+
+test("terminal and paused WowBoost jobs cannot be processed by an in-flight page", () => {
+  for (const status of ["cancelled", "completed", "failed", "paused"]) {
+    assert.equal(wowBoostImportJobCanProcess(status), false, status);
+  }
+  for (const status of ["queued", "running", "importing", "retrying"]) {
+    assert.equal(wowBoostImportJobCanProcess(status), true, status);
+  }
+});
+
+test("WowBoost import modes are explicit and default to snapshot import", () => {
+  assert.equal(normalizeWowBoostImportMode("receipt_event_backfill"), "receipt_event_backfill");
+  assert.equal(normalizeWowBoostImportMode("order_snapshot_import"), "order_snapshot_import");
+  assert.equal(normalizeWowBoostImportMode("unknown"), "order_snapshot_import");
+});
+
+test("legacy queue uses a conditional active-status update and durable receipt continuation", () => {
+  const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+  assert.match(
+    source,
+    /\.in\("status", \[\.\.\.WOWBOOST_IMPORT_MUTABLE_JOB_STATUSES\]\)/,
+  );
+  assert.match(source, /cancellation_observed_before_fetch/);
+  assert.match(source, /cancellation_observed_before_write/);
+  assert.match(source, /conditional_update_rejected_because_job_was_terminal/);
+  assert.match(source, /path === "\/v1\/integrations\/wowboost\/backfill-receipt-events"/);
+  assert.match(source, /existingMetadata\.continuation_page \?\? existingProgress\.current_page/);
+});
+
+test("cancellation observed after page work cannot overwrite the terminal job state", () => {
+  const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+  const queueStart = source.indexOf('console.log("[WowBoost Queue] PAGE START"');
+  const queueEnd = source.indexOf("async scheduled(", queueStart);
+  const queueSource = source.slice(queueStart, queueEnd);
+
+  assert.match(queueSource, /const latestBeforeWrite = await getImportJob\(env, jobId\)/);
+  assert.match(queueSource, /!wowBoostImportJobCanProcess\(latestBeforeWrite\.status\)/);
+  assert.match(queueSource, /updateActiveWowBoostImportJob\(env, jobId/);
+  assert.doesNotMatch(
+    queueSource.slice(queueSource.indexOf("const latestBeforeWrite")),
+    /await updateImportJob\(env, jobId/,
+  );
+});
+
+test("checkpointed duplicate pages are skipped before any upstream fetch", () => {
+  const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+  const duplicateGuard = source.indexOf("if (page < expectedPage)");
+  const pageImport = source.indexOf("const result = await runWowBoostImportPage", duplicateGuard);
+  assert.ok(duplicateGuard >= 0);
+  assert.ok(pageImport > duplicateGuard);
+  assert.match(source.slice(duplicateGuard, pageImport), /DUPLICATE PAGE SKIPPED/);
+});
+
+test("receipt-only pages skip mutable platform order snapshots", () => {
+  const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+  assert.match(source, /const mapped = mode === "order_snapshot_import"/);
+  assert.match(source, /snapshot_phase_skipped: mode === "receipt_event_backfill"/);
+  assert.match(source, /refundEvents\.filter\(\(event\) => \(\s*wowBoostRefundEventIsInRange/);
 });
 
 test("refund migration provides atomic idempotent receipt-event insertion", () => {
