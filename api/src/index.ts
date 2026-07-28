@@ -350,6 +350,7 @@ import {
   buildWowSuiteCredentialStatus,
   capWowBoostPermanentMissingOrderIds,
   classifyWowBoostOrderDetailsLookupFailure,
+  decideWowBoostImportContinuation,
   extractWowBoostRefundEventsFromCsvRows,
   extractWowBoostRefundEventsFromJsonOrders,
   extractWowBoostCommerceReferenceEvidence,
@@ -370,11 +371,17 @@ import {
   isWowBoostOrderDetailsBackfillStatementTimeout,
   nextWowBoostOrderDetailsBackfillPlatform,
   mergeWowBoostPlatformOrderSnapshot,
+  normalizeWowBoostImportMode,
+  normalizeWowBoostReceiptBackfillMaxPages,
+  normalizeWowBoostReceiptBackfillMaxSourceRows,
   resolveWowBoostLegacyOrderNumber,
   resolveWowBoostOrderDetailsLookupOrderId,
   scanWowBoostLegacyOrderNumberExportPages,
   serializeWowBoostOrderDetailsBackfillCursor,
   summarizeWowBoostOrderDetailsReferenceBackfillDecisions,
+  summarizeWowBoostImportPageDates,
+  wowBoostImportJobCanProcess,
+  wowBoostRefundEventIsInRange,
   wowBoostExportContinuationTokenWithDateRange,
   wowBoostLegacyExportPageForRequest,
   wowBoostLegacyExportPagingProgress,
@@ -388,7 +395,13 @@ import {
   wowBoostRuntimeRepeatedPageDetected,
   wowBoostRuntimeStagingStopDecision,
   WOWBOOST_RUNTIME_DEFAULT_MAX_EXPORT_PAGES,
+  WOWBOOST_IMPORT_MUTABLE_JOB_STATUSES,
+  WOWBOOST_ORDER_SNAPSHOT_MAX_PAGES,
   WOWBOOST_ORDER_DETAILS_RETRY_MAX_ATTEMPTS,
+  WOWBOOST_RECEIPT_BACKFILL_DEFAULT_MAX_PAGES,
+  WOWBOOST_RECEIPT_BACKFILL_DEFAULT_MAX_SOURCE_ROWS,
+  WOWBOOST_SNAPSHOT_BEFORE_RANGE_PAGE_THRESHOLD,
+  type WowBoostImportMode,
   type WowBoostOrderNumberToOrderIdMapping,
   type WowBoostOrderDetailsReferenceBackfillDecision,
   type WowBoostOrderDetailsReferenceBackfillRow,
@@ -3631,6 +3644,24 @@ async function updateImportJob(env: Env, jobId: string, patch: Partial<ImportJob
   if (error) throw new Error(`Failed to update import job: ${error.message}`);
 }
 
+async function updateActiveWowBoostImportJob(
+  env: Env,
+  jobId: string,
+  patch: Partial<ImportJobRow> & Record<string, any>,
+) {
+  const supabase = getSupabase(env);
+  const { data, error } = await supabase
+    .from("integration_import_jobs")
+    .update({ ...patch, updated_at: new Date().toISOString() })
+    .eq("id", jobId)
+    .in("status", [...WOWBOOST_IMPORT_MUTABLE_JOB_STATUSES])
+    .select("*")
+    .maybeSingle();
+
+  if (error) throw new Error(`Failed to conditionally update WowBoost import job: ${error.message}`);
+  return (data ?? null) as ImportJobRow | null;
+}
+
 async function getImportJob(env: Env, jobId: string) {
   const supabase = getSupabase(env);
   const { data, error } = await supabase.from("integration_import_jobs").select("*").eq("id", jobId).maybeSingle();
@@ -6309,13 +6340,22 @@ async function runWowBoostImportChunk(env: Env, args: { from: string; to: string
     to: args.to,
     page,
     pageSize,
+    mode: "order_snapshot_import",
+  });
+  const continuation = decideWowBoostImportContinuation({
+    mode: "order_snapshot_import",
+    current_page: page,
+    upstream_has_more: result.upstreamHasMore,
+    page_range_position: result.rangePosition,
+    snapshot_before_range_page_threshold: 1,
+    snapshot_max_pages: WOWBOOST_ORDER_SNAPSHOT_MAX_PAGES,
   });
 
   return {
     ok: true,
-    has_more: Boolean(result.hasMore),
+    has_more: continuation.enqueue_next,
     next_cursor: null,
-    next_page: result.hasMore ? Number(result.nextPage ?? page + 1) : null,
+    next_page: continuation.next_page,
     next_window_index: null,
     current_window: { from: args.from, to: args.to },
     metrics: {
@@ -6327,6 +6367,7 @@ async function runWowBoostImportChunk(env: Env, args: { from: string; to: string
       warnings: [
         ...((result as any).identity?.warnings || []),
         ...((result as any).warnings || []),
+        ...(continuation.partial ? [`partial_run:${continuation.termination_reason}`] : []),
       ],
     },
   };
@@ -6359,6 +6400,8 @@ async function wowBoostExportPage(args: { exportBase: string; bearer: string; pa
   return {
     link,
     hasMore: Boolean(js.hasMoreToExport),
+    hasMoreRaw: js.hasMoreToExport ?? null,
+    hasMoreType: typeof js.hasMoreToExport,
     nextExport: String(js.nextExport ?? "").trim() || null,
 	};
 }
@@ -9949,7 +9992,11 @@ async function runWowSuiteWowBoostImport(env: Env, args: {
   const warnings = new Set<string>();
   const sourceOrderTimestamps: string[] = [];
   const refundTimestamps: string[] = [];
-  const maxPages = 250;
+  const maxPages = WOWBOOST_ORDER_SNAPSHOT_MAX_PAGES;
+  let pagesProcessed = 0;
+  let consecutivePagesBeforeRange = 0;
+  let partialRun = false;
+  let terminationReason = "upstream_exhausted";
 
   while (page <= maxPages) {
     const result = await runWowBoostImportPage(env, {
@@ -9959,7 +10006,9 @@ async function runWowSuiteWowBoostImport(env: Env, args: {
       pageSize,
       connector_job_id: args.jobId || null,
       filter: args.filter || "all_sales",
+      mode: "order_snapshot_import",
     });
+    pagesProcessed += 1;
     totalFetched += Number(result.fetched || 0);
     totalSourceRows += Number(result.sourceRows || 0);
     totalUpserted += Number(result.upserted || 0);
@@ -9976,11 +10025,22 @@ async function runWowSuiteWowBoostImport(env: Env, args: {
     if (result.latestRefundTimestamp) refundTimestamps.push(result.latestRefundTimestamp);
     for (const warning of result.warnings || []) warnings.add(String(warning));
 
-    if (!result.hasMore) break;
-    page = Number(result.nextPage || page + 1);
+    const continuation = decideWowBoostImportContinuation({
+      mode: "order_snapshot_import",
+      current_page: page,
+      upstream_has_more: result.upstreamHasMore,
+      page_range_position: result.rangePosition,
+      previous_consecutive_pages_before_range: consecutivePagesBeforeRange,
+      snapshot_max_pages: maxPages,
+    });
+    consecutivePagesBeforeRange = continuation.consecutive_pages_before_range;
+    partialRun = continuation.partial;
+    terminationReason = continuation.termination_reason;
+    if (!continuation.enqueue_next || !continuation.next_page) break;
+    page = continuation.next_page;
   }
 
-  if (page > maxPages) warnings.add(`partial_run:max_pages_${maxPages}`);
+  if (partialRun) warnings.add(`partial_run:${terminationReason}`);
   const orderRange = minMaxIso(sourceOrderTimestamps);
   const refundRange = minMaxIso(refundTimestamps);
   return {
@@ -9999,8 +10059,9 @@ async function runWowSuiteWowBoostImport(env: Env, args: {
     earliestRefundTimestamp: refundRange.earliest,
     latestRefundTimestamp: refundRange.latest,
     warnings: Array.from(warnings),
-    partialRun: page > maxPages,
-    pages: Math.min(page, maxPages),
+    partialRun,
+    terminationReason,
+    pages: pagesProcessed,
   };
 }
 
@@ -10039,9 +10100,10 @@ async function runWowBoostImportJob(env: Env, args: { jobId: string; from: strin
         records_processed: Number(res.fetched || 0),
         rows_upserted: Number(res.upserted || 0),
         ledger_inserted: Number(res.normalizedRefundEventsInserted || 0),
-        completed_at: completedAt,
-        metadata: {
-          rows_inserted: res.rowsInserted,
+	            completed_at: completedAt,
+	            metadata: {
+	              import_mode: "order_snapshot_import",
+	              rows_inserted: res.rowsInserted,
           rows_updated: res.rowsUpdated,
           rows_unchanged: res.rowsUnchanged,
           refunded_rows_observed: res.refundedRowsObserved,
@@ -13371,7 +13433,16 @@ async function router(req: Request, env: Env): Promise<Response> {
     const job = await getImportJob(env, jobId);
     if (!job) return json({ ok: false, error: "not_found", message: "Import job not found" }, 404);
 
-    const progress = cancelImportProgress(progressFromJob(job));
+    const cancelledAt = new Date().toISOString();
+    const currentProgress = progressFromJob(job) as ImportProgressState & Record<string, any>;
+    const progress = {
+      ...cancelImportProgress(currentProgress, cancelledAt),
+      metadata: {
+        ...((currentProgress.metadata && typeof currentProgress.metadata === "object") ? currentProgress.metadata : {}),
+        termination_reason: "user_cancelled",
+        cancelled_at: cancelledAt,
+      },
+    };
     await updateImportJobProgress(env, job, progress);
     const latest = await getImportJob(env, jobId);
 
@@ -16824,9 +16895,10 @@ if (path === "/v1/product-costs/rules/delete" && req.method === "POST") {
 
     try {
 	    const result = await runWowPayImportPage(env, { from, to, page, pageSize });
-      const completedAt = new Date().toISOString();
-      await updateImportJob(env, job.id, {
-        status: "completed",
+	        const completedAt = res.partialRun ? null : new Date().toISOString();
+	        const finalStatus = res.partialRun ? "paused" : "completed";
+	        await updateImportJob(env, job.id, {
+	          status: finalStatus,
         pages: 1,
         fetched: Number(result.fetched || 0),
         upserted: Number(result.upserted || 0),
@@ -16841,15 +16913,16 @@ if (path === "/v1/product-costs/rules/delete" && req.method === "POST") {
             to,
             filter: "all_sales",
           }),
-          status: "completed",
+	            status: finalStatus,
           current_page: page,
           records_fetched: Number(result.fetched || 0),
           records_processed: Number(result.fetched || 0),
           rows_upserted: Number(result.upserted || 0),
           ledger_inserted: Number(result.normalizedRefundEventsInserted || 0),
           completed_at: completedAt,
-          metadata: {
-            direct_one_page: true,
+	            metadata: {
+	              import_mode: "order_snapshot_import",
+	              direct_one_page: true,
             has_more: Boolean(result.hasMore),
             next_page: result.nextPage,
             rows_inserted: result.rowsInserted,
@@ -17154,8 +17227,9 @@ if (path === "/v1/product-costs/rules/delete" && req.method === "POST") {
               latest_source_order_timestamp: res.latestSourceOrderTimestamp,
               earliest_refund_timestamp: res.earliestRefundTimestamp,
               latest_refund_timestamp: res.latestRefundTimestamp,
-              partial_run: res.partialRun,
-              warnings: res.warnings,
+	              partial_run: res.partialRun,
+	              termination_reason: res.terminationReason,
+	              warnings: res.warnings,
             },
           },
         });
@@ -17615,12 +17689,21 @@ if (path === "/v1/integrations/nmi-lifeheater14090/debug-classic" && req.method 
 
 async function runWowBoostImportPage(
   env: Env,
-  args: { from: string; to: string; page: number; pageSize?: number; connector_job_id?: string | null; filter?: string | null }
+  args: {
+    from: string;
+    to: string;
+    page: number;
+    pageSize?: number;
+    connector_job_id?: string | null;
+    filter?: string | null;
+    mode?: WowBoostImportMode;
+  }
 ) {
   const started = Date.now();
   const pageSize = Math.max(1, Math.min(100, Number(args.pageSize ?? 100)));
   const jobId = args.connector_job_id || null;
   const filter = args.filter ?? null;
+  const mode = normalizeWowBoostImportMode(args.mode);
   let currentStage = "start";
   let sourceRows = 0;
   let validInRangeRows = 0;
@@ -17670,6 +17753,7 @@ async function runWowBoostImportPage(
     from: args.from,
     to: args.to,
     filter,
+    mode,
   });
 
   try {
@@ -17718,6 +17802,8 @@ async function runWowBoostImportPage(
   });
   logStageComplete("export request", {
     has_more: Boolean(exp.hasMore),
+    has_more_raw: exp.hasMoreRaw,
+    has_more_type: exp.hasMoreType,
     link_present: Boolean(exp.link),
     wowboost_export_calls: externalOperationCounters.wowboost_export_calls,
   });
@@ -17758,20 +17844,67 @@ async function runWowBoostImportPage(
     csvBytes: csvText.length,
 	  });
 
+  const pageDateDiagnostics = summarizeWowBoostImportPageDates(
+    parsed.rows.map((row) => pickField(row, [
+      "Order Create Date",
+      "OrderDate",
+      "Order Date",
+    ])),
+    args.from,
+    args.to,
+  );
+
   logStageStart("refund event extraction", { sourceRows: parsed.rows.length });
   const refundEvents = extractWowBoostRefundEventsFromCsvRows(parsed.rows, {
     workspace_id: "default",
     platform: "wowboost",
     connector_id: "wowboost",
   });
+  const inRangeRefundEvents = refundEvents.filter((event) => (
+    wowBoostRefundEventIsInRange(event, args.from, args.to)
+  ));
   logStageComplete("refund event extraction", {
     sourceRows: parsed.rows.length,
     refundedRowsObserved: refundEvents.length,
+    inRangeRefundEvents: inRangeRefundEvents.length,
+  });
+  const refundDateDiagnostics = summarizeWowBoostImportPageDates(
+    refundEvents.map((event) => event.occurred_at),
+    args.from,
+    args.to,
+  );
+  const terminationReason = exp.hasMore ? "upstream_has_more" : "upstream_exhausted";
+  console.log("[WowBoost Import] PAGE PAGINATION DIAGNOSTICS", {
+    page: args.page,
+    pageSize,
+    requested_from: args.from,
+    requested_to: args.to,
+    first_record_date: pageDateDiagnostics.first_record_date,
+    last_record_date: pageDateDiagnostics.last_record_date,
+    earliest_record_date: pageDateDiagnostics.earliest_record_date,
+    latest_record_date: pageDateDiagnostics.latest_record_date,
+    in_range_record_count: pageDateDiagnostics.in_range_record_count,
+    out_of_range_record_count: pageDateDiagnostics.out_of_range_record_count,
+    before_range_record_count: pageDateDiagnostics.before_range_record_count,
+    after_range_record_count: pageDateDiagnostics.after_range_record_count,
+    invalid_or_missing_date_count: pageDateDiagnostics.invalid_or_missing_date_count,
+    range_position: pageDateDiagnostics.range_position,
+    refund_event_count: refundDateDiagnostics.source_record_count,
+    in_range_refund_event_count: refundDateDiagnostics.in_range_record_count,
+    out_of_range_refund_event_count: refundDateDiagnostics.out_of_range_record_count,
+    import_mode: mode,
+    hasMore: exp.hasMore,
+    hasMoreRaw: exp.hasMoreRaw,
+    hasMoreType: exp.hasMoreType,
+    termination_reason: terminationReason,
   });
 
-  logStageStart("refund ledger insert", { refundedRowsObserved: refundEvents.length });
-  externalOperationCounters.supabase_rest_calls += refundEvents.length ? 1 : 0;
-  refundSummary = await insertWowSuiteRefundLedgerEvents(env, refundEvents, supabase);
+  logStageStart("refund ledger insert", {
+    refundedRowsObserved: refundEvents.length,
+    eligibleRefundEvents: inRangeRefundEvents.length,
+  });
+  externalOperationCounters.supabase_rest_calls += inRangeRefundEvents.length ? 1 : 0;
+  refundSummary = await insertWowSuiteRefundLedgerEvents(env, inRangeRefundEvents, supabase);
   logStageComplete("refund ledger insert", {
     refundedRowsObserved: refundSummary.observed,
     normalizedRefundEventsInserted: refundSummary.inserted,
@@ -17782,8 +17915,8 @@ async function runWowBoostImportPage(
   });
 
   logStageStart("row mapping", { sourceRows: parsed.rows.length });
-  const mapped = await Promise.all(
-    parsed.rows.map(async (r) => {
+  const mapped = mode === "order_snapshot_import"
+    ? await Promise.all(parsed.rows.map(async (r) => {
       const orderId =
         pickField(r, ["Order ID", "OrderId", "OrderID", "order_id", "Id", "ID"]) ||
         pickField(r, ["Order Number", "OrderNumber", "orderNumber"]);
@@ -17941,8 +18074,8 @@ async function runWowBoostImportPage(
             : null,
         },
       };
-    })
-  );
+    }))
+    : [];
 
 	  const validRows = mapped.filter(Boolean);
 	  validInRangeRows = validRows.length;
@@ -17951,6 +18084,7 @@ async function runWowBoostImportPage(
     sourceRows: parsed.rows.length,
     mappedRows: mapped.length,
     validRows: validRows.length,
+    snapshot_phase_skipped: mode === "receipt_event_backfill",
   });
 
   logStageStart("deduplication", { validRows: validRows.length });
@@ -18019,7 +18153,8 @@ async function runWowBoostImportPage(
     rowsInserted: snapshotInserted,
     rowsUpdated: snapshotUpdated,
     rowsUnchanged: snapshotUnchanged,
-    refundedRowsObserved: refundSummary?.observed || 0,
+    refundedRowsObserved: refundEvents.length,
+    refundEventsEligible: refundSummary?.observed || 0,
     normalizedRefundEventsInserted: refundSummary?.inserted || 0,
     normalizedRefundEventsDeduplicated: refundSummary?.deduplicated || 0,
     protectedSparseFields,
@@ -18027,6 +18162,19 @@ async function runWowBoostImportPage(
     latestSourceOrderTimestamp: sourceOrderRange.latest,
     earliestRefundTimestamp: refundSummary?.earliest_refund_at || null,
     latestRefundTimestamp: refundSummary?.latest_refund_at || null,
+    firstRecordDate: pageDateDiagnostics.first_record_date,
+    lastRecordDate: pageDateDiagnostics.last_record_date,
+    inRangeRecordCount: pageDateDiagnostics.in_range_record_count,
+    outOfRangeRecordCount: pageDateDiagnostics.out_of_range_record_count,
+    invalidOrMissingDateCount: pageDateDiagnostics.invalid_or_missing_date_count,
+    rangePosition: pageDateDiagnostics.range_position,
+    inRangeRefundEventCount: refundDateDiagnostics.in_range_record_count,
+    outOfRangeRefundEventCount: refundDateDiagnostics.out_of_range_record_count,
+    upstreamHasMore: exp.hasMore,
+    upstreamHasMoreRaw: exp.hasMoreRaw,
+    upstreamHasMoreType: exp.hasMoreType,
+    terminationReason,
+    mode,
 	    total_elapsed_ms: Date.now() - started,
     identity_lookup_counters: identityLookupCounters,
     external_operation_counters: externalOperationCounters,
@@ -18044,7 +18192,8 @@ async function runWowBoostImportPage(
     rowsInserted: snapshotInserted,
     rowsUpdated: snapshotUpdated,
     rowsUnchanged: snapshotUnchanged,
-    refundedRowsObserved: refundSummary?.observed || 0,
+    refundedRowsObserved: refundEvents.length,
+    refundEventsEligible: refundSummary?.observed || 0,
     normalizedRefundEventsInserted: refundSummary?.inserted || 0,
     normalizedRefundEventsDeduplicated: refundSummary?.deduplicated || 0,
     protectedSparseFields,
@@ -18052,6 +18201,24 @@ async function runWowBoostImportPage(
     latestSourceOrderTimestamp: sourceOrderRange.latest,
     earliestRefundTimestamp: refundSummary?.earliest_refund_at || null,
     latestRefundTimestamp: refundSummary?.latest_refund_at || null,
+    firstRecordDate: pageDateDiagnostics.first_record_date,
+    lastRecordDate: pageDateDiagnostics.last_record_date,
+    earliestRecordDate: pageDateDiagnostics.earliest_record_date,
+    latestRecordDate: pageDateDiagnostics.latest_record_date,
+    inRangeRecordCount: pageDateDiagnostics.in_range_record_count,
+    outOfRangeRecordCount: pageDateDiagnostics.out_of_range_record_count,
+    beforeRangeRecordCount: pageDateDiagnostics.before_range_record_count,
+    afterRangeRecordCount: pageDateDiagnostics.after_range_record_count,
+    invalidOrMissingDateCount: pageDateDiagnostics.invalid_or_missing_date_count,
+    rangePosition: pageDateDiagnostics.range_position,
+    refundEventCount: refundDateDiagnostics.source_record_count,
+    inRangeRefundEventCount: refundDateDiagnostics.in_range_record_count,
+    outOfRangeRefundEventCount: refundDateDiagnostics.out_of_range_record_count,
+    upstreamHasMore: exp.hasMore,
+    upstreamHasMoreRaw: exp.hasMoreRaw,
+    upstreamHasMoreType: exp.hasMoreType,
+    terminationReason,
+    mode,
     warnings: refundSummary?.rollup_warnings || [],
 	  };
   } catch (e: any) {
@@ -18080,12 +18247,26 @@ async function runWowBoostImportPage(
       const path = url.pathname;
 
       if (
-        (path === "/v1/integrations/wowboost/import-orders-async" || path === "/v1/integrations/wowboost/run-now") &&
+        (
+          path === "/v1/integrations/wowboost/import-orders-async"
+          || path === "/v1/integrations/wowboost/run-now"
+          || path === "/v1/integrations/wowboost/backfill-receipt-events"
+        ) &&
         req.method === "POST"
       ) {
         const body = await readJsonBody(req);
         const range = normalizeWowSuiteImportDateRange(body.from, body.to);
         const filter = String(body.filter ?? "all_sales").trim();
+        const receiptBackfillRoute = path === "/v1/integrations/wowboost/backfill-receipt-events";
+        const mode = receiptBackfillRoute
+          ? "receipt_event_backfill"
+          : normalizeWowBoostImportMode(body.mode, "order_snapshot_import");
+        let receiptMaxPages = normalizeWowBoostReceiptBackfillMaxPages(
+          body.max_pages ?? body.maxPages,
+        );
+        let receiptMaxSourceRows = normalizeWowBoostReceiptBackfillMaxSourceRows(
+          body.max_source_rows ?? body.maxSourceRows,
+        );
 
         if (!range.ok) {
           return json({ ok: false, error: "bad_request", message: range.error }, 400);
@@ -18102,6 +18283,8 @@ async function runWowBoostImportPage(
 
         const supabase = getSupabase(env);
         const settingsPlatform = wowSuiteKey("wowboost");
+        const requestedJobId = String(body.job_id ?? body.jobId ?? "").trim();
+        const pageSize = Math.max(1, Math.min(100, Number(body.pageSize ?? body.page_size ?? 100)));
 
         if (path.endsWith("/run-now")) {
           await supabase
@@ -18110,54 +18293,181 @@ async function runWowBoostImportPage(
             .eq("platform", settingsPlatform);
         }
 
-        const job = await createImportJob(env, {
-          platform: settingsPlatform,
-          module: "wowboost",
+        let job: ImportJobRow;
+        let page = 1;
+        if (requestedJobId) {
+          if (mode !== "receipt_event_backfill") {
+            return json({
+              ok: false,
+              error: "bad_request",
+              message: "job_id resume is supported only for receipt_event_backfill jobs.",
+            }, 400);
+          }
+          const existing = await getImportJob(env, requestedJobId);
+          if (!existing) {
+            return json({ ok: false, error: "not_found", message: "Import job not found." }, 404);
+          }
+          const existingProgress = progressFromJob(existing) as ImportProgressState & Record<string, any>;
+          const existingMetadata = existingProgress.metadata && typeof existingProgress.metadata === "object"
+            ? existingProgress.metadata
+            : {};
+          const existingBound = existingMetadata.receipt_backfill_bound
+            && typeof existingMetadata.receipt_backfill_bound === "object"
+            ? existingMetadata.receipt_backfill_bound
+            : {};
+          if (body.max_pages == null && body.maxPages == null) {
+            receiptMaxPages = normalizeWowBoostReceiptBackfillMaxPages(existingBound.max_pages);
+          }
+          if (body.max_source_rows == null && body.maxSourceRows == null) {
+            receiptMaxSourceRows = normalizeWowBoostReceiptBackfillMaxSourceRows(existingBound.max_source_rows);
+          }
+          if (
+            normalizeWowBoostImportMode(existingMetadata.import_mode) !== "receipt_event_backfill"
+            || existing.from_date !== from
+            || existing.to_date !== to
+          ) {
+            return json({
+              ok: false,
+              error: "job_configuration_mismatch",
+              message: "The existing receipt backfill job does not match the requested mode or date range.",
+            }, 409);
+          }
+          if (existing.status === "completed") {
+            return json({
+              ok: false,
+              error: "job_already_completed",
+              message: "A completed receipt backfill cannot be resumed.",
+            }, 409);
+          }
+          if (wowBoostImportJobCanProcess(existing.status)) {
+            return json({
+              ok: false,
+              error: "job_already_active",
+              message: "This receipt backfill job is already active.",
+            }, 409);
+          }
+          page = Math.max(
+            1,
+            Number(existingMetadata.continuation_page ?? existingProgress.current_page ?? 1) || 1,
+          );
+          const resumedAt = new Date().toISOString();
+          const resumedProgress = {
+            ...existingProgress,
+            status: "queued",
+            current_page: page,
+            last_error: null,
+            completed_at: null,
+            updated_at: resumedAt,
+            metadata: {
+              ...existingMetadata,
+              import_mode: mode,
+              receipt_phase_current_page: page,
+              receipt_backfill_bound: {
+                max_pages: receiptMaxPages,
+                max_source_rows: receiptMaxSourceRows,
+              },
+              receipt_segment_pages_processed: 0,
+              receipt_segment_source_rows_processed: 0,
+              continuation_page: page,
+              termination_reason: "receipt_backfill_resumed",
+              resumed_at: resumedAt,
+            },
+          };
+          await updateImportJob(env, existing.id, {
+            status: "queued",
+            completed_at: null,
+            error: null,
+            retries: 0,
+            progress: resumedProgress,
+          });
+          job = (await getImportJob(env, existing.id)) || { ...existing, progress: resumedProgress, status: "queued" };
+        } else {
+          const now = new Date().toISOString();
+          const initialProgress = {
+            ...createInitialImportProgress({
+              workspace_id: "default",
+              platform: settingsPlatform,
+              connector_id: "wowboost",
+              from,
+              to,
+              filter,
+              now,
+            }),
+            status: "queued",
+            current_page: 1,
+            started_at: now,
+            metadata: {
+              import_mode: mode,
+              snapshot_phase_complete: false,
+              snapshot_consecutive_pages_before_range: 0,
+              snapshot_before_range_page_threshold: WOWBOOST_SNAPSHOT_BEFORE_RANGE_PAGE_THRESHOLD,
+              snapshot_max_pages: WOWBOOST_ORDER_SNAPSHOT_MAX_PAGES,
+              receipt_phase_current_page: mode === "receipt_event_backfill" ? 1 : null,
+              receipt_backfill_bound: {
+                max_pages: receiptMaxPages,
+                max_source_rows: receiptMaxSourceRows,
+              },
+              receipt_segment_pages_processed: 0,
+              receipt_segment_source_rows_processed: 0,
+              continuation_page: 1,
+              termination_reason: "queued",
+            },
+          } as ImportProgressState & Record<string, any>;
+          job = await createImportJob(env, {
+            platform: settingsPlatform,
+            module: "wowboost",
+            from,
+            to,
+            filter,
+            progress: initialProgress,
+          });
+          await updateImportJob(env, job.id, {
+            status: "queued",
+            pages: 0,
+            fetched: 0,
+            upserted: 0,
+            retries: 0,
+            error: null,
+            started_at: now,
+          });
+        }
+
+        await env.wowboost_imports.send({
+          job_id: job.id,
           from,
           to,
           filter,
+          mode,
+          page,
+          pageSize,
+          attempt: 1,
         });
-  
-  const pageSize = Math.max(1, Math.min(100, Number(body.pageSize ?? 100)));
 
-  await updateImportJob(env, job.id, {
-    status: "queued",
-    pages: 0,
-    fetched: 0,
-    upserted: 0,
-    retries: 0,
-    error: null,
-    started_at: new Date().toISOString(),
-  });
+        const updated = await getImportJob(env, job.id);
 
-  await env.wowboost_imports.send({
-    job_id: job.id,
-    from,
-    to,
-    filter,
-    page: 1,
-    pageSize,
-    attempt: 1,
-  });
-
-  const updated = await getImportJob(env, job.id);
-
-  return json({
-    ok: true,
-    job_id: job.id,
-    job: buildPublicImportJobPayload(updated, progressFromJob(updated || job), {
-      full_progress: requestFullProgress(body.full_progress ?? body.fullProgress),
-    }),
-    status: updated?.status ?? "queued",
-    platform: settingsPlatform,
-    module: "wowboost",
-    from,
-    to,
-    filter,
-    pageSize,
-    message: "Import job queued. Background worker will process pages.",
-  });
-}
+        return json({
+          ok: true,
+          job_id: job.id,
+          job: buildPublicImportJobPayload(updated, progressFromJob(updated || job), {
+            full_progress: requestFullProgress(body.full_progress ?? body.fullProgress),
+          }),
+          status: updated?.status ?? "queued",
+          platform: settingsPlatform,
+          module: "wowboost",
+          mode,
+          from,
+          to,
+          filter,
+          page,
+          pageSize,
+          receipt_backfill_bound: mode === "receipt_event_backfill"
+            ? { max_pages: receiptMaxPages, max_source_rows: receiptMaxSourceRows }
+            : null,
+          message: requestedJobId
+            ? "Receipt-event backfill resumed from its persisted continuation page."
+            : "Import job queued. Background worker will process bounded pages.",
+        });
+      }
 
 if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GET") {
   const jobId = url.searchParams.get("job_id") || "";
@@ -18177,7 +18487,12 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
     job: buildPublicImportJobPayload(job, progressFromJob(job), {
       full_progress: requestFullProgress(url.searchParams.get("full_progress") ?? url.searchParams.get("fullProgress")),
     }),
-    done: job.status === "completed" || job.status === "failed" || job.status === "cancelled",
+    done:
+      job.status === "completed"
+      || job.status === "failed"
+      || job.status === "cancelled"
+      || job.status === "paused",
+    requires_resume: job.status === "paused",
   });
 }
 
@@ -18595,9 +18910,11 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 
 	    const jobId = String(body.job_id ?? body.jobId ?? "").trim();
     const page = Math.max(1, Number(body.page ?? 1));
-    const pageSize = Math.max(1, Math.min(100, Number(body.pageSize ?? 100)));
-    const attempt = Math.max(1, Number(body.attempt ?? 1));
-    const maxAttempts = 10;
+	    const pageSize = Math.max(1, Math.min(100, Number(body.pageSize ?? 100)));
+	    const attempt = Math.max(1, Number(body.attempt ?? 1));
+	    const maxAttempts = 10;
+	    let retryPage = page;
+	    let importMode = normalizeWowBoostImportMode(body.mode);
 
     if (!jobId) {
       msg.ack();
@@ -18605,39 +18922,85 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
     }
 
     try {
-      const job = await getImportJob(env, jobId);
+	      let job = await getImportJob(env, jobId);
 
-      if (!job) {
-        msg.ack();
-        continue;
-      }
+	      if (!job) {
+	        msg.ack();
+	        continue;
+	      }
 
-      if (job.status === "completed" || job.status === "failed" || job.status === "cancelled") {
-        msg.ack();
-        continue;
-      }
+	      const initialProgress = progressFromJob(job) as ImportProgressState & Record<string, any>;
+	      const initialMetadata = initialProgress.metadata && typeof initialProgress.metadata === "object"
+	        ? initialProgress.metadata
+	        : {};
+	      importMode = normalizeWowBoostImportMode(initialMetadata.import_mode ?? body.mode);
+	      const expectedPage = Math.max(
+	        1,
+	        Number(initialMetadata.continuation_page ?? initialProgress.current_page ?? page) || page,
+	      );
 
-      await updateImportJob(env, jobId, {
-        status: "running",
-        started_at: job.started_at || new Date().toISOString(),
-        completed_at: null,
-        error: null,
-      });
+	      if (!wowBoostImportJobCanProcess(job.status)) {
+	        console.log("[WowBoost Queue] PROCESSING STOPPED BEFORE FETCH", {
+	          jobId,
+	          page,
+	          mode: importMode,
+	          status: job.status,
+	          termination_reason: job.status === "cancelled" ? "user_cancelled" : `job_${job.status}`,
+	          cancellation_observed_before_fetch: job.status === "cancelled",
+	        });
+	        msg.ack();
+	        continue;
+	      }
+
+	      if (page < expectedPage) {
+	        console.log("[WowBoost Queue] DUPLICATE PAGE SKIPPED", {
+	          jobId,
+	          page,
+	          expectedPage,
+	          mode: importMode,
+	          termination_reason: "page_already_checkpointed",
+	        });
+	        msg.ack();
+	        continue;
+	      }
+
+	      const claimedJob = await updateActiveWowBoostImportJob(env, jobId, {
+	        status: "running",
+	        started_at: job.started_at || new Date().toISOString(),
+	        completed_at: null,
+	        error: null,
+	      });
+	      if (!claimedJob) {
+	        const latest = await getImportJob(env, jobId).catch(() => null);
+	        console.log("[WowBoost Queue] CONDITIONAL UPDATE REJECTED", {
+	          jobId,
+	          page,
+	          mode: importMode,
+	          status: latest?.status || null,
+	          conditional_update_rejected_because_job_was_terminal: true,
+	          cancellation_observed_before_fetch: latest?.status === "cancelled",
+	        });
+	        msg.ack();
+	        continue;
+	      }
+	      job = claimedJob;
 
       console.log("[WowBoost Queue] PAGE START", {
         jobId,
         page,
         pageSize,
-        attempt,
-      });
-      const result = await runWowBoostImportPage(env, {
+	        attempt,
+	        mode: importMode,
+	      });
+	      const result = await runWowBoostImportPage(env, {
         from: job.from_date,
         to: job.to_date,
         page,
         pageSize,
-        connector_job_id: jobId,
-        filter: job.filter,
-      });
+	        connector_job_id: jobId,
+	        filter: job.filter,
+	        mode: importMode,
+	      });
       console.log("[WowBoost Queue] PAGE IMPORT COMPLETE", {
         jobId,
         page,
@@ -18645,17 +19008,22 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
         upserted: result.upserted,
         hasMore: result.hasMore,
         nextPage: result.nextPage,
+        firstRecordDate: result.firstRecordDate,
+        lastRecordDate: result.lastRecordDate,
+        inRangeRecordCount: result.inRangeRecordCount,
+        outOfRangeRecordCount: result.outOfRangeRecordCount,
+        inRangeRefundEventCount: result.inRangeRefundEventCount,
+        outOfRangeRefundEventCount: result.outOfRangeRefundEventCount,
+        upstreamHasMore: result.upstreamHasMore,
+        upstreamHasMoreRaw: result.upstreamHasMoreRaw,
+        upstreamHasMoreType: result.upstreamHasMoreType,
+        terminationReason: result.terminationReason,
         identity: result.identity,
       });
 
-      const fetchedThisPage = Number(result.fetched ?? 0);
-      const upsertedThisPage = Number(result.upserted ?? 0);
-
-      const nextFetched = Number(job.fetched ?? 0) + fetchedThisPage;
-      const nextUpserted = Number(job.upserted ?? 0) + upsertedThisPage;
-
-      const hasMore = Boolean(result.hasMore);
-      const currentProgress = {
+	      const fetchedThisPage = Number(result.fetched ?? 0);
+	      const upsertedThisPage = Number(result.upserted ?? 0);
+	      const currentProgress = {
         ...createInitialImportProgress({
           workspace_id: "default",
           platform: wowSuiteKey("wowboost"),
@@ -18666,10 +19034,39 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
         }),
         ...((job.progress && typeof job.progress === "object") ? job.progress : {}),
       } as ImportProgressState & Record<string, any>;
-      const currentMetadata = currentProgress.metadata && typeof currentProgress.metadata === "object"
-        ? currentProgress.metadata
-        : {};
-      const completedAt = hasMore ? null : new Date().toISOString();
+	      const currentMetadata = currentProgress.metadata && typeof currentProgress.metadata === "object"
+	        ? currentProgress.metadata
+	        : {};
+	      const receiptBackfillBound = currentMetadata.receipt_backfill_bound
+	        && typeof currentMetadata.receipt_backfill_bound === "object"
+	        ? currentMetadata.receipt_backfill_bound
+	        : {};
+	      const continuationDecision = decideWowBoostImportContinuation({
+	        mode: importMode,
+	        current_page: page,
+	        upstream_has_more: result.upstreamHasMore,
+	        page_range_position: result.rangePosition,
+	        previous_consecutive_pages_before_range:
+	          currentMetadata.snapshot_consecutive_pages_before_range,
+	        snapshot_before_range_page_threshold:
+	          currentMetadata.snapshot_before_range_page_threshold,
+	        snapshot_max_pages: currentMetadata.snapshot_max_pages,
+	        previous_receipt_pages_processed:
+	          currentMetadata.receipt_segment_pages_processed,
+	        previous_receipt_source_rows_processed:
+	          currentMetadata.receipt_segment_source_rows_processed,
+	        source_rows: result.sourceRows,
+	        receipt_max_pages: receiptBackfillBound.max_pages,
+	        receipt_max_source_rows: receiptBackfillBound.max_source_rows,
+	      });
+	      const hasMore = continuationDecision.has_more;
+	      const processedThisPage = importMode === "receipt_event_backfill"
+	        ? Number(result.inRangeRefundEventCount || 0)
+	        : fetchedThisPage;
+	      const nextFetched = Number(job.fetched ?? 0) + processedThisPage;
+	      const nextUpserted = Number(job.upserted ?? 0) + upsertedThisPage;
+	      const completedAt = continuationDecision.status === "completed" ? new Date().toISOString() : null;
+	      retryPage = continuationDecision.continuation_page || page;
       const sourceTimestampRange = minMaxIso([
         currentMetadata.earliest_source_order_timestamp,
         currentMetadata.latest_source_order_timestamp,
@@ -18682,12 +19079,39 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
         result.earliestRefundTimestamp,
         result.latestRefundTimestamp,
       ]);
+      const pageDiagnostic = {
+        page,
+        first_record_date: result.firstRecordDate,
+        last_record_date: result.lastRecordDate,
+        earliest_record_date: result.earliestRecordDate,
+        latest_record_date: result.latestRecordDate,
+        in_range_record_count: result.inRangeRecordCount,
+        out_of_range_record_count: result.outOfRangeRecordCount,
+        before_range_record_count: result.beforeRangeRecordCount,
+        after_range_record_count: result.afterRangeRecordCount,
+        invalid_or_missing_date_count: result.invalidOrMissingDateCount,
+        range_position: result.rangePosition,
+        refund_event_count: result.refundEventCount,
+        in_range_refund_event_count: result.inRangeRefundEventCount,
+        out_of_range_refund_event_count: result.outOfRangeRefundEventCount,
+	        has_more: hasMore,
+	        enqueue_next: continuationDecision.enqueue_next,
+	        continuation_page: continuationDecision.continuation_page,
+	        upstream_has_more: result.upstreamHasMore,
+        upstream_has_more_raw: result.upstreamHasMoreRaw,
+        upstream_has_more_type: result.upstreamHasMoreType,
+	        termination_reason: continuationDecision.termination_reason,
+	      };
+      const recentPageDiagnostics = [
+        ...(Array.isArray(currentMetadata.recent_page_diagnostics) ? currentMetadata.recent_page_diagnostics : []),
+        pageDiagnostic,
+      ].slice(-25);
       const nextProgress = {
         ...currentProgress,
-        status: hasMore ? "importing" : "completed",
-        current_page: result.nextPage,
-        records_fetched: Number(currentProgress.records_fetched || 0) + Number(result.sourceRows || result.fetched || 0),
-        records_processed: Number(currentProgress.records_processed || 0) + fetchedThisPage,
+	        status: continuationDecision.status,
+	        current_page: continuationDecision.continuation_page,
+	        records_fetched: Number(currentProgress.records_fetched || 0) + Number(result.sourceRows || result.fetched || 0),
+	        records_processed: Number(currentProgress.records_processed || 0) + processedThisPage,
         rows_upserted: Number(currentProgress.rows_upserted || 0) + upsertedThisPage,
         ledger_inserted: Number(currentProgress.ledger_inserted || 0) + Number(result.normalizedRefundEventsInserted || 0),
         duplicate_rows_skipped:
@@ -18700,53 +19124,116 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
           rows_inserted: Number(currentMetadata.rows_inserted || 0) + Number(result.rowsInserted || 0),
           rows_updated: Number(currentMetadata.rows_updated || 0) + Number(result.rowsUpdated || 0),
           rows_unchanged: Number(currentMetadata.rows_unchanged || 0) + Number(result.rowsUnchanged || 0),
-          refunded_rows_observed:
-            Number(currentMetadata.refunded_rows_observed || 0) + Number(result.refundedRowsObserved || 0),
+	          refunded_rows_observed:
+	            Number(currentMetadata.refunded_rows_observed || 0) + Number(result.refundedRowsObserved || 0),
+	          refund_events_eligible:
+	            Number(currentMetadata.refund_events_eligible || 0) + Number(result.refundEventsEligible || 0),
           normalized_refund_events_inserted:
             Number(currentMetadata.normalized_refund_events_inserted || 0)
             + Number(result.normalizedRefundEventsInserted || 0),
           normalized_refund_events_deduplicated:
             Number(currentMetadata.normalized_refund_events_deduplicated || 0)
             + Number(result.normalizedRefundEventsDeduplicated || 0),
-          existing_refund_evidence_protected:
+	          existing_refund_evidence_protected:
             Number(currentMetadata.existing_refund_evidence_protected || 0)
             + Number(result.protectedSparseFields || 0),
-          last_page: page,
-          next_page: result.nextPage,
-          has_more: hasMore,
-          earliest_source_order_timestamp: sourceTimestampRange.earliest,
+	          last_page: page,
+	          next_page: continuationDecision.next_page,
+	          continuation_page: continuationDecision.continuation_page,
+	          has_more: hasMore,
+	          import_mode: importMode,
+	          snapshot_phase_complete: continuationDecision.snapshot_phase_complete,
+	          snapshot_consecutive_pages_before_range:
+	            continuationDecision.consecutive_pages_before_range,
+	          snapshot_before_range_page_threshold:
+	            Number(currentMetadata.snapshot_before_range_page_threshold)
+	            || WOWBOOST_SNAPSHOT_BEFORE_RANGE_PAGE_THRESHOLD,
+	          snapshot_max_pages:
+	            Number(currentMetadata.snapshot_max_pages) || WOWBOOST_ORDER_SNAPSHOT_MAX_PAGES,
+	          receipt_phase_current_page:
+	            importMode === "receipt_event_backfill" ? page : null,
+	          receipt_backfill_bound: {
+	            max_pages: normalizeWowBoostReceiptBackfillMaxPages(receiptBackfillBound.max_pages),
+	            max_source_rows: normalizeWowBoostReceiptBackfillMaxSourceRows(
+	              receiptBackfillBound.max_source_rows,
+	            ),
+	          },
+	          receipt_segment_pages_processed: continuationDecision.receipt_pages_processed,
+	          receipt_segment_source_rows_processed:
+	            continuationDecision.receipt_source_rows_processed,
+	          partial: continuationDecision.partial,
+	          earliest_source_order_timestamp: sourceTimestampRange.earliest,
           latest_source_order_timestamp: sourceTimestampRange.latest,
           earliest_refund_timestamp: refundTimestampRange.earliest,
           latest_refund_timestamp: refundTimestampRange.latest,
-        },
-      };
+          last_page_diagnostics: pageDiagnostic,
+          recent_page_diagnostics: recentPageDiagnostics,
+	          termination_reason: continuationDecision.termination_reason,
+	        },
+	      };
 
-      console.log("[WowBoost Queue] UPDATING JOB", {
-        jobId,
-        page,
-        hasMore,
-        nextFetched,
-        nextUpserted,
-      });
-      await updateImportJob(env, jobId, {
-        status: hasMore ? "running" : "completed",
-        pages: Math.max(Number(job.pages ?? 0), page),
-        fetched: nextFetched,
+	      console.log("[WowBoost Queue] UPDATING JOB", {
+	        jobId,
+	        page,
+	        mode: importMode,
+	        hasMore,
+	        enqueueNext: continuationDecision.enqueue_next,
+	        nextPage: continuationDecision.next_page,
+	        continuationPage: continuationDecision.continuation_page,
+	        nextStatus: continuationDecision.status,
+	        terminationReason: continuationDecision.termination_reason,
+	        nextFetched,
+	        nextUpserted,
+	      });
+	      const latestBeforeWrite = await getImportJob(env, jobId);
+	      if (!latestBeforeWrite || !wowBoostImportJobCanProcess(latestBeforeWrite.status)) {
+	        console.log("[WowBoost Queue] PROCESSING STOPPED BEFORE WRITE", {
+	          jobId,
+	          page,
+	          mode: importMode,
+	          status: latestBeforeWrite?.status || null,
+	          termination_reason:
+	            latestBeforeWrite?.status === "cancelled" ? "user_cancelled" : `job_${latestBeforeWrite?.status || "missing"}`,
+	          cancellation_observed_before_write: latestBeforeWrite?.status === "cancelled",
+	        });
+	        msg.ack();
+	        continue;
+	      }
+
+	      const updatedJob = await updateActiveWowBoostImportJob(env, jobId, {
+	        status: continuationDecision.status,
+	        pages: Math.max(Number(job.pages ?? 0), page),
+	        fetched: nextFetched,
         upserted: nextUpserted,
         retries: 0,
         last_success_page: page,
         last_success_at: new Date().toISOString(),
         last_error_at: null,
         completed_at: completedAt,
-        error: null,
-        progress: nextProgress,
-      });
-      console.log("[WowBoost Queue] JOB UPDATED", {
-        jobId,
-        page,
-      });
+	        error: null,
+	        progress: nextProgress,
+	      });
+	      if (!updatedJob) {
+	        const latest = await getImportJob(env, jobId).catch(() => null);
+	        console.log("[WowBoost Queue] CONDITIONAL UPDATE REJECTED", {
+	          jobId,
+	          page,
+	          mode: importMode,
+	          status: latest?.status || null,
+	          conditional_update_rejected_because_job_was_terminal: true,
+	          cancellation_observed_before_write: latest?.status === "cancelled",
+	        });
+	        msg.ack();
+	        continue;
+	      }
+	      console.log("[WowBoost Queue] JOB UPDATED", {
+	        jobId,
+	        page,
+	        status: continuationDecision.status,
+	        terminationReason: continuationDecision.termination_reason,
+	      });
 
-      if (!hasMore && nextUpserted > 0) {
+	      if (continuationDecision.status === "completed" && importMode === "order_snapshot_import" && nextUpserted > 0) {
         const identityWorkspaceId = "default";
         const identityPlatforms = ["wowboost"];
         console.log("[WowBoost Queue] IDENTITY BACKFILL ENQUEUE", {
@@ -18795,23 +19282,26 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
         })());
       }
 
-      if (hasMore) {
-        console.log("[WowBoost Queue] QUEUE NEXT PAGE", {
-          jobId,
-          currentPage: page,
-          nextPage: page + 1,
-        });
-        await env.wowboost_imports.send({
-          job_id: jobId,
-          page: page + 1,
-          pageSize,
-          attempt: 1,
-        });
-        console.log("[WowBoost Queue] NEXT PAGE QUEUED", {
-          jobId,
-          nextPage: page + 1,
-        });
-      }
+	      if (continuationDecision.enqueue_next && continuationDecision.next_page) {
+	        console.log("[WowBoost Queue] QUEUE NEXT PAGE", {
+	          jobId,
+	          currentPage: page,
+	          nextPage: continuationDecision.next_page,
+	          mode: importMode,
+	        });
+	        await env.wowboost_imports.send({
+	          job_id: jobId,
+	          page: continuationDecision.next_page,
+	          pageSize,
+	          attempt: 1,
+	          mode: importMode,
+	        });
+	        console.log("[WowBoost Queue] NEXT PAGE QUEUED", {
+	          jobId,
+	          nextPage: continuationDecision.next_page,
+	          mode: importMode,
+	        });
+	      }
 
       console.log("[WowBoost Queue] MESSAGE ACK", {
         jobId,
@@ -18821,41 +19311,62 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
     } catch (e: any) {
       const message = e?.message || String(e) || "unknown";
 
-      console.error("[WowBoost Queue] PAGE FAILED", {
-        jobId,
-        page,
-        pageSize,
-        attempt,
-        message,
-        stack: e?.stack,
-      });
+	      console.error("[WowBoost Queue] PAGE FAILED", {
+	        jobId,
+	        page,
+	        retryPage,
+	        pageSize,
+	        attempt,
+	        mode: importMode,
+	        message,
+	        stack: e?.stack,
+	      });
 
-      if (attempt >= maxAttempts) {
-        await updateImportJob(env, jobId, {
-          status: "failed",
-          completed_at: new Date().toISOString(),
-          error: `Page ${page} failed after ${attempt} attempts: ${message}`,
-          retries: 0,
-          last_error_at: new Date().toISOString(),
-        }).catch(() => {});
+	      const latest = await getImportJob(env, jobId).catch(() => null);
+	      if (!latest || !wowBoostImportJobCanProcess(latest.status)) {
+	        console.log("[WowBoost Queue] RETRY SUPPRESSED FOR TERMINAL JOB", {
+	          jobId,
+	          page,
+	          retryPage,
+	          mode: importMode,
+	          status: latest?.status || null,
+	          termination_reason: latest?.status === "cancelled" ? "user_cancelled" : `job_${latest?.status || "missing"}`,
+	        });
+	        msg.ack();
+	        continue;
+	      }
+
+	      if (attempt >= maxAttempts) {
+	        await updateActiveWowBoostImportJob(env, jobId, {
+	          status: "failed",
+	          completed_at: new Date().toISOString(),
+	          error: `Page ${retryPage} failed after ${attempt} attempts: ${message}`,
+	          retries: 0,
+	          last_error_at: new Date().toISOString(),
+	        }).catch(() => {});
 
         msg.ack();
         continue;
       }
 
-      await updateImportJob(env, jobId, {
-        status: "retrying",
-        completed_at: null,
-        error: `Page ${page} attempt ${attempt} failed: ${message}`,
-        last_error_at: new Date().toISOString(),
-      }).catch(() => {});
+	      const retryingJob = await updateActiveWowBoostImportJob(env, jobId, {
+	        status: "retrying",
+	        completed_at: null,
+	        error: `Page ${retryPage} attempt ${attempt} failed: ${message}`,
+	        last_error_at: new Date().toISOString(),
+	      }).catch(() => null);
+	      if (!retryingJob) {
+	        msg.ack();
+	        continue;
+	      }
 
-      await env.wowboost_imports.send({
-        job_id: jobId,
-        page,
-        pageSize,
-        attempt: attempt + 1,
-      });
+	      await env.wowboost_imports.send({
+	        job_id: jobId,
+	        page: retryPage,
+	        pageSize,
+	        attempt: attempt + 1,
+	        mode: importMode,
+	      });
 
       msg.ack();
     }
