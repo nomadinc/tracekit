@@ -4,6 +4,7 @@ import {
   aggregateDailyProfitConversions,
   aggregateProfitConversions,
   buildFinancialIssueAnalysis,
+  financialIssuePlatformFallbackDecision,
   financialIssueLedgerRowFromPlatformOrder,
   profitDailyKeyFromConversion,
   profitDailyKeyId,
@@ -321,6 +322,60 @@ test("uses receipt refunded evidence from WowBoost raw payloads", () => {
   assert.ok(refund);
   assert.equal(refund.amount, -96.94);
   assert.equal(refund.occurred_at, "2026-07-18T09:30:00.000Z");
+});
+
+test("normalized receipt events suppress the legacy platform order refund fallback", () => {
+  const platformOrder: FinancialIssueOrderRow = {
+    workspace_id: "default",
+    platform: "wowboost",
+    platform_order_id: "wowboost:receipt-authoritative",
+    order_id: "receipt-authoritative",
+    status: "COMPLETED",
+    status_norm: "COMPLETED",
+    gross_amount: 100,
+    currency: "USD",
+    order_ts: "2026-07-01T09:00:00.000Z",
+    raw_json: {
+      "Receipt Status Name": "Refunded",
+      "Refund Amount": "25.00",
+      "Refund Date": "07/02/2026 09:00:00",
+    },
+  };
+
+  const normalizedOrderIds = new Set(["receipt-authoritative"]);
+  const decision = financialIssuePlatformFallbackDecision(
+    platformOrder,
+    "refund",
+    normalizedOrderIds,
+  );
+
+  assert.equal(decision.include, false);
+  assert.equal(decision.reason, "existing_ledger_issue");
+  assert.equal(decision.row?.amount, -25);
+});
+
+test("legacy refund snapshots remain eligible only when no normalized receipt event exists", () => {
+  const platformOrder: FinancialIssueOrderRow = {
+    workspace_id: "default",
+    platform: "wowboost",
+    platform_order_id: "wowboost:legacy-refund",
+    order_id: "legacy-refund",
+    status: "REFUNDED",
+    status_norm: "REFUNDED",
+    gross_amount: -35,
+    currency: "USD",
+    order_ts: "2026-07-01T09:00:00.000Z",
+    raw_json: {
+      "Receipt Status Name": "Refunded",
+      "Refund Amount": "35.00",
+      "Refund Date": "07/02/2026 09:00:00",
+    },
+  };
+
+  const decision = financialIssuePlatformFallbackDecision(platformOrder, "refund", new Set());
+  assert.equal(decision.include, true);
+  assert.equal(decision.reason, "legacy_fallback");
+  assert.equal(decision.row?.amount, -35);
 });
 
 test("builds refund analysis from WowBoost platform fallback rows", () => {

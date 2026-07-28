@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   buildWowBoostCommerceReferenceBackfillDecision,
   buildWowBoostOrderNumberToOrderIdMap,
@@ -10,6 +11,8 @@ import {
   appendWowBoostRuntimePageFingerprint,
   extractWowBoostCommerceReference,
   extractWowBoostCommerceReferenceEvidence,
+  extractWowBoostRefundEventsFromCsvRows,
+  extractWowBoostRefundEventsFromJsonOrders,
   extractWowBoostLegacyOrderNumberEvidence,
   extractWowBoostOrderDetailsCommerceReference,
   filterWowBoostOrderDetailsBackfillRowsForScan,
@@ -37,6 +40,7 @@ import {
   summarizeWowBoostCommerceReferenceBackfillBatch,
   summarizeWowBoostCommerceReferenceExportBackfill,
   summarizeWowBoostOrderDetailsReferenceBackfillDecisions,
+  mergeWowBoostPlatformOrderSnapshot,
   wowBoostExportContinuationTokenWithDateRange,
   wowBoostLegacyExportPageForRequest,
   wowBoostLegacyExportPagingProgress,
@@ -50,6 +54,7 @@ import {
   wowBoostOrderReferenceDiagnostics,
   wowBoostRuntimeRepeatedPageDetected,
   wowBoostRuntimeStagingStopDecision,
+  wowBoostImportPageContinuation,
 } from "./wowboost.ts";
 
 test("reports connected WowSuite credentials without exposing the encrypted secret", () => {
@@ -1636,4 +1641,233 @@ test("order details backfill updates legacy wowsuite:wowboost row with null orde
     assert.equal(decision.transaction_id, "legacy-txn");
     assert.equal(decision.commerce_reference, "4F4DA0F1-3DEE-437B-A849-32E7B25D174C");
   }
+});
+
+test("extracts a refunded receipt independently from shipped or completed order status", () => {
+  const events = extractWowBoostRefundEventsFromCsvRows([
+    {
+      "Order ID": "124573",
+      "Order Status Name": "Shipped",
+      "Receipt Status Name": "Refunded",
+      "Receipt ID": "receipt-shipped-refund",
+      "Refund Amount": "125.94",
+      "Refund Date": "07/18/2026 09:30:00",
+      "Currency Code": "USD",
+    },
+    {
+      "Order ID": "124574",
+      "Order Status Name": "Completed",
+      "Receipt Status Name": "Refunded",
+      "Receipt ID": "receipt-completed-refund",
+      "Refund Amount": "10.99",
+      "Refund Date": "07/18/2026 10:30:00",
+      "Currency Code": "USD",
+    },
+  ]);
+
+  assert.equal(events.length, 2);
+  assert.deepEqual(events.map((event) => event.order_id), ["124573", "124574"]);
+  assert.deepEqual(events.map((event) => event.amount), [-125.94, -10.99]);
+  assert.ok(events.every((event) => event.ledger_type === "refund"));
+});
+
+test("keeps multiple receipt rows and partial refunds for one order as separate events", () => {
+  const events = extractWowBoostRefundEventsFromCsvRows([
+    {
+      "Order ID": "partial-1",
+      "Order Status Name": "Completed",
+      "Receipt Status Name": "Partially Refunded",
+      "Receipt ID": "refund-a",
+      "Refund Amount": "20.00",
+      "Refund Date": "07/10/2026 09:00:00",
+    },
+    {
+      "Order ID": "partial-1",
+      "Order Status Name": "Completed",
+      "Receipt Status Name": "Refunded",
+      "Receipt ID": "refund-b",
+      "Refund Amount": "15.50",
+      "Refund Date": "07/11/2026 09:00:00",
+    },
+  ]);
+
+  assert.equal(events.length, 2);
+  assert.equal(new Set(events.map((event) => event.transaction_id)).size, 2);
+  assert.deepEqual(events.map((event) => event.amount), [-20, -15.5]);
+});
+
+test("paid and refund receipt rows produce only the refund ledger event", () => {
+  const events = extractWowBoostRefundEventsFromCsvRows([
+    {
+      "Order ID": "mixed-1",
+      "Receipt Status Name": "Paid",
+      "Receipt ID": "paid-a",
+      "Amount USD": "99.00",
+      "Create Date (Receipts)": "07/01/2026 09:00:00",
+    },
+    {
+      "Order ID": "mixed-1",
+      "Receipt Status Name": "Refunded",
+      "Receipt ID": "refund-a",
+      "Amount USD": "25.00",
+      "Create Date (Receipts)": "07/02/2026 09:00:00",
+    },
+  ]);
+
+  assert.equal(events.length, 1);
+  assert.equal(events[0].source_id, "refund-a");
+  assert.equal(events[0].amount, -25);
+});
+
+test("JSON order normalization inspects every receipts entry", () => {
+  const events = extractWowBoostRefundEventsFromJsonOrders([
+    {
+      orderId: "json-1",
+      orderStatus: "Completed",
+      currencyCode: "USD",
+      receipts: [
+        {
+          receiptId: "paid-json",
+          paymentStatus: "Paid",
+          amount: "100.00",
+          createDate: "2026-07-01T10:00:00.000Z",
+        },
+        {
+          receiptId: "refund-json-a",
+          paymentStatus: "Partially Refunded",
+          amount: "30.00",
+          createDate: "2026-07-02T10:00:00.000Z",
+        },
+        {
+          receiptId: "refund-json-b",
+          paymentStatus: "Refunded",
+          amount: "20.00",
+          createDate: "2026-07-03T10:00:00.000Z",
+        },
+      ],
+    },
+  ], { platform: "wowpay", connector_id: "wowpay" });
+
+  assert.equal(events.length, 2);
+  assert.deepEqual(events.map((event) => event.source_id), ["refund-json-a", "refund-json-b"]);
+  assert.deepEqual(events.map((event) => event.amount), [-30, -20]);
+});
+
+test("refund event keys are stable across exact reruns and additive across wider ranges", () => {
+  const firstRows = [
+    {
+      "Order ID": "rerun-1",
+      "Receipt Status Name": "Refunded",
+      "Receipt ID": "refund-1",
+      "Amount USD": "10.00",
+      "Create Date (Receipts)": "07/05/2026 09:00:00",
+    },
+  ];
+  const widerRows = [
+    ...firstRows,
+    {
+      "Order ID": "rerun-1",
+      "Receipt Status Name": "Refunded",
+      "Receipt ID": "refund-2",
+      "Amount USD": "5.00",
+      "Create Date (Receipts)": "07/20/2026 09:00:00",
+    },
+  ];
+  const first = extractWowBoostRefundEventsFromCsvRows(firstRows);
+  const rerun = extractWowBoostRefundEventsFromCsvRows(firstRows);
+  const wider = extractWowBoostRefundEventsFromCsvRows(widerRows);
+
+  assert.equal(first[0].transaction_id, rerun[0].transaction_id);
+  assert.equal(wider.length, 2);
+  assert.ok(wider.some((event) => event.transaction_id === first[0].transaction_id));
+});
+
+test("refund events use a conservative composite key when no receipt identifier exists", () => {
+  const [event] = extractWowBoostRefundEventsFromCsvRows([
+    {
+      "Order ID": "composite-1",
+      "Receipt Status Name": "Refunded",
+      "Amount USD": "17.25",
+      "Create Date (Receipts)": "07/08/2026 11:30:00",
+    },
+  ]);
+
+  assert.ok(event);
+  assert.match(event.transaction_id, /:composite:2026-07-08t11-30-00.000z:17.25:refunded$/);
+});
+
+test("later sparse non-refund snapshots preserve established financial evidence", () => {
+  const result = mergeWowBoostPlatformOrderSnapshot(
+    {
+      platform_order_id: "wowboost:preserve-1",
+      status: "REFUNDED",
+      status_norm: "REFUNDED",
+      gross_amount: -90.94,
+      transaction_id: "refund-transaction",
+      raw_json: {
+        "Receipt Status Name": "Refunded",
+        "Refund Amount": "90.94",
+      },
+    },
+    {
+      platform_order_id: "wowboost:preserve-1",
+      status: "COMPLETED",
+      status_norm: "COMPLETED",
+      gross_amount: null,
+      transaction_id: null,
+      raw_json: {
+        "Order Status Name": "Completed",
+        "Receipt Status Name": "",
+      },
+    },
+  );
+
+  assert.equal(result.row.gross_amount, -90.94);
+  assert.equal(result.row.transaction_id, "refund-transaction");
+  assert.equal(result.row.raw_json["Receipt Status Name"], "Refunded");
+  assert.equal(result.row.raw_json["Refund Amount"], "90.94");
+  assert.equal(result.row.raw_json["Order Status Name"], "Completed");
+  assert.ok(result.protected_fields.includes("gross_amount"));
+});
+
+test("upstream hasMore controls pagination even for short or zero in-range pages", () => {
+  assert.deepEqual(wowBoostImportPageContinuation(true, 4), {
+    has_more: true,
+    next_page: 5,
+  });
+  assert.deepEqual(wowBoostImportPageContinuation(false, 4), {
+    has_more: false,
+    next_page: null,
+  });
+});
+
+test("refund migration provides atomic idempotent receipt-event insertion", () => {
+  const migration = readFileSync(
+    new URL("../../supabase/migrations/033_wowboost_receipt_refund_events.sql", import.meta.url),
+    "utf8",
+  ).toLowerCase();
+
+  assert.match(migration, /create unique index if not exists conversions_wowsuite_refund_event_uidx/);
+  assert.match(migration, /workspace_id, platform, ledger_type, transaction_id/);
+  assert.match(migration, /create or replace function public\.insert_wowsuite_refund_events/);
+  assert.match(migration, /on conflict do nothing/);
+  assert.match(migration, /grant execute on function public\.insert_wowsuite_refund_events\(jsonb\) to service_role/);
+});
+
+test("direct and async WowBoost import paths persist durable import jobs", () => {
+  const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+  const directRoute = source.slice(
+    source.indexOf('path === "/v1/integrations/wowboost/import-one-page"'),
+    source.indexOf('path === "/v1/integrations/wowboost/import-next-page"'),
+  );
+  const asyncRoute = source.slice(
+    source.indexOf('path === "/v1/integrations/wowboost/import-orders-async"'),
+    source.indexOf('path === "/v1/integrations/wowboost/cancel"'),
+  );
+
+  assert.match(directRoute, /createImportJob\(env/);
+  assert.match(directRoute, /updateImportJob\(env, directJob\.id/);
+  assert.match(directRoute, /normalized_refund_events_inserted/);
+  assert.match(asyncRoute, /createImportJob\(env/);
+  assert.match(source, /normalized_refund_events_deduplicated/);
 });
