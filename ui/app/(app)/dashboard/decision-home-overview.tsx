@@ -92,35 +92,6 @@ function dashboardDrilldown(range: { from: string; to: string }, section: string
   return `/dashboard?${dateRangeQuery(range)}#${section}`;
 }
 
-function Metric({
-  label,
-  value,
-  helper,
-  href,
-  title,
-  id,
-}: {
-  label: string;
-  value: string;
-  helper?: string;
-  href: string;
-  title: string;
-  id?: string;
-}) {
-  return (
-    <Link
-      id={id}
-      href={href}
-      title={title}
-      className="block rounded-xl bg-slate-50 p-4 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:bg-slate-900/70 dark:hover:bg-slate-900"
-    >
-      <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</div>
-      <div className="mt-2 text-2xl font-semibold tracking-tight">{value}</div>
-      {helper ? <div className="mt-1 text-xs text-slate-500">{helper}</div> : null}
-    </Link>
-  );
-}
-
 function EmptyState({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-64 items-center justify-center rounded-xl border border-dashed p-6 text-center text-sm text-slate-500">
@@ -160,9 +131,13 @@ type ProfitWaterfallStep = {
   description: string;
   amount: number;
   runningTotal: number;
-  href: string;
   kind: "start" | "deduction" | "end";
   unknown?: boolean;
+};
+
+type MissingProfitInput = {
+  label: string;
+  detail: string;
 };
 
 function buildOperatingCostModel(summary: ProfitSummaryResponse | null): OperatingCostModel {
@@ -236,10 +211,6 @@ function buildOperatingCostModel(summary: ProfitSummaryResponse | null): Operati
   };
 }
 
-function waterfallDrilldown(range: { from: string; to: string }, section: string) {
-  return dashboardDrilldown(range, section);
-}
-
 function waterfallAmountLabel(step: ProfitWaterfallStep) {
   if (step.unknown) return "Unknown";
   if (step.kind === "deduction") return `-${positiveMoney(step.amount)}`;
@@ -256,14 +227,201 @@ function isUnknownOperatingCostCategory(row: CostCategory) {
   return row.value === 0 && UNKNOWN_OPERATING_COST_ZERO_CATEGORIES.has(row.name);
 }
 
-function ProfitWaterfall({
+function buildMissingProfitInputs(summary: ProfitSummaryResponse | null, costBreakdown: CostCategory[]): MissingProfitInput[] {
+  if (!summary) return [];
+
+  return [
+    num(summary.cogs) === 0
+      ? { label: "COGS", detail: "Product costs are missing or zero" }
+      : null,
+    num(summary.ad_spend) === 0
+      ? { label: "Ad Spend", detail: "Ad spend is not connected or is zero" }
+      : null,
+    num(summary.affiliate_payout) === 0
+      ? { label: "Affiliate Payouts", detail: "Affiliate payout data is unavailable or zero" }
+      : null,
+    costBreakdown.find((row) => row.name === "Software & Infrastructure")?.value === 0
+      ? { label: "Software Costs", detail: "Software and infrastructure expenses are not mapped" }
+      : null,
+    costBreakdown.find((row) => row.name === "Other")?.value === 0
+      ? { label: "Other Costs", detail: "Miscellaneous operating expense mapping is not configured" }
+      : null,
+  ].filter(Boolean) as MissingProfitInput[];
+}
+
+function buildExecutiveSummarySentence(
+  summary: ProfitSummaryResponse | null,
+  operatingCostTotal: number,
+  missingInputs: MissingProfitInput[],
+) {
+  if (!summary) return "Profit data is unavailable for the selected period.";
+
+  const revenueLeakage = Math.abs(num(summary.refunds)) + Math.abs(num(summary.chargebacks));
+  const parts = [
+    `Net profit was ${formatMoney(summary.net_profit)} for the selected period.`,
+    `Refunds and chargebacks reduced gross revenue by ${positiveMoney(revenueLeakage)}, while ${positiveMoney(operatingCostTotal)} in mapped operating costs were recorded.`,
+  ];
+
+  if (missingInputs.length) {
+    parts.push("Profit may be overstated because some operating cost sources are not connected.");
+  }
+
+  return parts.join(" ");
+}
+
+function SummaryMetric({
+  label,
+  value,
+  subtitle,
+  href,
+  title,
+}: {
+  label: string;
+  value: string;
+  subtitle: string;
+  href?: string;
+  title?: string;
+}) {
+  const content = (
+    <>
+      <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</div>
+      <div className="mt-1 text-lg font-semibold tracking-tight">{value}</div>
+      <div className="mt-1 text-xs text-slate-500">{subtitle}</div>
+    </>
+  );
+
+  if (!href) {
+    return <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-900/70">{content}</div>;
+  }
+
+  return (
+    <Link
+      href={href}
+      title={title}
+      className="block rounded-xl bg-slate-50 p-3 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:bg-slate-900/70 dark:hover:bg-slate-900"
+    >
+      {content}
+    </Link>
+  );
+}
+
+function ExecutiveSummary({
   summary,
   range,
+  operatingCostTotal,
+  missingInputs,
+}: {
+  summary: ProfitSummaryResponse | null;
+  range: { from: string; to: string };
+  operatingCostTotal: number;
+  missingInputs: MissingProfitInput[];
+}) {
+  const confidenceValue = !summary ? "Unavailable" : missingInputs.length ? "Incomplete" : "Complete";
+  const confidenceSubtitle = !summary
+    ? "Waiting for profit data"
+    : missingInputs.length
+      ? "Some cost inputs are missing"
+      : "Mapped inputs are present";
+  const confidenceTone = !summary
+    ? "bg-slate-100 text-slate-600 dark:bg-slate-900 dark:text-slate-300"
+    : missingInputs.length
+      ? "bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-200"
+      : "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200";
+
+  return (
+    <section className="overflow-hidden rounded-2xl border bg-white p-5 dark:bg-ink/60" aria-label="Executive Summary">
+      <div className="grid gap-5 xl:grid-cols-[minmax(20rem,0.9fr)_minmax(0,1.35fr)]">
+        <div className="flex flex-col justify-between gap-5">
+          <div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Net Profit</div>
+            <div className="mt-2 text-4xl font-semibold tracking-tight sm:text-5xl">
+              {summary ? formatMoney(summary.net_profit) : "—"}
+            </div>
+            <div className="mt-3 grid gap-2 text-sm text-slate-600 dark:text-slate-300 sm:grid-cols-3 xl:grid-cols-1 2xl:grid-cols-3">
+              <div>
+                <div className="text-xs uppercase tracking-wide text-slate-500">Profit Margin</div>
+                <div className="font-semibold text-slate-900 dark:text-slate-100">
+                  {summary ? `${num(summary.profit_margin_pct).toFixed(1)}%` : "—"}
+                </div>
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-wide text-slate-500">Previous Period</div>
+                <div className="font-medium text-slate-500">Previous-period comparison unavailable</div>
+              </div>
+              <div>
+                <div className="text-xs uppercase tracking-wide text-slate-500">Date Range</div>
+                <div className="font-medium text-slate-900 dark:text-slate-100">{range.from} to {range.to}</div>
+              </div>
+            </div>
+          </div>
+
+          <p className="rounded-xl bg-slate-50 p-3 text-sm leading-6 text-slate-700 dark:bg-slate-900/70 dark:text-slate-200">
+            {buildExecutiveSummarySentence(summary, operatingCostTotal, missingInputs)}
+          </p>
+        </div>
+
+        <div className="space-y-3">
+          <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+            <SummaryMetric
+              label="Gross Revenue"
+              value={summary ? formatMoney(summary.gross_revenue) : "—"}
+              subtitle="Recognized revenue"
+              href={dashboardDrilldown(range, "revenue-breakdown")}
+              title="Open Revenue Breakdown"
+            />
+            <SummaryMetric
+              label="Net Revenue"
+              value={summary ? formatMoney(summary.net_revenue) : "—"}
+              subtitle="After refunds and chargebacks"
+              href={dashboardDrilldown(range, "revenue-after-leakage")}
+              title="Open Revenue after refunds and chargebacks"
+            />
+            <SummaryMetric
+              label="Operating Costs"
+              value={summary ? positiveMoney(operatingCostTotal) : "—"}
+              subtitle="Mapped operating expenses"
+              href={dashboardDrilldown(range, "operating-cost-breakdown")}
+              title="Open Operating Cost Breakdown"
+            />
+            <SummaryMetric
+              label="Orders"
+              value={summary ? num(summary.order_count).toLocaleString("en-US") : "—"}
+              subtitle="Recognized orders"
+              href={`/orders?${dateRangeQuery(range)}`}
+              title="Open Orders"
+            />
+            <SummaryMetric
+              label="AOV"
+              value={formatAov(summary)}
+              subtitle="Gross revenue per order"
+              href={`/orders?${dateRangeQuery(range)}&analysis=order-value`}
+              title="Open Order Value Analysis"
+            />
+            <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-900/70">
+              <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">Profit Confidence</div>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                <span className={`rounded-full px-2 py-1 text-xs font-semibold ${confidenceTone}`}>{confidenceValue}</span>
+              </div>
+              <div className="mt-2 text-xs text-slate-500">{confidenceSubtitle}</div>
+              {missingInputs.length ? (
+                <div className="mt-2 text-xs text-amber-700 dark:text-amber-200">
+                  Missing: {missingInputs.map((input) => input.label).join(" · ")}
+                </div>
+              ) : null}
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function ProfitWaterfall({
+  summary,
   operatingCostModel,
   loading,
 }: {
   summary: ProfitSummaryResponse | null;
-  range: { from: string; to: string };
   operatingCostModel: OperatingCostModel;
   loading: boolean;
 }) {
@@ -272,11 +430,11 @@ function ProfitWaterfall({
       <section className="rounded-2xl border bg-white p-6 dark:bg-ink/60">
         <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold">Profit Waterfall</h2>
+            <h2 className="text-base font-semibold">Profit Waterfall</h2>
             <p className="text-sm text-slate-500">Gross Revenue to Net Profit</p>
           </div>
         </div>
-        <EmptyState>Loading Profit Waterfall…</EmptyState>
+        <div className="h-32 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-900" />
       </section>
     );
   }
@@ -286,7 +444,7 @@ function ProfitWaterfall({
       <section className="rounded-2xl border bg-white p-6 dark:bg-ink/60">
         <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-lg font-semibold">Profit Waterfall</h2>
+            <h2 className="text-base font-semibold">Profit Waterfall</h2>
             <p className="text-sm text-slate-500">Gross Revenue to Net Profit</p>
           </div>
         </div>
@@ -297,107 +455,11 @@ function ProfitWaterfall({
 
   const grossRevenue = num(summary.gross_revenue);
   const refundAmount = Math.abs(num(summary.refunds));
-  const refundFees = Math.abs(sumFields(summary, ["refund_fees", "refund_fee"]));
-  const advertising = Math.abs(num(summary.ad_spend));
-  const affiliatePayouts = Math.abs(num(summary.affiliate_payout));
-  const cogs = Math.abs(num(summary.cogs));
-  const fulfillment = Math.abs(num(summary.shipping_cost ?? summary.shipping));
-  const paymentProcessing = Math.abs(num(summary.processor_fees) + num(summary.bank_fees));
-  const softwareInfrastructure = Math.abs(sumFields(summary, [
-    "software_infrastructure",
-    "software_infrastructure_costs",
-    "software_costs",
-    "infrastructure_costs",
-  ]));
   const chargebackAmount = Math.abs(num(summary.chargebacks));
-  const chargebackFees = Math.abs(num(summary.chargeback_fees));
-  const otherOperatingCosts = Math.max(
-    0,
-    operatingCostModel.operatingCostTotal -
-      advertising -
-      affiliatePayouts -
-      cogs -
-      fulfillment -
-      paymentProcessing -
-      softwareInfrastructure -
-      refundFees -
-      chargebackFees,
-  );
-
-  const deductions = [
-    {
-      key: "refunds",
-      label: "Refunds",
-      description: refundFees > 0 ? "Refunded revenue and mapped refund fees" : "Refunded revenue",
-      amount: refundAmount + refundFees,
-      href: waterfallDrilldown(range, "refund-analysis"),
-      unknown: false,
-    },
-    {
-      key: "advertising",
-      label: "Advertising",
-      description: "Paid media and tracked ad spend",
-      amount: advertising,
-      href: waterfallDrilldown(range, "ad-spend-analysis"),
-      unknown: advertising === 0,
-    },
-    {
-      key: "affiliate-payouts",
-      label: "Affiliate Payouts",
-      description: "Affiliate commissions and partner payouts",
-      amount: affiliatePayouts,
-      href: waterfallDrilldown(range, "affiliate-costs"),
-      unknown: affiliatePayouts === 0,
-    },
-    {
-      key: "cogs",
-      label: "COGS",
-      description: "Product cost of goods sold",
-      amount: cogs,
-      href: `/settings/product-costs?${dateRangeQuery(range)}`,
-      unknown: cogs === 0,
-    },
-    {
-      key: "fulfillment",
-      label: "Shipping & Fulfillment",
-      description: "Shipping, fulfillment, and delivery costs",
-      amount: fulfillment,
-      href: waterfallDrilldown(range, "fulfillment"),
-      unknown: fulfillment === 0,
-    },
-    {
-      key: "payment-processing",
-      label: "Payment Processing",
-      description: "Processor fees and bank fees",
-      amount: paymentProcessing,
-      href: waterfallDrilldown(range, "processor-fees"),
-      unknown: paymentProcessing === 0,
-    },
-    {
-      key: "software-infrastructure",
-      label: "Software & Infrastructure",
-      description: "Recurring SaaS and infrastructure costs when mapped",
-      amount: softwareInfrastructure,
-      href: waterfallDrilldown(range, "vendor-costs"),
-      unknown: softwareInfrastructure === 0,
-    },
-    {
-      key: "chargebacks",
-      label: "Chargebacks",
-      description: chargebackFees > 0 ? "Chargeback revenue loss and chargeback fees" : "Chargeback revenue loss",
-      amount: chargebackAmount + chargebackFees,
-      href: waterfallDrilldown(range, "chargeback-analysis"),
-      unknown: false,
-    },
-    {
-      key: "other-operating-costs",
-      label: "Other Operating Costs",
-      description: "Other mapped or residual operating expenses",
-      amount: otherOperatingCosts,
-      href: waterfallDrilldown(range, "operating-cost-breakdown"),
-      unknown: otherOperatingCosts === 0,
-    },
-  ];
+  const netProfit = num(summary.net_profit);
+  const bridgeOperatingImpact = grossRevenue - refundAmount - chargebackAmount - netProfit;
+  const bridgeOperatingCosts = Math.abs(bridgeOperatingImpact);
+  const bridgeUsesNetAdjustments = Math.abs(bridgeOperatingCosts - operatingCostModel.operatingCostTotal) > 0.005;
 
   let runningTotal = grossRevenue;
   const steps: ProfitWaterfallStep[] = [
@@ -407,24 +469,43 @@ function ProfitWaterfall({
       description: "Total recognized revenue before deductions",
       amount: grossRevenue,
       runningTotal,
-      href: waterfallDrilldown(range, "revenue-breakdown"),
       kind: "start",
     },
-    ...deductions.map((step) => {
-      if (!step.unknown) runningTotal -= step.amount;
-      return {
-        ...step,
-        runningTotal,
-        kind: "deduction" as const,
-      };
-    }),
+    {
+      key: "refunds",
+      label: "Refunds",
+      description: "Refund ledger events reduce gross revenue",
+      amount: refundAmount,
+      runningTotal: runningTotal -= refundAmount,
+      kind: "deduction",
+    },
+    {
+      key: "chargebacks",
+      label: "Chargebacks",
+      description: "Chargeback ledger events reduce gross revenue",
+      amount: chargebackAmount,
+      runningTotal: runningTotal -= chargebackAmount,
+      kind: "deduction",
+    },
+    {
+      key: "operating-costs",
+      label: "Operating Costs",
+      description: bridgeOperatingImpact < 0
+        ? "Net adjustments increased profit after mapped operating costs"
+        : bridgeUsesNetAdjustments
+          ? "Mapped operating expenses and net adjustments required to reconcile"
+          : "Includes payment processing and other mapped expenses",
+      amount: bridgeOperatingCosts,
+      runningTotal: runningTotal -= bridgeOperatingImpact,
+      kind: bridgeOperatingImpact < 0 ? "start" : "deduction",
+      unknown: bridgeOperatingCosts === 0 && operatingCostModel.operatingCostTotal === 0,
+    },
     {
       key: "net-profit",
       label: "Net Profit",
       description: "Ending profit from the Profit Engine",
-      amount: num(summary.net_profit),
-      runningTotal: num(summary.net_profit),
-      href: waterfallDrilldown(range, "profit-statement"),
+      amount: netProfit,
+      runningTotal: netProfit,
       kind: "end",
     },
   ];
@@ -435,18 +516,16 @@ function ProfitWaterfall({
   );
 
   return (
-    <section className="rounded-2xl border bg-white p-6 dark:bg-ink/60" aria-label="Profit Waterfall">
-      <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+    <section className="rounded-2xl border bg-white p-5 dark:bg-ink/60" aria-label="Profit Waterfall">
+      <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-lg font-semibold">Profit Waterfall</h2>
-          <p className="text-sm text-slate-500">
-            How Gross Revenue becomes Net Profit for {range.from} through {range.to}
-          </p>
+          <h2 className="text-base font-semibold">Profit Waterfall</h2>
+          <p className="text-sm text-slate-500">A compact bridge from Gross Revenue to Net Profit.</p>
         </div>
-        <span className="text-xs text-slate-500">Click any bar to drill down</span>
+        <span className="text-xs text-slate-500">Informational bridge</span>
       </div>
 
-      <div className="space-y-3">
+      <div className="grid gap-2 lg:grid-cols-5">
         {steps.map((step, index) => {
           const amountLabel = waterfallAmountLabel(step);
           const percentLabel = waterfallPercentLabel(step, grossRevenue);
@@ -466,37 +545,35 @@ function ProfitWaterfall({
           const title = `${step.label}: ${amountLabel} (${percentLabel} of Gross Revenue). Running total: ${formatMoney(step.runningTotal)}. ${step.description}`;
 
           return (
-            <Link
+            <div
               key={step.key}
-              href={step.href}
               title={title}
-              className="group grid gap-2 rounded-xl border border-transparent p-2 transition hover:border-slate-200 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:hover:border-slate-800 dark:hover:bg-slate-900/40 md:grid-cols-[12rem_minmax(0,1fr)_10rem]"
+              className="rounded-xl bg-slate-50 p-3 dark:bg-slate-900/70"
             >
-              <div className="flex items-center gap-3">
+              <div className="mb-2 flex items-start justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium">{step.label}</div>
+                  <div className="mt-0.5 truncate text-xs text-slate-500">{step.description}</div>
+                </div>
                 <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-500 dark:bg-slate-900">
                   {index === 0 ? "Start" : step.kind === "end" ? "End" : "↓"}
                 </span>
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium">{step.label}</div>
-                  <div className="truncate text-xs text-slate-500">{step.description}</div>
-                </div>
               </div>
 
-              <div className="relative h-11 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-900">
+              <div className="relative h-9 overflow-hidden rounded-full bg-white dark:bg-ink/70">
                 <div
-                  className={`flex h-full min-w-20 items-center justify-between rounded-full px-4 text-sm font-semibold transition-all duration-500 ease-out ${barClass}`}
+                  className={`flex h-full min-w-20 items-center justify-between rounded-full px-3 text-sm font-semibold transition-all duration-500 ease-out ${barClass}`}
                   style={{ width: `${width}%` }}
                 >
                   <span className="truncate">{amountLabel}</span>
-                  <span className="ml-3 hidden shrink-0 text-xs opacity-90 sm:inline">{percentLabel}</span>
                 </div>
               </div>
 
-              <div className="flex items-center justify-between gap-3 text-sm md:block md:text-right">
-                <span className="text-xs text-slate-500 md:block">Running total</span>
+              <div className="mt-2 flex items-center justify-between gap-3 text-xs">
+                <span className="text-slate-500">{percentLabel} of gross</span>
                 <span className="font-mono font-semibold">{formatMoney(step.runningTotal)}</span>
               </div>
-            </Link>
+            </div>
           );
         })}
       </div>
@@ -566,91 +643,22 @@ export function DecisionHomeOverview() {
     { name: "Chargebacks", value: Math.abs(num(summary?.chargebacks)) },
   ].filter((row) => row.value > 0);
 
-  const missingInputs = summary
-    ? ([
-        num(summary.cogs) === 0 ? "Product costs are missing or zero" : null,
-        num(summary.ad_spend) === 0 ? "Ad spend is not connected or is zero" : null,
-        num(summary.affiliate_payout) === 0 ? "Affiliate payout data is unavailable or zero" : null,
-        costBreakdown.find((row) => row.name === "Software & Infrastructure")?.value === 0
-          ? "Software and infrastructure expenses are not mapped"
-          : null,
-        costBreakdown.find((row) => row.name === "Other")?.value === 0
-          ? "Miscellaneous operating expense mapping is not configured"
-          : null,
-      ].filter(Boolean) as string[])
-    : [];
+  const missingInputs = buildMissingProfitInputs(summary, costBreakdown);
 
   return (
     <div className="space-y-6">
-      <section id="profit-statement" className="overflow-hidden rounded-2xl border bg-white p-6 dark:bg-ink/60">
-        <Link
-          href={dashboardDrilldown(range, "profit-statement")}
-          title="Open Profit Statement"
-          className="block rounded-xl transition focus:outline-none focus:ring-2 focus:ring-teal-500"
-        >
-          <div className="text-sm font-medium text-slate-500">Did we make money?</div>
-          <div className="mt-2 text-5xl font-semibold tracking-tight">
-            {summary ? formatMoney(summary.net_profit) : "—"}
-          </div>
-          <div className="mt-2 text-sm text-slate-500">
-            Net Profit for {range.from} through {range.to}
-          </div>
-        </Link>
-      </section>
+      <ExecutiveSummary
+        summary={summary}
+        range={range}
+        operatingCostTotal={operatingCostTotal}
+        missingInputs={missingInputs}
+      />
 
       <ProfitWaterfall
         summary={summary}
-        range={range}
         operatingCostModel={operatingCostModel}
         loading={loading}
       />
-
-      <section className="rounded-2xl border bg-white p-4 dark:bg-ink/60" aria-label="Executive KPI cards">
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
-          <Metric
-            label="Gross revenue"
-            value={summary ? formatMoney(summary.gross_revenue) : "—"}
-            href={dashboardDrilldown(range, "revenue-breakdown")}
-            title="Open Revenue Breakdown"
-            id="revenue-breakdown"
-          />
-          <Metric
-            label="Net revenue"
-            value={summary ? formatMoney(summary.net_revenue) : "—"}
-            helper="After refunds and chargebacks"
-            href={dashboardDrilldown(range, "revenue-after-leakage")}
-            title="Open Revenue after refunds and chargebacks"
-            id="revenue-after-leakage"
-          />
-          <Metric
-            label="Operating Costs"
-            value={summary ? positiveMoney(operatingCostTotal) : "—"}
-            href={dashboardDrilldown(range, "operating-cost-breakdown")}
-            title="Open Operating Cost Breakdown"
-            id="operating-cost-breakdown"
-          />
-          <Metric
-            label="Profit margin"
-            value={summary ? `${num(summary.profit_margin_pct).toFixed(1)}%` : "—"}
-            href={dashboardDrilldown(range, "profit-analysis")}
-            title="Open Profit Analysis"
-            id="profit-analysis"
-          />
-          <Metric
-            label="Orders"
-            value={summary ? num(summary.order_count).toLocaleString("en-US") : "—"}
-            href={`/orders?${dateRangeQuery(range)}`}
-            title="Open Orders"
-          />
-          <Metric
-            label="AOV"
-            value={formatAov(summary)}
-            helper="Gross revenue / orders"
-            href={`/orders?${dateRangeQuery(range)}&analysis=order-value`}
-            title="Open Order Value Analysis"
-          />
-        </div>
-      </section>
 
       {error ? (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200">
@@ -661,9 +669,10 @@ export function DecisionHomeOverview() {
       {missingInputs.length ? (
         <Card title="Action required" right={<span className="text-xs text-amber-600">Profit confidence is incomplete</span>}>
           <div className="grid gap-3 md:grid-cols-3">
-            {missingInputs.map((message) => (
-              <div key={message} className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
-                {message}
+            {missingInputs.map((input) => (
+              <div key={input.label} className="rounded-xl border border-amber-200 bg-amber-50 p-4 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/30 dark:text-amber-200">
+                <div className="font-medium">{input.label}</div>
+                <div className="mt-1 text-xs">{input.detail}</div>
               </div>
             ))}
           </div>

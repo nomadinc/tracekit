@@ -40,11 +40,33 @@ Operating Costs represent all expenses required to operate the business. The cur
 
 Missing categories must not be treated as silently complete. They should continue to appear in Profit Confidence or attention modules until a source is connected or explicitly mapped.
 
-The Profit Waterfall is the primary Home visualization and sits between the Net Profit header and the KPI cards. It uses the existing Profit Summary API values to explain the flow:
+The Executive Summary is the upper-page decision surface. It combines the primary Net Profit value, selected date range, profit margin, previous-period availability, supporting KPIs, and concise Profit Confidence state in one information-dense panel. It should answer:
 
-Gross Revenue -> Refunds -> Advertising -> Affiliate Payouts -> COGS -> Shipping & Fulfillment -> Payment Processing -> Software & Infrastructure -> Chargebacks -> Other Operating Costs -> Net Profit
+- Did we make money?
+- Can we trust the number?
+- What financial inputs are missing?
 
-Every waterfall bar is clickable and preserves the active date range. Missing operating-cost inputs render as `Unknown` instead of `$0` so operators do not confuse unmapped cost categories with confirmed zero expense.
+The summary sentence must be deterministic and built only from available dashboard data. It should not call an LLM or invent previous-period comparisons.
+
+The compact Profit Waterfall sits directly below the Executive Summary and supports the summary instead of dominating the page. It uses the existing Profit Summary API values to explain the accounting bridge:
+
+Gross Revenue -> Refunds -> Chargebacks -> Operating Costs -> Net Profit
+
+The waterfall follows backend Profit Engine accounting. Refund and chargeback ledger values are shown as revenue deductions, and operating costs are not used to deduct those values again. Missing operating-cost inputs render as `Unknown` instead of `$0` so operators do not confuse unmapped cost categories with confirmed zero expense.
+
+Waterfall rows are intentionally informational, not navigational. Do not make a row clickable until the destination is a real detail page that explains that row. Date-preserving KPI links may live in the Executive Summary when the destination is meaningful.
+
+Metric definitions:
+
+| Metric | Definition |
+| --- | --- |
+| Net Profit | Profit Engine `net_profit` |
+| Gross Revenue | Profit Engine `gross_revenue` |
+| Net Revenue | Profit Engine `net_revenue`, after refund and chargeback ledger effects |
+| Operating Costs | Positive display of Profit Engine `total_costs` and mapped operating-expense buckets |
+| Orders | Profit Engine recognized order count |
+| AOV | Gross revenue divided by recognized orders |
+| Profit Confidence | Complete when required mapped cost inputs are present; incomplete when cost sources are missing |
 
 ### 2. Why did profit move?
 
