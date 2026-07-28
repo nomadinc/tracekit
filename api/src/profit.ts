@@ -249,119 +249,10 @@ function canonicalOrderId(row: { order_id?: string | null }) {
   return firstText(row.order_id);
 }
 
-function sourceDimensions(order: FinancialIssueOrderRow | null | undefined) {
-  const raw = order?.raw_json;
-  const affiliateId = firstText(order?.affiliate_id, rawText(raw, ["affiliate_id", "affiliateId", "Affiliate ID"]));
-  const sourceId = firstText(order?.source_id, rawText(raw, ["source_id", "sourceId", "Source ID", "traffic_source", "utm_source"]));
-  const campaignId = firstText(
-    rawText(raw, ["campaign_id", "campaignId", "Campaign ID", "utm_campaign"]),
-    order?.sub1,
-  );
-  const brandId = rawText(raw, ["brand_id", "brandId", "Brand ID", "brand"]);
-  const offerId = rawText(raw, ["offer_id", "offerId", "Offer ID", "offer"]);
-  const productId = rawText(raw, ["product_id", "productId", "Product ID", "sku", "SKU"]);
-  const attributionStatus = affiliateId || sourceId || campaignId ? "attributed" : "unattributed";
-
-  if (affiliateId) {
-    return {
-      group_key: `affiliate:${affiliateId}`,
-      group_type: "affiliate",
-      source_name: `Affiliate ${affiliateId}`,
-      affiliate_id: affiliateId,
-      source_id: sourceId || null,
-      campaign_id: campaignId || null,
-      brand_id: brandId || null,
-      offer_id: offerId || null,
-      product_id: productId || null,
-      attribution_status: attributionStatus,
-    };
-  }
-
-  if (sourceId) {
-    return {
-      group_key: `source:${sourceId}`,
-      group_type: "traffic_source",
-      source_name: `Source ${sourceId}`,
-      affiliate_id: null,
-      source_id: sourceId,
-      campaign_id: campaignId || null,
-      brand_id: brandId || null,
-      offer_id: offerId || null,
-      product_id: productId || null,
-      attribution_status: attributionStatus,
-    };
-  }
-
-  if (campaignId) {
-    return {
-      group_key: `campaign:${campaignId}`,
-      group_type: "campaign",
-      source_name: `Campaign ${campaignId}`,
-      affiliate_id: null,
-      source_id: null,
-      campaign_id: campaignId,
-      brand_id: brandId || null,
-      offer_id: offerId || null,
-      product_id: productId || null,
-      attribution_status: attributionStatus,
-    };
-  }
-
-  return {
-    group_key: "unknown",
-    group_type: "unknown",
-    source_name: "Unattributed / Unknown",
-    affiliate_id: null,
-    source_id: null,
-    campaign_id: null,
-    brand_id: brandId || null,
-    offer_id: offerId || null,
-    product_id: productId || null,
-    attribution_status: attributionStatus,
-  };
-}
-
-function matchesAnalysisFilters(dimensions: ReturnType<typeof sourceDimensions>, filters: FinancialIssueAnalysisFilters) {
-  if (filters.affiliate_id && dimensions.affiliate_id !== filters.affiliate_id) return false;
-  if (filters.source_id && dimensions.source_id !== filters.source_id) return false;
-  if (filters.campaign_id && dimensions.campaign_id !== filters.campaign_id) return false;
-  if (filters.brand_id && dimensions.brand_id !== filters.brand_id) return false;
-  if (filters.offer_id && dimensions.offer_id !== filters.offer_id) return false;
-  if (filters.product_id && dimensions.product_id !== filters.product_id) return false;
-  if (filters.attribution_status && dimensions.attribution_status !== filters.attribution_status) return false;
-  return true;
-}
-
-function safePage(value: number | null | undefined) {
-  const n = Math.trunc(Number(value || 1));
-  return Number.isFinite(n) && n > 0 ? n : 1;
-}
-
 function safeLimit(value: number | null | undefined) {
   const n = Math.trunc(Number(value || 25));
   if (!Number.isFinite(n) || n <= 0) return 25;
   return Math.min(100, Math.max(1, n));
-}
-
-function sortDirection(value: string | null | undefined) {
-  return String(value || "desc").toLowerCase() === "asc" ? "asc" : "desc";
-}
-
-function bucketKey(occurredAt: unknown, from?: string | null, to?: string | null) {
-  const day = dayFromOccurredAt(occurredAt);
-  if (!day) return null;
-  const fromDt = from ? new Date(`${from}T00:00:00.000Z`) : null;
-  const toDt = to ? new Date(`${to}T00:00:00.000Z`) : null;
-  if (fromDt && toDt && Number.isFinite(fromDt.getTime()) && Number.isFinite(toDt.getTime())) {
-    const spanDays = Math.max(1, Math.ceil((toDt.getTime() - fromDt.getTime()) / 86_400_000) + 1);
-    if (spanDays > 62) {
-      const dt = new Date(`${day}T00:00:00.000Z`);
-      const weekStart = new Date(dt);
-      weekStart.setUTCDate(dt.getUTCDate() - dt.getUTCDay());
-      return weekStart.toISOString().slice(0, 10);
-    }
-  }
-  return day;
 }
 
 export function buildFinancialIssueAnalysis(
@@ -370,9 +261,8 @@ export function buildFinancialIssueAnalysis(
   options: FinancialIssueAnalysisOptions,
 ) {
   const kind = options.kind;
-  const page = safePage(options.page);
-  const limit = safeLimit(options.limit);
-  const direction = sortDirection(options.direction);
+  const limit = Math.min(5, safeLimit(options.limit ?? 5));
+  const affiliateFilter = firstText(options.affiliate_id);
   const ordersById = new Map<string, FinancialIssueOrderRow>();
 
   for (const order of platformOrders) {
@@ -380,63 +270,54 @@ export function buildFinancialIssueAnalysis(
     if (orderId && !ordersById.has(orderId)) ordersById.set(orderId, order);
   }
 
-  const sourceRows = new Map<string, any>();
-  const orderRevenue = new Map<string, number>();
-  const issueAmountsByOrder = new Map<string, number>();
-  const issueEventsByOrder = new Map<string, number>();
-  const trend = new Map<string, { date: string; amount: number; count: number; affected_orders: Set<string> }>();
+  const affiliateRows = new Map<string, {
+    affiliate_id: string;
+    affiliate_name: string;
+    total_orders: Set<string>;
+    affected_orders: Set<string>;
+    event_count: number;
+    amount: number;
+  }>();
   const saleOrderIds = new Set<string>();
   const issueOrderIds = new Set<string>();
-  const sourcedSaleOrderIds = new Set<string>();
-  const missingDenominators = new Set<string>();
-  let totalRevenue = 0;
+  const warnings: string[] = [];
   let issueAmount = 0;
   let issueEventCount = 0;
 
-  function sourceForOrderId(orderId: string) {
-    return sourceDimensions(ordersById.get(orderId));
+  function affiliateForOrder(orderId: string) {
+    const order = ordersById.get(orderId);
+    return firstText(order?.affiliate_id, rawText(order?.raw_json, ["affiliate_id", "affiliateId", "Affiliate ID"]));
   }
 
-  function entryFor(dimensions: ReturnType<typeof sourceDimensions>) {
-    const existing = sourceRows.get(dimensions.group_key);
+  function entryFor(affiliateId: string) {
+    const existing = affiliateRows.get(affiliateId);
     if (existing) return existing;
     const entry = {
-      group_key: dimensions.group_key,
-      group_type: dimensions.group_type,
-      source_name: dimensions.source_name,
-      affiliate_id: dimensions.affiliate_id,
-      source_id: dimensions.source_id,
-      campaign_id: dimensions.campaign_id,
-      brand_id: dimensions.brand_id,
-      offer_id: dimensions.offer_id,
-      product_id: dimensions.product_id,
-      attribution_status: dimensions.attribution_status,
-      total_orders_set: new Set<string>(),
-      affected_orders_set: new Set<string>(),
-      total_revenue: 0,
+      affiliate_id: affiliateId,
+      affiliate_name: `Affiliate ${affiliateId}`,
+      total_orders: new Set<string>(),
+      affected_orders: new Set<string>(),
       event_count: 0,
       amount: 0,
     };
-    sourceRows.set(dimensions.group_key, entry);
+    affiliateRows.set(affiliateId, entry);
     return entry;
   }
 
   for (const row of ledgerRows) {
     const orderId = canonicalOrderId(row);
     if (!orderId) continue;
-    const dimensions = sourceForOrderId(orderId);
-    if (!matchesAnalysisFilters(dimensions, options)) continue;
+    const affiliateId = affiliateForOrder(orderId);
+    if (!affiliateId) continue;
+    if (affiliateFilter && affiliateId !== affiliateFilter) continue;
+
     const ledgerType = String(row.ledger_type || "");
     const amount = numberFrom(row.amount);
+    const entry = entryFor(affiliateId);
 
     if (ledgerType === "sale" && amount > 0) {
       saleOrderIds.add(orderId);
-      orderRevenue.set(orderId, roundMoney((orderRevenue.get(orderId) || 0) + amount));
-      totalRevenue += amount;
-      if (dimensions.attribution_status === "attributed") sourcedSaleOrderIds.add(orderId);
-      const entry = entryFor(dimensions);
-      entry.total_orders_set.add(orderId);
-      entry.total_revenue += amount;
+      entry.total_orders.add(orderId);
     }
 
     if (ledgerType === kind) {
@@ -444,112 +325,53 @@ export function buildFinancialIssueAnalysis(
       issueAmount += absoluteAmount;
       issueEventCount += 1;
       issueOrderIds.add(orderId);
-      issueAmountsByOrder.set(orderId, roundMoney((issueAmountsByOrder.get(orderId) || 0) + absoluteAmount));
-      issueEventsByOrder.set(orderId, (issueEventsByOrder.get(orderId) || 0) + 1);
-
-      const bucket = bucketKey(row.occurred_at, options.from, options.to);
-      if (bucket) {
-        const point = trend.get(bucket) || { date: bucket, amount: 0, count: 0, affected_orders: new Set<string>() };
-        point.amount += absoluteAmount;
-        point.count += 1;
-        point.affected_orders.add(orderId);
-        trend.set(bucket, point);
-      }
-
-      const entry = entryFor(dimensions);
-      entry.affected_orders_set.add(orderId);
+      entry.affected_orders.add(orderId);
       entry.event_count += 1;
       entry.amount += absoluteAmount;
     }
   }
 
-  const sources = Array.from(sourceRows.values()).map((entry) => {
-    const totalOrders = entry.total_orders_set.size;
-    const affectedOrders = entry.affected_orders_set.size;
-    const totalRevenueForSource = roundMoney(entry.total_revenue);
+  const affiliates = Array.from(affiliateRows.values()).map((entry) => {
+    const totalOrders = entry.total_orders.size;
+    const affectedOrders = entry.affected_orders.size;
     const amountForSource = roundMoney(entry.amount);
     const rateByOrders = totalOrders > 0 ? affectedOrders / totalOrders : null;
-    const rateByRevenue = totalRevenueForSource > 0 ? amountForSource / totalRevenueForSource : null;
 
-    if (affectedOrders > 0 && totalOrders <= 0) missingDenominators.add(`${entry.source_name}: total orders`);
-    if (amountForSource > 0 && totalRevenueForSource <= 0) missingDenominators.add(`${entry.source_name}: total revenue`);
+    if (affectedOrders > 0 && totalOrders <= 0) warnings.push(`${entry.affiliate_name} has affected orders but no sale-order denominator.`);
 
     return {
-      group_key: entry.group_key,
-      group_type: entry.group_type,
-      source_name: entry.source_name,
+      group_key: `affiliate:${entry.affiliate_id}`,
+      group_type: "affiliate",
+      source_name: entry.affiliate_name,
       affiliate_id: entry.affiliate_id,
-      source_id: entry.source_id,
-      campaign_id: entry.campaign_id,
-      brand_id: entry.brand_id,
-      offer_id: entry.offer_id,
-      product_id: entry.product_id,
-      attribution_status: entry.attribution_status,
+      affiliate_name: entry.affiliate_name,
       total_orders: totalOrders,
-      total_revenue: totalRevenueForSource,
       event_count: entry.event_count,
       affected_orders: affectedOrders,
       amount: amountForSource,
       rate_by_orders: roundRatio(rateByOrders),
-      rate_by_revenue: roundRatio(rateByRevenue),
-      average_affected_order_value: affectedOrders > 0 ? roundMoney(amountForSource / affectedOrders) : null,
+      total_revenue: 0,
+      rate_by_revenue: null,
+      average_affected_order_value: null,
     };
   });
 
-  const sort = String(options.sort || "rate_by_revenue");
-  const sortField = new Set(["count", "amount", "rate_by_orders", "rate_by_revenue", "total_revenue"]).has(sort)
-    ? sort
-    : "rate_by_revenue";
-  const sortedSources = sources.sort((a, b) => {
-    const aValue = sortField === "count" ? a.affected_orders : Number((a as any)[sortField] ?? -1);
-    const bValue = sortField === "count" ? b.affected_orders : Number((b as any)[sortField] ?? -1);
-    const diff = aValue - bValue || String(a.source_name).localeCompare(String(b.source_name));
-    return direction === "asc" ? diff : -diff;
-  });
+  const sortedAffiliates = affiliates
+    .sort((a, b) =>
+      b.affected_orders - a.affected_orders ||
+      Number(b.rate_by_orders ?? -1) - Number(a.rate_by_orders ?? -1) ||
+      b.event_count - a.event_count ||
+      Math.abs(b.amount) - Math.abs(a.amount) ||
+      String(a.affiliate_id).localeCompare(String(b.affiliate_id))
+    )
+    .slice(0, limit);
 
-  const totalSources = sortedSources.length;
-  const offset = (page - 1) * limit;
-  const pagedSources = sortedSources.slice(offset, offset + limit);
-
-  const affectedOrders = Array.from(issueAmountsByOrder.entries())
-    .map(([orderId, amount]) => {
-      const order = ordersById.get(orderId);
-      const dimensions = sourceForOrderId(orderId);
-      return {
-        order_id: orderId,
-        group_key: dimensions.group_key,
-        group_type: dimensions.group_type,
-        platform_order_id: order?.platform_order_id || null,
-        order_date: order?.order_ts || null,
-        customer: firstText(order?.customer_email, order?.customer_email_normalized, order?.email) || null,
-        affiliate_or_source: dimensions.source_name,
-        affiliate_id: dimensions.affiliate_id,
-        source_id: dimensions.source_id,
-        gross_revenue: roundMoney(orderRevenue.get(orderId) || numberFrom(order?.gross_amount) || numberFrom(order?.receipt_total)),
-        amount,
-        event_count: issueEventsByOrder.get(orderId) || 0,
-        currency: firstText(order?.currency, ledgerRows.find((row) => canonicalOrderId(row) === orderId)?.currency, "USD"),
-        status: firstText(order?.status_norm, order?.status) || null,
-        attribution_confidence: dimensions.attribution_status === "attributed" ? "deterministic_source_identifier" : "unavailable",
-      };
-    })
-    .sort((a, b) => Math.abs(b.amount) - Math.abs(a.amount))
-    .slice(0, 50);
-
-  const trendRows = Array.from(trend.values())
-    .map((point) => ({
-      date: point.date,
-      amount: roundMoney(point.amount),
-      count: point.count,
-      affected_orders: point.affected_orders.size,
-    }))
-    .sort((a, b) => a.date.localeCompare(b.date));
-
-  const warnings: string[] = [];
   if (!options.scanned_all) warnings.push("Analysis is based on a bounded ledger scan; narrow the date range for complete source ranking.");
   if (!platformOrders.length && ledgerRows.some((row) => canonicalOrderId(row))) {
-    warnings.push("Ledger data is available, but matching platform order source fields are unavailable.");
+    warnings.push("Ledger data is available, but matching platform order affiliate fields are unavailable.");
   }
+
+  const uniqueWarnings = Array.from(new Set(warnings));
 
   return {
     summary: {
@@ -557,24 +379,18 @@ export function buildFinancialIssueAnalysis(
       event_count: issueEventCount,
       affected_orders: issueOrderIds.size,
       rate_by_orders: saleOrderIds.size > 0 ? roundRatio(issueOrderIds.size / saleOrderIds.size) : null,
-      rate_by_revenue: totalRevenue > 0 ? roundRatio(issueAmount / totalRevenue) : null,
-      average_amount: issueOrderIds.size > 0 ? roundMoney(issueAmount / issueOrderIds.size) : null,
       total_orders: saleOrderIds.size,
-      total_revenue: roundMoney(totalRevenue),
     },
-    trend: trendRows,
-    sources: pagedSources,
-    affected_orders: affectedOrders,
-    pagination: {
-      page,
-      limit,
-      total: totalSources,
-      total_pages: Math.max(1, Math.ceil(totalSources / limit)),
-    },
+    affiliates: sortedAffiliates,
+    sources: sortedAffiliates,
+    trend: [],
+    affected_orders: [],
+    pagination: { page: 1, limit, total: sortedAffiliates.length, total_pages: 1 },
     data_quality: {
-      attributed_order_coverage: saleOrderIds.size > 0 ? roundRatio(sourcedSaleOrderIds.size / saleOrderIds.size) : null,
-      missing_denominators: Array.from(missingDenominators).slice(0, 20),
-      warnings,
+      partial_scan: !options.scanned_all,
+      attributed_order_coverage: null,
+      missing_denominators: [],
+      warnings: uniqueWarnings,
     },
   };
 }
