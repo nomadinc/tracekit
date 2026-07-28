@@ -415,6 +415,35 @@ export function financialIssueLedgerRowFromPlatformOrder(
   };
 }
 
+export function financialIssuePlatformFallbackDecision(
+  row: FinancialIssueOrderRow,
+  kind: FinancialIssueKind,
+  normalizedIssueOrderIds: ReadonlySet<string>,
+) {
+  const issueRow = financialIssueLedgerRowFromPlatformOrder(row, kind);
+  if (!issueRow) {
+    return {
+      include: false,
+      reason: "not_financial_issue" as const,
+      row: null,
+    };
+  }
+
+  if (normalizedIssueOrderIds.has(String(issueRow.order_id || "").trim())) {
+    return {
+      include: false,
+      reason: "existing_ledger_issue" as const,
+      row: issueRow,
+    };
+  }
+
+  return {
+    include: true,
+    reason: "legacy_fallback" as const,
+    row: issueRow,
+  };
+}
+
 export function saleLedgerRowFromPlatformOrder(row: FinancialIssueOrderRow): FinancialIssueLedgerRow | null {
   const orderId = canonicalOrderId(row);
   const amount = numberFrom(row.gross_amount);

@@ -145,7 +145,7 @@ test("decision home links to dedicated refund and chargeback analysis routes", (
   assert.match(worker, /FINANCIAL_ISSUE_PLATFORM_FALLBACK_PLATFORMS = \["wowboost", "wowsuite:wowboost", "wowsuite"\]/);
   assert.match(worker, /selectFinancialIssuePlatformRowsByStatus/);
   assert.match(worker, /selectFinancialIssuePlatformRowsInOrderRange/);
-  assert.match(worker, /financialIssueLedgerRowFromPlatformOrder/);
+  assert.match(worker, /financialIssuePlatformFallbackDecision/);
   assert.match(worker, /existingLedgerIssueOrderIds/);
   assert.match(worker, /existing_ledger_issue/);
 });

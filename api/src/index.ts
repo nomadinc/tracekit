@@ -20,7 +20,7 @@ import {
   buildFinancialIssueAnalysis,
   conversionMatchesDailyKey,
   conversionMatchesOrderKey,
-  financialIssueLedgerRowFromPlatformOrder,
+  financialIssuePlatformFallbackDecision,
   profitDailyKeyFromConversion,
   profitDailyKeyId,
   profitOrderKeyFromConversion,
@@ -350,6 +350,8 @@ import {
   buildWowSuiteCredentialStatus,
   capWowBoostPermanentMissingOrderIds,
   classifyWowBoostOrderDetailsLookupFailure,
+  extractWowBoostRefundEventsFromCsvRows,
+  extractWowBoostRefundEventsFromJsonOrders,
   extractWowBoostCommerceReferenceEvidence,
   extractWowBoostOrderDetailsCommerceReference,
   extractWowBoostLegacyOrderNumberEvidence,
@@ -367,6 +369,7 @@ import {
   normalizeWowBoostLegacyMaxExportPagesPerInvocation,
   isWowBoostOrderDetailsBackfillStatementTimeout,
   nextWowBoostOrderDetailsBackfillPlatform,
+  mergeWowBoostPlatformOrderSnapshot,
   resolveWowBoostLegacyOrderNumber,
   resolveWowBoostOrderDetailsLookupOrderId,
   scanWowBoostLegacyOrderNumberExportPages,
@@ -381,6 +384,7 @@ import {
   wowBoostOrderDetailsRetryDelayMs,
   wowBoostOrderDetailsBackfillNextCursor,
   wowBoostOrderReferenceDiagnostics,
+  wowBoostImportPageContinuation,
   wowBoostRuntimeRepeatedPageDetected,
   wowBoostRuntimeStagingStopDecision,
   WOWBOOST_RUNTIME_DEFAULT_MAX_EXPORT_PAGES,
@@ -388,6 +392,7 @@ import {
   type WowBoostOrderNumberToOrderIdMapping,
   type WowBoostOrderDetailsReferenceBackfillDecision,
   type WowBoostOrderDetailsReferenceBackfillRow,
+  type WowBoostRefundEvent,
 } from "./wowboost";
 type LedgerType =
   | "sale"
@@ -2556,7 +2561,8 @@ async function readFinancialIssueAnalysis(env: Env, url: URL, kind: FinancialIss
   const platformIssueRows: FinancialIssueLedgerRow[] = [];
 
   for (const row of platformCandidateRows) {
-    const issueRow = financialIssueLedgerRowFromPlatformOrder(row, kind);
+    const fallback = financialIssuePlatformFallbackDecision(row, kind, existingLedgerIssueOrderIds);
+    const issueRow = fallback.row;
     if (!issueRow) {
       const saleRow = saleLedgerRowFromPlatformOrder(row);
       if (!saleRow) platformIssueExcluded.not_financial_issue = (platformIssueExcluded.not_financial_issue || 0) + 1;
@@ -2568,7 +2574,7 @@ async function readFinancialIssueAnalysis(env: Env, url: URL, kind: FinancialIss
       platformIssueExcluded.outside_date_range = (platformIssueExcluded.outside_date_range || 0) + 1;
       continue;
     }
-    if (existingLedgerIssueOrderIds.has(String(issueRow.order_id || ""))) {
+    if (!fallback.include) {
       platformIssueExcluded.existing_ledger_issue = (platformIssueExcluded.existing_ledger_issue || 0) + 1;
       continue;
     }
@@ -2818,127 +2824,114 @@ async function runWowPayImportPage(env: Env, args: { from: string; to: string; p
   if (!js) throw new Error(`WowPay returned invalid JSON: ${text.slice(0, 300)}`);
 
   const orders = Array.isArray(js.customerOrders) ? js.customerOrders : Array.isArray(js.orders) ? js.orders : [];
+  const refundEvents = extractWowBoostRefundEventsFromJsonOrders(orders, {
+    workspace_id: "default",
+    platform: "wowpay",
+    connector_id: "wowpay",
+  });
+  const refundSummary = await insertWowSuiteRefundLedgerEvents(env, refundEvents, supabase);
+  const upserts: any[] = [];
 
-  const upserts = await Promise.all(
-    orders.map(async (o: any) => {
-      const orderId = String(o.orderId ?? o.orderNumber ?? "").trim();
-      if (!orderId) return null;
+  for (const o of orders) {
+    const orderId = String(o.orderId ?? o.orderNumber ?? "").trim();
+    if (!orderId) continue;
 
-      const receipts = Array.isArray(o.receipts) ? o.receipts : [];
-      const receipt = receipts[0] || {};
-      const status = wowSuiteNormalizeStatus(receipt.paymentStatus || o.orderStatus);
+    const receipts = Array.isArray(o.receipts) ? o.receipts : [];
+    const receipt = receipts[0] || {};
+    const status = wowSuiteNormalizeStatus(o.orderStatus || receipt.paymentStatus);
+    const gross = parseMoneyMaybe(
+      o.amountUSD ??
+        o.amount ??
+        o.totalAmount ??
+        o.orderTotal ??
+        o.total ??
+        o.price ??
+        o.productPrice ??
+        o.formattedProductPrice,
+    );
+    const receiptTotal = parseMoneyMaybe(
+      receipt.amountUSD ??
+        receipt.amount ??
+        o.amountUSD ??
+        o.amount ??
+        o.totalAmount ??
+        o.orderTotal ??
+        o.total ??
+        o.price ??
+        o.productPrice ??
+        o.formattedProductPrice,
+    );
+    const emailFields = await emailIdentityFields(
+      o.email || o.customerEmail || o.customer?.email || receipt.email
+    );
+    const transactionId = receipt.transactionId || receipt.transactionID || o.transactionId || o.paymentTrackingNumber || null;
+    const phone = normalizePhone(o.phoneNumber || o.customerPhone || o.phone || o.customer?.phoneNumber || "");
 
-      let gross =
-		  parseMoneyMaybe(
-		    receipt.amountUSD ??
-		      receipt.amount ??
-		      o.amountUSD ??
-		      o.amount ??
-		      o.totalAmount ??
-		      o.orderTotal ??
-		      o.total ??
-		      o.price ??
-		      o.productPrice ??
-		      o.formattedProductPrice,
-		  ) ?? 0;
-      if (gross == null) gross = 0;
-      if ((status === "REFUNDED" || status === "CHARGEBACK" || status === "CANCELLED") && gross > 0) {
-        gross = -Math.abs(gross);
-      }
+    upserts.push({
+      platform: "wowpay",
+      platform_order_id: `wowpay:${orderId}`,
+      platform_store_id: o.campaignId || o.campaignID || o.campaign_id || null,
+      order_id: String(orderId),
+      order_ts: parseDateToIsoMaybe(
+        o.orderDate || o.lastUpdateDate || receipt.createDate
+      ) || `${args.from}T00:00:00.000Z`,
+      status,
+      status_norm: status,
+      gross_amount: gross,
+      receipt_total: receiptTotal,
+      currency: o.currencyCode || receipt.currencyCode || "USD",
+      ...emailFields,
+      email: emailFields.customer_email,
+      phone: phone || null,
+      transaction_id: transactionId,
+      everflow_transaction_id: o._ef_transaction_id || o.ef_transaction_id || o.everflow_transaction_id || transactionId || null,
+      tkid: o.tkid || o.tk_id || o.tracekit_id || null,
+      affiliate_id: o.affiliateId || o.affiliateID || o.affiliate_id || null,
+      everflow_offer_id: o.offerId || o.offerID || o.offer_id || o.campaignId || o.campaignID || null,
+      source_id: o.sourceId || o.sourceID || o.source_id || null,
+      sub1: o.s1 || o.S1 || o.sub1 || null,
+      sub2: o.s2 || o.S2 || o.sub2 || null,
+      sub3: o.s3 || o.S3 || o.sub3 || null,
+      sub4: o.s4 || o.S4 || o.sub4 || null,
+      sub5: o.s5 || o.S5 || o.sub5 || null,
+      product_subtotal: parseMoneyMaybe(o.productSubtotal ?? o.subtotal ?? o.productPrice) ?? null,
+      shipping_amount: parseMoneyMaybe(o.shippingAmount ?? o.shipping ?? o.shipAmount) ?? null,
+      tax_amount: parseMoneyMaybe(o.taxAmount ?? o.tax) ?? null,
+      product_cost: parseMoneyMaybe(o.productCost ?? o.product_cost) ?? null,
+      shipping_cost: parseMoneyMaybe(o.shippingCost ?? o.shipping_cost) ?? null,
+      gateway_fee: parseMoneyMaybe(receipt.gatewayFee ?? receipt.processorFee ?? o.gatewayFee) ?? null,
+      chargeback_fee: parseMoneyMaybe(o.chargebackFee ?? o.chargeback_fee) ?? null,
+      tracking_number: receipt.trackingNumber || o.trackingNumber || o.shipmentTrackingNumber || null,
+      shipping_carrier: o.shippingCarrier || o.carrier || null,
+      raw_json: o,
+    });
+  }
 
-      const emailFields = await emailIdentityFields(
-        o.email || o.customerEmail || o.customer?.email || receipt.email
-      );
-
-      const transactionId = receipt.transactionId || receipt.transactionID || o.transactionId || o.paymentTrackingNumber || null;
-      const phone = normalizePhone(o.phoneNumber || o.customerPhone || o.phone || o.customer?.phoneNumber || "");
-
-	  console.log(
-		  "WOWPAY AMOUNTS",
-		  {
-		    amountUSD: o.amountUSD,
-		    amount: o.amount,
-		    totalAmount: o.totalAmount,
-		    orderTotal: o.orderTotal,
-		    total: o.total,
-		    price: o.price,
-		    productPrice: o.productPrice,
-		  }
-		);
-
-      return {
-		  platform: "wowpay",
-		  platform_order_id: `wowpay:${orderId}`,
-		  platform_store_id: o.campaignId || o.campaignID || o.campaign_id || null,
-		  order_id: String(orderId),
-		  order_ts: parseDateToIsoMaybe(
-		    receipt.createDate || o.orderDate || o.lastUpdateDate
-		  ) || `${args.from}T00:00:00.000Z`,
-		  status,
-		  status_norm: status,
-
-		  gross_amount: gross,
-
-		  receipt_total:
-		    parseMoneyMaybe(
-		      receipt.amountUSD ??
-		      receipt.amount ??
-		      o.amountUSD ??
-		      o.amount ??
-		      o.totalAmount ??
-		      o.orderTotal ??
-		      o.total ??
-		      o.price ??
-		      o.productPrice ??
-		      o.formattedProductPrice
-		    ) ?? null,
-
-		  currency: receipt.currencyCode || o.currencyCode || "USD",
-
-        ...emailFields,
-        email: emailFields.customer_email,
-        phone: phone || null,
-
-        transaction_id: transactionId,
-        everflow_transaction_id: o._ef_transaction_id || o.ef_transaction_id || o.everflow_transaction_id || transactionId || null,
-        tkid: o.tkid || o.tk_id || o.tracekit_id || null,
-        affiliate_id: o.affiliateId || o.affiliateID || o.affiliate_id || null,
-        everflow_offer_id: o.offerId || o.offerID || o.offer_id || o.campaignId || o.campaignID || null,
-        source_id: o.sourceId || o.sourceID || o.source_id || null,
-        sub1: o.s1 || o.S1 || o.sub1 || null,
-        sub2: o.s2 || o.S2 || o.sub2 || null,
-        sub3: o.s3 || o.S3 || o.sub3 || null,
-        sub4: o.s4 || o.S4 || o.sub4 || null,
-        sub5: o.s5 || o.S5 || o.sub5 || null,
-
-        product_subtotal: parseMoneyMaybe(o.productSubtotal ?? o.subtotal ?? o.productPrice) ?? null,
-        shipping_amount: parseMoneyMaybe(o.shippingAmount ?? o.shipping ?? o.shipAmount) ?? null,
-        tax_amount: parseMoneyMaybe(o.taxAmount ?? o.tax) ?? null,
-        product_cost: parseMoneyMaybe(o.productCost ?? o.product_cost) ?? null,
-        shipping_cost: parseMoneyMaybe(o.shippingCost ?? o.shipping_cost) ?? null,
-        gateway_fee: parseMoneyMaybe(receipt.gatewayFee ?? receipt.processorFee ?? o.gatewayFee) ?? null,
-        chargeback_fee: parseMoneyMaybe(o.chargebackFee ?? o.chargeback_fee) ?? null,
-        tracking_number: receipt.trackingNumber || o.trackingNumber || o.shipmentTrackingNumber || null,
-        shipping_carrier: o.shippingCarrier || o.carrier || null,
-        raw_json: o,
-      };
-    })
-  );
-
-  const deduped = dedupePlatformOrders(upserts.filter(Boolean));
-
-  if (deduped.length) {
-    const { error } = await supabase.from("platform_orders").upsert(deduped as any[], { onConflict: "platform_order_id" });
+  const snapshotWrites = await prepareWowBoostSnapshotWrites(supabase, upserts);
+  if (snapshotWrites.rows.length) {
+    const { error } = await supabase
+      .from("platform_orders")
+      .upsert(snapshotWrites.rows as any[], { onConflict: "platform_order_id" });
     if (error) throw new Error(error.message);
   }
 
   return {
     fetched: orders.length,
-    upserted: deduped.length,
+    upserted: snapshotWrites.inserted + snapshotWrites.updated,
     page: args.page,
     pageSize,
     hasMore: Boolean(js?.paging?.nextPage) || orders.length >= pageSize,
     nextPage: (Boolean(js?.paging?.nextPage) || orders.length >= pageSize) ? args.page + 1 : null,
+    rowsInserted: snapshotWrites.inserted,
+    rowsUpdated: snapshotWrites.updated,
+    rowsUnchanged: snapshotWrites.unchanged,
+    protectedSparseFields: snapshotWrites.protected_sparse_fields,
+    refundedRowsObserved: refundSummary.observed,
+    normalizedRefundEventsInserted: refundSummary.inserted,
+    normalizedRefundEventsDeduplicated: refundSummary.deduplicated,
+    earliestRefundTimestamp: refundSummary.earliest_refund_at,
+    latestRefundTimestamp: refundSummary.latest_refund_at,
+    warnings: refundSummary.rollup_warnings,
   };
 }
 
@@ -3157,6 +3150,151 @@ function dedupePlatformOrders(rows: any[]) {
   }
 
   return Array.from(map.values());
+}
+
+type WowBoostSnapshotWriteSummary = {
+  rows: any[];
+  inserted: number;
+  updated: number;
+  unchanged: number;
+  protected_sparse_fields: number;
+};
+
+type WowBoostRefundWriteSummary = {
+  observed: number;
+  inserted: number;
+  deduplicated: number;
+  earliest_refund_at: string | null;
+  latest_refund_at: string | null;
+  rollup_orders_refreshed: number;
+  rollup_daily_refreshed: number;
+  rollup_warnings: string[];
+};
+
+function minMaxIso(values: Array<string | null | undefined>) {
+  const valid = values.map((value) => String(value || "").trim()).filter(Boolean).sort();
+  return {
+    earliest: valid[0] || null,
+    latest: valid[valid.length - 1] || null,
+  };
+}
+
+async function prepareWowBoostSnapshotWrites(
+  supabase: SupabaseClientAny,
+  incomingRows: any[],
+): Promise<WowBoostSnapshotWriteSummary> {
+  const rows = dedupePlatformOrders(incomingRows.filter(Boolean));
+  if (!rows.length) {
+    return { rows: [], inserted: 0, updated: 0, unchanged: 0, protected_sparse_fields: 0 };
+  }
+
+  const existingById = new Map<string, any>();
+  const ids = rows.map((row) => String(row.platform_order_id || "").trim()).filter(Boolean);
+  for (let index = 0; index < ids.length; index += 200) {
+    const { data, error } = await supabase
+      .from("platform_orders")
+      .select("*")
+      .in("platform_order_id", ids.slice(index, index + 200));
+    if (error) throw new Error(`WowBoost snapshot lookup failed: ${error.message}`);
+    for (const existing of data || []) {
+      existingById.set(String((existing as any).platform_order_id || ""), existing);
+    }
+  }
+
+  const writeRows: any[] = [];
+  let inserted = 0;
+  let updated = 0;
+  let unchanged = 0;
+  let protectedSparseFields = 0;
+
+  for (const incoming of rows) {
+    const key = String(incoming.platform_order_id || "");
+    const existing = existingById.get(key);
+    const merged = mergeWowBoostPlatformOrderSnapshot(existing, incoming);
+    protectedSparseFields += merged.protected_fields.length;
+    if (!existing) {
+      inserted += 1;
+      writeRows.push(merged.row);
+    } else if (merged.changed) {
+      updated += 1;
+      writeRows.push(merged.row);
+    } else {
+      unchanged += 1;
+    }
+  }
+
+  return {
+    rows: writeRows,
+    inserted,
+    updated,
+    unchanged,
+    protected_sparse_fields: protectedSparseFields,
+  };
+}
+
+async function insertWowSuiteRefundLedgerEvents(
+  env: Env,
+  events: WowBoostRefundEvent[],
+  supabase = getSupabase(env),
+): Promise<WowBoostRefundWriteSummary> {
+  const byId = new Map<string, WowBoostRefundEvent>();
+  for (const event of events || []) byId.set(event.transaction_id, event);
+  const uniqueEvents = Array.from(byId.values());
+  const range = minMaxIso(uniqueEvents.map((event) => event.occurred_at));
+
+  if (!uniqueEvents.length) {
+    return {
+      observed: 0,
+      inserted: 0,
+      deduplicated: 0,
+      earliest_refund_at: null,
+      latest_refund_at: null,
+      rollup_orders_refreshed: 0,
+      rollup_daily_refreshed: 0,
+      rollup_warnings: [],
+    };
+  }
+
+  const rows = uniqueEvents.map((event) => ({
+    workspace_id: event.workspace_id,
+    ledger_type: event.ledger_type,
+    event_source: event.platform,
+    ingestion_method: "api_import",
+    connector_id: event.connector_id,
+    order_id: event.order_id,
+    transaction_id: event.transaction_id,
+    parent_transaction_id: event.parent_transaction_id,
+    amount: event.amount,
+    currency: event.currency,
+    platform: event.platform,
+    source_system: event.platform,
+    status: event.status,
+    reason: "WowBoost receipt-level refund",
+    raw: event.raw,
+    meta: event.meta,
+    occurred_at: event.occurred_at,
+  }));
+
+  const { data, error } = await supabase.rpc("insert_wowsuite_refund_events", { p_events: rows });
+  if (error) throw new Error(`WowBoost refund ledger insert failed: ${error.message}`);
+
+  const result = Array.isArray(data) ? data[0] : data;
+  const inserted = Number(result?.inserted_count || 0);
+  const deduplicated = Number(result?.duplicate_count || Math.max(0, uniqueEvents.length - inserted));
+  const rollup = inserted > 0
+    ? await refreshProfitRollupsForInsertedRows(env, rows as ProfitConversionRow[])
+    : { orders_refreshed: 0, daily_refreshed: 0, warnings: [] as string[] };
+
+  return {
+    observed: uniqueEvents.length,
+    inserted,
+    deduplicated,
+    earliest_refund_at: range.earliest,
+    latest_refund_at: range.latest,
+    rollup_orders_refreshed: rollup.orders_refreshed,
+    rollup_daily_refreshed: rollup.daily_refreshed,
+    rollup_warnings: rollup.warnings,
+  };
 }
 
 function envFlagEnabled(value: unknown, defaultValue = true) {
@@ -6184,9 +6322,12 @@ async function runWowBoostImportChunk(env: Env, args: { from: string; to: string
       fetched: Number(result.fetched || 0),
       processed: Number(result.fetched || 0),
       rows_upserted: Number(result.upserted || 0),
-      ledger_inserted: 0,
-      duplicates_skipped: 0,
-      warnings: (result as any).identity?.warnings || [],
+      ledger_inserted: Number(result.normalizedRefundEventsInserted || 0),
+      duplicates_skipped: Number(result.normalizedRefundEventsDeduplicated || 0),
+      warnings: [
+        ...((result as any).identity?.warnings || []),
+        ...((result as any).warnings || []),
+      ],
     },
   };
 }
@@ -9783,181 +9924,138 @@ async function executeBrowserEventNormalizeRuntimeTask(env: Env, job: ImportJobR
   }
 }
 
-async function runWowSuiteWowBoostImport(env: Env, args: { from: string; to: string; pageSize?: number; debug?: boolean }) {
-  const supabase = getSupabase(env);
-
-  const { data: creds, error } = await supabase
-    .from("integrations_credentials")
-    .select("*")
-    .in("platform", [wowSuiteKey("wowboost"), "wowboost", "wowsuite"])
-    .order("updated_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-
-  if (error) throw new Error(`WOWSuite(wowboost) creds read failed: ${error.message}`);
-  if (!creds) throw new Error("WowBoost not connected. Save credentials first.");
-
-  const authBase = String((creds as any).base_url || env.DEFAULT_WOWSUITE_AUTH_BASE || DEFAULT_WOWSUITE_AUTH_BASE).replace(/\/+$/, "");
-  const exportBase = String(env.DEFAULT_WOWSUITE_EXPORT_BASE || DEFAULT_WOWSUITE_EXPORT_BASE).replace(/\/+$/, "");
-  const username = String((creds as any).username ?? "").trim();
-  const password = await decryptSecretFromCredRow(env, creds as any);
-
+async function runWowSuiteWowBoostImport(env: Env, args: {
+  from: string;
+  to: string;
+  pageSize?: number;
+  debug?: boolean;
+  jobId?: string | null;
+  filter?: string | null;
+}) {
   if (!parseYmd(args.from) || !parseYmd(args.to)) throw new Error("from/to must be YYYY-MM-DD");
 
-  const bearer = await wowSuiteGetBearerToken({ authBase, username, password });
-  const pageSize = Math.max(1, Math.min(2000, Number(args.pageSize ?? 1000)));
-
+  const pageSize = Math.max(1, Math.min(100, Number(args.pageSize ?? 100)));
   let page = 1;
   let totalFetched = 0;
+  let totalSourceRows = 0;
   let totalUpserted = 0;
+  let totalInserted = 0;
+  let totalUpdated = 0;
+  let totalUnchanged = 0;
+  let refundedRowsObserved = 0;
+  let normalizedRefundEventsInserted = 0;
+  let normalizedRefundEventsDeduplicated = 0;
+  let protectedSparseFields = 0;
+  const warnings = new Set<string>();
+  const sourceOrderTimestamps: string[] = [];
+  const refundTimestamps: string[] = [];
   const maxPages = 250;
 
   while (page <= maxPages) {
-    const exp = await wowBoostExportPage({ exportBase, bearer, page, pageSize, fromYmd: args.from, toYmd: args.to });
+    const result = await runWowBoostImportPage(env, {
+      from: args.from,
+      to: args.to,
+      page,
+      pageSize,
+      connector_job_id: args.jobId || null,
+      filter: args.filter || "all_sales",
+    });
+    totalFetched += Number(result.fetched || 0);
+    totalSourceRows += Number(result.sourceRows || 0);
+    totalUpserted += Number(result.upserted || 0);
+    totalInserted += Number(result.rowsInserted || 0);
+    totalUpdated += Number(result.rowsUpdated || 0);
+    totalUnchanged += Number(result.rowsUnchanged || 0);
+    refundedRowsObserved += Number(result.refundedRowsObserved || 0);
+    normalizedRefundEventsInserted += Number(result.normalizedRefundEventsInserted || 0);
+    normalizedRefundEventsDeduplicated += Number(result.normalizedRefundEventsDeduplicated || 0);
+    protectedSparseFields += Number(result.protectedSparseFields || 0);
+    if (result.earliestSourceOrderTimestamp) sourceOrderTimestamps.push(result.earliestSourceOrderTimestamp);
+    if (result.latestSourceOrderTimestamp) sourceOrderTimestamps.push(result.latestSourceOrderTimestamp);
+    if (result.earliestRefundTimestamp) refundTimestamps.push(result.earliestRefundTimestamp);
+    if (result.latestRefundTimestamp) refundTimestamps.push(result.latestRefundTimestamp);
+    for (const warning of result.warnings || []) warnings.add(String(warning));
 
-    const csvRes = await fetchWithTimeout(exp.link, { method: "GET", headers: { Accept: "text/csv,*/*" } }, 30000);
-    const csvText = await readTextSafe(csvRes);
-    if (!csvRes.ok) throw new Error(`WowBoost CSV download failed (${csvRes.status}): ${csvText.slice(0, 160)}`);
-
-    const parsed = parseCsv(csvText);
-    totalFetched += parsed.rows.length;
-
-    const upserts = await Promise.all(
-      parsed.rows.map(async (r) => {
-        const orderId =
-          pickField(r, ["Order ID", "OrderId", "OrderID", "order_id", "orderid", "Id", "ID"]) ||
-          pickField(r, ["Order Number", "OrderNumber", "orderNumber", "Master Order Number", "MasterOrderNumber"]);
-
-        if (!orderId) return null;
-
-        const status = wowSuiteNormalizeStatus(
-          pickField(r, ["Order Status Name", "OrderStatus", "orderStatus", "Status", "status"]) ||
-            pickField(r, ["Receipt Status Name", "PaymentStatus", "paymentStatus", "Payment Status"])
-        );
-
-        const isoTs =
-          parseDateToIsoMaybe(
-            pickField(r, ["Order Create Date", "createDate", "CreateDate", "orderDate", "OrderDate", "Date", "CreatedAt", "Created", "lastUpdateDate", "LastUpdateDate", "Updated Date"])
-          ) || `${args.from}T00:00:00.000Z`;
-
-        let gross = parseMoneyMaybe(
-          pickField(r, [
-            "Order Price USD",
-            "Order Price",
-            "productPrice",
-            "Product Price",
-            "ProductPrice",
-            "Amount USD",
-            "Amount",
-            "AmountUSD",
-            "Total",
-            "OrderTotal",
-            "Gross",
-            "Revenue",
-            "amount",
-          ])
-        );
-
-        if (gross == null) gross = 0;
-        if ((status === "REFUNDED" || status === "CHARGEBACK" || status === "CANCELLED") && gross > 0) gross = -Math.abs(gross);
-
-        const emailFields = await emailIdentityFields(
-          pickField(r, ["CustomerEmail", "Customer Email", "Email", "email", "customerEmail"])
-        );
-        const phone = normalizePhone(pickField(r, ["CustomerPhone", "Customer Phone", "Phone", "phone", "Phone Number"]));
-        const transactionId =
-          pickField(r, ["PaymentTrackingNumber", "Payment Tracking Number", "TransactionId", "Transaction ID", "transaction_id", "ReferenceId", "Reference ID"]) || null;
-        const commerceReferenceEvidence = extractWowBoostCommerceReferenceEvidence(r);
-        const commerceReference = commerceReferenceEvidence.value || null;
-        const efTid = pickEverflowTid(r) || null;
-
-        return {
-          platform: "wowboost",
-          platform_order_id: `wowboost:${orderId}`,
-          platform_store_id: pickField(r, ["Campaign ID", "CampaignId", "Campaign", "Brand Campaign"]) || null,
-          order_id: String(orderId),
-          commerce_reference: commerceReference,
-          order_ts: isoTs,
-          status: status || "UNKNOWN",
-          status_norm: status || "UNKNOWN",
-          gross_amount: gross,
-          receipt_total: parseMoneyMaybe(pickField(r, ["Amount USD", "Amount", "AmountUSD", "amount"])) ?? null,
-          currency: pickField(r, ["currencyCode", "CurrencyCode", "Currency", "currency", "Transaction Currency"]) || "USD",
-
-          ...emailFields,
-          email: emailFields.customer_email,
-          phone: phone || null,
-
-          transaction_id: transactionId,
-          everflow_transaction_id: efTid,
-          tkid: pickTrackingId(r) || null,
-          affiliate_id: pickField(r, ["AffiliateId", "Affiliate ID", "affiliate_id", "Partner ID", "PartnerId"]) || null,
-          everflow_offer_id: pickField(r, ["Offer ID", "OfferId", "Campaign ID", "CampaignId"]) || null,
-          source_id: pickField(r, ["Source ID", "SourceId", "source_id"]) || null,
-          sub1: pickField(r, ["S1", "s1", "sub1", "Sub1"]) || null,
-          sub2: pickField(r, ["S2", "s2", "sub2", "Sub2"]) || null,
-          sub3: pickField(r, ["S3", "s3", "sub3", "Sub3"]) || null,
-          sub4: pickField(r, ["S4", "s4", "sub4", "Sub4"]) || null,
-          sub5: pickField(r, ["S5", "s5", "sub5", "Sub5"]) || null,
-
-          product_subtotal: parseMoneyMaybe(
-			  pickField(r, [
-			    "Order Price USD",
-			    "Order Price",
-			    "productPrice",
-			    "Product Price",
-			  ])
-			) ?? null,
-          shipping_amount: parseMoneyMaybe(pickField(r, ["Shipping Amount", "Shipping", "Shipping Price"])) ?? null,
-          tax_amount: parseMoneyMaybe(pickField(r, ["Tax Amount", "Tax"])) ?? null,
-          product_cost: parseMoneyMaybe(pickField(r, ["Product Cost", "COGS"])) ?? null,
-          shipping_cost: parseMoneyMaybe(pickField(r, ["Shipping Cost"])) ?? null,
-          gateway_fee: parseMoneyMaybe(pickField(r, ["Gateway Fee", "Processor Fee"])) ?? null,
-          chargeback_fee: parseMoneyMaybe(pickField(r, ["Chargeback Fee"])) ?? null,
-          tracking_number: pickField(r, ["ShipmentTrackingNumber", "Shipment Tracking Number", "FulfillmentTrackingNumber", "Tracking Number"]) || null,
-          shipping_carrier: pickField(r, ["Shipping Carrier", "Carrier"]) || null,
-          raw_json: {
-            ...r,
-            tracekit_commerce_reference_evidence: commerceReference
-              ? {
-                  source: "wowboost",
-                  source_field: commerceReferenceEvidence.source_field,
-                  value: commerceReference,
-                }
-              : null,
-          },
-        };
-      })
-    ).then((rows) => rows.filter(Boolean));
-
-    const deduped = dedupePlatformOrders(upserts);
-
-    if (deduped.length) {
-      const { error: upErr } = await supabase.from("platform_orders").upsert(deduped as any[], { onConflict: "platform_order_id" });
-      if (upErr) throw new Error(`WowBoost DB upsert failed: ${upErr.message}`);
-      totalUpserted += deduped.length;
-    }
-
-    if (!exp.hasMore || parsed.rows.length === 0 || parsed.rows.length < pageSize) break;
-    page += 1;
+    if (!result.hasMore) break;
+    page = Number(result.nextPage || page + 1);
   }
 
-  return { fetched: totalFetched, upserted: totalUpserted, pages: page };
+  if (page > maxPages) warnings.add(`partial_run:max_pages_${maxPages}`);
+  const orderRange = minMaxIso(sourceOrderTimestamps);
+  const refundRange = minMaxIso(refundTimestamps);
+  return {
+    fetched: totalFetched,
+    sourceRows: totalSourceRows,
+    upserted: totalUpserted,
+    rowsInserted: totalInserted,
+    rowsUpdated: totalUpdated,
+    rowsUnchanged: totalUnchanged,
+    refundedRowsObserved,
+    normalizedRefundEventsInserted,
+    normalizedRefundEventsDeduplicated,
+    protectedSparseFields,
+    earliestSourceOrderTimestamp: orderRange.earliest,
+    latestSourceOrderTimestamp: orderRange.latest,
+    earliestRefundTimestamp: refundRange.earliest,
+    latestRefundTimestamp: refundRange.latest,
+    warnings: Array.from(warnings),
+    partialRun: page > maxPages,
+    pages: Math.min(page, maxPages),
+  };
 }
 
 async function runWowBoostImportJob(env: Env, args: { jobId: string; from: string; to: string; filter?: string | null; pageSize?: number; debug?: boolean }) {
   await updateImportJob(env, args.jobId, { status: "running", started_at: new Date().toISOString(), error: null });
 
   try {
-    const res = await runWowSuiteWowBoostImport(env, { from: args.from, to: args.to, pageSize: args.pageSize, debug: args.debug });
+    const res = await runWowSuiteWowBoostImport(env, {
+      from: args.from,
+      to: args.to,
+      pageSize: args.pageSize,
+      debug: args.debug,
+      jobId: args.jobId,
+      filter: args.filter,
+    });
+    const completedAt = new Date().toISOString();
 
     await updateImportJob(env, args.jobId, {
       status: "completed",
-      completed_at: new Date().toISOString(),
+      completed_at: completedAt,
       fetched: Number(res.fetched ?? 0),
       upserted: Number(res.upserted ?? 0),
       pages: Number(res.pages ?? 0),
       error: null,
+      progress: {
+        ...createInitialImportProgress({
+          workspace_id: "default",
+          platform: wowSuiteKey("wowboost"),
+          connector_id: "wowboost",
+          from: args.from,
+          to: args.to,
+          filter: args.filter,
+        }),
+        status: "completed",
+        records_fetched: Number(res.sourceRows || res.fetched || 0),
+        records_processed: Number(res.fetched || 0),
+        rows_upserted: Number(res.upserted || 0),
+        ledger_inserted: Number(res.normalizedRefundEventsInserted || 0),
+        completed_at: completedAt,
+        metadata: {
+          rows_inserted: res.rowsInserted,
+          rows_updated: res.rowsUpdated,
+          rows_unchanged: res.rowsUnchanged,
+          refunded_rows_observed: res.refundedRowsObserved,
+          normalized_refund_events_inserted: res.normalizedRefundEventsInserted,
+          normalized_refund_events_deduplicated: res.normalizedRefundEventsDeduplicated,
+          existing_refund_evidence_protected: res.protectedSparseFields,
+          earliest_source_order_timestamp: res.earliestSourceOrderTimestamp,
+          latest_source_order_timestamp: res.latestSourceOrderTimestamp,
+          earliest_refund_timestamp: res.earliestRefundTimestamp,
+          latest_refund_timestamp: res.latestRefundTimestamp,
+          partial_run: res.partialRun,
+          warnings: res.warnings,
+        },
+      },
     });
   } catch (e: any) {
     await updateImportJob(env, args.jobId, {
@@ -16714,9 +16812,60 @@ if (path === "/v1/product-costs/rules/delete" && req.method === "POST") {
         message: "Dry run validated the WowPay import request. No records were imported.",
       });
     }
-	
+
+    const job = await createImportJob(env, {
+      platform: settingsPlatform,
+      module: "wowpay",
+      from,
+      to,
+      filter: "all_sales",
+      status: "running",
+    });
+
     try {
 	    const result = await runWowPayImportPage(env, { from, to, page, pageSize });
+      const completedAt = new Date().toISOString();
+      await updateImportJob(env, job.id, {
+        status: "completed",
+        pages: 1,
+        fetched: Number(result.fetched || 0),
+        upserted: Number(result.upserted || 0),
+        completed_at: completedAt,
+        error: null,
+        progress: {
+          ...createInitialImportProgress({
+            workspace_id: "default",
+            platform: settingsPlatform,
+            connector_id: "wowpay",
+            from,
+            to,
+            filter: "all_sales",
+          }),
+          status: "completed",
+          current_page: page,
+          records_fetched: Number(result.fetched || 0),
+          records_processed: Number(result.fetched || 0),
+          rows_upserted: Number(result.upserted || 0),
+          ledger_inserted: Number(result.normalizedRefundEventsInserted || 0),
+          completed_at: completedAt,
+          metadata: {
+            direct_one_page: true,
+            has_more: Boolean(result.hasMore),
+            next_page: result.nextPage,
+            rows_inserted: result.rowsInserted,
+            rows_updated: result.rowsUpdated,
+            rows_unchanged: result.rowsUnchanged,
+            refunded_rows_observed: result.refundedRowsObserved,
+            normalized_refund_events_inserted: result.normalizedRefundEventsInserted,
+            normalized_refund_events_deduplicated: result.normalizedRefundEventsDeduplicated,
+            existing_refund_evidence_protected: result.protectedSparseFields,
+            earliest_refund_timestamp: result.earliestRefundTimestamp,
+            latest_refund_timestamp: result.latestRefundTimestamp,
+            partial_run: Boolean(result.hasMore),
+            warnings: result.warnings,
+          },
+        },
+      });
 
       if (path.endsWith("/run-now")) {
         await supabase
@@ -16725,8 +16874,13 @@ if (path === "/v1/product-costs/rules/delete" && req.method === "POST") {
           .eq("platform", settingsPlatform);
       }
 
-	    return json({ ok: true, platform: settingsPlatform, from, to, ...result });
+	    return json({ ok: true, platform: settingsPlatform, from, to, job_id: job.id, ...result });
     } catch (e: any) {
+      await updateImportJob(env, job.id, {
+        status: "failed",
+        completed_at: new Date().toISOString(),
+        error: e?.message || String(e),
+      }).catch(() => {});
       if (path.endsWith("/run-now")) {
         await supabase
           .from("integrations_settings")
@@ -16947,20 +17101,81 @@ if (path === "/v1/product-costs/rules/delete" && req.method === "POST") {
         return json({ ok: false, error: "bad_request", message: "from/to must be YYYY-MM-DD" }, 400);
       }
 
-      const res = await runWowSuiteWowBoostImport(env, {
+      const filter = String(body.filter ?? "all_sales");
+      const job = await createImportJob(env, {
+        platform: wowSuiteKey("wowboost"),
+        module: "wowboost",
         from,
         to,
-        pageSize: Number(body.pageSize ?? 10),
-        debug: Boolean(body.debug),
+        filter,
+        status: "running",
       });
+      try {
+        const res = await runWowSuiteWowBoostImport(env, {
+          from,
+          to,
+          pageSize: Number(body.pageSize ?? 10),
+          debug: Boolean(body.debug),
+          jobId: job.id,
+          filter,
+        });
+        const completedAt = new Date().toISOString();
+        await updateImportJob(env, job.id, {
+          status: "completed",
+          completed_at: completedAt,
+          fetched: Number(res.sourceRows || res.fetched || 0),
+          upserted: Number(res.upserted || 0),
+          pages: Number(res.pages || 0),
+          error: null,
+          progress: {
+            ...createInitialImportProgress({
+              workspace_id: "default",
+              platform: wowSuiteKey("wowboost"),
+              connector_id: "wowboost",
+              from,
+              to,
+              filter,
+            }),
+            status: "completed",
+            records_fetched: Number(res.sourceRows || res.fetched || 0),
+            records_processed: Number(res.fetched || 0),
+            rows_upserted: Number(res.upserted || 0),
+            ledger_inserted: Number(res.normalizedRefundEventsInserted || 0),
+            completed_at: completedAt,
+            metadata: {
+              rows_inserted: res.rowsInserted,
+              rows_updated: res.rowsUpdated,
+              rows_unchanged: res.rowsUnchanged,
+              refunded_rows_observed: res.refundedRowsObserved,
+              normalized_refund_events_inserted: res.normalizedRefundEventsInserted,
+              normalized_refund_events_deduplicated: res.normalizedRefundEventsDeduplicated,
+              existing_refund_evidence_protected: res.protectedSparseFields,
+              earliest_source_order_timestamp: res.earliestSourceOrderTimestamp,
+              latest_source_order_timestamp: res.latestSourceOrderTimestamp,
+              earliest_refund_timestamp: res.earliestRefundTimestamp,
+              latest_refund_timestamp: res.latestRefundTimestamp,
+              partial_run: res.partialRun,
+              warnings: res.warnings,
+            },
+          },
+        });
 
-      return json({
-        ok: true,
-        platform: "wowsuite:wowboost",
-        from,
-        to,
-        ...res,
-      });
+        return json({
+          ok: true,
+          platform: "wowsuite:wowboost",
+          from,
+          to,
+          job_id: job.id,
+          ...res,
+        });
+      } catch (error: any) {
+        await updateImportJob(env, job.id, {
+          status: "failed",
+          completed_at: new Date().toISOString(),
+          error: error?.message || String(error),
+        }).catch(() => {});
+        throw error;
+      }
     } catch (e: any) {
       return json(
         {
@@ -17074,10 +17289,6 @@ if (path === "/v1/integrations/gateway-classic/list" && req.method === "GET") {
   
     if (path === "/v1/integrations/wowboost/import-one-page" && req.method === "POST") {
     try {
-      const started = Date.now();
-      function logPhase(name: string) {
-        console.log(`[WowBoost Import] ${name}: ${Date.now() - started}ms`);
-      }
       const body = await readJsonBody(req);
       const from = String(body.from ?? "").trim();
       const to = String(body.to ?? "").trim();
@@ -17088,201 +17299,89 @@ if (path === "/v1/integrations/gateway-classic/list" && req.method === "GET") {
         return json({ ok: false, error: "bad_request", message: "from/to must be YYYY-MM-DD" }, 400);
       }
 
-      const supabase = getSupabase(env);
-
-      const { data: creds, error } = await supabase
-        .from("integrations_credentials")
-        .select("*")
-        .in("platform", [wowSuiteKey("wowboost"), "wowboost", "wowsuite"])
-        .order("updated_at", { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (error) throw new Error(error.message);
-      if (!creds) throw new Error("WowBoost not connected.");
-
-      const authBase = String((creds as any).base_url || env.DEFAULT_WOWSUITE_AUTH_BASE || DEFAULT_WOWSUITE_AUTH_BASE).replace(/\/+$/, "");
-      const exportBase = String(env.DEFAULT_WOWSUITE_EXPORT_BASE || DEFAULT_WOWSUITE_EXPORT_BASE).replace(/\/+$/, "");
-      const username = String((creds as any).username ?? "").trim();
-      const password = await decryptSecretFromCredRow(env, creds as any);
-
-      const bearer = await wowSuiteGetBearerToken({ authBase, username, password });
-      logPhase("auth complete");
-
-      const exp = await wowBoostExportPage({
-        exportBase,
-        bearer,
-        page,
-        pageSize,
-        fromYmd: from,
-        toYmd: to,
-      });
-      logPhase("export complete");
-
-      const csvRes = await fetchWithTimeout(exp.link, { method: "GET", headers: { Accept: "text/csv,*/*" } }, 30000);
-      const csvText = await readTextSafe(csvRes);
-      logPhase("csv downloaded");
-
-      if (!csvRes.ok) {
-        throw new Error(`CSV download failed ${csvRes.status}: ${csvText.slice(0, 200)}`);
-      }
-
-      const parsed = parseCsv(csvText);
-      logPhase("csv parsed");
-      console.log({
-        page,
-        pageSize,
-        rows: parsed.rows.length,
-        headers: parsed.headers.length,
-        csvBytes: csvText.length,
-      });
-      
-      console.log("WOWBOOST CSV HEADERS", parsed.headers);
-	  console.log("WOWBOOST FIRST ROW", parsed.rows[0]);
-
-      const upserts = [];
-      let current = 0;
-      for (const r of parsed.rows) {
-        current += 1;
-        if (current % 25 === 0) {
-          console.log(`[WowBoost Import] processed ${current}/${parsed.rows.length}`);
-        }
-          const orderId =
-            pickField(r, ["Order ID", "OrderId", "OrderID", "order_id", "Id", "ID"]) ||
-            pickField(r, ["Order Number", "OrderNumber", "orderNumber"]);
-
-          if (!orderId) continue;
-
-          const status = wowSuiteNormalizeStatus(
-            pickField(r, ["Order Status Name", "OrderStatus", "orderStatus", "Status", "status"]) ||
-              pickField(r, ["Receipt Status Name", "PaymentStatus", "paymentStatus"])
-          );
-
-          let gross = parseMoneyMaybe(
-            pickField(r, [
-              "Order Price USD",
-              "Order Price",
-              "productPrice",
-              "Product Price",
-              "ProductPrice",
-              "Amount USD",
-              "Amount",
-              "Total",
-              "OrderTotal",
-            ])
-          );
-
-          if (gross == null) gross = 0;
-          if ((status === "REFUNDED" || status === "CHARGEBACK" || status === "CANCELLED") && gross > 0) {
-            gross = -Math.abs(gross);
-          }
-
-          const isoTs =
-            parseDateToIsoMaybe(
-              pickField(r, ["Order Create Date", "Updated Date", "Create Date (Receipts)", "OrderDate", "Date"])
-            ) || `${from}T00:00:00.000Z`;
-
-          const emailFields = await emailIdentityFields(
-            pickField(r, ["CustomerEmail", "Customer Email", "Email", "email", "customerEmail"])
-          );
-          const transactionId =
-            pickField(r, ["PaymentTrackingNumber", "Payment Tracking Number", "TransactionId", "Transaction ID", "transaction_id", "ReferenceId", "Reference ID"]) || null;
-          const commerceReferenceEvidence = extractWowBoostCommerceReferenceEvidence(r);
-          const commerceReference = commerceReferenceEvidence.value || null;
-          const efTid = pickEverflowTid(r) || null;
-          const phone = normalizePhone(pickField(r, ["CustomerPhone", "Customer Phone", "Phone", "phone", "Phone Number"]));
-
-          const row = {
-            platform: "wowboost",
-            platform_order_id: `wowboost:${orderId}`,
-            platform_store_id: pickField(r, ["Campaign ID", "CampaignId", "Campaign", "Brand Campaign"]) || null,
-            order_id: String(orderId),
-            commerce_reference: commerceReference,
-            order_ts: isoTs,
-            status,
-            status_norm: status,
-            gross_amount: gross,
-            receipt_total: parseMoneyMaybe(pickField(r, ["Amount USD", "Amount", "AmountUSD", "amount"])) ?? null,
-            currency: pickField(r, ["Currency Code", "Currency", "currencyCode", "Transaction Currency"]) || "USD",
-
-            ...emailFields,
-            email: emailFields.customer_email,
-            phone: phone || null,
-            transaction_id: transactionId,
-            everflow_transaction_id: efTid,
-            tkid: pickTrackingId(r) || null,
-            affiliate_id: pickField(r, ["Affiliate ID", "AffiliateId", "affiliate_id", "Partner ID", "PartnerId"]) || null,
-            everflow_offer_id: pickField(r, ["Offer ID", "OfferId", "Campaign ID", "CampaignId"]) || null,
-            source_id: pickField(r, ["Source ID", "SourceId", "source_id"]) || null,
-            sub1: pickField(r, ["S1", "s1", "sub1", "Sub1"]) || null,
-            sub2: pickField(r, ["S2", "s2", "sub2", "Sub2"]) || null,
-            sub3: pickField(r, ["S3", "s3", "sub3", "Sub3"]) || null,
-            sub4: pickField(r, ["S4", "s4", "sub4", "Sub4"]) || null,
-            sub5: pickField(r, ["S5", "s5", "sub5", "Sub5"]) || null,
-            product_subtotal: parseMoneyMaybe(
-              pickField(r, [
-                "Order Price USD",
-                "Order Price",
-                "productPrice",
-                "Product Price",
-                "ProductPrice",
-                "Product Subtotal",
-                "Subtotal",
-              ])
-            ) ?? null,
-            shipping_amount: parseMoneyMaybe(pickField(r, ["Shipping Amount", "Shipping", "Shipping Price"])) ?? null,
-            tax_amount: parseMoneyMaybe(pickField(r, ["Tax Amount", "Tax"])) ?? null,
-            product_cost: parseMoneyMaybe(pickField(r, ["Product Cost", "COGS"])) ?? null,
-            shipping_cost: parseMoneyMaybe(pickField(r, ["Shipping Cost"])) ?? null,
-            gateway_fee: parseMoneyMaybe(pickField(r, ["Gateway Fee", "Processor Fee"])) ?? null,
-            chargeback_fee: parseMoneyMaybe(pickField(r, ["Chargeback Fee"])) ?? null,
-            tracking_number: pickField(r, ["ShipmentTrackingNumber", "Shipment Tracking Number", "FulfillmentTrackingNumber", "Tracking Number"]) || null,
-            shipping_carrier: pickField(r, ["Shipping Carrier", "Carrier"]) || null,
-            raw_json: {
-              ...r,
-              tracekit_commerce_reference_evidence: commerceReference
-                ? {
-                    source: "wowboost",
-                    source_field: commerceReferenceEvidence.source_field,
-                    value: commerceReference,
-                  }
-                : null,
+      {
+        const filter = String(body.filter ?? "all_sales");
+        const directJob = await createImportJob(env, {
+          platform: wowSuiteKey("wowboost"),
+          module: "wowboost",
+          from,
+          to,
+          filter,
+          status: "running",
+        });
+        try {
+          const result = await runWowBoostImportPage(env, {
+            from,
+            to,
+            page,
+            pageSize,
+            connector_job_id: directJob.id,
+            filter,
+          });
+          const completedAt = new Date().toISOString();
+          const progress = {
+            ...createInitialImportProgress({
+              workspace_id: "default",
+              platform: wowSuiteKey("wowboost"),
+              connector_id: "wowboost",
+              from,
+              to,
+              filter,
+            }),
+            status: "completed",
+            current_page: page,
+            records_fetched: Number(result.sourceRows || result.fetched || 0),
+            records_processed: Number(result.fetched || 0),
+            rows_upserted: Number(result.upserted || 0),
+            ledger_inserted: Number(result.normalizedRefundEventsInserted || 0),
+            completed_at: completedAt,
+            metadata: {
+              direct_one_page: true,
+              has_more: Boolean(result.hasMore),
+              next_page: result.nextPage,
+              rows_inserted: result.rowsInserted,
+              rows_updated: result.rowsUpdated,
+              rows_unchanged: result.rowsUnchanged,
+              refunded_rows_observed: result.refundedRowsObserved,
+              normalized_refund_events_inserted: result.normalizedRefundEventsInserted,
+              normalized_refund_events_deduplicated: result.normalizedRefundEventsDeduplicated,
+              existing_refund_evidence_protected: result.protectedSparseFields,
+              earliest_source_order_timestamp: result.earliestSourceOrderTimestamp,
+              latest_source_order_timestamp: result.latestSourceOrderTimestamp,
+              earliest_refund_timestamp: result.earliestRefundTimestamp,
+              latest_refund_timestamp: result.latestRefundTimestamp,
+              partial_run: Boolean(result.hasMore),
             },
           };
-          if (row) {
-            upserts.push(row);
-          }
+          await updateImportJob(env, directJob.id, {
+            status: "completed",
+            pages: 1,
+            fetched: Number(result.sourceRows || result.fetched || 0),
+            upserted: Number(result.upserted || 0),
+            completed_at: completedAt,
+            error: null,
+            progress,
+          });
+          return json({
+            ok: true,
+            platform: "wowsuite:wowboost",
+            from,
+            to,
+            ...result,
+            page,
+            pageSize: result.pageSize,
+            job_id: directJob.id,
+          });
+        } catch (error: any) {
+          await updateImportJob(env, directJob.id, {
+            status: "failed",
+            completed_at: new Date().toISOString(),
+            error: error?.message || String(error),
+          }).catch(() => {});
+          throw error;
+        }
       }
-      logPhase("mapping complete");
 
-      const deduped = dedupePlatformOrders(upserts);
-      logPhase("dedupe complete");
-
-      const upsertStarted = Date.now();
-      if (deduped.length) {
-        const { error: upErr } = await supabase
-          .from("platform_orders")
-          .upsert(deduped as any[], { onConflict: "platform_order_id" });
-
-        if (upErr) throw new Error(upErr.message);
-      }
-      console.log(`[WowBoost Import] upsert took ${Date.now() - upsertStarted}ms`);
-      logPhase("upsert complete");
-
-      const response = {
-        ok: true,
-        platform: "wowsuite:wowboost",
-        from,
-        to,
-        page,
-        pageSize,
-        fetched: parsed.rows.length,
-        upserted: deduped.length,
-        hasMore: exp.hasMore,
-        nextPage: exp.hasMore ? page + 1 : null,
-      };
-      logPhase("response generated");
-      return json(response);
     } catch (e: any) {
       return json({
         ok: false,
@@ -17527,6 +17626,12 @@ async function runWowBoostImportPage(
   let validInRangeRows = 0;
   let dedupedRows = 0;
   let upsertedRows = 0;
+  let snapshotInserted = 0;
+  let snapshotUpdated = 0;
+  let snapshotUnchanged = 0;
+  let protectedSparseFields = 0;
+  let refundSummary: WowBoostRefundWriteSummary | null = null;
+  let sourceOrderRange = { earliest: null as string | null, latest: null as string | null };
   const externalOperationCounters = {
     supabase_rest_calls: 0,
     wowboost_auth_calls: 0,
@@ -17638,19 +17743,42 @@ async function runWowBoostImportPage(
   }
 
   logStageStart("CSV parse", { csvBytes: csvText.length });
-  const parsed = parseCsv(csvText);
-  sourceRows = parsed.rows.length;
+	  const parsed = parseCsv(csvText);
+	  sourceRows = parsed.rows.length;
   logStageComplete("CSV parse", {
     rows: parsed.rows.length,
     headers: parsed.headers.length,
     csvBytes: csvText.length,
   });
-  console.log("[WowBoost Import] CSV STATS", {
+	  console.log("[WowBoost Import] CSV STATS", {
     page: args.page,
     pageSize,
     rows: parsed.rows.length,
     headers: parsed.headers.length,
     csvBytes: csvText.length,
+	  });
+
+  logStageStart("refund event extraction", { sourceRows: parsed.rows.length });
+  const refundEvents = extractWowBoostRefundEventsFromCsvRows(parsed.rows, {
+    workspace_id: "default",
+    platform: "wowboost",
+    connector_id: "wowboost",
+  });
+  logStageComplete("refund event extraction", {
+    sourceRows: parsed.rows.length,
+    refundedRowsObserved: refundEvents.length,
+  });
+
+  logStageStart("refund ledger insert", { refundedRowsObserved: refundEvents.length });
+  externalOperationCounters.supabase_rest_calls += refundEvents.length ? 1 : 0;
+  refundSummary = await insertWowSuiteRefundLedgerEvents(env, refundEvents, supabase);
+  logStageComplete("refund ledger insert", {
+    refundedRowsObserved: refundSummary.observed,
+    normalizedRefundEventsInserted: refundSummary.inserted,
+    normalizedRefundEventsDeduplicated: refundSummary.deduplicated,
+    earliestRefundTimestamp: refundSummary.earliest_refund_at,
+    latestRefundTimestamp: refundSummary.latest_refund_at,
+    rollupWarnings: refundSummary.rollup_warnings,
   });
 
   logStageStart("row mapping", { sourceRows: parsed.rows.length });
@@ -17696,9 +17824,7 @@ async function runWowBoostImportPage(
         ])
       );
 
-      if (gross == null) gross = 0;
-
-      if ((status === "REFUNDED" || status === "CHARGEBACK" || status === "CANCELLED") && gross > 0) {
+      if (gross != null && (status === "REFUNDED" || status === "CHARGEBACK" || status === "CANCELLED") && gross > 0) {
         gross = -Math.abs(gross);
       }
 
@@ -17818,8 +17944,9 @@ async function runWowBoostImportPage(
     })
   );
 
-  const validRows = mapped.filter(Boolean);
-  validInRangeRows = validRows.length;
+	  const validRows = mapped.filter(Boolean);
+	  validInRangeRows = validRows.length;
+  sourceOrderRange = minMaxIso(validRows.map((row: any) => row?.order_ts));
   logStageComplete("row mapping", {
     sourceRows: parsed.rows.length,
     mappedRows: mapped.length,
@@ -17827,8 +17954,8 @@ async function runWowBoostImportPage(
   });
 
   logStageStart("deduplication", { validRows: validRows.length });
-  const deduped = dedupePlatformOrders(validRows);
-  dedupedRows = deduped.length;
+	  const deduped = dedupePlatformOrders(validRows);
+	  dedupedRows = deduped.length;
   logStageComplete("deduplication", {
     validRows: validRows.length,
     dedupedRows,
@@ -17850,30 +17977,37 @@ async function runWowBoostImportPage(
     identity_lookup_counters: identityLookupCounters,
   });
 
-  logStageStart("final upsert", { dedupedRows });
-  if (deduped.length) {
-    const upsertStarted = Date.now();
-    externalOperationCounters.supabase_rest_calls += 1;
-    externalOperationCounters.final_upsert_calls += 1;
-    const { error: upErr } = await supabase
-      .from("platform_orders")
-      .upsert(deduped as any[], { onConflict: "platform_order_id" });
+	  logStageStart("final upsert", { dedupedRows });
+  const snapshotWrites = await prepareWowBoostSnapshotWrites(supabase, deduped);
+  snapshotInserted = snapshotWrites.inserted;
+  snapshotUpdated = snapshotWrites.updated;
+  snapshotUnchanged = snapshotWrites.unchanged;
+  protectedSparseFields = snapshotWrites.protected_sparse_fields;
+	  if (snapshotWrites.rows.length) {
+	    const upsertStarted = Date.now();
+	    externalOperationCounters.supabase_rest_calls += 1;
+	    externalOperationCounters.final_upsert_calls += 1;
+	    const { error: upErr } = await supabase
+	      .from("platform_orders")
+	      .upsert(snapshotWrites.rows as any[], { onConflict: "platform_order_id" });
 
     if (upErr) throw new Error(upErr.message);
     console.log(`[WowBoost Import] upsert took ${Date.now() - upsertStarted}ms`);
   }
-  upsertedRows = dedupedRows;
-  logStageComplete("final upsert", {
-    dedupedRows,
-    upserted: upsertedRows,
-    supabase_rest_calls: externalOperationCounters.supabase_rest_calls,
-    final_upsert_calls: externalOperationCounters.final_upsert_calls,
-  });
+	  upsertedRows = snapshotInserted + snapshotUpdated;
+	  logStageComplete("final upsert", {
+	    dedupedRows,
+	    upserted: upsertedRows,
+      rowsInserted: snapshotInserted,
+      rowsUpdated: snapshotUpdated,
+      rowsUnchanged: snapshotUnchanged,
+      protectedSparseFields,
+	    supabase_rest_calls: externalOperationCounters.supabase_rest_calls,
+	    final_upsert_calls: externalOperationCounters.final_upsert_calls,
+	  });
 
-  const hasMore =
-    sourceRows >= pageSize &&
-    validInRangeRows > 0 &&
-    Boolean(exp.hasMore);
+  const continuation = wowBoostImportPageContinuation(exp.hasMore, args.page);
+	  const hasMore = continuation.has_more;
 
   console.log("[WowBoost Import] PAGE COMPLETE", {
     page: args.page,
@@ -17881,8 +18015,19 @@ async function runWowBoostImportPage(
     fetched: validInRangeRows,
     sourceRows,
     dedupedRows,
-    upserted: upsertedRows,
-    total_elapsed_ms: Date.now() - started,
+	    upserted: upsertedRows,
+    rowsInserted: snapshotInserted,
+    rowsUpdated: snapshotUpdated,
+    rowsUnchanged: snapshotUnchanged,
+    refundedRowsObserved: refundSummary?.observed || 0,
+    normalizedRefundEventsInserted: refundSummary?.inserted || 0,
+    normalizedRefundEventsDeduplicated: refundSummary?.deduplicated || 0,
+    protectedSparseFields,
+    earliestSourceOrderTimestamp: sourceOrderRange.earliest,
+    latestSourceOrderTimestamp: sourceOrderRange.latest,
+    earliestRefundTimestamp: refundSummary?.earliest_refund_at || null,
+    latestRefundTimestamp: refundSummary?.latest_refund_at || null,
+	    total_elapsed_ms: Date.now() - started,
     identity_lookup_counters: identityLookupCounters,
     external_operation_counters: externalOperationCounters,
   });
@@ -17893,10 +18038,22 @@ async function runWowBoostImportPage(
     upserted: upsertedRows,
     page: args.page,
     pageSize,
-    hasMore,
-    nextPage: hasMore ? args.page + 1 : null,
-    identity,
-  };
+	    hasMore,
+	    nextPage: continuation.next_page,
+	    identity,
+    rowsInserted: snapshotInserted,
+    rowsUpdated: snapshotUpdated,
+    rowsUnchanged: snapshotUnchanged,
+    refundedRowsObserved: refundSummary?.observed || 0,
+    normalizedRefundEventsInserted: refundSummary?.inserted || 0,
+    normalizedRefundEventsDeduplicated: refundSummary?.deduplicated || 0,
+    protectedSparseFields,
+    earliestSourceOrderTimestamp: sourceOrderRange.earliest,
+    latestSourceOrderTimestamp: sourceOrderRange.latest,
+    earliestRefundTimestamp: refundSummary?.earliest_refund_at || null,
+    latestRefundTimestamp: refundSummary?.latest_refund_at || null,
+    warnings: refundSummary?.rollup_warnings || [],
+	  };
   } catch (e: any) {
     console.error("[WowBoost Import] PAGE FAILED", {
       current_stage: currentStage,
@@ -18498,6 +18655,71 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
       const nextUpserted = Number(job.upserted ?? 0) + upsertedThisPage;
 
       const hasMore = Boolean(result.hasMore);
+      const currentProgress = {
+        ...createInitialImportProgress({
+          workspace_id: "default",
+          platform: wowSuiteKey("wowboost"),
+          connector_id: "wowboost",
+          from: job.from_date,
+          to: job.to_date,
+          filter: job.filter,
+        }),
+        ...((job.progress && typeof job.progress === "object") ? job.progress : {}),
+      } as ImportProgressState & Record<string, any>;
+      const currentMetadata = currentProgress.metadata && typeof currentProgress.metadata === "object"
+        ? currentProgress.metadata
+        : {};
+      const completedAt = hasMore ? null : new Date().toISOString();
+      const sourceTimestampRange = minMaxIso([
+        currentMetadata.earliest_source_order_timestamp,
+        currentMetadata.latest_source_order_timestamp,
+        result.earliestSourceOrderTimestamp,
+        result.latestSourceOrderTimestamp,
+      ]);
+      const refundTimestampRange = minMaxIso([
+        currentMetadata.earliest_refund_timestamp,
+        currentMetadata.latest_refund_timestamp,
+        result.earliestRefundTimestamp,
+        result.latestRefundTimestamp,
+      ]);
+      const nextProgress = {
+        ...currentProgress,
+        status: hasMore ? "importing" : "completed",
+        current_page: result.nextPage,
+        records_fetched: Number(currentProgress.records_fetched || 0) + Number(result.sourceRows || result.fetched || 0),
+        records_processed: Number(currentProgress.records_processed || 0) + fetchedThisPage,
+        rows_upserted: Number(currentProgress.rows_upserted || 0) + upsertedThisPage,
+        ledger_inserted: Number(currentProgress.ledger_inserted || 0) + Number(result.normalizedRefundEventsInserted || 0),
+        duplicate_rows_skipped:
+          Number(currentProgress.duplicate_rows_skipped || 0)
+          + Number(result.normalizedRefundEventsDeduplicated || 0),
+        updated_at: new Date().toISOString(),
+        completed_at: completedAt,
+        metadata: {
+          ...currentMetadata,
+          rows_inserted: Number(currentMetadata.rows_inserted || 0) + Number(result.rowsInserted || 0),
+          rows_updated: Number(currentMetadata.rows_updated || 0) + Number(result.rowsUpdated || 0),
+          rows_unchanged: Number(currentMetadata.rows_unchanged || 0) + Number(result.rowsUnchanged || 0),
+          refunded_rows_observed:
+            Number(currentMetadata.refunded_rows_observed || 0) + Number(result.refundedRowsObserved || 0),
+          normalized_refund_events_inserted:
+            Number(currentMetadata.normalized_refund_events_inserted || 0)
+            + Number(result.normalizedRefundEventsInserted || 0),
+          normalized_refund_events_deduplicated:
+            Number(currentMetadata.normalized_refund_events_deduplicated || 0)
+            + Number(result.normalizedRefundEventsDeduplicated || 0),
+          existing_refund_evidence_protected:
+            Number(currentMetadata.existing_refund_evidence_protected || 0)
+            + Number(result.protectedSparseFields || 0),
+          last_page: page,
+          next_page: result.nextPage,
+          has_more: hasMore,
+          earliest_source_order_timestamp: sourceTimestampRange.earliest,
+          latest_source_order_timestamp: sourceTimestampRange.latest,
+          earliest_refund_timestamp: refundTimestampRange.earliest,
+          latest_refund_timestamp: refundTimestampRange.latest,
+        },
+      };
 
       console.log("[WowBoost Queue] UPDATING JOB", {
         jobId,
@@ -18515,8 +18737,9 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
         last_success_page: page,
         last_success_at: new Date().toISOString(),
         last_error_at: null,
-        completed_at: hasMore ? null : new Date().toISOString(),
+        completed_at: completedAt,
         error: null,
+        progress: nextProgress,
       });
       console.log("[WowBoost Queue] JOB UPDATED", {
         jobId,

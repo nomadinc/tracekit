@@ -3,6 +3,38 @@ export type WowBoostCommerceReferenceEvidence = {
   source_field: string;
 };
 
+export type WowBoostRefundSource = "csv_receipt" | "json_receipt" | "order_status_fallback";
+
+export type WowBoostRefundEvent = {
+  workspace_id: string;
+  platform: string;
+  platform_order_id: string;
+  order_id: string;
+  connector_id: string;
+  ledger_type: "refund";
+  transaction_id: string;
+  parent_transaction_id: string | null;
+  amount: number;
+  currency: string;
+  occurred_at: string;
+  status: string;
+  source: WowBoostRefundSource;
+  source_id: string | null;
+  raw: Record<string, unknown>;
+  meta: Record<string, unknown>;
+};
+
+export type WowBoostSnapshotMergeResult = {
+  row: Record<string, any>;
+  changed: boolean;
+  protected_fields: string[];
+};
+
+export type WowBoostImportPageContinuation = {
+  has_more: boolean;
+  next_page: number | null;
+};
+
 export const WOWBOOST_COMMERCE_REFERENCE_FIELDS = [
   "ReferenceId",
   "Reference ID",
@@ -356,6 +388,413 @@ export function normalizeWowBoostExportHeader(value: unknown) {
     .toLowerCase()
     .replace(/[\s_\-]/g, "")
     .replace(/[^\p{L}\p{N}]/gu, "");
+}
+
+const WOWBOOST_RECEIPT_STATUS_FIELDS = [
+  "Receipt Status Name",
+  "Receipt Status",
+  "Payment Status",
+  "PaymentStatus",
+  "paymentStatus",
+  "status",
+] as const;
+
+const WOWBOOST_ORDER_STATUS_FIELDS = [
+  "Order Status Name",
+  "Order Status",
+  "OrderStatus",
+  "orderStatus",
+] as const;
+
+const WOWBOOST_REFUND_AMOUNT_FIELDS = [
+  "Refund Amount",
+  "Refunded Amount",
+  "Return Amount",
+  "refundAmount",
+  "refundedAmount",
+  "Amount USD",
+  "Amount",
+  "amountUSD",
+  "amount",
+] as const;
+
+const WOWBOOST_REFUND_DATE_FIELDS = [
+  "Refund Date",
+  "Refund Created Date",
+  "Refund Create Date",
+  "Refund Completed Date",
+  "Create Date (Receipts)",
+  "Receipt Date",
+  "Transaction Date",
+  "createDate",
+  "transactionDate",
+  "updatedAt",
+  "date",
+] as const;
+
+const WOWBOOST_RECEIPT_ID_FIELDS = [
+  "Refund ID",
+  "RefundId",
+  "refundId",
+  "Receipt ID",
+  "ReceiptId",
+  "receiptId",
+  "Payment Receipt ID",
+  "PaymentReceiptId",
+  "Return ID",
+  "ReturnId",
+  "returnId",
+] as const;
+
+const WOWBOOST_RECEIPT_TRANSACTION_FIELDS = [
+  "Refund Transaction ID",
+  "RefundTransactionId",
+  "refundTransactionId",
+  "Receipt Transaction ID",
+  "ReceiptTransactionId",
+  "receiptTransactionId",
+  "PaymentTrackingNumber",
+  "Payment Tracking Number",
+  "paymentTrackingNumber",
+] as const;
+
+const WOWBOOST_PARENT_TRANSACTION_FIELDS = [
+  "TransactionId",
+  "Transaction ID",
+  "transactionId",
+  "transactionID",
+  "transaction_id",
+] as const;
+
+function wowBoostMoney(value: unknown) {
+  const cleaned = String(value ?? "").replace(/[$,\s]/g, "");
+  if (!cleaned) return null;
+  const amount = Number(cleaned);
+  return Number.isFinite(amount) ? Math.abs(amount) : null;
+}
+
+function wowBoostEventTimestamp(value: unknown) {
+  const text = cleanText(value);
+  if (!text) return null;
+
+  const usDate = /^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d{1,2}):(\d{2})(?::(\d{2}))?)?$/.exec(text);
+  if (usDate) {
+    const timestamp = Date.UTC(
+      Number(usDate[3]),
+      Number(usDate[1]) - 1,
+      Number(usDate[2]),
+      Number(usDate[4] || 0),
+      Number(usDate[5] || 0),
+      Number(usDate[6] || 0),
+    );
+    return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
+  }
+
+  const timestamp = Date.parse(text);
+  return Number.isFinite(timestamp) ? new Date(timestamp).toISOString() : null;
+}
+
+function wowBoostRefundStatus(value: unknown) {
+  const status = cleanText(value);
+  if (!status) return null;
+  const normalized = status.toLowerCase();
+  if (!/(^|\b)(refund|refunded|partiallyrefunded|partial refund|return)(\b|$)/.test(normalized)) return null;
+  if (/declin|reject|failed|cancelled request|canceled request/.test(normalized)) return null;
+  return status;
+}
+
+function wowBoostCurrency(value: unknown) {
+  return cleanText(value).toUpperCase() || "USD";
+}
+
+function wowBoostEventComponent(value: unknown) {
+  return cleanText(value).toLowerCase().replace(/[^a-z0-9._-]+/g, "-").replace(/^-+|-+$/g, "");
+}
+
+function wowBoostSourceIdentityComponent(value: unknown) {
+  return encodeURIComponent(cleanText(value));
+}
+
+function wowBoostSafeReceiptMetadata(record: Record<string, any>) {
+  const metadata: Record<string, unknown> = {};
+  const allowedFields = [
+    ...WOWBOOST_RECEIPT_STATUS_FIELDS,
+    ...WOWBOOST_REFUND_AMOUNT_FIELDS,
+    ...WOWBOOST_REFUND_DATE_FIELDS,
+    ...WOWBOOST_RECEIPT_ID_FIELDS,
+    ...WOWBOOST_RECEIPT_TRANSACTION_FIELDS,
+    ...WOWBOOST_PARENT_TRANSACTION_FIELDS,
+    "Currency",
+    "Currency Code",
+    "currencyCode",
+  ];
+  const allowed = new Set(allowedFields.map(normalizeWowBoostExportHeader));
+
+  for (const [key, value] of Object.entries(record || {})) {
+    if (!allowed.has(normalizeWowBoostExportHeader(key))) continue;
+    if (value == null || typeof value === "object") continue;
+    metadata[key] = String(value).slice(0, 200);
+  }
+
+  return metadata;
+}
+
+function buildWowBoostRefundEvent(args: {
+  record: Record<string, any>;
+  order: Record<string, any>;
+  workspace_id?: unknown;
+  platform?: unknown;
+  connector_id?: unknown;
+  platform_order_id?: unknown;
+  order_id?: unknown;
+  source: WowBoostRefundSource;
+}): WowBoostRefundEvent | null {
+  const workspaceId = cleanText(args.workspace_id) || "default";
+  const platform = cleanText(args.platform) || "wowboost";
+  const orderId = cleanText(args.order_id);
+  const platformOrderId = cleanText(args.platform_order_id) || `${platform}:${orderId}`;
+  const connectorId = cleanText(args.connector_id) || platform;
+  if (!orderId) return null;
+
+  const receiptStatus = pickWowBoostField(args.record, WOWBOOST_RECEIPT_STATUS_FIELDS);
+  const orderStatus = pickWowBoostField(args.order, WOWBOOST_ORDER_STATUS_FIELDS);
+  const sourceStatus = args.source === "order_status_fallback"
+    ? wowBoostRefundStatus(orderStatus)
+    : wowBoostRefundStatus(receiptStatus);
+  if (!sourceStatus) return null;
+
+  const amountEvidence = pickWowBoostField(args.record, WOWBOOST_REFUND_AMOUNT_FIELDS)
+    || (args.source === "order_status_fallback"
+      ? pickWowBoostField(args.order, WOWBOOST_REFUND_AMOUNT_FIELDS)
+      : "");
+  const amount = wowBoostMoney(amountEvidence);
+  if (amount == null || amount <= 0) return null;
+
+  const occurredAt = wowBoostEventTimestamp(
+    pickWowBoostField(args.record, WOWBOOST_REFUND_DATE_FIELDS)
+      || pickWowBoostField(args.order, WOWBOOST_REFUND_DATE_FIELDS),
+  );
+  if (!occurredAt) return null;
+
+  const receiptId = pickWowBoostField(args.record, WOWBOOST_RECEIPT_ID_FIELDS)
+    || (args.source === "json_receipt" ? pickWowBoostField(args.record, ["id", "ID"]) : "");
+  const receiptTransactionId = pickWowBoostField(args.record, WOWBOOST_RECEIPT_TRANSACTION_FIELDS);
+  const genericReceiptTransactionId = args.source === "order_status_fallback"
+    ? ""
+    : pickWowBoostField(args.record, WOWBOOST_PARENT_TRANSACTION_FIELDS);
+  const parentTransactionId = pickWowBoostField(args.order, WOWBOOST_PARENT_TRANSACTION_FIELDS)
+    || (args.source === "order_status_fallback"
+      ? pickWowBoostField(args.record, WOWBOOST_PARENT_TRANSACTION_FIELDS)
+      : "")
+    || null;
+  const sourceId = receiptId || receiptTransactionId || genericReceiptTransactionId || null;
+  const sourceIdentity = sourceId
+    ? `source:${wowBoostSourceIdentityComponent(sourceId)}`
+    : [
+        "composite",
+        wowBoostEventComponent(occurredAt),
+        amount.toFixed(2),
+        wowBoostEventComponent(sourceStatus),
+      ].join(":");
+  const transactionId = [
+    "wowboost",
+    "refund",
+    wowBoostEventComponent(workspaceId),
+    wowBoostEventComponent(platform),
+    wowBoostEventComponent(connectorId),
+    wowBoostEventComponent(orderId),
+    sourceIdentity,
+  ].join(":");
+
+  return {
+    workspace_id: workspaceId,
+    platform,
+    platform_order_id: platformOrderId,
+    order_id: orderId,
+    connector_id: connectorId,
+    ledger_type: "refund",
+    transaction_id: transactionId,
+    parent_transaction_id: parentTransactionId,
+    amount: -Math.abs(amount),
+    currency: wowBoostCurrency(
+      pickWowBoostField(args.record, ["Currency Code", "Currency", "currencyCode", "currency"])
+        || pickWowBoostField(args.order, ["Currency Code", "Currency", "currencyCode", "currency"]),
+    ),
+    occurred_at: occurredAt,
+    status: sourceStatus,
+    source: args.source,
+    source_id: sourceId,
+    raw: wowBoostSafeReceiptMetadata(args.record),
+    meta: {
+      external_event_id: transactionId,
+      platform_order_id: platformOrderId,
+      receipt_id: receiptId || null,
+      receipt_transaction_id: receiptTransactionId || genericReceiptTransactionId || null,
+      source_status: sourceStatus,
+      source: "wowboost_receipt_import",
+      source_record_type: args.source,
+    },
+  };
+}
+
+export function extractWowBoostRefundEventsFromCsvRows(
+  rows: Record<string, any>[],
+  args: { workspace_id?: unknown; platform?: unknown; connector_id?: unknown } = {},
+) {
+  const events = new Map<string, WowBoostRefundEvent>();
+
+  for (const row of rows || []) {
+    const orderId = pickWowBoostField(row, [
+      "Order ID",
+      "OrderId",
+      "OrderID",
+      "order_id",
+      "Id",
+      "ID",
+      "Order Number",
+      "OrderNumber",
+    ]);
+    if (!orderId) continue;
+
+    const receiptStatus = pickWowBoostField(row, WOWBOOST_RECEIPT_STATUS_FIELDS);
+    const source: WowBoostRefundSource = receiptStatus
+      ? "csv_receipt"
+      : "order_status_fallback";
+    const event = buildWowBoostRefundEvent({
+      record: row,
+      order: row,
+      workspace_id: args.workspace_id,
+      platform: args.platform,
+      connector_id: args.connector_id,
+      platform_order_id: `${cleanText(args.platform) || "wowboost"}:${orderId}`,
+      order_id: orderId,
+      source,
+    });
+    if (event) events.set(event.transaction_id, event);
+  }
+
+  return Array.from(events.values());
+}
+
+export function extractWowBoostRefundEventsFromJsonOrders(
+  orders: Record<string, any>[],
+  args: { workspace_id?: unknown; platform?: unknown; connector_id?: unknown } = {},
+) {
+  const events = new Map<string, WowBoostRefundEvent>();
+  const platform = cleanText(args.platform) || "wowboost";
+
+  for (const order of orders || []) {
+    const orderId = cleanText(order?.orderId ?? order?.orderID ?? order?.id ?? order?.orderNumber);
+    if (!orderId) continue;
+    const receipts = Array.isArray(order?.receipts) ? order.receipts : [];
+
+    if (receipts.length) {
+      for (const receipt of receipts) {
+        if (!receipt || typeof receipt !== "object") continue;
+        const event = buildWowBoostRefundEvent({
+          record: receipt,
+          order,
+          workspace_id: args.workspace_id,
+          platform,
+          connector_id: args.connector_id,
+          platform_order_id: `${platform}:${orderId}`,
+          order_id: orderId,
+          source: "json_receipt",
+        });
+        if (event) events.set(event.transaction_id, event);
+      }
+      continue;
+    }
+
+    const event = buildWowBoostRefundEvent({
+      record: order,
+      order,
+      workspace_id: args.workspace_id,
+      platform,
+      connector_id: args.connector_id,
+      platform_order_id: `${platform}:${orderId}`,
+      order_id: orderId,
+      source: "order_status_fallback",
+    });
+    if (event) events.set(event.transaction_id, event);
+  }
+
+  return Array.from(events.values());
+}
+
+function wowBoostSparseMerge(existing: unknown, incoming: unknown): unknown {
+  if (incoming === null || incoming === undefined) return existing;
+  if (typeof incoming === "string" && !incoming.trim()) return existing;
+  if (
+    existing &&
+    incoming &&
+    typeof existing === "object" &&
+    typeof incoming === "object" &&
+    !Array.isArray(existing) &&
+    !Array.isArray(incoming)
+  ) {
+    const merged: Record<string, unknown> = { ...(existing as Record<string, unknown>) };
+    for (const [key, value] of Object.entries(incoming as Record<string, unknown>)) {
+      merged[key] = wowBoostSparseMerge(merged[key], value);
+    }
+    return merged;
+  }
+  return incoming;
+}
+
+function stableWowBoostJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(stableWowBoostJson).join(",")}]`;
+  if (value && typeof value === "object") {
+    return `{${Object.keys(value as Record<string, unknown>).sort().map((key) => (
+      `${JSON.stringify(key)}:${stableWowBoostJson((value as Record<string, unknown>)[key])}`
+    )).join(",")}}`;
+  }
+  return JSON.stringify(value);
+}
+
+export function mergeWowBoostPlatformOrderSnapshot(
+  existing: Record<string, any> | null | undefined,
+  incoming: Record<string, any>,
+): WowBoostSnapshotMergeResult {
+  if (!existing) return { row: incoming, changed: true, protected_fields: [] };
+
+  const row: Record<string, any> = {};
+  const protectedFields: string[] = [];
+  for (const [key, incomingValue] of Object.entries(incoming)) {
+    const existingValue = existing[key];
+    const sparse = incomingValue === null
+      || incomingValue === undefined
+      || (typeof incomingValue === "string" && !incomingValue.trim())
+      || (
+        (key === "status" || key === "status_norm")
+        && String(incomingValue || "").trim().toUpperCase() === "UNKNOWN"
+      );
+    if (sparse && existingValue !== null && existingValue !== undefined && String(existingValue).trim()) {
+      protectedFields.push(key);
+    }
+    row[key] = sparse
+      ? wowBoostSparseMerge(existingValue, null)
+      : wowBoostSparseMerge(existingValue, incomingValue);
+  }
+
+  return {
+    row,
+    changed: stableWowBoostJson(row) !== stableWowBoostJson(
+      Object.fromEntries(Object.keys(incoming).map((key) => [key, existing[key]])),
+    ),
+    protected_fields: protectedFields,
+  };
+}
+
+export function wowBoostImportPageContinuation(
+  upstreamHasMore: unknown,
+  currentPage: number,
+): WowBoostImportPageContinuation {
+  const hasMore = Boolean(upstreamHasMore);
+  return {
+    has_more: hasMore,
+    next_page: hasMore ? Math.max(1, Number(currentPage) || 1) + 1 : null,
+  };
 }
 
 export function wowBoostExportContinuationTokenWithDateRange(args: {
