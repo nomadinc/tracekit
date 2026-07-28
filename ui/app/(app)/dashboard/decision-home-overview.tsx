@@ -133,13 +133,13 @@ type OperatingCostModel = {
   costBreakdown: CostCategory[];
 };
 
-type ProfitWaterfallStep = {
+type OperatingCostBridgeStep = {
   key: string;
   label: string;
   description: string;
   amount: number;
   runningTotal: number;
-  kind: "start" | "deduction" | "end";
+  kind: "start" | "deduction" | "addition" | "end";
   unknown?: boolean;
 };
 
@@ -219,15 +219,16 @@ function buildOperatingCostModel(summary: ProfitSummaryResponse | null): Operati
   };
 }
 
-function waterfallAmountLabel(step: ProfitWaterfallStep) {
+function bridgeAmountLabel(step: OperatingCostBridgeStep) {
   if (step.unknown) return "Unknown";
   if (step.kind === "deduction") return `-${positiveMoney(step.amount)}`;
+  if (step.kind === "addition") return `+${positiveMoney(step.amount)}`;
   return formatMoney(step.amount);
 }
 
-function waterfallPercentLabel(step: ProfitWaterfallStep, grossRevenue: number) {
-  if (step.unknown || grossRevenue <= 0) return "Unknown";
-  const percent = (Math.abs(step.amount) / grossRevenue) * 100;
+function bridgePercentLabel(step: OperatingCostBridgeStep, netRevenue: number) {
+  if (step.unknown || netRevenue <= 0) return "Unknown";
+  const percent = (Math.abs(step.amount) / netRevenue) * 100;
   return step.kind === "deduction" ? `-${formatPercent(percent)}` : formatPercent(percent);
 }
 
@@ -452,36 +453,36 @@ function ExecutiveSummary({
   );
 }
 
-function ProfitWaterfall({
+function OperatingCostBridge({
   summary,
-  operatingCostModel,
+  missingInputs,
   loading,
 }: {
   summary: ProfitSummaryResponse | null;
-  operatingCostModel: OperatingCostModel;
+  missingInputs: MissingProfitInput[];
   loading: boolean;
 }) {
   if (loading) {
     return (
-      <section className="rounded-2xl border bg-white p-6 dark:bg-ink/60">
+      <section className="rounded-2xl border bg-white p-5 dark:bg-ink/60">
         <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-base font-semibold">Profit Waterfall</h2>
-            <p className="text-sm text-slate-500">Gross Revenue to Net Profit</p>
+            <h2 className="text-base font-semibold">Operating Cost Bridge</h2>
+            <p className="text-sm text-slate-500">How Net Revenue becomes Net Profit.</p>
           </div>
         </div>
-        <div className="h-32 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-900" />
+        <div className="h-36 animate-pulse rounded-xl bg-slate-100 dark:bg-slate-900" />
       </section>
     );
   }
 
   if (!summary) {
     return (
-      <section className="rounded-2xl border bg-white p-6 dark:bg-ink/60">
+      <section className="rounded-2xl border bg-white p-5 dark:bg-ink/60">
         <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
           <div>
-            <h2 className="text-base font-semibold">Profit Waterfall</h2>
-            <p className="text-sm text-slate-500">Gross Revenue to Net Profit</p>
+            <h2 className="text-base font-semibold">Operating Cost Bridge</h2>
+            <p className="text-sm text-slate-500">How Net Revenue becomes Net Profit.</p>
           </div>
         </div>
         <EmptyState>Profit data is unavailable for this date range.</EmptyState>
@@ -489,53 +490,96 @@ function ProfitWaterfall({
     );
   }
 
-  const grossRevenue = num(summary.gross_revenue);
-  const refunds = refundAmount(summary);
-  const chargebacks = chargebackAmount(summary);
+  const netRevenue = num(summary.net_revenue);
   const netProfit = num(summary.net_profit);
-  const bridgeOperatingImpact = grossRevenue - refunds - chargebacks - netProfit;
-  const bridgeOperatingCosts = Math.abs(bridgeOperatingImpact);
-  const bridgeUsesNetAdjustments = Math.abs(bridgeOperatingCosts - operatingCostModel.operatingCostTotal) > 0.005;
-
-  let runningTotal = grossRevenue;
-  const steps: ProfitWaterfallStep[] = [
+  const targetOperatingImpact = netRevenue - netProfit;
+  const bridgeCategories = [
     {
-      key: "gross-revenue",
-      label: "Gross Revenue",
-      description: "Total recognized revenue before deductions",
-      amount: grossRevenue,
+      key: "advertising",
+      label: "Advertising",
+      description: "Paid media and tracked ad spend",
+      value: Math.abs(num(summary.ad_spend)),
+    },
+    {
+      key: "affiliate-payouts",
+      label: "Affiliate Payouts",
+      description: "Affiliate commissions and partner payouts",
+      value: Math.abs(num(summary.affiliate_payout)),
+    },
+    {
+      key: "cogs",
+      label: "COGS",
+      description: "Product cost of goods sold",
+      value: Math.abs(num(summary.cogs)),
+    },
+    {
+      key: "fulfillment",
+      label: "Shipping & Fulfillment",
+      description: "Shipping, fulfillment, and delivery costs",
+      value: Math.abs(num(summary.shipping_cost ?? summary.shipping)),
+    },
+    {
+      key: "payment-processing",
+      label: "Payment Processing",
+      description: "Processor fees and bank fees",
+      value: Math.abs(num(summary.processor_fees) + num(summary.bank_fees)),
+    },
+    {
+      key: "software-infrastructure",
+      label: "Software & Infrastructure",
+      description: "Recurring SaaS and infrastructure costs when mapped",
+      value: Math.abs(sumFields(summary, [
+        "software_infrastructure",
+        "software_infrastructure_costs",
+        "software_costs",
+        "infrastructure_costs",
+      ])),
+    },
+    {
+      key: "general-administrative",
+      label: "General & Administrative",
+      description: "Tax and mapped administrative operating costs",
+      value: Math.abs(num(summary.tax) + sumFields(summary, ["general_administrative", "g_and_a", "administrative_costs"])),
+    },
+  ].filter((row) => row.value > 0);
+
+  const mappedCategoryTotal = bridgeCategories.reduce((total, row) => total + row.value, 0);
+  const otherOperatingImpact = targetOperatingImpact - mappedCategoryTotal;
+  const showOtherOperatingCosts = Math.abs(otherOperatingImpact) > 0.005;
+
+  let runningTotal = netRevenue;
+  const steps: OperatingCostBridgeStep[] = [
+    {
+      key: "net-revenue",
+      label: "Net Revenue",
+      description: "Revenue after refunds and chargebacks",
+      amount: netRevenue,
       runningTotal,
       kind: "start",
     },
-    {
-      key: "refunds",
-      label: "Refunds",
-      description: "Refund ledger events reduce gross revenue",
-      amount: refunds,
-      runningTotal: runningTotal -= refunds,
-      kind: "deduction",
-    },
-    {
-      key: "chargebacks",
-      label: "Chargebacks",
-      description: "Chargeback ledger events reduce gross revenue",
-      amount: chargebacks,
-      runningTotal: runningTotal -= chargebacks,
-      kind: "deduction",
-    },
-    {
-      key: "operating-costs",
-      label: "Operating Costs",
-      description: bridgeOperatingImpact < 0
-        ? "Net adjustments increased profit after mapped operating costs"
-        : bridgeUsesNetAdjustments
-          ? "Mapped operating expenses and net adjustments required to reconcile"
-          : "Includes payment processing and other mapped expenses",
-      amount: bridgeOperatingCosts,
-      runningTotal: runningTotal -= bridgeOperatingImpact,
-      kind: bridgeOperatingImpact < 0 ? "start" : "deduction",
-      unknown: bridgeOperatingCosts === 0 && operatingCostModel.operatingCostTotal === 0,
-    },
+    ...bridgeCategories.map((row) => ({
+      key: row.key,
+      label: row.label,
+      description: row.description,
+      amount: row.value,
+      runningTotal: runningTotal -= row.value,
+      kind: "deduction" as const,
+    })),
+    ...(showOtherOperatingCosts
+      ? [
+          {
+            key: "other-operating-costs",
+            label: "Other Operating Costs",
+            description:
+              otherOperatingImpact >= 0
+                ? "Other mapped costs and residual operating impact required to reconcile"
+                : "Net operating adjustments that increased profit",
+            amount: Math.abs(otherOperatingImpact),
+            runningTotal: runningTotal -= otherOperatingImpact,
+            kind: otherOperatingImpact >= 0 ? "deduction" as const : "addition" as const,
+          },
+        ]
+      : []),
     {
       key: "net-profit",
       label: "Net Profit",
@@ -552,19 +596,19 @@ function ProfitWaterfall({
   );
 
   return (
-    <section className="rounded-2xl border bg-white p-5 dark:bg-ink/60" aria-label="Profit Waterfall">
+    <section className="rounded-2xl border bg-white p-5 dark:bg-ink/60" aria-label="Operating Cost Bridge">
       <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
         <div>
-          <h2 className="text-base font-semibold">Profit Waterfall</h2>
-          <p className="text-sm text-slate-500">A compact bridge from Gross Revenue to Net Profit.</p>
+          <h2 className="text-base font-semibold">Operating Cost Bridge</h2>
+          <p className="text-sm text-slate-500">How Net Revenue becomes Net Profit.</p>
         </div>
         <span className="text-xs text-slate-500">Informational bridge</span>
       </div>
 
-      <div className="grid gap-2 lg:grid-cols-5">
+      <div className="flex gap-2 overflow-x-auto pb-1">
         {steps.map((step, index) => {
-          const amountLabel = waterfallAmountLabel(step);
-          const percentLabel = waterfallPercentLabel(step, grossRevenue);
+          const amountLabel = bridgeAmountLabel(step);
+          const percentLabel = bridgePercentLabel(step, netRevenue);
           const width = step.unknown
             ? 16
             : Math.max(8, Math.min(100, (Math.abs(step.amount) / maxMagnitude) * 100));
@@ -573,18 +617,20 @@ function ProfitWaterfall({
             ? "border border-dashed border-slate-400 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300"
             : step.kind === "start"
               ? "bg-teal-600 text-white shadow-sm shadow-teal-900/10"
+              : step.kind === "addition"
+                ? "bg-emerald-600 text-white shadow-sm shadow-emerald-900/10"
               : step.kind === "end"
                 ? isNegativeNet
                   ? "bg-red-600 text-white shadow-sm shadow-red-900/10"
                   : "bg-blue-600 text-white shadow-sm shadow-blue-900/10"
                 : "bg-amber-500 text-white shadow-sm shadow-amber-900/10";
-          const title = `${step.label}: ${amountLabel} (${percentLabel} of Gross Revenue). Running total: ${formatMoney(step.runningTotal)}. ${step.description}`;
+          const title = `${step.label}: ${amountLabel} (${percentLabel} of Net Revenue). Running balance: ${formatMoney(step.runningTotal)}. ${step.description}`;
 
           return (
             <div
               key={step.key}
               title={title}
-              className="rounded-xl bg-slate-50 p-3 dark:bg-slate-900/70"
+              className="min-w-[12rem] flex-1 rounded-xl bg-slate-50 p-3 dark:bg-slate-900/70"
             >
               <div className="mb-2 flex items-start justify-between gap-3">
                 <div className="min-w-0">
@@ -606,13 +652,20 @@ function ProfitWaterfall({
               </div>
 
               <div className="mt-2 flex items-center justify-between gap-3 text-xs">
-                <span className="text-slate-500">{percentLabel} of gross</span>
+                <span className="text-slate-500">{percentLabel} of net rev.</span>
                 <span className="font-mono font-semibold">{formatMoney(step.runningTotal)}</span>
               </div>
             </div>
           );
         })}
       </div>
+
+      {missingInputs.length ? (
+        <div className="mt-4 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-800 dark:bg-amber-950/20 dark:text-amber-200">
+          <span className="font-medium">Missing inputs:</span>{" "}
+          {missingInputs.map((input) => input.label).join(" · ")}
+        </div>
+      ) : null}
     </section>
   );
 }
@@ -690,9 +743,9 @@ export function DecisionHomeOverview() {
         missingInputs={missingInputs}
       />
 
-      <ProfitWaterfall
+      <OperatingCostBridge
         summary={summary}
-        operatingCostModel={operatingCostModel}
+        missingInputs={missingInputs}
         loading={loading}
       />
 

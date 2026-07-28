@@ -48,13 +48,17 @@ The Executive Summary is the upper-page decision surface. It combines the primar
 
 The summary sentence must be deterministic and built only from available dashboard data. It should not call an LLM or invent previous-period comparisons.
 
-The compact Profit Waterfall sits directly below the Executive Summary and supports the summary instead of dominating the page. It uses the existing Profit Summary API values to explain the accounting bridge:
+The original Gross Revenue to Net Profit waterfall was replaced because it repeated the Executive Summary metrics. The Executive Summary now explains what happened; the Operating Cost Bridge explains why Net Revenue became Net Profit.
 
-Gross Revenue -> Refunds -> Chargebacks -> Operating Costs -> Net Profit
+The Operating Cost Bridge sits directly below the Executive Summary and uses the existing Profit Summary API values to explain this accounting flow:
 
-The waterfall follows backend Profit Engine accounting. Refund and chargeback ledger values are shown as revenue deductions, and operating costs are not used to deduct those values again. Missing operating-cost inputs render as `Unknown` instead of `$0` so operators do not confuse unmapped cost categories with confirmed zero expense.
+Net Revenue -> mapped operating-cost categories -> Net Profit
 
-Waterfall rows are intentionally informational, not navigational. Do not make a row clickable until the destination is a real detail page that explains that row. Date-preserving KPI links may live in the Executive Summary when the destination is meaningful.
+Refunds and chargebacks do not appear in this bridge because they are already reflected in Net Revenue. The bridge follows backend Profit Engine accounting, uses mapped operating-cost categories as deductions, and includes an Other Operating Costs row only when a residual mapped operating impact is needed to reconcile to Net Profit.
+
+Missing operating-cost categories do not render as normal deduction bars and must not be treated as `$0`. They appear in a quieter Missing Inputs area tied to Profit Confidence so operators can distinguish known mapped expenses from disconnected cost sources.
+
+Bridge rows are intentionally informational, not navigational. Do not make a row clickable until the destination is a real detail page that explains that row. Date-preserving KPI links may live in the Executive Summary when the destination is meaningful.
 
 Refunds and Chargebacks are first-class Executive Summary metrics. They display as positive absolute amounts with revenue-leakage treatment because they are deductions from Gross Revenue, not standalone negative KPIs. Their relationship to the rest of the summary is:
 
