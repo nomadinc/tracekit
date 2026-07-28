@@ -130,6 +130,15 @@ function EmptyState({ children }: { children: React.ReactNode }) {
 }
 
 const PIE_COLORS = ["#0f766e", "#2563eb", "#d97706", "#dc2626", "#7c3aed", "#64748b", "#16a34a"];
+const UNKNOWN_OPERATING_COST_ZERO_CATEGORIES = new Set([
+  "Advertising",
+  "Affiliate Payouts",
+  "COGS",
+  "Fulfillment",
+  "Payment Processing",
+  "Software & Infrastructure",
+  "Other",
+]);
 
 type CostCategory = {
   name: string;
@@ -137,58 +146,26 @@ type CostCategory = {
   value: number;
 };
 
-export function DecisionHomeOverview() {
-  const range = useDashboardRange();
-  const [summary, setSummary] = React.useState<ProfitSummaryResponse | null>(null);
-  const [series, setSeries] = React.useState<RevenueSpendPoint[]>([]);
-  const [error, setError] = React.useState<string | null>(null);
-  const [loading, setLoading] = React.useState(true);
+type OperatingCostModel = {
+  knownOperatingCostCategories: CostCategory[];
+  knownOperatingCostTotal: number;
+  operatingCostTotal: number;
+  operatingCostOther: number;
+  costBreakdown: CostCategory[];
+};
 
-  React.useEffect(() => {
-    let cancelled = false;
+type ProfitWaterfallStep = {
+  key: string;
+  label: string;
+  description: string;
+  amount: number;
+  runningTotal: number;
+  href: string;
+  kind: "start" | "deduction" | "end";
+  unknown?: boolean;
+};
 
-    async function load() {
-      try {
-        setLoading(true);
-        setError(null);
-
-        const summaryParams = new URLSearchParams({
-          workspace_id: "default",
-          from: range.from,
-          to: range.to,
-        });
-
-        const [summaryJson, trendJson] = await Promise.all([
-          apiGetJson<ProfitSummaryResponse>(`/v1/profit/summary?${summaryParams.toString()}`),
-          apiGetJson<RevenueSpendResponse>(
-            `/v1/revenue-spend?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`,
-          ),
-        ]);
-
-        if (!cancelled) {
-          setSummary(summaryJson);
-          setSeries(Array.isArray(trendJson?.series) ? trendJson.series : []);
-        }
-      } catch (e: any) {
-        if (!cancelled) setError(e?.message || "Home dashboard data is unavailable.");
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    load();
-    return () => {
-      cancelled = true;
-    };
-  }, [range.from, range.to]);
-
-  const chartData = series.map((point) => ({
-    date: String(point.date || "").slice(0, 10),
-    revenue: num(point.revenue),
-    operatingCosts: Math.max(0, num(point.revenue) - num(point.net_profit)),
-    netProfit: num(point.net_profit),
-  }));
-
+function buildOperatingCostModel(summary: ProfitSummaryResponse | null): OperatingCostModel {
   const knownOperatingCostCategories: CostCategory[] = [
     {
       name: "Advertising",
@@ -249,6 +226,338 @@ export function DecisionHomeOverview() {
       value: operatingCostOther,
     },
   ];
+
+  return {
+    knownOperatingCostCategories,
+    knownOperatingCostTotal,
+    operatingCostTotal,
+    operatingCostOther,
+    costBreakdown,
+  };
+}
+
+function waterfallDrilldown(range: { from: string; to: string }, section: string) {
+  return dashboardDrilldown(range, section);
+}
+
+function waterfallAmountLabel(step: ProfitWaterfallStep) {
+  if (step.unknown) return "Unknown";
+  if (step.kind === "deduction") return `-${positiveMoney(step.amount)}`;
+  return formatMoney(step.amount);
+}
+
+function waterfallPercentLabel(step: ProfitWaterfallStep, grossRevenue: number) {
+  if (step.unknown || grossRevenue <= 0) return "Unknown";
+  const percent = (Math.abs(step.amount) / grossRevenue) * 100;
+  return step.kind === "deduction" ? `-${formatPercent(percent)}` : formatPercent(percent);
+}
+
+function isUnknownOperatingCostCategory(row: CostCategory) {
+  return row.value === 0 && UNKNOWN_OPERATING_COST_ZERO_CATEGORIES.has(row.name);
+}
+
+function ProfitWaterfall({
+  summary,
+  range,
+  operatingCostModel,
+  loading,
+}: {
+  summary: ProfitSummaryResponse | null;
+  range: { from: string; to: string };
+  operatingCostModel: OperatingCostModel;
+  loading: boolean;
+}) {
+  if (loading) {
+    return (
+      <section className="rounded-2xl border bg-white p-6 dark:bg-ink/60">
+        <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">Profit Waterfall</h2>
+            <p className="text-sm text-slate-500">Gross Revenue to Net Profit</p>
+          </div>
+        </div>
+        <EmptyState>Loading Profit Waterfall…</EmptyState>
+      </section>
+    );
+  }
+
+  if (!summary) {
+    return (
+      <section className="rounded-2xl border bg-white p-6 dark:bg-ink/60">
+        <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h2 className="text-lg font-semibold">Profit Waterfall</h2>
+            <p className="text-sm text-slate-500">Gross Revenue to Net Profit</p>
+          </div>
+        </div>
+        <EmptyState>Profit data is unavailable for this date range.</EmptyState>
+      </section>
+    );
+  }
+
+  const grossRevenue = num(summary.gross_revenue);
+  const refundAmount = Math.abs(num(summary.refunds));
+  const refundFees = Math.abs(sumFields(summary, ["refund_fees", "refund_fee"]));
+  const advertising = Math.abs(num(summary.ad_spend));
+  const affiliatePayouts = Math.abs(num(summary.affiliate_payout));
+  const cogs = Math.abs(num(summary.cogs));
+  const fulfillment = Math.abs(num(summary.shipping_cost ?? summary.shipping));
+  const paymentProcessing = Math.abs(num(summary.processor_fees) + num(summary.bank_fees));
+  const softwareInfrastructure = Math.abs(sumFields(summary, [
+    "software_infrastructure",
+    "software_infrastructure_costs",
+    "software_costs",
+    "infrastructure_costs",
+  ]));
+  const chargebackAmount = Math.abs(num(summary.chargebacks));
+  const chargebackFees = Math.abs(num(summary.chargeback_fees));
+  const otherOperatingCosts = Math.max(
+    0,
+    operatingCostModel.operatingCostTotal -
+      advertising -
+      affiliatePayouts -
+      cogs -
+      fulfillment -
+      paymentProcessing -
+      softwareInfrastructure -
+      refundFees -
+      chargebackFees,
+  );
+
+  const deductions = [
+    {
+      key: "refunds",
+      label: "Refunds",
+      description: refundFees > 0 ? "Refunded revenue and mapped refund fees" : "Refunded revenue",
+      amount: refundAmount + refundFees,
+      href: waterfallDrilldown(range, "refund-analysis"),
+      unknown: false,
+    },
+    {
+      key: "advertising",
+      label: "Advertising",
+      description: "Paid media and tracked ad spend",
+      amount: advertising,
+      href: waterfallDrilldown(range, "ad-spend-analysis"),
+      unknown: advertising === 0,
+    },
+    {
+      key: "affiliate-payouts",
+      label: "Affiliate Payouts",
+      description: "Affiliate commissions and partner payouts",
+      amount: affiliatePayouts,
+      href: waterfallDrilldown(range, "affiliate-costs"),
+      unknown: affiliatePayouts === 0,
+    },
+    {
+      key: "cogs",
+      label: "COGS",
+      description: "Product cost of goods sold",
+      amount: cogs,
+      href: `/settings/product-costs?${dateRangeQuery(range)}`,
+      unknown: cogs === 0,
+    },
+    {
+      key: "fulfillment",
+      label: "Shipping & Fulfillment",
+      description: "Shipping, fulfillment, and delivery costs",
+      amount: fulfillment,
+      href: waterfallDrilldown(range, "fulfillment"),
+      unknown: fulfillment === 0,
+    },
+    {
+      key: "payment-processing",
+      label: "Payment Processing",
+      description: "Processor fees and bank fees",
+      amount: paymentProcessing,
+      href: waterfallDrilldown(range, "processor-fees"),
+      unknown: paymentProcessing === 0,
+    },
+    {
+      key: "software-infrastructure",
+      label: "Software & Infrastructure",
+      description: "Recurring SaaS and infrastructure costs when mapped",
+      amount: softwareInfrastructure,
+      href: waterfallDrilldown(range, "vendor-costs"),
+      unknown: softwareInfrastructure === 0,
+    },
+    {
+      key: "chargebacks",
+      label: "Chargebacks",
+      description: chargebackFees > 0 ? "Chargeback revenue loss and chargeback fees" : "Chargeback revenue loss",
+      amount: chargebackAmount + chargebackFees,
+      href: waterfallDrilldown(range, "chargeback-analysis"),
+      unknown: false,
+    },
+    {
+      key: "other-operating-costs",
+      label: "Other Operating Costs",
+      description: "Other mapped or residual operating expenses",
+      amount: otherOperatingCosts,
+      href: waterfallDrilldown(range, "operating-cost-breakdown"),
+      unknown: otherOperatingCosts === 0,
+    },
+  ];
+
+  let runningTotal = grossRevenue;
+  const steps: ProfitWaterfallStep[] = [
+    {
+      key: "gross-revenue",
+      label: "Gross Revenue",
+      description: "Total recognized revenue before deductions",
+      amount: grossRevenue,
+      runningTotal,
+      href: waterfallDrilldown(range, "revenue-breakdown"),
+      kind: "start",
+    },
+    ...deductions.map((step) => {
+      if (!step.unknown) runningTotal -= step.amount;
+      return {
+        ...step,
+        runningTotal,
+        kind: "deduction" as const,
+      };
+    }),
+    {
+      key: "net-profit",
+      label: "Net Profit",
+      description: "Ending profit from the Profit Engine",
+      amount: num(summary.net_profit),
+      runningTotal: num(summary.net_profit),
+      href: waterfallDrilldown(range, "profit-statement"),
+      kind: "end",
+    },
+  ];
+
+  const maxMagnitude = Math.max(
+    1,
+    ...steps.filter((step) => !step.unknown).map((step) => Math.abs(step.amount)),
+  );
+
+  return (
+    <section className="rounded-2xl border bg-white p-6 dark:bg-ink/60" aria-label="Profit Waterfall">
+      <div className="mb-5 flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h2 className="text-lg font-semibold">Profit Waterfall</h2>
+          <p className="text-sm text-slate-500">
+            How Gross Revenue becomes Net Profit for {range.from} through {range.to}
+          </p>
+        </div>
+        <span className="text-xs text-slate-500">Click any bar to drill down</span>
+      </div>
+
+      <div className="space-y-3">
+        {steps.map((step, index) => {
+          const amountLabel = waterfallAmountLabel(step);
+          const percentLabel = waterfallPercentLabel(step, grossRevenue);
+          const width = step.unknown
+            ? 16
+            : Math.max(8, Math.min(100, (Math.abs(step.amount) / maxMagnitude) * 100));
+          const isNegativeNet = step.kind === "end" && step.amount < 0;
+          const barClass = step.unknown
+            ? "border border-dashed border-slate-400 bg-slate-100 text-slate-600 dark:border-slate-600 dark:bg-slate-900 dark:text-slate-300"
+            : step.kind === "start"
+              ? "bg-teal-600 text-white shadow-sm shadow-teal-900/10"
+              : step.kind === "end"
+                ? isNegativeNet
+                  ? "bg-red-600 text-white shadow-sm shadow-red-900/10"
+                  : "bg-blue-600 text-white shadow-sm shadow-blue-900/10"
+                : "bg-amber-500 text-white shadow-sm shadow-amber-900/10";
+          const title = `${step.label}: ${amountLabel} (${percentLabel} of Gross Revenue). Running total: ${formatMoney(step.runningTotal)}. ${step.description}`;
+
+          return (
+            <Link
+              key={step.key}
+              href={step.href}
+              title={title}
+              className="group grid gap-2 rounded-xl border border-transparent p-2 transition hover:border-slate-200 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:hover:border-slate-800 dark:hover:bg-slate-900/40 md:grid-cols-[12rem_minmax(0,1fr)_10rem]"
+            >
+              <div className="flex items-center gap-3">
+                <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-slate-100 text-xs font-semibold text-slate-500 dark:bg-slate-900">
+                  {index === 0 ? "Start" : step.kind === "end" ? "End" : "↓"}
+                </span>
+                <div className="min-w-0">
+                  <div className="truncate text-sm font-medium">{step.label}</div>
+                  <div className="truncate text-xs text-slate-500">{step.description}</div>
+                </div>
+              </div>
+
+              <div className="relative h-11 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-900">
+                <div
+                  className={`flex h-full min-w-20 items-center justify-between rounded-full px-4 text-sm font-semibold transition-all duration-500 ease-out ${barClass}`}
+                  style={{ width: `${width}%` }}
+                >
+                  <span className="truncate">{amountLabel}</span>
+                  <span className="ml-3 hidden shrink-0 text-xs opacity-90 sm:inline">{percentLabel}</span>
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between gap-3 text-sm md:block md:text-right">
+                <span className="text-xs text-slate-500 md:block">Running total</span>
+                <span className="font-mono font-semibold">{formatMoney(step.runningTotal)}</span>
+              </div>
+            </Link>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+export function DecisionHomeOverview() {
+  const range = useDashboardRange();
+  const [summary, setSummary] = React.useState<ProfitSummaryResponse | null>(null);
+  const [series, setSeries] = React.useState<RevenueSpendPoint[]>([]);
+  const [error, setError] = React.useState<string | null>(null);
+  const [loading, setLoading] = React.useState(true);
+
+  React.useEffect(() => {
+    let cancelled = false;
+
+    async function load() {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const summaryParams = new URLSearchParams({
+          workspace_id: "default",
+          from: range.from,
+          to: range.to,
+        });
+
+        const [summaryJson, trendJson] = await Promise.all([
+          apiGetJson<ProfitSummaryResponse>(`/v1/profit/summary?${summaryParams.toString()}`),
+          apiGetJson<RevenueSpendResponse>(
+            `/v1/revenue-spend?from=${encodeURIComponent(range.from)}&to=${encodeURIComponent(range.to)}`,
+          ),
+        ]);
+
+        if (!cancelled) {
+          setSummary(summaryJson);
+          setSeries(Array.isArray(trendJson?.series) ? trendJson.series : []);
+        }
+      } catch (e: any) {
+        if (!cancelled) setError(e?.message || "Home dashboard data is unavailable.");
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+
+    load();
+    return () => {
+      cancelled = true;
+    };
+  }, [range.from, range.to]);
+
+  const chartData = series.map((point) => ({
+    date: String(point.date || "").slice(0, 10),
+    revenue: num(point.revenue),
+    operatingCosts: Math.max(0, num(point.revenue) - num(point.net_profit)),
+    netProfit: num(point.net_profit),
+  }));
+
+  const operatingCostModel = buildOperatingCostModel(summary);
+  const { costBreakdown, operatingCostTotal } = operatingCostModel;
   const costDonutData = costBreakdown.filter((row) => row.value > 0);
 
   const leakageMix = [
@@ -274,65 +583,72 @@ export function DecisionHomeOverview() {
   return (
     <div className="space-y-6">
       <section id="profit-statement" className="overflow-hidden rounded-2xl border bg-white p-6 dark:bg-ink/60">
-        <div className="flex flex-col gap-6 xl:flex-row xl:items-end xl:justify-between">
-          <Link
-            href={dashboardDrilldown(range, "profit-statement")}
-            title="Open Profit Statement"
-            className="rounded-xl transition focus:outline-none focus:ring-2 focus:ring-teal-500"
-          >
-            <div className="text-sm font-medium text-slate-500">Did we make money?</div>
-            <div className="mt-2 text-5xl font-semibold tracking-tight">
-              {summary ? formatMoney(summary.net_profit) : "—"}
-            </div>
-            <div className="mt-2 text-sm text-slate-500">
-              Net Profit for {range.from} through {range.to}
-            </div>
-          </Link>
-
-          <div className="grid flex-1 gap-3 sm:grid-cols-2 xl:max-w-5xl xl:grid-cols-6">
-            <Metric
-              label="Gross revenue"
-              value={summary ? formatMoney(summary.gross_revenue) : "—"}
-              href={dashboardDrilldown(range, "revenue-breakdown")}
-              title="Open Revenue Breakdown"
-              id="revenue-breakdown"
-            />
-            <Metric
-              label="Net revenue"
-              value={summary ? formatMoney(summary.net_revenue) : "—"}
-              helper="After refunds and chargebacks"
-              href={dashboardDrilldown(range, "revenue-after-leakage")}
-              title="Open Revenue after refunds and chargebacks"
-              id="revenue-after-leakage"
-            />
-            <Metric
-              label="Operating Costs"
-              value={summary ? positiveMoney(operatingCostTotal) : "—"}
-              href={dashboardDrilldown(range, "operating-cost-breakdown")}
-              title="Open Operating Cost Breakdown"
-              id="operating-cost-breakdown"
-            />
-            <Metric
-              label="Profit margin"
-              value={summary ? `${num(summary.profit_margin_pct).toFixed(1)}%` : "—"}
-              href={dashboardDrilldown(range, "profit-analysis")}
-              title="Open Profit Analysis"
-              id="profit-analysis"
-            />
-            <Metric
-              label="Orders"
-              value={summary ? num(summary.order_count).toLocaleString("en-US") : "—"}
-              href={`/orders?${dateRangeQuery(range)}`}
-              title="Open Orders"
-            />
-            <Metric
-              label="AOV"
-              value={formatAov(summary)}
-              helper="Gross revenue / orders"
-              href={`/orders?${dateRangeQuery(range)}&analysis=order-value`}
-              title="Open Order Value Analysis"
-            />
+        <Link
+          href={dashboardDrilldown(range, "profit-statement")}
+          title="Open Profit Statement"
+          className="block rounded-xl transition focus:outline-none focus:ring-2 focus:ring-teal-500"
+        >
+          <div className="text-sm font-medium text-slate-500">Did we make money?</div>
+          <div className="mt-2 text-5xl font-semibold tracking-tight">
+            {summary ? formatMoney(summary.net_profit) : "—"}
           </div>
+          <div className="mt-2 text-sm text-slate-500">
+            Net Profit for {range.from} through {range.to}
+          </div>
+        </Link>
+      </section>
+
+      <ProfitWaterfall
+        summary={summary}
+        range={range}
+        operatingCostModel={operatingCostModel}
+        loading={loading}
+      />
+
+      <section className="rounded-2xl border bg-white p-4 dark:bg-ink/60" aria-label="Executive KPI cards">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
+          <Metric
+            label="Gross revenue"
+            value={summary ? formatMoney(summary.gross_revenue) : "—"}
+            href={dashboardDrilldown(range, "revenue-breakdown")}
+            title="Open Revenue Breakdown"
+            id="revenue-breakdown"
+          />
+          <Metric
+            label="Net revenue"
+            value={summary ? formatMoney(summary.net_revenue) : "—"}
+            helper="After refunds and chargebacks"
+            href={dashboardDrilldown(range, "revenue-after-leakage")}
+            title="Open Revenue after refunds and chargebacks"
+            id="revenue-after-leakage"
+          />
+          <Metric
+            label="Operating Costs"
+            value={summary ? positiveMoney(operatingCostTotal) : "—"}
+            href={dashboardDrilldown(range, "operating-cost-breakdown")}
+            title="Open Operating Cost Breakdown"
+            id="operating-cost-breakdown"
+          />
+          <Metric
+            label="Profit margin"
+            value={summary ? `${num(summary.profit_margin_pct).toFixed(1)}%` : "—"}
+            href={dashboardDrilldown(range, "profit-analysis")}
+            title="Open Profit Analysis"
+            id="profit-analysis"
+          />
+          <Metric
+            label="Orders"
+            value={summary ? num(summary.order_count).toLocaleString("en-US") : "—"}
+            href={`/orders?${dateRangeQuery(range)}`}
+            title="Open Orders"
+          />
+          <Metric
+            label="AOV"
+            value={formatAov(summary)}
+            helper="Gross revenue / orders"
+            href={`/orders?${dateRangeQuery(range)}&analysis=order-value`}
+            title="Open Order Value Analysis"
+          />
         </div>
       </section>
 
@@ -411,18 +727,21 @@ export function DecisionHomeOverview() {
                     </tr>
                   </thead>
                   <tbody>
-                    {costBreakdown.map((row) => (
-                      <tr key={row.name} className="border-t">
-                        <td className="px-4 py-3">
-                          <div className="font-medium">{row.name}</div>
-                          <div className="mt-1 text-xs text-slate-500">{row.description}</div>
-                        </td>
-                        <td className="px-4 py-3 text-right font-mono">{formatMoney(row.value)}</td>
-                        <td className="px-4 py-3 text-right font-mono">
-                          {operatingCostTotal > 0 ? formatPercent((row.value / operatingCostTotal) * 100) : "—"}
-                        </td>
-                      </tr>
-                    ))}
+                    {costBreakdown.map((row) => {
+                      const rowUnknown = isUnknownOperatingCostCategory(row);
+                      return (
+                        <tr key={row.name} className="border-t">
+                          <td className="px-4 py-3">
+                            <div className="font-medium">{row.name}</div>
+                            <div className="mt-1 text-xs text-slate-500">{row.description}</div>
+                          </td>
+                          <td className="px-4 py-3 text-right font-mono">{rowUnknown ? "Unknown" : formatMoney(row.value)}</td>
+                          <td className="px-4 py-3 text-right font-mono">
+                            {rowUnknown ? "Unknown" : operatingCostTotal > 0 ? formatPercent((row.value / operatingCostTotal) * 100) : "—"}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
