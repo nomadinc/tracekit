@@ -56,12 +56,22 @@ The waterfall follows backend Profit Engine accounting. Refund and chargeback le
 
 Waterfall rows are intentionally informational, not navigational. Do not make a row clickable until the destination is a real detail page that explains that row. Date-preserving KPI links may live in the Executive Summary when the destination is meaningful.
 
+Refunds and Chargebacks are first-class Executive Summary metrics. They display as positive absolute amounts with revenue-leakage treatment because they are deductions from Gross Revenue, not standalone negative KPIs. Their relationship to the rest of the summary is:
+
+Gross Revenue - Refunds - Chargebacks = Net Revenue
+
+Net Revenue - Operating Costs = Net Profit
+
+Refund and chargeback summary cards should preserve the active date range when linked to a detail destination. They should remain non-clickable until a real refund or chargeback analysis route exists with meaningful source, count, amount, rate, and date-range detail. Same-page anchors or placeholder navigation are not valid drill-downs.
+
 Metric definitions:
 
 | Metric | Definition |
 | --- | --- |
 | Net Profit | Profit Engine `net_profit` |
 | Gross Revenue | Profit Engine `gross_revenue` |
+| Refunds | Absolute display of Profit Engine `refunds`; deducted from Gross Revenue |
+| Chargebacks | Absolute display of Profit Engine `chargebacks`; deducted from Gross Revenue |
 | Net Revenue | Profit Engine `net_revenue`, after refund and chargeback ledger effects |
 | Operating Costs | Positive display of Profit Engine `total_costs` and mapped operating-expense buckets |
 | Orders | Profit Engine recognized order count |
