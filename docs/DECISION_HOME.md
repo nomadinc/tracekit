@@ -40,6 +40,12 @@ Operating Costs represent all expenses required to operate the business. The cur
 
 Missing categories must not be treated as silently complete. They should continue to appear in Profit Confidence or attention modules until a source is connected or explicitly mapped.
 
+The Profit Waterfall is the primary Home visualization and sits between the Net Profit header and the KPI cards. It uses the existing Profit Summary API values to explain the flow:
+
+Gross Revenue -> Refunds -> Advertising -> Affiliate Payouts -> COGS -> Shipping & Fulfillment -> Payment Processing -> Software & Infrastructure -> Chargebacks -> Other Operating Costs -> Net Profit
+
+Every waterfall bar is clickable and preserves the active date range. Missing operating-cost inputs render as `Unknown` instead of `$0` so operators do not confuse unmapped cost categories with confirmed zero expense.
+
 ### 2. Why did profit move?
 
 Primary outputs:
