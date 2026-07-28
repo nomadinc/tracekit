@@ -4,6 +4,7 @@ import {
   buildWowBoostCommerceReferenceBackfillDecision,
   buildWowBoostOrderNumberToOrderIdMap,
   buildWowBoostOrderDetailsReferenceBackfillDecision,
+  buildWowSuiteCredentialStatus,
   capWowBoostPermanentMissingOrderIds,
   classifyWowBoostOrderDetailsLookupFailure,
   appendWowBoostRuntimePageFingerprint,
@@ -20,6 +21,7 @@ import {
   normalizeWowBoostOrderDetailsBackfillDateRange,
   normalizeWowBoostOrderDetailsBackfillLimit,
   normalizeWowBoostOrderDetailsPacingMs,
+  normalizeWowSuiteImportDateRange,
   normalizeWowBoostCommerceReferenceExportRow,
   normalizeWowBoostExportHeader,
   normalizeWowBoostRuntimeMaxExportPages,
@@ -49,6 +51,63 @@ import {
   wowBoostRuntimeRepeatedPageDetected,
   wowBoostRuntimeStagingStopDecision,
 } from "./wowboost.ts";
+
+test("reports connected WowSuite credentials without exposing the encrypted secret", () => {
+  const status = buildWowSuiteCredentialStatus("wowpay", {
+    platform: "wowsuite:wowpay",
+    base_url: "https://public-api.tryemanagecrm.com",
+    username: "merchant-account",
+    password_ciphertext: "encrypted-secret",
+    created_at: "2026-07-01T00:00:00.000Z",
+    updated_at: "2026-07-27T00:00:00.000Z",
+  });
+
+  assert.equal(status.connected, true);
+  assert.equal(status.base_url, "https://public-api.tryemanagecrm.com");
+  assert.equal(status.updated_at, "2026-07-27T00:00:00.000Z");
+  assert.deepEqual(status.missing, []);
+  assert.equal("password_ciphertext" in status, false);
+});
+
+test("reports missing WowSuite credential fields without treating the route as unavailable", () => {
+  const disconnected = buildWowSuiteCredentialStatus("wowpay", null);
+  const partial = buildWowSuiteCredentialStatus("wowboost", {
+    platform: "wowsuite:wowboost",
+    base_url: "https://public-api.tryemanagecrm.com",
+    username: "merchant-account",
+  });
+
+  assert.deepEqual(disconnected, {
+    ok: true,
+    connected: false,
+    platform: "wowpay",
+    credential_platform: null,
+    base_url: null,
+    baseUrl: null,
+    username: null,
+    created_at: null,
+    updated_at: null,
+    missing: ["base_url", "username", "password"],
+  });
+  assert.equal(partial.connected, false);
+  assert.deepEqual(partial.missing, ["password"]);
+});
+
+test("validates WowSuite import ranges without accepting rollover or reversed dates", () => {
+  assert.deepEqual(normalizeWowSuiteImportDateRange("2026-07-19", "2026-07-31"), {
+    ok: true,
+    from: "2026-07-19",
+    to: "2026-07-31",
+  });
+  assert.deepEqual(normalizeWowSuiteImportDateRange("2026-07-32", "2026-07-31"), {
+    ok: false,
+    error: "from/to must be valid YYYY-MM-DD dates",
+  });
+  assert.deepEqual(normalizeWowSuiteImportDateRange("2026-08-01", "2026-07-31"), {
+    ok: false,
+    error: "from must be on or before to",
+  });
+});
 
 test("maps WowBoost ReferenceId to canonical commerce reference", () => {
   const reference = "66FE31EE-C521-432E-9822-0A07FF85230F";

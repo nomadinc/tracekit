@@ -347,6 +347,7 @@ import {
   WOWBOOST_PLATFORM_VALUES,
   buildWowBoostOrderNumberToOrderIdMap,
   buildWowBoostOrderDetailsReferenceBackfillDecision,
+  buildWowSuiteCredentialStatus,
   capWowBoostPermanentMissingOrderIds,
   classifyWowBoostOrderDetailsLookupFailure,
   extractWowBoostCommerceReferenceEvidence,
@@ -357,6 +358,7 @@ import {
   normalizeWowBoostCommerceReferenceExportRow,
   normalizeWowBoostOrderDetailsBackfillDateRange,
   normalizeWowBoostOrderDetailsPacingMs,
+  normalizeWowSuiteImportDateRange,
   normalizeWowBoostRuntimeMaxExportPages,
   parseWowBoostRetryAfterMs,
   parseWowBoostOrderDetailsBackfillCursor,
@@ -5138,10 +5140,7 @@ async function continueImportJob(env: Env, jobId: string, args: { resume?: boole
 
 async function getLatestCredential(env: Env, platform: string) {
   const supabase = getSupabase(env);
-  const keys =
-	  platform === "checkoutchamp"
-	    ? ["checkoutchamp"]
-	    : [coercePlatformKey(platform), platform];
+  const keys = credentialLookupKeys(platform);
 
   const { data, error } = await supabase
     .from("integrations_credentials")
@@ -5153,6 +5152,77 @@ async function getLatestCredential(env: Env, platform: string) {
 
   if (error) throw new Error(`${platform} creds read failed: ${error.message}`);
   return data as any | null;
+}
+
+function credentialLookupKeys(platform: string) {
+  const raw = String(platform ?? "").trim().toLowerCase();
+  const coerced = coercePlatformKey(raw);
+  const keys = [coerced, raw].filter(Boolean);
+
+  if (raw === "wowboost" || coerced === wowSuiteKey("wowboost")) {
+    keys.push("wowboost", wowSuiteKey("wowboost"), "wowsuite");
+  }
+
+  if (raw === "wowpay" || coerced === wowSuiteKey("wowpay")) {
+    keys.push("wowpay", wowSuiteKey("wowpay"));
+  }
+
+  return Array.from(new Set(keys));
+}
+
+async function getWowSuiteStatusCredential(env: Env, sub: WowSuiteSub) {
+  const supabase = getSupabase(env);
+  const platform = sub === "wowboost" ? "wowboost" : "wowpay";
+  const keys = credentialLookupKeys(platform);
+
+  const { data, error } = await supabase
+    .from("integrations_credentials")
+    .select("platform,base_url,username,password_ciphertext,created_at,updated_at")
+    .in("platform", keys)
+    .order("updated_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw new Error(`${platform} creds read failed: ${error.message}`);
+  return data as any | null;
+}
+
+async function getIntegrationSettings(env: Env, platform: string, defaults: { intervalMinutes: number; lookbackHours: number }) {
+  const supabase = getSupabase(env);
+  const now = new Date().toISOString();
+
+  const { data, error } = await supabase.from("integrations_settings").select("*").eq("platform", platform).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (data) return data as any;
+
+  const payload = {
+    platform,
+    auto_import_enabled: false,
+    auto_import_interval_minutes: defaults.intervalMinutes,
+    auto_import_lookback_hours: defaults.lookbackHours,
+    updated_at: now,
+  };
+  const { data: inserted, error: insertError } = await supabase
+    .from("integrations_settings")
+    .upsert(payload as any, { onConflict: "platform" })
+    .select("*")
+    .maybeSingle();
+  if (insertError) throw new Error(insertError.message);
+  return (inserted || payload) as any;
+}
+
+async function saveIntegrationSettings(env: Env, platform: string, body: any, defaults: { intervalMinutes: number; lookbackHours: number }) {
+  const supabase = getSupabase(env);
+  const patch = {
+    platform,
+    auto_import_enabled: Boolean(body.auto_import_enabled),
+    auto_import_interval_minutes: Math.max(15, Math.min(1440, Number(body.auto_import_interval_minutes ?? defaults.intervalMinutes) || defaults.intervalMinutes)),
+    auto_import_lookback_hours: Math.max(1, Math.min(168, Number(body.auto_import_lookback_hours ?? defaults.lookbackHours) || defaults.lookbackHours)),
+    updated_at: new Date().toISOString(),
+  };
+
+  const { error } = await supabase.from("integrations_settings").upsert(patch as any, { onConflict: "platform" });
+  if (error) throw new Error(error.message);
 }
 
 async function saveCredential(env: Env, args: { platform: string; baseUrl: string; username: string; password: string; metadata?: Record<string, any> }) {
@@ -15726,30 +15796,41 @@ if (path === "/v1/product-costs/rules/delete" && req.method === "POST") {
     });
   }
 
-  if (path === "/v1/integrations/wowboost/status" && req.method === "GET") {
-    const creds = await getLatestCredential(env, "wowboost");
+  if (
+    (path === "/v1/integrations/wowboost/status" || path === "/v1/integrations/wowpay/status") &&
+    req.method === "GET"
+  ) {
+    const sub: WowSuiteSub = path.includes("/wowpay/") ? "wowpay" : "wowboost";
+    const creds = await getWowSuiteStatusCredential(env, sub);
+    return json(buildWowSuiteCredentialStatus(sub, creds));
+  }
 
-    if (!creds) {
-      return json({
-        ok: true,
-        connected: false,
-        platform: "wowboost",
-        baseUrl: null,
-        username: null,
-        created_at: null,
-        updated_at: null,
-      });
-    }
-
-    return json({
-      ok: true,
-      connected: true,
-      platform: "wowboost",
-      baseUrl: creds.base_url ?? null,
-      username: creds.username ?? null,
-      created_at: creds.created_at ?? null,
-      updated_at: creds.updated_at ?? null,
+  if (
+    (path === "/v1/integrations/wowboost/settings" || path === "/v1/integrations/wowpay/settings") &&
+    req.method === "GET"
+  ) {
+    const sub: WowSuiteSub = path.includes("/wowpay/") ? "wowpay" : "wowboost";
+    const settingsPlatform = wowSuiteKey(sub);
+    const data = await getIntegrationSettings(env, settingsPlatform, {
+      intervalMinutes: 60,
+      lookbackHours: 2,
     });
+
+    return json({ ok: true, platform: settingsPlatform, ...(data || {}) });
+  }
+
+  if (
+    (path === "/v1/integrations/wowboost/settings" || path === "/v1/integrations/wowpay/settings") &&
+    req.method === "POST"
+  ) {
+    const sub: WowSuiteSub = path.includes("/wowpay/") ? "wowpay" : "wowboost";
+    const body = await readJsonBody(req);
+    await saveIntegrationSettings(env, wowSuiteKey(sub), body, {
+      intervalMinutes: 60,
+      lookbackHours: 2,
+    });
+
+    return json({ ok: true, message: "Settings saved." });
   }
 
   // Temporary validation endpoint. Remove after WowBoost referenceId field validation is no longer needed.
@@ -16588,19 +16669,72 @@ if (path === "/v1/product-costs/rules/delete" && req.method === "POST") {
     }
   }
   
-  if (path === "/v1/integrations/wowpay/import-one-page" && req.method === "POST") {
+  if (
+    (
+      path === "/v1/integrations/wowpay/import-one-page" ||
+      path === "/v1/integrations/wowpay/import-orders" ||
+      path === "/v1/integrations/wowpay/run-now"
+	) &&
+    req.method === "POST"
+  ) {
 	  const body = await readJsonBody(req);
-	  const from = String(body.from ?? "").trim();
-	  const to = String(body.to ?? "").trim();
+    const range = normalizeWowSuiteImportDateRange(body.from, body.to);
 	  const page = Math.max(1, Number(body.page ?? 1));
 	  const pageSize = Math.max(1, Math.min(1000, Number(body.pageSize ?? 1000)));
+    const dryRun = Boolean(body.dry_run ?? body.dryRun);
 	
-	  if (!parseYmd(from) || !parseYmd(to)) {
-	    return json({ ok: false, error: "bad_request", message: "from/to must be YYYY-MM-DD" }, 400);
+	  if (!range.ok) {
+	    return json({ ok: false, error: "bad_request", message: range.error }, 400);
 	  }
+    const { from, to } = range;
+
+    const settingsPlatform = wowSuiteKey("wowpay");
+    const supabase = getSupabase(env);
+
+    if (path.endsWith("/run-now")) {
+      await supabase
+        .from("integrations_settings")
+        .update({ last_run_at: new Date().toISOString(), last_error: null, updated_at: new Date().toISOString() })
+        .eq("platform", settingsPlatform);
+    }
+
+    if (dryRun) {
+      return json({
+        ok: true,
+        platform: settingsPlatform,
+        from,
+        to,
+        page,
+        pageSize,
+        dry_run: true,
+        fetched: 0,
+        upserted: 0,
+        hasMore: false,
+        nextPage: null,
+        message: "Dry run validated the WowPay import request. No records were imported.",
+      });
+    }
 	
-	  const result = await runWowPayImportPage(env, { from, to, page, pageSize });
-	  return json({ ok: true, platform: wowSuiteKey("wowpay"), from, to, ...result });
+    try {
+	    const result = await runWowPayImportPage(env, { from, to, page, pageSize });
+
+      if (path.endsWith("/run-now")) {
+        await supabase
+          .from("integrations_settings")
+          .update({ last_success_at: new Date().toISOString(), last_error: null, updated_at: new Date().toISOString() })
+          .eq("platform", settingsPlatform);
+      }
+
+	    return json({ ok: true, platform: settingsPlatform, from, to, ...result });
+    } catch (e: any) {
+      if (path.endsWith("/run-now")) {
+        await supabase
+          .from("integrations_settings")
+          .update({ last_error: String(e?.message || e), updated_at: new Date().toISOString() })
+          .eq("platform", settingsPlatform);
+      }
+      throw e;
+    }
 	}
 
   if (path === "/v1/integrations/wowsuite/status" && req.method === "GET") {
@@ -16608,7 +16742,7 @@ if (path === "/v1/product-costs/rules/delete" && req.method === "POST") {
 
     const { data, error } = await supabase
       .from("integrations_credentials")
-      .select("platform,base_url,username,created_at,updated_at")
+      .select("platform,base_url,username,password_ciphertext,created_at,updated_at")
       .in("platform", [wowSuiteKey("wowboost"), wowSuiteKey("wowpay"), "wowboost", "wowpay", "wowsuite"]);
 
     if (error) throw new Error(error.message);
@@ -16622,22 +16756,8 @@ if (path === "/v1/product-costs/rules/delete" && req.method === "POST") {
       platform: "wowsuite",
       connected: Boolean(wowboost || wowpay),
       subs: {
-        wowboost: wowboost
-          ? {
-              connected: true,
-              baseUrl: wowboost.base_url ?? null,
-              username: wowboost.username ?? null,
-              updated_at: wowboost.updated_at ?? null,
-            }
-          : { connected: false },
-        wowpay: wowpay
-          ? {
-              connected: true,
-              baseUrl: wowpay.base_url ?? null,
-              username: wowpay.username ?? null,
-              updated_at: wowpay.updated_at ?? null,
-            }
-          : { connected: false },
+        wowboost: buildWowSuiteCredentialStatus("wowboost", wowboost),
+        wowpay: buildWowSuiteCredentialStatus("wowpay", wowpay),
       },
     });
   }
@@ -17802,15 +17922,18 @@ async function runWowBoostImportPage(
       const url = new URL(req.url);
       const path = url.pathname;
 
-      if (path === "/v1/integrations/wowboost/import-orders-async" && req.method === "POST") {
+      if (
+        (path === "/v1/integrations/wowboost/import-orders-async" || path === "/v1/integrations/wowboost/run-now") &&
+        req.method === "POST"
+      ) {
         const body = await readJsonBody(req);
-        const from = String(body.from ?? "").trim();
-        const to = String(body.to ?? "").trim();
+        const range = normalizeWowSuiteImportDateRange(body.from, body.to);
         const filter = String(body.filter ?? "all_sales").trim();
 
-        if (!parseYmd(from) || !parseYmd(to)) {
-          return json({ ok: false, error: "bad_request", message: "from/to must be YYYY-MM-DD" }, 400);
+        if (!range.ok) {
+          return json({ ok: false, error: "bad_request", message: range.error }, 400);
         }
+        const { from, to } = range;
 
         if (!env.wowboost_imports) {
           return json({
@@ -17820,8 +17943,18 @@ async function runWowBoostImportPage(
           }, 500);
         }
 
+        const supabase = getSupabase(env);
+        const settingsPlatform = wowSuiteKey("wowboost");
+
+        if (path.endsWith("/run-now")) {
+          await supabase
+            .from("integrations_settings")
+            .update({ last_run_at: new Date().toISOString(), last_error: null, updated_at: new Date().toISOString() })
+            .eq("platform", settingsPlatform);
+        }
+
         const job = await createImportJob(env, {
-          platform: wowSuiteKey("wowboost"),
+          platform: settingsPlatform,
           module: "wowboost",
           from,
           to,
@@ -17859,7 +17992,7 @@ async function runWowBoostImportPage(
       full_progress: requestFullProgress(body.full_progress ?? body.fullProgress),
     }),
     status: updated?.status ?? "queued",
-    platform: wowSuiteKey("wowboost"),
+    platform: settingsPlatform,
     module: "wowboost",
     from,
     to,

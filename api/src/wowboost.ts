@@ -40,6 +40,74 @@ export const WOWBOOST_RUNTIME_DEFAULT_MAX_EXPORT_PAGES = 150;
 export const WOWBOOST_RUNTIME_MAX_EXPORT_PAGES = 1000;
 export const WOWBOOST_RUNTIME_PAGE_FINGERPRINT_HISTORY_LIMIT = 8;
 
+export type WowSuiteCredentialStatusRow = {
+  platform?: string | null;
+  base_url?: string | null;
+  username?: string | null;
+  password_ciphertext?: string | null;
+  created_at?: string | null;
+  updated_at?: string | null;
+};
+
+export function buildWowSuiteCredentialStatus(
+  platform: "wowboost" | "wowpay",
+  credential: WowSuiteCredentialStatusRow | null | undefined,
+) {
+  const baseUrl = credential?.base_url ? String(credential.base_url).trim() || null : null;
+  const username = credential?.username ? String(credential.username).trim() || null : null;
+  const hasPassword = Boolean(String(credential?.password_ciphertext ?? "").trim());
+  const missing: string[] = [];
+
+  if (!baseUrl) missing.push("base_url");
+  if (!username) missing.push("username");
+  if (!hasPassword) missing.push("password");
+
+  return {
+    ok: true,
+    connected: Boolean(credential) && missing.length === 0,
+    platform,
+    credential_platform: credential?.platform ?? null,
+    base_url: baseUrl,
+    baseUrl,
+    username,
+    created_at: credential?.created_at ?? null,
+    updated_at: credential?.updated_at ?? null,
+    missing,
+  };
+}
+
+export function normalizeWowSuiteImportDateRange(fromValue: unknown, toValue: unknown) {
+  const from = String(fromValue ?? "").trim();
+  const to = String(toValue ?? "").trim();
+
+  const parseExactDate = (value: string) => {
+    const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+    if (!match) return null;
+
+    const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+    const canonical = [
+      date.getUTCFullYear(),
+      String(date.getUTCMonth() + 1).padStart(2, "0"),
+      String(date.getUTCDate()).padStart(2, "0"),
+    ].join("-");
+
+    return canonical === value ? date : null;
+  };
+
+  const fromDate = parseExactDate(from);
+  const toDate = parseExactDate(to);
+
+  if (!fromDate || !toDate) {
+    return { ok: false as const, error: "from/to must be valid YYYY-MM-DD dates" };
+  }
+
+  if (fromDate.getTime() > toDate.getTime()) {
+    return { ok: false as const, error: "from must be on or before to" };
+  }
+
+  return { ok: true as const, from, to };
+}
+
 export type WowBoostCommerceReferenceBackfillRow = {
   platform?: string | null;
   platform_order_id?: string | null;
