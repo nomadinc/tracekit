@@ -399,12 +399,16 @@ function ExecutiveSummary({
               value={summary ? positiveMoney(refundAmount(summary)) : "—"}
               subtitle="Refunded revenue"
               tone="warning"
+              href={`/dashboard/refunds?${dateRangeQuery(range)}`}
+              title="Open Refund Analysis"
             />
             <SummaryMetric
               label="Chargebacks"
               value={summary ? positiveMoney(chargebackAmount(summary)) : "—"}
               subtitle="Disputed revenue"
               tone="warning"
+              href={`/dashboard/chargebacks?${dateRangeQuery(range)}`}
+              title="Open Chargeback Analysis"
             />
             <SummaryMetric
               label="Net Revenue"

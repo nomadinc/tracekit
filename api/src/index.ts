@@ -17,6 +17,7 @@ import {
 import {
   aggregateDailyProfitConversions,
   aggregateProfitConversions,
+  buildFinancialIssueAnalysis,
   conversionMatchesDailyKey,
   conversionMatchesOrderKey,
   profitDailyKeyFromConversion,
@@ -26,6 +27,9 @@ import {
   sumProfitTotals,
   toProfitDailyRollupRow,
   toProfitOrderRollupRow,
+  type FinancialIssueKind,
+  type FinancialIssueLedgerRow,
+  type FinancialIssueOrderRow,
   type ProfitConversionRow,
   type ProfitDailyKey,
   type ProfitOrderKey,
@@ -2060,6 +2064,14 @@ const PROFIT_CONVERSION_SELECT =
 const PROFIT_ROLLUP_SELECT =
   "workspace_id,day,platform,event_source,connector_id,currency,gross_revenue,refunds,chargebacks,chargeback_fees,processor_fees,bank_fees,shipping_cost,tax,cogs,affiliate_payout,ad_spend,reversals,adjustments,net_revenue,total_costs,net_profit,profit_margin_pct,order_count,event_count";
 
+const FINANCIAL_ISSUE_ANALYSIS_CONVERSION_SELECT =
+  "workspace_id,order_id,connector_id,currency,platform,event_source,ledger_type,amount,occurred_at,transaction_id,status";
+
+const FINANCIAL_ISSUE_ANALYSIS_PLATFORM_ORDER_SELECT =
+  "platform_order_id,order_id,platform,status,status_norm,gross_amount,receipt_total,currency,order_ts,customer_email,customer_email_normalized,email,affiliate_id,source_id,sub1,sub2,sub3,sub4,sub5,raw_json";
+
+const FINANCIAL_ISSUE_ANALYSIS_LEDGER_SCAN_LIMIT = 10_000;
+
 function parseDateFilter(value: string | null) {
   if (!value) return null;
   const date = parseYmd(value);
@@ -2314,6 +2326,107 @@ async function selectProfitDailyRollups(
   }
 
   return rows;
+}
+
+async function selectFinancialIssueLedgerRows(
+  supabase: SupabaseClientAny,
+  filters: {
+    workspace_id?: string | null;
+    from?: string | null;
+    to?: string | null;
+    currency?: string | null;
+    kind: FinancialIssueKind;
+  },
+) {
+  const rows: FinancialIssueLedgerRow[] = [];
+  const pageSize = 1000;
+  const workspaceId = String(filters.workspace_id || "default").trim() || "default";
+  const from = parseDateFilter(filters.from || null);
+  const to = parseDateFilter(filters.to || null);
+  let scannedAll = true;
+
+  for (let offset = 0; offset < FINANCIAL_ISSUE_ANALYSIS_LEDGER_SCAN_LIMIT; offset += pageSize) {
+    let query = supabase
+      .from("conversions")
+      .select(FINANCIAL_ISSUE_ANALYSIS_CONVERSION_SELECT)
+      .eq("workspace_id", workspaceId)
+      .in("ledger_type", ["sale", filters.kind])
+      .order("occurred_at", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+
+    if (from) query = query.gte("occurred_at", `${from}T00:00:00.000Z`);
+    if (to) query = query.lt("occurred_at", nextDayStartIso(to));
+    if (filters.currency) query = query.eq("currency", String(filters.currency).toUpperCase());
+
+    const { data, error } = await query;
+    if (error) throw new Error(`Financial issue ledger read failed: ${error.message}`);
+
+    rows.push(...((data || []) as FinancialIssueLedgerRow[]));
+    if (!data || data.length < pageSize) return { rows, scanned_all: scannedAll };
+    if (rows.length >= FINANCIAL_ISSUE_ANALYSIS_LEDGER_SCAN_LIMIT) scannedAll = false;
+  }
+
+  return { rows, scanned_all: false };
+}
+
+async function selectFinancialIssuePlatformOrders(
+  supabase: SupabaseClientAny,
+  workspaceId: string,
+  orderIds: string[],
+) {
+  const rows: FinancialIssueOrderRow[] = [];
+  const uniqueIds = Array.from(new Set(orderIds.map((id) => String(id || "").trim()).filter(Boolean)));
+  const chunkSize = 500;
+
+  for (let i = 0; i < uniqueIds.length; i += chunkSize) {
+    const chunk = uniqueIds.slice(i, i + chunkSize);
+    if (!chunk.length) continue;
+    const { data, error } = await supabase
+      .from("platform_orders")
+      .select(FINANCIAL_ISSUE_ANALYSIS_PLATFORM_ORDER_SELECT)
+      .eq("workspace_id", workspaceId)
+      .in("order_id", chunk)
+      .order("order_ts", { ascending: false });
+
+    if (error) throw new Error(`Financial issue platform order read failed: ${error.message}`);
+    rows.push(...((data || []) as FinancialIssueOrderRow[]));
+  }
+
+  return rows;
+}
+
+async function readFinancialIssueAnalysis(env: Env, url: URL, kind: FinancialIssueKind) {
+  const supabase = getSupabase(env);
+  const workspaceId = String(url.searchParams.get("workspace_id") || "default").trim() || "default";
+  const from = url.searchParams.get("from");
+  const to = url.searchParams.get("to");
+  const ledger = await selectFinancialIssueLedgerRows(supabase, {
+    workspace_id: workspaceId,
+    from,
+    to,
+    currency: url.searchParams.get("currency"),
+    kind,
+  });
+  const orderIds = ledger.rows.map((row) => String(row.order_id || "").trim()).filter(Boolean);
+  const platformOrders = await selectFinancialIssuePlatformOrders(supabase, workspaceId, orderIds);
+
+  return buildFinancialIssueAnalysis(ledger.rows, platformOrders, {
+    kind,
+    from,
+    to,
+    sort: url.searchParams.get("sort"),
+    direction: url.searchParams.get("direction") || url.searchParams.get("dir"),
+    page: Number(url.searchParams.get("page") || 1),
+    limit: Number(url.searchParams.get("limit") || 25),
+    affiliate_id: url.searchParams.get("affiliate_id"),
+    source_id: url.searchParams.get("source_id"),
+    campaign_id: url.searchParams.get("campaign_id"),
+    brand_id: url.searchParams.get("brand_id"),
+    offer_id: url.searchParams.get("offer_id"),
+    product_id: url.searchParams.get("product_id"),
+    attribution_status: url.searchParams.get("attribution_status"),
+    scanned_all: ledger.scanned_all,
+  });
 }
 
 function summarizeProfitRollups(rows: any[]) {
@@ -13557,6 +13670,34 @@ async function router(req: Request, env: Env): Promise<Response> {
         ok: false,
         error: "profit_summary_failed",
         message: e?.message || String(e),
+      }, 500);
+    }
+  }
+
+  if ((path === "/v1/refunds/analysis" || path === "/v1/chargebacks/analysis") && req.method === "GET") {
+    try {
+      const kind: FinancialIssueKind = path === "/v1/refunds/analysis" ? "refund" : "chargeback";
+      const analysis = await readFinancialIssueAnalysis(env, url, kind);
+      return json({
+        ok: true,
+        kind,
+        ...analysis,
+      });
+    } catch (e: any) {
+      return json({
+        ok: false,
+        error: "financial_issue_analysis_failed",
+        message: e?.message || String(e),
+        summary: null,
+        trend: [],
+        sources: [],
+        affected_orders: [],
+        pagination: { page: 1, limit: 25, total: 0, total_pages: 1 },
+        data_quality: {
+          attributed_order_coverage: null,
+          missing_denominators: [],
+          warnings: [],
+        },
       }, 500);
     }
   }
