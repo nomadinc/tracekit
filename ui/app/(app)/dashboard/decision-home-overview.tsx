@@ -60,6 +60,14 @@ function positiveMoney(value: unknown) {
   return formatMoney(Math.abs(num(value)));
 }
 
+function refundAmount(summary: ProfitSummaryResponse | null) {
+  return Math.abs(num(summary?.refunds));
+}
+
+function chargebackAmount(summary: ProfitSummaryResponse | null) {
+  return Math.abs(num(summary?.chargebacks));
+}
+
 function sumFields(summary: ProfitSummaryResponse | null, fields: string[]) {
   if (!summary) return 0;
   const record = summary as Record<string, unknown>;
@@ -256,10 +264,20 @@ function buildExecutiveSummarySentence(
 ) {
   if (!summary) return "Profit data is unavailable for the selected period.";
 
-  const revenueLeakage = Math.abs(num(summary.refunds)) + Math.abs(num(summary.chargebacks));
+  const refunds = refundAmount(summary);
+  const chargebacks = chargebackAmount(summary);
+  const leakageSentence =
+    refunds > 0 && chargebacks > 0
+      ? `Refunds reduced gross revenue by ${positiveMoney(refunds)} and chargebacks reduced it by another ${positiveMoney(chargebacks)}.`
+      : refunds > 0
+        ? `Refunds reduced gross revenue by ${positiveMoney(refunds)}.`
+        : chargebacks > 0
+          ? `Chargebacks reduced gross revenue by ${positiveMoney(chargebacks)}.`
+          : "No refunds or chargebacks were recorded.";
+
   const parts = [
     `Net profit was ${formatMoney(summary.net_profit)} for the selected period.`,
-    `Refunds and chargebacks reduced gross revenue by ${positiveMoney(revenueLeakage)}, while ${positiveMoney(operatingCostTotal)} in mapped operating costs were recorded.`,
+    `${leakageSentence} A further ${positiveMoney(operatingCostTotal)} in mapped operating costs was recorded.`,
   ];
 
   if (missingInputs.length) {
@@ -275,13 +293,19 @@ function SummaryMetric({
   subtitle,
   href,
   title,
+  tone = "default",
 }: {
   label: string;
   value: string;
   subtitle: string;
   href?: string;
   title?: string;
+  tone?: "default" | "warning";
 }) {
+  const className =
+    tone === "warning"
+      ? "rounded-xl bg-amber-50 p-3 dark:bg-amber-950/20"
+      : "rounded-xl bg-slate-50 p-3 dark:bg-slate-900/70";
   const content = (
     <>
       <div className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</div>
@@ -291,14 +315,14 @@ function SummaryMetric({
   );
 
   if (!href) {
-    return <div className="rounded-xl bg-slate-50 p-3 dark:bg-slate-900/70">{content}</div>;
+    return <div className={className}>{content}</div>;
   }
 
   return (
     <Link
       href={href}
       title={title}
-      className="block rounded-xl bg-slate-50 p-3 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:bg-slate-900/70 dark:hover:bg-slate-900"
+      className={`block transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:hover:bg-slate-900 ${className}`}
     >
       {content}
     </Link>
@@ -361,13 +385,25 @@ function ExecutiveSummary({
         </div>
 
         <div className="space-y-3">
-          <div className="grid gap-3 sm:grid-cols-2 2xl:grid-cols-3">
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             <SummaryMetric
               label="Gross Revenue"
               value={summary ? formatMoney(summary.gross_revenue) : "—"}
               subtitle="Recognized revenue"
               href={dashboardDrilldown(range, "revenue-breakdown")}
               title="Open Revenue Breakdown"
+            />
+            <SummaryMetric
+              label="Refunds"
+              value={summary ? positiveMoney(refundAmount(summary)) : "—"}
+              subtitle="Refunded revenue"
+              tone="warning"
+            />
+            <SummaryMetric
+              label="Chargebacks"
+              value={summary ? positiveMoney(chargebackAmount(summary)) : "—"}
+              subtitle="Disputed revenue"
+              tone="warning"
             />
             <SummaryMetric
               label="Net Revenue"
@@ -454,10 +490,10 @@ function ProfitWaterfall({
   }
 
   const grossRevenue = num(summary.gross_revenue);
-  const refundAmount = Math.abs(num(summary.refunds));
-  const chargebackAmount = Math.abs(num(summary.chargebacks));
+  const refunds = refundAmount(summary);
+  const chargebacks = chargebackAmount(summary);
   const netProfit = num(summary.net_profit);
-  const bridgeOperatingImpact = grossRevenue - refundAmount - chargebackAmount - netProfit;
+  const bridgeOperatingImpact = grossRevenue - refunds - chargebacks - netProfit;
   const bridgeOperatingCosts = Math.abs(bridgeOperatingImpact);
   const bridgeUsesNetAdjustments = Math.abs(bridgeOperatingCosts - operatingCostModel.operatingCostTotal) > 0.005;
 
@@ -475,16 +511,16 @@ function ProfitWaterfall({
       key: "refunds",
       label: "Refunds",
       description: "Refund ledger events reduce gross revenue",
-      amount: refundAmount,
-      runningTotal: runningTotal -= refundAmount,
+      amount: refunds,
+      runningTotal: runningTotal -= refunds,
       kind: "deduction",
     },
     {
       key: "chargebacks",
       label: "Chargebacks",
       description: "Chargeback ledger events reduce gross revenue",
-      amount: chargebackAmount,
-      runningTotal: runningTotal -= chargebackAmount,
+      amount: chargebacks,
+      runningTotal: runningTotal -= chargebacks,
       kind: "deduction",
     },
     {
