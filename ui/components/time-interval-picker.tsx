@@ -48,6 +48,14 @@ function daysInclusive(range: DateRange) {
   return Math.floor((b - a) / 86400000) + 1;
 }
 
+function sameDayRange(a: DateRange, b: DateRange) {
+  if (!a.from || !a.to || !b.from || !b.to) return false;
+  return (
+    startOfDay(a.from).getTime() === startOfDay(b.from).getTime() &&
+    startOfDay(a.to).getTime() === startOfDay(b.to).getTime()
+  );
+}
+
 export function TimeIntervalPicker({
   value,
   onChange,
@@ -75,7 +83,7 @@ export function TimeIntervalPicker({
   React.useEffect(() => {
     setFromStr(value.from ? toDateInputValue(value.from) : "");
     setToStr(value.to ? toDateInputValue(value.to) : "");
-  }, [value.from?.getTime(), value.to?.getTime()]);
+  }, [value.from, value.to]);
 
   const presets = [
     {
@@ -207,7 +215,7 @@ export function TimeIntervalPicker({
       <button
         ref={buttonRef}
         type="button"
-        className="max-w-full border rounded-md px-3 py-2 text-sm bg-white hover:bg-gray-50"
+        className="max-w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:border-white/10 dark:bg-ink/80 dark:text-slate-100 dark:hover:bg-slate-900"
         onClick={() => setOpen((v) => !v)}
       >
         {summary}
@@ -216,59 +224,69 @@ export function TimeIntervalPicker({
       {open && (
         <div
           className={[
-            "absolute z-20 mt-2 rounded-md border bg-white shadow-lg p-3 space-y-3",
+            "absolute z-20 mt-2 rounded-md border border-slate-200 bg-white p-3 text-slate-900 shadow-lg shadow-slate-900/10 dark:border-white/10 dark:bg-ink dark:text-slate-100 dark:shadow-black/40",
             // clamp width to viewport, but never too tiny
-            "w-[min(360px,calc(100vw-24px))] min-w-[260px]",
+            "w-[min(360px,calc(100vw-24px))] min-w-[260px] space-y-3",
             align === "right" ? "right-0" : "left-0",
           ].join(" ")}
         >
           {/* Presets */}
           <div>
-            <div className="text-xs font-semibold text-gray-500 mb-2">
+            <div className="mb-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
               PRESETS
             </div>
             <div className="grid grid-cols-2 gap-2">
-              {presets.map((p) => (
-                <button
-                  key={p.label}
-                  type="button"
-                  className="text-left px-2 py-2 rounded border hover:bg-gray-50 text-sm"
-                  onClick={() => {
-                    const next = p.get();
-                    onChange(next);
-                    setFromStr(next.from ? toDateInputValue(next.from) : "");
-                    setToStr(next.to ? toDateInputValue(next.to) : "");
-                    close();
-                  }}
-                >
-                  {p.label}
-                </button>
-              ))}
+              {presets.map((p) => {
+                const presetRange = p.get();
+                const selected = sameDayRange(value, presetRange);
+                return (
+                  <button
+                    key={p.label}
+                    type="button"
+                    aria-pressed={selected}
+                    className={[
+                      "rounded border px-2 py-2 text-left text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:opacity-60",
+                      selected
+                        ? "border-teal-500 bg-teal-50 text-teal-800 dark:border-teal-400 dark:bg-teal-400/10 dark:text-teal-200"
+                        : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:bg-slate-950/60 dark:text-slate-200 dark:hover:bg-slate-900",
+                    ].join(" ")}
+                    onClick={() => {
+                      const next = presetRange;
+                      onChange(next);
+                      setFromStr(next.from ? toDateInputValue(next.from) : "");
+                      setToStr(next.to ? toDateInputValue(next.to) : "");
+                      close();
+                    }}
+                  >
+                    {p.label}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
           {/* Custom range */}
-          <div className="border-t pt-3">
-            <div className="text-xs font-semibold text-gray-500 mb-2">
+          <div className="border-t border-slate-200 pt-3 dark:border-white/10">
+            <div className="mb-2 text-xs font-semibold text-slate-500 dark:text-slate-400">
               CUSTOM RANGE
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              <label className="text-xs text-gray-600">
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
                 From
                 <input
                   type="date"
-                  className="mt-1 w-full border rounded-md px-2 py-2 text-sm"
+                  className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-sm text-slate-900 [color-scheme:light] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 dark:border-white/10 dark:bg-slate-950 dark:text-slate-100 dark:[color-scheme:dark] dark:placeholder:text-slate-500 dark:disabled:bg-slate-900 dark:disabled:text-slate-500"
                   value={fromStr}
                   onChange={(e) => setFromStr(e.target.value)}
                 />
               </label>
 
-              <label className="text-xs text-gray-600">
+              <label className="text-xs font-medium text-slate-600 dark:text-slate-300">
                 To
                 <input
                   type="date"
-                  className="mt-1 w-full border rounded-md px-2 py-2 text-sm"
+                  className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-sm text-slate-900 [color-scheme:light] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 dark:border-white/10 dark:bg-slate-950 dark:text-slate-100 dark:[color-scheme:dark] dark:placeholder:text-slate-500 dark:disabled:bg-slate-900 dark:disabled:text-slate-500"
                   value={toStr}
                   onChange={(e) => setToStr(e.target.value)}
                 />
@@ -278,7 +296,7 @@ export function TimeIntervalPicker({
             <div className="mt-3 flex items-center justify-between">
               <button
                 type="button"
-                className="text-sm px-3 py-2 rounded-md border hover:bg-gray-50"
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:border-white/10 dark:text-slate-200 dark:hover:bg-slate-900"
                 onClick={() => {
                   setFromStr("");
                   setToStr("");
@@ -292,14 +310,14 @@ export function TimeIntervalPicker({
               <div className="space-x-2">
                 <button
                   type="button"
-                  className="text-sm px-3 py-2 rounded-md border hover:bg-gray-50"
+                  className="rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:border-white/10 dark:text-slate-200 dark:hover:bg-slate-900"
                   onClick={close}
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  className="text-sm px-3 py-2 rounded-md border bg-black text-white hover:bg-black/90 disabled:opacity-50"
+                  className="rounded-md border border-teal-700 bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300 disabled:text-slate-600 disabled:opacity-80 dark:border-teal-500 dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400 dark:disabled:border-slate-700 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
                   onClick={applyInputs}
                   disabled={!fromStr && !toStr}
                 >

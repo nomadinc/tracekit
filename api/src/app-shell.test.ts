@@ -144,6 +144,29 @@ test("decision home links to dedicated refund and chargeback analysis routes", (
   assert.match(worker, /path === "\/v1\/chargebacks\/analysis"/);
 });
 
+test("shared time interval picker keeps labels and dark-mode controls readable", () => {
+  const picker = readRepoFile("ui/components/time-interval-picker.tsx");
+
+  for (const label of ["Today", "Yesterday", "Last 7 Days", "Month to Date", "PRESETS", "CUSTOM RANGE", "From", "To", "Clear", "Cancel", "Apply"]) {
+    assert.match(picker, new RegExp(label));
+  }
+
+  assert.match(picker, /sameDayRange/);
+  assert.match(picker, /aria-pressed=\{selected\}/);
+  assert.match(picker, /dark:bg-ink/);
+  assert.match(picker, /dark:bg-slate-950/);
+  assert.match(picker, /dark:border-white\/10/);
+  assert.match(picker, /dark:text-slate-100/);
+  assert.match(picker, /dark:text-slate-200/);
+  assert.match(picker, /dark:text-slate-300/);
+  assert.match(picker, /focus:ring-2 focus:ring-teal-500/);
+  assert.match(picker, /dark:\[color-scheme:dark\]/);
+  assert.match(picker, /setFromStr\(e\.target\.value\)/);
+  assert.match(picker, /setToStr\(e\.target\.value\)/);
+  assert.doesNotMatch(picker, /className="(?:[^"]* )?text-left px-2 py-2 rounded border hover:bg-gray-50 text-sm"/);
+  assert.doesNotMatch(picker, /className="(?:[^"]* )?text-sm px-3 py-2 rounded-md border hover:bg-gray-50"/);
+});
+
 test("investigation drawer primitives are installed in the app shell", () => {
   const appShell = readRepoFile("ui/components/layout/app-shell.tsx");
   const provider = readRepoFile("ui/components/investigation/investigation-provider.tsx");
