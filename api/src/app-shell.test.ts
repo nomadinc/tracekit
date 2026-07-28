@@ -142,6 +142,12 @@ test("decision home links to dedicated refund and chargeback analysis routes", (
   assert.doesNotMatch(analysisClient, /LineChart|TrendChart|DetailDrawer|SORT_OPTIONS|campaign_id|source_id|attribution_status/);
   assert.match(worker, /path === "\/v1\/refunds\/analysis"/);
   assert.match(worker, /path === "\/v1\/chargebacks\/analysis"/);
+  assert.match(worker, /FINANCIAL_ISSUE_PLATFORM_FALLBACK_PLATFORMS = \["wowboost", "wowsuite:wowboost", "wowsuite"\]/);
+  assert.match(worker, /selectFinancialIssuePlatformRowsByStatus/);
+  assert.match(worker, /selectFinancialIssuePlatformRowsInOrderRange/);
+  assert.match(worker, /financialIssueLedgerRowFromPlatformOrder/);
+  assert.match(worker, /existingLedgerIssueOrderIds/);
+  assert.match(worker, /existing_ledger_issue/);
 });
 
 test("shared time interval picker keeps labels and dark-mode controls readable", () => {
