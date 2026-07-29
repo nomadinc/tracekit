@@ -192,6 +192,63 @@ test("financial import monitor route consumes the authenticated Worker endpoint 
   assert.throws(() => readRepoFile("ui/app/api/financial-import-monitor/route.ts"));
 });
 
+test("financial reconciliation center routes, UI, and migration are wired safely", () => {
+  const navigation = readRepoFile("ui/lib/app-navigation.ts");
+  const page = readRepoFile("ui/app/(app)/dashboard/financial-reconciliation/page.tsx");
+  const client = readRepoFile("ui/app/(app)/dashboard/financial-reconciliation/financial-reconciliation-client.tsx");
+  const lib = readRepoFile("ui/lib/financial-reconciliation.ts");
+  const worker = readRepoFile("api/src/index.ts");
+  const reconciliation = readRepoFile("api/src/financial-reconciliation.ts");
+  const migration = readRepoFile("supabase/migrations/036_financial_event_matches.sql");
+
+  assert.match(navigation, /href: "\/dashboard\/financial-reconciliation"/);
+  assert.match(page, /<FinancialReconciliationClient \/>/);
+  assert.match(client, /Financial Reconciliation Center/);
+  assert.match(client, /Manual controls are disabled/);
+  assert.match(client, /\/v1\/financial-reconciliation\/matches/);
+  assert.match(client, /financialReconciliationQuery/);
+  assert.match(lib, /FinancialReconciliationResponse/);
+  assert.match(lib, /\/v1\/financial-reconciliation/);
+  assert.match(worker, /FINANCIAL_RECONCILIATION_PATH/);
+  assert.match(worker, /FINANCIAL_RECONCILIATION_MATCHES_PATH/);
+  assert.match(worker, /getFinancialReconciliationReport\(getSupabase\(env\), params\)/);
+  assert.match(worker, /applyFinancialReconciliationDecision\(getSupabase\(env\), body\)/);
+  assert.match(worker, /publishReconciliationDomainEvent/);
+  assert.match(worker, /result\.decision\.created !== false/);
+  assert.match(reconciliation, /FINANCIAL_RECONCILIATION_PATH = "\/v1\/financial-reconciliation"/);
+  assert.match(reconciliation, /FINANCIAL_RECONCILIATION_MATCHES_PATH = "\/v1\/financial-reconciliation\/matches"/);
+  assert.match(reconciliation, /migration_036_missing/);
+  assert.match(reconciliation, /reconciliation_rpc_unavailable/);
+  assert.match(reconciliation, /match_rate_exact/);
+  assert.match(reconciliation, /seller_transaction_id/);
+  assert.match(reconciliation, /buyer_transaction_id/);
+  assert.match(reconciliation, /parent_transaction_id/);
+  assert.match(reconciliation, /payment_transaction_id/);
+  assert.match(reconciliation, /commerce_reference/);
+  assert.match(reconciliation, /refund_without_matching_sale/);
+  assert.match(reconciliation, /duplicate_rejected_before_ledger_insertion/);
+  assert.doesNotMatch(reconciliation, /\bfetch\s*\(/);
+  assert.throws(() => readRepoFile("ui/app/api/financial-reconciliation/route.ts"));
+
+  assert.match(migration, /financial_event_id_type text/);
+  assert.match(migration, /financial_reconciliation_metadata_is_safe/);
+  assert.match(migration, /with recursive metadata_walk/);
+  assert.match(migration, /format_type\(a\.atttypid, a\.atttypmod\)/);
+  assert.match(migration, /financial_event_id %s not null references public\.conversions\(id\)/);
+  assert.match(migration, /v_financial_event_id public\.conversions\.id%type/);
+  assert.match(migration, /financial_event_matches_active_uidx[\s\S]*workspace_id, financial_event_id[\s\S]*where is_active/);
+  assert.match(migration, /financial_event_matches_idempotency_uidx[\s\S]*workspace_id, idempotency_key/);
+  assert.match(migration, /request_fingerprint text not null/);
+  assert.match(migration, /pg_advisory_xact_lock\(hashtextextended/);
+  assert.match(migration, /idempotency_key_conflict/);
+  assert.match(migration, /financial_event_matches_immutable_guard/);
+  assert.match(migration, /revoke all on table public\.financial_event_matches from authenticated/);
+  assert.match(migration, /revoke all on function public\.apply_financial_event_match_decision\(jsonb\) from anon/);
+  assert.match(migration, /revoke all on function public\.apply_financial_event_match_decision\(jsonb\) from authenticated/);
+  assert.match(migration, /grant execute on function public\.apply_financial_event_match_decision\(jsonb\) to service_role/);
+  assert.doesNotMatch(migration.toLowerCase(), /drop\s+table|truncate|delete\s+from|update\s+public\.conversions/);
+});
+
 test("financial issue analysis migration adds indexes matching the bounded query predicates", () => {
   const migration = readRepoFile("supabase/migrations/034_financial_issue_analysis_indexes.sql");
   const explain = readRepoFile("docs/operations/refunds-analysis-explain.sql");

@@ -263,6 +263,14 @@ import {
   redactFinancialImportMonitorMessage,
 } from "./financial-import-monitor";
 import {
+  FINANCIAL_RECONCILIATION_MATCHES_PATH,
+  FINANCIAL_RECONCILIATION_PATH,
+  applyFinancialReconciliationDecision,
+  getFinancialReconciliationReport,
+  normalizeFinancialReconciliationParams,
+  redactFinancialReconciliationMessage,
+} from "./financial-reconciliation";
+import {
   matchGlobalSearchRoute,
   normalizeGlobalSearchParams,
   searchWorkspace,
@@ -14949,6 +14957,71 @@ async function router(req: Request, env: Env): Promise<Response> {
       message: `${FINANCIAL_IMPORT_MONITOR_PATH} requires GET.`,
       allowed_methods: ["GET"],
     }, 405, { Allow: "GET" });
+  }
+
+  if (path === FINANCIAL_RECONCILIATION_PATH && req.method === "GET") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const params = normalizeFinancialReconciliationParams(Object.fromEntries(url.searchParams.entries()));
+      return json(await getFinancialReconciliationReport(getSupabase(env), params));
+    } catch (e: any) {
+      return json({
+        ok: false,
+        error: "financial_reconciliation_failed",
+        message: redactFinancialReconciliationMessage(e?.message || String(e)),
+      }, e?.status || 500);
+    }
+  }
+
+  if (path === FINANCIAL_RECONCILIATION_PATH && req.method !== "GET") {
+    return json({
+      ok: false,
+      error: "method_not_allowed",
+      message: `${FINANCIAL_RECONCILIATION_PATH} requires GET.`,
+      allowed_methods: ["GET"],
+    }, 405, { Allow: "GET" });
+  }
+
+  if (path === FINANCIAL_RECONCILIATION_MATCHES_PATH && req.method === "POST") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const body = await readJsonBody(req);
+      const result = await applyFinancialReconciliationDecision(getSupabase(env), body);
+      if (result.ok && result.decision && result.decision.created !== false) {
+        const decision = result.decision;
+        await publishReconciliationDomainEvent(env, {
+          workspace_id: decision.workspace_id,
+          type: decision.resulting_state === "manual" ? "reconciliation.matched" : decision.resulting_state === "ignored" ? "reconciliation.resolved" : "reconciliation.unmatched",
+          case_id: `financial_event_match:${decision.financial_event_id}`,
+          entity_type: "financial_event",
+          entity_id: decision.financial_event_id,
+          category: "financial_event_match",
+          status: decision.resulting_state,
+          connector_id: "financial-reconciliation",
+          platform: null,
+          safe_summary: "Financial event reconciliation decision recorded.",
+          occurred_at: decision.decided_at || new Date().toISOString(),
+        });
+      }
+      return json(result, result.ok ? 200 : 409);
+    } catch (e: any) {
+      return json({
+        ok: false,
+        error: "financial_reconciliation_decision_failed",
+        message: redactFinancialReconciliationMessage(e?.message || String(e)),
+      }, e?.status || 500);
+    }
+  }
+
+  if (path === FINANCIAL_RECONCILIATION_MATCHES_PATH && req.method !== "POST") {
+    return json({
+      ok: false,
+      error: "method_not_allowed",
+      message: `${FINANCIAL_RECONCILIATION_MATCHES_PATH} requires POST.`,
+      allowed_methods: ["POST"],
+    }, 405, { Allow: "POST" });
   }
 
 	  if (path === "/v1/profit/rebuild-order" && req.method === "POST") {
