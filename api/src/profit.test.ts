@@ -195,6 +195,116 @@ test("keeps refund and chargeback analysis separate", () => {
   assert.equal(result.affiliates[0].amount, 100);
 });
 
+test("builds chargeback analysis from matched ledger events with affiliate and source rankings", () => {
+  const result = buildFinancialIssueAnalysis(
+    [
+      row("sale", 100, { order_id: "ord_a" }),
+      row("sale", 150, { order_id: "ord_b" }),
+      row("sale", 200, { order_id: "ord_c" }),
+      row("chargeback", -100, { order_id: "ord_a", occurred_at: "2026-07-05T12:00:00.000Z", transaction_id: "cb-a" } as any),
+      row("chargeback", -20, { order_id: "ord_c", occurred_at: "2026-07-06T12:00:00.000Z", transaction_id: "cb-c" } as any),
+    ],
+    [
+      { order_id: "ord_a", platform_order_id: "shopify:ord_a", affiliate_id: "aff-1", source_id: "src-1" },
+      { order_id: "ord_b", platform_order_id: "shopify:ord_b", affiliate_id: "aff-1", source_id: "src-1" },
+      { order_id: "ord_c", platform_order_id: "shopify:ord_c", sub1: "landing-1" },
+    ],
+    { kind: "chargeback" },
+  );
+
+  assert.equal(result.summary.amount, 120);
+  assert.equal(result.summary.event_count, 2);
+  assert.equal(result.summary.affected_orders, 2);
+  assert.equal(result.summary.total_orders, 3);
+  assert.equal(result.summary.rate_by_orders, 0.6667);
+  assert.equal(result.affiliates.length, 1);
+  assert.equal(result.affiliates[0].affiliate_id, "aff-1");
+  assert.equal(result.affiliates[0].event_count, 1);
+  assert.equal(result.affiliates[0].affected_orders, 1);
+  assert.equal(result.affiliates[0].total_orders, 2);
+  assert.equal(result.affiliates[0].rate_by_orders, 0.5);
+  assert.deepEqual(new Set(result.sources.map((source: any) => source.group_key)), new Set(["source_id:src-1", "sub1:landing-1"]));
+  assert.equal(result.sources.find((source: any) => source.group_key === "source_id:src-1")?.rate_by_orders, 0.5);
+  assert.equal(result.sources.find((source: any) => source.group_key === "sub1:landing-1")?.rate_by_orders, 1);
+  assert.equal(result.data_quality.diagnostics.included_records_missing_affiliate, 1);
+});
+
+test("chargeback analysis excludes missing platform orders and zero amounts", () => {
+  const result = buildFinancialIssueAnalysis(
+    [
+      row("chargeback", -50, { order_id: "missing-platform-order", transaction_id: "cb-missing" } as any),
+      row("chargeback", 0, { order_id: "zero-amount", transaction_id: "cb-zero" } as any),
+    ],
+    [{ order_id: "zero-amount", affiliate_id: "aff-1" }],
+    { kind: "chargeback" },
+  );
+
+  assert.equal(result.summary.amount, 0);
+  assert.equal(result.summary.event_count, 0);
+  assert.equal(result.affiliates.length, 0);
+  assert.equal(result.data_quality.diagnostics.unmatched_orders, 1);
+  assert.equal(result.data_quality.diagnostics.missing_amounts, 1);
+  assert.equal(result.data_quality.diagnostics.excluded_records_by_reason.unmatched_order, 1);
+  assert.equal(result.data_quality.diagnostics.excluded_records_by_reason.missing_amount, 1);
+});
+
+test("chargeback analysis preserves distinct same-order events and deduplicates repeated source events", () => {
+  const result = buildFinancialIssueAnalysis(
+    [
+      row("sale", 300, { order_id: "ord_multi" }),
+      row("chargeback", -100, { order_id: "ord_multi", transaction_id: "cb-1", occurred_at: "2026-07-05T12:00:00.000Z" } as any),
+      row("chargeback", -25, { order_id: "ord_multi", transaction_id: "cb-2", occurred_at: "2026-07-06T12:00:00.000Z" } as any),
+      row("chargeback", -25, { order_id: "ord_multi", transaction_id: "cb-2", occurred_at: "2026-07-06T12:00:00.000Z" } as any),
+    ],
+    [{ order_id: "ord_multi", affiliate_id: "aff-1", source_id: "src-1" }],
+    { kind: "chargeback" },
+  );
+
+  assert.equal(result.summary.amount, 125);
+  assert.equal(result.summary.event_count, 2);
+  assert.equal(result.summary.affected_orders, 1);
+  assert.equal(result.affiliates[0].event_count, 2);
+  assert.equal(result.sources[0].event_count, 2);
+  assert.equal(result.data_quality.diagnostics.duplicate_source_events, 1);
+  assert.equal(result.data_quality.diagnostics.excluded_records_by_reason.duplicate_source_event, 1);
+});
+
+test("chargeback affiliate filter scopes totals and denominator", () => {
+  const result = buildFinancialIssueAnalysis(
+    [
+      row("sale", 100, { order_id: "ord_a" }),
+      row("chargeback", -25, { order_id: "ord_a", transaction_id: "cb-a" } as any),
+      row("sale", 200, { order_id: "ord_b" }),
+      row("chargeback", -50, { order_id: "ord_b", transaction_id: "cb-b" } as any),
+    ],
+    [
+      { order_id: "ord_a", affiliate_id: "aff-1" },
+      { order_id: "ord_b", affiliate_id: "aff-2" },
+    ],
+    { kind: "chargeback", affiliate_id: "aff-2" },
+  );
+
+  assert.equal(result.summary.amount, 50);
+  assert.equal(result.summary.event_count, 1);
+  assert.equal(result.summary.affected_orders, 1);
+  assert.equal(result.summary.total_orders, 1);
+  assert.equal(result.affiliates.length, 1);
+  assert.equal(result.affiliates[0].affiliate_id, "aff-2");
+  assert.equal(result.data_quality.diagnostics.excluded_records_by_reason.affiliate_filter, 1);
+});
+
+test("chargeback affiliate without sale denominator reports a warning instead of a misleading rate", () => {
+  const result = buildFinancialIssueAnalysis(
+    [row("chargeback", -75, { order_id: "ord_no_sale", transaction_id: "cb-no-sale" } as any)],
+    [{ order_id: "ord_no_sale", affiliate_id: "aff-1" }],
+    { kind: "chargeback" },
+  );
+
+  assert.equal(result.summary.rate_by_orders, null);
+  assert.equal(result.affiliates[0].rate_by_orders, null);
+  assert.match(result.data_quality.warnings.join(" "), /no sale-order denominator/);
+});
+
 test("reports missing denominators instead of zero rates", () => {
   const result = buildFinancialIssueAnalysis(
     [row("refund", -15, { order_id: "ord_a" })],

@@ -135,6 +135,7 @@ export type FinancialIssueDiagnostics = {
   platform_issue_records_excluded_by_reason: Record<string, number>;
   included_records: number;
   included_records_missing_affiliate: number;
+  duplicate_source_events: number;
   excluded_records_by_reason: Record<string, number>;
   unmatched_orders: number;
   missing_amounts: number;
@@ -501,12 +502,14 @@ export function buildFinancialIssueAnalysis(
     platform_issue_records_excluded_by_reason: {},
     included_records: 0,
     included_records_missing_affiliate: 0,
+    duplicate_source_events: 0,
     excluded_records_by_reason: {},
     unmatched_orders: 0,
     missing_amounts: 0,
   };
   let issueAmount = 0;
   let issueEventCount = 0;
+  const issueEventKeys = new Set<string>();
 
   function affiliateForOrder(orderId: string) {
     const order = ordersById.get(orderId);
@@ -528,6 +531,84 @@ export function buildFinancialIssueAnalysis(
     return entry;
   }
 
+  const sourceRows = new Map<string, {
+    group_key: string;
+    group_type: string;
+    source_name: string;
+    source_id?: string | null;
+    sub_id_key?: string | null;
+    sub_id_value?: string | null;
+    total_orders: Set<string>;
+    affected_orders: Set<string>;
+    event_count: number;
+    amount: number;
+  }>();
+
+  function sourceForOrder(orderId: string) {
+    const order = ordersById.get(orderId);
+    const raw = order?.raw_json;
+    const sourceId = firstText(order?.source_id, rawText(raw, ["source_id", "sourceId", "Source ID", "SourceId"]));
+    if (sourceId) {
+      return {
+        group_key: `source_id:${sourceId}`,
+        group_type: "traffic_source",
+        source_name: `Source ${sourceId}`,
+        source_id: sourceId,
+      };
+    }
+
+    for (const key of ["sub1", "sub2", "sub3", "sub4", "sub5"] as const) {
+      const value = firstText(
+        order?.[key],
+        rawText(raw, [key, key.toUpperCase(), key.replace("sub", "Sub"), key.replace("sub", "S"), key.replace("sub", "s")]),
+      );
+      if (value) {
+        return {
+          group_key: `${key}:${value}`,
+          group_type: "sub_id",
+          source_name: `${key.toUpperCase()} ${value}`,
+          sub_id_key: key,
+          sub_id_value: value,
+        };
+      }
+    }
+
+    return null;
+  }
+
+  function sourceEntryFor(source: NonNullable<ReturnType<typeof sourceForOrder>>) {
+    const existing = sourceRows.get(source.group_key);
+    if (existing) return existing;
+    const entry = {
+      group_key: source.group_key,
+      group_type: source.group_type,
+      source_name: source.source_name,
+      source_id: source.source_id || null,
+      sub_id_key: source.sub_id_key || null,
+      sub_id_value: source.sub_id_value || null,
+      total_orders: new Set<string>(),
+      affected_orders: new Set<string>(),
+      event_count: 0,
+      amount: 0,
+    };
+    sourceRows.set(source.group_key, entry);
+    return entry;
+  }
+
+  function issueEventKey(row: FinancialIssueLedgerRow, orderId: string, ledgerType: string, amount: number) {
+    const transactionId = firstText(row.transaction_id);
+    const platform = firstText(row.platform, row.event_source, "unknown");
+    if (transactionId) return `${platform}\u001f${ledgerType}\u001f${transactionId}`;
+    return [
+      platform,
+      ledgerType,
+      orderId,
+      firstText(row.occurred_at),
+      Math.abs(amount).toFixed(2),
+      firstText(row.status),
+    ].join("\u001f");
+  }
+
   for (const row of ledgerRows) {
     const orderId = canonicalOrderId(row);
     const ledgerType = String(row.ledger_type || "");
@@ -547,6 +628,8 @@ export function buildFinancialIssueAnalysis(
     if (ledgerType === "sale" && amount > 0) {
       if (ordersById.has(orderId)) saleOrderIds.add(orderId);
       if (affiliateId) entryFor(affiliateId).total_orders.add(orderId);
+      const source = sourceForOrder(orderId);
+      if (source) sourceEntryFor(source).total_orders.add(orderId);
     }
 
     if (ledgerType === kind) {
@@ -560,6 +643,14 @@ export function buildFinancialIssueAnalysis(
         incrementReason(diagnostics.excluded_records_by_reason, "unmatched_order");
         continue;
       }
+      const sourceEventKey = issueEventKey(row, orderId, ledgerType, amount);
+      if (issueEventKeys.has(sourceEventKey)) {
+        diagnostics.duplicate_source_events += 1;
+        incrementReason(diagnostics.excluded_records_by_reason, "duplicate_source_event");
+        continue;
+      }
+      issueEventKeys.add(sourceEventKey);
+
       const absoluteAmount = Math.abs(amount);
       issueAmount += absoluteAmount;
       issueEventCount += 1;
@@ -574,10 +665,36 @@ export function buildFinancialIssueAnalysis(
         diagnostics.included_records_missing_affiliate += 1;
         incrementReason(diagnostics.excluded_records_by_reason, "missing_affiliate");
       }
+      const source = sourceForOrder(orderId);
+      if (source) {
+        const entry = sourceEntryFor(source);
+        entry.affected_orders.add(orderId);
+        entry.event_count += 1;
+        entry.amount += absoluteAmount;
+      }
     }
   }
 
-  const affiliates = Array.from(affiliateRows.values()).map((entry) => {
+  function rankedRows<T extends {
+    total_orders: Set<string>;
+    affected_orders: Set<string>;
+    event_count: number;
+    amount: number;
+  }>(entries: T[], mapEntry: (entry: T) => any) {
+    return entries
+      .filter((entry) => entry.event_count > 0 || entry.affected_orders.size > 0)
+      .map(mapEntry)
+      .sort((a, b) =>
+        b.affected_orders - a.affected_orders ||
+        Number(b.rate_by_orders ?? -1) - Number(a.rate_by_orders ?? -1) ||
+        b.event_count - a.event_count ||
+        Math.abs(b.amount) - Math.abs(a.amount) ||
+        String(a.group_key).localeCompare(String(b.group_key))
+      )
+      .slice(0, limit);
+  }
+
+  const sortedAffiliates = rankedRows(Array.from(affiliateRows.values()), (entry) => {
     const totalOrders = entry.total_orders.size;
     const affectedOrders = entry.affected_orders.size;
     const amountForSource = roundMoney(entry.amount);
@@ -602,15 +719,31 @@ export function buildFinancialIssueAnalysis(
     };
   });
 
-  const sortedAffiliates = affiliates
-    .sort((a, b) =>
-      b.affected_orders - a.affected_orders ||
-      Number(b.rate_by_orders ?? -1) - Number(a.rate_by_orders ?? -1) ||
-      b.event_count - a.event_count ||
-      Math.abs(b.amount) - Math.abs(a.amount) ||
-      String(a.affiliate_id).localeCompare(String(b.affiliate_id))
-    )
-    .slice(0, limit);
+  const sortedSources = rankedRows(Array.from(sourceRows.values()), (entry) => {
+    const totalOrders = entry.total_orders.size;
+    const affectedOrders = entry.affected_orders.size;
+    const amountForSource = roundMoney(entry.amount);
+    const rateByOrders = totalOrders > 0 ? affectedOrders / totalOrders : null;
+
+    if (affectedOrders > 0 && totalOrders <= 0) warnings.push(`${entry.source_name} has affected orders but no sale-order denominator.`);
+
+    return {
+      group_key: entry.group_key,
+      group_type: entry.group_type,
+      source_name: entry.source_name,
+      source_id: entry.source_id || null,
+      sub_id_key: entry.sub_id_key || null,
+      sub_id_value: entry.sub_id_value || null,
+      total_orders: totalOrders,
+      event_count: entry.event_count,
+      affected_orders: affectedOrders,
+      amount: amountForSource,
+      rate_by_orders: roundRatio(rateByOrders),
+      total_revenue: 0,
+      rate_by_revenue: null,
+      average_affected_order_value: null,
+    };
+  });
 
   if (!options.scanned_all) warnings.push("Analysis is based on a bounded ledger scan; narrow the date range for complete source ranking.");
   if (!platformOrders.length && ledgerRows.some((row) => canonicalOrderId(row))) {
@@ -631,7 +764,7 @@ export function buildFinancialIssueAnalysis(
       total_orders: saleOrderIds.size,
     },
     affiliates: sortedAffiliates,
-    sources: sortedAffiliates,
+    sources: sortedSources,
     trend: [],
     affected_orders: [],
     pagination: { page: 1, limit, total: sortedAffiliates.length, total_pages: 1 },
