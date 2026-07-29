@@ -450,3 +450,31 @@ test("refund analysis excludes unmatched ledger rows and reports diagnostics", (
   assert.equal(result.data_quality.diagnostics.excluded_records_by_reason.unmatched_order, 1);
   assert.equal(result.data_quality.diagnostics.excluded_records_by_reason.missing_amount, 1);
 });
+
+test("refund analysis includes matched receipt events without affiliate in source-of-truth totals", () => {
+  const result = buildFinancialIssueAnalysis(
+    [
+      row("sale", 100, { order_id: "attributed-order" }),
+      row("refund", -25, { order_id: "attributed-order" }),
+      row("sale", 120, { order_id: "unattributed-order" }),
+      row("refund", -40, { order_id: "unattributed-order" }),
+    ],
+    [
+      { order_id: "attributed-order", platform_order_id: "wowboost:attributed-order", affiliate_id: "aff-1" },
+      { order_id: "unattributed-order", platform_order_id: "wowboost:unattributed-order" },
+    ],
+    { kind: "refund" },
+  );
+
+  assert.equal(result.summary.amount, 65);
+  assert.equal(result.summary.event_count, 2);
+  assert.equal(result.summary.affected_orders, 2);
+  assert.equal(result.summary.total_orders, 2);
+  assert.equal(result.affiliates.length, 1);
+  assert.equal(result.affiliates[0].affiliate_id, "aff-1");
+  assert.equal(result.affiliates[0].amount, 25);
+  assert.equal(result.data_quality.diagnostics.included_records, 2);
+  assert.equal(result.data_quality.diagnostics.included_records_missing_affiliate, 1);
+  assert.equal(result.data_quality.diagnostics.excluded_records_by_reason.missing_affiliate, 1);
+  assert.match(result.data_quality.warnings.join(" "), /included in totals but omitted from affiliate\/source ranking/);
+});
