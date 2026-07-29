@@ -44,6 +44,8 @@ export type PaypalLedgerType =
   | "refund"
   | "chargeback"
   | "chargeback_fee"
+  | "chargeback_reversal"
+  | "chargeback_fee_reversal"
   | "processor_fee"
   | "reversal"
   | "adjustment";
@@ -1041,6 +1043,72 @@ function isMeaningfulPaypalStatus(status: string) {
   return Boolean(status && status !== "UNKNOWN");
 }
 
+function signedPaypalLedgerAmount(ledgerType: PaypalLedgerType, value: number) {
+  if (ledgerType === "refund" || ledgerType === "chargeback" || ledgerType === "chargeback_fee" || ledgerType === "processor_fee") {
+    return -Math.abs(value);
+  }
+  if (ledgerType === "chargeback_reversal" || ledgerType === "chargeback_fee_reversal" || ledgerType === "reversal") {
+    return Math.abs(value);
+  }
+  return ledgerType === "sale" ? Math.abs(value) : value;
+}
+
+function paypalArray(value: unknown): any[] {
+  if (Array.isArray(value)) return value;
+  if (value && typeof value === "object") return [value];
+  return [];
+}
+
+function paypalDisputeMoneyMovements(dispute: any): any[] {
+  return [
+    ...paypalArray(dispute?.money_movements),
+    ...paypalArray(dispute?.money_movement),
+    ...paypalArray(dispute?.fund_movements),
+    ...paypalArray(dispute?.fund_movement),
+    ...paypalArray(dispute?.seller_fund_movements),
+    ...paypalArray(dispute?.dispute_outcome?.money_movements),
+    ...paypalArray(dispute?.dispute_outcome?.fund_movements),
+  ];
+}
+
+function paypalDisputeMovementAmount(dispute: any, kind: "principal_recovery" | "fee_recovery") {
+  const direct = kind === "principal_recovery"
+    ? paypalMoney(
+      dispute?.principal_reversal_amount
+        ?? dispute?.principal_recovery_amount
+        ?? dispute?.seller_recovered_amount
+        ?? dispute?.seller_payout_amount
+        ?? dispute?.dispute_outcome?.seller_payout_amount
+        ?? dispute?.dispute_outcome?.payout_to_seller_amount,
+    )
+    : paypalMoney(
+      dispute?.chargeback_fee_reversal
+        ?? dispute?.dispute_fee_reversal
+        ?? dispute?.fee_reversal
+        ?? dispute?.reversed_transaction_fee
+        ?? dispute?.dispute_outcome?.chargeback_fee_reversal
+        ?? dispute?.dispute_outcome?.dispute_fee_reversal
+        ?? dispute?.dispute_outcome?.fee_reversal,
+    );
+  if (direct && direct.value !== 0) return direct;
+
+  for (const movement of paypalDisputeMoneyMovements(dispute)) {
+    const party = cleanText(movement?.affected_party ?? movement?.party).toLowerCase();
+    const type = cleanText(movement?.type ?? movement?.movement_type).toLowerCase();
+    const reason = cleanText(movement?.reason ?? movement?.movement_reason ?? movement?.fund_movement_reason).toLowerCase();
+    const sellerCredit = party === "seller" && type === "credit";
+    const principalRecovery = /dispute_settlement|payout_to_seller|seller_payout/.test(reason) && !/fee/.test(reason);
+    const feeRecovery = /reversed_transaction_fee|dispute_settlement_fee|fee_reversal|reversed_fee/.test(reason);
+    if (!sellerCredit) continue;
+    if (kind === "principal_recovery" && !principalRecovery) continue;
+    if (kind === "fee_recovery" && !feeRecovery) continue;
+    const money = paypalMoney(movement?.amount ?? movement?.gross_amount ?? movement?.money);
+    if (money && money.value !== 0) return money;
+  }
+
+  return null;
+}
+
 export function buildPaypalLedgerEventsFromRecord(record: any, args: {
   accountId?: string | null;
   connectorId?: string | null;
@@ -1069,7 +1137,7 @@ export function buildPaypalLedgerEventsFromRecord(record: any, args: {
         recordIdentity: stablePaypalRecordId(record, accountId),
       }),
       parentTransactionId: cleanText(info.paypal_reference_id ?? info.paypalReferenceId ?? info.reference_id) || null,
-      amount: amount.value,
+      amount: signedPaypalLedgerAmount(ledgerType, amount.value),
       currency: amount.currency,
       status,
       reason: paypalLedgerReason(record, ledgerType),
@@ -1093,7 +1161,7 @@ export function buildPaypalLedgerEventsFromRecord(record: any, args: {
         recordIdentity: stablePaypalRecordId(record, accountId),
       }),
       parentTransactionId: rawTransactionId || null,
-      amount: fee.value,
+      amount: signedPaypalLedgerAmount(feeLedgerType, fee.value),
       currency: fee.currency,
       status: feeLedgerType,
       reason: feeLedgerType === "chargeback_fee" ? "PayPal explicit chargeback/dispute fee" : "PayPal explicit processor fee",
@@ -1126,15 +1194,15 @@ export function buildPaypalLedgerEventsFromDispute(dispute: any, args: {
   const amount = paypalMoney(dispute?.dispute_amount ?? dispute?.disputed_amount ?? dispute?.amount);
   const fee = paypalMoney(dispute?.chargeback_fee ?? dispute?.dispute_fee);
   const text = lowerJoin(dispute?.status, dispute?.reason, dispute?.outcome, dispute?.dispute_life_cycle_stage);
+  const sellerFavorable = text.includes("seller") && (text.includes("favor") || text.includes("favour") || text.includes("won"));
+  const principalRecovery = paypalDisputeMovementAmount(dispute, "principal_recovery");
+  const feeRecovery = paypalDisputeMovementAmount(dispute, "fee_recovery");
   const occurredAt = cleanText(dispute?.update_time ?? dispute?.create_time) || new Date(0).toISOString();
   const orderId = cleanText(dispute?.invoice_id ?? dispute?.custom_field) || null;
   const events: PaypalLedgerEvent[] = [];
 
-  if (amount && amount.value !== 0) {
-    const ledgerType: PaypalLedgerType =
-      text.includes("seller") && (text.includes("favor") || text.includes("favour") || text.includes("won"))
-        ? "reversal"
-        : "chargeback";
+  if (!sellerFavorable && amount && amount.value !== 0) {
+    const ledgerType: PaypalLedgerType = "chargeback";
 
     events.push({
       ledgerType,
@@ -1152,15 +1220,52 @@ export function buildPaypalLedgerEventsFromDispute(dispute: any, args: {
     });
   }
 
-  if (fee && fee.value !== 0) {
+  if (principalRecovery) {
     events.push({
-      ledgerType: "chargeback_fee",
-      transactionId: `paypal:${normalizeIdPart(args.accountId)}:${disputeId}:chargeback_fee`,
+      ledgerType: "chargeback_reversal",
+      transactionId: `paypal:${normalizeIdPart(args.accountId)}:${disputeId}:chargeback_reversal`,
+      parentTransactionId: cleanText(dispute?.disputed_transaction_id) || null,
+      amount: principalRecovery.value,
+      currency: principalRecovery.currency,
+      status: cleanText(dispute?.status) || "chargeback_reversal",
+      reason: "PayPal explicit dispute recovery",
+      occurredAt,
+      orderId,
+      connectorId: args.connectorId,
+      accountId: args.accountId,
+      raw: dispute,
+    });
+  }
+
+  if (!sellerFavorable && fee && fee.value !== 0) {
+    const feeLedgerType: PaypalLedgerType = "chargeback_fee";
+    events.push({
+      ledgerType: feeLedgerType,
+      transactionId: `paypal:${normalizeIdPart(args.accountId)}:${disputeId}:${feeLedgerType}`,
       parentTransactionId: disputeId,
       amount: fee.value,
       currency: fee.currency,
-      status: "chargeback_fee",
-      reason: "PayPal explicit dispute/chargeback fee",
+      status: feeLedgerType,
+      reason: feeLedgerType === "chargeback_fee_reversal"
+        ? "PayPal explicit dispute/chargeback fee recovery"
+        : "PayPal explicit dispute/chargeback fee",
+      occurredAt,
+      orderId,
+      connectorId: args.connectorId,
+      accountId: args.accountId,
+      raw: dispute,
+    });
+  }
+
+  if (feeRecovery) {
+    events.push({
+      ledgerType: "chargeback_fee_reversal",
+      transactionId: `paypal:${normalizeIdPart(args.accountId)}:${disputeId}:chargeback_fee_reversal`,
+      parentTransactionId: disputeId,
+      amount: feeRecovery.value,
+      currency: feeRecovery.currency,
+      status: "chargeback_fee_reversal",
+      reason: "PayPal explicit dispute/chargeback fee recovery",
       occurredAt,
       orderId,
       connectorId: args.connectorId,

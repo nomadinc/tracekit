@@ -343,6 +343,14 @@ import {
   type PaypalReconciliationResult,
 } from "./paypal";
 import {
+  buildPaypalDisputeListUrl,
+  normalizePaypalDisputeEvents,
+  parsePaypalDisputeListPage,
+  summarizeGatewayClassicActionsForDiagnostics,
+  type GatewayClassicAction,
+  type NormalizedChargebackEvent,
+} from "./chargebacks";
+import {
   WOWBOOST_ORDER_REFERENCE_DEBUG_EXPECTED,
   WOWBOOST_PLATFORM_VALUES,
   buildWowBoostOrderNumberToOrderIdMap,
@@ -412,6 +420,8 @@ type LedgerType =
   | "refund"
   | "chargeback"
   | "chargeback_fee"
+  | "chargeback_reversal"
+  | "chargeback_fee_reversal"
   | "processor_fee"
   | "bank_fee"
   | "shipping_cost"
@@ -514,6 +524,8 @@ function detectLedgerType(payload: any): LedgerType {
       ""
   ).toLowerCase();
 
+  if (raw.includes("chargeback_fee_reversal")) return "chargeback_fee_reversal";
+  if (raw.includes("chargeback_reversal")) return "chargeback_reversal";
   if (raw.includes("chargeback_fee")) return "chargeback_fee";
   if (raw.includes("processor_fee")) return "processor_fee";
   if (raw.includes("bank_fee")) return "bank_fee";
@@ -3720,6 +3732,18 @@ const BROWSER_EVENT_NORMALIZE_TASK_RECHECK_DELAY_SECONDS = 30;
 const BROWSER_EVENT_NORMALIZE_RUNTIME_MAX_BATCH_SIZE = BROWSER_EVENT_DEFAULT_BATCH_SIZE;
 const JOURNEY_ASSIGNMENT_RUNTIME_TASK_TYPE = "journey_assignment_batch";
 const ATTRIBUTION_BACKFILL_RUNTIME_TASK_TYPE = "attribution_backfill_batch";
+const CHARGEBACK_INGESTION_CONNECTOR_ID = "chargeback-ingestion";
+const CHARGEBACK_INGESTION_JOB_TYPE = "chargeback_backfill";
+const CHARGEBACK_INGESTION_PHASE = "ingest_account_page";
+const CHARGEBACK_INGESTION_TASK_TYPE = "chargeback_ingest_account_page";
+const CHARGEBACK_PAYPAL_DEFAULT_PAGE_SIZE = 10;
+const CHARGEBACK_PAYPAL_MAX_PAGE_SIZE = 50;
+const CHARGEBACK_GATEWAY_DEFAULT_PAGE_SIZE = 100;
+const CHARGEBACK_GATEWAY_MAX_PAGE_SIZE = 250;
+const CHARGEBACK_GATEWAY_DEFAULT_MAX_PAGES = 3;
+const CHARGEBACK_DOUBLE_DEBIT_DEFAULT_WINDOW_DAYS = 7;
+const CHARGEBACK_MAX_DATE_RANGE_DAYS = 366;
+const CHARGEBACK_PAYPAL_MAX_PAGES = 50;
 
 async function createConnectorRuntimeTask(env: Env, plan: ConnectorRuntimeTaskPlan) {
   const supabase = getSupabase(env);
@@ -4942,6 +4966,863 @@ async function resetAndEnqueueConnectorRuntimeTask(env: Env, plan: ConnectorRunt
   if (!task) throw new Error("Failed to re-read connector runtime task for enqueue.");
   await enqueueConnectorRuntimeTask(env, task);
   return { task, created: result.created };
+}
+
+type ChargebackProcessorAccount = {
+  account_key: string;
+  platform: string;
+  credential_platform: string;
+  connector_id: string;
+  processor_account_id: string;
+  family: "paypal" | "gateway_classic";
+  base_url: string | null;
+  environment?: "sandbox" | "live" | null;
+};
+
+type ChargebackBackfillRequest = {
+  workspace_id: string;
+  from: string;
+  to: string;
+  platforms: string[];
+  paypal_page_size: number;
+  gateway_page_size: number;
+  gateway_max_pages: number;
+  force_new_job: boolean;
+  dry_run: boolean;
+};
+
+function normalizeChargebackBackfillRequest(body: any): { ok: true; value: ChargebackBackfillRequest } | { ok: false; status: number; error: string; message: string } {
+  const workspaceId = String(body?.workspace_id || "default").trim() || "default";
+  const from = String(body?.from || "").trim();
+  const to = String(body?.to || "").trim();
+  if (!parseYmd(from) || !parseYmd(to)) {
+    return { ok: false, status: 400, error: "bad_request", message: "from/to must be YYYY-MM-DD" };
+  }
+  if (Date.parse(`${from}T00:00:00.000Z`) > Date.parse(`${to}T00:00:00.000Z`)) {
+    return { ok: false, status: 400, error: "bad_request", message: "from must be on or before to" };
+  }
+  const rangeDays = Math.floor((Date.parse(`${to}T00:00:00.000Z`) - Date.parse(`${from}T00:00:00.000Z`)) / 86400000) + 1;
+  if (rangeDays > CHARGEBACK_MAX_DATE_RANGE_DAYS) {
+    return { ok: false, status: 400, error: "bad_request", message: `date range cannot exceed ${CHARGEBACK_MAX_DATE_RANGE_DAYS} days` };
+  }
+  const rawPlatforms = Array.isArray(body?.platforms)
+    ? body.platforms
+    : Array.isArray(body?.processors)
+      ? body.processors
+      : [];
+  const platforms: string[] = Array.from(new Set(rawPlatforms.map((value: unknown) => String(value || "").trim().toLowerCase()).filter(Boolean)));
+  return {
+    ok: true,
+    value: {
+      workspace_id: workspaceId,
+      from,
+      to,
+      platforms,
+      paypal_page_size: Math.max(1, Math.min(CHARGEBACK_PAYPAL_MAX_PAGE_SIZE, Number(body?.paypal_page_size ?? body?.page_size ?? CHARGEBACK_PAYPAL_DEFAULT_PAGE_SIZE) || CHARGEBACK_PAYPAL_DEFAULT_PAGE_SIZE)),
+      gateway_page_size: Math.max(1, Math.min(CHARGEBACK_GATEWAY_MAX_PAGE_SIZE, Number(body?.gateway_page_size ?? CHARGEBACK_GATEWAY_DEFAULT_PAGE_SIZE) || CHARGEBACK_GATEWAY_DEFAULT_PAGE_SIZE)),
+      gateway_max_pages: Math.max(1, Math.min(50, Number(body?.gateway_max_pages ?? CHARGEBACK_GATEWAY_DEFAULT_MAX_PAGES) || CHARGEBACK_GATEWAY_DEFAULT_MAX_PAGES)),
+      force_new_job: Boolean(body?.force_new_job ?? body?.forceNewJob),
+      dry_run: Boolean(body?.dry_run),
+    },
+  };
+}
+
+function chargebackAccountKey(account: ChargebackProcessorAccount) {
+  return `${account.family}:${account.platform}:${account.processor_account_id}`;
+}
+
+function chargebackAccountMatchesRequest(account: ChargebackProcessorAccount, platforms: string[]) {
+  if (!platforms.length) return true;
+  const candidates = [
+    account.platform,
+    account.credential_platform,
+    account.connector_id,
+    account.processor_account_id,
+    account.family,
+    account.account_key,
+  ].map((value) => String(value || "").toLowerCase());
+  return platforms.some((platform) => candidates.includes(platform) || candidates.some((candidate) => candidate.startsWith(`${platform}:`)));
+}
+
+function chargebackProgressStringArray(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return Array.from(new Set(value.map((item) => String(item || "").trim().toLowerCase()).filter(Boolean)));
+}
+
+function chargebackCredentialWorkspaceId(row: any) {
+  const metadata = row?.metadata && typeof row.metadata === "object" ? row.metadata : {};
+  return String(metadata.workspace_id ?? metadata.workspaceId ?? metadata.workspace ?? "default").trim() || "default";
+}
+
+async function discoverChargebackProcessorAccounts(env: Env, workspaceId: string, requestedPlatforms: string[] = []): Promise<ChargebackProcessorAccount[]> {
+  const supabase = getSupabase(env);
+  const { data, error } = await supabase
+    .from("integrations_credentials")
+    .select("*")
+    .or("platform.eq.paypal,platform.like.paypal:%,platform.like.nmi:%,platform.eq.paydiverse,platform.like.paydiverse:%")
+    .order("platform", { ascending: true });
+  if (error) throw new Error(`Chargeback credential discovery failed: ${error.message}`);
+
+  const accounts: ChargebackProcessorAccount[] = [];
+  for (const row of (data || []) as any[]) {
+    if (chargebackCredentialWorkspaceId(row) !== workspaceId) continue;
+    const platform = String(row.platform || "").trim().toLowerCase();
+    if (!platform) continue;
+    if (platform === "paypal" || platform.startsWith("paypal:")) {
+      const metadata = normalizePaypalCredentialMetadata(row.metadata);
+      const connectorId = metadata.connector_id || stablePaypalConnectorId({
+        merchantAccountId: metadata.merchant_account_id,
+        clientId: row.username,
+      });
+      const processorAccountId = String(metadata.merchant_account_id || connectorId).trim();
+      accounts.push({
+        account_key: `paypal:${processorAccountId}`,
+        platform: "paypal",
+        credential_platform: platform,
+        connector_id: connectorId,
+        processor_account_id: processorAccountId,
+        family: "paypal",
+        base_url: paypalBaseUrlForEnvironment(metadata.environment),
+        environment: metadata.environment,
+      });
+      continue;
+    }
+    if (platform.startsWith("nmi:") || platform === "paydiverse" || platform.startsWith("paydiverse:")) {
+      accounts.push({
+        account_key: platform,
+        platform,
+        credential_platform: platform,
+        connector_id: platform,
+        processor_account_id: platform,
+        family: "gateway_classic",
+        base_url: String(row.base_url || "").trim() || null,
+      });
+    }
+  }
+
+  return accounts
+    .filter((account) => chargebackAccountMatchesRequest(account, requestedPlatforms))
+    .sort((a, b) => a.account_key.localeCompare(b.account_key));
+}
+
+function createChargebackIngestionProgress(args: ChargebackBackfillRequest, accounts: ChargebackProcessorAccount[], now = new Date().toISOString()) {
+  const accountsState: Record<string, any> = {};
+  for (const account of accounts) {
+    accountsState[account.account_key] = {
+      ...account,
+      status: "queued",
+      current_page: account.family === "paypal" ? 1 : 0,
+      next_page_token: null,
+      records_fetched: 0,
+      records_processed: 0,
+      events_observed: 0,
+      events_inserted: 0,
+      duplicates_skipped: 0,
+      matched: 0,
+      unmatched: 0,
+      diagnostics: [],
+      last_error: null,
+    };
+  }
+  return {
+    workspace_id: args.workspace_id,
+    connector_id: CHARGEBACK_INGESTION_CONNECTOR_ID,
+    job_type: CHARGEBACK_INGESTION_JOB_TYPE,
+    phase: CHARGEBACK_INGESTION_PHASE,
+    status: accounts.length ? "queued" : "completed",
+    requested_from: args.from,
+    requested_to: args.to,
+    records_discovered: accounts.length,
+    records_processed: 0,
+    records_succeeded: 0,
+    records_failed: 0,
+    records_skipped: 0,
+    retries: 0,
+    current_cursor: null,
+    current_page: null,
+    last_error: null,
+    next_run_at: null,
+    started_at: now,
+    updated_at: now,
+    completed_at: accounts.length ? null : now,
+    accounts: accountsState,
+    metadata: {
+      runtime_version: 1,
+      execution_mode: "connector_runtime",
+      runtime_connector: CHARGEBACK_INGESTION_CONNECTOR_ID,
+      paypal_page_size: args.paypal_page_size,
+      gateway_page_size: args.gateway_page_size,
+      gateway_max_pages: args.gateway_max_pages,
+      double_debit_window_days: CHARGEBACK_DOUBLE_DEBIT_DEFAULT_WINDOW_DAYS,
+      dry_run: args.dry_run,
+      requested_platforms: args.platforms,
+      accounts: accounts.map((account) => ({
+        account_key: account.account_key,
+        platform: account.platform,
+        family: account.family,
+        connector_id: account.connector_id,
+        processor_account_id: account.processor_account_id,
+      })),
+    },
+  };
+}
+
+function chargebackTaskPlanForAccount(args: {
+  job: ImportJobRow;
+  request: ChargebackBackfillRequest;
+  account: ChargebackProcessorAccount;
+  page?: number | null;
+  next_page_token?: string | null;
+}): ConnectorRuntimeTaskPlan {
+  const page = args.page ?? (args.account.family === "paypal" ? 1 : 0);
+  const token = args.next_page_token || null;
+  const dedupeCursor = token || String(page);
+  return {
+    job_id: args.job.id,
+    workspace_id: args.request.workspace_id,
+    connector_id: CHARGEBACK_INGESTION_CONNECTOR_ID,
+    task_type: CHARGEBACK_INGESTION_TASK_TYPE,
+    phase: CHARGEBACK_INGESTION_PHASE,
+    cursor: `${args.account.account_key}:${dedupeCursor}`,
+    page,
+    payload: {
+      account: args.account,
+      from: args.request.from,
+      to: args.request.to,
+      paypal_page_size: args.request.paypal_page_size,
+      gateway_page_size: args.request.gateway_page_size,
+      gateway_max_pages: args.request.gateway_max_pages,
+      next_page_token: token,
+      dry_run: args.request.dry_run,
+    },
+    dedupe_key: `chargeback:${args.account.account_key}:${dedupeCursor}`,
+    max_attempts: 5,
+  };
+}
+
+function chargebackRuntimeConfigKey(args: ChargebackBackfillRequest, accounts: ChargebackProcessorAccount[]) {
+  return JSON.stringify({
+    platforms: args.platforms.slice().sort(),
+    paypal_page_size: args.paypal_page_size,
+    gateway_page_size: args.gateway_page_size,
+    gateway_max_pages: args.gateway_max_pages,
+    dry_run: args.dry_run,
+    accounts: accounts.map((account) => account.account_key).sort(),
+  });
+}
+
+async function createChargebackIngestionJob(env: Env, args: ChargebackBackfillRequest, accounts: ChargebackProcessorAccount[]) {
+  const supabase = getSupabase(env);
+  const now = new Date().toISOString();
+  const progress = createChargebackIngestionProgress(args, accounts, now);
+  const metadata = connectorRuntimeMetadata({
+    connector_id: CHARGEBACK_INGESTION_CONNECTOR_ID,
+    metadata: {
+      ...progress.metadata,
+      config_key: chargebackRuntimeConfigKey(args, accounts),
+    },
+  });
+  const payload = {
+    platform: "chargebacks",
+    module: "connector_runtime",
+    status: progress.status,
+    from_date: args.from,
+    to_date: args.to,
+    filter: JSON.stringify({ platforms: args.platforms, dry_run: args.dry_run }),
+    workspace_id: args.workspace_id,
+    connector_id: CHARGEBACK_INGESTION_CONNECTOR_ID,
+    job_type: CHARGEBACK_INGESTION_JOB_TYPE,
+    phase: CHARGEBACK_INGESTION_PHASE,
+    requested_from: args.from,
+    requested_to: args.to,
+    records_discovered: accounts.length,
+    records_processed: 0,
+    records_succeeded: 0,
+    records_failed: 0,
+    records_skipped: 0,
+    current_cursor: null,
+    current_page: null,
+    last_error: null,
+    metadata,
+    progress: {
+      ...progress,
+      metadata,
+    },
+    requested_at: now,
+    started_at: now,
+    updated_at: now,
+    completed_at: progress.completed_at,
+  };
+  const { data, error } = await supabase.from("integration_import_jobs").insert(payload).select("*").single();
+  if (error) throw new Error(`Failed to create chargeback ingestion job: ${error.message}`);
+  return data as ImportJobRow;
+}
+
+async function startChargebackIngestionRuntimeJob(env: Env, args: ChargebackBackfillRequest) {
+  if (!env.wowboost_imports) {
+    return json({
+      ok: false,
+      error: "queue_not_configured",
+      message: "wowboost_imports queue binding is missing. Check wrangler.toml.",
+    }, 500);
+  }
+
+  const accounts = await discoverChargebackProcessorAccounts(env, args.workspace_id, args.platforms);
+  const configKey = chargebackRuntimeConfigKey(args, accounts);
+  if (!args.force_new_job) {
+    const existing = await findActiveConnectorRuntimeJob(env, {
+      workspace_id: args.workspace_id,
+      connector_id: CHARGEBACK_INGESTION_CONNECTOR_ID,
+      job_type: CHARGEBACK_INGESTION_JOB_TYPE,
+      from: args.from,
+      to: args.to,
+      matches: (_job, progress) => String(progress.metadata?.config_key || "") === configKey,
+    });
+    if (existing) {
+      await reconcileConnectorRuntimeJobQueue(env, existing, { reason: "chargeback_backfill_resume" }).catch(() => {});
+      return json({
+        ok: true,
+        reused: true,
+        job: await connectorRuntimeJobPayload(env, existing),
+      });
+    }
+  }
+
+  const job = await createChargebackIngestionJob(env, args, accounts);
+  for (const account of accounts) {
+    await createAndEnqueueConnectorRuntimeTask(env, chargebackTaskPlanForAccount({ job, request: args, account }));
+  }
+  const updated = await getImportJob(env, job.id);
+  return json({
+    ok: true,
+    reused: false,
+    accounts: accounts.map((account) => ({
+      account_key: account.account_key,
+      platform: account.platform,
+      family: account.family,
+      connector_id: account.connector_id,
+      processor_account_id: account.processor_account_id,
+    })),
+    job: await connectorRuntimeJobPayload(env, updated || job),
+  }, 202);
+}
+
+function chargebackProgressAccounts(progress: ConnectorRuntimeProgress & Record<string, any>) {
+  return { ...((progress as any).accounts || {}) } as Record<string, any>;
+}
+
+function capChargebackDiagnosticList(values: any[], limit = 25) {
+  return values.slice(Math.max(0, values.length - limit));
+}
+
+async function reconcileChargebackEventsToPlatformOrders(
+  supabase: SupabaseClientAny,
+  workspaceId: string,
+  events: NormalizedChargebackEvent[],
+) {
+  const refs = Array.from(new Set(events.flatMap((event) => [
+    event.platform_order_id,
+    event.order_id,
+    event.commerce_reference,
+  ]).map((value) => String(value || "").trim()).filter(Boolean)));
+  const txns = Array.from(new Set(events.map((event) => String(event.processor_transaction_id || event.parent_transaction_id || "").trim()).filter(Boolean)));
+  const candidates = new Map<string, any>();
+  const addCandidates = (rows: any[] | null | undefined) => {
+    for (const row of rows || []) {
+      const key = String(row.platform_order_id || row.order_id || row.transaction_id || JSON.stringify(row));
+      candidates.set(key, row);
+    }
+  };
+  const candidateSelect = "platform,platform_order_id,order_id,commerce_reference,transaction_id,order_ts";
+
+  if (refs.length) {
+    const [byOrder, byPlatformOrder, byCommerceReference] = await Promise.all([
+      supabase.from("platform_orders").select(candidateSelect).eq("workspace_id", workspaceId).in("order_id", refs).limit(500),
+      supabase.from("platform_orders").select(candidateSelect).eq("workspace_id", workspaceId).in("platform_order_id", refs).limit(500),
+      supabase.from("platform_orders").select(candidateSelect).eq("workspace_id", workspaceId).in("commerce_reference", refs).limit(500),
+    ]);
+    for (const result of [byOrder, byPlatformOrder, byCommerceReference]) {
+      if ((result as any).error) throw new Error(`Chargeback platform-order lookup failed: ${(result as any).error.message}`);
+      addCandidates((result as any).data);
+    }
+  }
+
+  if (txns.length) {
+    const byTransaction = await supabase.from("platform_orders").select(candidateSelect).eq("workspace_id", workspaceId).in("transaction_id", txns).limit(500);
+    if ((byTransaction as any).error) throw new Error(`Chargeback transaction lookup failed: ${(byTransaction as any).error.message}`);
+    addCandidates((byTransaction as any).data);
+  }
+
+  let matched = 0;
+  let unmatched = 0;
+  let ambiguous = 0;
+  const nextEvents = events.map((event) => {
+    const eventRefs = new Set([
+      event.platform_order_id,
+      event.order_id,
+      event.commerce_reference,
+    ].map((value) => String(value || "").trim()).filter(Boolean));
+    const eventTxns = new Set([
+      event.processor_transaction_id,
+      event.parent_transaction_id,
+    ].map((value) => String(value || "").trim()).filter(Boolean));
+    const matches = Array.from(candidates.values()).filter((candidate) => {
+      return (
+        (candidate.platform_order_id && eventRefs.has(String(candidate.platform_order_id))) ||
+        (candidate.order_id && eventRefs.has(String(candidate.order_id))) ||
+        (candidate.commerce_reference && eventRefs.has(String(candidate.commerce_reference))) ||
+        (candidate.transaction_id && eventTxns.has(String(candidate.transaction_id)))
+      );
+    });
+    const unique = new Map<string, any>();
+    for (const match of matches) unique.set(String(match.platform_order_id || match.order_id || match.transaction_id), match);
+    const uniqueMatches = Array.from(unique.values());
+    if (uniqueMatches.length === 1) {
+      matched += 1;
+      const match = uniqueMatches[0];
+      return {
+        ...event,
+        order_id: String(match.order_id || event.order_id || "").trim() || null,
+        platform_order_id: String(match.platform_order_id || event.platform_order_id || "").trim() || null,
+        diagnostic_flags: event.diagnostic_flags.filter((flag) => flag !== "chargeback_without_matching_sale"),
+        meta: {
+          ...event.meta,
+          matched_platform_order_id: match.platform_order_id || null,
+          matched_order_id: match.order_id || null,
+          match_method: "deterministic_source_identifier",
+          match_candidate_count: 1,
+        },
+      };
+    }
+    if (uniqueMatches.length > 1) {
+      ambiguous += 1;
+      return {
+        ...event,
+        diagnostic_flags: Array.from(new Set([...event.diagnostic_flags, "ambiguous_platform_order_match"])),
+        meta: { ...event.meta, match_candidate_count: uniqueMatches.length },
+      };
+    }
+    unmatched += 1;
+    return {
+      ...event,
+      diagnostic_flags: Array.from(new Set([...event.diagnostic_flags, "chargeback_without_matching_sale"])),
+      meta: { ...event.meta, match_candidate_count: 0 },
+    };
+  });
+
+  return { events: nextEvents, matched, unmatched, ambiguous };
+}
+
+async function applyRefundChargebackDoubleDebitDiagnostics(
+  supabase: SupabaseClientAny,
+  events: NormalizedChargebackEvent[],
+  windowDays = CHARGEBACK_DOUBLE_DEBIT_DEFAULT_WINDOW_DAYS,
+) {
+  const principalEvents = events.filter((event) => event.ledger_type === "chargeback" && event.order_id);
+  if (!principalEvents.length) return events;
+  const orderIds = Array.from(new Set(principalEvents.map((event) => String(event.order_id || "")).filter(Boolean)));
+  const times = principalEvents.map((event) => Date.parse(event.occurred_at)).filter(Number.isFinite);
+  if (!orderIds.length || !times.length) return events;
+  const minIso = new Date(Math.min(...times) - windowDays * 86400000).toISOString();
+  const maxIso = new Date(Math.max(...times) + windowDays * 86400000).toISOString();
+  const { data, error } = await supabase
+    .from("conversions")
+    .select("order_id,amount,occurred_at,transaction_id")
+    .eq("ledger_type", "refund")
+    .in("order_id", orderIds)
+    .gte("occurred_at", minIso)
+    .lte("occurred_at", maxIso)
+    .limit(1000);
+  if (error) {
+    return events.map((event) => ({
+      ...event,
+      diagnostic_flags: Array.from(new Set([...event.diagnostic_flags, "refund_chargeback_double_debit_diagnostic_deferred"])),
+      meta: {
+        ...event.meta,
+        double_debit_diagnostic_error: error.message,
+      },
+    }));
+  }
+  const refundsByOrder = new Map<string, any[]>();
+  for (const refund of data || []) {
+    const orderId = String((refund as any).order_id || "");
+    refundsByOrder.set(orderId, [...(refundsByOrder.get(orderId) || []), refund]);
+  }
+  return events.map((event) => {
+    if (event.ledger_type !== "chargeback" || !event.order_id) return event;
+    const eventTime = Date.parse(event.occurred_at);
+    const possible = (refundsByOrder.get(event.order_id) || []).some((refund) => {
+      const refundTime = Date.parse(String(refund.occurred_at || ""));
+      if (!Number.isFinite(eventTime) || !Number.isFinite(refundTime)) return false;
+      const withinWindow = Math.abs(eventTime - refundTime) <= windowDays * 86400000;
+      const sameAmount = Math.abs(Math.abs(Number(refund.amount || 0)) - Math.abs(event.amount)) < 0.01;
+      return withinWindow && sameAmount;
+    });
+    if (!possible) return event;
+    return {
+      ...event,
+      diagnostic_flags: Array.from(new Set([...event.diagnostic_flags, "possible_refund_chargeback_double_debit"])),
+      meta: {
+        ...event.meta,
+        possible_refund_chargeback_double_debit: true,
+        double_debit_window_days: windowDays,
+      },
+    };
+  });
+}
+
+async function insertChargebackLedgerEvents(env: Env, events: NormalizedChargebackEvent[], dryRun = false) {
+  const bySource = new Map<string, NormalizedChargebackEvent>();
+  for (const event of events) {
+    const key = `${event.workspace_id}:${event.platform}:${event.processor_account_id}:${event.ledger_type}:${event.source_event_id}`;
+    bySource.set(key, event);
+  }
+  const uniqueEvents = Array.from(bySource.values());
+  const rows = uniqueEvents.map((event) => ({
+    workspace_id: event.workspace_id,
+    ledger_type: event.ledger_type,
+    event_source: event.platform,
+    ingestion_method: "api_import",
+    connector_id: event.connector_id,
+    order_id: event.order_id,
+    transaction_id: event.transaction_id,
+    parent_transaction_id: event.parent_transaction_id,
+    amount: event.amount,
+    currency: event.currency,
+    platform: event.platform,
+    source_system: event.platform,
+    status: event.status,
+    reason: event.reason,
+    raw: event.raw,
+    meta: event.meta,
+    occurred_at: event.occurred_at,
+    processor_account_id: event.processor_account_id,
+    source_event_id: event.source_event_id,
+    dispute_id: event.dispute_id,
+    source_amount: event.source_amount,
+    source_direction: event.source_direction,
+    diagnostic_flags: event.diagnostic_flags,
+  }));
+  if (dryRun || !rows.length) {
+    return {
+      observed: uniqueEvents.length,
+      inserted: 0,
+      duplicates_skipped: dryRun ? 0 : uniqueEvents.length,
+      invalid_rejected: 0,
+      rollup_orders_refreshed: 0,
+      rollup_daily_refreshed: 0,
+      rollup_warnings: [] as string[],
+    };
+  }
+  const supabase = getSupabase(env);
+  const { data, error } = await supabase.rpc("insert_chargeback_ledger_events", { p_events: rows });
+  if (error) throw new Error(`Chargeback ledger insert failed: ${error.message}`);
+  const result = Array.isArray(data) ? data[0] : data;
+  const observed = Number(result?.observed_count ?? uniqueEvents.length);
+  const inserted = Number(result?.inserted_count ?? 0);
+  const duplicates = Number(result?.duplicate_count ?? Math.max(0, uniqueEvents.length - inserted));
+  const invalid = Number(result?.invalid_count ?? 0);
+  const rollup = inserted > 0
+    ? await refreshProfitRollupsForInsertedRows(env, rows as ProfitConversionRow[])
+    : { orders_refreshed: 0, daily_refreshed: 0, warnings: [] as string[] };
+  return {
+    observed,
+    inserted,
+    duplicates_skipped: duplicates,
+    invalid_rejected: invalid,
+    rollup_orders_refreshed: rollup.orders_refreshed,
+    rollup_daily_refreshed: rollup.daily_refreshed,
+    rollup_warnings: rollup.warnings,
+  };
+}
+
+async function executePaypalChargebackIngestionTask(env: Env, job: ImportJobRow, task: ConnectorImportTaskRow, account: ChargebackProcessorAccount) {
+  const progress = connectorRuntimeProgressFromJob(job);
+  const from = String(task.payload?.from || progress.requested_from || job.from_date);
+  const to = String(task.payload?.to || progress.requested_to || job.to_date);
+  const page = Math.max(1, Number(task.page || task.payload?.page || 1));
+  const pageSize = Math.max(1, Math.min(CHARGEBACK_PAYPAL_MAX_PAGE_SIZE, Number(task.payload?.paypal_page_size || CHARGEBACK_PAYPAL_DEFAULT_PAGE_SIZE)));
+  const nextPageToken = String(task.payload?.next_page_token || "").trim() || null;
+  const dryRun = Boolean(task.payload?.dry_run || progress.metadata?.dry_run);
+  const creds = await getLatestCredential(env, account.credential_platform);
+  if (!creds) throw new Error(`PayPal chargeback credentials missing for ${account.credential_platform}`);
+  const metadata = normalizePaypalCredentialMetadata((creds as any).metadata);
+  const clientSecret = await decryptSecretFromCredRow(env, creds as any);
+  const token = await fetchPaypalAccessToken({
+    clientId: String((creds as any).username || ""),
+    clientSecret,
+    environment: metadata.environment,
+  });
+  const url = buildPaypalDisputeListUrl({
+    base_url: paypalBaseUrlForEnvironment(metadata.environment),
+    from_iso: `${from}T00:00:00.000Z`,
+    to_iso: nextDayStartIso(to),
+    page,
+    page_size: pageSize,
+    next_page_token: nextPageToken,
+  });
+  const res = await fetchWithTimeout(url, {
+    method: "GET",
+    headers: {
+      Authorization: `Bearer ${token.access_token}`,
+      "Content-Type": "application/json",
+    },
+  }, 30000);
+  const text = await readTextSafe(res);
+  const parsed = safeJsonParse(text) || {};
+  if (!res.ok) throw new Error(`PayPal dispute list failed ${res.status}: ${text.slice(0, 500)}`);
+  const pageResult = parsePaypalDisputeListPage(parsed, { requested_page: page, page_size: pageSize });
+  const currentPageCursor = nextPageToken || String(page);
+  const nextPageCursor = pageResult.next_page_token || (pageResult.next_page ? String(pageResult.next_page) : null);
+  const paginationWarnings: any[] = [];
+  let pageHasMore = pageResult.has_more;
+  if (pageHasMore && (!nextPageCursor || nextPageCursor === currentPageCursor || Number(pageResult.next_page || 0) > CHARGEBACK_PAYPAL_MAX_PAGES)) {
+    pageHasMore = false;
+    paginationWarnings.push({
+      reason: !nextPageCursor || nextPageCursor === currentPageCursor
+        ? "paypal_dispute_pagination_repeated_cursor"
+        : "paypal_dispute_pagination_page_bound_reached",
+      current_cursor: currentPageCursor,
+      next_cursor: nextPageCursor,
+      page,
+      next_page: pageResult.next_page,
+      max_pages: CHARGEBACK_PAYPAL_MAX_PAGES,
+    });
+  }
+  let events = pageResult.disputes.flatMap((dispute) => normalizePaypalDisputeEvents(dispute, {
+    workspace_id: progress.workspace_id,
+    platform: "paypal",
+    connector_id: account.connector_id,
+    processor_account_id: account.processor_account_id,
+  }));
+  const reconciliation = await reconcileChargebackEventsToPlatformOrders(getSupabase(env), progress.workspace_id, events);
+  events = await applyRefundChargebackDoubleDebitDiagnostics(getSupabase(env), reconciliation.events);
+  const insert = await insertChargebackLedgerEvents(env, events, dryRun);
+  const accounts = chargebackProgressAccounts(progress);
+  const accountState = {
+    ...(accounts[account.account_key] || {}),
+    ...account,
+    status: pageHasMore ? "running" : "completed",
+    current_page: page,
+    next_page: pageResult.next_page,
+    next_page_token: pageResult.next_page_token,
+    records_fetched: Number(accounts[account.account_key]?.records_fetched || 0) + pageResult.disputes.length,
+    records_processed: Number(accounts[account.account_key]?.records_processed || 0) + pageResult.disputes.length,
+    events_observed: Number(accounts[account.account_key]?.events_observed || 0) + insert.observed,
+    events_inserted: Number(accounts[account.account_key]?.events_inserted || 0) + insert.inserted,
+    duplicates_skipped: Number(accounts[account.account_key]?.duplicates_skipped || 0) + insert.duplicates_skipped,
+    matched: Number(accounts[account.account_key]?.matched || 0) + reconciliation.matched,
+    unmatched: Number(accounts[account.account_key]?.unmatched || 0) + reconciliation.unmatched,
+    ambiguous: Number(accounts[account.account_key]?.ambiguous || 0) + reconciliation.ambiguous,
+    invalid_rejected: Number(accounts[account.account_key]?.invalid_rejected || 0) + insert.invalid_rejected,
+    diagnostics: capChargebackDiagnosticList([
+      ...(accounts[account.account_key]?.diagnostics || []),
+      ...paginationWarnings,
+      ...(insert.rollup_warnings || []).map((warning: string) => ({ reason: "chargeback_rollup_warning", warning })),
+    ]),
+    last_error: null,
+  };
+  accounts[account.account_key] = accountState;
+  const allCompleted = Object.values(accounts).every((state: any) => state.status === "completed");
+  const now = new Date().toISOString();
+  const nextProgress = {
+    ...progress,
+    status: (allCompleted ? "completed" : "running") as ConnectorRuntimeProgress["status"],
+    phase: CHARGEBACK_INGESTION_PHASE,
+    records_processed: Number(progress.records_processed || 0) + pageResult.disputes.length,
+    records_succeeded: Number(progress.records_succeeded || 0) + insert.inserted,
+    records_skipped: Number(progress.records_skipped || 0) + insert.duplicates_skipped,
+    current_cursor: `${account.account_key}:${pageResult.next_page_token || pageResult.next_page || page}`,
+    current_page: page,
+    updated_at: now,
+    completed_at: allCompleted ? now : null,
+    last_error: null,
+    accounts,
+    metadata: {
+      ...progress.metadata,
+      accounts: Object.values(accounts),
+    },
+  };
+  await updateConnectorRuntimeJobProgress(env, job, nextProgress);
+  if (pageHasMore) {
+    const request: ChargebackBackfillRequest = {
+      workspace_id: progress.workspace_id,
+      from,
+      to,
+      platforms: chargebackProgressStringArray(progress.metadata?.requested_platforms),
+      paypal_page_size: pageSize,
+      gateway_page_size: Number(progress.metadata?.gateway_page_size || CHARGEBACK_GATEWAY_DEFAULT_PAGE_SIZE),
+      gateway_max_pages: Number(progress.metadata?.gateway_max_pages || CHARGEBACK_GATEWAY_DEFAULT_MAX_PAGES),
+      force_new_job: false,
+      dry_run: dryRun,
+    };
+    await createAndEnqueueConnectorRuntimeTask(env, chargebackTaskPlanForAccount({
+      job,
+      request,
+      account,
+      page: pageResult.next_page,
+      next_page_token: pageResult.next_page_token,
+    }));
+  }
+  return {
+    account_key: account.account_key,
+    platform: account.platform,
+    processor_account_id: account.processor_account_id,
+    page,
+    page_size: pageSize,
+    fetched: pageResult.disputes.length,
+    events_observed: insert.observed,
+    events_inserted: insert.inserted,
+    duplicates_skipped: insert.duplicates_skipped,
+    matched: reconciliation.matched,
+    unmatched: reconciliation.unmatched,
+    ambiguous: reconciliation.ambiguous,
+    invalid_rejected: insert.invalid_rejected,
+    pagination_warnings: paginationWarnings,
+    has_more: pageHasMore,
+    next_page: pageHasMore ? pageResult.next_page : null,
+    next_page_token: pageHasMore ? pageResult.next_page_token : null,
+    dry_run: dryRun,
+  };
+}
+
+function gatewayClassicActionsFromTransactionXml(tx: string): GatewayClassicAction[] {
+  const transactionId = xmlValue(tx, "transaction_id") || null;
+  const orderId = xmlValue(tx, "order_id") || xmlValue(tx, "orderid") || transactionId;
+  const condition = xmlValue(tx, "condition") || null;
+  const currency = xmlValue(tx, "currency") || "USD";
+  const actions = xmlBlocks(tx, "action");
+  return actions.map((action) => ({
+    transaction_id: transactionId,
+    order_id: orderId,
+    action_type: xmlValue(action, "action_type") || null,
+    action_date: xmlValue(action, "date") || null,
+    amount: xmlValue(action, "amount") || null,
+    requested_amount: xmlValue(action, "requested_amount") || null,
+    response_text: xmlValue(action, "response_text") || null,
+    condition,
+    currency,
+    raw: {
+      action_type: xmlValue(action, "action_type") || null,
+      date: xmlValue(action, "date") || null,
+      response_text: xmlValue(action, "response_text") || null,
+    },
+  }));
+}
+
+async function executeGatewayChargebackDiagnosticsTask(env: Env, job: ImportJobRow, task: ConnectorImportTaskRow, account: ChargebackProcessorAccount) {
+  const progress = connectorRuntimeProgressFromJob(job);
+  const from = String(task.payload?.from || progress.requested_from || job.from_date);
+  const to = String(task.payload?.to || progress.requested_to || job.to_date);
+  const page = Math.max(0, Number(task.page ?? task.payload?.page ?? 0));
+  const pageSize = Math.max(1, Math.min(CHARGEBACK_GATEWAY_MAX_PAGE_SIZE, Number(task.payload?.gateway_page_size || CHARGEBACK_GATEWAY_DEFAULT_PAGE_SIZE)));
+  const maxPages = Math.max(1, Math.min(50, Number(task.payload?.gateway_max_pages || CHARGEBACK_GATEWAY_DEFAULT_MAX_PAGES)));
+  const creds = await getLatestCredential(env, account.credential_platform);
+  if (!creds) throw new Error(`Gateway chargeback credentials missing for ${account.credential_platform}`);
+  const securityKey = await decryptSecretFromCredRow(env, creds as any);
+  const baseUrl = String((creds as any).base_url || account.base_url || "https://secure.networkmerchants.com").replace(/\/+$/, "");
+  const form = new URLSearchParams();
+  form.set("security_key", securityKey.trim());
+  form.set("start_date", nmiClassicDate(from, false));
+  form.set("end_date", nmiClassicDate(to, true));
+  form.set("result_limit", String(pageSize));
+  form.set("page_number", String(page));
+  form.set("result_order", "standard");
+  form.set("condition", "pending,pendingsettlement,in_progress,abandoned,failed,canceled,complete,unknown");
+
+  const res = await fetchWithTimeout(`${baseUrl}/api/query.php`, {
+    method: "POST",
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+    body: form.toString(),
+  }, 30000);
+  const xml = await readTextSafe(res);
+  if (!res.ok) throw new Error(`Gateway chargeback diagnostics query failed ${res.status}: ${xml.slice(0, 500)}`);
+  const transactions = xmlBlocks(xml, "transaction");
+  const actions = transactions.flatMap(gatewayClassicActionsFromTransactionXml);
+  const diagnostics = summarizeGatewayClassicActionsForDiagnostics({
+    platform: account.platform,
+    processor_account_id: account.processor_account_id,
+    actions,
+  });
+  const hasMore = transactions.length >= pageSize && page + 1 < maxPages;
+  const boundReached = transactions.length >= pageSize && page + 1 >= maxPages;
+  const accounts = chargebackProgressAccounts(progress);
+  accounts[account.account_key] = {
+    ...(accounts[account.account_key] || {}),
+    ...account,
+    status: hasMore ? "running" : "completed",
+    current_page: page,
+    records_fetched: Number(accounts[account.account_key]?.records_fetched || 0) + transactions.length,
+    records_processed: Number(accounts[account.account_key]?.records_processed || 0) + transactions.length,
+    events_observed: Number(accounts[account.account_key]?.events_observed || 0),
+    events_inserted: Number(accounts[account.account_key]?.events_inserted || 0),
+    diagnostics: capChargebackDiagnosticList([
+      ...(accounts[account.account_key]?.diagnostics || []),
+      ...diagnostics.slice(0, 10),
+      ...(boundReached ? [{ reason: "gateway_mapping_payload_bound_reached", page, max_pages: maxPages }] : []),
+    ]),
+    last_error: null,
+  };
+  const allCompleted = Object.values(accounts).every((state: any) => state.status === "completed");
+  const now = new Date().toISOString();
+  const nextProgress = {
+    ...progress,
+    status: (allCompleted ? "completed" : "running") as ConnectorRuntimeProgress["status"],
+    phase: CHARGEBACK_INGESTION_PHASE,
+    records_processed: Number(progress.records_processed || 0) + transactions.length,
+    records_skipped: Number(progress.records_skipped || 0) + diagnostics.length,
+    current_cursor: `${account.account_key}:${page}`,
+    current_page: page,
+    updated_at: now,
+    completed_at: allCompleted ? now : null,
+    accounts,
+    metadata: {
+      ...progress.metadata,
+      accounts: Object.values(accounts),
+    },
+  };
+  await updateConnectorRuntimeJobProgress(env, job, nextProgress);
+  if (hasMore) {
+    const request: ChargebackBackfillRequest = {
+      workspace_id: progress.workspace_id,
+      from,
+      to,
+      platforms: chargebackProgressStringArray(progress.metadata?.requested_platforms),
+      paypal_page_size: Number(progress.metadata?.paypal_page_size || CHARGEBACK_PAYPAL_DEFAULT_PAGE_SIZE),
+      gateway_page_size: pageSize,
+      gateway_max_pages: maxPages,
+      force_new_job: false,
+      dry_run: true,
+    };
+    await createAndEnqueueConnectorRuntimeTask(env, chargebackTaskPlanForAccount({
+      job,
+      request,
+      account,
+      page: page + 1,
+    }));
+  }
+  return {
+    account_key: account.account_key,
+    platform: account.platform,
+    processor_account_id: account.processor_account_id,
+    page,
+    page_size: pageSize,
+    fetched: transactions.length,
+    actions_scanned: actions.length,
+    diagnostics: diagnostics.slice(0, 10),
+    events_inserted: 0,
+    has_more: hasMore,
+    next_page: hasMore ? page + 1 : null,
+    mapping_status: "diagnostic_only_pending_representative_payload_review",
+    bound_reached: boundReached,
+  };
+}
+
+async function executeChargebackIngestionRuntimeTask(env: Env, job: ImportJobRow, task: ConnectorImportTaskRow) {
+  const account = task.payload?.account as ChargebackProcessorAccount | undefined;
+  if (!account?.family || !account?.account_key) throw new Error("Chargeback task payload is missing account metadata.");
+  if (account.family === "paypal") return executePaypalChargebackIngestionTask(env, job, task, account);
+  return executeGatewayChargebackDiagnosticsTask(env, job, task, account);
 }
 
 async function insertConnectorRuntimeError(env: Env, args: {
@@ -8152,6 +9033,8 @@ async function executeConnectorRuntimeTask(env: Env, task: ConnectorImportTaskRo
     summary = await executeAttributionBackfillRuntimeTask(env, job, task);
   } else if (task.task_type === BROWSER_EVENT_NORMALIZE_TASK_TYPE) {
     summary = await executeBrowserEventNormalizeRuntimeTask(env, job, task);
+  } else if (task.task_type === CHARGEBACK_INGESTION_TASK_TYPE) {
+    summary = await executeChargebackIngestionRuntimeTask(env, job, task);
   } else {
     throw new Error(`Unsupported connector runtime task type: ${task.task_type}`);
   }
@@ -8354,6 +9237,32 @@ function attributionBackfillRuntimeTaskPlanForProgress(job: ImportJobRow, progre
   };
 }
 
+function chargebackIngestionTaskPlanForProgress(job: ImportJobRow, progress: ConnectorRuntimeProgress & Record<string, any>): ConnectorRuntimeTaskPlan {
+  const accounts = Object.values(chargebackProgressAccounts(progress)) as any[];
+  const account = accounts.find((state) => state?.status !== "completed") || accounts[0];
+  if (!account) {
+    throw new Error("Chargeback ingestion job has no processor accounts to plan.");
+  }
+  const request: ChargebackBackfillRequest = {
+    workspace_id: progress.workspace_id || "default",
+    from: progress.requested_from || job.from_date,
+    to: progress.requested_to || job.to_date,
+    platforms: chargebackProgressStringArray(progress.metadata?.requested_platforms),
+    paypal_page_size: Number(progress.metadata?.paypal_page_size || CHARGEBACK_PAYPAL_DEFAULT_PAGE_SIZE),
+    gateway_page_size: Number(progress.metadata?.gateway_page_size || CHARGEBACK_GATEWAY_DEFAULT_PAGE_SIZE),
+    gateway_max_pages: Number(progress.metadata?.gateway_max_pages || CHARGEBACK_GATEWAY_DEFAULT_MAX_PAGES),
+    force_new_job: false,
+    dry_run: Boolean(progress.metadata?.dry_run),
+  };
+  return chargebackTaskPlanForAccount({
+    job,
+    request,
+    account: account as ChargebackProcessorAccount,
+    page: Number(account.next_page ?? account.current_page ?? (account.family === "paypal" ? 1 : 0)),
+    next_page_token: String(account.next_page_token || "").trim() || null,
+  });
+}
+
 function connectorRuntimeTaskPlanForProgress(job: ImportJobRow, progress: ConnectorRuntimeProgress & Record<string, any>): ConnectorRuntimeTaskPlan {
   if (progress.connector_id === IDENTITY_BACKFILL_CONNECTOR_ID) {
     return identityBackfillRuntimeTaskPlanForProgress(job, progress);
@@ -8366,6 +9275,9 @@ function connectorRuntimeTaskPlanForProgress(job: ImportJobRow, progress: Connec
   }
   if (progress.connector_id === BROWSER_EVENTS_CONNECTOR_ID) {
     return browserEventNormalizeTaskPlanForProgress(job, progress);
+  }
+  if (progress.connector_id === CHARGEBACK_INGESTION_CONNECTOR_ID) {
+    return chargebackIngestionTaskPlanForProgress(job, progress);
   }
   return wowBoostRuntimeTaskPlanForProgress(job, progress);
 }
@@ -12817,6 +13729,31 @@ async function router(req: Request, env: Env): Promise<Response> {
       ok: false,
       error: "method_not_allowed",
       message: "/v1/attribution/backfill requires POST.",
+      allowed_methods: ["POST"],
+    }, 405, { Allow: "POST" });
+  }
+
+  if (path === "/v1/chargebacks/backfill" && req.method === "POST") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const body = await readJsonBody(req);
+      const parsed = normalizeChargebackBackfillRequest(body);
+      if (!parsed.ok) return json({ ok: false, error: parsed.error, message: parsed.message }, parsed.status);
+      return await startChargebackIngestionRuntimeJob(env, parsed.value);
+    } catch (e: any) {
+      console.error("chargebacks.backfill.failed", {
+        message: e?.message || String(e),
+      });
+      return json({ ok: false, error: "chargeback_backfill_failed", message: e?.message || String(e) }, e?.status || 500);
+    }
+  }
+
+  if (path === "/v1/chargebacks/backfill" && req.method !== "POST") {
+    return json({
+      ok: false,
+      error: "method_not_allowed",
+      message: "/v1/chargebacks/backfill requires POST.",
       allowed_methods: ["POST"],
     }, 405, { Allow: "POST" });
   }
