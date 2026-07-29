@@ -2089,8 +2089,11 @@ const PROFIT_ROLLUP_SELECT =
 const FINANCIAL_ISSUE_ANALYSIS_CONVERSION_SELECT =
   "workspace_id,order_id,connector_id,currency,platform,event_source,ledger_type,amount,occurred_at,transaction_id,status";
 
-const FINANCIAL_ISSUE_ANALYSIS_PLATFORM_ORDER_SELECT =
-  "workspace_id,platform_order_id,order_id,platform,status,status_norm,transaction_id,gross_amount,receipt_total,currency,order_ts,customer_email,customer_email_normalized,email,affiliate_id,source_id,sub1,sub2,sub3,sub4,sub5,raw_json";
+const FINANCIAL_ISSUE_ANALYSIS_PLATFORM_CANDIDATE_SELECT =
+  "workspace_id,platform_order_id,order_id,platform,status,status_norm,gross_amount,receipt_total,currency,order_ts,affiliate_id,raw_json";
+
+const FINANCIAL_ISSUE_ANALYSIS_PLATFORM_LOOKUP_SELECT =
+  "workspace_id,platform_order_id,order_id,platform,order_ts,affiliate_id,raw_json";
 
 const FINANCIAL_ISSUE_ANALYSIS_LEDGER_SCAN_LIMIT = 10_000;
 const FINANCIAL_ISSUE_PLATFORM_SCAN_LIMIT = 10_000;
@@ -2407,7 +2410,7 @@ async function selectFinancialIssuePlatformOrders(
     if (!chunk.length) continue;
     const { data, error } = await supabase
       .from("platform_orders")
-      .select(FINANCIAL_ISSUE_ANALYSIS_PLATFORM_ORDER_SELECT)
+      .select(FINANCIAL_ISSUE_ANALYSIS_PLATFORM_LOOKUP_SELECT)
       .eq("workspace_id", workspaceId)
       .in("order_id", chunk)
       .order("order_ts", { ascending: false });
@@ -2462,33 +2465,29 @@ async function selectFinancialIssuePlatformRowsInOrderRange(
   const to = parseDateFilter(filters.to || null);
   let scannedAll = true;
 
-  for (const platform of FINANCIAL_ISSUE_PLATFORM_FALLBACK_PLATFORMS) {
-    let platformRows = 0;
-    for (let offset = 0; offset < FINANCIAL_ISSUE_PLATFORM_SCAN_LIMIT; offset += pageSize) {
-      let query = supabase
-        .from("platform_orders")
-        .select(FINANCIAL_ISSUE_ANALYSIS_PLATFORM_ORDER_SELECT)
-        .eq("workspace_id", workspaceId)
-        .eq("platform", platform)
-        .order("order_ts", { ascending: true })
-        .range(offset, offset + pageSize - 1);
+  for (let offset = 0; offset < FINANCIAL_ISSUE_PLATFORM_SCAN_LIMIT; offset += pageSize) {
+    let query = supabase
+      .from("platform_orders")
+      .select(FINANCIAL_ISSUE_ANALYSIS_PLATFORM_CANDIDATE_SELECT)
+      .eq("workspace_id", workspaceId)
+      .in("platform", FINANCIAL_ISSUE_PLATFORM_FALLBACK_PLATFORMS)
+      .order("order_ts", { ascending: true })
+      .range(offset, offset + pageSize - 1);
 
-      if (from) query = query.gte("order_ts", `${from}T00:00:00.000Z`);
-      if (to) query = query.lt("order_ts", nextDayStartIso(to));
-      if (filters.currency) query = query.eq("currency", String(filters.currency).toUpperCase());
+    if (from) query = query.gte("order_ts", `${from}T00:00:00.000Z`);
+    if (to) query = query.lt("order_ts", nextDayStartIso(to));
+    if (filters.currency) query = query.eq("currency", String(filters.currency).toUpperCase());
 
-      const { data, error } = await query;
-      if (error) throw new Error(`Financial issue platform order range read failed: ${error.message}`);
+    const { data, error } = await query;
+    if (error) throw new Error(`Financial issue platform order range read failed: ${error.message}`);
 
-      const batch = (data || []) as FinancialIssueOrderRow[];
-      rows.push(...batch);
-      platformRows += batch.length;
-      if (batch.length < pageSize) break;
-      if (platformRows >= FINANCIAL_ISSUE_PLATFORM_SCAN_LIMIT) scannedAll = false;
-    }
+    const batch = (data || []) as FinancialIssueOrderRow[];
+    rows.push(...batch);
+    if (batch.length < pageSize) return { rows, scanned_all: scannedAll };
+    if (rows.length >= FINANCIAL_ISSUE_PLATFORM_SCAN_LIMIT) scannedAll = false;
   }
 
-  return { rows, scanned_all: scannedAll };
+  return { rows, scanned_all: false };
 }
 
 async function selectFinancialIssuePlatformRowsByStatus(
@@ -2504,32 +2503,28 @@ async function selectFinancialIssuePlatformRowsByStatus(
   const statuses = financialIssuePlatformStatusNorms(filters.kind);
   let scannedAll = true;
 
-  for (const platform of FINANCIAL_ISSUE_PLATFORM_FALLBACK_PLATFORMS) {
-    let platformRows = 0;
-    for (let offset = 0; offset < FINANCIAL_ISSUE_PLATFORM_SCAN_LIMIT; offset += pageSize) {
-      let query = supabase
-        .from("platform_orders")
-        .select(FINANCIAL_ISSUE_ANALYSIS_PLATFORM_ORDER_SELECT)
-        .eq("workspace_id", workspaceId)
-        .eq("platform", platform)
-        .in("status_norm", statuses)
-        .order("platform_order_id", { ascending: true })
-        .range(offset, offset + pageSize - 1);
+  for (let offset = 0; offset < FINANCIAL_ISSUE_PLATFORM_SCAN_LIMIT; offset += pageSize) {
+    let query = supabase
+      .from("platform_orders")
+      .select(FINANCIAL_ISSUE_ANALYSIS_PLATFORM_CANDIDATE_SELECT)
+      .eq("workspace_id", workspaceId)
+      .in("platform", FINANCIAL_ISSUE_PLATFORM_FALLBACK_PLATFORMS)
+      .in("status_norm", statuses)
+      .order("platform_order_id", { ascending: true })
+      .range(offset, offset + pageSize - 1);
 
-      if (filters.currency) query = query.eq("currency", String(filters.currency).toUpperCase());
+    if (filters.currency) query = query.eq("currency", String(filters.currency).toUpperCase());
 
-      const { data, error } = await query;
-      if (error) throw new Error(`Financial issue platform status read failed: ${error.message}`);
+    const { data, error } = await query;
+    if (error) throw new Error(`Financial issue platform status read failed: ${error.message}`);
 
-      const batch = (data || []) as FinancialIssueOrderRow[];
-      rows.push(...batch);
-      platformRows += batch.length;
-      if (batch.length < pageSize) break;
-      if (platformRows >= FINANCIAL_ISSUE_PLATFORM_SCAN_LIMIT) scannedAll = false;
-    }
+    const batch = (data || []) as FinancialIssueOrderRow[];
+    rows.push(...batch);
+    if (batch.length < pageSize) return { rows, scanned_all: scannedAll };
+    if (rows.length >= FINANCIAL_ISSUE_PLATFORM_SCAN_LIMIT) scannedAll = false;
   }
 
-  return { rows, scanned_all: scannedAll };
+  return { rows, scanned_all: false };
 }
 
 function mergeFinancialIssueDiagnostics(analysis: any, extra: Record<string, any>) {
@@ -2599,7 +2594,20 @@ async function readFinancialIssueAnalysis(env: Env, url: URL, kind: FinancialIss
     .filter(Boolean) as FinancialIssueLedgerRow[];
   const combinedLedgerRows = [...ledger.rows, ...platformSaleRows, ...platformIssueRows];
   const orderIds = combinedLedgerRows.map((row) => String(row.order_id || "").trim()).filter(Boolean);
-  const conversionPlatformOrders = await selectFinancialIssuePlatformOrders(supabase, workspaceId, orderIds);
+  const candidateOrderIdsWithAffiliate = new Set<string>();
+  const candidateOrderIdsMissingAffiliate = new Set<string>();
+  for (const row of platformCandidateRows) {
+    const orderId = String(row.order_id || "").trim();
+    if (!orderId) continue;
+    if (String(row.affiliate_id || "").trim()) candidateOrderIdsWithAffiliate.add(orderId);
+    else candidateOrderIdsMissingAffiliate.add(orderId);
+  }
+  for (const orderId of candidateOrderIdsMissingAffiliate) candidateOrderIdsWithAffiliate.delete(orderId);
+  const conversionPlatformOrders = await selectFinancialIssuePlatformOrders(
+    supabase,
+    workspaceId,
+    orderIds.filter((orderId) => !candidateOrderIdsWithAffiliate.has(orderId)),
+  );
   const platformOrders = uniqueFinancialIssuePlatformRows([
     ...conversionPlatformOrders,
     ...platformRange.rows,

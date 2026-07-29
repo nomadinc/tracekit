@@ -145,9 +145,42 @@ test("decision home links to dedicated refund and chargeback analysis routes", (
   assert.match(worker, /FINANCIAL_ISSUE_PLATFORM_FALLBACK_PLATFORMS = \["wowboost", "wowsuite:wowboost", "wowsuite"\]/);
   assert.match(worker, /selectFinancialIssuePlatformRowsByStatus/);
   assert.match(worker, /selectFinancialIssuePlatformRowsInOrderRange/);
+  assert.match(worker, /\.in\("platform", FINANCIAL_ISSUE_PLATFORM_FALLBACK_PLATFORMS\)/);
+  assert.match(worker, /\.gte\("order_ts", `\$\{from\}T00:00:00\.000Z`\)/);
+  assert.match(worker, /\.lt\("order_ts", nextDayStartIso\(to\)\)/);
+  assert.match(worker, /FINANCIAL_ISSUE_ANALYSIS_PLATFORM_CANDIDATE_SELECT/);
+  assert.doesNotMatch(
+    worker.match(/const FINANCIAL_ISSUE_ANALYSIS_PLATFORM_CANDIDATE_SELECT =\s*\n\s*"([^"]+)"/)?.[1] || "",
+    /customer_email|customer_email_normalized|email,|source_id|sub1|sub2|sub3|sub4|sub5/,
+  );
   assert.match(worker, /financialIssuePlatformFallbackDecision/);
   assert.match(worker, /existingLedgerIssueOrderIds/);
   assert.match(worker, /existing_ledger_issue/);
+  assert.match(worker, /candidateOrderIdsWithAffiliate/);
+});
+
+test("financial issue analysis migration adds indexes matching the bounded query predicates", () => {
+  const migration = readRepoFile("supabase/migrations/034_financial_issue_analysis_indexes.sql");
+  const explain = readRepoFile("docs/operations/refunds-analysis-explain.sql");
+
+  assert.match(
+    migration,
+    /platform_orders_financial_issue_order_range_idx[\s\S]*workspace_id, order_ts, platform, platform_order_id/,
+  );
+  assert.match(
+    migration,
+    /platform_orders_financial_issue_status_idx[\s\S]*workspace_id, status_norm, platform_order_id, platform/,
+  );
+  assert.match(
+    migration,
+    /conversions_financial_issue_range_idx[\s\S]*workspace_id, occurred_at, ledger_type, order_id/,
+  );
+  assert.doesNotMatch(migration, /\bwhere\b/i);
+  assert.doesNotMatch(migration.toLowerCase(), /drop\s+(table|index)|truncate|delete\s+from|update\s+public/);
+  assert.match(explain, /explain \(analyze, buffers, costs, verbose\)/);
+  assert.match(explain, /platform_orders_financial_issue_order_range_idx/);
+  assert.match(explain, /platform_orders_financial_issue_status_idx/);
+  assert.match(explain, /conversions_financial_issue_range_idx/);
 });
 
 test("WowBoost and WowPay integration catalog routes are registered by the Worker", () => {
