@@ -134,6 +134,7 @@ export type FinancialIssueDiagnostics = {
   platform_issue_records_included: number;
   platform_issue_records_excluded_by_reason: Record<string, number>;
   included_records: number;
+  included_records_missing_affiliate: number;
   excluded_records_by_reason: Record<string, number>;
   unmatched_orders: number;
   missing_amounts: number;
@@ -499,6 +500,7 @@ export function buildFinancialIssueAnalysis(
     platform_issue_records_included: 0,
     platform_issue_records_excluded_by_reason: {},
     included_records: 0,
+    included_records_missing_affiliate: 0,
     excluded_records_by_reason: {},
     unmatched_orders: 0,
     missing_amounts: 0,
@@ -537,23 +539,14 @@ export function buildFinancialIssueAnalysis(
     }
 
     const affiliateId = affiliateForOrder(orderId);
-    if (!affiliateId) {
-      if (ledgerType === kind) {
-        diagnostics.unmatched_orders += 1;
-        incrementReason(diagnostics.excluded_records_by_reason, ordersById.has(orderId) ? "missing_affiliate" : "unmatched_order");
-      }
-      continue;
-    }
     if (affiliateFilter && affiliateId !== affiliateFilter) {
       if (ledgerType === kind) incrementReason(diagnostics.excluded_records_by_reason, "affiliate_filter");
       continue;
     }
 
-    const entry = entryFor(affiliateId);
-
     if (ledgerType === "sale" && amount > 0) {
-      saleOrderIds.add(orderId);
-      entry.total_orders.add(orderId);
+      if (ordersById.has(orderId)) saleOrderIds.add(orderId);
+      if (affiliateId) entryFor(affiliateId).total_orders.add(orderId);
     }
 
     if (ledgerType === kind) {
@@ -562,14 +555,25 @@ export function buildFinancialIssueAnalysis(
         incrementReason(diagnostics.excluded_records_by_reason, "missing_amount");
         continue;
       }
+      if (!ordersById.has(orderId)) {
+        diagnostics.unmatched_orders += 1;
+        incrementReason(diagnostics.excluded_records_by_reason, "unmatched_order");
+        continue;
+      }
       const absoluteAmount = Math.abs(amount);
       issueAmount += absoluteAmount;
       issueEventCount += 1;
       diagnostics.included_records += 1;
       issueOrderIds.add(orderId);
-      entry.affected_orders.add(orderId);
-      entry.event_count += 1;
-      entry.amount += absoluteAmount;
+      if (affiliateId) {
+        const entry = entryFor(affiliateId);
+        entry.affected_orders.add(orderId);
+        entry.event_count += 1;
+        entry.amount += absoluteAmount;
+      } else {
+        diagnostics.included_records_missing_affiliate += 1;
+        incrementReason(diagnostics.excluded_records_by_reason, "missing_affiliate");
+      }
     }
   }
 
@@ -611,6 +615,9 @@ export function buildFinancialIssueAnalysis(
   if (!options.scanned_all) warnings.push("Analysis is based on a bounded ledger scan; narrow the date range for complete source ranking.");
   if (!platformOrders.length && ledgerRows.some((row) => canonicalOrderId(row))) {
     warnings.push("Ledger data is available, but matching platform order affiliate fields are unavailable.");
+  }
+  if (diagnostics.included_records_missing_affiliate > 0) {
+    warnings.push(`${diagnostics.included_records_missing_affiliate} ${kind} event(s) are included in totals but omitted from affiliate/source ranking because affiliate evidence is unavailable.`);
   }
 
   const uniqueWarnings = Array.from(new Set(warnings));
