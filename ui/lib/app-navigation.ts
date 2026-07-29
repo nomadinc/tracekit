@@ -56,6 +56,7 @@ export const APP_NAVIGATION: AppNavigationGroup[] = [
     items: [
       { href: "/reports", label: "Commissions", description: "Review generated commission records." },
       { href: "/reports", label: "Payouts", description: "Prepare payable commission workflows." },
+      { href: "/dashboard/financial-import-monitor", label: "Financial Import Monitor", description: "Monitor import health for payment, refund, and chargeback connectors." },
       { href: "/orders", label: "Orders", description: "Audit commerce and financial records." },
     ],
   },

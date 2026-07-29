@@ -161,6 +161,37 @@ test("decision home links to dedicated refund and chargeback analysis routes", (
   assert.match(worker, /candidateOrderIdsWithAffiliate/);
 });
 
+test("financial import monitor route consumes the authenticated Worker endpoint without a privileged UI proxy", () => {
+  const navigation = readRepoFile("ui/lib/app-navigation.ts");
+  const page = readRepoFile("ui/app/(app)/dashboard/financial-import-monitor/page.tsx");
+  const client = readRepoFile("ui/app/(app)/dashboard/financial-import-monitor/financial-import-monitor-client.tsx");
+  const lib = readRepoFile("ui/lib/financial-import-monitor.ts");
+  const worker = readRepoFile("api/src/index.ts");
+  const monitor = readRepoFile("api/src/financial-import-monitor.ts");
+
+  assert.match(navigation, /href: "\/dashboard\/financial-import-monitor"/);
+  assert.match(page, /<FinancialImportMonitorClient \/>/);
+  assert.match(client, /Financial Import Monitor/);
+  assert.match(client, /\/v1\/financial-import-monitor/);
+  assert.match(client, /SummaryCards/);
+  assert.match(client, /AccountTable/);
+  assert.match(client, /DetailPanel/);
+  assert.match(client, /Needs attention/);
+  assert.match(lib, /financialImportMonitorQuery/);
+  assert.match(worker, /FINANCIAL_IMPORT_MONITOR_PATH/);
+  assert.match(worker, /getFinancialImportMonitorReport/);
+  assert.match(monitor, /FINANCIAL_IMPORT_MONITOR_PATH = "\/v1\/financial-import-monitor"/);
+  assert.match(monitor, /integrations_credentials/);
+  assert.match(monitor, /integration_import_jobs/);
+  assert.match(monitor, /connector_import_tasks/);
+  assert.match(monitor, /conversions/);
+  assert.match(monitor, /processor_account_id/);
+  assert.match(monitor, /diagnostic_only/);
+  assert.doesNotMatch(monitor, /\bfetch\s*\(/);
+  assert.doesNotMatch(monitor, /\.(insert|upsert|update|delete)\s*\(/);
+  assert.throws(() => readRepoFile("ui/app/api/financial-import-monitor/route.ts"));
+});
+
 test("financial issue analysis migration adds indexes matching the bounded query predicates", () => {
   const migration = readRepoFile("supabase/migrations/034_financial_issue_analysis_indexes.sql");
   const explain = readRepoFile("docs/operations/refunds-analysis-explain.sql");
