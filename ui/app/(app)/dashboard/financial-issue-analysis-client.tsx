@@ -116,6 +116,19 @@ function affiliateName(row: FinancialIssueSourceRow) {
   return row.affiliate_name || row.source_name || `Affiliate ${row.affiliate_id || "Unknown"}`;
 }
 
+function sourceName(row: FinancialIssueSourceRow) {
+  if (row.source_name) return row.source_name;
+  if (row.source_id) return `Source ${row.source_id}`;
+  if (row.sub_id_key && row.sub_id_value) return `${row.sub_id_key.toUpperCase()} ${row.sub_id_value}`;
+  return "Unknown source";
+}
+
+function sourceKey(row: FinancialIssueSourceRow) {
+  if (row.source_id) return row.source_id;
+  if (row.sub_id_key && row.sub_id_value) return `${row.sub_id_key}:${row.sub_id_value}`;
+  return row.group_key || "Unavailable";
+}
+
 export function FinancialIssueAnalysisClient({ kind }: Props) {
   const copy = COPY[kind];
   const router = useRouter();
@@ -172,6 +185,7 @@ export function FinancialIssueAnalysisClient({ kind }: Props) {
   }, [affiliateId, copy.endpoint, copy.title, range.from, range.to]);
 
   const rows = data?.affiliates || [];
+  const sourceRows = data?.sources || [];
   const summary = data?.summary;
   const warnings = data?.data_quality?.warnings || [];
   const partialScan = Boolean(data?.data_quality?.partial_scan);
@@ -291,6 +305,51 @@ export function FinancialIssueAnalysisClient({ kind }: Props) {
         ) : (
           <div className="p-5 text-sm text-slate-500">
             {loading ? "Loading affiliate rows..." : emptyMessage(kind, affiliateId, range.from, range.to)}
+          </div>
+        )}
+      </section>
+
+      <section className="rounded-2xl border bg-white dark:bg-ink/60">
+        <div className="border-b p-5">
+          <h2 className="text-base font-semibold">Source / Sub-ID Ranking</h2>
+          <p className="mt-1 text-sm text-slate-500">
+            Uses source and sub-ID fields when they are available on matched orders.
+          </p>
+        </div>
+        {sourceRows.length ? (
+          <div className="overflow-x-auto">
+            <table className="min-w-[760px] w-full text-left text-sm">
+              <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-900/70">
+                <tr>
+                  <th className="px-4 py-3">Rank</th>
+                  <th className="px-4 py-3">Source</th>
+                  <th className="px-4 py-3">Key</th>
+                  <th className="px-4 py-3 text-right">Total Orders</th>
+                  <th className="px-4 py-3 text-right">{copy.affectedColumn}</th>
+                  <th className="px-4 py-3 text-right">{copy.eventColumn}</th>
+                  <th className="px-4 py-3 text-right">{copy.amountColumn}</th>
+                  <th className="px-4 py-3 text-right">{copy.rateColumn}</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y">
+                {sourceRows.map((row, index) => (
+                  <tr key={row.group_key || index} className="hover:bg-slate-50 dark:hover:bg-slate-900/60">
+                    <td className="px-4 py-3 font-semibold tabular-nums">{index + 1}</td>
+                    <td className="px-4 py-3 font-medium">{sourceName(row)}</td>
+                    <td className="px-4 py-3 text-slate-600 dark:text-slate-300">{sourceKey(row)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{integer(row.total_orders)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{integer(row.affected_orders)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{integer(row.event_count)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{money(row.amount)}</td>
+                    <td className="px-4 py-3 text-right tabular-nums">{percent(row.rate_by_orders)}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <div className="p-5 text-sm text-slate-500">
+            {loading ? "Loading source rows..." : "No source or sub-ID ranking data was found for the selected period."}
           </div>
         )}
       </section>

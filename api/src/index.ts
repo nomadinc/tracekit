@@ -2090,10 +2090,10 @@ const FINANCIAL_ISSUE_ANALYSIS_CONVERSION_SELECT =
   "workspace_id,order_id,connector_id,currency,platform,event_source,ledger_type,amount,occurred_at,transaction_id,status";
 
 const FINANCIAL_ISSUE_ANALYSIS_PLATFORM_CANDIDATE_SELECT =
-  "workspace_id,platform_order_id,order_id,platform,status,status_norm,gross_amount,receipt_total,currency,order_ts,affiliate_id,raw_json";
+  "workspace_id,platform_order_id,order_id,platform,status,status_norm,gross_amount,receipt_total,currency,order_ts,affiliate_id,source_id,sub1,sub2,sub3,sub4,sub5,raw_json";
 
 const FINANCIAL_ISSUE_ANALYSIS_PLATFORM_LOOKUP_SELECT =
-  "workspace_id,platform_order_id,order_id,platform,order_ts,affiliate_id,raw_json";
+  "workspace_id,platform_order_id,order_id,platform,order_ts,affiliate_id,source_id,sub1,sub2,sub3,sub4,sub5,raw_json";
 
 const FINANCIAL_ISSUE_ANALYSIS_LEDGER_SCAN_LIMIT = 10_000;
 const FINANCIAL_ISSUE_PLATFORM_SCAN_LIMIT = 10_000;

@@ -138,21 +138,23 @@ test("decision home links to dedicated refund and chargeback analysis routes", (
   assert.match(analysisClient, /Clear/);
   assert.match(analysisClient, /Top 5 Affiliates by Refunds/);
   assert.match(analysisClient, /Top 5 Affiliates by Chargebacks/);
+  assert.match(analysisClient, /Source \/ Sub-ID Ranking/);
   assert.match(analysisClient, /No refund data was found/);
-  assert.doesNotMatch(analysisClient, /LineChart|TrendChart|DetailDrawer|SORT_OPTIONS|campaign_id|source_id|attribution_status/);
+  assert.doesNotMatch(analysisClient, /LineChart|TrendChart|DetailDrawer|SORT_OPTIONS|campaign_id|attribution_status/);
   assert.match(worker, /path === "\/v1\/refunds\/analysis"/);
   assert.match(worker, /path === "\/v1\/chargebacks\/analysis"/);
   assert.match(worker, /FINANCIAL_ISSUE_PLATFORM_FALLBACK_PLATFORMS = \["wowboost", "wowsuite:wowboost", "wowsuite"\]/);
   assert.match(worker, /selectFinancialIssuePlatformRowsByStatus/);
   assert.match(worker, /selectFinancialIssuePlatformRowsInOrderRange/);
   assert.match(worker, /\.in\("platform", FINANCIAL_ISSUE_PLATFORM_FALLBACK_PLATFORMS\)/);
+  assert.match(worker, /\.gte\("occurred_at", `\$\{from\}T00:00:00\.000Z`\)/);
+  assert.match(worker, /\.lt\("occurred_at", nextDayStartIso\(to\)\)/);
   assert.match(worker, /\.gte\("order_ts", `\$\{from\}T00:00:00\.000Z`\)/);
   assert.match(worker, /\.lt\("order_ts", nextDayStartIso\(to\)\)/);
   assert.match(worker, /FINANCIAL_ISSUE_ANALYSIS_PLATFORM_CANDIDATE_SELECT/);
-  assert.doesNotMatch(
-    worker.match(/const FINANCIAL_ISSUE_ANALYSIS_PLATFORM_CANDIDATE_SELECT =\s*\n\s*"([^"]+)"/)?.[1] || "",
-    /customer_email|customer_email_normalized|email,|source_id|sub1|sub2|sub3|sub4|sub5/,
-  );
+  const candidateSelect = worker.match(/const FINANCIAL_ISSUE_ANALYSIS_PLATFORM_CANDIDATE_SELECT =\s*\n\s*"([^"]+)"/)?.[1] || "";
+  assert.doesNotMatch(candidateSelect, /customer_email|customer_email_normalized|email,/);
+  assert.match(candidateSelect, /source_id,sub1,sub2,sub3,sub4,sub5/);
   assert.match(worker, /financialIssuePlatformFallbackDecision/);
   assert.match(worker, /existingLedgerIssueOrderIds/);
   assert.match(worker, /existing_ledger_issue/);

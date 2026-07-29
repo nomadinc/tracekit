@@ -136,6 +136,8 @@ export type FinancialIssueSourceRow = {
   affiliate_id?: string | null;
   affiliate_name?: string | null;
   source_id?: string | null;
+  sub_id_key?: string | null;
+  sub_id_value?: string | null;
   campaign_id?: string | null;
   brand_id?: string | null;
   offer_id?: string | null;
@@ -197,6 +199,8 @@ export type FinancialIssueAnalysisResponse = {
       platform_issue_records_included?: number;
       platform_issue_records_excluded_by_reason?: Record<string, number>;
       included_records?: number;
+      included_records_missing_affiliate?: number;
+      duplicate_source_events?: number;
       excluded_records_by_reason?: Record<string, number>;
       unmatched_orders?: number;
       missing_amounts?: number;
