@@ -343,10 +343,16 @@ import {
   type PaypalReconciliationResult,
 } from "./paypal";
 import {
+  buildPaypalDisputeDetailUrl,
   buildPaypalDisputeListUrl,
+  dedupePaypalDisputeListItems,
+  mergePaypalDisputeListAndDetail,
   normalizePaypalDisputeEvents,
+  paypalDisputeContinuationCursor,
+  paypalDisputeWindowBounds,
   parsePaypalDisputeListPage,
   summarizeGatewayClassicActionsForDiagnostics,
+  summarizePaypalDisputeNormalizationDiagnostics,
   type GatewayClassicAction,
   type NormalizedChargebackEvent,
 } from "./chargebacks";
@@ -5173,10 +5179,12 @@ function chargebackTaskPlanForAccount(args: {
   account: ChargebackProcessorAccount;
   page?: number | null;
   next_page_token?: string | null;
+  paypal_next_query?: Record<string, string> | null;
 }): ConnectorRuntimeTaskPlan {
   const page = args.page ?? (args.account.family === "paypal" ? 1 : 0);
   const token = args.next_page_token || null;
-  const dedupeCursor = token || String(page);
+  const paypalNextQuery = args.paypal_next_query || null;
+  const dedupeCursor = paypalDisputeContinuationCursor(paypalNextQuery) || token || String(page);
   return {
     job_id: args.job.id,
     workspace_id: args.request.workspace_id,
@@ -5193,6 +5201,7 @@ function chargebackTaskPlanForAccount(args: {
       gateway_page_size: args.request.gateway_page_size,
       gateway_max_pages: args.request.gateway_max_pages,
       next_page_token: token,
+      paypal_next_query: paypalNextQuery,
       dry_run: args.request.dry_run,
     },
     dedupe_key: `chargeback:${args.account.account_key}:${dedupeCursor}`,
@@ -5543,23 +5552,90 @@ async function executePaypalChargebackIngestionTask(env: Env, job: ImportJobRow,
   const page = Math.max(1, Number(task.page || task.payload?.page || 1));
   const pageSize = Math.max(1, Math.min(CHARGEBACK_PAYPAL_MAX_PAGE_SIZE, Number(task.payload?.paypal_page_size || CHARGEBACK_PAYPAL_DEFAULT_PAGE_SIZE)));
   const nextPageToken = String(task.payload?.next_page_token || "").trim() || null;
+  const paypalNextQuery = task.payload?.paypal_next_query && typeof task.payload.paypal_next_query === "object"
+    ? task.payload.paypal_next_query as Record<string, string>
+    : null;
   const dryRun = Boolean(task.payload?.dry_run || progress.metadata?.dry_run);
   const creds = await getLatestCredential(env, account.credential_platform);
   if (!creds) throw new Error(`PayPal chargeback credentials missing for ${account.credential_platform}`);
   const metadata = normalizePaypalCredentialMetadata((creds as any).metadata);
   const clientSecret = await decryptSecretFromCredRow(env, creds as any);
+  const baseUrl = paypalBaseUrlForEnvironment(metadata.environment);
+  const windowBounds = paypalDisputeWindowBounds(`${from}T00:00:00.000Z`, nextDayStartIso(to));
+  if (!paypalNextQuery && !nextPageToken && windowBounds.empty) {
+    const accounts = chargebackProgressAccounts(progress);
+    accounts[account.account_key] = {
+      ...(accounts[account.account_key] || {}),
+      ...account,
+      status: "completed",
+      current_page: page,
+      next_page: null,
+      next_page_token: null,
+      paypal_next_query: null,
+      diagnostics: capChargebackDiagnosticList([
+        ...(accounts[account.account_key]?.diagnostics || []),
+        {
+          reason: "paypal_dispute_window_empty_after_clamp",
+          from_iso: windowBounds.from_iso,
+          to_iso: windowBounds.to_iso,
+        },
+      ]),
+      last_error: null,
+    };
+    const allCompleted = Object.values(accounts).every((state: any) => state.status === "completed");
+    const now = new Date().toISOString();
+    const nextProgress = {
+      ...progress,
+      status: (allCompleted ? "completed" : "running") as ConnectorRuntimeProgress["status"],
+      phase: CHARGEBACK_INGESTION_PHASE,
+      current_cursor: `${account.account_key}:${page}`,
+      current_page: page,
+      updated_at: now,
+      completed_at: allCompleted ? now : null,
+      last_error: null,
+      accounts,
+      metadata: {
+        ...progress.metadata,
+        accounts: Object.values(accounts),
+      },
+    };
+    await updateConnectorRuntimeJobProgress(env, job, nextProgress);
+    return {
+      account_key: account.account_key,
+      platform: account.platform,
+      processor_account_id: account.processor_account_id,
+      page,
+      page_size: pageSize,
+      fetched: 0,
+      details_fetched: 0,
+      events_observed: 0,
+      events_inserted: 0,
+      duplicates_skipped: 0,
+      matched: 0,
+      unmatched: 0,
+      ambiguous: 0,
+      invalid_rejected: 0,
+      pagination_warnings: [{ reason: "paypal_dispute_window_empty_after_clamp" }],
+      has_more: false,
+      next_page: null,
+      next_page_token: null,
+      paypal_next_query: null,
+      dry_run: dryRun,
+    };
+  }
   const token = await fetchPaypalAccessToken({
     clientId: String((creds as any).username || ""),
     clientSecret,
     environment: metadata.environment,
   });
   const url = buildPaypalDisputeListUrl({
-    base_url: paypalBaseUrlForEnvironment(metadata.environment),
-    from_iso: `${from}T00:00:00.000Z`,
-    to_iso: nextDayStartIso(to),
+    base_url: baseUrl,
+    from_iso: windowBounds.from_iso,
+    to_iso: windowBounds.to_iso,
     page,
     page_size: pageSize,
     next_page_token: nextPageToken,
+    next_query: paypalNextQuery,
   });
   const res = await fetchWithTimeout(url, {
     method: "GET",
@@ -5571,12 +5647,37 @@ async function executePaypalChargebackIngestionTask(env: Env, job: ImportJobRow,
   const text = await readTextSafe(res);
   const parsed = safeJsonParse(text) || {};
   if (!res.ok) throw new Error(`PayPal dispute list failed ${res.status}: ${text.slice(0, 500)}`);
-  const pageResult = parsePaypalDisputeListPage(parsed, { requested_page: page, page_size: pageSize });
-  const currentPageCursor = nextPageToken || String(page);
-  const nextPageCursor = pageResult.next_page_token || (pageResult.next_page ? String(pageResult.next_page) : null);
+  const pageResult = parsePaypalDisputeListPage(parsed, { requested_page: page, page_size: pageSize, base_url: baseUrl });
+  const detailedDisputes = [];
+  for (const dispute of dedupePaypalDisputeListItems(pageResult.disputes)) {
+    const detailUrl = buildPaypalDisputeDetailUrl(baseUrl, dispute?.dispute_id ?? dispute?.id);
+    if (!detailUrl) throw new Error("PayPal dispute detail failed: list item missing dispute_id");
+    const detailRes = await fetchWithTimeout(detailUrl, {
+      method: "GET",
+      headers: {
+        Authorization: `Bearer ${token.access_token}`,
+        "Content-Type": "application/json",
+      },
+    }, 30000);
+    const detailText = await readTextSafe(detailRes);
+    const detailParsed = safeJsonParse(detailText) || {};
+    if (!detailRes.ok) throw new Error(`PayPal dispute detail failed ${detailRes.status}: ${detailText.slice(0, 500)}`);
+    detailedDisputes.push(mergePaypalDisputeListAndDetail(dispute, detailParsed));
+  }
+  const currentPageCursor = paypalDisputeContinuationCursor(paypalNextQuery) || nextPageToken || String(page);
+  const nextPageCursor = pageResult.next_cursor;
+  const rawNextHref = Array.isArray(parsed?.links)
+    ? parsed.links.find((link: any) => String(link?.rel || "").toLowerCase() === "next")?.href
+    : null;
   const paginationWarnings: any[] = [];
   let pageHasMore = pageResult.has_more;
-  if (pageHasMore && (!nextPageCursor || nextPageCursor === currentPageCursor || Number(pageResult.next_page || 0) > CHARGEBACK_PAYPAL_MAX_PAGES)) {
+  if (rawNextHref && !pageResult.next_query) {
+    paginationWarnings.push({
+      reason: "paypal_dispute_pagination_invalid_next_url",
+      page,
+    });
+  }
+  if (pageHasMore && (!nextPageCursor || nextPageCursor === currentPageCursor || page >= CHARGEBACK_PAYPAL_MAX_PAGES)) {
     pageHasMore = false;
     paginationWarnings.push({
       reason: !nextPageCursor || nextPageCursor === currentPageCursor
@@ -5589,7 +5690,8 @@ async function executePaypalChargebackIngestionTask(env: Env, job: ImportJobRow,
       max_pages: CHARGEBACK_PAYPAL_MAX_PAGES,
     });
   }
-  let events = pageResult.disputes.flatMap((dispute) => normalizePaypalDisputeEvents(dispute, {
+  const normalizationDiagnostics = detailedDisputes.flatMap(summarizePaypalDisputeNormalizationDiagnostics);
+  let events = detailedDisputes.flatMap((dispute) => normalizePaypalDisputeEvents(dispute, {
     workspace_id: progress.workspace_id,
     platform: "paypal",
     connector_id: account.connector_id,
@@ -5604,10 +5706,12 @@ async function executePaypalChargebackIngestionTask(env: Env, job: ImportJobRow,
     ...account,
     status: pageHasMore ? "running" : "completed",
     current_page: page,
-    next_page: pageResult.next_page,
+    next_page: pageHasMore ? (pageResult.next_page || page + 1) : null,
     next_page_token: pageResult.next_page_token,
+    paypal_next_query: pageHasMore ? pageResult.next_query : null,
+    details_fetched: Number(accounts[account.account_key]?.details_fetched || 0) + detailedDisputes.length,
     records_fetched: Number(accounts[account.account_key]?.records_fetched || 0) + pageResult.disputes.length,
-    records_processed: Number(accounts[account.account_key]?.records_processed || 0) + pageResult.disputes.length,
+    records_processed: Number(accounts[account.account_key]?.records_processed || 0) + detailedDisputes.length,
     events_observed: Number(accounts[account.account_key]?.events_observed || 0) + insert.observed,
     events_inserted: Number(accounts[account.account_key]?.events_inserted || 0) + insert.inserted,
     duplicates_skipped: Number(accounts[account.account_key]?.duplicates_skipped || 0) + insert.duplicates_skipped,
@@ -5618,6 +5722,7 @@ async function executePaypalChargebackIngestionTask(env: Env, job: ImportJobRow,
     diagnostics: capChargebackDiagnosticList([
       ...(accounts[account.account_key]?.diagnostics || []),
       ...paginationWarnings,
+      ...normalizationDiagnostics,
       ...(insert.rollup_warnings || []).map((warning: string) => ({ reason: "chargeback_rollup_warning", warning })),
     ]),
     last_error: null,
@@ -5629,10 +5734,10 @@ async function executePaypalChargebackIngestionTask(env: Env, job: ImportJobRow,
     ...progress,
     status: (allCompleted ? "completed" : "running") as ConnectorRuntimeProgress["status"],
     phase: CHARGEBACK_INGESTION_PHASE,
-    records_processed: Number(progress.records_processed || 0) + pageResult.disputes.length,
+    records_processed: Number(progress.records_processed || 0) + detailedDisputes.length,
     records_succeeded: Number(progress.records_succeeded || 0) + insert.inserted,
     records_skipped: Number(progress.records_skipped || 0) + insert.duplicates_skipped,
-    current_cursor: `${account.account_key}:${pageResult.next_page_token || pageResult.next_page || page}`,
+    current_cursor: `${account.account_key}:${pageHasMore ? (pageResult.next_cursor || pageResult.next_page || page) : currentPageCursor}`,
     current_page: page,
     updated_at: now,
     completed_at: allCompleted ? now : null,
@@ -5660,8 +5765,9 @@ async function executePaypalChargebackIngestionTask(env: Env, job: ImportJobRow,
       job,
       request,
       account,
-      page: pageResult.next_page,
+      page: pageResult.next_page || page + 1,
       next_page_token: pageResult.next_page_token,
+      paypal_next_query: pageResult.next_query,
     }));
   }
   return {
@@ -5671,6 +5777,7 @@ async function executePaypalChargebackIngestionTask(env: Env, job: ImportJobRow,
     page,
     page_size: pageSize,
     fetched: pageResult.disputes.length,
+    details_fetched: detailedDisputes.length,
     events_observed: insert.observed,
     events_inserted: insert.inserted,
     duplicates_skipped: insert.duplicates_skipped,
@@ -5680,8 +5787,9 @@ async function executePaypalChargebackIngestionTask(env: Env, job: ImportJobRow,
     invalid_rejected: insert.invalid_rejected,
     pagination_warnings: paginationWarnings,
     has_more: pageHasMore,
-    next_page: pageHasMore ? pageResult.next_page : null,
+    next_page: pageHasMore ? (pageResult.next_page || page + 1) : null,
     next_page_token: pageHasMore ? pageResult.next_page_token : null,
+    paypal_next_query: pageHasMore ? pageResult.next_query : null,
     dry_run: dryRun,
   };
 }
