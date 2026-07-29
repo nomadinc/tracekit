@@ -257,6 +257,12 @@ import {
   normalizeHomeParams,
 } from "./home";
 import {
+  FINANCIAL_IMPORT_MONITOR_PATH,
+  getFinancialImportMonitorReport,
+  normalizeFinancialImportMonitorParams,
+  redactFinancialImportMonitorMessage,
+} from "./financial-import-monitor";
+import {
   matchGlobalSearchRoute,
   normalizeGlobalSearchParams,
   searchWorkspace,
@@ -14919,6 +14925,30 @@ async function router(req: Request, env: Env): Promise<Response> {
         },
       ],
     });
+  }
+
+  if (path === FINANCIAL_IMPORT_MONITOR_PATH && req.method === "GET") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const params = normalizeFinancialImportMonitorParams(Object.fromEntries(url.searchParams.entries()));
+      return json(await getFinancialImportMonitorReport(getSupabase(env), params));
+    } catch (e: any) {
+      return json({
+        ok: false,
+        error: "financial_import_monitor_failed",
+        message: redactFinancialImportMonitorMessage(e?.message || String(e)),
+      }, e?.status || 500);
+    }
+  }
+
+  if (path === FINANCIAL_IMPORT_MONITOR_PATH && req.method !== "GET") {
+    return json({
+      ok: false,
+      error: "method_not_allowed",
+      message: `${FINANCIAL_IMPORT_MONITOR_PATH} requires GET.`,
+      allowed_methods: ["GET"],
+    }, 405, { Allow: "GET" });
   }
 
 	  if (path === "/v1/profit/rebuild-order" && req.method === "POST") {
