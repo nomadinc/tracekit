@@ -3,6 +3,8 @@ export type ProfitLedgerType =
   | "refund"
   | "chargeback"
   | "chargeback_fee"
+  | "chargeback_reversal"
+  | "chargeback_fee_reversal"
   | "processor_fee"
   | "bank_fee"
   | "shipping_cost"
@@ -828,6 +830,12 @@ export function aggregateProfitConversions(rows: ProfitConversionRow[]): ProfitA
         break;
       case "chargeback_fee":
         totals.chargeback_fees += amount;
+        break;
+      case "chargeback_reversal":
+        totals.reversals += amount;
+        break;
+      case "chargeback_fee_reversal":
+        totals.adjustments += amount;
         break;
       case "processor_fee":
         totals.processor_fees += amount;

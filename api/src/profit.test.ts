@@ -73,6 +73,25 @@ test("aggregates sale with chargeback and chargeback fee", () => {
   assert.equal(result.net_profit, -15);
 });
 
+test("keeps same-order refunds, chargebacks, and recoveries financially independent", () => {
+  const result = aggregateProfitConversions([
+    row("sale", 100),
+    row("refund", -25),
+    row("chargeback", -100),
+    row("chargeback_fee", -15),
+    row("chargeback_reversal", 100),
+    row("chargeback_fee_reversal", 15),
+  ]);
+
+  assert.equal(result.refunds, -25);
+  assert.equal(result.chargebacks, -100);
+  assert.equal(result.chargeback_fees, -15);
+  assert.equal(result.reversals, 100);
+  assert.equal(result.adjustments, 15);
+  assert.equal(result.net_revenue, 75);
+  assert.equal(result.net_profit, 75);
+});
+
 test("aggregates multiple processor fees", () => {
   const result = aggregateProfitConversions([
     row("sale", 100),

@@ -425,6 +425,54 @@ test("normalizes explicit dispute fixtures into ledger events", () => {
   assert.equal(events.find((event) => event.ledgerType === "chargeback_fee")?.amount, -15);
 });
 
+test("normalizes PayPal seller-favorable dispute updates as chargeback-specific reversals", () => {
+  const events = buildPaypalLedgerEventsFromDispute(
+    {
+      dispute_id: "DSP-RECOVERY",
+      status: "RESOLVED_SELLER_FAVOUR",
+      outcome: "seller won",
+      disputed_transaction_id: "TXN-1",
+      money_movements: [
+        {
+          party: "SELLER",
+          type: "CREDIT",
+          reason: "DISPUTE_SETTLEMENT",
+          amount: { value: "100.00", currency_code: "USD" },
+        },
+        {
+          party: "SELLER",
+          type: "CREDIT",
+          reason: "REVERSED_TRANSACTION_FEE",
+          amount: { value: "15.00", currency_code: "USD" },
+        },
+      ],
+      update_time: "2026-07-04T00:00:00Z",
+    },
+    { accountId, connectorId },
+  );
+
+  assert.equal(events.find((event) => event.ledgerType === "chargeback_reversal")?.amount, 100);
+  assert.equal(events.find((event) => event.ledgerType === "chargeback_fee_reversal")?.amount, 15);
+  assert.equal(events.some((event) => event.ledgerType === "reversal"), false);
+});
+
+test("does not infer PayPal dispute recovery from seller-favorable status alone", () => {
+  const events = buildPaypalLedgerEventsFromDispute(
+    {
+      dispute_id: "DSP-NO-RECOVERY",
+      status: "RESOLVED_SELLER_FAVOUR",
+      outcome: "seller won",
+      disputed_transaction_id: "TXN-1",
+      dispute_amount: { value: "100.00", currency_code: "USD" },
+      chargeback_fee: { value: "15.00", currency_code: "USD" },
+      update_time: "2026-07-04T00:00:00Z",
+    },
+    { accountId, connectorId },
+  );
+
+  assert.equal(events.length, 0);
+});
+
 test("reconciles exact invoice/order references", () => {
   const result = reconcilePaypalRecordToCommerceOrder({
     record: transactionFixture(),
