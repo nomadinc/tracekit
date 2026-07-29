@@ -122,5 +122,5 @@ export function financialReconciliationQuery(params: Record<string, string | num
     search.set(key, String(value));
   }
   const query = search.toString();
-  return `/v1/financial-reconciliation${query ? `?${query}` : ""}`;
+  return `/api/financial-reconciliation${query ? `?${query}` : ""}`;
 }

@@ -16,7 +16,7 @@ import {
   ShieldCheck,
   XCircle,
 } from "lucide-react";
-import { apiGetJson, apiPostJson } from "@/lib/api";
+import { sameOriginGetJson, sameOriginPostJson } from "@/lib/same-origin-api";
 import {
   financialReconciliationQuery,
   type FinancialReconciliationItem,
@@ -312,7 +312,7 @@ function DetailPanel({ item, data, onDecision }: { item: FinancialReconciliation
     try {
       setSaving(true);
       setMessage(null);
-      const response = await apiPostJson<any>("/v1/financial-reconciliation/matches", {
+      const response = await sameOriginPostJson<any>("/api/financial-reconciliation/matches", {
         workspace_id: WORKSPACE_ID,
         financial_event_id: item.id,
         decision_type: decisionType,
@@ -483,7 +483,7 @@ export default function FinancialReconciliationClient() {
       try {
         setLoading(true);
         setError(null);
-        const response = await apiGetJson<FinancialReconciliationResponse>(query);
+        const response = await sameOriginGetJson<FinancialReconciliationResponse>(query);
         if (!cancelled) {
           setData(response);
           setSelected((prev) => prev && response.items.some((item) => item.id === prev) ? prev : response.items[0]?.id || null);
@@ -531,7 +531,7 @@ export default function FinancialReconciliationClient() {
             <div>
               <h2 className="font-semibold">Financial Reconciliation Center is unavailable</h2>
               <p className="mt-1 text-sm text-slate-500">{error}</p>
-              <p className="mt-2 text-xs text-slate-500">This page uses the authenticated Worker endpoint <code>/v1/financial-reconciliation</code>.</p>
+              <p className="mt-2 text-xs text-slate-500">This page uses the authenticated server proxy <code>/api/financial-reconciliation</code>.</p>
             </div>
           </div>
         </Card>
