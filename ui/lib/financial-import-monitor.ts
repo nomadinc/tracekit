@@ -118,5 +118,5 @@ export function financialImportMonitorQuery(params: Record<string, string | numb
     search.set(key, String(value));
   }
   const query = search.toString();
-  return `/v1/financial-import-monitor${query ? `?${query}` : ""}`;
+  return `/api/financial-import-monitor${query ? `?${query}` : ""}`;
 }

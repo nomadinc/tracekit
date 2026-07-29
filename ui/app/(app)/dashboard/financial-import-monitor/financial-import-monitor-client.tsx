@@ -15,7 +15,7 @@ import {
   ShieldAlert,
   XCircle,
 } from "lucide-react";
-import { apiGetJson } from "@/lib/api";
+import { sameOriginGetJson } from "@/lib/same-origin-api";
 import {
   financialImportMonitorQuery,
   type FinancialImportMonitorAccount,
@@ -381,7 +381,7 @@ export default function FinancialImportMonitorClient() {
       try {
         setLoading(true);
         setError(null);
-        const response = await apiGetJson<FinancialImportMonitorResponse>(query);
+        const response = await sameOriginGetJson<FinancialImportMonitorResponse>(query);
         if (!cancelled) {
           setData(response);
           setSelected((prev) => prev || response.accounts[0]?.account_key || null);
@@ -426,7 +426,7 @@ export default function FinancialImportMonitorClient() {
             <div>
               <h2 className="font-semibold">Financial Import Monitor is unavailable</h2>
               <p className="mt-1 text-sm text-slate-500">{error}</p>
-              <p className="mt-2 text-xs text-slate-500">The monitor uses the authenticated Worker endpoint <code>/v1/financial-import-monitor</code>. Confirm the dashboard session or API base can call authenticated operational APIs.</p>
+              <p className="mt-2 text-xs text-slate-500">The monitor uses the authenticated server proxy <code>/api/financial-import-monitor</code>. Confirm the UI server can call authenticated operational APIs.</p>
             </div>
           </div>
         </Card>

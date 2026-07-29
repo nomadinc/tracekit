@@ -161,23 +161,41 @@ test("decision home links to dedicated refund and chargeback analysis routes", (
   assert.match(worker, /candidateOrderIdsWithAffiliate/);
 });
 
-test("financial import monitor route consumes the authenticated Worker endpoint without a privileged UI proxy", () => {
+test("financial import monitor route uses an authenticated server-side proxy", () => {
   const navigation = readRepoFile("ui/lib/app-navigation.ts");
   const page = readRepoFile("ui/app/(app)/dashboard/financial-import-monitor/page.tsx");
   const client = readRepoFile("ui/app/(app)/dashboard/financial-import-monitor/financial-import-monitor-client.tsx");
   const lib = readRepoFile("ui/lib/financial-import-monitor.ts");
+  const sameOriginApi = readRepoFile("ui/lib/same-origin-api.ts");
+  const proxy = readRepoFile("ui/app/api/financial-import-monitor/route.ts");
   const worker = readRepoFile("api/src/index.ts");
   const monitor = readRepoFile("api/src/financial-import-monitor.ts");
 
   assert.match(navigation, /href: "\/dashboard\/financial-import-monitor"/);
   assert.match(page, /<FinancialImportMonitorClient \/>/);
   assert.match(client, /Financial Import Monitor/);
-  assert.match(client, /\/v1\/financial-import-monitor/);
+  assert.match(client, /\/api\/financial-import-monitor/);
+  assert.match(client, /sameOriginGetJson/);
+  assert.doesNotMatch(client, /apiGetJson/);
+  assert.doesNotMatch(client, /x-tk-secret|TK_SECRET_KEY|TRACEKIT_TK_SECRET/);
   assert.match(client, /SummaryCards/);
   assert.match(client, /AccountTable/);
   assert.match(client, /DetailPanel/);
   assert.match(client, /Needs attention/);
   assert.match(lib, /financialImportMonitorQuery/);
+  assert.match(lib, /\/api\/financial-import-monitor/);
+  assert.doesNotMatch(lib, /\/v1\/financial-import-monitor/);
+  assert.match(sameOriginApi, /fetch\(pathAndQuery/);
+  assert.doesNotMatch(sameOriginApi, /NEXT_PUBLIC_API_BASE|TK_SECRET_KEY|TRACEKIT_TK_SECRET|x-tk-secret/);
+  assert.match(proxy, /process\.env\.TK_SECRET_KEY/);
+  assert.match(proxy, /process\.env\.TRACEKIT_TK_SECRET/);
+  assert.match(proxy, /x-tk-secret/);
+  assert.match(proxy, /\/v1\/financial-import-monitor\$\{search \? `\?\$\{search\}` : ""\}/);
+  assert.match(proxy, /url\.searchParams\.toString\(\)/);
+  assert.match(proxy, /NextResponse\.json\(await readJsonSafe\(res\), \{ status: res\.status \}\)/);
+  assert.match(proxy, /admin_auth_not_configured/);
+  assert.match(proxy, /Worker returned a non-JSON response/);
+  assert.doesNotMatch(proxy, /console\.log|console\.error|NEXT_PUBLIC_TK_SECRET_KEY/);
   assert.match(worker, /FINANCIAL_IMPORT_MONITOR_PATH/);
   assert.match(worker, /getFinancialImportMonitorReport/);
   assert.match(monitor, /FINANCIAL_IMPORT_MONITOR_PATH = "\/v1\/financial-import-monitor"/);
@@ -189,7 +207,6 @@ test("financial import monitor route consumes the authenticated Worker endpoint 
   assert.match(monitor, /diagnostic_only/);
   assert.doesNotMatch(monitor, /\bfetch\s*\(/);
   assert.doesNotMatch(monitor, /\.(insert|upsert|update|delete)\s*\(/);
-  assert.throws(() => readRepoFile("ui/app/api/financial-import-monitor/route.ts"));
 });
 
 test("financial reconciliation center routes, UI, and migration are wired safely", () => {
@@ -197,6 +214,9 @@ test("financial reconciliation center routes, UI, and migration are wired safely
   const page = readRepoFile("ui/app/(app)/dashboard/financial-reconciliation/page.tsx");
   const client = readRepoFile("ui/app/(app)/dashboard/financial-reconciliation/financial-reconciliation-client.tsx");
   const lib = readRepoFile("ui/lib/financial-reconciliation.ts");
+  const sameOriginApi = readRepoFile("ui/lib/same-origin-api.ts");
+  const proxy = readRepoFile("ui/app/api/financial-reconciliation/route.ts");
+  const matchesProxy = readRepoFile("ui/app/api/financial-reconciliation/matches/route.ts");
   const worker = readRepoFile("api/src/index.ts");
   const reconciliation = readRepoFile("api/src/financial-reconciliation.ts");
   const migration = readRepoFile("supabase/migrations/036_financial_event_matches.sql");
@@ -205,10 +225,34 @@ test("financial reconciliation center routes, UI, and migration are wired safely
   assert.match(page, /<FinancialReconciliationClient \/>/);
   assert.match(client, /Financial Reconciliation Center/);
   assert.match(client, /Manual controls are disabled/);
-  assert.match(client, /\/v1\/financial-reconciliation\/matches/);
+  assert.match(client, /\/api\/financial-reconciliation\/matches/);
+  assert.match(client, /sameOriginGetJson/);
+  assert.match(client, /sameOriginPostJson/);
+  assert.doesNotMatch(client, /apiGetJson|apiPostJson/);
+  assert.doesNotMatch(client, /x-tk-secret|TK_SECRET_KEY|TRACEKIT_TK_SECRET/);
   assert.match(client, /financialReconciliationQuery/);
   assert.match(lib, /FinancialReconciliationResponse/);
-  assert.match(lib, /\/v1\/financial-reconciliation/);
+  assert.match(lib, /\/api\/financial-reconciliation/);
+  assert.doesNotMatch(lib, /\/v1\/financial-reconciliation/);
+  assert.match(sameOriginApi, /method: "GET"/);
+  assert.match(sameOriginApi, /method: "POST"/);
+  assert.match(sameOriginApi, /JSON\.stringify\(body\)/);
+  assert.doesNotMatch(sameOriginApi, /NEXT_PUBLIC_API_BASE|TK_SECRET_KEY|TRACEKIT_TK_SECRET|x-tk-secret/);
+  for (const route of [proxy, matchesProxy]) {
+    assert.match(route, /process\.env\.TK_SECRET_KEY/);
+    assert.match(route, /process\.env\.TRACEKIT_TK_SECRET/);
+    assert.match(route, /x-tk-secret/);
+    assert.match(route, /NextResponse\.json\(await readJsonSafe\(res\), \{ status: res\.status \}\)/);
+    assert.match(route, /admin_auth_not_configured/);
+    assert.match(route, /Worker returned a non-JSON response/);
+    assert.doesNotMatch(route, /console\.log|console\.error|NEXT_PUBLIC_TK_SECRET_KEY/);
+  }
+  assert.match(proxy, /\/v1\/financial-reconciliation\$\{search \? `\?\$\{search\}` : ""\}/);
+  assert.match(proxy, /url\.searchParams\.toString\(\)/);
+  assert.match(matchesProxy, /\/v1\/financial-reconciliation\/matches/);
+  assert.match(matchesProxy, /method: "POST"/);
+  assert.match(matchesProxy, /"content-type": "application\/json"/);
+  assert.match(matchesProxy, /body: body \|\| "\{\}"/);
   assert.match(worker, /FINANCIAL_RECONCILIATION_PATH/);
   assert.match(worker, /FINANCIAL_RECONCILIATION_MATCHES_PATH/);
   assert.match(worker, /getFinancialReconciliationReport\(getSupabase\(env\), params\)/);
@@ -228,7 +272,6 @@ test("financial reconciliation center routes, UI, and migration are wired safely
   assert.match(reconciliation, /refund_without_matching_sale/);
   assert.match(reconciliation, /duplicate_rejected_before_ledger_insertion/);
   assert.doesNotMatch(reconciliation, /\bfetch\s*\(/);
-  assert.throws(() => readRepoFile("ui/app/api/financial-reconciliation/route.ts"));
 
   assert.match(migration, /financial_event_id_type text/);
   assert.match(migration, /financial_reconciliation_metadata_is_safe/);
