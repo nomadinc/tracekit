@@ -41,6 +41,8 @@ export type PayPalDisputeListPage = {
   has_more: boolean;
   next_page: number | null;
   next_page_token: string | null;
+  next_query: Record<string, string> | null;
+  next_cursor: string | null;
 };
 
 export type GatewayActionClassification =
@@ -106,6 +108,13 @@ export function chargebackMoney(value: unknown): { value: number; currency: stri
   return { value: parsed, currency: "USD" };
 }
 
+function canonicalQuery(value: Record<string, string>) {
+  return Object.keys(value)
+    .sort()
+    .map((key) => `${key}=${value[key]}`)
+    .join("&");
+}
+
 export function signedChargebackAmount(ledgerType: ChargebackLedgerType, amount: number) {
   if (ledgerType === "chargeback" || ledgerType === "chargeback_fee") return -Math.abs(amount);
   return Math.abs(amount);
@@ -146,6 +155,20 @@ function isSellerFavorableDispute(dispute: any) {
     dispute?.dispute_life_cycle_stage,
   ].map(cleanLower).join(" ");
   return /seller/.test(text) && /(favor|favour|won|recovered|reinstated|resolved_seller)/.test(text);
+}
+
+function paypalDisputeSellerTransactionId(dispute: any) {
+  return chargebackText(
+    dispute?.seller_transaction_id
+      ?? dispute?.disputed_transactions?.[0]?.seller_transaction_id,
+  );
+}
+
+function paypalDisputeBuyerTransactionId(dispute: any) {
+  return chargebackText(
+    dispute?.buyer_transaction_id
+      ?? dispute?.disputed_transactions?.[0]?.buyer_transaction_id,
+  );
 }
 
 function asArray(value: unknown): any[] {
@@ -243,21 +266,23 @@ function paypalDisputeId(dispute: any) {
 
 function paypalDisputeTransactionId(dispute: any) {
   return chargebackText(
-    dispute?.disputed_transaction_id
-      ?? dispute?.seller_transaction_id
-      ?? dispute?.transaction_id
-      ?? dispute?.disputed_transactions?.[0]?.seller_transaction_id
-      ?? dispute?.disputed_transactions?.[0]?.buyer_transaction_id,
+    paypalDisputeSellerTransactionId(dispute)
+      || paypalDisputeBuyerTransactionId(dispute)
+      || dispute?.disputed_transaction_id
+      || dispute?.transaction_id,
   );
 }
 
 function paypalDisputeOrderReference(dispute: any) {
   return chargebackText(
-    dispute?.invoice_id
-      ?? dispute?.custom_field
+    dispute?.custom_field
       ?? dispute?.custom
-      ?? dispute?.disputed_transactions?.[0]?.invoice_id
+      ?? dispute?.disputed_transactions?.[0]?.custom
       ?? dispute?.disputed_transactions?.[0]?.custom_field,
+  ) || chargebackText(
+    dispute?.invoice_id
+      ?? dispute?.disputed_transactions?.[0]?.invoice_id
+      ?? dispute?.disputed_transactions?.[0]?.invoice_number,
   ) || null;
 }
 
@@ -288,7 +313,7 @@ export function normalizePaypalDisputeEvents(dispute: any, args: {
   const orderId = paypalDisputeOrderReference(dispute);
   const processorTransactionId = paypalDisputeTransactionId(dispute) || null;
   const principal = chargebackMoney(dispute?.dispute_amount ?? dispute?.disputed_amount ?? dispute?.amount);
-  const fee = chargebackMoney(dispute?.chargeback_fee ?? dispute?.dispute_fee ?? dispute?.fee_amount);
+  const fee = chargebackMoney(dispute?.chargeback_fee ?? dispute?.dispute_fee);
   const sellerFavorable = isSellerFavorableDispute(dispute);
   const principalRecovery = paypalExplicitPrincipalRecovery(dispute);
   const feeRecovery = paypalExplicitFeeRecovery(dispute);
@@ -333,6 +358,8 @@ export function normalizePaypalDisputeEvents(dispute: any, args: {
         dispute_id: disputeId,
         processor_account_id: processorAccountId,
         processor_transaction_id: processorTransactionId,
+        seller_transaction_id: paypalDisputeSellerTransactionId(dispute) || null,
+        buyer_transaction_id: paypalDisputeBuyerTransactionId(dispute) || null,
       },
     });
   }
@@ -376,6 +403,8 @@ export function normalizePaypalDisputeEvents(dispute: any, args: {
         dispute_id: disputeId,
         processor_account_id: processorAccountId,
         processor_transaction_id: processorTransactionId,
+        seller_transaction_id: paypalDisputeSellerTransactionId(dispute) || null,
+        buyer_transaction_id: paypalDisputeBuyerTransactionId(dispute) || null,
         recovery_source_id: principalRecovery.source_id,
       },
     });
@@ -420,6 +449,8 @@ export function normalizePaypalDisputeEvents(dispute: any, args: {
         dispute_id: disputeId,
         processor_account_id: processorAccountId,
         processor_transaction_id: processorTransactionId,
+        seller_transaction_id: paypalDisputeSellerTransactionId(dispute) || null,
+        buyer_transaction_id: paypalDisputeBuyerTransactionId(dispute) || null,
       },
     });
   }
@@ -463,6 +494,8 @@ export function normalizePaypalDisputeEvents(dispute: any, args: {
         dispute_id: disputeId,
         processor_account_id: processorAccountId,
         processor_transaction_id: processorTransactionId,
+        seller_transaction_id: paypalDisputeSellerTransactionId(dispute) || null,
+        buyer_transaction_id: paypalDisputeBuyerTransactionId(dispute) || null,
         recovery_source_id: feeRecovery.source_id,
       },
     });
@@ -471,7 +504,80 @@ export function normalizePaypalDisputeEvents(dispute: any, args: {
   return events;
 }
 
-export function parsePaypalDisputeListPage(response: any, args: { requested_page?: number; page_size?: number } = {}): PayPalDisputeListPage {
+const PAYPAL_DISPUTE_CONTINUATION_PARAMS = new Set([
+  "page",
+  "page_size",
+  "next_page_token",
+  "update_time_after",
+  "update_time_before",
+  "create_time_after",
+  "create_time_before",
+  "start_time",
+  "dispute_state",
+]);
+
+export function sanitizePaypalDisputeNextQuery(nextHref: unknown, baseUrl: string): Record<string, string> | null {
+  const href = chargebackText(nextHref);
+  if (!href) return null;
+  try {
+    const base = new URL(baseUrl);
+    const parsed = new URL(href);
+    if (parsed.protocol !== "https:") return null;
+    if (parsed.username || parsed.password) return null;
+    if (parsed.hostname !== base.hostname) return null;
+    if (parsed.pathname.replace(/\/+$/, "") !== "/v1/customer/disputes") return null;
+    const query: Record<string, string> = {};
+    for (const [key, value] of parsed.searchParams.entries()) {
+      if (PAYPAL_DISPUTE_CONTINUATION_PARAMS.has(key) && chargebackText(value)) {
+        query[key] = value;
+      }
+    }
+    return Object.keys(query).length ? query : null;
+  } catch {
+    return null;
+  }
+}
+
+export function paypalDisputeContinuationCursor(query: Record<string, string> | null) {
+  if (!query) return null;
+  return chargebackText(query.next_page_token)
+    || chargebackText(query.page)
+    || canonicalQuery(query)
+    || null;
+}
+
+export function clampPaypalDisputeUpdateTimeBefore(toIso: string, now = new Date()) {
+  const requestedMs = Date.parse(toIso);
+  const nowMs = now.getTime();
+  if (!Number.isFinite(requestedMs)) return toIso;
+  return new Date(Math.min(requestedMs, nowMs)).toISOString();
+}
+
+export function paypalDisputeWindowBounds(fromIso: string, toIso: string, now = new Date()) {
+  const clampedTo = clampPaypalDisputeUpdateTimeBefore(toIso, now);
+  const fromMs = Date.parse(fromIso);
+  const toMs = Date.parse(clampedTo);
+  return {
+    from_iso: Number.isFinite(fromMs) ? new Date(fromMs).toISOString() : fromIso,
+    to_iso: Number.isFinite(toMs) ? new Date(toMs).toISOString() : clampedTo,
+    empty: Number.isFinite(fromMs) && Number.isFinite(toMs) && fromMs >= toMs,
+  };
+}
+
+export function dedupePaypalDisputeListItems(disputes: any[]) {
+  const seen = new Set<string>();
+  const unique: any[] = [];
+  for (const dispute of disputes || []) {
+    const disputeId = paypalDisputeId(dispute);
+    const key = disputeId || `missing:${unique.length}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    unique.push(dispute);
+  }
+  return unique;
+}
+
+export function parsePaypalDisputeListPage(response: any, args: { requested_page?: number; page_size?: number; base_url?: string } = {}): PayPalDisputeListPage {
   const disputes = Array.isArray(response?.items)
     ? response.items
     : Array.isArray(response?.disputes)
@@ -487,20 +593,16 @@ export function parsePaypalDisputeListPage(response: any, args: { requested_page
     ? response.links.find((link: any) => cleanLower(link?.rel) === "next")
     : null;
   const nextHref = chargebackText(nextLink?.href);
+  const nextQuery = sanitizePaypalDisputeNextQuery(nextHref, args.base_url || "https://api-m.paypal.com");
   let nextPageToken: string | null = null;
   let linkedNextPage: number | null = null;
-  if (nextHref) {
-    try {
-      const parsed = new URL(nextHref);
-      nextPageToken = chargebackText(parsed.searchParams.get("next_page_token")) || null;
-      linkedNextPage = Number(parsed.searchParams.get("page")) || null;
-    } catch {
-      nextPageToken = null;
-      linkedNextPage = null;
-    }
+  if (nextQuery) {
+    nextPageToken = chargebackText(nextQuery.next_page_token) || null;
+    linkedNextPage = Number(nextQuery.page) || null;
   }
-  const nextPage = linkedNextPage || (totalPages && page < totalPages ? page + 1 : null);
-  const hasMore = Boolean(nextHref) || Boolean(totalPages && page < totalPages);
+  const nextPage = linkedNextPage || (nextQuery ? page + 1 : null);
+  const hasMore = Boolean(nextQuery);
+  const nextCursor = paypalDisputeContinuationCursor(nextQuery) || (hasMore && nextPage ? String(nextPage) : null);
 
   return {
     disputes,
@@ -511,6 +613,8 @@ export function parsePaypalDisputeListPage(response: any, args: { requested_page
     has_more: hasMore,
     next_page: hasMore ? nextPage || page + 1 : null,
     next_page_token: nextPageToken,
+    next_query: nextQuery,
+    next_cursor: nextCursor,
   };
 }
 
@@ -521,17 +625,78 @@ export function buildPaypalDisputeListUrl(args: {
   page?: number | null;
   page_size?: number | null;
   next_page_token?: string | null;
+  next_query?: Record<string, string> | null;
 }) {
   const url = new URL("/v1/customer/disputes", `${args.base_url.replace(/\/+$/, "")}/`);
+  const nextQuery = args.next_query && typeof args.next_query === "object" ? args.next_query : null;
+  if (nextQuery) {
+    for (const [key, value] of Object.entries(nextQuery)) {
+      if (PAYPAL_DISPUTE_CONTINUATION_PARAMS.has(key) && chargebackText(value)) {
+        url.searchParams.set(key, key === "update_time_before" ? clampPaypalDisputeUpdateTimeBefore(value) : value);
+      }
+    }
+    return url.toString();
+  }
+  const bounds = paypalDisputeWindowBounds(args.from_iso, args.to_iso);
   url.searchParams.set("page_size", String(Math.max(1, Math.min(50, Number(args.page_size || 50)))));
-  url.searchParams.set("update_time_after", args.from_iso);
-  url.searchParams.set("update_time_before", args.to_iso);
+  url.searchParams.set("update_time_after", bounds.from_iso);
+  url.searchParams.set("update_time_before", bounds.to_iso);
   if (args.next_page_token) {
     url.searchParams.set("next_page_token", args.next_page_token);
   } else {
     url.searchParams.set("page", String(Math.max(1, Number(args.page || 1))));
   }
   return url.toString();
+}
+
+export function buildPaypalDisputeDetailUrl(baseUrl: string, disputeId: unknown) {
+  const id = chargebackText(disputeId);
+  if (!id) return null;
+  const url = new URL(`/v1/customer/disputes/${encodeURIComponent(id)}`, `${baseUrl.replace(/\/+$/, "")}/`);
+  return url.toString();
+}
+
+export function mergePaypalDisputeListAndDetail(listDispute: any, detailDispute: any) {
+  if (!detailDispute || typeof detailDispute !== "object" || Array.isArray(detailDispute)) {
+    throw new Error("PayPal dispute detail payload is malformed.");
+  }
+  const listDisputeId = paypalDisputeId(listDispute);
+  const detailDisputeId = paypalDisputeId(detailDispute);
+  if (!detailDisputeId) {
+    throw new Error("PayPal dispute detail payload is missing dispute_id.");
+  }
+  if (listDisputeId && detailDisputeId !== listDisputeId) {
+    throw new Error("PayPal dispute detail payload dispute_id mismatch.");
+  }
+  return {
+    ...(listDispute && typeof listDispute === "object" ? listDispute : {}),
+    ...(detailDispute && typeof detailDispute === "object" ? detailDispute : {}),
+    paypal_list_summary: listDispute && typeof listDispute === "object" ? listDispute : null,
+  };
+}
+
+export function summarizePaypalDisputeNormalizationDiagnostics(dispute: any) {
+  const disputeId = paypalDisputeId(dispute) || null;
+  const diagnostics: Record<string, unknown>[] = [];
+  if (isSellerFavorableDispute(dispute) && !paypalExplicitPrincipalRecovery(dispute)) {
+    diagnostics.push({
+      reason: "paypal_seller_favorable_without_explicit_principal_recovery",
+      dispute_id: disputeId,
+    });
+  }
+  if (isSellerFavorableDispute(dispute) && !paypalExplicitFeeRecovery(dispute)) {
+    diagnostics.push({
+      reason: "paypal_seller_favorable_without_explicit_fee_recovery",
+      dispute_id: disputeId,
+    });
+  }
+  if (!chargebackMoney(dispute?.chargeback_fee ?? dispute?.dispute_fee)) {
+    diagnostics.push({
+      reason: "paypal_dispute_fee_not_exposed",
+      dispute_id: disputeId,
+    });
+  }
+  return diagnostics;
 }
 
 export function classifyGatewayClassicAction(action: GatewayClassicAction): GatewayActionClassification {
