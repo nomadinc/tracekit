@@ -5,11 +5,13 @@ import Link from "next/link";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
+  ArrowRight,
   CheckCircle2,
   Clock3,
   Copy,
   DatabaseZap,
   Filter,
+  Info,
   Loader2,
   Search,
   ShieldAlert,
@@ -17,8 +19,13 @@ import {
 } from "lucide-react";
 import { sameOriginGetJson } from "@/lib/same-origin-api";
 import {
+  buildFinancialImportIssueCards,
+  deriveFinancialImportHealth,
   financialImportMonitorQuery,
+  importMetricLabel,
+  recentFinancialImportActivity,
   type FinancialImportMonitorAccount,
+  type FinancialImportIssueCard,
   type FinancialImportMonitorResponse,
   type FinancialImportMonitorStatus,
 } from "@/lib/financial-import-monitor";
@@ -79,47 +86,147 @@ function compact(value: unknown, fallback = "-") {
 
 function statusTone(status: string) {
   if (status === "Healthy") return "border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-100";
-  if (status === "Running") return "border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-100";
-  if (status === "Waiting" || status === "Never run") return "border-slate-200 bg-slate-50 text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-slate-200";
+  if (status === "Running" || status === "Imports running") return "border-blue-200 bg-blue-50 text-blue-800 dark:border-blue-500/30 dark:bg-blue-500/10 dark:text-blue-100";
+  if (status === "Waiting" || status === "Never run" || status === "No imports configured") return "border-slate-200 bg-slate-50 text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-slate-200";
   if (status === "Diagnostic only") return "border-violet-200 bg-violet-50 text-violet-800 dark:border-violet-500/30 dark:bg-violet-500/10 dark:text-violet-100";
-  if (status === "Failed") return "border-red-200 bg-red-50 text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100";
+  if (status === "Failed" || status === "Critical" || status === "Stale") return "border-red-200 bg-red-50 text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100";
   if (status === "Disabled") return "border-slate-200 bg-slate-100 text-slate-500 dark:border-white/10 dark:bg-white/5 dark:text-slate-400";
   return "border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100";
 }
 
 function statusIcon(status: string) {
   if (status === "Healthy") return <CheckCircle2 className="h-4 w-4" />;
-  if (status === "Running") return <Loader2 className="h-4 w-4 animate-spin" />;
-  if (status === "Failed") return <XCircle className="h-4 w-4" />;
-  if (status === "Attention") return <AlertTriangle className="h-4 w-4" />;
+  if (status === "Running" || status === "Imports running") return <Loader2 className="h-4 w-4 animate-spin" />;
+  if (status === "Failed" || status === "Critical" || status === "Stale") return <XCircle className="h-4 w-4" />;
+  if (status === "Attention" || status === "Review needed" || status === "Partial data") return <AlertTriangle className="h-4 w-4" />;
+  if (status === "Diagnostic only") return <Info className="h-4 w-4" />;
   return <Clock3 className="h-4 w-4" />;
+}
+
+function issueTone(severity: string) {
+  if (severity === "Critical") return statusTone("Critical");
+  if (severity === "Info") return statusTone("Diagnostic only");
+  return statusTone("Attention");
 }
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return <section className={`rounded-lg border bg-white p-4 shadow-sm dark:border-white/10 dark:bg-ink/85 ${className}`}>{children}</section>;
 }
 
-function SummaryCards({ data }: { data: FinancialImportMonitorResponse }) {
-  const items = [
-    ["Connector accounts", data.summary.connector_accounts, DatabaseZap],
-    ["Healthy", data.summary.healthy, CheckCircle2],
-    ["Running", data.summary.running, Loader2],
-    ["Attention required", data.summary.attention_required, AlertTriangle],
-    ["Failed", data.summary.failed, XCircle],
-    ["Unmatched events", data.summary.unmatched_financial_events, ShieldAlert],
-    ["Imports last 24h", data.summary.imports_last_24h, Clock3],
+function currentActivityLabel(account: FinancialImportMonitorAccount) {
+  if (account.current_task) {
+    if (account.current_task.stale) return "Stale task";
+    return `${account.current_task.status || "running"} · ${account.current_task.phase || account.current_task.task_type || "task"}`;
+  }
+  if (account.status === "Never run") return "No completed import";
+  return "No current task";
+}
+
+function topDiagnostic(account: FinancialImportMonitorAccount) {
+  return account.diagnostics.find((diagnostic) => diagnostic.severity === "critical") ||
+    account.diagnostics.find((diagnostic) => diagnostic.severity === "warning") ||
+    account.diagnostics[0] ||
+    null;
+}
+
+function ImportHealthHero({ data, onReviewIssues }: { data: FinancialImportMonitorResponse; onReviewIssues: () => void }) {
+  const health = deriveFinancialImportHealth(data);
+  const stats = [
+    ["Connector accounts", health.configured_accounts, DatabaseZap],
+    ["Imports running", health.running_imports, Loader2],
+    ["Failed imports", health.failed_imports, XCircle],
+    ["Need attention", health.accounts_needing_attention, AlertTriangle],
+    ["Completed in 24h", health.imports_last_24h, Clock3],
   ];
   return (
-    <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-7">
-      {items.map(([label, value, Icon]: any) => (
-        <Card key={label}>
-          <div className="flex items-center justify-between gap-3">
-            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</div>
-            <Icon className={`h-4 w-4 ${label === "Running" && Number(value) ? "animate-spin" : ""} text-slate-400`} />
+    <section className="rounded-lg border bg-white p-5 shadow-sm dark:border-white/10 dark:bg-ink/90">
+      <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
+        <div>
+          <div className="flex flex-wrap items-center gap-3">
+            <span className={`inline-flex items-center gap-2 rounded-full border px-3 py-1 text-sm font-semibold ${statusTone(health.state)}`}>
+              {statusIcon(health.state)}
+              {health.label}
+            </span>
+            <span className="text-sm text-slate-500">Updated {time(data.generated_at)}</span>
           </div>
-          <div className="mt-2 text-2xl font-semibold tracking-tight">{Number(value || 0).toLocaleString()}</div>
+          <h2 className="mt-4 text-2xl font-semibold tracking-tight md:text-3xl">Are your financial imports healthy?</h2>
+          <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">{health.description}</p>
+          <p className="mt-3 text-sm text-slate-500">Last successful import: <span className="font-medium text-slate-800 dark:text-slate-100">{time(health.last_successful_import)}</span></p>
+          <div className="mt-5 flex flex-wrap gap-2">
+            <button type="button" onClick={onReviewIssues} className="inline-flex items-center gap-2 rounded-md bg-slate-950 px-4 py-2 text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-slate-400 dark:bg-white dark:text-slate-950">
+              <ShieldAlert className="h-4 w-4" />
+              Review issues
+            </button>
+            <Link href="/operations" className="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5">
+              View jobs
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+        </div>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {stats.map(([label, value, Icon]: any) => (
+            <div key={label} className="rounded-lg border bg-slate-50 p-4 dark:border-white/10 dark:bg-white/5">
+              <div className="flex items-center justify-between gap-3">
+                <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</div>
+                <Icon className={`h-4 w-4 ${label === "Imports running" && Number(value) ? "animate-spin" : ""} text-slate-400`} />
+              </div>
+              <div className="mt-2 text-2xl font-semibold tracking-tight">{Number(value || 0).toLocaleString()}</div>
+            </div>
+          ))}
+          <div className="rounded-lg border bg-slate-50 p-4 dark:border-white/10 dark:bg-white/5">
+            <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Diagnostic only</div>
+            <div className="mt-2 text-2xl font-semibold tracking-tight">{health.diagnostic_only_accounts.toLocaleString()}</div>
+            <p className="mt-1 text-xs text-slate-500">Intentional discovery-only mode</p>
+          </div>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function IssueCards({ cards, onSelect }: { cards: FinancialImportIssueCard[]; onSelect: (card: FinancialImportIssueCard) => void }) {
+  return (
+    <section id="import-issues" tabIndex={-1} className="scroll-mt-24 space-y-3 focus:outline-none" aria-labelledby="import-issues-heading">
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h2 id="import-issues-heading" className="text-lg font-semibold">What needs your attention?</h2>
+          <p className="mt-1 text-sm text-slate-500">Financial Imports tracks connector availability, import progress, stale work, and diagnostic-only accounts.</p>
+        </div>
+      </div>
+      {cards.length ? (
+        <div className="grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          {cards.map((card) => (
+            <button
+              type="button"
+              key={card.category}
+              onClick={() => onSelect(card)}
+              className="rounded-lg border bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:bg-ink/85"
+            >
+              <div className="flex items-start justify-between gap-3">
+                <div>
+                  <h3 className="font-semibold">{card.title}</h3>
+                  <span className={`mt-2 inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${issueTone(card.severity)}`}>{card.severity}</span>
+                </div>
+                <span className="text-2xl font-semibold">{card.count.toLocaleString()}</span>
+              </div>
+              <p className="mt-3 text-sm leading-5 text-slate-600 dark:text-slate-300">{card.summary}</p>
+              <p className="mt-2 text-xs leading-5 text-slate-500">{card.why_it_matters}</p>
+              <div className="mt-4 inline-flex items-center gap-1 text-sm font-medium text-slate-800 dark:text-slate-100">
+                {card.next_step}
+                <ArrowRight className="h-4 w-4" />
+              </div>
+            </button>
+          ))}
+        </div>
+      ) : (
+        <Card>
+          <div className="flex min-h-28 flex-col items-center justify-center text-center">
+            <CheckCircle2 className="h-8 w-8 text-emerald-500" />
+            <h3 className="mt-3 font-semibold">Your financial imports are healthy.</h3>
+            <p className="mt-2 max-w-xl text-sm leading-6 text-slate-500">All enabled connectors are importing successfully, with no failed or stale tasks.</p>
+          </div>
         </Card>
-      ))}
+      )}
     </section>
   );
 }
@@ -197,14 +304,28 @@ function Filters({ range, platform, account, status, mode, attentionOnly }: {
   );
 }
 
-function AccountTable({ accounts, selected, onSelect }: { accounts: FinancialImportMonitorAccount[]; selected: string | null; onSelect: (account: FinancialImportMonitorAccount) => void }) {
+function AccountTable({
+  accounts,
+  selected,
+  filtered,
+  onSelect,
+}: {
+  accounts: FinancialImportMonitorAccount[];
+  selected: string | null;
+  filtered: boolean;
+  onSelect: (account: FinancialImportMonitorAccount) => void;
+}) {
   if (!accounts.length) {
     return (
       <Card>
         <div className="flex min-h-44 flex-col items-center justify-center text-center">
-          <CheckCircle2 className="h-8 w-8 text-emerald-500" />
-          <h3 className="mt-3 font-semibold">No financial import accounts found</h3>
-          <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">Configured accounts and runtime history will appear here once financial connectors are connected or imported.</p>
+          {filtered ? <Search className="h-8 w-8 text-slate-400" /> : <DatabaseZap className="h-8 w-8 text-slate-400" />}
+          <h3 className="mt-3 font-semibold">{filtered ? "No connector accounts match these filters." : "No financial connectors are configured."}</h3>
+          <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">
+            {filtered
+              ? "Clear or adjust the filters to inspect other connector accounts."
+              : "Add a supported connector to begin importing refunds, chargebacks, and related financial events."}
+          </p>
         </div>
       </Card>
     );
@@ -215,7 +336,7 @@ function AccountTable({ accounts, selected, onSelect }: { accounts: FinancialImp
         <table className="min-w-[1180px] w-full text-left text-sm">
           <thead className="border-b bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:border-white/10 dark:bg-white/5">
             <tr>
-              {["Connector", "Account", "Status", "Last successful", "Last attempted", "Imported", "Inserted", "Duplicate", "Matched", "Unmatched", "Missing affiliate", "Errors", "Cursor/window"].map((heading) => (
+              {["Connector", "Account", "Status", "Mode", "Last successful", "Last attempted", "Current activity", "Attention"].map((heading) => (
                 <th key={heading} className="px-4 py-3 font-semibold">{heading}</th>
               ))}
             </tr>
@@ -223,28 +344,32 @@ function AccountTable({ accounts, selected, onSelect }: { accounts: FinancialImp
           <tbody className="divide-y dark:divide-white/10">
             {accounts.map((account) => (
               <tr key={account.account_key} className={`${selected === account.account_key ? "bg-slate-100 dark:bg-white/10" : "hover:bg-slate-50 dark:hover:bg-white/5"}`}>
-                <td className="px-4 py-3">
-                  <button type="button" onClick={() => onSelect(account)} className="text-left font-medium text-slate-950 underline-offset-4 hover:underline dark:text-white">{account.connector_label}</button>
-                  <div className="text-xs text-slate-500">{account.ingestion_mode.replace(/_/g, " ")}</div>
-                </td>
-                <td className="px-4 py-3 font-mono text-xs">{compact(account.account)}</td>
-                <td className="px-4 py-3">
-                  <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${statusTone(account.status)}`}>
-                    {statusIcon(account.status)}
-                    {account.status}
-                  </span>
-                </td>
-                <td className="px-4 py-3 text-slate-500">{time(account.last_successful_import)}</td>
-                <td className="px-4 py-3 text-slate-500">{time(account.last_attempted_import)}</td>
-                <td className="px-4 py-3">{count(account.imported_events)}</td>
-                <td className="px-4 py-3">{count(account.inserted_events)}</td>
-                <td className="px-4 py-3">{count(account.duplicate_events)}</td>
-                <td className="px-4 py-3">{count(account.matched)}</td>
-                <td className="px-4 py-3">{count(account.unmatched)}</td>
-                <td className="px-4 py-3">{count(account.missing_affiliate_attribution)}</td>
-                <td className="px-4 py-3">{count(account.errors)}</td>
-                <td className="max-w-48 truncate px-4 py-3 text-xs text-slate-500">{account.current_cursor_window || "-"}</td>
-              </tr>
+	                <td className="px-4 py-3">
+	                  <button type="button" onClick={() => onSelect(account)} className="text-left font-medium text-slate-950 underline-offset-4 hover:underline dark:text-white">{account.connector_label}</button>
+	                  <div className="text-xs text-slate-500">{account.platform}</div>
+	                </td>
+	                <td className="px-4 py-3 font-mono text-xs">{compact(account.account)}</td>
+	                <td className="px-4 py-3">
+	                  <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${statusTone(account.status)}`}>
+	                    {statusIcon(account.status)}
+	                    {account.status}
+	                  </span>
+	                  <div className="mt-1 max-w-48 text-xs text-slate-500">{account.status_reason}</div>
+	                </td>
+	                <td className="px-4 py-3">{account.ingestion_mode.replace(/_/g, " ")}</td>
+	                <td className="px-4 py-3 text-slate-500">{time(account.last_successful_import)}</td>
+	                <td className="px-4 py-3 text-slate-500">{time(account.last_attempted_import)}</td>
+	                <td className="max-w-56 px-4 py-3 text-xs text-slate-500">{currentActivityLabel(account)}</td>
+	                <td className="px-4 py-3">
+	                  {account.diagnostics.filter((item) => item.severity !== "info").length || account.status === "Never run" ? (
+	                    <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${statusTone(account.status === "Never run" ? "Never run" : "Attention")}`}>
+	                      {account.status === "Never run" ? "Setup" : `${account.diagnostics.filter((item) => item.severity !== "info").length} signal${account.diagnostics.filter((item) => item.severity !== "info").length === 1 ? "" : "s"}`}
+	                    </span>
+	                  ) : (
+	                    <span className="text-xs text-slate-500">None</span>
+	                  )}
+	                </td>
+	              </tr>
             ))}
           </tbody>
         </table>
@@ -253,21 +378,82 @@ function AccountTable({ accounts, selected, onSelect }: { accounts: FinancialImp
   );
 }
 
+function RecentImportActivity({ data, onSelect }: { data: FinancialImportMonitorResponse; onSelect: (accountKey: string) => void }) {
+  const rows = recentFinancialImportActivity(data, 8);
+  return (
+    <section className="space-y-3" aria-labelledby="recent-import-activity-heading">
+      <div>
+        <h2 id="recent-import-activity-heading" className="text-lg font-semibold">Recent import activity</h2>
+        <p className="mt-1 text-sm text-slate-500">Latest bounded jobs and active tasks across connector accounts.</p>
+      </div>
+      {rows.length ? (
+        <Card className="p-0">
+          <div className="divide-y dark:divide-white/10">
+            {rows.map((row) => (
+              <button
+                type="button"
+                key={row.id}
+                onClick={() => onSelect(row.account_key)}
+                className="grid w-full gap-3 px-4 py-3 text-left transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-slate-400 dark:hover:bg-white/5 lg:grid-cols-[minmax(0,1fr)_9rem_13rem_minmax(0,1.2fr)]"
+              >
+                <div>
+                  <div className="font-medium">{row.connector} · {compact(row.account, "Unknown account")}</div>
+                  <div className="mt-1 text-xs text-slate-500">{row.detail}</div>
+                </div>
+                <div>
+                  <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${statusTone(row.status === "completed" ? "Healthy" : row.status === "failed" ? "Failed" : row.status === "Stale" ? "Stale" : "Waiting")}`}>{row.status}</span>
+                </div>
+                <div className="text-xs text-slate-500">
+                  <div>Updated {time(row.timestamp)}</div>
+                  <div>Completed {time(row.completed_at)}</div>
+                </div>
+                <div className="flex flex-wrap gap-2 text-xs text-slate-500">
+                  {row.metrics.map((metric) => (
+                    <span key={`${row.id}:${metric.label}`} className="rounded-full border px-2 py-0.5 dark:border-white/10">{metric.value} {metric.label}</span>
+                  ))}
+                </div>
+              </button>
+            ))}
+          </div>
+        </Card>
+      ) : (
+        <Card>
+          <div className="flex min-h-24 flex-col items-center justify-center text-center">
+            <Clock3 className="h-7 w-7 text-slate-400" />
+            <h3 className="mt-3 font-semibold">No recent financial import activity.</h3>
+            <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">Recent jobs and active tasks will appear here as connectors import data.</p>
+          </div>
+        </Card>
+      )}
+    </section>
+  );
+}
+
 function DetailPanel({ account }: { account: FinancialImportMonitorAccount | null }) {
   if (!account) {
     return (
       <Card>
-        <h2 className="font-semibold">Account Details</h2>
-        <p className="mt-2 text-sm text-slate-500">Select an account row to inspect import history, diagnostics, and financial event totals.</p>
+        <h2 className="font-semibold">Account detail</h2>
+        <p className="mt-2 text-sm text-slate-500">Select an account row to inspect import history, diagnostics, runtime progress, and supporting financial event totals.</p>
       </Card>
     );
   }
+  const diagnostic = topDiagnostic(account);
   return (
     <Card>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h2 className="text-lg font-semibold">{account.connector_label}</h2>
-          <p className="mt-1 font-mono text-xs text-slate-500">{account.account_key}</p>
+          <p className="mt-1 font-mono text-xs text-slate-500">{account.account || "Unknown account"}</p>
+          <div className="mt-3 flex flex-wrap gap-2">
+            <span className={`inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium ${statusTone(account.status)}`}>
+              {statusIcon(account.status)}
+              {account.status}
+            </span>
+            <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${account.ingestion_mode === "diagnostic_only" ? statusTone("Diagnostic only") : statusTone("Waiting")}`}>
+              {account.ingestion_mode.replace(/_/g, " ")}
+            </span>
+          </div>
         </div>
         <button type="button" onClick={() => navigator.clipboard?.writeText(account.account_key)} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm dark:border-white/10">
           <Copy className="h-4 w-4" />
@@ -275,16 +461,12 @@ function DetailPanel({ account }: { account: FinancialImportMonitorAccount | nul
         </button>
       </div>
 
-      <dl className="mt-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <dl className="mt-5 grid gap-3 sm:grid-cols-2">
         {[
-          ["Processor account", account.processor_account_id || "-"],
-          ["Platform", account.platform],
-          ["Enabled", account.enabled ? "Enabled" : "Disabled"],
-          ["Mode", account.ingestion_mode.replace(/_/g, " ")],
-          ["Current cursor/window", account.current_cursor_window || "-"],
-          ["Retry count", account.current_task?.attempt_count ?? "-"],
-          ["Last successful job", account.last_successful_import ? time(account.last_successful_import) : "Never"],
-          ["Last failed/current error", account.current_task?.last_error || account.recent_jobs.find((job) => job.last_error)?.last_error || "-"],
+          ["Last successful import", time(account.last_successful_import)],
+          ["Last attempt", time(account.last_attempted_import)],
+          ["Current task", account.current_task ? currentActivityLabel(account) : "No current task"],
+          ["Most important diagnostic", diagnostic ? `${diagnostic.type.replace(/_/g, " ")}: ${diagnostic.message}${diagnostic.count ? ` (${count(diagnostic.count)})` : ""}` : "None"],
         ].map(([label, value]) => (
           <div key={label} className="rounded-lg border bg-slate-50 p-3 dark:border-white/10 dark:bg-white/5">
             <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</dt>
@@ -293,9 +475,31 @@ function DetailPanel({ account }: { account: FinancialImportMonitorAccount | nul
         ))}
       </dl>
 
+      <section className="mt-5">
+        <h3 className="font-semibold">Import metrics</h3>
+        <div className="mt-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          {[
+            ["Records fetched", importMetricLabel(account.imported_events)],
+            ["Events inserted", importMetricLabel(account.inserted_events)],
+            ["Duplicates skipped", importMetricLabel(account.duplicate_events)],
+            ["Matched", importMetricLabel(account.matched)],
+            ["Unmatched", count(account.unmatched)],
+            ["Invalid/rejected", count(account.diagnostics.find((item) => item.type === "invalid_or_rejected_records")?.count)],
+            ["Missing affiliate", count(account.missing_affiliate_attribution)],
+            ["Errors", count(account.errors)],
+          ].map(([label, value]) => (
+            <div key={label} className="rounded-lg border bg-slate-50 p-3 dark:border-white/10 dark:bg-white/5">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</div>
+              <div className="mt-1 text-lg font-semibold">{value}</div>
+            </div>
+          ))}
+        </div>
+      </section>
+
       <div className="mt-5 grid gap-4 xl:grid-cols-2">
         <section>
-          <h3 className="font-semibold">Financial Event Breakdown</h3>
+          <h3 className="font-semibold">Imported financial events</h3>
+          <p className="mt-1 text-xs text-slate-500">Supporting ledger context only; import health is based on connector and runtime behavior.</p>
           <div className="mt-3 divide-y rounded-lg border dark:divide-white/10 dark:border-white/10">
             {LEDGER_LABELS.map(([key, label]) => {
               const total = account.financial_event_totals[key];
@@ -325,8 +529,29 @@ function DetailPanel({ account }: { account: FinancialImportMonitorAccount | nul
         </section>
       </div>
 
+      <details className="mt-5 rounded-lg border p-3 dark:border-white/10">
+        <summary className="cursor-pointer text-sm font-semibold">Technical details</summary>
+        <dl className="mt-3 grid gap-3 sm:grid-cols-2">
+          {[
+            ["Account key", account.account_key],
+            ["Processor account", account.processor_account_id || "Not reported"],
+            ["Platform", account.platform],
+            ["Enabled", account.enabled ? "Enabled" : "Disabled"],
+            ["Credential platform", account.credential_platform || "Not reported"],
+            ["Current cursor/window", account.current_cursor_window || "Not reported"],
+            ["Retry count", account.current_task?.attempt_count ?? "Not reported"],
+            ["Task maximum attempts", account.current_task?.max_attempts ?? "Not reported"],
+          ].map(([label, value]) => (
+            <div key={label} className="rounded-lg border bg-slate-50 p-3 dark:border-white/10 dark:bg-white/5">
+              <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</dt>
+              <dd className="mt-1 break-words text-sm">{String(value)}</dd>
+            </div>
+          ))}
+        </dl>
+      </details>
+
       <section className="mt-5">
-        <h3 className="font-semibold">Recent Import History</h3>
+        <h3 className="font-semibold">Recent import history</h3>
         <div className="mt-3 divide-y rounded-lg border dark:divide-white/10 dark:border-white/10">
           {account.recent_jobs.length ? account.recent_jobs.map((job) => (
             <div key={job.id} className="grid gap-2 px-3 py-3 text-sm md:grid-cols-[1fr_8rem_12rem_12rem]">
@@ -363,6 +588,8 @@ export default function FinancialImportMonitorClient() {
   const [selected, setSelected] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const hasInventoryFilters = Boolean(platform || account || status !== "all" || mode !== "all" || attentionOnly);
+  const [filtersOpen, setFiltersOpen] = React.useState(hasInventoryFilters);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -387,7 +614,7 @@ export default function FinancialImportMonitorClient() {
           setSelected((prev) => prev || response.accounts[0]?.account_key || null);
         }
       } catch (e: any) {
-        if (!cancelled) setError(e?.message || "Financial Import Monitor is unavailable.");
+        if (!cancelled) setError(e?.message || "Financial Imports is unavailable.");
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -399,22 +626,35 @@ export default function FinancialImportMonitorClient() {
   }, [account, attentionOnly, mode, platform, range.from, range.to, status]);
 
   const selectedAccount = data?.accounts.find((item) => item.account_key === selected) || data?.accounts[0] || null;
+  const issueCards = data ? buildFinancialImportIssueCards(data) : [];
+
+  React.useEffect(() => {
+    if (hasInventoryFilters) setFiltersOpen(true);
+  }, [hasInventoryFilters]);
+
+  function focusIssues() {
+    window.requestAnimationFrame(() => {
+      const issues = document.getElementById("import-issues");
+      issues?.scrollIntoView({ behavior: "smooth", block: "start" });
+      issues?.focus({ preventScroll: true });
+    });
+  }
+
+  function focusInventory(accountKey?: string | null) {
+    if (accountKey) setSelected(accountKey);
+    window.requestAnimationFrame(() => {
+      const inventory = document.getElementById("connector-inventory");
+      inventory?.scrollIntoView({ behavior: "smooth", block: "start" });
+      inventory?.focus({ preventScroll: true });
+    });
+  }
+
+  function selectIssue(card: FinancialImportIssueCard) {
+    focusInventory(card.account_keys[0] || null);
+  }
 
   return (
     <main className="space-y-6">
-      <div className="flex flex-wrap items-start justify-between gap-4">
-        <div>
-          <p className="text-sm font-medium text-slate-500">Revenue Operations</p>
-          <h1 className="mt-2 text-3xl font-semibold tracking-tight">Financial Import Monitor</h1>
-          <p className="mt-2 max-w-3xl text-slate-600 dark:text-slate-300">
-            Monitor financial connector health, runtime progress, normalized ledger activity, and reconciliation diagnostics before enabling broader chargeback ingestion.
-          </p>
-        </div>
-        <Link href="/operations" className="rounded-md border px-3 py-2 text-sm font-medium hover:bg-slate-50 dark:border-white/10 dark:hover:bg-white/5">View jobs</Link>
-      </div>
-
-      <Filters range={range} platform={platform} account={account} status={status} mode={mode} attentionOnly={attentionOnly} />
-
       {loading ? (
         <Card>
           <div className="flex items-center gap-2 text-sm text-slate-500"><Loader2 className="h-4 w-4 animate-spin" /> Loading financial import health...</div>
@@ -424,7 +664,7 @@ export default function FinancialImportMonitorClient() {
           <div className="flex items-start gap-3">
             <AlertTriangle className="mt-0.5 h-5 w-5 text-amber-500" />
             <div>
-              <h2 className="font-semibold">Financial Import Monitor is unavailable</h2>
+              <h2 className="font-semibold">Financial Imports is unavailable</h2>
               <p className="mt-1 text-sm text-slate-500">{error}</p>
               <p className="mt-2 text-xs text-slate-500">The monitor uses the authenticated server proxy <code>/api/financial-import-monitor</code>. Confirm the UI server can call authenticated operational APIs.</p>
             </div>
@@ -432,11 +672,38 @@ export default function FinancialImportMonitorClient() {
         </Card>
       ) : data ? (
         <>
-          <SummaryCards data={data} />
-          <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.4fr)_minmax(420px,0.8fr)]">
-            <AccountTable accounts={data.accounts} selected={selected} onSelect={(next) => setSelected(next.account_key)} />
-            <DetailPanel account={selectedAccount} />
-          </div>
+          <ImportHealthHero data={data} onReviewIssues={focusIssues} />
+          <IssueCards cards={issueCards} onSelect={selectIssue} />
+          <RecentImportActivity data={data} onSelect={(accountKey) => focusInventory(accountKey)} />
+          <section id="connector-inventory" tabIndex={-1} className="scroll-mt-24 space-y-4 focus:outline-none">
+            <Card>
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div>
+                  <h2 className="font-semibold">Connector inventory</h2>
+                  <p className="mt-1 text-sm text-slate-500">Inspect account configuration, import status, runtime progress, and recent history.</p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setFiltersOpen((prev) => !prev)}
+                  aria-expanded={filtersOpen}
+                  aria-controls="financial-import-filters"
+                  className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5"
+                >
+                  <Filter className="h-4 w-4" />
+                  {filtersOpen ? "Hide filters" : "Show filters"}
+                </button>
+              </div>
+            </Card>
+            {filtersOpen ? (
+              <div id="financial-import-filters">
+                <Filters range={range} platform={platform} account={account} status={status} mode={mode} attentionOnly={attentionOnly} />
+              </div>
+            ) : null}
+            <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.4fr)_minmax(420px,0.8fr)]">
+              <AccountTable accounts={data.accounts} selected={selected} filtered={hasInventoryFilters} onSelect={(next) => setSelected(next.account_key)} />
+              <DetailPanel account={selectedAccount} />
+            </div>
+          </section>
         </>
       ) : null}
     </main>
