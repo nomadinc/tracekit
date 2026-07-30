@@ -4,6 +4,7 @@ import {
   aggregateDailyProfitConversions,
   aggregateProfitConversions,
   buildFinancialIssueAnalysis,
+  buildProfitReportingReadiness,
   executiveBucketKey,
   executiveCommerceOrderType,
   executiveCommerceSourceBrand,
@@ -57,6 +58,118 @@ test("aggregates sale-only profit", () => {
   assert.equal(result.total_costs, 0);
   assert.equal(result.net_profit, 100);
   assert.equal(result.profit_margin_pct, 100);
+});
+
+test("profit reporting readiness distinguishes stale and diagnostic-only connectors", () => {
+  const result = buildProfitReportingReadiness({
+    now_iso: "2026-07-30T12:00:00.000Z",
+    requested_to_iso: "2026-07-30T00:00:00.000Z",
+    accounts: [
+      {
+        connector: "wowboost",
+        account_key: "wowsuite:wowboost",
+        commerce_current: true,
+        transaction_snapshot_current: true,
+        financial_ledger_current: true,
+        financial_mapping_complete: true,
+        last_success_at: "2026-07-30T11:00:00.000Z",
+        latest_completed_window_to: "2026-07-30T00:00:00.000Z",
+      },
+      {
+        connector: "nmi",
+        account_key: "nmi:lifeheater14090",
+        transaction_snapshot_current: true,
+        financial_ledger_current: false,
+        financial_mapping_complete: false,
+        cost_configuration_complete: false,
+        diagnostic_only: true,
+        last_success_at: "2026-07-30T10:00:00.000Z",
+        latest_completed_window_to: "2026-07-29T23:00:00.000Z",
+      },
+    ],
+  });
+
+  assert.equal(result.profit_reporting_ready, false);
+  assert.equal(result.commerce_current, true);
+  assert.equal(result.financial_ledger_current, false);
+  assert.equal(result.financial_mapping_complete, false);
+  assert.equal(result.cost_configuration_complete, false);
+  assert.equal(result.status, "snapshot_mode");
+  assert.equal(result.status_label, "Operational Profit — Snapshot Mode");
+  assert.equal(result.reliable_through, "2026-07-29T23:00:00.000Z");
+  assert.equal(result.incomplete_reasons.some((reason) => reason.code === "financial_mapping_diagnostic_only"), true);
+  assert.equal(result.incomplete_reasons.some((reason) => reason.code === "cost_configuration_missing"), true);
+  assert.equal(result.incomplete_reasons.some((reason) => /diagnostic-only/i.test(reason.message)), false);
+  assert.equal(result.incomplete_reasons.some((reason) => /Snapshot Mode/.test(reason.message)), true);
+});
+
+test("profit reporting readiness ignores disabled connectors and reports sanitized failures", () => {
+  const result = buildProfitReportingReadiness({
+    now_iso: "2026-07-30T12:00:00.000Z",
+    accounts: [
+      {
+        connector: "paypal",
+        account_key: "paypal:merchant-1",
+        enabled: false,
+        failed: true,
+      },
+      {
+        connector: "paypal",
+        account_key: "paypal:merchant-2",
+        failed: true,
+        last_success_at: "2026-07-30T11:00:00.000Z",
+      },
+    ],
+  });
+
+  assert.equal(result.incomplete_reasons.length, 1);
+  assert.equal(result.incomplete_reasons[0].code, "connector_failed");
+  assert.equal(result.incomplete_reasons[0].message.includes("merchant"), false);
+  assert.equal(result.status, "unavailable");
+});
+
+test("profit reporting readiness reports live state and common reliable boundary", () => {
+  const result = buildProfitReportingReadiness({
+    now_iso: "2026-07-30T12:00:00.000Z",
+    requested_to_iso: "2026-07-30T08:00:00.000Z",
+    accounts: [
+      {
+        connector: "wowboost",
+        account_key: "wowsuite:wowboost",
+        commerce_current: true,
+        transaction_snapshot_current: true,
+        financial_ledger_current: true,
+        financial_mapping_complete: true,
+        cost_configuration_complete: true,
+        last_success_at: "2026-07-30T10:00:00.000Z",
+        latest_completed_window_to: "2026-07-30T10:00:00.000Z",
+      },
+      {
+        connector: "paypal",
+        account_key: "paypal:primary",
+        transaction_snapshot_current: true,
+        financial_ledger_current: true,
+        financial_mapping_complete: true,
+        cost_configuration_complete: true,
+        last_success_at: "2026-07-30T08:00:00.000Z",
+        latest_completed_window_to: "2026-07-30T08:00:00.000Z",
+      },
+      {
+        connector: "nmi",
+        account_key: "nmi:disabled",
+        enabled: false,
+        transaction_snapshot_current: false,
+        financial_ledger_current: false,
+        financial_mapping_complete: false,
+      },
+    ],
+  });
+
+  assert.equal(result.profit_reporting_ready, true);
+  assert.equal(result.status, "live");
+  assert.equal(result.status_label, "Operational Profit — Live");
+  assert.equal(result.reliable_through, "2026-07-30T08:00:00.000Z");
+  assert.equal(result.last_successful_financial_sync_at, "2026-07-30T10:00:00.000Z");
 });
 
 test("aggregates sale plus partial refund", () => {

@@ -66,16 +66,62 @@ test("dashboard renders executive dashboard modules from the dedicated endpoint"
   assert.match(dashboard, /\/api\/financial-import-monitor/);
   assert.match(dashboard, /\/api\/operations\/summary/);
   assert.match(dashboard, /Accrued Affiliate Commission/);
+  assert.match(dashboard, /Operational Profit/);
+  assert.match(dashboard, /Profit Status/);
+  assert.match(dashboard, /Reliable Through/);
+  assert.match(dashboard, /Snapshot Mode/);
   assert.match(dashboard, /Which affiliates are profitable\?/);
   assert.match(dashboard, /Financial Imports/);
   assert.match(dashboard, /Financial Health/);
-  assert.match(dashboard, /Commerce data is incomplete for today/);
+  assert.match(dashboard, /Profit Status is limited for this view/);
   assert.match(dashboard, /raw_json\.Brand/);
+  assert.doesNotMatch(dashboard, /Net Profit/);
+  assert.doesNotMatch(dashboard, /diagnostic-only/);
   assert.match(proxy, /\/v1\/executive-dashboard/);
   assert.match(proxy, /x-tk-secret/);
   assert.match(worker, /path === "\/v1\/executive-dashboard"/);
   assert.match(worker, /EXECUTIVE_DASHBOARD_PLATFORM_ORDER_SELECT/);
   assert.doesNotMatch(dashboard, /\/v1\/revenue-spend/);
+});
+
+test("PayPal and gateway financial ingestion are queued through Connector Runtime", () => {
+  const worker = readRepoFile("api/src/index.ts");
+
+  assert.match(worker, /PAYPAL_TRANSACTION_SYNC_TASK_TYPE = "paypal_transaction_import_page"/);
+  assert.match(worker, /GATEWAY_TRANSACTION_SYNC_TASK_TYPE = "gateway_transaction_snapshot_page"/);
+  assert.match(worker, /executePaypalTransactionSyncRuntimeTask/);
+  assert.match(worker, /executeGatewayTransactionSyncRuntimeTask/);
+  assert.match(worker, /task\.task_type === PAYPAL_TRANSACTION_SYNC_TASK_TYPE/);
+  assert.match(worker, /task\.task_type === GATEWAY_TRANSACTION_SYNC_TASK_TYPE/);
+  assert.match(worker, /runScheduledPaypalImport[\s\S]*createFinancialTransactionSyncJob/);
+  assert.match(worker, /runScheduledPaypalImport[\s\S]*enqueueFinancialTransactionSyncJob/);
+  assert.doesNotMatch(worker, /runScheduledPaypalImport[\s\S]*await runPaypalImport\(env, \{ from, to, filter: "all_financial_records" \}/);
+  assert.match(worker, /runScheduledGatewayTransactionSnapshotImport/);
+  assert.match(worker, /ctx\.waitUntil\(runScheduledGatewayTransactionSnapshotImport\(env\)\)/);
+  assert.match(worker, /financial_ledger_status: "diagnostic_only"/);
+  assert.match(worker, /connector_runtime\.queue\.publish_deferred_retryable/);
+  assert.match(worker, /status: "retrying"/);
+});
+
+test("executive dashboard exposes reporting readiness without changing ledger formulas", () => {
+  const worker = readRepoFile("api/src/index.ts");
+  const profit = readRepoFile("api/src/profit.ts");
+  const spec = readRepoFile("docs/architecture/PROFIT_ENGINE_SPEC_V1.md");
+  const checklist = readRepoFile("docs/architecture/EXECUTIVE_DASHBOARD_VALIDATION.md");
+
+  assert.match(worker, /reporting_readiness: reportingReadiness/);
+  assert.match(worker, /buildProfitReportingReadiness/);
+  assert.match(profit, /profit_reporting_ready/);
+  assert.match(profit, /financial_mapping_diagnostic_only/);
+  assert.match(profit, /cost_configuration_missing/);
+  assert.match(profit, /reliable_through/);
+  assert.match(profit, /Operational Profit — Snapshot Mode/);
+  assert.doesNotMatch(profit, /last_error.*message/);
+  assert.match(spec, /^# TraceKit Profit Engine Specification v1/m);
+  assert.match(spec, /TraceKit will never sacrifice financial accuracy for dashboard completeness/);
+  assert.match(spec, /Snapshot Mode/);
+  assert.match(checklist, /^# Executive Dashboard Validation Checklist/m);
+  assert.match(checklist, /Operational Profit formula verified/);
 });
 
 test("topbar exposes workspace search and notification affordances", () => {

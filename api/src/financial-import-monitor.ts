@@ -453,7 +453,7 @@ function isFinancialImportJob(job: any, account: AccountSeed) {
     progress.job_type,
     progress.phase,
   ].map(lower).join(" ");
-  if (/(chargeback|refund|financial|receipt|dispute|ledger|processor|payment|payout|commission|commerce_order_snapshot|order_snapshot_import)/.test(descriptor)) return true;
+  if (/(chargeback|refund|financial|receipt|dispute|ledger|processor|payment|transaction|snapshot|payout|commission|commerce_order_snapshot|order_snapshot_import)/.test(descriptor)) return true;
   return [
     "events_inserted",
     "ledger_inserted",
@@ -472,7 +472,7 @@ function isFinancialImportTask(task: any) {
     payload.task_type,
     payload.phase,
   ].map(lower).join(" ");
-  return /(chargeback|refund|financial|receipt|dispute|ledger|processor|payment|payout|commission)/.test(descriptor);
+  return /(chargeback|refund|financial|receipt|dispute|ledger|processor|payment|transaction|snapshot|payout|commission)/.test(descriptor);
 }
 
 function accountMetric(jobs: any[], account: AccountSeed, names: string[]) {
@@ -619,6 +619,7 @@ function includeByFilters(account: FinancialImportMonitorAccount, params: Financ
 export function buildFinancialImportMonitorReport(args: {
   params: FinancialImportMonitorParams;
   credentials?: any[];
+  settings?: any[];
   jobs?: any[];
   tasks?: any[];
   ledgerRows?: any[];
@@ -627,6 +628,8 @@ export function buildFinancialImportMonitorReport(args: {
 }): FinancialImportMonitorReport {
   const now = args.now || new Date();
   const credentials = (args.credentials || []).filter((row) => credentialWorkspaceId(row) === args.params.workspace_id);
+  const settingsLoaded = args.settings !== undefined;
+  const settings = args.settings || [];
   const jobs = (args.jobs || []).filter((row) => rowWorkspaceId(row) === args.params.workspace_id);
   const tasks = (args.tasks || []).filter((row) => rowWorkspaceId(row) === args.params.workspace_id);
   const ledgerRows = (args.ledgerRows || []).filter((row) => rowWorkspaceId(row) === args.params.workspace_id);
@@ -645,6 +648,22 @@ export function buildFinancialImportMonitorReport(args: {
   for (const row of ledgerRows) {
     const seed = accountSeedFromLedger(row);
     if (seed) seeds.set(seed.account_key, mergeSeed(seeds.get(seed.account_key), seed));
+  }
+  const settingsByPlatform = new Map(settings.map((row) => [lower(row?.platform), row]));
+  for (const [key, seed] of Array.from(seeds.entries())) {
+    const setting = settingsByPlatform.get(lower(seed.credential_platform)) || settingsByPlatform.get(lower(seed.platform)) || null;
+    const requiresExplicitEnablement = seed.platform === "paypal" || seed.platform.startsWith("paypal:") || seed.platform.startsWith("nmi:") || seed.platform === "paydiverse" || seed.platform.startsWith("paydiverse:");
+    if (requiresExplicitEnablement && settingsLoaded) {
+      seeds.set(key, {
+        ...seed,
+        enabled: Boolean(setting?.auto_import_enabled),
+      });
+    } else if (setting) {
+      seeds.set(key, {
+        ...seed,
+        enabled: seed.enabled && setting.auto_import_enabled !== false,
+      });
+    }
   }
 
   const rows: FinancialImportMonitorAccount[] = [];
@@ -839,6 +858,11 @@ export async function getFinancialImportMonitorReport(supabase: any, params: Fin
     .select("platform,base_url,metadata,updated_at")
     .order("platform", { ascending: true })
     .limit(500);
+  const settingsQuery = supabase
+    .from("integrations_settings")
+    .select("platform,auto_import_enabled,auto_import_interval_minutes,auto_import_lookback_hours,last_run_at,last_success_at,last_error,updated_at")
+    .order("platform", { ascending: true })
+    .limit(500);
   const jobsQuery = supabase
     .from("integration_import_jobs")
     .select("id,workspace_id,platform,connector_id,job_type,phase,status,from_date,to_date,requested_from,requested_to,records_discovered,records_processed,records_succeeded,records_failed,records_skipped,current_cursor,current_page,last_error,metadata,progress,requested_at,started_at,updated_at,completed_at")
@@ -855,8 +879,9 @@ export async function getFinancialImportMonitorReport(supabase: any, params: Fin
     .order("occurred_at", { ascending: false })
     .limit(FINANCIAL_IMPORT_MONITOR_LEDGER_LIMIT);
 
-  const [credentialsResult, jobsResult, ledgerResult] = await Promise.all([credentialsQuery, jobsQuery, ledgerQuery]);
+  const [credentialsResult, settingsResult, jobsResult, ledgerResult] = await Promise.all([credentialsQuery, settingsQuery, jobsQuery, ledgerQuery]);
   if (credentialsResult.error) throw new Error(`Financial import credential read failed: ${credentialsResult.error.message}`);
+  if (settingsResult.error) throw new Error(`Financial import settings read failed: ${settingsResult.error.message}`);
   if (jobsResult.error) throw new Error(`Financial import job read failed: ${jobsResult.error.message}`);
   if (ledgerResult.error) throw new Error(`Financial ledger read failed: ${ledgerResult.error.message}`);
 
@@ -889,6 +914,7 @@ export async function getFinancialImportMonitorReport(supabase: any, params: Fin
   return buildFinancialImportMonitorReport({
     params,
     credentials: credentialsResult.data || [],
+    settings: settingsResult.data || [],
     jobs,
     tasks,
     ledgerRows: ledgerResult.data || [],
