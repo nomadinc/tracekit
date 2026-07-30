@@ -1,73 +1,95 @@
-# Executive Performance Dashboard
+# Executive Dashboard v2
 
-The `/dashboard` route is the story-driven operating dashboard for current business performance. It preserves the existing TraceKit application shell and reads the existing Profit Engine and Payout Engine ledgers.
-
-## Data Sources
-
-- Sales and revenue: `conversions` rows where `ledger_type = 'sale'`.
-- Refunds, chargebacks, fees, and operating costs: existing Profit Engine ledger categories in `conversions` and `profit_daily_rollups`.
-- Affiliate commission: `affiliate_commissions.commission_amount`, filtered by `conversion_event_time`, excluding voided or reversed rows.
-- Operational health links: existing Financial Health, Financial Imports, and Work Items pages.
+The `/dashboard` route is TraceKit's story-driven Business Performance dashboard. It consumes a dedicated Worker endpoint, `GET /v1/executive-dashboard`, through the authenticated same-origin Next.js proxy at `/api/executive-dashboard`.
 
 The dashboard does not call processor APIs, run imports, mutate ledgers, or expose secrets.
 
-## Canonical Sales Definition
+## Five-Layer Model
 
-`Sales today` means positive, active base sale ledger rows in the selected workspace-local day:
+The response is organized around the current TraceKit data architecture:
 
-- include `conversions.ledger_type = 'sale'`;
-- require `amount > 0`;
-- exclude statuses containing refund, chargeback, cancel, void, failed, declined, or test;
-- dedupe by workspace, currency, connector, and `order_id` when present;
-- fall back to transaction/source identifiers only when `order_id` is unavailable.
+- `business`: commerce facts from `platform_orders`.
+- `attribution`: affiliate and source evidence already attached to commerce rows.
+- `financial`: normalized financial ledger events from `conversions` plus accrued payout rows from `affiliate_commissions`.
+- `operations`: links to existing workspace-wide Financial Health, Financial Imports, and Work Items views.
+- `brands`: provisional exact brand evidence from WowBoost raw order payloads.
 
-This fixes the previous dashboard gap where the displayed order count came from daily rollups that depend on non-empty `order_id` and UTC day boundaries.
+The existing Profit Engine endpoint remains available for existing consumers. Executive Dashboard v2 does not rely on `include_executive_performance=1`.
 
-## Affiliate Commission Definition
+## Commerce Definitions
 
-`Affiliate commission today` is generated/accrued commission from the Payout Engine:
+Sales and order metrics come from `platform_orders`, not from financial ledger rows.
 
-- source: `affiliate_commissions.commission_amount`;
-- date field: `conversion_event_time`;
-- excluded statuses: `voided`, `reversed`;
-- missing rows mean unavailable, not zero.
+`Sales` means valid positive commerce rows with raw WowBoost `Order Type = Regular Order`.
 
-The dashboard does not estimate commission from revenue percentages.
+`Orders` means valid positive commerce rows with raw WowBoost `Order Type` in:
 
-## KPI Calculations
+- `Regular Order`
+- `Upsell Order`
+- `Mini Upsell Order`
 
-- Revenue: canonical positive sale revenue.
-- Sales: canonical sales count.
-- Affiliate commission: active generated commission.
-- After affiliate commission: revenue minus active generated commission.
-- AOV: revenue divided by canonical sales count.
-- Net revenue, net profit, refunds, chargebacks, and operating costs retain existing Profit Engine meanings where shown.
+Both metrics exclude refunded, chargeback, cancelled, voided, failed, declined, abandoned, test, and non-commerce rows. Gross sales revenue uses the same population as Sales. Total order revenue and AOV use the broader Orders population.
 
-## Trend and Comparison
+Units sold come from `raw_json["Order Quantity (Units Sold)"]` when present, then normalized quantity-style fields, and finally a conservative fallback of `1`.
 
-The default period is Today. Today uses the workspace timezone from `workspace_onboarding.default_timezone` when available, otherwise the caller timezone, then UTC fallback.
+Customer count is intentionally unavailable unless a row has `person_id`; anonymous rows are not guessed into customer counts.
 
-- Today is bucketed hourly and compared with the same elapsed interval yesterday.
-- 7-day and 30-day periods are bucketed daily and compared with the previous equivalent period.
-- Multiple currencies are not silently combined; diagnostics warn when mixed currencies are present.
+## Brand Resolver
 
-## Rankings
+Brand is provisional until a durable brand dimension exists.
 
-Affiliate and source rankings are based on `affiliate_commissions` evidence:
+- Source: exact `platform_orders.raw_json.Brand`.
+- Missing source: `Unknown brand`.
+- No fuzzy matching.
+- No campaign, store, or offer fallback.
+- Currencies remain separated.
 
-- attributed revenue;
-- generated commission;
-- revenue after commission.
+This keeps source evidence explicit and avoids blending products or brands through inferred names.
 
-Unattributed revenue is not assigned to a fake affiliate.
+## Coverage and Staleness
 
-## API Extension
+The dashboard reports commerce coverage using the latest imported `platform_orders.order_ts` for the workspace.
 
-`GET /v1/profit/summary` accepts:
+If the latest imported order is older than the requested period end, the response returns:
 
-- `include_executive_performance=1`;
-- `period`;
-- `timezone`;
-- existing `workspace_id`, `from`, `to`, and `currency` filters.
+- `partial: true`
+- `partial_reasons`
+- `filters.coverage.commerce_latest_order_at`
+- `filters.coverage.requested_period_end`
+- `filters.coverage.is_current: false`
 
-The existing summary fields are preserved. The executive dashboard data is returned in `executive_performance`.
+The UI prominently warns that commerce data is incomplete and qualifies sales, orders, revenue, AOV, brand rankings, and affiliate/source rankings. Financial event totals may still display, but they are labeled as financial ledger events and are not treated as complete-profit comparisons against incomplete commerce revenue.
+
+## Financial and Commission Data
+
+Financial leakage uses normalized append-only `conversions` ledger rows:
+
+- `refund`
+- `chargeback`
+- `chargeback_fee`
+- `chargeback_reversal`
+- `chargeback_fee_reversal`
+
+These rows do not drive gross sales or order counts.
+
+Accrued affiliate commission uses `affiliate_commissions.commission_amount`, excluding `voided` and `reversed` statuses. Missing commission rows are reported as unavailable, not zero.
+
+`After Affiliate Commission` is:
+
+`gross sales revenue - accrued affiliate commission`
+
+It is not labeled Net Profit because non-commission operating costs are not yet fully represented in this dashboard layer.
+
+## Operational Health
+
+Operational modules reuse existing same-origin authenticated UI proxies:
+
+- `/api/financial-reconciliation`
+- `/api/financial-import-monitor`
+- `/api/operations/summary`
+
+These modules are workspace-wide unless the underlying service exposes a durable brand dimension.
+
+## Follow-Up Recommendation
+
+Add a brand dimension only after the commerce source can persist stable brand IDs or exact brand evidence across connectors. Until then, `raw_json.Brand` remains the only approved provisional brand resolver.
