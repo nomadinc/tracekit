@@ -11,6 +11,14 @@ import {
   normalizeFinancialReconciliationParams,
   redactFinancialReconciliationMessage,
 } from "./financial-reconciliation.ts";
+import {
+  buildFinancialIssueCards,
+  buildFinancialWorkQueue,
+  deriveFinancialHealth,
+  financialImpactRows,
+  netFinancialImpact,
+  recentFinancialActivity,
+} from "../../ui/lib/financial-reconciliation.ts";
 
 const NOW = new Date("2026-07-29T12:00:00.000Z");
 const REPO_ROOT = fileURLToPath(new URL("../../", import.meta.url));
@@ -383,4 +391,185 @@ test("route error redaction suppresses credentials and PII", () => {
   const message = redactFinancialReconciliationMessage("failed https://client:secret@example.com?access_token=abc for person@example.com");
   assert.doesNotMatch(message, /secret|access_token=abc|person@example.com/);
   assert.match(message, /\[redacted\]/);
+});
+
+test("financial health derivation handles healthy, no-events, review, critical, and partial states", () => {
+  const noEvents = report();
+  assert.equal(deriveFinancialHealth(noEvents as any).state, "no_events");
+
+  const noEventsWithDiagnostics = {
+    ...noEvents,
+    summary: {
+      ...noEvents.summary,
+      broken_chains: 1,
+      needs_review: 1,
+    },
+    diagnostics: {
+      ...noEvents.diagnostics,
+      broken_chains: [{ chain_key: "paypal:missing-chain", reasons: ["chargeback_fee_without_chargeback"], events: [] }],
+    },
+  };
+  assert.equal(deriveFinancialHealth(noEventsWithDiagnostics as any).state, "critical");
+
+  const healthy = report({
+    ledgerRows: [ledger({ id: "healthy", order_id: "order-1" })],
+    orderCandidates: [order({ order_id: "order-1", platform_order_id: "wowboost:order-1", affiliate_id: "affiliate-1", source_id: "source-1" })],
+  });
+  assert.equal(deriveFinancialHealth(healthy as any).state, "healthy");
+
+  const reviewNeeded = report({
+    ledgerRows: [ledger({ id: "missing-attribution", order_id: "order-1" })],
+  });
+  assert.equal(deriveFinancialHealth(reviewNeeded as any).state, "review_needed");
+  assert.equal(reviewNeeded.summary.match_rate, 1);
+
+  const unmatchedOnly = {
+    ...noEvents,
+    summary: {
+      ...noEvents.summary,
+      financial_events_reviewed: 1,
+      unmatched_events: 1,
+      needs_review: 1,
+      match_rate: 0,
+    },
+  };
+  assert.equal(deriveFinancialHealth(unmatchedOnly as any).state, "review_needed");
+
+  const critical = report({
+    ledgerRows: [ledger({ id: "fee-only", ledger_type: "chargeback_fee", transaction_id: "", dispute_id: "chain-1", amount: -15 })],
+  });
+  assert.equal(deriveFinancialHealth(critical as any).state, "critical");
+
+  const perfectMatchBrokenChain = {
+    ...healthy,
+    summary: {
+      ...healthy.summary,
+      broken_chains: 1,
+      needs_review: 1,
+    },
+    diagnostics: {
+      ...healthy.diagnostics,
+      broken_chains: [{ chain_key: "paypal:chain", reasons: ["mixed_currency_chain"], events: [{ event_id: "healthy" }] }],
+    },
+  };
+  assert.equal(perfectMatchBrokenChain.summary.match_rate, 1);
+  assert.equal(deriveFinancialHealth(perfectMatchBrokenChain as any).state, "critical");
+
+  const partial = report({
+    ledgerRows: [ledger({ id: "partial", ledger_type: "chargeback_fee", transaction_id: "", dispute_id: "partial-chain", amount: -15 })],
+    partialReason: "Ledger result exceeded 1000 rows.",
+  });
+  const partialHealth = deriveFinancialHealth(partial as any);
+  assert.equal(partialHealth.state, "partial");
+  assert.equal(partialHealth.match_health, null);
+  assert.equal(partial.summary.match_rate, null);
+});
+
+test("financial issue cards and work queue expose narrative review counts and priority", () => {
+  const result = report({
+    ledgerRows: [
+      ledger({ id: "fee-only", ledger_type: "chargeback_fee", transaction_id: "", dispute_id: "chain-1", amount: -15 }),
+      ledger({ id: "unmatched", transaction_id: "" }),
+      ledger({ id: "missing-attribution", order_id: "order-1" }),
+    ],
+  });
+
+  const cards = buildFinancialIssueCards(result as any);
+  assert.equal(cards.some((card) => card.title === "Broken financial chains" && card.count >= 1), true);
+  assert.equal(cards.some((card) => card.title === "Missing attribution" && card.count >= 1), true);
+
+  const queue = buildFinancialWorkQueue(result as any);
+  assert.equal(queue[0].severity, "Critical");
+  assert.equal(queue.some((item) => item.category === "unmatched"), true);
+  assert.equal(queue.some((item) => item.category === "missing_attribution"), true);
+
+  const informationalDuplicate = report({
+    ledgerRows: [ledger({ id: "stored-duplicate", order_id: "order-1", diagnostic_flags: ["duplicate_rejected_before_insert"] })],
+    orderCandidates: [order({ order_id: "order-1", platform_order_id: "wowboost:order-1", affiliate_id: "affiliate-1", source_id: "source-1" })],
+  });
+  const duplicateCard = buildFinancialIssueCards(informationalDuplicate as any).find((card) => card.category === "duplicate_evidence");
+  assert.equal(deriveFinancialHealth(informationalDuplicate as any).state, "review_needed");
+  assert.equal(duplicateCard?.severity, "Informational");
+  assert.equal(duplicateCard?.count, 1);
+  assert.equal(buildFinancialWorkQueue(informationalDuplicate as any, "duplicate_evidence")[0].severity, "Informational");
+});
+
+test("financial impact keeps ledger types separate and calculates signed net totals", () => {
+  const diagnosticFlagged = report({
+    ledgerRows: [
+      ledger({ id: "refund", ledger_type: "refund", amount: -20, currency: "USD", diagnostic_flags: ["duplicate_rejected_before_insert"] }),
+      ledger({ id: "chargeback", ledger_type: "chargeback", amount: -30, currency: "USD" }),
+      ledger({ id: "fee", ledger_type: "chargeback_fee", amount: -5, currency: "USD" }),
+      ledger({ id: "reversal", ledger_type: "chargeback_reversal", amount: 4, currency: "USD" }),
+      ledger({ id: "fee-reversal", ledger_type: "chargeback_fee_reversal", amount: 1, currency: "USD" }),
+    ],
+  });
+  const rows = financialImpactRows(diagnosticFlagged as any);
+  assert.equal(rows.find((row) => row.type === "refund")?.amount, -20);
+  assert.deepEqual(rows.map((row) => row.type), ["refund", "chargeback", "chargeback_fee", "chargeback_reversal", "chargeback_fee_reversal"]);
+  assert.equal(netFinancialImpact(diagnosticFlagged as any).amount, -50);
+
+  const onlyReversals = report({
+    ledgerRows: [
+      ledger({ id: "principal-recovery", ledger_type: "chargeback_reversal", amount: 25, currency: "USD" }),
+      ledger({ id: "fee-recovery", ledger_type: "chargeback_fee_reversal", amount: 5, currency: "USD" }),
+    ],
+  });
+  assert.equal(netFinancialImpact(onlyReversals as any).amount, 30);
+
+  const debitAndReversal = report({
+    ledgerRows: [
+      ledger({ id: "chargeback-debit", ledger_type: "chargeback", amount: -100, currency: "USD" }),
+      ledger({ id: "chargeback-recovered", ledger_type: "chargeback_reversal", amount: 25, currency: "USD" }),
+    ],
+  });
+  assert.equal(netFinancialImpact(debitAndReversal as any).amount, -75);
+
+  const zeroValue = report({
+    ledgerRows: [ledger({ id: "zero", ledger_type: "chargeback_fee", amount: 0, currency: "USD" })],
+  });
+  assert.equal(financialImpactRows(zeroValue as any).find((row) => row.type === "chargeback_fee")?.count, 1);
+  assert.equal(netFinancialImpact(zeroValue as any).amount, 0);
+
+  const missingCurrency = report({
+    ledgerRows: [ledger({ id: "missing-currency", ledger_type: "refund", amount: -10, currency: null })],
+  });
+  assert.equal(netFinancialImpact(missingCurrency as any).amount, -10);
+  assert.equal(netFinancialImpact(missingCurrency as any).currency, null);
+
+  const mixed = report({
+    ledgerRows: [
+      ledger({ id: "usd", ledger_type: "refund", amount: -20, currency: "USD" }),
+      ledger({ id: "eur", ledger_type: "chargeback", amount: -30, currency: "EUR" }),
+    ],
+  });
+  assert.equal(netFinancialImpact(mixed as any).mixed_currency, true);
+  assert.equal(netFinancialImpact(mixed as any).label, "Multiple currencies");
+});
+
+test("recent financial activity uses honest lifecycle labels without inventing state", () => {
+  const result = report({
+    ledgerRows: [
+      ledger({ id: "auto", order_id: "order-1", occurred_at: "2026-07-15T12:00:00.000Z" }),
+      ledger({ id: "manual", occurred_at: "2026-07-16T12:00:00.000Z" }),
+      ledger({ id: "ignored", occurred_at: "2026-07-17T12:00:00.000Z" }),
+      ledger({ id: "removed", order_id: "order-2", occurred_at: "2026-07-18T12:00:00.000Z" }),
+    ],
+    orderCandidates: [
+      order({ order_id: "order-1", platform_order_id: "wowboost:order-1", affiliate_id: "affiliate-1", source_id: "source-1" }),
+      order({ order_id: "order-2", platform_order_id: "wowboost:order-2", affiliate_id: "affiliate-1", source_id: "source-1" }),
+    ],
+    decisions: [
+      { id: "d-manual", workspace_id: "default", financial_event_id: "manual", resulting_state: "manual", decision_type: "confirm_match", matched_platform_order_id: "wowboost:order-1", is_active: true },
+      { id: "d-ignored", workspace_id: "default", financial_event_id: "ignored", resulting_state: "ignored", decision_type: "ignore", is_active: true, reason: "operator chose to ignore" },
+      { id: "d-removed", workspace_id: "default", financial_event_id: "removed", resulting_state: "removed", decision_type: "remove_match", is_active: true, reason: "undo" },
+    ],
+  });
+
+  const activity = recentFinancialActivity(result as any, 4);
+  assert.deepEqual(activity.map((item) => item.event_id), ["removed", "ignored", "manual", "auto"]);
+  assert.match(activity.find((item) => item.event_id === "manual")?.detail || "", /Manually reconciled/);
+  assert.match(activity.find((item) => item.event_id === "ignored")?.detail || "", /Ignored by an operator/);
+  assert.match(activity.find((item) => item.event_id === "removed")?.detail || "", /Manual match removed/);
+  assert.match(activity.find((item) => item.event_id === "auto")?.detail || "", /Automatically reconciled/);
 });
