@@ -62,6 +62,8 @@ export const WOWBOOST_RECEIPT_BACKFILL_DEFAULT_MAX_PAGES = 50;
 export const WOWBOOST_RECEIPT_BACKFILL_MAX_PAGES = 250;
 export const WOWBOOST_RECEIPT_BACKFILL_DEFAULT_MAX_SOURCE_ROWS = 5_000;
 export const WOWBOOST_RECEIPT_BACKFILL_MAX_SOURCE_ROWS = 25_000;
+export const WOWBOOST_SCHEDULED_COMMERCE_LOOKBACK_DAYS = 2;
+export const WOWBOOST_SCHEDULED_COMMERCE_ACTIVE_JOB_STALE_MS = 2 * 60 * 60 * 1000;
 
 export const WOWBOOST_IMPORT_MUTABLE_JOB_STATUSES = [
   "queued",
@@ -116,6 +118,157 @@ export function normalizeWowBoostReceiptBackfillMaxSourceRows(value: unknown) {
 export function wowBoostImportJobCanProcess(status: unknown) {
   return WOWBOOST_IMPORT_MUTABLE_JOB_STATUSES.includes(
     cleanText(status).toLowerCase() as (typeof WOWBOOST_IMPORT_MUTABLE_JOB_STATUSES)[number],
+  );
+}
+
+function ymdInTimeZone(date: Date, timezone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: timezone,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  }).formatToParts(date);
+  const byType = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  return `${byType.year}-${byType.month}-${byType.day}`;
+}
+
+function addDaysToYmd(ymd: string, days: number) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd);
+  if (!match) return ymd;
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3])));
+  date.setUTCDate(date.getUTCDate() + days);
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}-${String(date.getUTCDate()).padStart(2, "0")}`;
+}
+
+export function normalizeWowBoostScheduledTimezone(value: unknown, fallback = "UTC") {
+  const candidate = cleanText(value) || fallback;
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: candidate }).format(new Date());
+    return candidate;
+  } catch {
+    return fallback;
+  }
+}
+
+export function buildWowBoostScheduledCommerceWindow(args: {
+  now?: Date | string | number | null;
+  timezone?: string | null;
+  lookback_days?: number | string | null;
+} = {}) {
+  const now = args.now instanceof Date ? args.now : new Date(args.now ?? Date.now());
+  const safeNow = Number.isFinite(now.getTime()) ? now : new Date();
+  const timezone = normalizeWowBoostScheduledTimezone(args.timezone);
+  const lookbackDays = Math.max(
+    WOWBOOST_SCHEDULED_COMMERCE_LOOKBACK_DAYS,
+    Math.min(14, Math.floor(Number(args.lookback_days ?? WOWBOOST_SCHEDULED_COMMERCE_LOOKBACK_DAYS)) || WOWBOOST_SCHEDULED_COMMERCE_LOOKBACK_DAYS),
+  );
+  const to = ymdInTimeZone(safeNow, timezone);
+  const from = addDaysToYmd(to, -lookbackDays);
+  return {
+    from,
+    to,
+    timezone,
+    lookback_days: lookbackDays,
+  };
+}
+
+function uuidFromDigest(bytes: Uint8Array) {
+  const value = Array.from(bytes.slice(0, 16));
+  value[6] = (value[6] & 0x0f) | 0x50;
+  value[8] = (value[8] & 0x3f) | 0x80;
+  const hex = value.map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+export function buildWowBoostScheduledImportDedupeKey(args: {
+  workspace_id?: string | null;
+  platform?: string | null;
+  account_key?: string | null;
+  mode?: string | null;
+  filter?: string | null;
+  schedule_key?: string | null;
+  from: string;
+  to: string;
+}) {
+  const workspaceId = cleanText(args.workspace_id) || "default";
+  const platform = cleanText(args.platform) || "wowsuite:wowboost";
+  const accountKey = cleanText(args.account_key) || platform;
+  const mode = normalizeWowBoostImportMode(args.mode, "order_snapshot_import");
+  const filter = cleanText(args.filter) || "all_sales";
+  const scheduleKey = cleanText(args.schedule_key) || "unspecified";
+  return [
+    "wowboost_scheduled_commerce_snapshot_v1",
+    scheduleKey,
+    workspaceId,
+    platform,
+    accountKey,
+    mode,
+    filter,
+    args.from,
+    args.to,
+  ].join(":");
+}
+
+export async function buildWowBoostScheduledImportJobId(args: {
+  workspace_id?: string | null;
+  platform?: string | null;
+  account_key?: string | null;
+  mode?: string | null;
+  filter?: string | null;
+  schedule_key?: string | null;
+  from: string;
+  to: string;
+}) {
+  const key = buildWowBoostScheduledImportDedupeKey(args);
+  const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(key));
+  return uuidFromDigest(new Uint8Array(digest));
+}
+
+export function wowBoostScheduledImportJobBlocks(job: Record<string, any>, args: {
+  workspace_id?: string | null;
+  platform?: string | null;
+  account_key?: string | null;
+  from: string;
+  to: string;
+  filter?: string | null;
+  now?: Date | string | number | null;
+  stale_ms?: number | null;
+}) {
+  const progress = job?.progress && typeof job.progress === "object" ? job.progress : {};
+  const metadata = {
+    ...((progress.metadata && typeof progress.metadata === "object") ? progress.metadata : {}),
+    ...((job?.metadata && typeof job.metadata === "object") ? job.metadata : {}),
+  };
+  if (!wowBoostImportJobCanProcess(job?.status ?? progress.status)) return false;
+
+  const now = args.now instanceof Date ? args.now : new Date(args.now ?? Date.now());
+  const nowMs = Number.isFinite(now.getTime()) ? now.getTime() : Date.now();
+  const staleMs = Math.max(1, Number(args.stale_ms ?? WOWBOOST_SCHEDULED_COMMERCE_ACTIVE_JOB_STALE_MS) || WOWBOOST_SCHEDULED_COMMERCE_ACTIVE_JOB_STALE_MS);
+  const heartbeat = Date.parse(cleanText(job?.updated_at ?? progress.updated_at ?? job?.started_at ?? job?.requested_at));
+  if (Number.isFinite(heartbeat) && nowMs - heartbeat > staleMs) return false;
+
+  const mode = normalizeWowBoostImportMode(metadata.import_mode ?? progress.import_mode ?? "order_snapshot_import");
+  if (mode !== "order_snapshot_import") return false;
+
+  const workspaceId = cleanText(args.workspace_id) || "default";
+  const jobWorkspace = cleanText(job?.workspace_id ?? progress.workspace_id ?? metadata.workspace_id) || "default";
+  if (jobWorkspace !== workspaceId) return false;
+
+  const platform = cleanText(args.platform) || "wowsuite:wowboost";
+  const jobPlatform = cleanText(job?.platform ?? progress.platform);
+  if (jobPlatform !== platform) return false;
+
+  const filter = cleanText(args.filter) || "all_sales";
+  const jobFilter = cleanText(job?.filter ?? progress.filter) || "all_sales";
+  if (jobFilter !== filter) return false;
+
+  const accountKey = cleanText(args.account_key);
+  const jobAccountKey = cleanText(metadata.account_key ?? metadata.credential_platform);
+  if (accountKey && jobAccountKey && accountKey !== jobAccountKey) return false;
+
+  return (
+    cleanText(job?.from_date ?? progress.requested_from) === args.from &&
+    cleanText(job?.to_date ?? progress.requested_to) === args.to
   );
 }
 

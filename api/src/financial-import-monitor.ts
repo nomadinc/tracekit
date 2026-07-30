@@ -453,7 +453,7 @@ function isFinancialImportJob(job: any, account: AccountSeed) {
     progress.job_type,
     progress.phase,
   ].map(lower).join(" ");
-  if (/(chargeback|refund|financial|receipt|dispute|ledger|processor|payment|payout|commission)/.test(descriptor)) return true;
+  if (/(chargeback|refund|financial|receipt|dispute|ledger|processor|payment|payout|commission|commerce_order_snapshot|order_snapshot_import)/.test(descriptor)) return true;
   return [
     "events_inserted",
     "ledger_inserted",
@@ -721,6 +721,38 @@ export function buildFinancialImportMonitorReport(args: {
       errors: activeErrors.length + jobErrors.length + taskErrors.length,
       mode: seed.ingestion_mode,
     });
+    const latestSourceOrderMs = Math.max(
+      0,
+      ...accountJobs.map((job) => {
+        const metadata = jobMetadata(job);
+        return dateMs(metadata.latest_source_order_timestamp);
+      }),
+    );
+    const hasCommerceSnapshotJob = accountJobs.some((job) => {
+      const metadata = jobMetadata(job);
+      const descriptor = [
+        job?.job_type,
+        job?.phase,
+        metadata.import_mode,
+      ].map(lower).join(" ");
+      return /commerce_order_snapshot|order_snapshot_import/.test(descriptor);
+    });
+    if (
+      ["wowboost", "wowsuite:wowboost"].includes(seed.platform) &&
+      hasCommerceSnapshotJob &&
+      (
+        latestSourceOrderMs <= 0 ||
+        now.getTime() - latestSourceOrderMs > FINANCIAL_IMPORT_MONITOR_HEALTHY_RECENCY_MS
+      )
+    ) {
+      diagnostics.push({
+        type: "stale_commerce_snapshot",
+        severity: "warning",
+        message: latestSourceOrderMs > 0
+          ? "Latest imported WowBoost commerce order is older than the freshness window."
+          : "WowBoost commerce import has not reported a source order timestamp yet.",
+      });
+    }
     const status = statusForAccount({
       seed,
       jobs: accountJobs,

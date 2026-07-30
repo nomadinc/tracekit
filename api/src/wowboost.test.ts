@@ -5,6 +5,9 @@ import {
   buildWowBoostCommerceReferenceBackfillDecision,
   buildWowBoostOrderNumberToOrderIdMap,
   buildWowBoostOrderDetailsReferenceBackfillDecision,
+  buildWowBoostScheduledCommerceWindow,
+  buildWowBoostScheduledImportDedupeKey,
+  buildWowBoostScheduledImportJobId,
   buildWowSuiteCredentialStatus,
   capWowBoostPermanentMissingOrderIds,
   classifyWowBoostOrderDetailsLookupFailure,
@@ -60,7 +63,10 @@ import {
   wowBoostRuntimeStagingStopDecision,
   wowBoostImportPageContinuation,
   wowBoostImportJobCanProcess,
+  wowBoostScheduledImportJobBlocks,
   wowBoostRefundEventIsInRange,
+  WOWBOOST_SCHEDULED_COMMERCE_ACTIVE_JOB_STALE_MS,
+  WOWBOOST_SCHEDULED_COMMERCE_LOOKBACK_DAYS,
   WOWBOOST_RECEIPT_BACKFILL_MAX_PAGES,
 } from "./wowboost.ts";
 
@@ -2025,6 +2031,212 @@ test("WowBoost import modes are explicit and default to snapshot import", () => 
   assert.equal(normalizeWowBoostImportMode("unknown"), "order_snapshot_import");
 });
 
+test("scheduled WowBoost commerce window includes previous two local calendar days through today", () => {
+  const window = buildWowBoostScheduledCommerceWindow({
+    now: "2026-07-30T06:30:00.000Z",
+    timezone: "America/Los_Angeles",
+  });
+
+  assert.equal(window.from, "2026-07-27");
+  assert.equal(window.to, "2026-07-29");
+  assert.equal(window.timezone, "America/Los_Angeles");
+  assert.equal(window.lookback_days, WOWBOOST_SCHEDULED_COMMERCE_LOOKBACK_DAYS);
+});
+
+test("scheduled WowBoost commerce window clamps lower lookbacks to the safe overlap", () => {
+  const window = buildWowBoostScheduledCommerceWindow({
+    now: "2026-07-30T18:30:00.000Z",
+    timezone: "UTC",
+    lookback_days: 0,
+  });
+
+  assert.equal(window.from, "2026-07-28");
+  assert.equal(window.to, "2026-07-30");
+  assert.equal(window.lookback_days, 2);
+});
+
+test("scheduled WowBoost commerce window falls back safely for invalid timezones", () => {
+  const window = buildWowBoostScheduledCommerceWindow({
+    now: "2026-07-30T06:30:00.000Z",
+    timezone: "Not/A_Real_Zone",
+  });
+
+  assert.equal(window.from, "2026-07-28");
+  assert.equal(window.to, "2026-07-30");
+  assert.equal(window.timezone, "UTC");
+});
+
+test("scheduled WowBoost commerce window is stable across local midnight and DST boundaries", () => {
+  const beforeMidnight = buildWowBoostScheduledCommerceWindow({
+    now: "2026-07-30T06:59:00.000Z",
+    timezone: "America/Los_Angeles",
+  });
+  const afterMidnight = buildWowBoostScheduledCommerceWindow({
+    now: "2026-07-30T07:01:00.000Z",
+    timezone: "America/Los_Angeles",
+  });
+  const dstStart = buildWowBoostScheduledCommerceWindow({
+    now: "2026-03-08T10:30:00.000Z",
+    timezone: "America/Los_Angeles",
+  });
+
+  assert.deepEqual(beforeMidnight, {
+    from: "2026-07-27",
+    to: "2026-07-29",
+    timezone: "America/Los_Angeles",
+    lookback_days: 2,
+  });
+  assert.deepEqual(afterMidnight, {
+    from: "2026-07-28",
+    to: "2026-07-30",
+    timezone: "America/Los_Angeles",
+    lookback_days: 2,
+  });
+  assert.deepEqual(dstStart, {
+    from: "2026-03-06",
+    to: "2026-03-08",
+    timezone: "America/Los_Angeles",
+    lookback_days: 2,
+  });
+});
+
+test("scheduled WowBoost job identity is deterministic for the same effective import", async () => {
+  const args = {
+    workspace_id: "default",
+    platform: "wowsuite:wowboost",
+    account_key: "wowsuite:wowboost",
+    mode: "order_snapshot_import",
+    filter: "all_sales",
+    schedule_key: "2026-07-30T12",
+    from: "2026-07-28",
+    to: "2026-07-30",
+  };
+
+  assert.equal(
+    buildWowBoostScheduledImportDedupeKey(args),
+    "wowboost_scheduled_commerce_snapshot_v1:2026-07-30T12:default:wowsuite:wowboost:wowsuite:wowboost:order_snapshot_import:all_sales:2026-07-28:2026-07-30",
+  );
+  assert.equal(
+    await buildWowBoostScheduledImportJobId(args),
+    await buildWowBoostScheduledImportJobId({ ...args }),
+  );
+  assert.notEqual(
+    await buildWowBoostScheduledImportJobId(args),
+    await buildWowBoostScheduledImportJobId({ ...args, schedule_key: "2026-07-30T13" }),
+  );
+  assert.notEqual(
+    await buildWowBoostScheduledImportJobId(args),
+    await buildWowBoostScheduledImportJobId({ ...args, to: "2026-07-31" }),
+  );
+});
+
+test("scheduled WowBoost duplicate guard blocks only genuinely active matching snapshot jobs", () => {
+  const now = "2026-07-30T12:00:00.000Z";
+  const baseJob = {
+    status: "running",
+    workspace_id: "default",
+    platform: "wowsuite:wowboost",
+    module: "wowboost",
+    from_date: "2026-07-28",
+    to_date: "2026-07-30",
+    filter: "all_sales",
+    updated_at: "2026-07-30T11:58:00.000Z",
+    progress: {
+      workspace_id: "default",
+      metadata: {
+        import_mode: "order_snapshot_import",
+        account_key: "wowsuite:wowboost",
+      },
+    },
+  };
+
+  assert.equal(wowBoostScheduledImportJobBlocks(baseJob, {
+    workspace_id: "default",
+    platform: "wowsuite:wowboost",
+    account_key: "wowsuite:wowboost",
+    from: "2026-07-28",
+    to: "2026-07-30",
+    filter: "all_sales",
+    now,
+  }), true);
+
+  assert.equal(wowBoostScheduledImportJobBlocks({
+    ...baseJob,
+    updated_at: "2026-07-19T03:45:44.968Z",
+  }, {
+    workspace_id: "default",
+    platform: "wowsuite:wowboost",
+    account_key: "wowsuite:wowboost",
+    from: "2026-07-28",
+    to: "2026-07-30",
+    filter: "all_sales",
+    now,
+    stale_ms: WOWBOOST_SCHEDULED_COMMERCE_ACTIVE_JOB_STALE_MS,
+  }), false);
+
+  assert.equal(wowBoostScheduledImportJobBlocks({
+    ...baseJob,
+    progress: {
+      workspace_id: "default",
+      metadata: { import_mode: "receipt_event_backfill", account_key: "wowsuite:wowboost" },
+    },
+  }, {
+    workspace_id: "default",
+    platform: "wowsuite:wowboost",
+    account_key: "wowsuite:wowboost",
+    from: "2026-07-28",
+    to: "2026-07-30",
+    filter: "all_sales",
+    now,
+  }), false);
+});
+
+test("scheduled handler queues WowBoost order snapshots without scheduling receipt backfill", () => {
+  const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+  const scheduledStart = source.indexOf("async function runScheduledWowBoostImport");
+  const scheduledEnd = source.indexOf("async function runScheduledCheckoutChampImport", scheduledStart);
+  const scheduledSource = source.slice(scheduledStart, scheduledEnd);
+  const settingsStart = source.indexOf("async function getIntegrationSettings");
+  const settingsEnd = source.indexOf("async function saveIntegrationSettings", settingsStart);
+  const settingsSource = source.slice(settingsStart, settingsEnd);
+
+  assert.match(source, /ctx\.waitUntil\(runScheduledWowBoostImport\(env\)\)/);
+  assert.match(scheduledSource, /getIntegrationSettings\(env, platform/);
+  assert.doesNotMatch(scheduledSource, /autoImportEnabled:\s*true/);
+  assert.match(settingsSource, /auto_import_enabled: false/);
+  assert.match(scheduledSource, /auto_import_enabled/);
+  assert.match(scheduledSource, /auto_import_disabled/);
+  assert.match(scheduledSource, /getWowSuiteStatusCredential\(env, "wowboost"\)/);
+  assert.match(scheduledSource, /wowBoostScheduledImportJobBlocks/);
+  assert.match(scheduledSource, /buildWowBoostScheduledImportJobId/);
+  assert.match(scheduledSource, /createImportJobIfAbsent/);
+  assert.match(scheduledSource, /reason: "recent_success"/);
+  assert.match(scheduledSource, /scheduledJobForFailure/);
+  assert.match(scheduledSource, /status: "failed"/);
+  assert.match(scheduledSource, /env\.wowboost_imports\.send\(\{/);
+  assert.match(scheduledSource, /mode: "order_snapshot_import"/);
+  assert.doesNotMatch(scheduledSource, /mode: "receipt_event_backfill"/);
+  assert.doesNotMatch(scheduledSource, /runWowBoostImportPage|fetchWowBoostExportPage|runWowBoostImportJob/);
+  assert.match(scheduledSource, /last_run_at/);
+  assert.match(scheduledSource, /sanitizedIntegrationError/);
+});
+
+test("WowBoost scheduled jobs store workspace and connector metadata for monitor isolation", () => {
+  const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+  const scheduledStart = source.indexOf("async function runScheduledWowBoostImport");
+  const scheduledEnd = source.indexOf("async function runScheduledCheckoutChampImport", scheduledStart);
+  const scheduledSource = source.slice(scheduledStart, scheduledEnd);
+
+  assert.match(scheduledSource, /workspace_id: workspaceId/);
+  assert.match(scheduledSource, /connector_id: connectorId/);
+  assert.match(scheduledSource, /job_type: "commerce_order_snapshot_import"/);
+  assert.match(scheduledSource, /phase: "order_snapshot_import"/);
+  assert.match(scheduledSource, /scheduled_import: true/);
+  assert.match(scheduledSource, /schedule_key: scheduleKey/);
+  assert.match(scheduledSource, /scheduled_dedupe_key: scheduledDedupeKey/);
+  assert.match(scheduledSource, /credential_platform: credentialStatus\.credential_platform/);
+});
+
 test("legacy queue uses a conditional active-status update and durable receipt continuation", () => {
   const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
   assert.match(
@@ -2036,6 +2248,12 @@ test("legacy queue uses a conditional active-status update and durable receipt c
   assert.match(source, /conditional_update_rejected_because_job_was_terminal/);
   assert.match(source, /path === "\/v1\/integrations\/wowboost\/backfill-receipt-events"/);
   assert.match(source, /existingMetadata\.continuation_page \?\? existingProgress\.current_page/);
+  assert.match(source, /from: job\.from_date/);
+  assert.match(source, /to: job\.to_date/);
+  assert.match(source, /filter: job\.filter/);
+  assert.match(source, /scheduled: Boolean\(body\.scheduled \?\? currentMetadata\.scheduled_import\)/);
+  assert.match(source, /workspace_id: currentProgress\.workspace_id \|\| "default"/);
+  assert.match(source, /account_key: currentMetadata\.account_key \|\| body\.account_key \|\| wowSuiteKey\("wowboost"\)/);
 });
 
 test("cancellation observed after page work cannot overwrite the terminal job state", () => {

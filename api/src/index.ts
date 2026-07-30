@@ -415,9 +415,13 @@ import {
   isWowBoostOrderDetailsBackfillStatementTimeout,
   nextWowBoostOrderDetailsBackfillPlatform,
   mergeWowBoostPlatformOrderSnapshot,
+  buildWowBoostScheduledImportDedupeKey,
+  buildWowBoostScheduledCommerceWindow,
+  buildWowBoostScheduledImportJobId,
   normalizeWowBoostImportMode,
   normalizeWowBoostReceiptBackfillMaxPages,
   normalizeWowBoostReceiptBackfillMaxSourceRows,
+  wowBoostScheduledImportJobBlocks,
   resolveWowBoostLegacyOrderNumber,
   resolveWowBoostOrderDetailsLookupOrderId,
   scanWowBoostLegacyOrderNumberExportPages,
@@ -441,6 +445,8 @@ import {
   WOWBOOST_RUNTIME_DEFAULT_MAX_EXPORT_PAGES,
   WOWBOOST_IMPORT_MUTABLE_JOB_STATUSES,
   WOWBOOST_ORDER_SNAPSHOT_MAX_PAGES,
+  WOWBOOST_SCHEDULED_COMMERCE_ACTIVE_JOB_STALE_MS,
+  WOWBOOST_SCHEDULED_COMMERCE_LOOKBACK_DAYS,
   WOWBOOST_ORDER_DETAILS_RETRY_MAX_ATTEMPTS,
   WOWBOOST_RECEIPT_BACKFILL_DEFAULT_MAX_PAGES,
   WOWBOOST_RECEIPT_BACKFILL_DEFAULT_MAX_SOURCE_ROWS,
@@ -4616,7 +4622,14 @@ type ImportJobRow = {
   updated_at?: string | null;
 };
 
+function isDatabaseUniqueViolation(error: any) {
+  const code = String(error?.code || "").trim();
+  const message = String(error?.message || error || "");
+  return code === "23505" || /duplicate key value violates unique constraint|unique constraint/i.test(message);
+}
+
 async function createImportJob(env: Env, args: {
+  id?: string | null;
   platform: string;
   module?: string | null;
   from: string;
@@ -4626,6 +4639,9 @@ async function createImportJob(env: Env, args: {
   connector_id?: string | null;
   progress?: ImportProgressState | Record<string, any> | null;
   status?: ImportJobStatus;
+  job_type?: string | null;
+  phase?: string | null;
+  metadata?: Record<string, any> | null;
 }) {
   const supabase = getSupabase(env);
   const progress = args.progress ?? createInitialImportProgress({
@@ -4638,12 +4654,20 @@ async function createImportJob(env: Env, args: {
   });
 
   const payload = {
+    ...(args.id ? { id: args.id } : {}),
+    workspace_id: String(args.workspace_id || "default").trim() || "default",
     platform: args.platform,
+    connector_id: args.connector_id ?? null,
+    job_type: args.job_type ?? null,
+    phase: args.phase ?? null,
     module: args.module ?? null,
     status: args.status ?? normalizeImportStatus((progress as any).status || "queued"),
     from_date: args.from,
     to_date: args.to,
+    requested_from: args.from,
+    requested_to: args.to,
     filter: args.filter ?? null,
+    metadata: args.metadata ?? null,
     progress,
     requested_at: new Date().toISOString(),
     updated_at: new Date().toISOString(),
@@ -4653,6 +4677,18 @@ async function createImportJob(env: Env, args: {
   if (error) throw new Error(`Failed to create import job: ${error.message}`);
 
   return data as ImportJobRow;
+}
+
+async function createImportJobIfAbsent(env: Env, args: Parameters<typeof createImportJob>[1]) {
+  try {
+    const job = await createImportJob(env, args);
+    return { job, created: true };
+  } catch (e: any) {
+    if (!args.id || !isDatabaseUniqueViolation(e)) throw e;
+    const existing = await getImportJob(env, args.id);
+    if (!existing) throw e;
+    return { job: existing, created: false };
+  }
 }
 
 async function updateImportJob(env: Env, jobId: string, patch: Partial<ImportJobRow> & Record<string, any>) {
@@ -12152,6 +12188,290 @@ async function runWowBoostImportJob(env: Env, args: { jobId: string; from: strin
   }
 }
 
+function sanitizedIntegrationError(value: unknown) {
+  const raw = String(value instanceof Error ? value.message : value || "unknown").trim() || "unknown";
+  return raw
+    .replace(/https?:\/\/([^/\s:@]+):([^@\s]+)@/gi, "https://[redacted]@")
+    .replace(/Bearer\s+[A-Za-z0-9._~+/=-]+/gi, "Bearer [redacted]")
+    .replace(/Basic\s+[A-Za-z0-9._~+/=-]+/gi, "Basic [redacted]")
+    .replace(/([?&](?:client_secret|access_token|refresh_token|password|api[_-]?key|security[_-]?key|token)=)([^&\s]+)/gi, "$1[redacted]")
+    .replace(/(client_secret|access_token|refresh_token|password|api[_-]?key|security[_-]?key|token)=([^&\s]+)/gi, "$1=[redacted]")
+    .replace(/("(?:client_secret|access_token|refresh_token|password|api[_-]?key|security[_-]?key|token)"\s*:\s*")([^"]+)(")/gi, "$1[redacted]$3")
+    .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, "[redacted-email]")
+    .slice(0, 500);
+}
+
+function wowBoostScheduledTimezoneFromSettings(settings: any) {
+  const metadata = settings?.metadata && typeof settings.metadata === "object" ? settings.metadata : {};
+  const nestedSettings = settings?.settings && typeof settings.settings === "object" ? settings.settings : {};
+  return (
+    settings?.timezone ||
+    settings?.workspace_timezone ||
+    metadata.timezone ||
+    metadata.workspace_timezone ||
+    nestedSettings.timezone ||
+    nestedSettings.workspace_timezone ||
+    "UTC"
+  );
+}
+
+function wowBoostScheduledLookbackDaysFromSettings(settings: any) {
+  const metadata = settings?.metadata && typeof settings.metadata === "object" ? settings.metadata : {};
+  const nestedSettings = settings?.settings && typeof settings.settings === "object" ? settings.settings : {};
+  const explicitDays =
+    settings?.auto_import_lookback_days ??
+    metadata.auto_import_lookback_days ??
+    metadata.lookback_days ??
+    nestedSettings.auto_import_lookback_days ??
+    nestedSettings.lookback_days;
+  if (explicitDays !== undefined && explicitDays !== null) return explicitDays;
+  const lookbackHours = Number(settings?.auto_import_lookback_hours ?? 0);
+  return lookbackHours > 0
+    ? Math.ceil(lookbackHours / 24)
+    : WOWBOOST_SCHEDULED_COMMERCE_LOOKBACK_DAYS;
+}
+
+async function runScheduledWowBoostImport(env: Env) {
+  const supabase = getSupabase(env);
+  const platform = wowSuiteKey("wowboost");
+  const workspaceId = "default";
+  const connectorId = "wowboost";
+  const filter = "all_sales";
+  const pageSize = 100;
+  const now = new Date();
+  const nowIso = now.toISOString();
+  let scheduledJobForFailure: string | null = null;
+
+  try {
+    const settings = await getIntegrationSettings(env, platform, {
+      intervalMinutes: 60,
+      lookbackHours: 72,
+    });
+
+    if (!settings || !(settings as any).auto_import_enabled) {
+      console.log("[cron] wowboost commerce import skipped", {
+        platform,
+        reason: "auto_import_disabled",
+      });
+      return;
+    }
+
+    if (!env.wowboost_imports) {
+      throw new Error("wowboost_imports queue binding is missing. Check wrangler.toml.");
+    }
+
+    const credential = await getWowSuiteStatusCredential(env, "wowboost");
+    const credentialStatus = buildWowSuiteCredentialStatus("wowboost", credential);
+    if (!credentialStatus.connected) {
+      throw new Error(`WowBoost credentials are incomplete: missing ${credentialStatus.missing.join(", ") || "credentials"}.`);
+    }
+
+    const window = buildWowBoostScheduledCommerceWindow({
+      now,
+      timezone: wowBoostScheduledTimezoneFromSettings(settings),
+      lookback_days: wowBoostScheduledLookbackDaysFromSettings(settings),
+    });
+    const accountKey = platform;
+    const scheduleKey = nowIso.slice(0, 13);
+    const recentSuccessMs = Date.parse(String((settings as any).last_success_at || ""));
+    if (
+      Number.isFinite(recentSuccessMs) &&
+      now.getTime() - recentSuccessMs < Math.min(
+        30 * 60 * 1000,
+        Math.max(5 * 60 * 1000, Number((settings as any).auto_import_interval_minutes || 60) * 60 * 1000 / 2),
+      )
+    ) {
+      console.log("[cron] wowboost commerce import skipped", {
+        platform,
+        reason: "recent_success",
+        last_success_at: (settings as any).last_success_at,
+      });
+      return;
+    }
+    const scheduledDedupeKey = buildWowBoostScheduledImportDedupeKey({
+      workspace_id: workspaceId,
+      platform,
+      account_key: accountKey,
+      mode: "order_snapshot_import",
+      filter,
+      schedule_key: scheduleKey,
+      from: window.from,
+      to: window.to,
+    });
+    const scheduledJobId = await buildWowBoostScheduledImportJobId({
+      workspace_id: workspaceId,
+      platform,
+      account_key: accountKey,
+      mode: "order_snapshot_import",
+      filter,
+      schedule_key: scheduleKey,
+      from: window.from,
+      to: window.to,
+    });
+
+    const { data: candidateJobs, error: candidateError } = await supabase
+      .from("integration_import_jobs")
+      .select("id,workspace_id,platform,module,status,from_date,to_date,filter,progress,metadata,updated_at,started_at,requested_at")
+      .eq("platform", platform)
+      .eq("module", "wowboost")
+      .eq("from_date", window.from)
+      .eq("to_date", window.to)
+      .in("status", [...WOWBOOST_IMPORT_MUTABLE_JOB_STATUSES])
+      .order("updated_at", { ascending: false })
+      .limit(25);
+    if (candidateError) throw new Error(`WowBoost scheduled job duplicate check failed: ${candidateError.message}`);
+
+    const blockingJob = (candidateJobs || []).find((job: any) => wowBoostScheduledImportJobBlocks(job, {
+      workspace_id: workspaceId,
+      platform,
+      account_key: accountKey,
+      from: window.from,
+      to: window.to,
+      filter,
+      now,
+      stale_ms: WOWBOOST_SCHEDULED_COMMERCE_ACTIVE_JOB_STALE_MS,
+    }));
+
+    await supabase
+      .from("integrations_settings")
+      .update({
+        last_run_at: nowIso,
+        updated_at: nowIso,
+      } as any)
+      .eq("platform", platform);
+
+    if (blockingJob) {
+      console.log("[cron] wowboost commerce import skipped", {
+        platform,
+        reason: "active_job_exists",
+        job_id: blockingJob.id,
+        from: window.from,
+        to: window.to,
+      });
+      return;
+    }
+
+    const initialProgress = {
+      ...createInitialImportProgress({
+        workspace_id: workspaceId,
+        platform,
+        connector_id: connectorId,
+        from: window.from,
+        to: window.to,
+        filter,
+        now: nowIso,
+      }),
+      status: "queued",
+      current_page: 1,
+      metadata: {
+        import_mode: "order_snapshot_import",
+        scheduled_import: true,
+        scheduler: "cloudflare_cron",
+        account_key: accountKey,
+        schedule_key: scheduleKey,
+        scheduled_dedupe_key: scheduledDedupeKey,
+        credential_platform: credentialStatus.credential_platform,
+        timezone: window.timezone,
+        lookback_days: window.lookback_days,
+        latest_requested_from: window.from,
+        latest_requested_to: window.to,
+        snapshot_phase_complete: false,
+        snapshot_consecutive_pages_before_range: 0,
+        snapshot_before_range_page_threshold: WOWBOOST_SNAPSHOT_BEFORE_RANGE_PAGE_THRESHOLD,
+        snapshot_max_pages: WOWBOOST_ORDER_SNAPSHOT_MAX_PAGES,
+        continuation_page: 1,
+        termination_reason: "scheduled_queued",
+      },
+    } as ImportProgressState & Record<string, any>;
+
+    const created = await createImportJobIfAbsent(env, {
+      id: scheduledJobId,
+      workspace_id: workspaceId,
+      platform,
+      module: "wowboost",
+      connector_id: connectorId,
+      job_type: "commerce_order_snapshot_import",
+      phase: "order_snapshot_import",
+      from: window.from,
+      to: window.to,
+      filter,
+      progress: initialProgress,
+      metadata: initialProgress.metadata,
+      status: "queued",
+    });
+    const job = created.job;
+
+    if (!created.created) {
+      console.log("[cron] wowboost commerce import skipped", {
+        platform,
+        reason: "scheduled_job_already_exists",
+        job_id: job.id,
+        from: window.from,
+        to: window.to,
+      });
+      return;
+    }
+    scheduledJobForFailure = job.id;
+
+    await updateImportJob(env, job.id, {
+      status: "queued",
+      pages: 0,
+      fetched: 0,
+      upserted: 0,
+      retries: 0,
+      error: null,
+      started_at: nowIso,
+    });
+
+    await env.wowboost_imports.send({
+      job_id: job.id,
+      from: window.from,
+      to: window.to,
+      filter,
+      mode: "order_snapshot_import",
+      page: 1,
+      pageSize,
+      attempt: 1,
+      scheduled: true,
+      workspace_id: workspaceId,
+      account_key: accountKey,
+    });
+    scheduledJobForFailure = null;
+
+    console.log("[cron] wowboost commerce import queued", {
+      platform,
+      job_id: job.id,
+      from: window.from,
+      to: window.to,
+      timezone: window.timezone,
+      lookback_days: window.lookback_days,
+      pageSize,
+    });
+  } catch (e: any) {
+    const lastError = sanitizedIntegrationError(e);
+    if (scheduledJobForFailure) {
+      await updateActiveWowBoostImportJob(env, scheduledJobForFailure, {
+        status: "failed",
+        error: lastError,
+        completed_at: new Date().toISOString(),
+      }).catch(() => {});
+    }
+    await supabase
+      .from("integrations_settings")
+      .update({
+        last_run_at: new Date().toISOString(),
+        last_error: lastError,
+        updated_at: new Date().toISOString(),
+      } as any)
+      .eq("platform", platform)
+      .catch(() => {});
+    console.error("[cron] wowboost commerce import scheduling failed", {
+      platform,
+      message: lastError,
+    });
+  }
+}
+
 async function runScheduledCheckoutChampImport(env: Env) {
   const supabase = getSupabase(env);
 
@@ -18140,7 +18460,7 @@ if (path === "/v1/product-costs/rules/delete" && req.method === "POST") {
     const settingsPlatform = wowSuiteKey(sub);
     const data = await getIntegrationSettings(env, settingsPlatform, {
       intervalMinutes: 60,
-      lookbackHours: 2,
+      lookbackHours: sub === "wowboost" ? 72 : 2,
     });
 
     return json({ ok: true, platform: settingsPlatform, ...(data || {}) });
@@ -18154,7 +18474,7 @@ if (path === "/v1/product-costs/rules/delete" && req.method === "POST") {
     const body = await readJsonBody(req);
     await saveIntegrationSettings(env, wowSuiteKey(sub), body, {
       intervalMinutes: 60,
-      lookbackHours: 2,
+      lookbackHours: sub === "wowboost" ? 72 : 2,
     });
 
     return json({ ok: true, message: "Settings saved." });
@@ -21384,15 +21704,27 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 	        msg.ack();
 	        continue;
 	      }
-	      console.log("[WowBoost Queue] JOB UPDATED", {
-	        jobId,
-	        page,
-	        status: continuationDecision.status,
-	        terminationReason: continuationDecision.termination_reason,
-	      });
+		      console.log("[WowBoost Queue] JOB UPDATED", {
+		        jobId,
+		        page,
+		        status: continuationDecision.status,
+		        terminationReason: continuationDecision.termination_reason,
+		      });
 
-	      if (continuationDecision.status === "completed" && importMode === "order_snapshot_import" && nextUpserted > 0) {
-        const identityWorkspaceId = "default";
+		      if (continuationDecision.status === "completed" && importMode === "order_snapshot_import") {
+		        await getSupabase(env)
+		          .from("integrations_settings")
+		          .update({
+		            last_success_at: new Date().toISOString(),
+		            last_error: null,
+		            updated_at: new Date().toISOString(),
+		          } as any)
+		          .eq("platform", wowSuiteKey("wowboost"))
+		          .catch(() => {});
+		      }
+
+		      if (continuationDecision.status === "completed" && importMode === "order_snapshot_import" && nextUpserted > 0) {
+	        const identityWorkspaceId = "default";
         const identityPlatforms = ["wowboost"];
         console.log("[WowBoost Queue] IDENTITY BACKFILL ENQUEUE", {
           jobId,
@@ -21449,10 +21781,16 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 	        });
 	        await env.wowboost_imports.send({
 	          job_id: jobId,
+	          from: job.from_date,
+	          to: job.to_date,
+	          filter: job.filter,
 	          page: continuationDecision.next_page,
 	          pageSize,
 	          attempt: 1,
 	          mode: importMode,
+	          scheduled: Boolean(body.scheduled ?? currentMetadata.scheduled_import),
+	          workspace_id: currentProgress.workspace_id || "default",
+	          account_key: currentMetadata.account_key || body.account_key || wowSuiteKey("wowboost"),
 	        });
 	        console.log("[WowBoost Queue] NEXT PAGE QUEUED", {
 	          jobId,
@@ -21502,6 +21840,14 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 	          retries: 0,
 	          last_error_at: new Date().toISOString(),
 	        }).catch(() => {});
+	        await getSupabase(env)
+	          .from("integrations_settings")
+	          .update({
+	            last_error: sanitizedIntegrationError(`Page ${retryPage} failed after ${attempt} attempts: ${message}`),
+	            updated_at: new Date().toISOString(),
+	          } as any)
+	          .eq("platform", wowSuiteKey("wowboost"))
+	          .catch(() => {});
 
         msg.ack();
         continue;
@@ -21535,6 +21881,7 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
     ctx.waitUntil(runScheduledCheckoutChampImport(env));
     ctx.waitUntil(runScheduledShopifyImport(env));
     ctx.waitUntil(runScheduledPaypalImport(env));
+    ctx.waitUntil(runScheduledWowBoostImport(env));
     ctx.waitUntil(runScheduledDomainEventProjectionReplay(getSupabase(env), {
       batch_size: Number(env.LIVE_WORKSPACE_PROJECTION_BATCH_SIZE || 0) || undefined,
       max_events: Number(env.LIVE_WORKSPACE_PROJECTION_MAX_EVENTS || 0) || undefined,

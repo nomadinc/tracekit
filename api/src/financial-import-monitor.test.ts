@@ -106,6 +106,105 @@ test("configured account with no history shows Never run without exposing creden
   assert.equal(JSON.stringify(result), JSON.stringify(result).replace(/secret-should-not-appear|client-id-should-not-appear/g, ""));
 });
 
+test("WowBoost commerce snapshot jobs are monitored separately from financial ledger totals", () => {
+  const result = report({
+    credentials: [{ platform: "wowsuite:wowboost", metadata: { workspace_id: "default" } }],
+    jobs: [job({
+      id: "job-wowboost-commerce",
+      platform: "wowsuite:wowboost",
+      connector_id: "wowboost",
+      job_type: "commerce_order_snapshot_import",
+      phase: "order_snapshot_import",
+      status: "completed",
+      updated_at: "2026-07-29T11:00:00.000Z",
+      completed_at: "2026-07-29T11:00:00.000Z",
+      progress: {
+        workspace_id: "default",
+        connector_id: "wowboost",
+        status: "completed",
+        records_fetched: 198,
+        records_processed: 78,
+        rows_upserted: 78,
+        metadata: {
+          import_mode: "order_snapshot_import",
+          account_key: "wowsuite:wowboost",
+          latest_source_order_timestamp: "2026-07-29T10:45:00.000Z",
+          accounts: [{ account_key: "wowsuite:wowboost", platform: "wowsuite:wowboost", processor_account_id: "wowsuite:wowboost" }],
+        },
+      },
+    })],
+  });
+
+  assert.equal(result.accounts.length, 1);
+  assert.equal(result.accounts[0].account_key, "wowsuite:wowboost");
+  assert.equal(result.accounts[0].status, "Healthy");
+  assert.equal(result.accounts[0].imported_events, 78);
+  assert.equal(result.accounts[0].inserted_events, null);
+  assert.equal(result.accounts[0].financial_event_totals.refund.event_count, 0);
+  assert.equal(result.accounts[0].recent_jobs[0].job_type, "commerce_order_snapshot_import");
+});
+
+test("WowBoost commerce snapshot monitor reports stale source-order evidence", () => {
+  const result = report({
+    credentials: [{ platform: "wowsuite:wowboost", metadata: { workspace_id: "default" } }],
+    jobs: [job({
+      id: "job-wowboost-stale-commerce",
+      platform: "wowsuite:wowboost",
+      connector_id: "wowboost",
+      job_type: "commerce_order_snapshot_import",
+      phase: "order_snapshot_import",
+      status: "completed",
+      updated_at: "2026-07-29T11:00:00.000Z",
+      completed_at: "2026-07-29T11:00:00.000Z",
+      progress: {
+        workspace_id: "default",
+        connector_id: "wowboost",
+        status: "completed",
+        records_processed: 78,
+        metadata: {
+          import_mode: "order_snapshot_import",
+          account_key: "wowsuite:wowboost",
+          latest_source_order_timestamp: "2026-07-27T10:45:00.000Z",
+          accounts: [{ account_key: "wowsuite:wowboost", platform: "wowsuite:wowboost" }],
+        },
+      },
+    })],
+  });
+
+  assert.equal(result.accounts[0].status, "Attention");
+  assert.equal(result.accounts[0].diagnostics.some((diagnostic) => diagnostic.type === "stale_commerce_snapshot"), true);
+});
+
+test("WowBoost commerce snapshot monitor does not treat missing source-order evidence as fresh", () => {
+  const result = report({
+    credentials: [{ platform: "wowsuite:wowboost", metadata: { workspace_id: "default" } }],
+    jobs: [job({
+      id: "job-wowboost-missing-source-ts",
+      platform: "wowsuite:wowboost",
+      connector_id: "wowboost",
+      job_type: "commerce_order_snapshot_import",
+      phase: "order_snapshot_import",
+      status: "completed",
+      updated_at: "2026-07-29T11:00:00.000Z",
+      completed_at: "2026-07-29T11:00:00.000Z",
+      progress: {
+        workspace_id: "default",
+        connector_id: "wowboost",
+        status: "completed",
+        records_processed: 78,
+        metadata: {
+          import_mode: "order_snapshot_import",
+          account_key: "wowsuite:wowboost",
+          accounts: [{ account_key: "wowsuite:wowboost", platform: "wowsuite:wowboost" }],
+        },
+      },
+    })],
+  });
+
+  assert.equal(result.accounts[0].status, "Attention");
+  assert.equal(result.accounts[0].diagnostics.some((diagnostic) => diagnostic.type === "stale_commerce_snapshot"), true);
+});
+
 test("financial import health presentation derives no-connectors healthy running review critical and partial states", () => {
   const none = report();
   assert.equal(deriveFinancialImportHealth(none as any).state, "No imports configured");
