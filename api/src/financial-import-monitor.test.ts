@@ -120,6 +120,55 @@ test("explicitly enabled PayPal account with no history shows Never run", () => 
   assert.equal(result.accounts[0].enabled, true);
 });
 
+test("customer-facing Financial Imports hides WowPay while preserving WowBoost PayPal and NMI labels", () => {
+  const result = report({
+    credentials: [
+      { platform: "wowsuite:wowpay", metadata: { workspace_id: "default" } },
+      { platform: "wowpay", metadata: { workspace_id: "default" } },
+      { platform: "wowsuite:wowboost", metadata: { workspace_id: "default" } },
+      { platform: "paypal", metadata: { workspace_id: "default", merchant_account_id: "merchant-1" } },
+      { platform: "nmi:lifeheater14090", metadata: { workspace_id: "default" } },
+    ],
+    settings: [
+      { platform: "wowsuite:wowpay", auto_import_enabled: true },
+      { platform: "wowpay", auto_import_enabled: true },
+      { platform: "wowsuite:wowboost", auto_import_enabled: true },
+      { platform: "paypal", auto_import_enabled: true },
+      { platform: "nmi:lifeheater14090", auto_import_enabled: true },
+    ],
+    jobs: [
+      job({
+        id: "job-wowpay-hidden",
+        platform: "wowsuite:wowpay",
+        connector_id: "wowpay",
+        job_type: "order_snapshot_import",
+        phase: "order_snapshot_import",
+        progress: {
+          workspace_id: "default",
+          connector_id: "wowpay",
+          status: "completed",
+          accounts: {
+            "wowsuite:wowpay": {
+              account_key: "wowsuite:wowpay",
+              platform: "wowsuite:wowpay",
+            },
+          },
+        },
+      }),
+    ],
+  });
+
+  const labels = result.accounts.map((account) => account.connector_label);
+  const platforms = result.accounts.map((account) => account.platform);
+
+  assert.equal(labels.includes("WowBoost"), true);
+  assert.equal(labels.includes("PayPal"), true);
+  assert.equal(labels.includes("NMI Snapshot Mode"), true);
+  assert.equal(labels.some((label) => /WowPay/.test(label)), false);
+  assert.equal(platforms.includes("wowsuite:wowpay"), false);
+  assert.equal(platforms.includes("wowpay"), false);
+});
+
 test("NMI and PayDiverse accounts are default-disabled and diagnostic-only when enabled", () => {
   const disabled = report({
     credentials: [{ platform: "nmi:lifeheater14090", metadata: { workspace_id: "default" } }],

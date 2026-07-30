@@ -211,7 +211,7 @@ function titleCaseConnector(value: unknown) {
   const known: Record<string, string> = {
     paypal: "PayPal",
     wowboost: "WowBoost",
-    wowpay: "WowPay",
+    wowpay: "Legacy gateway",
     wowsuite: "WowSuite",
     stripe: "Stripe",
     nmi: "NMI",
