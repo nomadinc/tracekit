@@ -20207,19 +20207,36 @@ if (path === "/v1/product-costs/rules/delete" && req.method === "POST") {
       });
     }
 
-    const job = await createImportJob(env, {
-      platform: settingsPlatform,
-      module: "wowpay",
-      from,
-      to,
-      filter: "all_sales",
-      status: "running",
-    });
+    let job: ImportJobRow;
+    try {
+      job = await createImportJob(env, {
+        platform: settingsPlatform,
+        module: "wowpay",
+        from,
+        to,
+        filter: "all_sales",
+        status: "running",
+      });
+    } catch (e: any) {
+      const message = sanitizedIntegrationError(e);
+      if (path.endsWith("/run-now")) {
+        await supabase
+          .from("integrations_settings")
+          .update({ last_error: message, updated_at: new Date().toISOString() })
+          .eq("platform", settingsPlatform);
+      }
+      return json({
+        ok: false,
+        error: "wowpay_import_job_create_failed",
+        message,
+      }, 500);
+    }
 
     try {
 	    const result = await runWowPayImportPage(env, { from, to, page, pageSize });
-	        const completedAt = res.partialRun ? null : new Date().toISOString();
-	        const finalStatus = res.partialRun ? "paused" : "completed";
+	        const partialRun = Boolean(result.hasMore);
+	        const completedAt = partialRun ? null : new Date().toISOString();
+	        const finalStatus = partialRun ? "paused" : "completed";
 	        await updateImportJob(env, job.id, {
 	          status: finalStatus,
         pages: 1,
@@ -20257,7 +20274,7 @@ if (path === "/v1/product-costs/rules/delete" && req.method === "POST") {
             existing_refund_evidence_protected: result.protectedSparseFields,
             earliest_refund_timestamp: result.earliestRefundTimestamp,
             latest_refund_timestamp: result.latestRefundTimestamp,
-            partial_run: Boolean(result.hasMore),
+            partial_run: partialRun,
             warnings: result.warnings,
           },
         },
