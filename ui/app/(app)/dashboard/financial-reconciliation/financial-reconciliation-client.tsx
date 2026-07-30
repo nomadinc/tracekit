@@ -25,6 +25,7 @@ import {
   buildFinancialIssueCards,
   buildFinancialWorkQueue,
   deriveFinancialHealth,
+  financialEventDisplayLabel,
   financialImpactRows,
   financialReconciliationQuery,
   netFinancialImpact,
@@ -105,8 +106,7 @@ function eventSuffix(value: string) {
 }
 
 function orderReference(item: FinancialReconciliationItem | null | undefined) {
-  if (!item) return "Not reported";
-  return item.suggested_order.public_order_label || item.suggested_order.candidate_order_id || item.processor_reference || item.source_event_id || `event ...${eventSuffix(item.id)}`;
+  return financialEventDisplayLabel(item).primary;
 }
 
 function stateTone(state: string) {
@@ -148,7 +148,7 @@ function severityTone(severity: FinancialIssueSeverity) {
   return "border-slate-200 bg-slate-50 text-slate-700 dark:border-white/10 dark:bg-white/5 dark:text-slate-200";
 }
 
-function HealthHero({ data, onReviewIssues }: { data: FinancialReconciliationResponse; onReviewIssues: () => void }) {
+function HealthHero({ data, onReviewIssues, onOpenLedger }: { data: FinancialReconciliationResponse; onReviewIssues: () => void; onOpenLedger: () => void }) {
   const health = deriveFinancialHealth(data);
   const reviewed = health.reviewed.toLocaleString();
   const matched = health.matched.toLocaleString();
@@ -177,10 +177,10 @@ function HealthHero({ data, onReviewIssues }: { data: FinancialReconciliationRes
               <ListChecks className="h-4 w-4" />
               Review Issues
             </button>
-            <a href="#advanced-explorer" className="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5">
-              Advanced explorer
+            <button type="button" onClick={onOpenLedger} className="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5">
+              Financial ledger
               <ArrowRight className="h-4 w-4" />
-            </a>
+            </button>
           </div>
         </div>
         <div className="grid gap-3 sm:grid-cols-2">
@@ -341,14 +341,18 @@ function EventTable({ items, selectedId, onSelect }: { items: FinancialReconcili
       <Card>
         <div className="flex min-h-44 flex-col items-center justify-center text-center">
           <CheckCircle2 className="h-8 w-8 text-emerald-500" />
-          <h3 className="mt-3 font-semibold">No financial events need review</h3>
-          <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">Refund, chargeback, fee, and reversal events will appear here when they match the selected filters.</p>
+          <h3 className="mt-3 font-semibold">No financial events found for this period.</h3>
+          <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">Adjust the date range or filters to inspect other events.</p>
         </div>
       </Card>
     );
   }
   return (
     <Card className="overflow-hidden p-0">
+      <div className="border-b px-4 py-3 dark:border-white/10">
+        <h2 className="font-semibold">Financial events</h2>
+        <p className="mt-1 text-sm text-slate-500">Complete financial event history for the selected period.</p>
+      </div>
       <div className="overflow-x-auto">
         <table className="min-w-[1180px] w-full text-left text-sm">
           <thead className="border-b bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:border-white/10 dark:bg-white/5">
@@ -367,7 +371,7 @@ function EventTable({ items, selectedId, onSelect }: { items: FinancialReconcili
                   <button type="button" onClick={() => onSelect(item)} className="text-left font-mono text-xs underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-slate-400">
                     {compact(orderReference(item), "Not reported")}
                   </button>
-                  <div className="mt-1 text-xs text-slate-500">source {compact(item.source_event_id || item.processor_reference || `...${eventSuffix(item.id)}`, "Not reported")}</div>
+                  <div className="mt-1 text-xs text-slate-500">{financialEventDisplayLabel(item).secondary || `event ...${eventSuffix(item.id)}`}</div>
                 </td>
                 <td className="px-4 py-3">{item.connector}</td>
                 <td className="px-4 py-3 font-mono text-xs">{compact(displayAccount(item.processor_account_id))}</td>
@@ -407,12 +411,12 @@ function WorkQueue({
       <Card>
         <div className="flex min-h-36 flex-col items-center justify-center text-center">
           <CheckCircle2 className="h-8 w-8 text-emerald-500" />
-          <h3 className="mt-3 font-semibold">{healthyEmpty ? "Your financial data is healthy." : "No rows match this review queue."}</h3>
+          <h3 className="mt-3 font-semibold">{healthyEmpty ? "No financial issues need review." : "No rows match this review queue."}</h3>
           <p className="mt-2 max-w-xl text-sm leading-6 text-slate-500">
             {healthyEmpty
-              ? "All financial events in this period are reconciled, and no critical integrity issues were detected."
+              ? "All actionable items in this view have been reconciled or cleared."
               : filteredEmpty
-                ? "Choose another issue type or open the advanced explorer to review all matching ledger events."
+                ? "Choose another issue type or open the Financial ledger to review all matching ledger events."
                 : "The current diagnostics did not produce row-level work items for this result set."}
           </p>
         </div>
@@ -424,7 +428,7 @@ function WorkQueue({
     <Card className="p-0">
       <div className="border-b px-4 py-3 dark:border-white/10">
         <h2 className="font-semibold">Financial review queue</h2>
-        <p className="mt-1 text-sm text-slate-500">Prioritized by urgency: critical chain/source evidence, match review, double-debit candidates, attribution gaps, then informational duplicate evidence.</p>
+        <p className="mt-1 text-sm text-slate-500">Prioritized issues that need operator review or confirmation.</p>
       </div>
       <div className="divide-y dark:divide-white/10">
         {items.map((entry) => (
@@ -437,15 +441,20 @@ function WorkQueue({
           >
             <div>
               <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${severityTone(entry.severity)}`}>{entry.severity}</span>
-              <div className="mt-2 text-xs text-slate-500">{sentenceLabel(entry.category)}</div>
+              <div className="mt-2 text-xs font-semibold uppercase tracking-wide text-slate-500">{sentenceLabel(entry.category)}</div>
             </div>
             <div>
               <div className="font-medium">{entry.title}</div>
               <div className="mt-1 font-mono text-xs text-slate-500">{compact(entry.order_reference, "Not reported")}</div>
             </div>
             <div className="text-sm leading-5 text-slate-600 dark:text-slate-300">
+              <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Why it matters</div>
               {entry.reason}
-              <div className="mt-1 text-xs text-slate-500">Next step: {entry.next_step}</div>
+              <div className="mt-2 inline-flex items-center gap-1 text-xs font-semibold text-slate-800 dark:text-slate-100">
+                <span className="text-slate-500 dark:text-slate-400">Action:</span>
+                {entry.next_step}
+                <ArrowRight className="h-3.5 w-3.5" />
+              </div>
             </div>
             <div>
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Amount</div>
@@ -510,7 +519,9 @@ function RecentActivity({ data, onSelect }: { data: FinancialReconciliationRespo
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="font-medium">{compact(story.title, "Not reported")}</div>
-                <div className="mt-1 text-xs text-slate-500">{time(story.event_date)} · {sentenceLabel(story.event_type)}</div>
+                <div className="mt-1 text-xs text-slate-500">
+                  {story.subtitle ? `${story.subtitle} · ` : ""}{time(story.event_date)} · {sentenceLabel(story.event_type)}
+                </div>
               </div>
               <div className="text-right font-semibold">{money(story.amount, story.currency)}</div>
             </div>
@@ -527,7 +538,17 @@ function RecentActivity({ data, onSelect }: { data: FinancialReconciliationRespo
   );
 }
 
-function DetailPanel({ item, data, onDecision }: { item: FinancialReconciliationItem | null; data: FinancialReconciliationResponse | null; onDecision: () => void }) {
+function DetailPanel({
+  item,
+  data,
+  reviewContext,
+  onDecision,
+}: {
+  item: FinancialReconciliationItem | null;
+  data: FinancialReconciliationResponse | null;
+  reviewContext: FinancialWorkQueueItem | null;
+  onDecision: () => void;
+}) {
   const [reason, setReason] = React.useState("");
   const [matchedPlatformOrderId, setMatchedPlatformOrderId] = React.useState("");
   const [saving, setSaving] = React.useState(false);
@@ -580,19 +601,34 @@ function DetailPanel({ item, data, onDecision }: { item: FinancialReconciliation
 
   const automaticExact = item.match_status === "automatic" && item.confidence === "exact";
   const confirmLabel = automaticExact ? "Confirm automatic match" : item.match_status === "manual" ? "Update manual match" : "Confirm match";
+  const activeReviewContext = reviewContext?.event_id === item.id ? reviewContext : null;
 
   return (
     <Card>
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-lg font-semibold">{label(item.event_type)}</h2>
+          <h2 className="text-lg font-semibold">{activeReviewContext ? "Review context" : "Financial event"}</h2>
+          <p className="mt-1 text-sm text-slate-500">{activeReviewContext ? "This item came from the Financial Review Queue." : "Ledger event details and reconciliation evidence."}</p>
           <p className="mt-1 font-mono text-xs text-slate-500">{item.id}</p>
         </div>
         <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${stateTone(item.match_status)}`}>{label(item.match_status)}</span>
       </div>
 
+      {activeReviewContext ? (
+        <div className="mt-5 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
+          <div className="flex flex-wrap items-center gap-2">
+            <span className={`rounded-full border px-2 py-0.5 text-xs font-medium ${severityTone(activeReviewContext.severity)}`}>{activeReviewContext.severity}</span>
+            <span className="font-semibold">{sentenceLabel(activeReviewContext.category)}</span>
+          </div>
+          <p className="mt-2 leading-6">{activeReviewContext.reason}</p>
+          <p className="mt-2 text-xs font-semibold uppercase tracking-wide opacity-80">Recommended next step</p>
+          <p className="mt-1">{activeReviewContext.next_step}</p>
+        </div>
+      ) : null}
+
       <dl className="mt-5 grid gap-3 sm:grid-cols-2">
         {[
+          ["Type", label(item.event_type)],
           ["Amount", money(item.amount, item.currency)],
           ["Occurred", time(item.event_date)],
           ["Connector", displayReference(item.connector, "Unknown connector")],
@@ -713,6 +749,7 @@ export default function FinancialReconciliationClient() {
   const [activeIssue, setActiveIssue] = React.useState<FinancialIssueCategory | "all">("all");
   const hasAdvancedFilters = Boolean(platform || account || eventType !== "all" || state !== "all" || confidence !== "all" || needsReview);
   const [explorerOpen, setExplorerOpen] = React.useState(hasAdvancedFilters);
+  const [reviewContext, setReviewContext] = React.useState<FinancialWorkQueueItem | null>(null);
 
   React.useEffect(() => {
     let cancelled = false;
@@ -760,7 +797,19 @@ export default function FinancialReconciliationClient() {
   function reviewIssues(category: FinancialIssueCategory | "all" = "all") {
     setActiveIssue(category);
     window.requestAnimationFrame(() => {
-      document.getElementById("work-queue")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      const queue = document.getElementById("work-queue");
+      queue?.scrollIntoView({ behavior: "smooth", block: "start" });
+      queue?.focus({ preventScroll: true });
+    });
+  }
+
+  function openLedger() {
+    setExplorerOpen(true);
+    setReviewContext(null);
+    window.requestAnimationFrame(() => {
+      const ledger = document.getElementById("financial-ledger");
+      ledger?.scrollIntoView({ behavior: "smooth", block: "start" });
+      ledger?.focus({ preventScroll: true });
     });
   }
 
@@ -814,7 +863,7 @@ export default function FinancialReconciliationClient() {
               </div>
             </Card>
           ) : null}
-          <HealthHero data={data} onReviewIssues={() => reviewIssues("all")} />
+          <HealthHero data={data} onReviewIssues={() => reviewIssues("all")} onOpenLedger={openLedger} />
           {data.partial ? (
             <Card className="border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-500/30 dark:bg-amber-500/10 dark:text-amber-100">
               <div className="flex items-start gap-3">
@@ -828,7 +877,7 @@ export default function FinancialReconciliationClient() {
             </Card>
           ) : null}
           <IssueCards data={data} active={activeIssue} onSelect={(category) => reviewIssues(category)} />
-          <section id="work-queue" className="grid scroll-mt-24 gap-6 2xl:grid-cols-[minmax(0,1.35fr)_minmax(420px,0.65fr)]">
+          <section id="work-queue" tabIndex={-1} className="grid scroll-mt-24 gap-6 focus:outline-none 2xl:grid-cols-[minmax(0,1.35fr)_minmax(420px,0.65fr)]">
             <WorkQueue
               items={workQueue}
               selectedId={selected}
@@ -836,40 +885,45 @@ export default function FinancialReconciliationClient() {
               healthState={health?.state || "no_events"}
               onSelect={(entry) => {
                 selectEventId(entry.event_id);
+                setReviewContext(entry);
               }}
             />
-            {workQueue.length ? <DetailPanel item={selectedItem} data={data} onDecision={() => setReloadToken((prev) => prev + 1)} /> : null}
+            {workQueue.length ? <DetailPanel item={selectedItem} data={data} reviewContext={reviewContext} onDecision={() => setReloadToken((prev) => prev + 1)} /> : null}
           </section>
           <FinancialImpact data={data} />
           <RecentActivity data={data} onSelect={(eventId) => {
             selectEventId(eventId);
             setExplorerOpen(true);
+            setReviewContext(null);
           }} />
-          <section id="advanced-explorer" className="scroll-mt-24 space-y-4">
+          <section id="financial-ledger" tabIndex={-1} className="scroll-mt-24 space-y-4 focus:outline-none">
             <Card>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
-                  <h2 className="font-semibold">Advanced explorer</h2>
-                  <p className="mt-1 text-sm text-slate-500">Power-user filters, the full event table, and decision history remain available here.</p>
+                  <h2 className="font-semibold">Financial ledger</h2>
+                  <p className="mt-1 text-sm text-slate-500">Search and inspect every refund, chargeback, fee, and reversal event.</p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setExplorerOpen((prev) => !prev)}
                   aria-expanded={explorerOpen}
-                  aria-controls="financial-advanced-explorer-panel"
+                  aria-controls="financial-ledger-filters-panel"
                   className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5"
                 >
-                  {explorerOpen ? "Hide filters" : "Show filters"}
+                  {explorerOpen ? "Hide advanced filters" : "Show advanced filters"}
                   <ChevronDown className={`h-4 w-4 transition ${explorerOpen ? "rotate-180" : ""}`} />
                 </button>
               </div>
             </Card>
             {explorerOpen ? (
-              <div id="financial-advanced-explorer-panel" className="contents">
+              <div id="financial-ledger-filters-panel" className="contents">
                 <Filters range={range} platform={platform} account={account} eventType={eventType} state={state} confidence={confidence} needsReview={needsReview} />
                 <div className="grid gap-6 2xl:grid-cols-[minmax(0,1.4fr)_minmax(420px,0.8fr)]">
-                  <EventTable items={data.items} selectedId={selected} onSelect={(item) => setSelected(item.id)} />
-                  <DetailPanel item={selectedItem} data={data} onDecision={() => setReloadToken((prev) => prev + 1)} />
+                  <EventTable items={data.items} selectedId={selected} onSelect={(item) => {
+                    setSelected(item.id);
+                    setReviewContext(null);
+                  }} />
+                  <DetailPanel item={selectedItem} data={data} reviewContext={null} onDecision={() => setReloadToken((prev) => prev + 1)} />
                 </div>
                 <History data={data} />
               </div>

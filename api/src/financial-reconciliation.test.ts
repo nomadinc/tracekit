@@ -15,6 +15,7 @@ import {
   buildFinancialIssueCards,
   buildFinancialWorkQueue,
   deriveFinancialHealth,
+  financialEventDisplayLabel,
   financialImpactRows,
   netFinancialImpact,
   recentFinancialActivity,
@@ -480,8 +481,8 @@ test("financial issue cards and work queue expose narrative review counts and pr
 
   const queue = buildFinancialWorkQueue(result as any);
   assert.equal(queue[0].severity, "Critical");
-  assert.equal(queue.some((item) => item.category === "unmatched"), true);
-  assert.equal(queue.some((item) => item.category === "missing_attribution"), true);
+  assert.equal(buildFinancialWorkQueue(result as any, "unmatched").some((item) => item.category === "unmatched"), true);
+  assert.equal(buildFinancialWorkQueue(result as any, "missing_attribution").some((item) => item.category === "missing_attribution"), true);
 
   const informationalDuplicate = report({
     ledgerRows: [ledger({ id: "stored-duplicate", order_id: "order-1", diagnostic_flags: ["duplicate_rejected_before_insert"] })],
@@ -491,7 +492,70 @@ test("financial issue cards and work queue expose narrative review counts and pr
   assert.equal(deriveFinancialHealth(informationalDuplicate as any).state, "review_needed");
   assert.equal(duplicateCard?.severity, "Informational");
   assert.equal(duplicateCard?.count, 1);
+  assert.equal(buildFinancialWorkQueue(informationalDuplicate as any).length, 0);
   assert.equal(buildFinancialWorkQueue(informationalDuplicate as any, "duplicate_evidence")[0].severity, "Informational");
+
+  const healthyAutomatic = report({
+    ledgerRows: [ledger({ id: "healthy-auto", order_id: "order-1" })],
+    orderCandidates: [order({ order_id: "order-1", platform_order_id: "wowboost:order-1", affiliate_id: "affiliate-1", source_id: "source-1" })],
+  });
+  assert.equal(deriveFinancialHealth(healthyAutomatic as any).state, "healthy");
+  assert.equal(buildFinancialWorkQueue(healthyAutomatic as any).length, 0);
+});
+
+test("financial work queue omits operator-resolved items and merges multiple diagnostics per event", () => {
+  const result = report({
+    ledgerRows: [
+      ledger({ id: "resolved-missing", transaction_id: "", order_id: "manual-order" }),
+      ledger({ id: "multi-diagnostic", transaction_id: "", ledger_type: "chargeback_fee", dispute_id: "chain-multi", amount: -15 }),
+    ],
+    orderCandidates: [order({ platform_order_id: "wowboost:manual-order", order_id: "manual-order", affiliate_id: null, source_id: null })],
+    decisions: [
+      { id: "resolved-decision", workspace_id: "default", financial_event_id: "resolved-missing", resulting_state: "manual", decision_type: "confirm_match", matched_platform_order_id: "wowboost:manual-order", is_active: true },
+    ],
+  });
+
+  const queue = buildFinancialWorkQueue(result as any);
+  assert.equal(queue.some((item) => item.event_id === "resolved-missing"), false);
+  assert.equal(queue.filter((item) => item.event_id === "multi-diagnostic").length, 1);
+  assert.equal(queue.find((item) => item.event_id === "multi-diagnostic")?.title, "Multiple financial issues");
+});
+
+test("financial event display labels distinguish orders, references, and repeated-looking ledger rows", () => {
+  const matchedOrder = report({
+    ledgerRows: [ledger({
+      id: "matched-from-paypal",
+      platform: "paypal",
+      transaction_id: "buyer-txn",
+      meta: { seller_transaction_id: "seller-txn" },
+    })],
+    orderCandidates: [order({ platform_order_id: "wowboost:123541", order_id: "123541", transaction_id: "seller-txn" })],
+  });
+  const matchedLabel = financialEventDisplayLabel(matchedOrder.items[0] as any);
+  assert.equal(matchedLabel.primary, "WowBoost Order #123541");
+  assert.equal(matchedLabel.secondary, "WowBoost");
+  assert.equal(matchedLabel.kind, "platform_order");
+
+  const processorOnly = report({
+    ledgerRows: [ledger({ id: "processor-only", platform: "paypal", transaction_id: "processor-ref-1", source_event_id: "" })],
+  });
+  const processorLabel = financialEventDisplayLabel(processorOnly.items[0] as any);
+  assert.equal(processorLabel.primary, "PayPal processor reference processor-ref-1");
+  assert.equal(processorLabel.kind, "processor_reference");
+  assert.doesNotMatch(processorLabel.primary, /Order #/);
+
+  const sourceOnly = report({
+    ledgerRows: [
+      ledger({ id: "repeat-a", platform: "wowboost", transaction_id: "", dispute_id: null, source_event_id: "receipt-refund-a", amount: -50, occurred_at: "2026-07-15T12:00:00.000Z" }),
+      ledger({ id: "repeat-b", platform: "wowboost", transaction_id: "", dispute_id: null, source_event_id: "receipt-refund-b", amount: -50, occurred_at: "2026-07-15T12:00:00.000Z" }),
+    ],
+  });
+  const labels = sourceOnly.items.map((item) => financialEventDisplayLabel(item as any).primary);
+  assert.deepEqual(labels, [
+    "WowBoost source event receipt-refund-a",
+    "WowBoost source event receipt-refund-b",
+  ]);
+  assert.notEqual(labels[0], labels[1]);
 });
 
 test("financial impact keeps ledger types separate and calculates signed net totals", () => {
