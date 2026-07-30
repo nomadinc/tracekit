@@ -104,6 +104,7 @@ import {
   type ImportJobStatus,
   type ImportProgressState,
 } from "./import-progress";
+import { buildImportJobInsertPayload } from "./import-jobs";
 import {
   buildIntegrationSettingsDefaultRow,
   buildIntegrationSettingsSavePatch,
@@ -4808,25 +4809,11 @@ async function createImportJob(env: Env, args: {
     filter: args.filter,
   });
 
-  const payload = {
-    ...(args.id ? { id: args.id } : {}),
-    workspace_id: String(args.workspace_id || "default").trim() || "default",
-    platform: args.platform,
-    connector_id: args.connector_id ?? null,
-    job_type: args.job_type ?? null,
-    phase: args.phase ?? null,
-    module: args.module ?? null,
+  const payload = buildImportJobInsertPayload({
+    ...args,
     status: args.status ?? normalizeImportStatus((progress as any).status || "queued"),
-    from_date: args.from,
-    to_date: args.to,
-    requested_from: args.from,
-    requested_to: args.to,
-    filter: args.filter ?? null,
-    metadata: args.metadata ?? null,
     progress,
-    requested_at: new Date().toISOString(),
-    updated_at: new Date().toISOString(),
-  };
+  });
 
   const { data, error } = await supabase.from("integration_import_jobs").insert(payload).select("*").single();
   if (error) throw new Error(`Failed to create import job: ${error.message}`);
