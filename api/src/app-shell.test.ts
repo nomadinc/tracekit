@@ -455,7 +455,32 @@ test("financial issue analysis migration adds indexes matching the bounded query
   assert.match(explain, /conversions_financial_issue_range_idx/);
 });
 
-test("WowBoost and WowPay integration catalog routes are registered by the Worker", () => {
+test("customer-facing integration catalog hides WowPay while keeping v1 commerce sources clear", () => {
+  const catalog = readRepoFile("ui/lib/integrations/catalog.ts");
+  const integrationsPage = readRepoFile("ui/app/(app)/settings/integrations/page.tsx");
+  const setupWizard = readRepoFile("ui/app/(app)/setup/setup-wizard-client.tsx");
+  const wowSuitePage = readRepoFile("ui/app/(app)/settings/integrations/wowsuite/page.tsx");
+  const importMonitor = readRepoFile("api/src/financial-import-monitor.ts");
+
+  assert.doesNotMatch(catalog, /id: "wowpay"/);
+  assert.doesNotMatch(catalog, /name: "WowPay"/);
+  assert.doesNotMatch(catalog, /\/v1\/integrations\/wowpay\/run-now/);
+  assert.doesNotMatch(setupWizard, /WowPay|wowpay/);
+  assert.doesNotMatch(wowSuitePage, /WowPay/);
+  assert.doesNotMatch(importMonitor, /WowBoost \/ WowPay/);
+  assert.match(integrationsPage, /getPopulatedIntegrationCategories/);
+
+  assert.match(catalog, /id: "wowboost"/);
+  assert.match(catalog, /name: "WowBoost"/);
+  assert.match(catalog, /commerce orders, revenue/);
+  assert.match(catalog, /\/v1\/integrations\/wowboost\/run-now/);
+
+  assert.match(catalog, /id: "paypal"/);
+  assert.match(catalog, /name: "PayPal"/);
+  assert.match(catalog, /payment_transactions and the append-only ledger/);
+});
+
+test("existing WowPay backend routes remain registered by the Worker", () => {
   const catalog = readRepoFile("ui/lib/integrations/catalog.ts");
   const worker = readRepoFile("api/src/index.ts");
 
@@ -465,12 +490,18 @@ test("WowBoost and WowPay integration catalog routes are registered by the Worke
     "/v1/integrations/wowboost/run-now",
     "/v1/integrations/wowboost/import-orders-async",
     "/v1/integrations/wowboost/import-job-status",
+  ]) {
+    assert.match(catalog, new RegExp(route.replaceAll("/", "\\/")));
+    assert.match(worker, new RegExp(route.replaceAll("/", "\\/")));
+  }
+
+  for (const route of [
     "/v1/integrations/wowpay/status",
     "/v1/integrations/wowpay/settings",
     "/v1/integrations/wowpay/run-now",
     "/v1/integrations/wowpay/import-orders",
   ]) {
-    assert.match(catalog, new RegExp(route.replaceAll("/", "\\/")));
+    assert.doesNotMatch(catalog, new RegExp(route.replaceAll("/", "\\/")));
     assert.match(worker, new RegExp(route.replaceAll("/", "\\/")));
   }
 

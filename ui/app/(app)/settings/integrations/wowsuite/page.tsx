@@ -5,7 +5,7 @@ import { IntegrationWizard } from "@/components/integrations/integration-wizard"
 import { getIntegrationDefinition } from "@/lib/integrations/catalog";
 import type { IntegrationDefinition } from "@/lib/integrations/types";
 
-const wowSuiteIntegrationIds = ["wowboost", "wowpay"] as const;
+const wowSuiteIntegrationIds = ["wowboost"] as const;
 
 function isIntegrationDefinition(
   integration: IntegrationDefinition | undefined
@@ -39,7 +39,7 @@ export default function WowSuiteIntegrationPage() {
         <div>
           <h1 className="text-lg font-semibold">WowSuite</h1>
           <p className="text-sm text-gray-500">
-            Manage WowBoost and WowPay under one umbrella.
+            Manage WowBoost commerce-order imports and revenue sync through the WowSuite API.
           </p>
         </div>
 

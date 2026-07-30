@@ -201,9 +201,9 @@ function credentialWorkspaceId(row: any) {
 
 function connectorLabel(platform: string) {
   if (platform === "paypal" || platform.startsWith("paypal:")) return "PayPal";
-  if (platform === "paydiverse" || platform.startsWith("paydiverse:")) return "PayDiverse";
-  if (platform.startsWith("nmi:")) return "NMI";
-  if (["wowboost", "wowpay", "wowsuite", "wowsuite:wowboost"].includes(platform)) return "WowBoost / WowPay";
+  if (platform === "paydiverse" || platform.startsWith("paydiverse:")) return "PayDiverse Snapshot Mode";
+  if (platform.startsWith("nmi:")) return "NMI Snapshot Mode";
+  if (["wowboost", "wowsuite", "wowsuite:wowboost"].includes(platform)) return "WowBoost";
   if (platform === "shopify" || platform.startsWith("shopify:")) return "Shopify Payments";
   if (platform === "checkoutchamp" || platform === "konnektive" || platform.startsWith("checkoutchamp:") || platform.startsWith("konnektive:")) return "CheckoutChamp / Konnektive";
   return platform ? platform.replace(/(^|[-_:])\w/g, (part) => part.toUpperCase()) : "Financial Connector";
@@ -213,7 +213,7 @@ function accountKeyForParts(platform: string, processorAccountId?: string | null
   const normalized = lower(platform) || "unknown";
   if (normalized === "paypal" || normalized.startsWith("paypal:")) return `paypal:${text(processorAccountId || connectorId || normalized) || normalized}`;
   if (normalized.startsWith("nmi:") || normalized === "paydiverse" || normalized.startsWith("paydiverse:")) return normalized;
-  if (["wowboost", "wowpay", "wowsuite", "wowsuite:wowboost"].includes(normalized)) return normalized;
+  if (["wowboost", "wowsuite", "wowsuite:wowboost"].includes(normalized)) return normalized;
   return `${normalized}:${text(processorAccountId || connectorId || normalized) || normalized}`;
 }
 
@@ -225,7 +225,6 @@ function isFinancialPlatform(platform: string) {
     platform.startsWith("paydiverse:") ||
     platform.startsWith("nmi:") ||
     platform === "wowboost" ||
-    platform === "wowpay" ||
     platform === "wowsuite" ||
     platform === "wowsuite:wowboost" ||
     platform === "shopify" ||
