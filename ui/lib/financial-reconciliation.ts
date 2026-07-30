@@ -175,6 +175,7 @@ export type FinancialNetImpact = {
 export type FinancialRecentActivity = {
   id: string;
   title: string;
+  subtitle: string | null;
   event_id: string;
   event_type: FinancialReconciliationLedgerType;
   amount: number;
@@ -182,6 +183,12 @@ export type FinancialRecentActivity = {
   event_date: string | null;
   status: string;
   detail: string;
+};
+
+export type FinancialEventDisplayLabel = {
+  primary: string;
+  secondary: string | null;
+  kind: "platform_order" | "commerce_order" | "processor_reference" | "source_event" | "event";
 };
 
 const IMPACT_LABELS: Record<FinancialReconciliationLedgerType, string> = {
@@ -197,9 +204,115 @@ function n(value: unknown) {
   return Number.isFinite(next) ? next : 0;
 }
 
+function titleCaseConnector(value: unknown) {
+  const raw = String(value || "").trim();
+  const normalized = raw.split(":").filter(Boolean).pop() || raw;
+  if (!normalized) return "Unknown connector";
+  const known: Record<string, string> = {
+    paypal: "PayPal",
+    wowboost: "WowBoost",
+    wowpay: "WowPay",
+    wowsuite: "WowSuite",
+    stripe: "Stripe",
+    nmi: "NMI",
+    paydiverse: "PayDiverse",
+    shopify: "Shopify",
+  };
+  const lower = normalized.toLowerCase();
+  return known[lower] || normalized
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+function connectorFromStructuredReference(value: string, fallback: string) {
+  const parts = value.split(":").filter(Boolean);
+  if (parts.length <= 1) return fallback;
+  const prefix = parts.slice(0, -1).join(":");
+  return /[a-z]/i.test(prefix) ? titleCaseConnector(prefix) : fallback;
+}
+
+function compactReference(value: unknown, fallback = "Not reported") {
+  const raw = String(value || "").trim();
+  if (!raw) return fallback;
+  return raw.length > 42 ? `${raw.slice(0, 22)}...${raw.slice(-10)}` : raw;
+}
+
+function stripKnownConnectorPrefix(value: string, item: FinancialReconciliationItem) {
+  const raw = value.trim();
+  const prefixes = [item.platform, item.connector]
+    .map((part) => String(part || "").trim().toLowerCase())
+    .filter(Boolean);
+  for (const prefix of prefixes) {
+    if (raw.toLowerCase().startsWith(`${prefix}:`)) return raw.slice(prefix.length + 1);
+    const last = prefix.split(":").filter(Boolean).pop();
+    if (last && raw.toLowerCase().startsWith(`${last}:`)) return raw.slice(last.length + 1);
+  }
+  const parts = raw.split(":").filter(Boolean);
+  if (parts.length > 1 && /[a-z]/i.test(parts.slice(0, -1).join(":"))) return parts[parts.length - 1] || raw;
+  return raw;
+}
+
+export function financialEventDisplayLabel(item: FinancialReconciliationItem | undefined | null): FinancialEventDisplayLabel {
+  if (!item) return { primary: "Not reported", secondary: null, kind: "event" };
+  const connector = titleCaseConnector(item.platform || item.connector);
+  const method = String(item.suggested_order.method || "");
+  const structuredOrderReference = String(item.suggested_order.public_order_label || "").trim();
+  const candidateOrderReference = String(item.suggested_order.candidate_order_id || "").trim();
+  const orderReference = structuredOrderReference || candidateOrderReference;
+
+  if (orderReference && method && method !== "commerce_reference") {
+    const orderId = stripKnownConnectorPrefix(orderReference, item);
+    const orderConnector = connectorFromStructuredReference(orderReference, connector);
+    return {
+      primary: `${orderConnector} Order #${compactReference(orderId, orderReference)}`,
+      secondary: orderConnector,
+      kind: "platform_order",
+    };
+  }
+
+  if (structuredOrderReference && method === "commerce_reference") {
+    const orderId = stripKnownConnectorPrefix(structuredOrderReference, item);
+    const orderConnector = connectorFromStructuredReference(structuredOrderReference, connector);
+    return {
+      primary: `${orderConnector} Order #${compactReference(orderId, structuredOrderReference)}`,
+      secondary: orderConnector,
+      kind: "commerce_order",
+    };
+  }
+
+  if (candidateOrderReference && method === "commerce_reference") {
+    return {
+      primary: `${connector} reference ${compactReference(stripKnownConnectorPrefix(candidateOrderReference, item), candidateOrderReference)}`,
+      secondary: "Commerce reference",
+      kind: "commerce_order",
+    };
+  }
+
+  if (item.processor_reference) {
+    return {
+      primary: `${connector} processor reference ${compactReference(item.processor_reference)}`,
+      secondary: "Processor reference",
+      kind: "processor_reference",
+    };
+  }
+
+  if (item.source_event_id) {
+    return {
+      primary: `${connector} source event ${compactReference(item.source_event_id)}`,
+      secondary: "Source event",
+      kind: "source_event",
+    };
+  }
+
+  return {
+    primary: `Financial event ${item.id.slice(-8)}`,
+    secondary: null,
+    kind: "event",
+  };
+}
+
 function eventReference(item: FinancialReconciliationItem | undefined | null) {
-  if (!item) return "Not reported";
-  return item.suggested_order.public_order_label || item.suggested_order.candidate_order_id || item.processor_reference || item.source_event_id || item.id.slice(-8);
+  return financialEventDisplayLabel(item).primary;
 }
 
 function eventById(data: FinancialReconciliationResponse) {
@@ -358,11 +471,33 @@ export function buildFinancialIssueCards(data: FinancialReconciliationResponse):
 export function buildFinancialWorkQueue(data: FinancialReconciliationResponse, category: FinancialIssueCategory | "all" = "all"): FinancialWorkQueueItem[] {
   const byId = eventById(data);
   const queue = new Map<string, FinancialWorkQueueItem>();
+  const priority: Record<FinancialIssueSeverity, number> = { Critical: 0, Review: 1, Informational: 2 };
+  const operatorResolved = (item: FinancialReconciliationItem | undefined | null) => Boolean(item && ["manual", "ignored", "removed"].includes(item.match_status));
   const add = (entry: FinancialWorkQueueItem) => {
     if (category !== "all" && entry.category !== category) return;
-    queue.set(`${entry.category}:${entry.event_id || entry.id}`, entry);
+    const key = category === "all" && entry.event_id ? `event:${entry.event_id}` : `${entry.category}:${entry.event_id || entry.id}`;
+    const existing = queue.get(key);
+    if (existing && category === "all") {
+      const nextSeverity = priority[entry.severity] < priority[existing.severity] ? entry.severity : existing.severity;
+      const reasons = Array.from(new Set([existing.reason, entry.reason].filter(Boolean)));
+      const steps = Array.from(new Set([existing.next_step, entry.next_step].filter(Boolean)));
+      queue.set(key, {
+        ...existing,
+        category: nextSeverity === entry.severity ? entry.category : existing.category,
+        severity: nextSeverity,
+        title: existing.title === entry.title ? existing.title : "Multiple financial issues",
+        reason: reasons.join(" "),
+        next_step: steps.length > 1 ? "Review all listed issues" : (steps[0] || entry.next_step),
+        amount: existing.amount ?? entry.amount,
+        currency: existing.currency ?? entry.currency,
+        event_date: existing.event_date || entry.event_date,
+      });
+      return;
+    }
+    queue.set(key, entry);
   };
   const addEvent = (item: FinancialReconciliationItem, categoryName: FinancialIssueCategory, severity: FinancialIssueSeverity, reason: string, nextStep: string) => {
+    if (operatorResolved(item)) return;
     add({
       id: `${categoryName}:${item.id}`,
       category: categoryName,
@@ -386,7 +521,7 @@ export function buildFinancialWorkQueue(data: FinancialReconciliationResponse, c
       addEvent(item, "missing_attribution", "Review", "Matched event is missing affiliate or source attribution.", "Review attribution evidence");
     }
     const duplicateFlags = item.diagnostic_flags.filter((flag) => flag.toLowerCase().includes("duplicate"));
-    if (duplicateFlags.length) {
+    if (duplicateFlags.length && category === "duplicate_evidence") {
       addEvent(item, "duplicate_evidence", "Informational", `Duplicate evidence preserved: ${duplicateFlags.join(", ")}`, "Review source evidence");
     }
   }
@@ -394,7 +529,9 @@ export function buildFinancialWorkQueue(data: FinancialReconciliationResponse, c
   for (let index = 0; index < data.diagnostics.broken_chains.length; index += 1) {
     const chain = data.diagnostics.broken_chains[index];
     const events = Array.isArray((chain as any).events) ? (chain as any).events : [];
-    const firstEvent = events.map((event: any) => byId.get(String(event.event_id || ""))).find(Boolean);
+    const chainEvents = events.map((event: any) => byId.get(String(event.event_id || ""))).filter(Boolean) as FinancialReconciliationItem[];
+    if (chainEvents.length && chainEvents.every(operatorResolved)) continue;
+    const firstEvent = chainEvents.find((item) => !operatorResolved(item)) || chainEvents[0];
     add({
       id: `broken_chain:${String((chain as any).chain_key || firstEvent?.id || index)}`,
       category: "broken_chain",
@@ -412,7 +549,9 @@ export function buildFinancialWorkQueue(data: FinancialReconciliationResponse, c
 
   for (let index = 0; index < data.diagnostics.double_debit.length; index += 1) {
     const item = data.diagnostics.double_debit[index];
-    const event = byId.get(String((item as any).chargeback_event_id || "")) || byId.get(String((item as any).refund_event_id || ""));
+    const events = [byId.get(String((item as any).chargeback_event_id || "")), byId.get(String((item as any).refund_event_id || ""))].filter(Boolean) as FinancialReconciliationItem[];
+    if (events.length && events.every(operatorResolved)) continue;
+    const event = events.find((candidate) => !operatorResolved(candidate)) || events[0];
     add({
       id: `double_debit:${String((item as any).order_id || event?.id || index)}`,
       category: "double_debit",
@@ -431,7 +570,9 @@ export function buildFinancialWorkQueue(data: FinancialReconciliationResponse, c
   for (let index = 0; index < data.diagnostics.duplicates.length; index += 1) {
     const item = data.diagnostics.duplicates[index];
     if ((item as any).requires_review === false) continue;
-    const event = (Array.isArray((item as any).event_ids) ? (item as any).event_ids : []).map((id: any) => byId.get(String(id))).find(Boolean);
+    const events = (Array.isArray((item as any).event_ids) ? (item as any).event_ids : []).map((id: any) => byId.get(String(id))).filter(Boolean) as FinancialReconciliationItem[];
+    if (events.length && events.every(operatorResolved)) continue;
+    const event = events.find((candidate) => !operatorResolved(candidate)) || events[0];
     add({
       id: `duplicate_evidence:${String((item as any).key || event?.id || index)}`,
       category: "duplicate_evidence",
@@ -447,7 +588,6 @@ export function buildFinancialWorkQueue(data: FinancialReconciliationResponse, c
     });
   }
 
-  const priority: Record<FinancialIssueSeverity, number> = { Critical: 0, Review: 1, Informational: 2 };
   return Array.from(queue.values())
     .sort((a, b) => priority[a.severity] - priority[b.severity] || Date.parse(b.event_date || "") - Date.parse(a.event_date || ""))
     .slice(0, 25);
@@ -485,7 +625,8 @@ export function recentFinancialActivity(data: FinancialReconciliationResponse, l
     .slice(0, limit)
     .map((item) => ({
       id: `activity:${item.id}`,
-      title: eventReference(item),
+      title: financialEventDisplayLabel(item).primary,
+      subtitle: financialEventDisplayLabel(item).secondary,
       event_id: item.id,
       event_type: item.event_type,
       amount: item.amount,
