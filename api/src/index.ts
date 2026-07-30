@@ -105,6 +105,10 @@ import {
   type ImportProgressState,
 } from "./import-progress";
 import {
+  buildIntegrationSettingsDefaultRow,
+  buildIntegrationSettingsSavePatch,
+} from "./integration-settings";
+import {
   compactIdentityIdentifier,
   compactIdentityPerson,
   createIdentityResolutionDebugMetrics,
@@ -8125,31 +8129,12 @@ async function getIntegrationSettings(env: Env, platform: string, defaults: { in
   if (error) throw new Error(error.message);
   if (data) return data as any;
 
-  const payload = {
-    platform,
-    auto_import_enabled: false,
-    auto_import_interval_minutes: defaults.intervalMinutes,
-    auto_import_lookback_hours: defaults.lookbackHours,
-    updated_at: now,
-  };
-  const { data: inserted, error: insertError } = await supabase
-    .from("integrations_settings")
-    .upsert(payload as any, { onConflict: "platform" })
-    .select("*")
-    .maybeSingle();
-  if (insertError) throw new Error(insertError.message);
-  return (inserted || payload) as any;
+  return buildIntegrationSettingsDefaultRow(platform, defaults, now) as any;
 }
 
 async function saveIntegrationSettings(env: Env, platform: string, body: any, defaults: { intervalMinutes: number; lookbackHours: number }) {
   const supabase = getSupabase(env);
-  const patch = {
-    platform,
-    auto_import_enabled: Boolean(body.auto_import_enabled),
-    auto_import_interval_minutes: Math.max(15, Math.min(1440, Number(body.auto_import_interval_minutes ?? defaults.intervalMinutes) || defaults.intervalMinutes)),
-    auto_import_lookback_hours: Math.max(1, Math.min(168, Number(body.auto_import_lookback_hours ?? defaults.lookbackHours) || defaults.lookbackHours)),
-    updated_at: new Date().toISOString(),
-  };
+  const patch = buildIntegrationSettingsSavePatch(platform, body, defaults);
 
   const { error } = await supabase.from("integrations_settings").upsert(patch as any, { onConflict: "platform" });
   if (error) throw new Error(error.message);
@@ -17742,39 +17727,20 @@ async function router(req: Request, env: Env): Promise<Response> {
   }
 
   if (path === "/v1/integrations/paypal/settings" && req.method === "GET") {
-    const supabase = getSupabase(env);
-
-    await supabase.from("integrations_settings").upsert(
-      {
-        platform: "paypal",
-        auto_import_enabled: false,
-        auto_import_interval_minutes: 60,
-        auto_import_lookback_hours: 30,
-        updated_at: new Date().toISOString(),
-      } as any,
-      { onConflict: "platform" },
-    );
-
-    const { data, error } = await supabase.from("integrations_settings").select("*").eq("platform", "paypal").maybeSingle();
-    if (error) throw new Error(error.message);
+    const data = await getIntegrationSettings(env, "paypal", {
+      intervalMinutes: 60,
+      lookbackHours: 30,
+    });
 
     return json({ ok: true, platform: "paypal", ...(data || {}) });
   }
 
   if (path === "/v1/integrations/paypal/settings" && req.method === "POST") {
     const body = await readJsonBody(req);
-    const supabase = getSupabase(env);
-
-    const patch = {
-      platform: "paypal",
-      auto_import_enabled: Boolean(body.auto_import_enabled),
-      auto_import_interval_minutes: Math.max(15, Math.min(1440, Number(body.auto_import_interval_minutes ?? 60) || 60)),
-      auto_import_lookback_hours: Math.max(1, Math.min(168, Number(body.auto_import_lookback_hours ?? 30) || 30)),
-      updated_at: new Date().toISOString(),
-    };
-
-    const { error } = await supabase.from("integrations_settings").upsert(patch as any, { onConflict: "platform" });
-    if (error) throw new Error(error.message);
+    await saveIntegrationSettings(env, "paypal", body, {
+      intervalMinutes: 60,
+      lookbackHours: 30,
+    });
 
     return json({ ok: true, message: "Settings saved." });
   }

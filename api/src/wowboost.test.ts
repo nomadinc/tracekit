@@ -2203,7 +2203,8 @@ test("scheduled handler queues WowBoost order snapshots without scheduling recei
   assert.match(source, /ctx\.waitUntil\(runScheduledWowBoostImport\(env\)\)/);
   assert.match(scheduledSource, /getIntegrationSettings\(env, platform/);
   assert.doesNotMatch(scheduledSource, /autoImportEnabled:\s*true/);
-  assert.match(settingsSource, /auto_import_enabled: false/);
+  assert.match(settingsSource, /buildIntegrationSettingsDefaultRow\(platform, defaults, now\)/);
+  assert.doesNotMatch(settingsSource, /\.upsert\(/);
   assert.match(scheduledSource, /auto_import_enabled/);
   assert.match(scheduledSource, /auto_import_disabled/);
   assert.match(scheduledSource, /getWowSuiteStatusCredential\(env, "wowboost"\)/);
