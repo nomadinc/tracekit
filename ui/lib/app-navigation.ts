@@ -57,7 +57,7 @@ export const APP_NAVIGATION: AppNavigationGroup[] = [
       { href: "/reports", label: "Commissions", description: "Review generated commission records." },
       { href: "/reports", label: "Payouts", description: "Prepare payable commission workflows." },
       { href: "/dashboard/financial-import-monitor", label: "Financial Import Monitor", description: "Monitor import health for payment, refund, and chargeback connectors." },
-      { href: "/dashboard/financial-reconciliation", label: "Financial Reconciliation", description: "Review unmatched, duplicate, and broken financial ledger chains." },
+      { href: "/dashboard/financial-reconciliation", label: "Financial Health", description: "Review trust, impact, and attention items across financial ledger events." },
       { href: "/orders", label: "Orders", description: "Audit commerce and financial records." },
     ],
   },
