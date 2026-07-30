@@ -51,6 +51,23 @@ test("home command center consumes one composed Home API and preserves overview 
   assert.doesNotMatch(home, /\/v1\/kpis|\/v1\/revenue-spend|\/api\/setup-wizard/);
 });
 
+test("dashboard renders executive performance modules from the profit summary extension", () => {
+  const dashboard = readRepoFile("ui/app/(app)/dashboard/decision-home-overview.tsx");
+
+  assert.match(dashboard, /Executive Performance/);
+  assert.match(dashboard, /How are we doing today\?/);
+  assert.match(dashboard, /include_executive_performance/);
+  assert.match(dashboard, /sameOriginGetJson/);
+  assert.match(dashboard, /\/api\/financial-reconciliation/);
+  assert.match(dashboard, /\/api\/financial-import-monitor/);
+  assert.match(dashboard, /\/api\/operations\/summary/);
+  assert.match(dashboard, /Affiliate Commission/);
+  assert.match(dashboard, /Which affiliates are profitable\?/);
+  assert.match(dashboard, /Financial Imports/);
+  assert.match(dashboard, /Financial Health/);
+  assert.doesNotMatch(dashboard, /\/v1\/revenue-spend/);
+});
+
 test("topbar exposes workspace search and notification affordances", () => {
   const topbar = readRepoFile("ui/components/layout/topbar.tsx");
   const navigation = readRepoFile("ui/lib/app-navigation.ts");
@@ -126,8 +143,9 @@ test("decision home links to dedicated refund and chargeback analysis routes", (
   const analysisClient = readRepoFile("ui/app/(app)/dashboard/financial-issue-analysis-client.tsx");
   const worker = readRepoFile("api/src/index.ts");
 
-  assert.match(decisionHome, /href=\{`\/dashboard\/refunds\?\$\{dateRangeQuery\(range\)\}`\}/);
-  assert.match(decisionHome, /href=\{`\/dashboard\/chargebacks\?\$\{dateRangeQuery\(range\)\}`\}/);
+  assert.match(decisionHome, /\$\{row\.href\}\?\$\{rangeQuery\(range\)\}/);
+  assert.match(worker, /href: "\/dashboard\/refunds"/);
+  assert.match(worker, /href: "\/dashboard\/chargebacks"/);
   assert.match(refundPage, /<FinancialIssueAnalysisClient kind="refund" \/>/);
   assert.match(chargebackPage, /<FinancialIssueAnalysisClient kind="chargeback" \/>/);
   assert.match(analysisClient, /\/v1\/refunds\/analysis/);

@@ -16,6 +16,11 @@ export type RevenueSpendPoint = {
   net_profit?: number | null;
   refunds?: number | null;
   chargebacks?: number | null;
+  gross_revenue?: number | null;
+  net_revenue?: number | null;
+  operating_costs?: number | null;
+  sales_count?: number | null;
+  affiliate_commission?: number | null;
 };
 
 export type RevenueSpendResponse = {
@@ -49,6 +54,118 @@ export type ProfitSummaryResponse = {
   profit_margin_pct?: number | null;
   order_count?: number | null;
   event_count?: number | null;
+  executive_performance?: ExecutivePerformanceResponse | null;
+};
+
+export type ExecutiveDelta = {
+  amount?: number | null;
+  pct?: number | null;
+};
+
+export type ExecutiveAffiliateCommission = {
+  commission_count?: number | null;
+  commission_amount?: number | null;
+  attributed_amount?: number | null;
+  available?: boolean | null;
+};
+
+export type ExecutivePerformanceSummary = {
+  gross_revenue?: number | null;
+  net_revenue?: number | null;
+  net_profit?: number | null;
+  operating_costs?: number | null;
+  refunds?: number | null;
+  chargebacks?: number | null;
+  sales_count?: number | null;
+  aov?: number | null;
+  profit_margin_pct?: number | null;
+  affiliate_commission?: ExecutiveAffiliateCommission | null;
+  after_affiliate_commission?: number | null;
+  cost_ratio?: number | null;
+};
+
+export type ExecutiveTrendPoint = {
+  date?: string | null;
+  gross_revenue?: number | null;
+  net_revenue?: number | null;
+  net_profit?: number | null;
+  operating_costs?: number | null;
+  refunds?: number | null;
+  chargebacks?: number | null;
+  sales_count?: number | null;
+  affiliate_commission?: number | null;
+  after_affiliate_commission?: number | null;
+};
+
+export type ExecutiveRankingRow = {
+  affiliate_id?: string | null;
+  publisher_id?: string | null;
+  source?: string | null;
+  attributed_revenue?: number | null;
+  commission_amount?: number | null;
+  net_after_commission?: number | null;
+  commission_count?: number | null;
+  commission_rate_effective?: number | null;
+};
+
+export type ExecutiveLeakageRow = {
+  key?: string | null;
+  label?: string | null;
+  amount?: number | null;
+  rate?: number | null;
+  href?: string | null;
+};
+
+export type ExecutiveCostRow = {
+  key?: string | null;
+  label?: string | null;
+  amount?: number | null;
+  share?: number | null;
+};
+
+export type ExecutivePerformanceResponse = {
+  ok?: boolean;
+  error?: string;
+  message?: string;
+  period?: string | null;
+  workspace_id?: string | null;
+  timezone?: string | null;
+  timezone_source?: string | null;
+  currency?: string | null;
+  currencies?: string[];
+  range?: {
+    from?: string | null;
+    to?: string | null;
+    from_iso?: string | null;
+    to_iso?: string | null;
+    previous_from_iso?: string | null;
+    previous_to_iso?: string | null;
+  };
+  headline?: ExecutivePerformanceSummary & {
+    deltas?: {
+      sales_count?: ExecutiveDelta | null;
+      gross_revenue?: ExecutiveDelta | null;
+      net_revenue?: ExecutiveDelta | null;
+      net_profit?: ExecutiveDelta | null;
+      affiliate_commission?: ExecutiveDelta | null;
+    };
+  };
+  profit?: ExecutivePerformanceSummary | null;
+  previous_profit?: ExecutivePerformanceSummary | null;
+  trend?: ExecutiveTrendPoint[];
+  cost_breakdown?: ExecutiveCostRow[];
+  leakage?: ExecutiveLeakageRow[];
+  affiliates?: ExecutiveRankingRow[];
+  sources?: ExecutiveRankingRow[];
+  diagnostics?: {
+    warnings?: string[];
+    conversion_rows_scanned?: number | null;
+    commission_rows_scanned?: number | null;
+    conversion_scan_complete?: boolean | null;
+    commission_scan_complete?: boolean | null;
+    canonical_sales_definition?: string | null;
+    commission_source?: string | null;
+  };
 };
 
 export type ProfitRollup = {

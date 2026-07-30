@@ -20,15 +20,22 @@ import {
   buildFinancialIssueAnalysis,
   conversionMatchesDailyKey,
   conversionMatchesOrderKey,
+  executiveBucketKey,
+  executiveDashboardRangeBounds,
+  executivePreviousRangeBounds,
   financialIssuePlatformFallbackDecision,
+  isActiveAffiliateCommission,
   profitDailyKeyFromConversion,
   profitDailyKeyId,
   profitOrderKeyFromConversion,
   profitOrderKeyId,
   saleLedgerRowFromPlatformOrder,
+  summarizeAffiliateCommissions,
+  summarizeExecutiveSales,
   sumProfitTotals,
   toProfitDailyRollupRow,
   toProfitOrderRollupRow,
+  type AffiliateCommissionPerformanceRow,
   type FinancialIssueKind,
   type FinancialIssueLedgerRow,
   type FinancialIssueOrderRow,
@@ -2130,6 +2137,27 @@ const FINANCIAL_ISSUE_ANALYSIS_PLATFORM_LOOKUP_SELECT =
 const FINANCIAL_ISSUE_ANALYSIS_LEDGER_SCAN_LIMIT = 10_000;
 const FINANCIAL_ISSUE_PLATFORM_SCAN_LIMIT = 10_000;
 const FINANCIAL_ISSUE_PLATFORM_FALLBACK_PLATFORMS = ["wowboost", "wowsuite:wowboost", "wowsuite"];
+const EXECUTIVE_PERFORMANCE_SCAN_LIMIT = 20_000;
+const EXECUTIVE_COMMISSION_SCAN_LIMIT = 10_000;
+const EXECUTIVE_COMMISSION_SELECT =
+  "id,commission_event_id,conversion_event_id,conversion_event_time,affiliate_id,publisher_id,offer_id,campaign_id,touchpoint_source,status,attributed_amount,credit_amount,commission_amount,currency";
+const EXECUTIVE_LEDGER_TYPES = [
+  "sale",
+  "refund",
+  "chargeback",
+  "chargeback_fee",
+  "chargeback_reversal",
+  "chargeback_fee_reversal",
+  "processor_fee",
+  "bank_fee",
+  "shipping_cost",
+  "tax",
+  "cogs",
+  "affiliate_payout",
+  "ad_spend",
+  "reversal",
+  "adjustment",
+];
 
 function parseDateFilter(value: string | null) {
   if (!value) return null;
@@ -2724,6 +2752,428 @@ function kpiPayloadFromSummaries(current: ReturnType<typeof summarizeProfitRollu
     refund_rate_delta_pp: refundRate - previousRefundRate,
     chargebacks: chargebackRate,
     chargebacks_delta_pp: chargebackRate - previousChargebackRate,
+  };
+}
+
+function dashboardNumber(value: unknown) {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function dashboardRoundMoney(value: number) {
+  return Math.round((value + Number.EPSILON) * 100) / 100;
+}
+
+function dashboardRoundRatio(value: number | null) {
+  if (value == null || !Number.isFinite(value)) return null;
+  return Math.round((value + Number.EPSILON) * 10000) / 10000;
+}
+
+function dashboardDelta(current: number, previous: number) {
+  return {
+    amount: dashboardRoundMoney(current - previous),
+    pct: dashboardRoundRatio(previous === 0 ? (current === 0 ? 0 : 1) : (current - previous) / Math.abs(previous)),
+  };
+}
+
+function dashboardText(value: unknown) {
+  return String(value ?? "").trim();
+}
+
+function dashboardCurrency(rows: Array<{ currency?: string | null }>) {
+  const currencies = Array.from(new Set(rows.map((row) => dashboardText(row.currency).toUpperCase()).filter(Boolean)));
+  return {
+    currency: currencies.length === 1 ? currencies[0] : "USD",
+    currencies,
+    multi_currency: currencies.length > 1,
+  };
+}
+
+async function selectExecutivePerformanceConversions(
+  supabase: SupabaseClientAny,
+  filters: {
+    workspace_id: string;
+    from_iso: string;
+    to_iso: string;
+    currency?: string | null;
+  },
+) {
+  const rows: ProfitConversionRow[] = [];
+  const pageSize = 1000;
+  let scannedAll = true;
+
+  for (let offset = 0; offset < EXECUTIVE_PERFORMANCE_SCAN_LIMIT; offset += pageSize) {
+    let query = supabase
+      .from("conversions")
+      .select(PROFIT_CONVERSION_SELECT)
+      .eq("workspace_id", filters.workspace_id)
+      .in("ledger_type", EXECUTIVE_LEDGER_TYPES)
+      .gte("occurred_at", filters.from_iso)
+      .lt("occurred_at", filters.to_iso)
+      .order("occurred_at", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+
+    if (filters.currency) query = query.eq("currency", String(filters.currency).toUpperCase());
+
+    const { data, error } = await query;
+    if (error) throw new Error(`Executive performance conversion read failed: ${error.message}`);
+    rows.push(...((data || []) as ProfitConversionRow[]));
+    if (!data || data.length < pageSize) return { rows, scanned_all: scannedAll };
+    if (rows.length >= EXECUTIVE_PERFORMANCE_SCAN_LIMIT) scannedAll = false;
+  }
+
+  return { rows, scanned_all: false };
+}
+
+async function selectExecutivePerformanceCommissions(
+  supabase: SupabaseClientAny,
+  filters: {
+    workspace_id: string;
+    from_iso: string;
+    to_iso: string;
+    currency?: string | null;
+  },
+) {
+  const rows: AffiliateCommissionPerformanceRow[] = [];
+  const pageSize = 1000;
+  let scannedAll = true;
+
+  for (let offset = 0; offset < EXECUTIVE_COMMISSION_SCAN_LIMIT; offset += pageSize) {
+    let query = supabase
+      .from("affiliate_commissions")
+      .select(EXECUTIVE_COMMISSION_SELECT)
+      .eq("workspace_id", filters.workspace_id)
+      .gte("conversion_event_time", filters.from_iso)
+      .lt("conversion_event_time", filters.to_iso)
+      .order("conversion_event_time", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+
+    if (filters.currency) query = query.eq("currency", String(filters.currency).toUpperCase());
+
+    const { data, error } = await query;
+    if (error) throw new Error(`Executive performance commission read failed: ${error.message}`);
+    rows.push(...((data || []) as AffiliateCommissionPerformanceRow[]));
+    if (!data || data.length < pageSize) return { rows, scanned_all: scannedAll };
+    if (rows.length >= EXECUTIVE_COMMISSION_SCAN_LIMIT) scannedAll = false;
+  }
+
+  return { rows, scanned_all: false };
+}
+
+function executiveSummaryFromRows(conversionRows: ProfitConversionRow[], commissionRows: AffiliateCommissionPerformanceRow[]) {
+  const totals = aggregateProfitConversions(conversionRows);
+  const sales = summarizeExecutiveSales(conversionRows);
+  const commissions = summarizeAffiliateCommissions(commissionRows);
+  const operatingCosts = Math.abs(dashboardNumber(totals.total_costs));
+  const netRevenue = dashboardNumber(totals.net_revenue);
+
+  return {
+    gross_revenue: dashboardRoundMoney(dashboardNumber(totals.gross_revenue)),
+    net_revenue: dashboardRoundMoney(netRevenue),
+    net_profit: dashboardRoundMoney(dashboardNumber(totals.net_profit)),
+    operating_costs: dashboardRoundMoney(operatingCosts),
+    refunds: dashboardRoundMoney(Math.abs(dashboardNumber(totals.refunds))),
+    chargebacks: dashboardRoundMoney(Math.abs(dashboardNumber(totals.chargebacks))),
+    sales_count: sales.sales_count,
+    aov: sales.sales_count > 0 ? dashboardRoundMoney(sales.gross_revenue / sales.sales_count) : null,
+    profit_margin_pct: totals.profit_margin_pct,
+    affiliate_commission: commissions,
+    after_affiliate_commission: commissions.available
+      ? dashboardRoundMoney(sales.gross_revenue - commissions.commission_amount)
+      : null,
+    cost_ratio: netRevenue > 0 ? dashboardRoundRatio(operatingCosts / netRevenue) : null,
+  };
+}
+
+function executiveSeriesFromRows(
+  conversionRows: ProfitConversionRow[],
+  commissionRows: AffiliateCommissionPerformanceRow[],
+  timeZone: string,
+  granularity: "hour" | "day",
+) {
+  const conversionBuckets = new Map<string, ProfitConversionRow[]>();
+  const commissionBuckets = new Map<string, AffiliateCommissionPerformanceRow[]>();
+
+  for (const row of conversionRows) {
+    const key = executiveBucketKey(row.occurred_at, timeZone, granularity);
+    if (!key) continue;
+    conversionBuckets.set(key, [...(conversionBuckets.get(key) || []), row]);
+  }
+
+  for (const row of commissionRows) {
+    const key = executiveBucketKey(row.conversion_event_time, timeZone, granularity);
+    if (!key) continue;
+    commissionBuckets.set(key, [...(commissionBuckets.get(key) || []), row]);
+  }
+
+  const keys = Array.from(new Set([...conversionBuckets.keys(), ...commissionBuckets.keys()])).sort();
+  return keys.map((key) => {
+    const summary = executiveSummaryFromRows(conversionBuckets.get(key) || [], commissionBuckets.get(key) || []);
+    return {
+      date: key,
+      gross_revenue: summary.gross_revenue,
+      net_revenue: summary.net_revenue,
+      net_profit: summary.net_profit,
+      operating_costs: summary.operating_costs,
+      refunds: summary.refunds,
+      chargebacks: summary.chargebacks,
+      sales_count: summary.sales_count,
+      affiliate_commission: summary.affiliate_commission.commission_amount,
+      after_affiliate_commission: summary.after_affiliate_commission,
+    };
+  });
+}
+
+function executiveAffiliateRows(rows: AffiliateCommissionPerformanceRow[]) {
+  const byKey = new Map<string, any>();
+  for (const row of rows) {
+    if (!isActiveAffiliateCommission(row)) continue;
+    const affiliateId = dashboardText(row.affiliate_id) || "unknown";
+    const existing = byKey.get(affiliateId) || {
+      affiliate_id: affiliateId === "unknown" ? null : affiliateId,
+      publisher_id: dashboardText(row.publisher_id) || null,
+      attributed_revenue: 0,
+      commission_amount: 0,
+      commission_count: 0,
+      currency: dashboardText(row.currency).toUpperCase() || null,
+    };
+    existing.attributed_revenue += dashboardNumber(row.attributed_amount ?? row.credit_amount);
+    existing.commission_amount += dashboardNumber(row.commission_amount);
+    existing.commission_count += 1;
+    byKey.set(affiliateId, existing);
+  }
+
+  return Array.from(byKey.values())
+    .map((row) => ({
+      ...row,
+      attributed_revenue: dashboardRoundMoney(row.attributed_revenue),
+      commission_amount: dashboardRoundMoney(row.commission_amount),
+      net_after_commission: dashboardRoundMoney(row.attributed_revenue - row.commission_amount),
+      commission_rate_effective:
+        row.attributed_revenue > 0 ? dashboardRoundRatio(row.commission_amount / row.attributed_revenue) : null,
+    }))
+    .sort((a, b) => Math.abs(b.attributed_revenue) - Math.abs(a.attributed_revenue))
+    .slice(0, 8);
+}
+
+function executiveSourceRows(rows: AffiliateCommissionPerformanceRow[]) {
+  const byKey = new Map<string, any>();
+  for (const row of rows) {
+    if (!isActiveAffiliateCommission(row)) continue;
+    const source =
+      dashboardText(row.touchpoint_source) ||
+      dashboardText(row.campaign_id) ||
+      dashboardText(row.offer_id) ||
+      "unknown";
+    const existing = byKey.get(source) || {
+      source,
+      attributed_revenue: 0,
+      commission_amount: 0,
+      commission_count: 0,
+    };
+    existing.attributed_revenue += dashboardNumber(row.attributed_amount ?? row.credit_amount);
+    existing.commission_amount += dashboardNumber(row.commission_amount);
+    existing.commission_count += 1;
+    byKey.set(source, existing);
+  }
+
+  return Array.from(byKey.values())
+    .map((row) => ({
+      ...row,
+      attributed_revenue: dashboardRoundMoney(row.attributed_revenue),
+      commission_amount: dashboardRoundMoney(row.commission_amount),
+      net_after_commission: dashboardRoundMoney(row.attributed_revenue - row.commission_amount),
+    }))
+    .sort((a, b) => Math.abs(b.attributed_revenue) - Math.abs(a.attributed_revenue))
+    .slice(0, 8);
+}
+
+function executiveLeakageRows(summary: ReturnType<typeof executiveSummaryFromRows>) {
+  const gross = Math.max(0, summary.gross_revenue);
+  return [
+    {
+      key: "refunds",
+      label: "Refunds",
+      amount: summary.refunds,
+      rate: gross > 0 ? dashboardRoundRatio(summary.refunds / gross) : null,
+      href: "/dashboard/refunds",
+    },
+    {
+      key: "chargebacks",
+      label: "Chargebacks",
+      amount: summary.chargebacks,
+      rate: gross > 0 ? dashboardRoundRatio(summary.chargebacks / gross) : null,
+      href: "/dashboard/chargebacks",
+    },
+  ];
+}
+
+function executiveCostRows(summary: ReturnType<typeof summarizeProfitRollups>) {
+  const rows = [
+    { key: "ad_spend", label: "Advertising", amount: Math.abs(dashboardNumber(summary.ad_spend)) },
+    { key: "affiliate_payout", label: "Affiliate Payouts", amount: Math.abs(dashboardNumber(summary.affiliate_payout)) },
+    { key: "cogs", label: "COGS", amount: Math.abs(dashboardNumber(summary.cogs)) },
+    { key: "fulfillment", label: "Shipping & Fulfillment", amount: Math.abs(dashboardNumber(summary.shipping)) },
+    {
+      key: "payment_processing",
+      label: "Payment Processing",
+      amount: Math.abs(dashboardNumber(summary.processor_fees) + dashboardNumber(summary.bank_fees)),
+    },
+    { key: "chargeback_fees", label: "Chargeback Fees", amount: Math.abs(dashboardNumber(summary.chargeback_fees)) },
+  ];
+  const total = rows.reduce((sum, row) => sum + row.amount, 0);
+  return rows
+    .filter((row) => row.amount > 0)
+    .map((row) => ({
+      ...row,
+      amount: dashboardRoundMoney(row.amount),
+      share: total > 0 ? dashboardRoundRatio(row.amount / total) : null,
+    }))
+    .sort((a, b) => b.amount - a.amount);
+}
+
+async function readWorkspaceDashboardSettings(supabase: SupabaseClientAny, workspaceId: string) {
+  try {
+    const { data, error } = await supabase
+      .from("workspace_onboarding")
+      .select("default_timezone,default_currency,updated_at")
+      .eq("workspace_id", workspaceId)
+      .maybeSingle();
+    if (error) throw error;
+    return {
+      timezone: dashboardText(data?.default_timezone) || null,
+      currency: dashboardText(data?.default_currency).toUpperCase() || null,
+      source: data?.default_timezone ? "workspace_onboarding.default_timezone" : "fallback",
+    };
+  } catch {
+    return { timezone: null, currency: null, source: "fallback" };
+  }
+}
+
+async function buildExecutivePerformancePayload(
+  supabase: SupabaseClientAny,
+  url: URL,
+  rollupSummary: ReturnType<typeof summarizeProfitRollups>,
+) {
+  const workspaceId = dashboardText(url.searchParams.get("workspace_id")) || "default";
+  const setup = await readWorkspaceDashboardSettings(supabase, workspaceId);
+  const requestedTimezone = dashboardText(url.searchParams.get("timezone"));
+  const timeZoneInput = requestedTimezone || setup.timezone || "UTC";
+  const period = dashboardText(url.searchParams.get("period")) || "today";
+  const today = executiveBucketKey(new Date().toISOString(), timeZoneInput, "day") || new Date().toISOString().slice(0, 10);
+  const currentRange = defaultDashboardDateRange(url);
+  const from = parseDateFilter(url.searchParams.get("from")) || (period === "today" ? today : currentRange.from);
+  const to = parseDateFilter(url.searchParams.get("to")) || (period === "today" ? today : currentRange.to);
+  const bounds = executiveDashboardRangeBounds(from, to, timeZoneInput);
+  if (!bounds) {
+    return {
+      ok: false,
+      error: "invalid_executive_performance_range",
+      message: "Executive performance range is invalid.",
+    };
+  }
+
+  const now = new Date();
+  if (period === "today" && to === today && now.toISOString() > bounds.from_iso && now.toISOString() < bounds.to_iso) {
+    bounds.to_iso = now.toISOString();
+    bounds.elapsed_ms = new Date(bounds.to_iso).getTime() - new Date(bounds.from_iso).getTime();
+  }
+
+  const previousBounds =
+    period === "today"
+      ? {
+          from_iso: new Date(new Date(bounds.from_iso).getTime() - 86400000).toISOString(),
+          to_iso: new Date(new Date(bounds.from_iso).getTime() - 86400000 + bounds.elapsed_ms).toISOString(),
+        }
+      : executivePreviousRangeBounds(bounds);
+  const currencyFilter = dashboardText(url.searchParams.get("currency"));
+
+  const [currentConversions, previousConversions, currentCommissions, previousCommissions] = await Promise.all([
+    selectExecutivePerformanceConversions(supabase, {
+      workspace_id: workspaceId,
+      from_iso: bounds.from_iso,
+      to_iso: bounds.to_iso,
+      currency: currencyFilter,
+    }),
+    selectExecutivePerformanceConversions(supabase, {
+      workspace_id: workspaceId,
+      from_iso: previousBounds.from_iso,
+      to_iso: previousBounds.to_iso,
+      currency: currencyFilter,
+    }),
+    selectExecutivePerformanceCommissions(supabase, {
+      workspace_id: workspaceId,
+      from_iso: bounds.from_iso,
+      to_iso: bounds.to_iso,
+      currency: currencyFilter,
+    }),
+    selectExecutivePerformanceCommissions(supabase, {
+      workspace_id: workspaceId,
+      from_iso: previousBounds.from_iso,
+      to_iso: previousBounds.to_iso,
+      currency: currencyFilter,
+    }),
+  ]);
+
+  const current = executiveSummaryFromRows(currentConversions.rows, currentCommissions.rows);
+  const previous = executiveSummaryFromRows(previousConversions.rows, previousCommissions.rows);
+  const currencyInfo = dashboardCurrency([...currentConversions.rows, ...currentCommissions.rows]);
+  const granularity = period === "today" || bounds.elapsed_ms <= 36 * 3600000 ? "hour" : "day";
+  const warnings = [];
+  if (!currentConversions.scanned_all || !previousConversions.scanned_all) warnings.push("Executive performance conversion scan reached its safety limit; narrow the date range for complete results.");
+  if (!currentCommissions.scanned_all || !previousCommissions.scanned_all) warnings.push("Executive performance commission scan reached its safety limit; narrow the date range for complete commission results.");
+  if (currencyInfo.multi_currency) warnings.push("Multiple currencies are present; dashboard totals use raw stored amounts and should be filtered by currency for accounting review.");
+  if (!current.affiliate_commission.available && current.sales_count > 0) warnings.push("Affiliate commission rows are unavailable for this range; commission should be treated as missing, not zero.");
+
+  return {
+    ok: true,
+    period,
+    workspace_id: workspaceId,
+    timezone: bounds.timeZone,
+    timezone_source: requestedTimezone ? "request.timezone" : setup.source,
+    range: {
+      from,
+      to,
+      from_iso: bounds.from_iso,
+      to_iso: bounds.to_iso,
+      previous_from_iso: previousBounds.from_iso,
+      previous_to_iso: previousBounds.to_iso,
+    },
+    currency: currencyFilter || currencyInfo.currency || setup.currency || "USD",
+    currencies: currencyInfo.currencies,
+    headline: {
+      sales_count: current.sales_count,
+      gross_revenue: current.gross_revenue,
+      net_revenue: current.net_revenue,
+      net_profit: current.net_profit,
+      affiliate_commission: current.affiliate_commission,
+      aov: current.aov,
+      deltas: {
+        sales_count: dashboardDelta(current.sales_count, previous.sales_count),
+        gross_revenue: dashboardDelta(current.gross_revenue, previous.gross_revenue),
+        net_revenue: dashboardDelta(current.net_revenue, previous.net_revenue),
+        net_profit: dashboardDelta(current.net_profit, previous.net_profit),
+        affiliate_commission: dashboardDelta(current.affiliate_commission.commission_amount, previous.affiliate_commission.commission_amount),
+      },
+    },
+    profit: current,
+    previous_profit: previous,
+    trend: executiveSeriesFromRows(currentConversions.rows, currentCommissions.rows, bounds.timeZone, granularity),
+    cost_breakdown: executiveCostRows(rollupSummary),
+    leakage: executiveLeakageRows(current),
+    affiliates: executiveAffiliateRows(currentCommissions.rows),
+    sources: executiveSourceRows(currentCommissions.rows),
+    diagnostics: {
+      warnings,
+      conversion_rows_scanned: currentConversions.rows.length,
+      commission_rows_scanned: currentCommissions.rows.length,
+      conversion_scan_complete: currentConversions.scanned_all,
+      commission_scan_complete: currentCommissions.scanned_all,
+      canonical_sales_definition:
+        "conversions.ledger_type = sale, amount > 0, non-cancelled/non-refunded/non-chargeback status, deduped by order_id then transaction/source identifiers.",
+      commission_source:
+        "affiliate_commissions.commission_amount by conversion_event_time, excluding voided/reversed rows; absence is reported as unavailable.",
+    },
   };
 }
 
@@ -15249,10 +15699,18 @@ async function router(req: Request, env: Env): Promise<Response> {
         event_source: url.searchParams.get("event_source"),
         currency: url.searchParams.get("currency"),
       });
+      const summary = summarizeProfitRollups(rows);
+      const includeExecutivePerformance =
+        url.searchParams.get("include_executive_performance") === "1" ||
+        url.searchParams.get("includeExecutivePerformance") === "true";
+      const executivePerformance = includeExecutivePerformance
+        ? await buildExecutivePerformancePayload(supabase, url, summary)
+        : null;
 
       return json({
         ok: true,
-        ...summarizeProfitRollups(rows),
+        ...summary,
+        ...(executivePerformance ? { executive_performance: executivePerformance } : {}),
       });
     } catch (e: any) {
       return json({
