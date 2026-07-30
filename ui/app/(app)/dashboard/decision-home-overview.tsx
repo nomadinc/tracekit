@@ -126,6 +126,19 @@ function formatTimestamp(value?: string | null) {
   return d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
 
+function customerFacingReason(value?: string | null) {
+  return String(value || "")
+    .replace(/diagnostic[-_]only/gi, "Snapshot Mode")
+    .replace(/reporting_readiness/gi, "Profit Status");
+}
+
+function readinessTone(status?: string | null): "neutral" | "good" | "warn" | "bad" {
+  if (status === "live") return "good";
+  if (status === "unavailable") return "bad";
+  if (status === "snapshot_mode" || status === "stale" || status === "limited") return "warn";
+  return "neutral";
+}
+
 function amountForCurrency(rows: ExecutiveDashboardCurrencyAmount[] | undefined, currency = "USD") {
   if (!rows?.length) return null;
   const match = rows.find((row) => row.currency === currency);
@@ -267,6 +280,90 @@ function MetricCard({
   );
 }
 
+function ProfitStatusCard({
+  dashboard,
+  range,
+}: {
+  dashboard: ExecutiveDashboardResponse | null;
+  range: { from: string; to: string };
+}) {
+  const currency = dashboard?.filters?.currency || "USD";
+  const readiness = dashboard?.reporting_readiness;
+  const operationalProfitRows = dashboard?.operational_profit_by_currency;
+  const hasOperationalProfit = Boolean(operationalProfitRows?.length && readiness?.profit_reporting_ready);
+  const statusLabel = readiness?.status_label || "Profit Unavailable";
+  const reliableThrough = readiness?.reliable_through || dashboard?.filters?.coverage?.commerce_latest_order_at || null;
+  const reasons = (readiness?.incomplete_reasons || dashboard?.partial_reasons || [])
+    .map((reason) => customerFacingReason(reason.message || reason.code || ""))
+    .filter(Boolean)
+    .slice(0, 4);
+
+  const snapshotAccounts = (readiness?.accounts || [])
+    .filter((account) => account.diagnostic_only || account.financial_mapping_complete === false)
+    .map((account) => account.account_key || account.connector)
+    .filter(Boolean);
+
+  return (
+    <div className={`mt-5 rounded-2xl border p-4 ${
+      readinessTone(readiness?.status) === "good"
+        ? "border-emerald-200 bg-emerald-50/80 dark:border-emerald-900/60 dark:bg-emerald-950/20"
+        : readinessTone(readiness?.status) === "bad"
+          ? "border-red-200 bg-red-50/80 dark:border-red-900/60 dark:bg-red-950/20"
+          : "border-amber-200 bg-amber-50/80 dark:border-amber-900/60 dark:bg-amber-950/20"
+    }`}>
+      <div className="grid gap-4 lg:grid-cols-[1fr_1.3fr]">
+        <div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Operational Profit</div>
+          <div className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 dark:text-white">
+            {hasOperationalProfit ? amountLabel(operationalProfitRows, currency) : "Unavailable"}
+          </div>
+          <div className="mt-2 text-sm font-medium text-slate-700 dark:text-slate-200">
+            Profit Status: {customerFacingReason(statusLabel)}
+          </div>
+          <div className="mt-1 text-sm text-slate-600 dark:text-slate-300">
+            Reliable Through: {formatTimestamp(reliableThrough)}
+          </div>
+        </div>
+        <div className="grid gap-3 text-sm sm:grid-cols-2">
+          <div className="rounded-xl bg-white/70 p-3 dark:bg-slate-950/30">
+            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Last successful commerce sync</div>
+            <div className="mt-1 font-medium text-slate-950 dark:text-slate-50">{formatTimestamp(dashboard?.filters?.coverage?.commerce_latest_order_at)}</div>
+          </div>
+          <div className="rounded-xl bg-white/70 p-3 dark:bg-slate-950/30">
+            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Last successful financial sync</div>
+            <div className="mt-1 font-medium text-slate-950 dark:text-slate-50">{formatTimestamp(readiness?.last_successful_financial_sync_at)}</div>
+          </div>
+          <div className="rounded-xl bg-white/70 p-3 dark:bg-slate-950/30">
+            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Last reconciled month</div>
+            <div className="mt-1 font-medium text-slate-950 dark:text-slate-50">{readiness?.period_reconciled ? "Closed period available" : "No closed period in this view"}</div>
+          </div>
+          <div className="rounded-xl bg-white/70 p-3 dark:bg-slate-950/30">
+            <div className="text-xs font-medium uppercase tracking-wide text-slate-500">Actions</div>
+            <div className="mt-1 flex flex-wrap gap-2">
+              <Link href={`/dashboard/financial-reconciliation?${rangeQuery(range)}`} className="font-medium text-teal-700 hover:underline dark:text-teal-300">Financial Health</Link>
+              <Link href={`/dashboard/financial-import-monitor?${rangeQuery(range)}`} className="font-medium text-teal-700 hover:underline dark:text-teal-300">Financial Imports</Link>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {reasons.length || snapshotAccounts.length ? (
+        <div className="mt-4 rounded-xl bg-white/70 p-3 text-sm text-slate-700 dark:bg-slate-950/30 dark:text-slate-200">
+          <div className="font-medium">Incomplete reasons</div>
+          <ul className="mt-2 space-y-1">
+            {reasons.map((reason) => (
+              <li key={reason}>{reason}</li>
+            ))}
+            {snapshotAccounts.length ? (
+              <li>Snapshot Mode sources: {snapshotAccounts.join(", ")}</li>
+            ) : null}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 function StoryHeader({
   dashboard,
   range,
@@ -339,13 +436,16 @@ function StoryHeader({
         <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
           <div className="flex items-center gap-2 font-medium">
             <AlertTriangle className="h-4 w-4" aria-hidden="true" />
-            Commerce data is incomplete for today.
+            Profit Status is limited for this view.
           </div>
           <p className="mt-1">
-            Latest imported order: {formatTimestamp(dashboard?.filters?.coverage?.commerce_latest_order_at)}. Today&apos;s sales and revenue may be understated.
+            Reliable Through: {formatTimestamp(dashboard?.reporting_readiness?.reliable_through || dashboard?.filters?.coverage?.commerce_latest_order_at)}.
+            {" "}Commerce metrics may remain visible, but complete Operational Profit requires current and mapped financial sources.
           </p>
         </div>
       ) : null}
+
+      <ProfitStatusCard dashboard={dashboard} range={range} />
 
       <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-8">
         <MetricCard label={`Sales Revenue ${periodLabel}`} value={grossRevenue} detail="Regular Order only" qualified={partial} />
@@ -797,7 +897,9 @@ export function DecisionHomeOverview() {
   }, [range.from, range.to, range.period, selectedBrand]);
 
   const currency = dashboard?.filters?.currency || "USD";
-  const warnings = (dashboard?.partial_reasons || []).map((reason) => String(reason.message || reason.code || "")).filter(Boolean);
+  const warnings = (dashboard?.partial_reasons || [])
+    .map((reason) => customerFacingReason(reason.message || reason.code || ""))
+    .filter(Boolean);
   const partial = Boolean(dashboard?.partial);
   const brands = dashboard?.brands?.available || [];
 

@@ -98,6 +98,47 @@ export type ProfitDailyAggregation = ProfitAggregation & {
   order_count: number;
 };
 
+export type ProfitReportingReadinessAccount = {
+  connector: string;
+  account_key: string;
+  enabled?: boolean | null;
+  required?: boolean | null;
+  commerce_current?: boolean | null;
+  transaction_snapshot_current?: boolean | null;
+  financial_ledger_current?: boolean | null;
+  financial_mapping_complete?: boolean | null;
+  cost_configuration_complete?: boolean | null;
+  diagnostic_only?: boolean | null;
+  latest_completed_window_to?: string | null;
+  last_success_at?: string | null;
+  failed?: boolean | null;
+};
+
+export type ProfitReportingStatus = "live" | "limited" | "snapshot_mode" | "stale" | "unavailable";
+
+export type ProfitReportingReadiness = {
+  commerce_current: boolean;
+  attribution_current: boolean;
+  transaction_snapshots_current: boolean;
+  financial_ledger_current: boolean;
+  financial_mapping_complete: boolean;
+  cost_configuration_complete: boolean;
+  profit_reporting_ready: boolean;
+  period_reconciled: boolean;
+  status: ProfitReportingStatus;
+  status_label: string;
+  reliable_through: string | null;
+  last_successful_financial_sync_at: string | null;
+  incomplete_reasons: Array<{
+    code: string;
+    connector: string;
+    account_key: string;
+    message: string;
+    severity: "info" | "warning" | "critical";
+  }>;
+  accounts: ProfitReportingReadinessAccount[];
+};
+
 export type FinancialIssueKind = "refund" | "chargeback";
 
 export type FinancialIssueLedgerRow = ProfitConversionRow & {
@@ -182,6 +223,176 @@ const COST_BUCKETS = [
 function numberFrom(value: unknown) {
   const n = Number(value ?? 0);
   return Number.isFinite(n) ? n : 0;
+}
+
+function readinessDateMs(value: unknown) {
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  const ms = Date.parse(String(value || ""));
+  return Number.isFinite(ms) ? ms : 0;
+}
+
+function readinessIso(value: unknown) {
+  const ms = readinessDateMs(value);
+  return ms ? new Date(ms).toISOString() : null;
+}
+
+export function buildProfitReportingReadiness(args: {
+  accounts: ProfitReportingReadinessAccount[];
+  requested_to_iso?: string | null;
+  stale_after_ms?: number | null;
+  now_iso?: string | null;
+}): ProfitReportingReadiness {
+  const requestedToMs = readinessDateMs(args.requested_to_iso);
+  const nowMs = readinessDateMs(args.now_iso) || Date.now();
+  const staleAfterMs = Math.max(1, Number(args.stale_after_ms || 86400000));
+  const reasons: ProfitReportingReadiness["incomplete_reasons"] = [];
+  const requiredAccounts = args.accounts.filter((account) => account.enabled !== false && account.required !== false);
+
+  for (const account of requiredAccounts) {
+    const connector = cleanText(account.connector, "unknown");
+    const accountKey = cleanText(account.account_key, connector);
+    if (account.failed) {
+      reasons.push({
+        code: "connector_failed",
+        connector,
+        account_key: accountKey,
+        message: `${connector} has a recent import failure.`,
+        severity: "critical",
+      });
+    }
+    if (account.commerce_current === false) {
+      reasons.push({
+        code: "commerce_stale",
+        connector,
+        account_key: accountKey,
+        message: `${connector} commerce data is not current for the selected reporting window.`,
+        severity: "warning",
+      });
+    }
+    if (account.transaction_snapshot_current === false) {
+      reasons.push({
+        code: "transaction_snapshot_stale",
+        connector,
+        account_key: accountKey,
+        message: `${connector} transaction snapshots are not current for the selected reporting window.`,
+        severity: "warning",
+      });
+    }
+    if (account.financial_ledger_current === false) {
+      reasons.push({
+        code: "financial_ledger_stale",
+        connector,
+        account_key: accountKey,
+        message: `${connector} financial ledger ingestion is not current for the selected reporting window.`,
+        severity: "warning",
+      });
+    }
+    if (account.financial_mapping_complete === false) {
+      reasons.push({
+        code: account.diagnostic_only ? "financial_mapping_diagnostic_only" : "financial_mapping_incomplete",
+        connector,
+        account_key: accountKey,
+        message: account.diagnostic_only
+          ? `${connector} is in Snapshot Mode and is not authoritative for complete profit reporting.`
+          : `${connector} financial mappings are incomplete for profit reporting.`,
+        severity: "warning",
+      });
+    }
+    if (account.cost_configuration_complete === false) {
+      reasons.push({
+        code: "cost_configuration_missing",
+        connector,
+        account_key: accountKey,
+        message: `${connector} is missing required cost configuration for complete profit reporting.`,
+        severity: "warning",
+      });
+    }
+    const completedWindowMs = readinessDateMs(account.latest_completed_window_to);
+    if (requestedToMs > 0 && completedWindowMs > 0 && completedWindowMs < requestedToMs) {
+      reasons.push({
+        code: "window_incomplete",
+        connector,
+        account_key: accountKey,
+        message: `${connector} has not completed an import window through the selected period end.`,
+        severity: "warning",
+      });
+    }
+    const lastSuccessMs = readinessDateMs(account.last_success_at);
+    if (!lastSuccessMs) {
+      reasons.push({
+        code: "no_successful_import",
+        connector,
+        account_key: accountKey,
+        message: `${connector} has no successful import recorded.`,
+        severity: "warning",
+      });
+    } else if (nowMs - lastSuccessMs > staleAfterMs) {
+      reasons.push({
+        code: "connector_stale",
+        connector,
+        account_key: accountKey,
+        message: `${connector} has not completed a successful import within the freshness window.`,
+        severity: "warning",
+      });
+    }
+  }
+
+  const commerceCurrent = !reasons.some((reason) => reason.code === "commerce_stale");
+  const transactionSnapshotsCurrent = !reasons.some((reason) => reason.code === "transaction_snapshot_stale" || reason.code === "window_incomplete");
+  const financialLedgerCurrent = !reasons.some((reason) => reason.code === "financial_ledger_stale");
+  const financialMappingComplete = !reasons.some((reason) => reason.code.startsWith("financial_mapping"));
+  const costConfigurationComplete = !reasons.some((reason) => reason.code === "cost_configuration_missing");
+  const boundaryCandidates = requiredAccounts
+    .map((account) => readinessDateMs(account.latest_completed_window_to) || readinessDateMs(account.last_success_at))
+    .filter((ms) => ms > 0);
+  const rawReliableThroughMs = boundaryCandidates.length ? Math.min(...boundaryCandidates) : 0;
+  const reliableThroughMs = requestedToMs > 0 && rawReliableThroughMs > 0 ? Math.min(rawReliableThroughMs, requestedToMs) : rawReliableThroughMs;
+  const financialSyncCandidates = requiredAccounts
+    .filter((account) => account.financial_ledger_current !== undefined || account.transaction_snapshot_current !== undefined)
+    .map((account) => readinessDateMs(account.last_success_at))
+    .filter((ms) => ms > 0);
+  const lastFinancialSyncMs = financialSyncCandidates.length ? Math.max(...financialSyncCandidates) : 0;
+  const hasCritical = reasons.some((reason) => reason.severity === "critical");
+  const hasNoSuccessfulImport = reasons.some((reason) => reason.code === "no_successful_import");
+  const hasSnapshotMode = reasons.some((reason) => reason.code === "financial_mapping_diagnostic_only");
+  const hasStale = reasons.some((reason) => reason.code === "commerce_stale" || reason.code === "connector_stale" || reason.code === "window_incomplete" || reason.code === "transaction_snapshot_stale");
+  const status: ProfitReportingStatus =
+    hasCritical || hasNoSuccessfulImport
+      ? "unavailable"
+      : hasSnapshotMode
+        ? "snapshot_mode"
+        : hasStale
+          ? "stale"
+          : reasons.length
+            ? "limited"
+            : "live";
+  const statusLabel =
+    status === "live"
+      ? "Operational Profit — Live"
+      : status === "snapshot_mode"
+        ? "Operational Profit — Snapshot Mode"
+        : status === "stale"
+          ? "Operational Profit — Stale"
+          : status === "limited"
+            ? "Operational Profit — Limited"
+            : "Profit Unavailable";
+
+  return {
+    commerce_current: commerceCurrent,
+    attribution_current: true,
+    transaction_snapshots_current: transactionSnapshotsCurrent,
+    financial_ledger_current: financialLedgerCurrent,
+    financial_mapping_complete: financialMappingComplete,
+    cost_configuration_complete: costConfigurationComplete,
+    profit_reporting_ready: reasons.length === 0,
+    period_reconciled: false,
+    status,
+    status_label: statusLabel,
+    reliable_through: readinessIso(reliableThroughMs),
+    last_successful_financial_sync_at: readinessIso(lastFinancialSyncMs),
+    incomplete_reasons: reasons,
+    accounts: args.accounts,
+  };
 }
 
 function cleanText(value: unknown, fallback: string) {

@@ -92,7 +92,7 @@ test("financial import monitor route constant is the canonical API path", () => 
   assert.equal(FINANCIAL_IMPORT_MONITOR_PATH, "/v1/financial-import-monitor");
 });
 
-test("configured account with no history shows Never run without exposing credential secrets", () => {
+test("configured PayPal account defaults to disabled without exposing credential secrets", () => {
   const result = report({
     credentials: [{
       platform: "paypal",
@@ -100,10 +100,39 @@ test("configured account with no history shows Never run without exposing creden
       password_encrypted: "secret-should-not-appear",
       metadata: { workspace_id: "default", merchant_account_id: "merchant-1" },
     }],
+    settings: [],
+  });
+
+  assert.equal(result.accounts[0].status, "Disabled");
+  assert.equal(JSON.stringify(result), JSON.stringify(result).replace(/secret-should-not-appear|client-id-should-not-appear/g, ""));
+});
+
+test("explicitly enabled PayPal account with no history shows Never run", () => {
+  const result = report({
+    credentials: [{
+      platform: "paypal",
+      metadata: { workspace_id: "default", merchant_account_id: "merchant-1" },
+    }],
+    settings: [{ platform: "paypal", auto_import_enabled: true }],
   });
 
   assert.equal(result.accounts[0].status, "Never run");
-  assert.equal(JSON.stringify(result), JSON.stringify(result).replace(/secret-should-not-appear|client-id-should-not-appear/g, ""));
+  assert.equal(result.accounts[0].enabled, true);
+});
+
+test("NMI and PayDiverse accounts are default-disabled and diagnostic-only when enabled", () => {
+  const disabled = report({
+    credentials: [{ platform: "nmi:lifeheater14090", metadata: { workspace_id: "default" } }],
+    settings: [],
+  });
+  assert.equal(disabled.accounts[0].status, "Disabled");
+
+  const enabled = report({
+    credentials: [{ platform: "paydiverse", metadata: { workspace_id: "default" } }],
+    settings: [{ platform: "paydiverse", auto_import_enabled: true }],
+  });
+  assert.equal(enabled.accounts[0].status, "Diagnostic only");
+  assert.equal(enabled.accounts[0].ingestion_mode, "diagnostic_only");
 });
 
 test("WowBoost commerce snapshot jobs are monitored separately from financial ledger totals", () => {

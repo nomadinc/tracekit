@@ -231,6 +231,47 @@ export type ExecutiveDashboardBrandRow = ExecutiveDashboardCommerceSummary & {
   brand: string;
 };
 
+export type ProfitReportingReadinessAccount = {
+  connector: string;
+  account_key: string;
+  enabled?: boolean | null;
+  required?: boolean | null;
+  commerce_current?: boolean | null;
+  transaction_snapshot_current?: boolean | null;
+  financial_ledger_current?: boolean | null;
+  financial_mapping_complete?: boolean | null;
+  cost_configuration_complete?: boolean | null;
+  diagnostic_only?: boolean | null;
+  latest_completed_window_to?: string | null;
+  last_success_at?: string | null;
+  failed?: boolean | null;
+};
+
+export type ProfitReportingReadinessReason = {
+  code?: string | null;
+  connector?: string | null;
+  account_key?: string | null;
+  message?: string | null;
+  severity?: "info" | "warning" | "critical" | string | null;
+};
+
+export type ProfitReportingReadiness = {
+  commerce_current?: boolean | null;
+  attribution_current?: boolean | null;
+  transaction_snapshots_current?: boolean | null;
+  financial_ledger_current?: boolean | null;
+  financial_mapping_complete?: boolean | null;
+  cost_configuration_complete?: boolean | null;
+  profit_reporting_ready?: boolean | null;
+  period_reconciled?: boolean | null;
+  status?: "live" | "limited" | "snapshot_mode" | "stale" | "unavailable" | string | null;
+  status_label?: string | null;
+  reliable_through?: string | null;
+  last_successful_financial_sync_at?: string | null;
+  incomplete_reasons?: ProfitReportingReadinessReason[];
+  accounts?: ProfitReportingReadinessAccount[];
+};
+
 export type ExecutiveDashboardResponse = {
   ok?: boolean;
   error?: string;
@@ -239,6 +280,8 @@ export type ExecutiveDashboardResponse = {
   generated_at?: string | null;
   partial?: boolean | null;
   partial_reasons?: Array<{ code?: string | null; message?: string | null; severity?: string | null }>;
+  reporting_readiness?: ProfitReportingReadiness | null;
+  operational_profit_by_currency?: ExecutiveDashboardCurrencyAmount[];
   filters?: {
     period?: string | null;
     timezone?: string | null;

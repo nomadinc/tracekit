@@ -18,6 +18,7 @@ import {
   aggregateDailyProfitConversions,
   aggregateProfitConversions,
   buildFinancialIssueAnalysis,
+  buildProfitReportingReadiness,
   conversionMatchesDailyKey,
   conversionMatchesOrderKey,
   EXECUTIVE_COMMERCE_EXCLUDED_STATUS_PARTS,
@@ -340,6 +341,7 @@ import {
 import {
   PaypalApiError,
   buildPaypalLedgerEventsFromRecord,
+  classifyPaypalLedgerEvent,
   chunkPaypalRecords,
   collectPaypalChunkLookupKeys,
   dedupePaypalPlatformOrderRows,
@@ -354,6 +356,7 @@ import {
   normalizePaypalPaymentTransactionRow,
   normalizePaypalPlatformOrderRow,
   paypalParentTransactionIds,
+  paypalFinancialEventTimestamp,
   paypalRecordMatchingFields,
   paypalBaseUrlForEnvironment,
   paypalReconciliationLookupWarning,
@@ -3267,6 +3270,29 @@ async function selectExecutiveDashboardLatestOrderAt(supabase: SupabaseClientAny
   return dashboardText(data?.order_ts) || null;
 }
 
+async function selectExecutiveDashboardReadinessSources(supabase: SupabaseClientAny, workspaceId: string) {
+  const [settingsResult, jobsResult] = await Promise.all([
+    supabase
+      .from("integrations_settings")
+      .select("platform,auto_import_enabled,last_run_at,last_success_at,last_error,updated_at")
+      .order("platform", { ascending: true })
+      .limit(500),
+    supabase
+      .from("integration_import_jobs")
+      .select("id,workspace_id,platform,connector_id,job_type,phase,status,requested_from,requested_to,last_error,metadata,progress,updated_at,completed_at")
+      .eq("workspace_id", workspaceId)
+      .in("connector_id", [PAYPAL_TRANSACTION_SYNC_CONNECTOR_ID, GATEWAY_TRANSACTION_SYNC_CONNECTOR_ID])
+      .order("updated_at", { ascending: false })
+      .limit(100),
+  ]);
+  if (settingsResult.error) throw new Error(`Executive dashboard connector settings read failed: ${settingsResult.error.message}`);
+  if (jobsResult.error) throw new Error(`Executive dashboard connector readiness read failed: ${jobsResult.error.message}`);
+  return {
+    settings: settingsResult.data || [],
+    jobs: jobsResult.data || [],
+  };
+}
+
 async function selectExecutiveDashboardFinancialRows(
   supabase: SupabaseClientAny,
   filters: {
@@ -3499,7 +3525,7 @@ async function buildExecutiveDashboardPayload(supabase: SupabaseClientAny, url: 
   const currencyFilter = dashboardText(url.searchParams.get("currency"));
   const brandFilter = dashboardText(url.searchParams.get("brand") || url.searchParams.get("brand_name"));
 
-  const [currentCommerce, previousCommerce, currentFinancials, currentCommissions, latestOrderAt] = await Promise.all([
+  const [currentCommerce, previousCommerce, currentFinancials, currentCommissions, latestOrderAt, readinessSources] = await Promise.all([
     selectExecutiveDashboardPlatformOrders(supabase, {
       workspace_id: workspaceId,
       from_iso: bounds.from_iso,
@@ -3525,6 +3551,7 @@ async function buildExecutiveDashboardPayload(supabase: SupabaseClientAny, url: 
       currency: currencyFilter,
     }),
     selectExecutiveDashboardLatestOrderAt(supabase, workspaceId),
+    selectExecutiveDashboardReadinessSources(supabase, workspaceId),
   ]);
 
   const current = summarizeExecutiveCommerceOrders(currentCommerce.rows, { brand: brandFilter });
@@ -3598,14 +3625,138 @@ async function buildExecutiveDashboardPayload(supabase: SupabaseClientAny, url: 
     });
   }
 
+  const readinessJobs = (readinessSources.jobs || []) as any[];
+  const readinessSettings = (readinessSources.settings || []) as any[];
+  const latestJobFor = (connectorId: string, platform?: string | null, successOnly = false) => {
+    return readinessJobs.find((job) => {
+      if (dashboardText(job.connector_id) !== connectorId) return false;
+      if (platform && dashboardText(job.platform) !== platform) return false;
+      if (!successOnly) return true;
+      return ["completed", "completed_with_errors"].includes(dashboardText(job.status));
+    }) || null;
+  };
+  const jobHasCredentialPlatform = (job: any, credentialPlatform: string) => {
+    const progress = connectorRuntimeProgressFromJob(job as ImportJobRow);
+    const accounts = Object.values(financialSyncProgressAccounts(progress));
+    if (!accounts.length && credentialPlatform === dashboardText(job.platform)) return true;
+    return accounts.some((state: any) => dashboardText(state.credential_platform) === credentialPlatform);
+  };
+  const latestJobForCredential = (connectorId: string, platform: string, credentialPlatform: string, successOnly = false) => {
+    return readinessJobs.find((job) => {
+      if (dashboardText(job.connector_id) !== connectorId) return false;
+      if (dashboardText(job.platform) !== platform) return false;
+      if (!jobHasCredentialPlatform(job, credentialPlatform)) return false;
+      if (!successOnly) return true;
+      return ["completed", "completed_with_errors"].includes(dashboardText(job.status));
+    }) || null;
+  };
+  const latestFailureAfterSuccess = (connectorId: string, platform?: string | null) => {
+    const latest = latestJobFor(connectorId, platform, false);
+    const latestSuccess = latestJobFor(connectorId, platform, true);
+    if (!latest) return false;
+    if (!["failed", "cancelled"].includes(dashboardText(latest.status))) return false;
+    if (!latestSuccess) return true;
+    return Date.parse(String(latest.updated_at || "")) > Date.parse(String(latestSuccess.completed_at || latestSuccess.updated_at || ""));
+  };
+  const latestFailureAfterCredentialSuccess = (connectorId: string, platform: string, credentialPlatform: string) => {
+    const latest = latestJobForCredential(connectorId, platform, credentialPlatform, false);
+    const latestSuccess = latestJobForCredential(connectorId, platform, credentialPlatform, true);
+    if (!latest) return false;
+    if (!["failed", "cancelled"].includes(dashboardText(latest.status))) return false;
+    if (!latestSuccess) return true;
+    return Date.parse(String(latest.updated_at || "")) > Date.parse(String(latestSuccess.completed_at || latestSuccess.updated_at || ""));
+  };
+  const paypalSettings = readinessSettings.filter((row: any) => {
+    const platform = dashboardText(row.platform);
+    return platform === "paypal" || platform.startsWith("paypal:");
+  });
+  const gatewaySettings = readinessSettings.filter((row: any) => {
+    const platform = dashboardText(row.platform);
+    return platform.startsWith("nmi:") || platform === "paydiverse" || platform.startsWith("paydiverse:");
+  });
+  const readinessAccounts = [
+    {
+      connector: "wowboost",
+      account_key: "wowsuite:wowboost",
+      enabled: true,
+      required: true,
+      commerce_current: isCurrent,
+      transaction_snapshot_current: true,
+      financial_ledger_current: true,
+      financial_mapping_complete: true,
+      cost_configuration_complete: true,
+      last_success_at: latestOrderAt,
+      latest_completed_window_to: latestOrderAt,
+      failed: false,
+    },
+    ...paypalSettings
+      .filter((setting: any) => setting.auto_import_enabled)
+      .map((setting: any) => {
+        const platform = dashboardText(setting.platform);
+        const success = latestJobForCredential(PAYPAL_TRANSACTION_SYNC_CONNECTOR_ID, "paypal", platform, true);
+        const progress = success ? connectorRuntimeProgressFromJob(success as ImportJobRow) : null;
+        const progressAccounts = financialSyncProgressAccounts(progress || ({} as any));
+        const accountState = Object.values(progressAccounts).find((state: any) => dashboardText(state.credential_platform) === platform) as any;
+        return {
+          connector: "paypal",
+          account_key: dashboardText(accountState?.account_key) || platform,
+          enabled: true,
+          required: true,
+          commerce_current: true,
+          transaction_snapshot_current: Boolean(success),
+          financial_ledger_current: Boolean(success),
+          financial_mapping_complete: true,
+          cost_configuration_complete: true,
+          last_success_at: dashboardText(accountState?.last_success_at || progress?.metadata?.last_success_at || success?.completed_at || success?.updated_at) || null,
+          latest_completed_window_to: dashboardText(accountState?.latest_completed_window_to || progress?.metadata?.latest_completed_window_to) || null,
+          failed: latestFailureAfterCredentialSuccess(PAYPAL_TRANSACTION_SYNC_CONNECTOR_ID, "paypal", platform),
+        };
+      }),
+    ...gatewaySettings
+      .filter((setting: any) => setting.auto_import_enabled)
+      .map((setting: any) => {
+        const platform = dashboardText(setting.platform);
+        const success = latestJobFor(GATEWAY_TRANSACTION_SYNC_CONNECTOR_ID, platform, true);
+        const progress = success ? connectorRuntimeProgressFromJob(success as ImportJobRow) : null;
+        return {
+          connector: platform.startsWith("nmi:") ? "nmi" : "paydiverse",
+          account_key: platform,
+          enabled: true,
+          required: true,
+          commerce_current: true,
+          transaction_snapshot_current: Boolean(success),
+          financial_ledger_current: false,
+          financial_mapping_complete: false,
+          cost_configuration_complete: false,
+          diagnostic_only: true,
+          last_success_at: dashboardText(progress?.metadata?.last_success_at || success?.completed_at || success?.updated_at) || null,
+          latest_completed_window_to: dashboardText(progress?.metadata?.latest_completed_window_to) || null,
+          failed: latestFailureAfterSuccess(GATEWAY_TRANSACTION_SYNC_CONNECTOR_ID, platform),
+        };
+      }),
+  ];
+  const reportingReadiness = buildProfitReportingReadiness({
+    accounts: readinessAccounts,
+    requested_to_iso: bounds.to_iso,
+    now_iso: now.toISOString(),
+  });
+  for (const reason of reportingReadiness.incomplete_reasons) {
+    partialReasons.push({
+      code: reason.code,
+      message: reason.message,
+      severity: reason.severity,
+    });
+  }
+
   const granularity = period === "today" || bounds.elapsed_ms <= 36 * 3600000 ? "hour" : "day";
 
   return {
     ok: true,
     workspace_id: workspaceId,
     generated_at: new Date().toISOString(),
-    partial: partialReasons.some((reason) => reason.severity === "warning"),
+    partial: partialReasons.some((reason) => reason.severity === "warning" || reason.severity === "critical"),
     partial_reasons: partialReasons,
+    reporting_readiness: reportingReadiness,
     filters: {
       period,
       timezone: bounds.timeZone,
@@ -4781,6 +4932,18 @@ const CHARGEBACK_GATEWAY_DEFAULT_MAX_PAGES = 3;
 const CHARGEBACK_DOUBLE_DEBIT_DEFAULT_WINDOW_DAYS = 7;
 const CHARGEBACK_MAX_DATE_RANGE_DAYS = 366;
 const CHARGEBACK_PAYPAL_MAX_PAGES = 50;
+const PAYPAL_TRANSACTION_SYNC_CONNECTOR_ID = "paypal-transaction-sync";
+const PAYPAL_TRANSACTION_SYNC_JOB_TYPE = "paypal_transaction_sync";
+const PAYPAL_TRANSACTION_SYNC_PHASE = "import_transaction_page";
+const PAYPAL_TRANSACTION_SYNC_TASK_TYPE = "paypal_transaction_import_page";
+const PAYPAL_TRANSACTION_SYNC_DEFAULT_CHUNK_SIZE = 10;
+const PAYPAL_TRANSACTION_SYNC_OVERLAP_HOURS = 24;
+const GATEWAY_TRANSACTION_SYNC_CONNECTOR_ID = "gateway-transaction-sync";
+const GATEWAY_TRANSACTION_SYNC_JOB_TYPE = "gateway_transaction_snapshot_sync";
+const GATEWAY_TRANSACTION_SYNC_PHASE = "import_classic_query_page";
+const GATEWAY_TRANSACTION_SYNC_TASK_TYPE = "gateway_transaction_snapshot_page";
+const GATEWAY_TRANSACTION_SYNC_DEFAULT_PAGE_SIZE = 100;
+const GATEWAY_TRANSACTION_SYNC_OVERLAP_HOURS = 24;
 
 async function createConnectorRuntimeTask(env: Env, plan: ConnectorRuntimeTaskPlan) {
   const supabase = getSupabase(env);
@@ -5979,7 +6142,55 @@ async function findActiveAttributionBackfillTaskForJob(env: Env, jobId: string, 
 
 async function createAndEnqueueConnectorRuntimeTask(env: Env, plan: ConnectorRuntimeTaskPlan) {
   const result = await createConnectorRuntimeTask(env, plan);
-  if (result.task.status !== "completed") await enqueueConnectorRuntimeTask(env, result.task);
+  if (result.task.status !== "completed") {
+    try {
+      await enqueueConnectorRuntimeTask(env, result.task);
+    } catch (error: any) {
+      const queueable = ["queued", "retrying"].includes(String(result.task.status || ""));
+      if (!queueable) throw error;
+      const now = new Date().toISOString();
+      const lastError = sanitizedIntegrationError(error);
+      const state = connectorRuntimeTaskDiagnosticState(result.task);
+      state.summary = appendConnectorRuntimeTaskDiagnostic(state.summary, "connector_runtime.queue.publish_deferred_retryable", {
+        reason: lastError,
+        previous_status: result.task.status,
+      }, now);
+      const availableAt = connectorRuntimeNextRunAt({
+        attempt: Math.max(1, Number(result.task.attempt_count || 1)),
+      });
+      await updateConnectorRuntimeTask(env, result.task.id, {
+        status: "retrying",
+        available_at: availableAt,
+        locked_at: null,
+        completed_at: null,
+        last_error: lastError,
+        result_summary: state.summary,
+      });
+      await insertConnectorRuntimeError(env, {
+        job_id: result.task.job_id,
+        task_id: result.task.id,
+        connector_id: result.task.connector_id,
+        record_identifier: result.task.dedupe_key,
+        error_class: "connector_runtime_queue_publish_retryable",
+        attempt: Math.max(1, Number(result.task.attempt_count || 1)),
+        message: lastError,
+        response_excerpt: error?.stack || null,
+        classification: "transient",
+      }).catch(() => {});
+      const updatedTask = await getConnectorRuntimeTask(env, result.task.id).catch(() => null);
+      return {
+        ...result,
+        task: updatedTask || {
+          ...result.task,
+          status: "retrying",
+          available_at: availableAt,
+          last_error: lastError,
+          result_summary: state.summary,
+        },
+        enqueue_deferred: true,
+      };
+    }
+  }
   return result;
 }
 
@@ -6962,6 +7173,528 @@ async function executeChargebackIngestionRuntimeTask(env: Env, job: ImportJobRow
   if (!account?.family || !account?.account_key) throw new Error("Chargeback task payload is missing account metadata.");
   if (account.family === "paypal") return executePaypalChargebackIngestionTask(env, job, task, account);
   return executeGatewayChargebackDiagnosticsTask(env, job, task, account);
+}
+
+type FinancialTransactionSyncAccount = {
+  account_key: string;
+  platform: string;
+  credential_platform: string;
+  connector_id: string;
+  processor_account_id: string;
+  family: "paypal" | "gateway_classic";
+  base_url: string | null;
+  ingestion_mode: "active" | "diagnostic_only";
+  financial_mapping_complete: boolean;
+  cost_configuration_complete: boolean;
+};
+
+function financialSyncProgressAccounts(progress: ConnectorRuntimeProgress & Record<string, any>) {
+  return { ...((progress as any).accounts || {}) } as Record<string, any>;
+}
+
+function maxIsoTimestamp(...values: Array<unknown>) {
+  let latest = 0;
+  for (const value of values) {
+    const ms = Date.parse(String(value || ""));
+    if (Number.isFinite(ms) && ms > latest) latest = ms;
+  }
+  return latest > 0 ? new Date(latest).toISOString() : null;
+}
+
+function financialSyncScheduleSlot(now: Date, intervalMinutes: number) {
+  const intervalMs = Math.max(15, Math.min(1440, Number(intervalMinutes || 60))) * 60000;
+  return new Date(Math.floor(now.getTime() / intervalMs) * intervalMs).toISOString().slice(0, 16);
+}
+
+function financialSyncWindowFromSettings(settings: any, now: Date, overlapHours: number) {
+  const lookbackHours = Math.max(1, Math.min(168, Number(settings?.auto_import_lookback_hours ?? 30) || 30));
+  return {
+    from: isoYmdUTC(new Date(now.getTime() - (lookbackHours + overlapHours) * 3600000)),
+    to: isoYmdUTC(now),
+    lookback_hours: lookbackHours,
+    overlap_hours: overlapHours,
+  };
+}
+
+function uuidFromHexDigest(hex: string) {
+  const padded = `${hex}${"0".repeat(32)}`.slice(0, 32);
+  return `${padded.slice(0, 8)}-${padded.slice(8, 12)}-${padded.slice(12, 16)}-${padded.slice(16, 20)}-${padded.slice(20, 32)}`;
+}
+
+async function financialSyncJobId(args: {
+  connector_id: string;
+  workspace_id: string;
+  account_key: string;
+  from: string;
+  to: string;
+  schedule_key: string;
+}) {
+  const key = [
+    "financial_sync_runtime_v1",
+    args.connector_id,
+    args.workspace_id,
+    args.account_key,
+    args.from,
+    args.to,
+    args.schedule_key,
+  ].join(":");
+  return uuidFromHexDigest(await sha256Hex(key));
+}
+
+function paypalTransactionSyncAccount(connection: Awaited<ReturnType<typeof getPaypalConnection>>): FinancialTransactionSyncAccount {
+  const processorAccountId = String(connection.metadata.merchant_account_id || connection.connectorId || "paypal").trim() || "paypal";
+  const connectorId = stablePaypalConnectorId({
+    merchantAccountId: processorAccountId && !processorAccountId.startsWith("paypal:") ? processorAccountId : connection.metadata.merchant_account_id,
+    clientId: connection.clientId,
+  });
+  return {
+    account_key: `paypal:${processorAccountId}`,
+    platform: "paypal",
+    credential_platform: "paypal",
+      connector_id: PAYPAL_TRANSACTION_SYNC_CONNECTOR_ID,
+      processor_account_id: processorAccountId,
+      family: "paypal",
+      base_url: connection.baseUrl,
+      ingestion_mode: "active",
+      financial_mapping_complete: true,
+      cost_configuration_complete: true,
+  };
+}
+
+function gatewayTransactionSyncAccount(row: any): FinancialTransactionSyncAccount | null {
+  const platform = String(row?.platform || "").trim().toLowerCase();
+  if (!(platform.startsWith("nmi:") || platform === "paydiverse" || platform.startsWith("paydiverse:"))) return null;
+  return {
+    account_key: platform,
+    platform,
+    credential_platform: platform,
+    connector_id: GATEWAY_TRANSACTION_SYNC_CONNECTOR_ID,
+    processor_account_id: platform,
+    family: "gateway_classic",
+    base_url: String(row?.base_url || (platform.startsWith("paydiverse") ? "https://paydiverse.transactiongateway.com" : "https://secure.networkmerchants.com")).replace(/\/+$/, ""),
+    ingestion_mode: "diagnostic_only",
+    financial_mapping_complete: false,
+    cost_configuration_complete: false,
+  };
+}
+
+async function discoverGatewayTransactionSyncAccounts(env: Env) {
+  const supabase = getSupabase(env);
+  const { data, error } = await supabase
+    .from("integrations_credentials")
+    .select("platform,base_url,metadata,updated_at")
+    .or("platform.like.nmi:%,platform.eq.paydiverse,platform.like.paydiverse:%")
+    .order("platform", { ascending: true })
+    .limit(250);
+  if (error) throw new Error(`Gateway transaction credential discovery failed: ${error.message}`);
+  return ((data || []) as any[]).map(gatewayTransactionSyncAccount).filter(Boolean) as FinancialTransactionSyncAccount[];
+}
+
+async function discoverPaypalTransactionSyncAccounts(env: Env) {
+  const supabase = getSupabase(env);
+  const { data, error } = await supabase
+    .from("integrations_credentials")
+    .select("platform,base_url,username,metadata,updated_at")
+    .or("platform.eq.paypal,platform.like.paypal:%")
+    .order("platform", { ascending: true })
+    .limit(100);
+  if (error) throw new Error(`PayPal transaction credential discovery failed: ${error.message}`);
+  return ((data || []) as any[]).map((row) => {
+    const platform = String(row?.platform || "paypal").trim().toLowerCase() || "paypal";
+    const metadata = normalizePaypalCredentialMetadata(row?.metadata);
+    const fallbackConnectorId = stablePaypalConnectorId({ clientId: String(row?.username || "") });
+    const processorAccountId = String(metadata.merchant_account_id || fallbackConnectorId.replace(/^paypal:/, "")).trim() || platform;
+    return {
+      account_key: `paypal:${processorAccountId}`,
+      platform: "paypal",
+      credential_platform: platform,
+      connector_id: PAYPAL_TRANSACTION_SYNC_CONNECTOR_ID,
+      processor_account_id: processorAccountId,
+      family: "paypal",
+      base_url: paypalBaseUrlForEnvironment(metadata.environment),
+      ingestion_mode: "active",
+      financial_mapping_complete: true,
+      cost_configuration_complete: true,
+    } as FinancialTransactionSyncAccount;
+  });
+}
+
+function financialTransactionSyncTaskPlan(args: {
+  job: ImportJobRow;
+  account: FinancialTransactionSyncAccount;
+  from: string;
+  to: string;
+  page?: number | null;
+  window_index?: number | null;
+  page_size?: number | null;
+  chunk_size?: number | null;
+  scheduled?: boolean | null;
+  schedule_key?: string | null;
+}): ConnectorRuntimeTaskPlan {
+  const page = Math.max(args.account.family === "paypal" ? 1 : 0, Number(args.page ?? (args.account.family === "paypal" ? 1 : 0)) || 0);
+  const windowIndex = Math.max(0, Number(args.window_index ?? 0) || 0);
+  const taskType = args.account.family === "paypal" ? PAYPAL_TRANSACTION_SYNC_TASK_TYPE : GATEWAY_TRANSACTION_SYNC_TASK_TYPE;
+  const phase = args.account.family === "paypal" ? PAYPAL_TRANSACTION_SYNC_PHASE : GATEWAY_TRANSACTION_SYNC_PHASE;
+  const connectorId = args.account.family === "paypal" ? PAYPAL_TRANSACTION_SYNC_CONNECTOR_ID : GATEWAY_TRANSACTION_SYNC_CONNECTOR_ID;
+  return {
+    job_id: args.job.id,
+    workspace_id: (args.job as any).workspace_id || "default",
+    connector_id: connectorId,
+    task_type: taskType,
+    phase,
+    page,
+    cursor: `${args.account.account_key}:window:${windowIndex}:page:${page}`,
+    payload: {
+      account: args.account,
+      from: args.from,
+      to: args.to,
+      page,
+      window_index: windowIndex,
+      page_size: args.page_size ?? null,
+      chunk_size: args.chunk_size ?? null,
+      scheduled: Boolean(args.scheduled),
+      schedule_key: args.schedule_key || null,
+    },
+    dedupe_key: `${taskType}:${args.account.account_key}:${args.from}:${args.to}:${args.schedule_key || "manual"}:${windowIndex}:${page}`,
+    max_attempts: 5,
+  };
+}
+
+function paypalTransactionSyncTaskPlanForProgress(job: ImportJobRow, progress: ConnectorRuntimeProgress & Record<string, any>) {
+  const account = progress.metadata?.account as FinancialTransactionSyncAccount | undefined;
+  if (!account?.account_key) throw new Error("PayPal transaction sync progress is missing account metadata.");
+  return financialTransactionSyncTaskPlan({
+    job,
+    account,
+    from: progress.requested_from || job.from_date,
+    to: progress.requested_to || job.to_date,
+    page: progress.current_page || 1,
+    window_index: progress.metadata?.current_window_index || 0,
+    chunk_size: progress.metadata?.chunk_size || PAYPAL_TRANSACTION_SYNC_DEFAULT_CHUNK_SIZE,
+    scheduled: progress.metadata?.scheduled_import,
+    schedule_key: progress.metadata?.schedule_key,
+  });
+}
+
+function gatewayTransactionSyncTaskPlanForProgress(job: ImportJobRow, progress: ConnectorRuntimeProgress & Record<string, any>) {
+  const account = progress.metadata?.account as FinancialTransactionSyncAccount | undefined;
+  if (!account?.account_key) throw new Error("Gateway transaction sync progress is missing account metadata.");
+  return financialTransactionSyncTaskPlan({
+    job,
+    account,
+    from: progress.requested_from || job.from_date,
+    to: progress.requested_to || job.to_date,
+    page: progress.current_page ?? 0,
+    page_size: progress.metadata?.page_size || GATEWAY_TRANSACTION_SYNC_DEFAULT_PAGE_SIZE,
+    scheduled: progress.metadata?.scheduled_import,
+    schedule_key: progress.metadata?.schedule_key,
+  });
+}
+
+async function createFinancialTransactionSyncJob(env: Env, args: {
+  workspace_id: string;
+  account: FinancialTransactionSyncAccount;
+  from: string;
+  to: string;
+  schedule_key: string;
+  scheduled: boolean;
+  chunk_size?: number | null;
+  page_size?: number | null;
+}) {
+  const now = new Date().toISOString();
+  const connectorId = args.account.family === "paypal" ? PAYPAL_TRANSACTION_SYNC_CONNECTOR_ID : GATEWAY_TRANSACTION_SYNC_CONNECTOR_ID;
+  const jobType = args.account.family === "paypal" ? PAYPAL_TRANSACTION_SYNC_JOB_TYPE : GATEWAY_TRANSACTION_SYNC_JOB_TYPE;
+  const phase = args.account.family === "paypal" ? PAYPAL_TRANSACTION_SYNC_PHASE : GATEWAY_TRANSACTION_SYNC_PHASE;
+  const jobId = await financialSyncJobId({
+    connector_id: connectorId,
+    workspace_id: args.workspace_id,
+    account_key: args.account.account_key,
+    from: args.from,
+    to: args.to,
+    schedule_key: args.schedule_key,
+  });
+  const progress = createConnectorRuntimeProgress({
+    workspace_id: args.workspace_id,
+    connector_id: connectorId,
+    job_type: jobType,
+    phase,
+    requested_from: args.from,
+    requested_to: args.to,
+    now,
+    metadata: connectorRuntimeMetadata({
+      connector_id: connectorId,
+      metadata: {
+        account: args.account,
+        accounts: [args.account],
+        scheduled_import: args.scheduled,
+        scheduler: args.scheduled ? "cloudflare_cron" : null,
+        schedule_key: args.schedule_key,
+        chunk_size: args.chunk_size || null,
+        page_size: args.page_size || null,
+        latest_completed_window_to: null,
+        latest_source_event_at: null,
+        last_run_at: now,
+        last_success_at: null,
+        last_error: null,
+        transaction_snapshot_current: args.account.family === "gateway_classic" ? false : null,
+        financial_mapping_complete: args.account.financial_mapping_complete,
+        cost_configuration_complete: args.account.cost_configuration_complete,
+        financial_ledger_status: args.account.family === "gateway_classic" ? "diagnostic_only" : "authoritative",
+      },
+    }),
+  }) as ConnectorRuntimeProgress & Record<string, any>;
+  progress.status = "queued";
+  progress.current_page = args.account.family === "paypal" ? 1 : 0;
+  progress.accounts = {
+    [args.account.account_key]: {
+      ...args.account,
+      status: "queued",
+      current_page: progress.current_page,
+      last_run_at: now,
+      last_success_at: null,
+      latest_source_event_at: null,
+      latest_completed_window_to: null,
+      last_error: null,
+    },
+  };
+  progress.metadata.accounts = Object.values(progress.accounts);
+
+  const created = await createImportJobIfAbsent(env, {
+    id: jobId,
+    workspace_id: args.workspace_id,
+    platform: args.account.platform,
+    module: "connector_runtime",
+    connector_id: connectorId,
+    job_type: jobType,
+    phase,
+    from: args.from,
+    to: args.to,
+    filter: jobType,
+    progress,
+    metadata: progress.metadata,
+    status: "queued",
+  });
+  return { ...created, progress };
+}
+
+async function enqueueFinancialTransactionSyncJob(env: Env, args: {
+  job: ImportJobRow;
+  account: FinancialTransactionSyncAccount;
+  progress: ConnectorRuntimeProgress & Record<string, any>;
+}) {
+  const plan = financialTransactionSyncTaskPlan({
+    job: args.job,
+    account: args.account,
+    from: args.progress.requested_from,
+    to: args.progress.requested_to,
+    page: args.account.family === "paypal" ? 1 : 0,
+    window_index: 0,
+    chunk_size: args.progress.metadata?.chunk_size || PAYPAL_TRANSACTION_SYNC_DEFAULT_CHUNK_SIZE,
+    page_size: args.progress.metadata?.page_size || GATEWAY_TRANSACTION_SYNC_DEFAULT_PAGE_SIZE,
+    scheduled: args.progress.metadata?.scheduled_import,
+    schedule_key: args.progress.metadata?.schedule_key,
+  });
+  return createAndEnqueueConnectorRuntimeTask(env, plan);
+}
+
+async function executePaypalTransactionSyncRuntimeTask(env: Env, job: ImportJobRow, task: ConnectorImportTaskRow) {
+  const progress = connectorRuntimeProgressFromJob(job);
+  const account = task.payload?.account as FinancialTransactionSyncAccount | undefined;
+  if (!account?.account_key) throw new Error("PayPal transaction sync task is missing account metadata.");
+  const from = String(task.payload?.from || progress.requested_from || job.from_date);
+  const to = String(task.payload?.to || progress.requested_to || job.to_date);
+  const page = Math.max(1, Number(task.page || task.payload?.page || 1));
+  const windowIndex = Math.max(0, Number(task.payload?.window_index || progress.metadata?.current_window_index || 0));
+  const chunkSize = Math.max(10, Math.min(20, Number(task.payload?.chunk_size || progress.metadata?.chunk_size || PAYPAL_TRANSACTION_SYNC_DEFAULT_CHUNK_SIZE)));
+  const result = await runPaypalImport(env, {
+    from,
+    to,
+    filter: "all_financial_records",
+    page,
+    windowIndex,
+    chunkSize,
+    maxChunks: 1,
+    credentialPlatform: account.credential_platform,
+  });
+  const accounts = financialSyncProgressAccounts(progress);
+  const previous = accounts[account.account_key] || {};
+  const now = new Date().toISOString();
+  const latestSourceEventAt = maxIsoTimestamp(previous.latest_source_event_at, result.latest_source_event_at);
+  const completedWindowTo = !result.has_more || (result.next_window_index !== null && result.next_page === 1)
+    ? maxIsoTimestamp(previous.latest_completed_window_to, result.current_window?.to)
+    : previous.latest_completed_window_to || null;
+  accounts[account.account_key] = {
+    ...previous,
+    ...account,
+    status: result.has_more ? "running" : "completed",
+    current_page: page,
+    next_page: result.next_page,
+    current_window_index: windowIndex,
+    next_window_index: result.next_window_index,
+    records_fetched: Number(previous.records_fetched || 0) + Number(result.records_fetched || 0),
+    records_processed: Number(previous.records_processed || 0) + Number(result.records_processed || 0),
+    payment_transactions_upserted: Number(previous.payment_transactions_upserted || 0) + Number(result.payment_transactions_upserted || 0),
+    platform_orders_upserted: Number(previous.platform_orders_upserted || 0) + Number(result.platform_orders_upserted || 0),
+    ledger_inserted: Number(previous.ledger_inserted || 0) + Number(result.ledger_inserted || 0),
+    duplicates_skipped: Number(previous.duplicates_skipped || 0) + Number(result.duplicate_sales_skipped || 0),
+    matched: Number(previous.matched || 0) + Number(result.matched || 0),
+    unmatched: Number(previous.unmatched || 0) + Number(result.unmatched || 0),
+    ambiguous: Number(previous.ambiguous || 0) + Number(result.ambiguous || 0),
+    latest_source_event_at: latestSourceEventAt,
+    latest_completed_window_to: completedWindowTo,
+    last_run_at: previous.last_run_at || progress.metadata?.last_run_at || now,
+    last_success_at: now,
+    last_error: null,
+    cost_configuration_complete: account.cost_configuration_complete,
+    financial_mapping_complete: true,
+    financial_ledger_status: "authoritative",
+  };
+  const nextProgress = {
+    ...progress,
+    status: (result.has_more ? "running" : "completed") as ConnectorRuntimeProgress["status"],
+    phase: PAYPAL_TRANSACTION_SYNC_PHASE,
+    records_processed: Number(progress.records_processed || 0) + Number(result.records_processed || 0),
+    records_succeeded: Number(progress.records_succeeded || 0) + Number(result.ledger_inserted || 0),
+    records_skipped: Number(progress.records_skipped || 0) + Number(result.ledger_skipped || 0),
+    current_cursor: `${account.account_key}:window:${result.next_window_index ?? windowIndex}:page:${result.next_page ?? page}`,
+    current_page: result.next_page ?? page,
+    updated_at: now,
+    completed_at: result.has_more ? null : now,
+    last_error: null,
+    accounts,
+    metadata: {
+      ...progress.metadata,
+      account,
+      accounts: Object.values(accounts),
+      current_window_index: result.next_window_index ?? windowIndex,
+      latest_source_event_at: latestSourceEventAt,
+      latest_completed_window_to: completedWindowTo,
+      last_success_at: now,
+      last_error: null,
+    },
+  };
+  await updateConnectorRuntimeJobProgress(env, job, nextProgress);
+  if (result.has_more) {
+    await createAndEnqueueConnectorRuntimeTask(env, financialTransactionSyncTaskPlan({
+      job,
+      account,
+      from,
+      to,
+      page: result.next_page,
+      window_index: result.next_window_index ?? windowIndex,
+      chunk_size: chunkSize,
+      scheduled: task.payload?.scheduled,
+      schedule_key: task.payload?.schedule_key,
+    }));
+  }
+  return {
+    account_key: account.account_key,
+    platform: account.platform,
+    processor_account_id: account.processor_account_id,
+    page,
+    window_index: windowIndex,
+    fetched: result.records_fetched,
+    records_processed: result.records_processed,
+    ledger_inserted: result.ledger_inserted,
+    payment_transactions_upserted: result.payment_transactions_upserted,
+    platform_orders_upserted: result.platform_orders_upserted,
+    has_more: result.has_more,
+    next_page: result.next_page,
+    next_window_index: result.next_window_index,
+    latest_source_event_at: result.latest_source_event_at,
+  };
+}
+
+async function executeGatewayTransactionSyncRuntimeTask(env: Env, job: ImportJobRow, task: ConnectorImportTaskRow) {
+  const progress = connectorRuntimeProgressFromJob(job);
+  const account = task.payload?.account as FinancialTransactionSyncAccount | undefined;
+  if (!account?.account_key) throw new Error("Gateway transaction sync task is missing account metadata.");
+  const from = String(task.payload?.from || progress.requested_from || job.from_date);
+  const to = String(task.payload?.to || progress.requested_to || job.to_date);
+  const page = Math.max(0, Number(task.page ?? task.payload?.page ?? 0));
+  const pageSize = Math.max(1, Math.min(1000, Number(task.payload?.page_size || progress.metadata?.page_size || GATEWAY_TRANSACTION_SYNC_DEFAULT_PAGE_SIZE)));
+  const result = await runGatewayClassicImportPage(env, {
+    platform: account.credential_platform,
+    from,
+    to,
+    page,
+    pageSize,
+  });
+  const accounts = financialSyncProgressAccounts(progress);
+  const previous = accounts[account.account_key] || {};
+  const now = new Date().toISOString();
+  const latestSourceEventAt = maxIsoTimestamp(previous.latest_source_event_at, result.latest_source_event_at);
+  const completedWindowTo = result.hasMore ? previous.latest_completed_window_to || null : to;
+  accounts[account.account_key] = {
+    ...previous,
+    ...account,
+    status: result.hasMore ? "running" : "completed",
+    current_page: page,
+    next_page: result.nextPage,
+    records_fetched: Number(previous.records_fetched || 0) + Number(result.fetched || 0),
+    records_processed: Number(previous.records_processed || 0) + Number(result.fetched || 0),
+    platform_orders_upserted: Number(previous.platform_orders_upserted || 0) + Number(result.upserted || 0),
+    latest_source_event_at: latestSourceEventAt,
+    latest_completed_window_to: completedWindowTo,
+    last_run_at: previous.last_run_at || progress.metadata?.last_run_at || now,
+    last_success_at: now,
+    last_error: null,
+    ingestion_mode: "diagnostic_only",
+    cost_configuration_complete: false,
+    financial_mapping_complete: false,
+    financial_ledger_status: "diagnostic_only",
+  };
+  const nextProgress = {
+    ...progress,
+    status: (result.hasMore ? "running" : "completed") as ConnectorRuntimeProgress["status"],
+    phase: GATEWAY_TRANSACTION_SYNC_PHASE,
+    records_processed: Number(progress.records_processed || 0) + Number(result.fetched || 0),
+    records_succeeded: Number(progress.records_succeeded || 0) + Number(result.upserted || 0),
+    current_cursor: `${account.account_key}:page:${result.nextPage ?? page}`,
+    current_page: result.nextPage ?? page,
+    updated_at: now,
+    completed_at: result.hasMore ? null : now,
+    last_error: null,
+    accounts,
+    metadata: {
+      ...progress.metadata,
+      account,
+      accounts: Object.values(accounts),
+      latest_source_event_at: latestSourceEventAt,
+      latest_completed_window_to: completedWindowTo,
+      last_success_at: now,
+      last_error: null,
+      cost_configuration_complete: false,
+      financial_mapping_complete: false,
+      financial_ledger_status: "diagnostic_only",
+    },
+  };
+  await updateConnectorRuntimeJobProgress(env, job, nextProgress);
+  if (result.hasMore) {
+    await createAndEnqueueConnectorRuntimeTask(env, financialTransactionSyncTaskPlan({
+      job,
+      account,
+      from,
+      to,
+      page: result.nextPage,
+      page_size: pageSize,
+      scheduled: task.payload?.scheduled,
+      schedule_key: task.payload?.schedule_key,
+    }));
+  }
+  return {
+    account_key: account.account_key,
+    platform: account.platform,
+    processor_account_id: account.processor_account_id,
+    page,
+    page_size: pageSize,
+    fetched: result.fetched,
+    platform_orders_upserted: result.upserted,
+    has_more: result.hasMore,
+    next_page: result.nextPage,
+    latest_source_event_at: result.latest_source_event_at,
+    financial_ledger_status: "diagnostic_only",
+  };
 }
 
 async function insertConnectorRuntimeError(env: Env, args: {
@@ -10174,6 +10907,10 @@ async function executeConnectorRuntimeTask(env: Env, task: ConnectorImportTaskRo
     summary = await executeBrowserEventNormalizeRuntimeTask(env, job, task);
   } else if (task.task_type === CHARGEBACK_INGESTION_TASK_TYPE) {
     summary = await executeChargebackIngestionRuntimeTask(env, job, task);
+  } else if (task.task_type === PAYPAL_TRANSACTION_SYNC_TASK_TYPE) {
+    summary = await executePaypalTransactionSyncRuntimeTask(env, job, task);
+  } else if (task.task_type === GATEWAY_TRANSACTION_SYNC_TASK_TYPE) {
+    summary = await executeGatewayTransactionSyncRuntimeTask(env, job, task);
   } else {
     throw new Error(`Unsupported connector runtime task type: ${task.task_type}`);
   }
@@ -10417,6 +11154,12 @@ function connectorRuntimeTaskPlanForProgress(job: ImportJobRow, progress: Connec
   }
   if (progress.connector_id === CHARGEBACK_INGESTION_CONNECTOR_ID) {
     return chargebackIngestionTaskPlanForProgress(job, progress);
+  }
+  if (progress.connector_id === PAYPAL_TRANSACTION_SYNC_CONNECTOR_ID) {
+    return paypalTransactionSyncTaskPlanForProgress(job, progress);
+  }
+  if (progress.connector_id === GATEWAY_TRANSACTION_SYNC_CONNECTOR_ID) {
+    return gatewayTransactionSyncTaskPlanForProgress(job, progress);
   }
   return wowBoostRuntimeTaskPlanForProgress(job, progress);
 }
@@ -12602,8 +13345,8 @@ function paypalErrorPayload(error: any) {
   };
 }
 
-async function getPaypalConnection(env: Env) {
-  const creds = await getLatestCredential(env, "paypal");
+async function getPaypalConnection(env: Env, platform = "paypal") {
+  const creds = await getLatestCredential(env, platform);
   if (!creds) throw new Error("PayPal not connected. Save credentials first.");
 
   const metadata = normalizePaypalCredentialMetadata((creds as any).metadata);
@@ -13402,10 +14145,23 @@ async function processPaypalImportChunk(
   return metrics;
 }
 
-async function runPaypalImport(env: Env, args: RunImportArgs & { jobId?: string | null }) {
+function latestPaypalSourceEventAt(records: any[]) {
+  let latest = 0;
+  for (const record of records || []) {
+    const primary = paypalFinancialEventTimestamp(record, classifyPaypalLedgerEvent(record));
+    const fee = paypalFinancialEventTimestamp(record, "processor_fee" as any);
+    for (const value of [primary, fee]) {
+      const ms = Date.parse(String(value || ""));
+      if (Number.isFinite(ms) && ms > latest) latest = ms;
+    }
+  }
+  return latest > 0 ? new Date(latest).toISOString() : null;
+}
+
+async function runPaypalImport(env: Env, args: RunImportArgs & { jobId?: string | null; credentialPlatform?: string | null }) {
   if (!parseYmd(args.from) || !parseYmd(args.to)) throw new Error("from/to must be YYYY-MM-DD");
 
-  const connection = await getPaypalConnection(env);
+  const connection = await getPaypalConnection(env, String(args.credentialPlatform || "paypal"));
   const accessToken = await fetchPaypalAccessToken({
     environment: connection.environment,
     clientId: connection.clientId,
@@ -13538,58 +14294,190 @@ async function runPaypalImport(env: Env, args: RunImportArgs & { jobId?: string 
     rollup_warnings: metrics.rollup_warnings,
     connector_id: connectorId,
     account_id: discoveredAccountId,
+    latest_source_event_at: latestPaypalSourceEventAt(pageRecords),
   };
 }
 
 async function runScheduledPaypalImport(env: Env) {
   const supabase = getSupabase(env);
+  const workspaceId = "default";
+  const now = new Date();
+  const nowIso = now.toISOString();
+  let accounts: FinancialTransactionSyncAccount[] = [];
 
-  await supabase.from("integrations_settings").upsert(
-    {
-      platform: "paypal",
-      auto_import_enabled: false,
-      auto_import_interval_minutes: 60,
-      auto_import_lookback_hours: 30,
-      updated_at: new Date().toISOString(),
-    } as any,
-    { onConflict: "platform" }
-  );
-
-  const { data: s, error } = await supabase.from("integrations_settings").select("*").eq("platform", "paypal").maybeSingle();
-  if (error) {
-    console.error("[cron] paypal settings read failed", error);
+  try {
+    accounts = await discoverPaypalTransactionSyncAccounts(env);
+  } catch (error: any) {
+    console.error("[cron] paypal transaction sync discovery failed", {
+      message: sanitizedIntegrationError(error),
+    });
     return;
   }
 
-  if (!s || !(s as any).auto_import_enabled) return;
+  for (const account of accounts) {
+    try {
+      const settings = await getIntegrationSettings(env, account.credential_platform, {
+        intervalMinutes: 60,
+        lookbackHours: 30,
+      });
+      if (!settings || !(settings as any).auto_import_enabled) {
+        console.log("[cron] paypal transaction sync skipped", {
+          platform: account.credential_platform,
+          account_key: account.account_key,
+          reason: "auto_import_disabled",
+        });
+        continue;
+      }
+      if (!env.wowboost_imports) throw new Error("wowboost_imports queue binding is missing. Check wrangler.toml.");
+      const window = financialSyncWindowFromSettings(settings, now, PAYPAL_TRANSACTION_SYNC_OVERLAP_HOURS);
+      const scheduleKey = financialSyncScheduleSlot(now, Number((settings as any).auto_import_interval_minutes || 60));
 
-  const lookbackHours = Math.max(1, Math.min(168, Number((s as any).auto_import_lookback_hours ?? 30)));
-  const overlapHours = 24;
+      await supabase
+        .from("integrations_settings")
+        .update({ last_run_at: nowIso, last_error: null, updated_at: nowIso } as any)
+        .eq("platform", account.credential_platform);
+
+      const created = await createFinancialTransactionSyncJob(env, {
+        workspace_id: workspaceId,
+        account,
+        from: window.from,
+        to: window.to,
+        schedule_key: scheduleKey,
+        scheduled: true,
+        chunk_size: PAYPAL_TRANSACTION_SYNC_DEFAULT_CHUNK_SIZE,
+      });
+      if (!created.created) {
+        await reconcileConnectorRuntimeJobQueue(env, created.job, { reason: "paypal_transaction_sync_duplicate_schedule" }).catch(() => {});
+        console.log("[cron] paypal transaction sync skipped", {
+          platform: account.credential_platform,
+          reason: "scheduled_job_already_exists",
+          job_id: created.job.id,
+          account_key: account.account_key,
+          from: window.from,
+          to: window.to,
+        });
+        continue;
+      }
+
+      const task = await enqueueFinancialTransactionSyncJob(env, {
+        job: created.job,
+        account,
+        progress: created.progress,
+      });
+
+      console.log("[cron] paypal transaction sync queued", {
+        platform: account.credential_platform,
+        job_id: created.job.id,
+        task_id: task.task.id,
+        account_key: account.account_key,
+        from: window.from,
+        to: window.to,
+        schedule_key: scheduleKey,
+        enqueue_deferred: Boolean((task as any).enqueue_deferred),
+      });
+    } catch (error: any) {
+      const lastError = sanitizedIntegrationError(error);
+      await supabase
+        .from("integrations_settings")
+        .update({ last_run_at: nowIso, last_error: lastError, updated_at: new Date().toISOString() } as any)
+        .eq("platform", account.credential_platform)
+        .catch(() => {});
+
+      console.error("[cron] paypal transaction sync scheduling failed", {
+        platform: account.credential_platform,
+        account_key: account.account_key,
+        message: lastError,
+      });
+    }
+  }
+}
+
+async function runScheduledGatewayTransactionSnapshotImport(env: Env) {
+  const supabase = getSupabase(env);
+  const workspaceId = "default";
   const now = new Date();
-  const from = isoYmdUTC(new Date(now.getTime() - (lookbackHours + overlapHours) * 3600000));
-  const to = isoYmdUTC(now);
-
-  await supabase
-    .from("integrations_settings")
-    .update({ last_run_at: new Date().toISOString(), last_error: null, updated_at: new Date().toISOString() })
-    .eq("platform", "paypal");
-
+  const nowIso = now.toISOString();
+  let accounts: FinancialTransactionSyncAccount[] = [];
   try {
-    const res = await runPaypalImport(env, { from, to, filter: "all_financial_records" });
+    accounts = await discoverGatewayTransactionSyncAccounts(env);
+  } catch (error: any) {
+    console.error("[cron] gateway transaction sync discovery failed", {
+      message: sanitizedIntegrationError(error),
+    });
+    return;
+  }
 
-    await supabase
-      .from("integrations_settings")
-      .update({ last_success_at: new Date().toISOString(), last_error: null, updated_at: new Date().toISOString() })
-      .eq("platform", "paypal");
-
-    console.log("[cron] paypal import ok", { from, to, ...res });
-  } catch (e: any) {
-    await supabase
-      .from("integrations_settings")
-      .update({ last_error: String(e?.message || e), updated_at: new Date().toISOString() })
-      .eq("platform", "paypal");
-
-    console.error("[cron] paypal import failed", e);
+  for (const account of accounts) {
+    try {
+      const settings = await getIntegrationSettings(env, account.credential_platform, {
+        intervalMinutes: 60,
+        lookbackHours: 30,
+      });
+      if (!settings || !(settings as any).auto_import_enabled) {
+        console.log("[cron] gateway transaction sync skipped", {
+          platform: account.platform,
+          account_key: account.account_key,
+          reason: "auto_import_disabled",
+        });
+        continue;
+      }
+      if (!env.wowboost_imports) throw new Error("wowboost_imports queue binding is missing. Check wrangler.toml.");
+      const window = financialSyncWindowFromSettings(settings, now, GATEWAY_TRANSACTION_SYNC_OVERLAP_HOURS);
+      const scheduleKey = financialSyncScheduleSlot(now, Number((settings as any).auto_import_interval_minutes || 60));
+      await supabase
+        .from("integrations_settings")
+        .update({ last_run_at: nowIso, last_error: null, updated_at: nowIso } as any)
+        .eq("platform", account.credential_platform);
+      const created = await createFinancialTransactionSyncJob(env, {
+        workspace_id: workspaceId,
+        account,
+        from: window.from,
+        to: window.to,
+        schedule_key: scheduleKey,
+        scheduled: true,
+        page_size: GATEWAY_TRANSACTION_SYNC_DEFAULT_PAGE_SIZE,
+      });
+      if (!created.created) {
+        await reconcileConnectorRuntimeJobQueue(env, created.job, { reason: "gateway_transaction_sync_duplicate_schedule" }).catch(() => {});
+        console.log("[cron] gateway transaction sync skipped", {
+          platform: account.platform,
+          account_key: account.account_key,
+          reason: "scheduled_job_already_exists",
+          job_id: created.job.id,
+          from: window.from,
+          to: window.to,
+        });
+        continue;
+      }
+      const task = await enqueueFinancialTransactionSyncJob(env, {
+        job: created.job,
+        account,
+        progress: created.progress,
+      });
+      console.log("[cron] gateway transaction sync queued", {
+        platform: account.platform,
+        account_key: account.account_key,
+        job_id: created.job.id,
+        task_id: task.task.id,
+        from: window.from,
+        to: window.to,
+        schedule_key: scheduleKey,
+        financial_ledger_status: "diagnostic_only",
+        enqueue_deferred: Boolean((task as any).enqueue_deferred),
+      });
+    } catch (error: any) {
+      const lastError = sanitizedIntegrationError(error);
+      await supabase
+        .from("integrations_settings")
+        .update({ last_run_at: nowIso, last_error: lastError, updated_at: new Date().toISOString() } as any)
+        .eq("platform", account.credential_platform)
+        .catch(() => {});
+      console.error("[cron] gateway transaction sync scheduling failed", {
+        platform: account.platform,
+        account_key: account.account_key,
+        message: lastError,
+      });
+    }
   }
 }
 
@@ -14135,6 +15023,7 @@ async function runGatewayClassicImportPage(env: Env, args: {
   if (!res.ok) throw new Error(`Gateway classic query failed ${res.status}: ${xml.slice(0, 500)}`);
 
   const transactions = xmlBlocks(xml, "transaction");
+  let latestSourceEventMs = 0;
 
   const upserts = transactions.map((tx) => {
     const id = xmlValue(tx, "transaction_id");
@@ -14167,6 +15056,8 @@ async function runGatewayClassicImportPage(env: Env, args: {
     const isoTs = actionDate
       ? `${actionDate.slice(0, 4)}-${actionDate.slice(4, 6)}-${actionDate.slice(6, 8)}T${actionDate.slice(8, 10)}:${actionDate.slice(10, 12)}:${actionDate.slice(12, 14)}.000Z`
       : `${args.from}T00:00:00.000Z`;
+    const sourceMs = Date.parse(isoTs);
+    if (Number.isFinite(sourceMs) && sourceMs > latestSourceEventMs) latestSourceEventMs = sourceMs;
 
     const rawJson = {
       transaction_id: id,
@@ -14209,6 +15100,7 @@ async function runGatewayClassicImportPage(env: Env, args: {
     pageSize,
     hasMore: transactions.length >= pageSize,
     nextPage: transactions.length >= pageSize ? page + 1 : null,
+    latest_source_event_at: latestSourceEventMs > 0 ? new Date(latestSourceEventMs).toISOString() : null,
   };
 }
 
@@ -21881,6 +22773,7 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
     ctx.waitUntil(runScheduledCheckoutChampImport(env));
     ctx.waitUntil(runScheduledShopifyImport(env));
     ctx.waitUntil(runScheduledPaypalImport(env));
+    ctx.waitUntil(runScheduledGatewayTransactionSnapshotImport(env));
     ctx.waitUntil(runScheduledWowBoostImport(env));
     ctx.waitUntil(runScheduledDomainEventProjectionReplay(getSupabase(env), {
       batch_size: Number(env.LIVE_WORKSPACE_PROJECTION_BATCH_SIZE || 0) || undefined,
