@@ -4,6 +4,9 @@ import {
   aggregateDailyProfitConversions,
   aggregateProfitConversions,
   buildFinancialIssueAnalysis,
+  executiveBucketKey,
+  executiveDashboardRangeBounds,
+  isActiveAffiliateCommission,
   financialIssuePlatformFallbackDecision,
   financialIssueLedgerRowFromPlatformOrder,
   profitDailyKeyFromConversion,
@@ -11,6 +14,9 @@ import {
   profitOrderKeyFromConversion,
   profitOrderKeyId,
   saleLedgerRowFromPlatformOrder,
+  summarizeAffiliateCommissions,
+  summarizeExecutiveSales,
+  type AffiliateCommissionPerformanceRow,
   type FinancialIssueOrderRow,
   toProfitDailyRollupRow,
   toProfitOrderRollupRow,
@@ -161,6 +167,49 @@ test("aggregates daily profit across multiple orders", () => {
   assert.equal(upsert.refunds, -10);
   assert.equal(upsert.processor_fees, -3);
   assert.equal(upsert.net_profit, 137);
+});
+
+test("executive sales count positive active sale events only and dedupes by order or transaction", () => {
+  const result = summarizeExecutiveSales([
+    row("sale", 100, { order_id: "ord_a", transaction_id: "txn_a" }),
+    row("sale", 100, { order_id: "ord_a", transaction_id: "txn_duplicate" }),
+    row("sale", 50, { order_id: "", transaction_id: "txn_b" }),
+    row("sale", 25, { order_id: "", transaction_id: "txn_b" }),
+    row("sale", 20, { order_id: "ord_cancelled", status: "cancelled" }),
+    row("sale", -10, { order_id: "negative_sale" }),
+    row("refund", -10, { order_id: "ord_a" }),
+  ]);
+
+  assert.equal(result.sales_count, 2);
+  assert.equal(result.gross_revenue, 150);
+});
+
+test("executive dashboard day bounds respect the requested timezone", () => {
+  const bounds = executiveDashboardRangeBounds("2026-07-29", "2026-07-29", "America/Los_Angeles");
+
+  assert.ok(bounds);
+  assert.equal(bounds.timeZone, "America/Los_Angeles");
+  assert.equal(bounds.from_iso, "2026-07-29T07:00:00.000Z");
+  assert.equal(bounds.to_iso, "2026-07-30T07:00:00.000Z");
+  assert.equal(executiveBucketKey("2026-07-30T06:59:59.000Z", "America/Los_Angeles", "day"), "2026-07-29");
+  assert.equal(executiveBucketKey("2026-07-30T07:00:00.000Z", "America/Los_Angeles", "day"), "2026-07-30");
+});
+
+test("executive commission summary uses affiliate_commissions and excludes voided rows", () => {
+  const rows: AffiliateCommissionPerformanceRow[] = [
+    { commission_amount: 7.5, attributed_amount: 100, status: "draft" },
+    { commission_amount: 2.5, attributed_amount: 50, status: "paid" },
+    { commission_amount: 99, attributed_amount: 900, status: "voided" },
+  ];
+
+  assert.equal(isActiveAffiliateCommission(rows[0]), true);
+  assert.equal(isActiveAffiliateCommission(rows[2]), false);
+
+  const result = summarizeAffiliateCommissions(rows);
+  assert.equal(result.available, true);
+  assert.equal(result.commission_count, 2);
+  assert.equal(result.commission_amount, 10);
+  assert.equal(result.attributed_amount, 150);
 });
 
 test("builds top-five refund affiliates using distinct affected-order counts", () => {

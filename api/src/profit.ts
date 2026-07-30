@@ -16,6 +16,7 @@ export type ProfitLedgerType =
   | "adjustment";
 
 export type ProfitConversionRow = {
+  id?: string | null;
   workspace_id?: string | null;
   order_id?: string | null;
   connector_id?: string | null;
@@ -25,6 +26,30 @@ export type ProfitConversionRow = {
   ledger_type?: string | null;
   amount?: number | string | null;
   occurred_at?: string | null;
+  transaction_id?: string | null;
+  parent_transaction_id?: string | null;
+  source_event_id?: string | null;
+  status?: string | null;
+  reason?: string | null;
+  raw?: Record<string, unknown> | null;
+  meta?: Record<string, unknown> | null;
+};
+
+export type AffiliateCommissionPerformanceRow = {
+  id?: string | null;
+  commission_event_id?: string | null;
+  conversion_event_id?: string | null;
+  conversion_event_time?: string | null;
+  affiliate_id?: string | null;
+  publisher_id?: string | null;
+  offer_id?: string | null;
+  campaign_id?: string | null;
+  touchpoint_source?: string | null;
+  status?: string | null;
+  attributed_amount?: number | string | null;
+  credit_amount?: number | string | null;
+  commission_amount?: number | string | null;
+  currency?: string | null;
 };
 
 export type ProfitOrderKey = {
@@ -238,6 +263,183 @@ function roundMoney(value: number) {
 function roundRatio(value: number | null) {
   if (value == null || !Number.isFinite(value)) return null;
   return Math.round((value + Number.EPSILON) * 10000) / 10000;
+}
+
+export function normalizeExecutiveDashboardTimezone(value: unknown) {
+  const candidate = cleanText(value, "UTC");
+  try {
+    new Intl.DateTimeFormat("en-US", { timeZone: candidate }).format(new Date());
+    return candidate;
+  } catch {
+    return "UTC";
+  }
+}
+
+function zonedParts(date: Date, timeZone: string) {
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone,
+    hourCycle: "h23",
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    second: "2-digit",
+  }).formatToParts(date);
+  const byType = new Map(parts.map((part) => [part.type, part.value]));
+  return {
+    year: Number(byType.get("year")),
+    month: Number(byType.get("month")),
+    day: Number(byType.get("day")),
+    hour: Number(byType.get("hour")),
+    minute: Number(byType.get("minute")),
+    second: Number(byType.get("second")),
+  };
+}
+
+function timeZoneOffsetMs(date: Date, timeZone: string) {
+  const parts = zonedParts(date, timeZone);
+  const asUtc = Date.UTC(parts.year, parts.month - 1, parts.day, parts.hour, parts.minute, parts.second);
+  return asUtc - date.getTime();
+}
+
+function zonedInstantForLocalDateTime(day: string, timeZone: string) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const date = Number(match[3]);
+  const guess = new Date(Date.UTC(year, month - 1, date, 0, 0, 0, 0));
+  const first = new Date(guess.getTime() - timeZoneOffsetMs(guess, timeZone));
+  return new Date(guess.getTime() - timeZoneOffsetMs(first, timeZone));
+}
+
+function addDaysToYmd(day: string, days: number) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(day);
+  if (!match) return day;
+  const date = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, Number(match[3]) + days, 0, 0, 0, 0));
+  return date.toISOString().slice(0, 10);
+}
+
+export function executiveDashboardRangeBounds(from: string, to: string, timeZoneInput: unknown) {
+  const timeZone = normalizeExecutiveDashboardTimezone(timeZoneInput);
+  const start = zonedInstantForLocalDateTime(from, timeZone);
+  const nextEnd = zonedInstantForLocalDateTime(addDaysToYmd(to, 1), timeZone);
+  if (!start || !nextEnd || nextEnd.getTime() <= start.getTime()) {
+    return null;
+  }
+  return {
+    timeZone,
+    from,
+    to,
+    from_iso: start.toISOString(),
+    to_iso: nextEnd.toISOString(),
+    elapsed_ms: nextEnd.getTime() - start.getTime(),
+  };
+}
+
+export function executivePreviousRangeBounds(current: { from_iso: string; to_iso: string; elapsed_ms: number }) {
+  const currentStart = new Date(current.from_iso).getTime();
+  const previousEnd = new Date(current.to_iso).getTime() - current.elapsed_ms;
+  const previousStart = currentStart - current.elapsed_ms;
+  return {
+    from_iso: new Date(previousStart).toISOString(),
+    to_iso: new Date(previousEnd).toISOString(),
+  };
+}
+
+export function executiveBucketKey(value: unknown, timeZoneInput: unknown, granularity: "hour" | "day") {
+  const dt = new Date(String(value || ""));
+  if (!Number.isFinite(dt.getTime())) return null;
+  const timeZone = normalizeExecutiveDashboardTimezone(timeZoneInput);
+  const parts = zonedParts(dt, timeZone);
+  const day = [
+    String(parts.year).padStart(4, "0"),
+    String(parts.month).padStart(2, "0"),
+    String(parts.day).padStart(2, "0"),
+  ].join("-");
+  if (granularity === "day") return day;
+  return `${day} ${String(parts.hour).padStart(2, "0")}:00`;
+}
+
+const EXECUTIVE_SALE_EXCLUDED_STATUS_PARTS = [
+  "refund",
+  "refunded",
+  "chargeback",
+  "cancel",
+  "cancelled",
+  "canceled",
+  "void",
+  "failed",
+  "declined",
+  "test",
+];
+
+export function isExecutiveSaleConversion(row: ProfitConversionRow) {
+  if (String(row.ledger_type || "") !== "sale") return false;
+  if (numberFrom(row.amount) <= 0) return false;
+  const status = String(row.status || "").trim().toLowerCase();
+  if (status && EXECUTIVE_SALE_EXCLUDED_STATUS_PARTS.some((part) => status.includes(part))) return false;
+  return true;
+}
+
+export function executiveSaleKey(row: ProfitConversionRow, fallbackIndex = 0) {
+  const workspaceId = normalizeProfitWorkspace(row.workspace_id);
+  const currency = normalizeProfitCurrency(row.currency);
+  const platform = cleanText(row.platform, "unknown");
+  const connector = normalizeProfitConnector(row.connector_id);
+  const orderId = cleanText(row.order_id, "");
+  if (orderId) return `${workspaceId}\u001f${currency}\u001forder\u001f${connector}\u001f${orderId}`;
+  const transactionId = cleanText(row.transaction_id, "");
+  if (transactionId) return `${workspaceId}\u001f${currency}\u001ftxn\u001f${platform}\u001f${transactionId}`;
+  const sourceEventId = cleanText(row.source_event_id, "");
+  if (sourceEventId) return `${workspaceId}\u001f${currency}\u001fsource\u001f${platform}\u001f${sourceEventId}`;
+  const id = cleanText(row.id, "");
+  if (id) return `${workspaceId}\u001f${currency}\u001fid\u001f${id}`;
+  return `${workspaceId}\u001f${currency}\u001ffallback\u001f${cleanText(row.occurred_at, "unknown")}\u001f${numberFrom(row.amount)}\u001f${fallbackIndex}`;
+}
+
+export function summarizeExecutiveSales(rows: ProfitConversionRow[]) {
+  const seen = new Set<string>();
+  let grossRevenue = 0;
+
+  rows.forEach((row, index) => {
+    if (!isExecutiveSaleConversion(row)) return;
+    const key = executiveSaleKey(row, index);
+    if (seen.has(key)) return;
+    seen.add(key);
+    grossRevenue += numberFrom(row.amount);
+  });
+
+  return {
+    sales_count: seen.size,
+    gross_revenue: roundMoney(grossRevenue),
+  };
+}
+
+export function isActiveAffiliateCommission(row: AffiliateCommissionPerformanceRow) {
+  const status = String(row.status || "").trim().toLowerCase();
+  return status !== "voided" && status !== "reversed";
+}
+
+export function summarizeAffiliateCommissions(rows: AffiliateCommissionPerformanceRow[]) {
+  let commissionAmount = 0;
+  let attributedAmount = 0;
+  let count = 0;
+
+  for (const row of rows) {
+    if (!isActiveAffiliateCommission(row)) continue;
+    count += 1;
+    commissionAmount += numberFrom(row.commission_amount);
+    attributedAmount += numberFrom(row.attributed_amount ?? row.credit_amount);
+  }
+
+  return {
+    commission_count: count,
+    commission_amount: roundMoney(commissionAmount),
+    attributed_amount: roundMoney(attributedAmount),
+    available: count > 0,
+  };
 }
 
 function firstText(...values: unknown[]) {
