@@ -5,8 +5,13 @@ import {
   aggregateProfitConversions,
   buildFinancialIssueAnalysis,
   executiveBucketKey,
+  executiveCommerceOrderType,
+  executiveCommerceSourceBrand,
+  executiveCommerceUnitsSold,
   executiveDashboardRangeBounds,
   isActiveAffiliateCommission,
+  isExecutiveCommerceOrder,
+  isExecutiveCommerceSale,
   financialIssuePlatformFallbackDecision,
   financialIssueLedgerRowFromPlatformOrder,
   profitDailyKeyFromConversion,
@@ -15,8 +20,10 @@ import {
   profitOrderKeyId,
   saleLedgerRowFromPlatformOrder,
   summarizeAffiliateCommissions,
+  summarizeExecutiveCommerceOrders,
   summarizeExecutiveSales,
   type AffiliateCommissionPerformanceRow,
+  type ExecutiveCommerceOrderRow,
   type FinancialIssueOrderRow,
   toProfitDailyRollupRow,
   toProfitOrderRollupRow,
@@ -210,6 +217,87 @@ test("executive commission summary uses affiliate_commissions and excludes voide
   assert.equal(result.commission_count, 2);
   assert.equal(result.commission_amount, 10);
   assert.equal(result.attributed_amount, 150);
+});
+
+function commerceRow(extra: Partial<ExecutiveCommerceOrderRow> = {}): ExecutiveCommerceOrderRow {
+  return {
+    workspace_id: "default",
+    platform: "wowboost",
+    platform_order_id: "wowboost:1",
+    order_id: "1",
+    gross_amount: 99,
+    currency: "USD",
+    order_ts: "2026-07-29T12:00:00.000Z",
+    status: "completed",
+    raw_json: {
+      Brand: "Life Heater",
+      "Order Type": "Regular Order",
+      "Order Quantity (Units Sold)": "2",
+    },
+    ...extra,
+  };
+}
+
+test("executive commerce definition counts regular order sales separately from upsell orders", () => {
+  const regular = commerceRow({ platform_order_id: "wowboost:regular" });
+  const upsell = commerceRow({
+    platform_order_id: "wowboost:upsell",
+    raw_json: { Brand: "Life Heater", "Order Type": "Upsell Order", "Order Quantity (Units Sold)": "1" },
+  });
+
+  assert.equal(executiveCommerceOrderType(regular), "Regular Order");
+  assert.equal(isExecutiveCommerceOrder(regular), true);
+  assert.equal(isExecutiveCommerceSale(regular), true);
+  assert.equal(isExecutiveCommerceOrder(upsell), true);
+  assert.equal(isExecutiveCommerceSale(upsell), false);
+
+  const result = summarizeExecutiveCommerceOrders([regular, upsell]);
+  assert.equal(result.sales_count, 1);
+  assert.equal(result.order_count, 2);
+  assert.equal(result.units_sold, 3);
+  assert.deepEqual(result.sales_revenue_by_currency, [{ currency: "USD", amount: 99 }]);
+  assert.deepEqual(result.order_revenue_by_currency, [{ currency: "USD", amount: 198 }]);
+  assert.deepEqual(result.average_order_value_by_currency, [{ currency: "USD", amount: 99 }]);
+});
+
+test("executive commerce excludes refunded chargeback cancelled void failed declined abandoned and test rows", () => {
+  for (const status of ["refunded", "chargeback", "cancelled", "voided", "failed", "declined", "abandoned", "test order"]) {
+    assert.equal(isExecutiveCommerceOrder(commerceRow({ status })), false, status);
+  }
+
+  assert.equal(isExecutiveCommerceOrder(commerceRow({ gross_amount: 0 })), false);
+  assert.equal(
+    isExecutiveCommerceOrder(commerceRow({ raw_json: { Brand: "Life Heater", "Order Type": "Lead" } })),
+    false,
+  );
+});
+
+test("executive commerce uses exact raw Brand and keeps unknown brand explicit", () => {
+  assert.equal(executiveCommerceSourceBrand(commerceRow()), "Life Heater");
+  assert.equal(executiveCommerceSourceBrand(commerceRow({ raw_json: { "Order Type": "Regular Order" } })), "Unknown brand");
+
+  const result = summarizeExecutiveCommerceOrders([
+    commerceRow({ platform_order_id: "wowboost:lifeheater" }),
+    commerceRow({ platform_order_id: "wowboost:unknown", raw_json: { "Order Type": "Regular Order" } }),
+  ], { brand: "Life Heater" });
+
+  assert.equal(result.order_count, 1);
+  assert.equal(result.sales_count, 1);
+});
+
+test("executive commerce preserves currencies and dedupes platform order snapshots", () => {
+  const result = summarizeExecutiveCommerceOrders([
+    commerceRow({ platform_order_id: "wowboost:1", gross_amount: 50, currency: "USD" }),
+    commerceRow({ platform_order_id: "wowboost:1", gross_amount: 75, currency: "USD" }),
+    commerceRow({ platform_order_id: "wowboost:2", gross_amount: 100, currency: "CAD" }),
+  ]);
+
+  assert.equal(result.order_count, 2);
+  assert.deepEqual(result.order_revenue_by_currency, [
+    { currency: "CAD", amount: 100 },
+    { currency: "USD", amount: 75 },
+  ]);
+  assert.deepEqual(result.currencies, ["CAD", "USD"]);
 });
 
 test("builds top-five refund affiliates using distinct affected-order counts", () => {

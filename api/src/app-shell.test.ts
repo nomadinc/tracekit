@@ -51,20 +51,30 @@ test("home command center consumes one composed Home API and preserves overview 
   assert.doesNotMatch(home, /\/v1\/kpis|\/v1\/revenue-spend|\/api\/setup-wizard/);
 });
 
-test("dashboard renders executive performance modules from the profit summary extension", () => {
+test("dashboard renders executive dashboard modules from the dedicated endpoint", () => {
   const dashboard = readRepoFile("ui/app/(app)/dashboard/decision-home-overview.tsx");
+  const proxy = readRepoFile("ui/app/api/executive-dashboard/route.ts");
+  const worker = readRepoFile("api/src/index.ts");
 
-  assert.match(dashboard, /Executive Performance/);
-  assert.match(dashboard, /How are we doing today\?/);
-  assert.match(dashboard, /include_executive_performance/);
+  assert.match(dashboard, /Executive Dashboard v2/);
+  assert.match(dashboard, /Business Performance/);
+  assert.match(dashboard, /\/api\/executive-dashboard/);
   assert.match(dashboard, /sameOriginGetJson/);
+  assert.doesNotMatch(dashboard, /apiGetJson/);
+  assert.doesNotMatch(dashboard, /include_executive_performance/);
   assert.match(dashboard, /\/api\/financial-reconciliation/);
   assert.match(dashboard, /\/api\/financial-import-monitor/);
   assert.match(dashboard, /\/api\/operations\/summary/);
-  assert.match(dashboard, /Affiliate Commission/);
+  assert.match(dashboard, /Accrued Affiliate Commission/);
   assert.match(dashboard, /Which affiliates are profitable\?/);
   assert.match(dashboard, /Financial Imports/);
   assert.match(dashboard, /Financial Health/);
+  assert.match(dashboard, /Commerce data is incomplete for today/);
+  assert.match(dashboard, /raw_json\.Brand/);
+  assert.match(proxy, /\/v1\/executive-dashboard/);
+  assert.match(proxy, /x-tk-secret/);
+  assert.match(worker, /path === "\/v1\/executive-dashboard"/);
+  assert.match(worker, /EXECUTIVE_DASHBOARD_PLATFORM_ORDER_SELECT/);
   assert.doesNotMatch(dashboard, /\/v1\/revenue-spend/);
 });
 
@@ -143,7 +153,7 @@ test("decision home links to dedicated refund and chargeback analysis routes", (
   const analysisClient = readRepoFile("ui/app/(app)/dashboard/financial-issue-analysis-client.tsx");
   const worker = readRepoFile("api/src/index.ts");
 
-  assert.match(decisionHome, /\$\{row\.href\}\?\$\{rangeQuery\(range\)\}/);
+  assert.match(decisionHome, /\$\{row\.href\}\?\$\{rangeQuery\(range, \{ brand \}\)\}/);
   assert.match(worker, /href: "\/dashboard\/refunds"/);
   assert.match(worker, /href: "\/dashboard\/chargebacks"/);
   assert.match(refundPage, /<FinancialIssueAnalysisClient kind="refund" \/>/);

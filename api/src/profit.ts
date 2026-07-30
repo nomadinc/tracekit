@@ -442,6 +442,170 @@ export function summarizeAffiliateCommissions(rows: AffiliateCommissionPerforman
   };
 }
 
+export type ExecutiveCommerceOrderRow = FinancialIssueOrderRow & {
+  person_id?: string | null;
+  platform_store_id?: string | null;
+  everflow_offer_id?: string | null;
+};
+
+export type ExecutiveCommerceSummary = {
+  sales_count: number;
+  order_count: number;
+  units_sold: number;
+  sales_revenue_by_currency: Array<{ currency: string; amount: number }>;
+  order_revenue_by_currency: Array<{ currency: string; amount: number }>;
+  average_order_value_by_currency: Array<{ currency: string; amount: number }>;
+  currencies: string[];
+};
+
+export const EXECUTIVE_COMMERCE_ORDER_TYPES = [
+  "Regular Order",
+  "Upsell Order",
+  "Mini Upsell Order",
+] as const;
+
+export const EXECUTIVE_COMMERCE_EXCLUDED_STATUS_PARTS = [
+  "refund",
+  "chargeback",
+  "dispute",
+  "cancel",
+  "cancelled",
+  "canceled",
+  "void",
+  "failed",
+  "declined",
+  "abandon",
+  "abort",
+  "test",
+];
+
+export function executiveCommerceOrderType(row: ExecutiveCommerceOrderRow) {
+  return rawText(row.raw_json, [
+    "Order Type",
+    "orderType",
+    "order_type",
+  ]) || "";
+}
+
+export function executiveCommerceSourceBrand(row: ExecutiveCommerceOrderRow) {
+  const brand = rawText(row.raw_json, ["Brand", "brand"]);
+  return brand || "Unknown brand";
+}
+
+export function executiveCommerceUnitsSold(row: ExecutiveCommerceOrderRow) {
+  const raw = row.raw_json;
+  const source =
+    rawText(raw, ["Order Quantity (Units Sold)", "Units Sold", "units_sold"]) ||
+    rawText(raw, ["quantity", "qty", "currentQty"]);
+  const units = Number(String(source || "").replace(/,/g, ""));
+  return Number.isFinite(units) && units > 0 ? units : 1;
+}
+
+function executiveCommerceStatusText(row: ExecutiveCommerceOrderRow) {
+  return [
+    row.status_norm,
+    row.status,
+    rawText(row.raw_json, ["Order Status Name", "OrderStatus", "orderStatus", "status"]),
+    rawText(row.raw_json, ["Receipt Status Name", "PaymentStatus", "paymentStatus"]),
+    rawText(row.raw_json, ["Order Behavior Name", "orderBehaviorName"]),
+  ].map((value) => String(value || "").trim()).filter(Boolean).join(" | ").toLowerCase();
+}
+
+export function isExecutiveCommerceOrder(row: ExecutiveCommerceOrderRow) {
+  if (numberFrom(row.gross_amount) <= 0) return false;
+  const orderType = executiveCommerceOrderType(row);
+  if (!EXECUTIVE_COMMERCE_ORDER_TYPES.includes(orderType as any)) return false;
+  const status = executiveCommerceStatusText(row);
+  if (status && EXECUTIVE_COMMERCE_EXCLUDED_STATUS_PARTS.some((part) => status.includes(part))) return false;
+  return true;
+}
+
+export function isExecutiveCommerceSale(row: ExecutiveCommerceOrderRow) {
+  return isExecutiveCommerceOrder(row) && executiveCommerceOrderType(row) === "Regular Order";
+}
+
+export function executiveCommerceRowKey(row: ExecutiveCommerceOrderRow, fallbackIndex = 0) {
+  const workspaceId = normalizeProfitWorkspace(row.workspace_id);
+  const platform = cleanText(row.platform, "unknown");
+  const platformOrderId = cleanText(row.platform_order_id, "");
+  if (platformOrderId) return `${workspaceId}\u001f${platform}\u001fplatform_order\u001f${platformOrderId}`;
+
+  const orderId = cleanText(row.order_id, "");
+  const brand = executiveCommerceSourceBrand(row);
+  const currency = normalizeProfitCurrency(row.currency);
+  if (orderId) return `${workspaceId}\u001f${platform}\u001forder\u001f${orderId}\u001f${brand}\u001f${currency}`;
+
+  return `${workspaceId}\u001f${platform}\u001ffallback\u001f${cleanText(row.order_ts, "unknown")}\u001f${numberFrom(row.gross_amount)}\u001f${fallbackIndex}`;
+}
+
+function addCurrencyAmount(map: Map<string, number>, currency: unknown, amount: unknown) {
+  const key = normalizeProfitCurrency(currency);
+  map.set(key, (map.get(key) || 0) + numberFrom(amount));
+}
+
+function currencyAmountRows(map: Map<string, number>) {
+  return Array.from(map.entries())
+    .map(([currency, amount]) => ({ currency, amount: roundMoney(amount) }))
+    .sort((a, b) => a.currency.localeCompare(b.currency));
+}
+
+export function summarizeExecutiveCommerceOrders(
+  rows: ExecutiveCommerceOrderRow[],
+  options: { brand?: string | null } = {},
+): ExecutiveCommerceSummary {
+  const selectedBrand = firstText(options.brand);
+  const deduped = new Map<string, ExecutiveCommerceOrderRow>();
+
+  rows.forEach((row, index) => {
+    if (!isExecutiveCommerceOrder(row)) return;
+    if (selectedBrand && executiveCommerceSourceBrand(row) !== selectedBrand) return;
+    deduped.set(executiveCommerceRowKey(row, index), row);
+  });
+
+  const orderRevenueByCurrency = new Map<string, number>();
+  const salesRevenueByCurrency = new Map<string, number>();
+  const orderCountByCurrency = new Map<string, number>();
+  let salesCount = 0;
+  let unitsSold = 0;
+
+  for (const row of deduped.values()) {
+    const currency = normalizeProfitCurrency(row.currency);
+    addCurrencyAmount(orderRevenueByCurrency, currency, row.gross_amount);
+    orderCountByCurrency.set(currency, (orderCountByCurrency.get(currency) || 0) + 1);
+    unitsSold += executiveCommerceUnitsSold(row);
+
+    if (isExecutiveCommerceSale(row)) {
+      salesCount += 1;
+      addCurrencyAmount(salesRevenueByCurrency, currency, row.gross_amount);
+    }
+  }
+
+  const averageOrderValueByCurrency = Array.from(orderRevenueByCurrency.entries())
+    .map(([currency, amount]) => {
+      const count = orderCountByCurrency.get(currency) || 0;
+      return {
+        currency,
+        amount: count > 0 ? roundMoney(amount / count) : 0,
+      };
+    })
+    .sort((a, b) => a.currency.localeCompare(b.currency));
+
+  const currencies = Array.from(new Set([
+    ...Array.from(orderRevenueByCurrency.keys()),
+    ...Array.from(salesRevenueByCurrency.keys()),
+  ])).sort();
+
+  return {
+    sales_count: salesCount,
+    order_count: deduped.size,
+    units_sold: unitsSold,
+    sales_revenue_by_currency: currencyAmountRows(salesRevenueByCurrency),
+    order_revenue_by_currency: currencyAmountRows(orderRevenueByCurrency),
+    average_order_value_by_currency: averageOrderValueByCurrency,
+    currencies,
+  };
+}
+
 function firstText(...values: unknown[]) {
   for (const value of values) {
     const text = String(value ?? "").trim();

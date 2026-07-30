@@ -168,6 +168,136 @@ export type ExecutivePerformanceResponse = {
   };
 };
 
+export type ExecutiveDashboardCurrencyAmount = {
+  currency: string;
+  amount: number;
+};
+
+export type ExecutiveDashboardMetric = {
+  event_count?: number | null;
+  affected_orders?: number | null;
+  amount_by_currency?: ExecutiveDashboardCurrencyAmount[];
+  rate_by_orders?: number | null;
+};
+
+export type ExecutiveDashboardCommerceSummary = {
+  sales_count: number;
+  order_count: number;
+  units_sold: number;
+  customer_count?: number | null;
+  customer_count_unavailable_reason?: string | null;
+  gross_revenue_by_currency: ExecutiveDashboardCurrencyAmount[];
+  total_order_revenue_by_currency: ExecutiveDashboardCurrencyAmount[];
+  average_order_value_by_currency: ExecutiveDashboardCurrencyAmount[];
+  previous?: {
+    sales_count?: number | null;
+    order_count?: number | null;
+    gross_revenue_by_currency?: ExecutiveDashboardCurrencyAmount[];
+    total_order_revenue_by_currency?: ExecutiveDashboardCurrencyAmount[];
+  };
+  deltas?: {
+    sales_count?: ExecutiveDelta | null;
+    order_count?: ExecutiveDelta | null;
+    gross_revenue?: ExecutiveDelta | null;
+  };
+  trend?: ExecutiveDashboardTrendPoint[];
+  diagnostics?: Record<string, unknown>;
+};
+
+export type ExecutiveDashboardTrendPoint = {
+  date: string;
+  sales_count?: number | null;
+  order_count?: number | null;
+  units_sold?: number | null;
+  gross_revenue_by_currency?: ExecutiveDashboardCurrencyAmount[];
+  order_revenue_by_currency?: ExecutiveDashboardCurrencyAmount[];
+  refund_amount_by_currency?: ExecutiveDashboardCurrencyAmount[];
+  chargeback_amount_by_currency?: ExecutiveDashboardCurrencyAmount[];
+  affiliate_commission_by_currency?: ExecutiveDashboardCurrencyAmount[];
+  after_affiliate_commission_by_currency?: ExecutiveDashboardCurrencyAmount[];
+};
+
+export type ExecutiveDashboardRankingRow = {
+  key?: string | null;
+  label: string;
+  sales_count: number;
+  order_count: number;
+  units_sold: number;
+  revenue_by_currency: ExecutiveDashboardCurrencyAmount[];
+  brands?: Array<{ brand: string; order_count: number }>;
+};
+
+export type ExecutiveDashboardBrandRow = ExecutiveDashboardCommerceSummary & {
+  brand: string;
+};
+
+export type ExecutiveDashboardResponse = {
+  ok?: boolean;
+  error?: string;
+  message?: string;
+  workspace_id?: string | null;
+  generated_at?: string | null;
+  partial?: boolean | null;
+  partial_reasons?: Array<{ code?: string | null; message?: string | null; severity?: string | null }>;
+  filters?: {
+    period?: string | null;
+    timezone?: string | null;
+    timezone_source?: string | null;
+    currency?: string | null;
+    currencies?: string[];
+    brand?: string | null;
+    range?: {
+      from?: string | null;
+      to?: string | null;
+      from_iso?: string | null;
+      to_iso?: string | null;
+      previous_from_iso?: string | null;
+      previous_to_iso?: string | null;
+    };
+    coverage?: {
+      commerce_latest_order_at?: string | null;
+      requested_period_end?: string | null;
+      is_current?: boolean | null;
+    };
+  };
+  business?: ExecutiveDashboardCommerceSummary & {
+    commerce_source?: string | null;
+    sales_definition?: string | null;
+    orders_definition?: string | null;
+  };
+  attribution?: {
+    affiliate_rankings?: ExecutiveDashboardRankingRow[];
+    source_rankings?: ExecutiveDashboardRankingRow[];
+    diagnostics?: Record<string, unknown>;
+  };
+  financial?: {
+    ledger_source?: string | null;
+    refunds?: ExecutiveDashboardMetric;
+    chargebacks?: ExecutiveDashboardMetric;
+    chargeback_fees?: ExecutiveDashboardMetric;
+    chargeback_reversals?: ExecutiveDashboardMetric;
+    chargeback_fee_reversals?: ExecutiveDashboardMetric;
+    accrued_affiliate_commission?: {
+      available?: boolean | null;
+      commission_count?: number | null;
+      amount_by_currency?: ExecutiveDashboardCurrencyAmount[];
+      source?: string | null;
+    };
+    after_affiliate_commission_by_currency?: ExecutiveDashboardCurrencyAmount[];
+    diagnostics?: Record<string, unknown>;
+  };
+  operations?: {
+    scope?: string | null;
+    health_sources?: string[];
+    notes?: string[];
+  };
+  brands?: {
+    resolver?: string | null;
+    selected?: string | null;
+    available?: ExecutiveDashboardBrandRow[];
+  };
+};
+
 export type ProfitRollup = {
   workspace_id?: string | null;
   order_id?: string | null;

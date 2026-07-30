@@ -20,10 +20,17 @@ import {
   buildFinancialIssueAnalysis,
   conversionMatchesDailyKey,
   conversionMatchesOrderKey,
+  EXECUTIVE_COMMERCE_EXCLUDED_STATUS_PARTS,
   executiveBucketKey,
+  executiveCommerceSourceBrand,
+  executiveCommerceRowKey,
+  executiveCommerceOrderType,
+  executiveCommerceUnitsSold,
   executiveDashboardRangeBounds,
   executivePreviousRangeBounds,
   financialIssuePlatformFallbackDecision,
+  isExecutiveCommerceOrder,
+  isExecutiveCommerceSale,
   isActiveAffiliateCommission,
   profitDailyKeyFromConversion,
   profitDailyKeyId,
@@ -31,11 +38,13 @@ import {
   profitOrderKeyId,
   saleLedgerRowFromPlatformOrder,
   summarizeAffiliateCommissions,
+  summarizeExecutiveCommerceOrders,
   summarizeExecutiveSales,
   sumProfitTotals,
   toProfitDailyRollupRow,
   toProfitOrderRollupRow,
   type AffiliateCommissionPerformanceRow,
+  type ExecutiveCommerceOrderRow,
   type FinancialIssueKind,
   type FinancialIssueLedgerRow,
   type FinancialIssueOrderRow,
@@ -2134,6 +2143,16 @@ const FINANCIAL_ISSUE_ANALYSIS_PLATFORM_CANDIDATE_SELECT =
 const FINANCIAL_ISSUE_ANALYSIS_PLATFORM_LOOKUP_SELECT =
   "workspace_id,platform_order_id,order_id,platform,order_ts,affiliate_id,source_id,sub1,sub2,sub3,sub4,sub5,raw_json";
 
+const EXECUTIVE_DASHBOARD_PLATFORM_ORDER_SELECT =
+  "workspace_id,platform,platform_order_id,order_id,person_id,platform_store_id,everflow_offer_id,status,status_norm,gross_amount,receipt_total,currency,order_ts,affiliate_id,source_id,sub1,sub2,sub3,sub4,sub5,raw_json,created_at,updated_at";
+const EXECUTIVE_DASHBOARD_FINANCIAL_TYPES = [
+  "refund",
+  "chargeback",
+  "chargeback_fee",
+  "chargeback_reversal",
+  "chargeback_fee_reversal",
+];
+
 const FINANCIAL_ISSUE_ANALYSIS_LEDGER_SCAN_LIMIT = 10_000;
 const FINANCIAL_ISSUE_PLATFORM_SCAN_LIMIT = 10_000;
 const FINANCIAL_ISSUE_PLATFORM_FALLBACK_PLATFORMS = ["wowboost", "wowsuite:wowboost", "wowsuite"];
@@ -3173,6 +3192,518 @@ async function buildExecutivePerformancePayload(
         "conversions.ledger_type = sale, amount > 0, non-cancelled/non-refunded/non-chargeback status, deduped by order_id then transaction/source identifiers.",
       commission_source:
         "affiliate_commissions.commission_amount by conversion_event_time, excluding voided/reversed rows; absence is reported as unavailable.",
+    },
+  };
+}
+
+function executiveAmountByCurrencyRows(map: Map<string, number>) {
+  return Array.from(map.entries())
+    .map(([currency, amount]) => ({ currency, amount: dashboardRoundMoney(amount) }))
+    .sort((a, b) => a.currency.localeCompare(b.currency));
+}
+
+function executiveAddAmount(map: Map<string, number>, currency: unknown, amount: unknown) {
+  const key = dashboardText(currency).toUpperCase() || "USD";
+  map.set(key, (map.get(key) || 0) + dashboardNumber(amount));
+}
+
+function executiveAmountForCurrency(rows: Array<{ currency?: string | null; amount?: number | null }>, currency: string | null) {
+  if (!currency) return rows.length === 1 ? dashboardNumber(rows[0]?.amount) : null;
+  const match = rows.find((row) => dashboardText(row.currency).toUpperCase() === currency.toUpperCase());
+  return match ? dashboardNumber(match.amount) : 0;
+}
+
+async function selectExecutiveDashboardPlatformOrders(
+  supabase: SupabaseClientAny,
+  filters: {
+    workspace_id: string;
+    from_iso: string;
+    to_iso: string;
+    currency?: string | null;
+  },
+) {
+  const rows: ExecutiveCommerceOrderRow[] = [];
+  const pageSize = 1000;
+  let scannedAll = true;
+
+  for (let offset = 0; offset < EXECUTIVE_PERFORMANCE_SCAN_LIMIT; offset += pageSize) {
+    let query = supabase
+      .from("platform_orders")
+      .select(EXECUTIVE_DASHBOARD_PLATFORM_ORDER_SELECT)
+      .eq("workspace_id", filters.workspace_id)
+      .gte("order_ts", filters.from_iso)
+      .lt("order_ts", filters.to_iso)
+      .order("order_ts", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+
+    if (filters.currency) query = query.eq("currency", String(filters.currency).toUpperCase());
+
+    const { data, error } = await query;
+    if (error) throw new Error(`Executive dashboard commerce read failed: ${error.message}`);
+    rows.push(...((data || []) as ExecutiveCommerceOrderRow[]));
+    if (!data || data.length < pageSize) return { rows, scanned_all: scannedAll };
+    if (rows.length >= EXECUTIVE_PERFORMANCE_SCAN_LIMIT) scannedAll = false;
+  }
+
+  return { rows, scanned_all: false };
+}
+
+async function selectExecutiveDashboardLatestOrderAt(supabase: SupabaseClientAny, workspaceId: string) {
+  const { data, error } = await supabase
+    .from("platform_orders")
+    .select("order_ts")
+    .eq("workspace_id", workspaceId)
+    .not("order_ts", "is", null)
+    .order("order_ts", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (error) throw new Error(`Executive dashboard commerce coverage read failed: ${error.message}`);
+  return dashboardText(data?.order_ts) || null;
+}
+
+async function selectExecutiveDashboardFinancialRows(
+  supabase: SupabaseClientAny,
+  filters: {
+    workspace_id: string;
+    from_iso: string;
+    to_iso: string;
+    currency?: string | null;
+  },
+) {
+  const rows: ProfitConversionRow[] = [];
+  const pageSize = 1000;
+  let scannedAll = true;
+
+  for (let offset = 0; offset < EXECUTIVE_PERFORMANCE_SCAN_LIMIT; offset += pageSize) {
+    let query = supabase
+      .from("conversions")
+      .select(PROFIT_CONVERSION_SELECT)
+      .eq("workspace_id", filters.workspace_id)
+      .in("ledger_type", EXECUTIVE_DASHBOARD_FINANCIAL_TYPES)
+      .gte("occurred_at", filters.from_iso)
+      .lt("occurred_at", filters.to_iso)
+      .order("occurred_at", { ascending: true })
+      .range(offset, offset + pageSize - 1);
+
+    if (filters.currency) query = query.eq("currency", String(filters.currency).toUpperCase());
+
+    const { data, error } = await query;
+    if (error) throw new Error(`Executive dashboard financial event read failed: ${error.message}`);
+    rows.push(...((data || []) as ProfitConversionRow[]));
+    if (!data || data.length < pageSize) return { rows, scanned_all: scannedAll };
+    if (rows.length >= EXECUTIVE_PERFORMANCE_SCAN_LIMIT) scannedAll = false;
+  }
+
+  return { rows, scanned_all: false };
+}
+
+function executiveFinancialMetric(rows: ProfitConversionRow[], ledgerTypes: string[], denominatorOrders: number) {
+  const amountByCurrency = new Map<string, number>();
+  const affectedOrders = new Set<string>();
+  let eventCount = 0;
+
+  for (const row of rows) {
+    if (!ledgerTypes.includes(dashboardText(row.ledger_type))) continue;
+    eventCount += 1;
+    executiveAddAmount(amountByCurrency, row.currency, Math.abs(dashboardNumber(row.amount)));
+    const orderId = dashboardText(row.order_id);
+    if (orderId) affectedOrders.add(orderId);
+  }
+
+  return {
+    event_count: eventCount,
+    affected_orders: affectedOrders.size,
+    amount_by_currency: executiveAmountByCurrencyRows(amountByCurrency),
+    rate_by_orders: denominatorOrders > 0 ? dashboardRoundRatio(affectedOrders.size / denominatorOrders) : null,
+  };
+}
+
+function executiveFinancialAmountRows(rows: ProfitConversionRow[], ledgerTypes: string[]) {
+  const amountByCurrency = new Map<string, number>();
+  for (const row of rows) {
+    if (!ledgerTypes.includes(dashboardText(row.ledger_type))) continue;
+    executiveAddAmount(amountByCurrency, row.currency, Math.abs(dashboardNumber(row.amount)));
+  }
+  return executiveAmountByCurrencyRows(amountByCurrency);
+}
+
+function executiveCommissionAmountRows(rows: AffiliateCommissionPerformanceRow[]) {
+  const amountByCurrency = new Map<string, number>();
+  for (const row of rows) {
+    if (!isActiveAffiliateCommission(row)) continue;
+    executiveAddAmount(amountByCurrency, row.currency, row.commission_amount);
+  }
+  return executiveAmountByCurrencyRows(amountByCurrency);
+}
+
+function executiveTrendFromCommerceAndFinancials(
+  commerceRows: ExecutiveCommerceOrderRow[],
+  financialRows: ProfitConversionRow[],
+  commissionRows: AffiliateCommissionPerformanceRow[],
+  timeZone: string,
+  granularity: "hour" | "day",
+  brand?: string | null,
+) {
+  const keys = new Set<string>();
+  const commerceBuckets = new Map<string, ExecutiveCommerceOrderRow[]>();
+  const financialBuckets = new Map<string, ProfitConversionRow[]>();
+  const commissionBuckets = new Map<string, AffiliateCommissionPerformanceRow[]>();
+
+  for (const row of commerceRows) {
+    const key = executiveBucketKey(row.order_ts, timeZone, granularity);
+    if (!key) continue;
+    keys.add(key);
+    commerceBuckets.set(key, [...(commerceBuckets.get(key) || []), row]);
+  }
+  for (const row of financialRows) {
+    const key = executiveBucketKey(row.occurred_at, timeZone, granularity);
+    if (!key) continue;
+    keys.add(key);
+    financialBuckets.set(key, [...(financialBuckets.get(key) || []), row]);
+  }
+  for (const row of commissionRows) {
+    const key = executiveBucketKey(row.conversion_event_time, timeZone, granularity);
+    if (!key) continue;
+    keys.add(key);
+    commissionBuckets.set(key, [...(commissionBuckets.get(key) || []), row]);
+  }
+
+  return Array.from(keys).sort().map((key) => {
+    const commerce = summarizeExecutiveCommerceOrders(commerceBuckets.get(key) || [], { brand });
+    const commissions = summarizeAffiliateCommissions(commissionBuckets.get(key) || []);
+    return {
+      date: key,
+      sales_count: commerce.sales_count,
+      order_count: commerce.order_count,
+      units_sold: commerce.units_sold,
+      gross_revenue_by_currency: commerce.sales_revenue_by_currency,
+      order_revenue_by_currency: commerce.order_revenue_by_currency,
+      refund_amount_by_currency: executiveFinancialAmountRows(financialBuckets.get(key) || [], ["refund"]),
+      chargeback_amount_by_currency: executiveFinancialAmountRows(financialBuckets.get(key) || [], ["chargeback"]),
+      affiliate_commission_by_currency: executiveCommissionAmountRows(commissionBuckets.get(key) || []),
+      after_affiliate_commission_by_currency: commissions.available
+        ? commerce.sales_revenue_by_currency.map((row) => ({
+            currency: row.currency,
+            amount: dashboardRoundMoney(row.amount - (executiveAmountForCurrency(executiveCommissionAmountRows(commissionBuckets.get(key) || []), row.currency) || 0)),
+          }))
+        : [],
+    };
+  });
+}
+
+function executiveRankCommerceRows(
+  rows: ExecutiveCommerceOrderRow[],
+  options: { key: "affiliate_id" | "source_id"; brand?: string | null; limit?: number } = { key: "affiliate_id" },
+) {
+  const selectedBrand = dashboardText(options.brand);
+  const byKey = new Map<string, any>();
+  rows.forEach((row, index) => {
+    if (!isExecutiveCommerceOrder(row)) return;
+    if (selectedBrand && executiveCommerceSourceBrand(row) !== selectedBrand) return;
+    const key = dashboardText(row[options.key]) || "unknown";
+    const existing = byKey.get(key) || {
+      key,
+      label: key === "unknown" ? "Unknown" : key,
+      sales_count: 0,
+      order_count: 0,
+      units_sold: 0,
+      revenue_by_currency: new Map<string, number>(),
+      brands: new Map<string, number>(),
+      order_keys: new Set<string>(),
+    };
+    const rowKey = executiveCommerceRowKey(row, index);
+    if (!existing.order_keys.has(rowKey)) {
+      existing.order_keys.add(rowKey);
+      existing.order_count += 1;
+      if (isExecutiveCommerceSale(row)) existing.sales_count += 1;
+      existing.units_sold += executiveCommerceUnitsSold(row);
+      executiveAddAmount(existing.revenue_by_currency, row.currency, row.gross_amount);
+      existing.brands.set(executiveCommerceSourceBrand(row), (existing.brands.get(executiveCommerceSourceBrand(row)) || 0) + 1);
+    }
+    byKey.set(key, existing);
+  });
+
+  return Array.from(byKey.values())
+    .map((row) => ({
+      key: row.key === "unknown" ? null : row.key,
+      label: row.label,
+      sales_count: row.sales_count,
+      order_count: row.order_count,
+      units_sold: row.units_sold,
+      revenue_by_currency: executiveAmountByCurrencyRows(row.revenue_by_currency),
+      brands: Array.from(row.brands.entries()).map(([brand, order_count]) => ({ brand, order_count })),
+    }))
+    .sort((a, b) => {
+      const aAmount = a.revenue_by_currency.reduce((sum, row) => sum + dashboardNumber(row.amount), 0);
+      const bAmount = b.revenue_by_currency.reduce((sum, row) => sum + dashboardNumber(row.amount), 0);
+      return bAmount - aAmount;
+    })
+    .slice(0, options.limit || 8);
+}
+
+function executiveBrandRows(rows: ExecutiveCommerceOrderRow[]) {
+  const byBrand = new Map<string, ExecutiveCommerceOrderRow[]>();
+  for (const row of rows) {
+    const brand = executiveCommerceSourceBrand(row);
+    byBrand.set(brand, [...(byBrand.get(brand) || []), row]);
+  }
+  return Array.from(byBrand.entries())
+    .map(([brand, brandRows]) => ({
+      brand,
+      ...summarizeExecutiveCommerceOrders(brandRows),
+    }))
+    .sort((a, b) => {
+      const aRevenue = a.order_revenue_by_currency.reduce((sum, row) => sum + row.amount, 0);
+      const bRevenue = b.order_revenue_by_currency.reduce((sum, row) => sum + row.amount, 0);
+      return bRevenue - aRevenue;
+    });
+}
+
+async function buildExecutiveDashboardPayload(supabase: SupabaseClientAny, url: URL) {
+  const workspaceId = dashboardText(url.searchParams.get("workspace_id")) || "default";
+  const setup = await readWorkspaceDashboardSettings(supabase, workspaceId);
+  const requestedTimezone = dashboardText(url.searchParams.get("timezone"));
+  const timeZoneInput = requestedTimezone || setup.timezone || "UTC";
+  const period = dashboardText(url.searchParams.get("period")) || "today";
+  const today = executiveBucketKey(new Date().toISOString(), timeZoneInput, "day") || new Date().toISOString().slice(0, 10);
+  const currentRange = defaultDashboardDateRange(url);
+  const from = parseDateFilter(url.searchParams.get("from")) || (period === "today" ? today : currentRange.from);
+  const to = parseDateFilter(url.searchParams.get("to")) || (period === "today" ? today : currentRange.to);
+  const bounds = executiveDashboardRangeBounds(from, to, timeZoneInput);
+  if (!bounds) {
+    return {
+      ok: false,
+      error: "invalid_executive_dashboard_range",
+      message: "Executive dashboard range is invalid.",
+    };
+  }
+
+  const now = new Date();
+  if (period === "today" && to === today && now.toISOString() > bounds.from_iso && now.toISOString() < bounds.to_iso) {
+    bounds.to_iso = now.toISOString();
+    bounds.elapsed_ms = new Date(bounds.to_iso).getTime() - new Date(bounds.from_iso).getTime();
+  }
+  const previousBounds =
+    period === "today"
+      ? {
+          from_iso: new Date(new Date(bounds.from_iso).getTime() - 86400000).toISOString(),
+          to_iso: new Date(new Date(bounds.from_iso).getTime() - 86400000 + bounds.elapsed_ms).toISOString(),
+        }
+      : executivePreviousRangeBounds(bounds);
+  const currencyFilter = dashboardText(url.searchParams.get("currency"));
+  const brandFilter = dashboardText(url.searchParams.get("brand") || url.searchParams.get("brand_name"));
+
+  const [currentCommerce, previousCommerce, currentFinancials, currentCommissions, latestOrderAt] = await Promise.all([
+    selectExecutiveDashboardPlatformOrders(supabase, {
+      workspace_id: workspaceId,
+      from_iso: bounds.from_iso,
+      to_iso: bounds.to_iso,
+      currency: currencyFilter,
+    }),
+    selectExecutiveDashboardPlatformOrders(supabase, {
+      workspace_id: workspaceId,
+      from_iso: previousBounds.from_iso,
+      to_iso: previousBounds.to_iso,
+      currency: currencyFilter,
+    }),
+    selectExecutiveDashboardFinancialRows(supabase, {
+      workspace_id: workspaceId,
+      from_iso: bounds.from_iso,
+      to_iso: bounds.to_iso,
+      currency: currencyFilter,
+    }),
+    selectExecutivePerformanceCommissions(supabase, {
+      workspace_id: workspaceId,
+      from_iso: bounds.from_iso,
+      to_iso: bounds.to_iso,
+      currency: currencyFilter,
+    }),
+    selectExecutiveDashboardLatestOrderAt(supabase, workspaceId),
+  ]);
+
+  const current = summarizeExecutiveCommerceOrders(currentCommerce.rows, { brand: brandFilter });
+  const previous = summarizeExecutiveCommerceOrders(previousCommerce.rows, { brand: brandFilter });
+  const commissions = summarizeAffiliateCommissions(brandFilter ? [] : currentCommissions.rows);
+  const currencyInfo = dashboardCurrency([
+    ...currentCommerce.rows,
+    ...currentFinancials.rows,
+    ...currentCommissions.rows,
+  ]);
+  const currency = currencyFilter || currencyInfo.currency || setup.currency || "USD";
+  const denominatorOrders = current.order_count;
+  const refunds = executiveFinancialMetric(currentFinancials.rows, ["refund"], denominatorOrders);
+  const chargebacks = executiveFinancialMetric(currentFinancials.rows, ["chargeback"], denominatorOrders);
+  const chargebackFees = executiveFinancialMetric(currentFinancials.rows, ["chargeback_fee"], denominatorOrders);
+  const chargebackReversals = executiveFinancialMetric(currentFinancials.rows, ["chargeback_reversal"], denominatorOrders);
+  const chargebackFeeReversals = executiveFinancialMetric(currentFinancials.rows, ["chargeback_fee_reversal"], denominatorOrders);
+  const grossSales = executiveAmountForCurrency(current.sales_revenue_by_currency, currency);
+  const previousGrossSales = executiveAmountForCurrency(previous.sales_revenue_by_currency, currency) || 0;
+  const commissionByCurrency = brandFilter ? [] : executiveCommissionAmountRows(currentCommissions.rows);
+  const afterCommissionByCurrency = commissions.available
+    ? current.sales_revenue_by_currency.map((row) => ({
+        currency: row.currency,
+        amount: dashboardRoundMoney(row.amount - (executiveAmountForCurrency(commissionByCurrency, row.currency) || 0)),
+      }))
+    : [];
+  const commerceLatestMs = latestOrderAt ? new Date(latestOrderAt).getTime() : 0;
+  const requestedEndMs = new Date(bounds.to_iso).getTime();
+  const isCurrent = Boolean(commerceLatestMs && commerceLatestMs >= requestedEndMs - 60000);
+  const partialReasons = [];
+
+  if (!isCurrent) {
+    partialReasons.push({
+      code: "commerce_data_incomplete",
+      message: `Commerce data is incomplete for today. Latest imported order: ${latestOrderAt ? new Date(latestOrderAt).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric", timeZone: bounds.timeZone }) : "unavailable"}. Today's sales and revenue may be understated.`,
+      severity: "warning",
+    });
+  }
+  if (!currentCommerce.scanned_all || !previousCommerce.scanned_all) {
+    partialReasons.push({
+      code: "commerce_scan_limited",
+      message: "Commerce scan reached its safety limit; narrow the date range for complete dashboard values.",
+      severity: "warning",
+    });
+  }
+  if (!currentFinancials.scanned_all) {
+    partialReasons.push({
+      code: "financial_scan_limited",
+      message: "Financial event scan reached its safety limit; narrow the date range for complete refund and chargeback values.",
+      severity: "warning",
+    });
+  }
+  if (currencyInfo.multi_currency && !currencyFilter) {
+    partialReasons.push({
+      code: "multi_currency",
+      message: "Multiple currencies are present. Totals remain separated by currency and should be filtered before accounting comparison.",
+      severity: "info",
+    });
+  }
+  if (brandFilter && !commissions.available) {
+    partialReasons.push({
+      code: "brand_commission_unavailable",
+      message: "Brand-filtered commission is unavailable because payout rows do not preserve brand evidence.",
+      severity: "info",
+    });
+  } else if (!commissions.available && current.sales_count > 0) {
+    partialReasons.push({
+      code: "commission_unavailable",
+      message: "Affiliate commission rows are unavailable for this range; accrued commission should be treated as missing, not zero.",
+      severity: "warning",
+    });
+  }
+
+  const granularity = period === "today" || bounds.elapsed_ms <= 36 * 3600000 ? "hour" : "day";
+
+  return {
+    ok: true,
+    workspace_id: workspaceId,
+    generated_at: new Date().toISOString(),
+    partial: partialReasons.some((reason) => reason.severity === "warning"),
+    partial_reasons: partialReasons,
+    filters: {
+      period,
+      timezone: bounds.timeZone,
+      timezone_source: requestedTimezone ? "request.timezone" : setup.source,
+      currency,
+      currencies: currencyInfo.currencies,
+      brand: brandFilter || null,
+      range: {
+        from,
+        to,
+        from_iso: bounds.from_iso,
+        to_iso: bounds.to_iso,
+        previous_from_iso: previousBounds.from_iso,
+        previous_to_iso: previousBounds.to_iso,
+      },
+      coverage: {
+        commerce_latest_order_at: latestOrderAt,
+        requested_period_end: bounds.to_iso,
+        is_current: isCurrent,
+      },
+    },
+    business: {
+      commerce_source: "platform_orders",
+      sales_definition: "valid positive platform_orders rows with raw WowBoost Order Type = Regular Order",
+      orders_definition: "valid positive platform_orders rows with raw WowBoost Order Type in Regular Order, Upsell Order, Mini Upsell Order",
+      sales_count: current.sales_count,
+      order_count: current.order_count,
+      units_sold: current.units_sold,
+      customer_count: null,
+      customer_count_unavailable_reason: "Dashboard customers require person_id-only counting; anonymous orders are intentionally excluded.",
+      gross_revenue_by_currency: current.sales_revenue_by_currency,
+      total_order_revenue_by_currency: current.order_revenue_by_currency,
+      average_order_value_by_currency: current.average_order_value_by_currency,
+      previous: {
+        sales_count: previous.sales_count,
+        order_count: previous.order_count,
+        gross_revenue_by_currency: previous.sales_revenue_by_currency,
+        total_order_revenue_by_currency: previous.order_revenue_by_currency,
+      },
+      deltas: {
+        sales_count: dashboardDelta(current.sales_count, previous.sales_count),
+        order_count: dashboardDelta(current.order_count, previous.order_count),
+        gross_revenue: dashboardDelta(grossSales || 0, previousGrossSales),
+      },
+      trend: executiveTrendFromCommerceAndFinancials(
+        currentCommerce.rows,
+        currentFinancials.rows,
+        brandFilter ? [] : currentCommissions.rows,
+        bounds.timeZone,
+        granularity,
+        brandFilter,
+      ),
+      diagnostics: {
+        commerce_rows_scanned: currentCommerce.rows.length,
+        commerce_scan_complete: currentCommerce.scanned_all,
+        excluded_statuses: EXECUTIVE_COMMERCE_EXCLUDED_STATUS_PARTS,
+        order_type_source: "platform_orders.raw_json['Order Type']",
+        brand_source: "platform_orders.raw_json.Brand exact match only",
+      },
+    },
+    attribution: {
+      affiliate_rankings: executiveRankCommerceRows(currentCommerce.rows, { key: "affiliate_id", brand: brandFilter }),
+      source_rankings: executiveRankCommerceRows(currentCommerce.rows, { key: "source_id", brand: brandFilter }),
+      diagnostics: {
+        ranking_source: "platform_orders affiliate/source evidence; commission rows are not joined to brand without durable brand evidence.",
+      },
+    },
+    financial: {
+      ledger_source: "conversions",
+      refunds,
+      chargebacks,
+      chargeback_fees: chargebackFees,
+      chargeback_reversals: chargebackReversals,
+      chargeback_fee_reversals: chargebackFeeReversals,
+      accrued_affiliate_commission: {
+        available: commissions.available,
+        commission_count: commissions.commission_count,
+        amount_by_currency: commissionByCurrency,
+        source: "affiliate_commissions.commission_amount excluding voided/reversed",
+      },
+      after_affiliate_commission_by_currency: afterCommissionByCurrency,
+      diagnostics: {
+        financial_event_rows_scanned: currentFinancials.rows.length,
+        financial_event_scan_complete: currentFinancials.scanned_all,
+        commission_rows_scanned: brandFilter ? 0 : currentCommissions.rows.length,
+        commission_scan_complete: brandFilter ? true : currentCommissions.scanned_all,
+        note: "Financial debits are displayed as financial events and are not compared against incomplete commerce revenue.",
+      },
+    },
+    operations: {
+      scope: "workspace",
+      health_sources: [
+        "/api/financial-reconciliation",
+        "/api/financial-import-monitor",
+        "/api/operations/summary",
+      ],
+      notes: [
+        "Operational modules remain workspace-wide unless their underlying systems expose durable brand dimensions.",
+      ],
+    },
+    brands: {
+      resolver: "exact platform_orders.raw_json.Brand; missing brand is Unknown brand",
+      selected: brandFilter || null,
+      available: executiveBrandRows(currentCommerce.rows),
     },
   };
 }
@@ -15682,6 +16213,19 @@ async function router(req: Request, env: Env): Promise<Response> {
       return json({
         ok: false,
         error: "profit_order_read_failed",
+        message: e?.message || String(e),
+      }, 500);
+    }
+  }
+
+  if (path === "/v1/executive-dashboard" && req.method === "GET") {
+    try {
+      const supabase = getSupabase(env);
+      return json(await buildExecutiveDashboardPayload(supabase, url));
+    } catch (e: any) {
+      return json({
+        ok: false,
+        error: "executive_dashboard_failed",
         message: e?.message || String(e),
       }, 500);
     }

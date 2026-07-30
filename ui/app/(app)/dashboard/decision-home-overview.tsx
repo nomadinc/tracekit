@@ -2,19 +2,7 @@
 
 import * as React from "react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation";
-import {
-  ResponsiveContainer,
-  LineChart,
-  Line,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  BarChart,
-  Bar,
-  Cell,
-} from "recharts";
+import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
   ArrowUpRight,
@@ -27,9 +15,20 @@ import {
   ShieldCheck,
   TrendingUp,
 } from "lucide-react";
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Line,
+  LineChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from "recharts";
 
 import { Card } from "@/components/ui/card";
-import { apiGetJson } from "@/lib/api";
 import { sameOriginGetJson } from "@/lib/same-origin-api";
 import {
   deriveFinancialHealth,
@@ -43,17 +42,18 @@ import {
 } from "@/lib/financial-import-monitor";
 import type { OperationsSummaryResponse } from "@/lib/work-items";
 import type {
-  ExecutivePerformanceResponse,
-  ExecutiveRankingRow,
-  ExecutiveTrendPoint,
-  ProfitSummaryResponse,
+  ExecutiveDashboardCurrencyAmount,
+  ExecutiveDashboardRankingRow,
+  ExecutiveDashboardResponse,
+  ExecutiveDashboardTrendPoint,
 } from "@/lib/profit-types";
 
 type PeriodKey = "today" | "7d" | "30d" | "custom";
 type TrendMetric =
-  | "net_profit"
   | "gross_revenue"
-  | "sales_count"
+  | "order_revenue"
+  | "orders"
+  | "units_sold"
   | "affiliate_commission"
   | "after_affiliate_commission"
   | "refunds"
@@ -66,11 +66,12 @@ const PERIODS: Array<{ key: PeriodKey; label: string; days: number }> = [
 ];
 
 const TREND_METRICS: Array<{ key: TrendMetric; label: string; color: string; money: boolean }> = [
-  { key: "net_profit", label: "Net Profit", color: "#2563eb", money: true },
-  { key: "gross_revenue", label: "Gross Revenue", color: "#0f766e", money: true },
-  { key: "sales_count", label: "Sales", color: "#7c3aed", money: false },
-  { key: "affiliate_commission", label: "Affiliate Commission", color: "#d97706", money: true },
-  { key: "after_affiliate_commission", label: "After Commission", color: "#0891b2", money: true },
+  { key: "gross_revenue", label: "Sales Revenue", color: "#0f766e", money: true },
+  { key: "order_revenue", label: "Order Revenue", color: "#2563eb", money: true },
+  { key: "orders", label: "Orders", color: "#7c3aed", money: false },
+  { key: "units_sold", label: "Units Sold", color: "#0891b2", money: false },
+  { key: "affiliate_commission", label: "Accrued Commission", color: "#d97706", money: true },
+  { key: "after_affiliate_commission", label: "After Commission", color: "#16a34a", money: true },
   { key: "refunds", label: "Refunds", color: "#ea580c", money: true },
   { key: "chargebacks", label: "Chargebacks", color: "#dc2626", money: true },
 ];
@@ -88,6 +89,11 @@ function addDays(date: Date, days: number) {
   return next;
 }
 
+function number(value: unknown) {
+  const n = Number(value ?? 0);
+  return Number.isFinite(n) ? n : 0;
+}
+
 function money(value: unknown, currency = "USD", digits = 0) {
   const n = Number(value ?? 0);
   return n.toLocaleString("en-US", {
@@ -99,7 +105,7 @@ function money(value: unknown, currency = "USD", digits = 0) {
 }
 
 function compactMoney(value: unknown, currency = "USD") {
-  const n = Number(value ?? 0);
+  const n = number(value);
   return new Intl.NumberFormat("en-US", {
     style: "currency",
     currency,
@@ -108,15 +114,30 @@ function compactMoney(value: unknown, currency = "USD") {
   }).format(n);
 }
 
-function number(value: unknown) {
-  const n = Number(value ?? 0);
-  return Number.isFinite(n) ? n : 0;
+function percent(value: unknown, digits = 1) {
+  const n = Number(value);
+  return Number.isFinite(n) ? `${(n * 100).toFixed(digits)}%` : "Unavailable";
 }
 
-function percent(value: unknown, digits = 1) {
-  const n = number(value);
-  if (!Number.isFinite(n)) return "-";
-  return `${(n * 100).toFixed(digits)}%`;
+function formatTimestamp(value?: string | null) {
+  if (!value) return "unavailable";
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return "unavailable";
+  return d.toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function amountForCurrency(rows: ExecutiveDashboardCurrencyAmount[] | undefined, currency = "USD") {
+  if (!rows?.length) return null;
+  const match = rows.find((row) => row.currency === currency);
+  if (match) return number(match.amount);
+  return rows.length === 1 ? number(rows[0].amount) : null;
+}
+
+function amountLabel(rows: ExecutiveDashboardCurrencyAmount[] | undefined, currency = "USD") {
+  const amount = amountForCurrency(rows, currency);
+  if (amount != null) return money(amount, currency);
+  if (!rows?.length) return "Unavailable";
+  return rows.map((row) => money(row.amount, row.currency)).join(" + ");
 }
 
 function deltaLabel(value: unknown, moneyValue: boolean, currency = "USD") {
@@ -124,10 +145,6 @@ function deltaLabel(value: unknown, moneyValue: boolean, currency = "USD") {
   if (n === 0) return "flat";
   const sign = n > 0 ? "+" : "";
   return moneyValue ? `${sign}${compactMoney(n, currency)}` : `${sign}${Math.round(n).toLocaleString("en-US")}`;
-}
-
-function trendValue(point: ExecutiveTrendPoint, key: TrendMetric) {
-  return number((point as Record<string, unknown>)[key]);
 }
 
 function useDashboardPeriod(): { period: PeriodKey; from: string; to: string } {
@@ -147,7 +164,7 @@ function useDashboardPeriod(): { period: PeriodKey; from: string; to: string } {
 
     if (preset?.key === "today") {
       const day = isoDateLocal(today);
-      return { period: "today" as PeriodKey, from: day, to: day };
+      return { period: "today", from: day, to: day };
     }
 
     const days = preset?.days || 1;
@@ -159,22 +176,28 @@ function useDashboardPeriod(): { period: PeriodKey; from: string; to: string } {
   }, [searchParams]);
 }
 
-function rangeQuery(range: { from: string; to: string }) {
-  return new URLSearchParams({ from: range.from, to: range.to }).toString();
+function rangeQuery(range: { from: string; to: string }, extras: Record<string, string | null | undefined> = {}) {
+  const params = new URLSearchParams({ from: range.from, to: range.to });
+  Object.entries(extras).forEach(([key, value]) => {
+    if (value) params.set(key, value);
+  });
+  return params.toString();
 }
 
-function periodHref(period: PeriodKey) {
+function periodHref(period: PeriodKey, brand?: string | null) {
   const today = new Date();
   const preset = PERIODS.find((item) => item.key === period);
   const dayCount = preset?.days || 1;
   const from = period === "today" ? isoDateLocal(today) : isoDateLocal(addDays(today, -(dayCount - 1)));
   const to = isoDateLocal(today);
-  return `/dashboard?period=${period}&from=${from}&to=${to}`;
+  const params = new URLSearchParams({ period, from, to });
+  if (brand) params.set("brand", brand);
+  return `/dashboard?${params.toString()}`;
 }
 
 function EmptyState({ children }: { children: React.ReactNode }) {
   return (
-    <div className="flex min-h-44 items-center justify-center rounded-lg border border-dashed p-5 text-center text-sm text-slate-500 dark:border-slate-800">
+    <div className="flex min-h-40 items-center justify-center rounded-lg border border-dashed p-5 text-center text-sm text-slate-500 dark:border-slate-800">
       {children}
     </div>
   );
@@ -200,12 +223,14 @@ function MetricCard({
   detail,
   href,
   tone = "neutral",
+  qualified,
 }: {
   label: string;
   value: string;
   detail: string;
   href?: string;
   tone?: "neutral" | "good" | "warn" | "bad";
+  qualified?: boolean;
 }) {
   const toneClass =
     tone === "good"
@@ -221,8 +246,10 @@ function MetricCard({
         <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</div>
         {href ? <ArrowUpRight className="h-4 w-4 text-slate-400" aria-hidden="true" /> : null}
       </div>
-      <div className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">{value}</div>
-      <div className="mt-1 text-sm text-slate-500">{detail}</div>
+      <div className="mt-2 text-2xl font-semibold tracking-tight text-slate-950 dark:text-slate-50">
+        {qualified ? "Incomplete" : value}
+      </div>
+      <div className="mt-1 text-sm text-slate-500">{qualified ? `${value} observed; ${detail}` : detail}</div>
     </>
   );
 
@@ -241,43 +268,50 @@ function MetricCard({
 }
 
 function StoryHeader({
-  performance,
+  dashboard,
   range,
   financialHealth,
   importHealth,
+  brand,
 }: {
-  performance: ExecutivePerformanceResponse | null;
+  dashboard: ExecutiveDashboardResponse | null;
   range: { period: PeriodKey; from: string; to: string };
   financialHealth: FinancialHealthSummary | null;
   importHealth: FinancialImportHealthSummary | null;
+  brand?: string | null;
 }) {
-  const headline = performance?.headline;
-  const profit = number(headline?.net_profit);
-  const currency = performance?.currency || "USD";
-  const sales = number(headline?.sales_count);
-  const commission = number(headline?.affiliate_commission?.commission_amount);
-  const commissionAvailable = Boolean(headline?.affiliate_commission?.available);
-  const afterCommission = headline?.after_affiliate_commission == null ? null : number(headline.after_affiliate_commission);
-  const aov = headline?.aov == null ? null : number(headline.aov);
+  const currency = dashboard?.filters?.currency || "USD";
+  const business = dashboard?.business;
+  const financial = dashboard?.financial;
+  const partial = Boolean(dashboard?.partial);
+  const grossRevenue = amountLabel(business?.gross_revenue_by_currency, currency);
+  const orderRevenue = amountLabel(business?.total_order_revenue_by_currency, currency);
+  const aov = amountLabel(business?.average_order_value_by_currency, currency);
+  const refunds = amountLabel(financial?.refunds?.amount_by_currency, currency);
+  const chargebacks = amountLabel(financial?.chargebacks?.amount_by_currency, currency);
+  const commission = amountLabel(financial?.accrued_affiliate_commission?.amount_by_currency, currency);
+  const afterCommission = amountLabel(financial?.after_affiliate_commission_by_currency, currency);
   const periodLabel = range.period === "today" ? "today" : "period";
-  const profitTone = profit >= 0 ? "text-emerald-700 dark:text-emerald-300" : "text-red-700 dark:text-red-300";
 
   return (
-    <section className="rounded-2xl border bg-white p-5 dark:border-slate-800 dark:bg-ink/70" aria-label="Executive Performance Summary">
+    <section className="rounded-2xl border bg-white p-5 dark:border-slate-800 dark:bg-ink/70" aria-label="Business Performance Summary">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-start lg:justify-between">
         <div className="max-w-3xl">
-          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Executive Performance</div>
+          <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">Executive Dashboard v2</div>
           <h1 className="mt-2 text-3xl font-semibold tracking-tight text-slate-950 dark:text-white sm:text-4xl">
-            {range.period === "today" ? "How are we doing today?" : "How did the business perform?"}
+            Business Performance
           </h1>
           <p className="mt-3 text-sm leading-6 text-slate-600 dark:text-slate-300">
-            Net profit is <span className={`font-semibold ${profitTone}`}>{money(profit, currency)}</span> from{" "}
-            <span className="font-semibold text-slate-950 dark:text-slate-50">{sales.toLocaleString("en-US")}</span>{" "}
-            canonical sales. Affiliate commission is{" "}
+            Sales revenue is{" "}
+            <span className="font-semibold text-slate-950 dark:text-slate-50">{grossRevenue}</span> from{" "}
             <span className="font-semibold text-slate-950 dark:text-slate-50">
-              {commissionAvailable ? money(commission, currency) : "unavailable"}
+              {(business?.sales_count || 0).toLocaleString("en-US")}
             </span>{" "}
-            from the payout ledger.
+            regular-order sales. Total orders are{" "}
+            <span className="font-semibold text-slate-950 dark:text-slate-50">
+              {(business?.order_count || 0).toLocaleString("en-US")}
+            </span>{" "}
+            after excluding non-commerce, refunded, chargeback, cancelled, voided, failed, declined, abandoned, and test rows.
           </p>
         </div>
 
@@ -287,7 +321,7 @@ function StoryHeader({
             return (
               <Link
                 key={period.key}
-                href={periodHref(period.key)}
+                href={periodHref(period.key, brand)}
                 className={`rounded-full border px-3 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-teal-500 ${
                   active
                     ? "border-teal-600 bg-teal-600 text-white"
@@ -301,36 +335,35 @@ function StoryHeader({
         </div>
       </div>
 
-      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-7">
+      {partial ? (
+        <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/60 dark:bg-amber-950/20 dark:text-amber-200">
+          <div className="flex items-center gap-2 font-medium">
+            <AlertTriangle className="h-4 w-4" aria-hidden="true" />
+            Commerce data is incomplete for today.
+          </div>
+          <p className="mt-1">
+            Latest imported order: {formatTimestamp(dashboard?.filters?.coverage?.commerce_latest_order_at)}. Today&apos;s sales and revenue may be understated.
+          </p>
+        </div>
+      ) : null}
+
+      <div className="mt-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-4 2xl:grid-cols-8">
+        <MetricCard label={`Sales Revenue ${periodLabel}`} value={grossRevenue} detail="Regular Order only" qualified={partial} />
+        <MetricCard label="Total Order Revenue" value={orderRevenue} detail="Regular, upsell, and mini upsell orders" qualified={partial} />
+        <MetricCard label="Orders" value={(business?.order_count || 0).toLocaleString("en-US")} detail="Valid commerce order rows" qualified={partial} href={`/orders?${rangeQuery(range, { brand })}`} />
+        <MetricCard label="Units Sold" value={(business?.units_sold || 0).toLocaleString("en-US")} detail="Order Quantity (Units Sold)" qualified={partial} />
+        <MetricCard label="AOV" value={aov} detail="Total order revenue divided by orders" qualified={partial} />
+        <MetricCard label="Refund Events" value={refunds} detail={`${financial?.refunds?.event_count || 0} refund events`} tone="warn" href={`/dashboard/refunds?${rangeQuery(range, { brand })}`} />
+        <MetricCard label="Chargeback Events" value={chargebacks} detail={`${financial?.chargebacks?.event_count || 0} chargeback events`} tone="warn" href={`/dashboard/chargebacks?${rangeQuery(range, { brand })}`} />
         <MetricCard
-          label={`Revenue ${periodLabel}`}
-          value={performance ? money(headline?.gross_revenue, currency) : "-"}
-          detail={`${deltaLabel(headline?.deltas?.gross_revenue?.amount, true, currency)} vs comparison window`}
+          label="After Affiliate Commission"
+          value={financial?.accrued_affiliate_commission?.available ? afterCommission : "Unavailable"}
+          detail={financial?.accrued_affiliate_commission?.available ? `Accrued commission ${commission}` : "Commission is missing, not zero"}
+          tone={financial?.accrued_affiliate_commission?.available ? "neutral" : "warn"}
         />
-        <MetricCard
-          label={`Sales ${periodLabel}`}
-          value={performance ? sales.toLocaleString("en-US") : "-"}
-          detail={`${deltaLabel(headline?.deltas?.sales_count?.amount, false)} vs comparison window`}
-          href={`/orders?${rangeQuery(range)}`}
-        />
-        <MetricCard
-          label="Affiliate Commission"
-          value={performance ? (commissionAvailable ? money(commission, currency) : "Unavailable") : "-"}
-          detail={commissionAvailable ? "Generated payout-engine commission" : "No commission rows for this period"}
-          tone={commissionAvailable ? "neutral" : "warn"}
-          href="/dashboard/financial-reconciliation"
-        />
-        <MetricCard
-          label="After affiliate commission"
-          value={performance ? (afterCommission == null ? "Unavailable" : money(afterCommission, currency)) : "-"}
-          detail="Sales revenue minus generated commission"
-          tone={afterCommission == null ? "warn" : afterCommission >= 0 ? "good" : "bad"}
-        />
-        <MetricCard
-          label="Average order value"
-          value={performance ? (aov == null ? "Not available" : money(aov, currency)) : "-"}
-          detail="Revenue divided by canonical sales"
-        />
+      </div>
+
+      <div className="mt-5 grid gap-3 md:grid-cols-3">
         <MetricCard
           label="Financial Health"
           value={financialHealth?.label || "Unavailable"}
@@ -339,15 +372,17 @@ function StoryHeader({
           href="/dashboard/financial-reconciliation"
         />
         <MetricCard
-          label="Import Health"
+          label="Financial Imports"
           value={importHealth?.label || "Unavailable"}
-          detail={
-            importHealth
-              ? `${importHealth.running_imports} running, ${importHealth.failed_imports} failed`
-              : "Open financial imports"
-          }
+          detail={importHealth ? `${importHealth.running_imports} running, ${importHealth.failed_imports} failed` : "Open financial imports"}
           tone={importHealthTone(importHealth?.state)}
           href="/dashboard/financial-import-monitor"
+        />
+        <MetricCard
+          label="Customer Count"
+          value={business?.customer_count == null ? "Unavailable" : business.customer_count.toLocaleString("en-US")}
+          detail={business?.customer_count_unavailable_reason || "Distinct person_id only"}
+          tone="warn"
         />
       </div>
     </section>
@@ -355,26 +390,23 @@ function StoryHeader({
 }
 
 function TrendModule({
-  performance,
+  dashboard,
   metric,
   setMetric,
 }: {
-  performance: ExecutivePerformanceResponse | null;
+  dashboard: ExecutiveDashboardResponse | null;
   metric: TrendMetric;
   setMetric: (metric: TrendMetric) => void;
 }) {
   const selected = TREND_METRICS.find((item) => item.key === metric) || TREND_METRICS[0];
-  const data = (performance?.trend || []).map((point) => ({
-    date: String(point.date || ""),
-    value: trendValue(point, metric),
+  const currency = dashboard?.filters?.currency || "USD";
+  const data = (dashboard?.business?.trend || []).map((point) => ({
+    date: point.date,
+    value: trendValue(point, metric, currency),
   }));
-  const currency = performance?.currency || "USD";
 
   return (
-    <Card
-      title="Why did performance move?"
-      right={<span className="text-xs text-slate-500">Selectable operating trend</span>}
-    >
+    <Card title="Why did performance move?" right={<span className="text-xs text-slate-500">Commerce, finance, and commission trends</span>}>
       <div className="mb-4 flex flex-wrap gap-2">
         {TREND_METRICS.map((item) => (
           <button
@@ -417,54 +449,105 @@ function TrendModule({
   );
 }
 
-function CostModule({ performance }: { performance: ExecutivePerformanceResponse | null }) {
-  const rows = performance?.cost_breakdown || [];
-  const currency = performance?.currency || "USD";
+function trendValue(point: ExecutiveDashboardTrendPoint, key: TrendMetric, currency: string) {
+  switch (key) {
+    case "gross_revenue":
+      return number(amountForCurrency(point.gross_revenue_by_currency, currency));
+    case "order_revenue":
+      return number(amountForCurrency(point.order_revenue_by_currency, currency));
+    case "orders":
+      return number(point.order_count);
+    case "units_sold":
+      return number(point.units_sold);
+    case "affiliate_commission":
+      return number(amountForCurrency(point.affiliate_commission_by_currency, currency));
+    case "after_affiliate_commission":
+      return number(amountForCurrency(point.after_affiliate_commission_by_currency, currency));
+    case "refunds":
+      return number(amountForCurrency(point.refund_amount_by_currency, currency));
+    case "chargebacks":
+      return number(amountForCurrency(point.chargeback_amount_by_currency, currency));
+    default:
+      return 0;
+  }
+}
+
+function BrandPerformanceModule({ dashboard }: { dashboard: ExecutiveDashboardResponse | null }) {
+  const rows = dashboard?.brands?.available || [];
+  const currency = dashboard?.filters?.currency || "USD";
 
   return (
-    <Card title="Where did the money go?" right={<span className="text-xs text-slate-500">Mapped operating costs</span>}>
+    <Card title="Which brands are performing?" right={<span className="text-xs text-slate-500">Exact raw Brand only</span>}>
       {rows.length ? (
-        <div className="space-y-3">
-          {rows.map((row) => (
-            <div key={row.key || row.label} className="grid gap-2 rounded-lg border p-3 dark:border-slate-800 sm:grid-cols-[1fr_auto] sm:items-center">
-              <div>
-                <div className="font-medium">{row.label}</div>
-                <div className="mt-1 h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-900">
-                  <div className="h-full rounded-full bg-amber-500" style={{ width: `${Math.max(4, Math.min(100, number(row.share) * 100))}%` }} />
-                </div>
-              </div>
-              <div className="text-right">
-                <div className="font-mono font-semibold">{money(row.amount, currency)}</div>
-                <div className="text-xs text-slate-500">{percent(row.share)} of mapped costs</div>
-              </div>
-            </div>
-          ))}
+        <div className="overflow-auto">
+          <table className="min-w-full text-sm">
+            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-900/70">
+              <tr>
+                <th className="px-3 py-2 text-left">Brand</th>
+                <th className="px-3 py-2 text-right">Sales</th>
+                <th className="px-3 py-2 text-right">Orders</th>
+                <th className="px-3 py-2 text-right">Order Revenue</th>
+                <th className="px-3 py-2 text-right">AOV</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.slice(0, 10).map((row) => (
+                <tr key={row.brand} className="border-t dark:border-slate-800">
+                  <td className="px-3 py-3 font-medium">{row.brand}</td>
+                  <td className="px-3 py-3 text-right">{row.sales_count.toLocaleString("en-US")}</td>
+                  <td className="px-3 py-3 text-right">{row.order_count.toLocaleString("en-US")}</td>
+                  <td className="px-3 py-3 text-right font-mono">{amountLabel(row.total_order_revenue_by_currency, currency)}</td>
+                  <td className="px-3 py-3 text-right font-mono">{amountLabel(row.average_order_value_by_currency, currency)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       ) : (
-        <EmptyState>Operating cost rows are not mapped for this period.</EmptyState>
+        <EmptyState>No brand evidence exists for this period.</EmptyState>
       )}
+      <p className="mt-3 text-xs text-slate-500">
+        Brand is resolved only from an exact `raw_json.Brand` value. Unknown brand remains explicit until a durable brand dimension is added.
+      </p>
     </Card>
   );
 }
 
-function LeakageModule({ performance, range }: { performance: ExecutivePerformanceResponse | null; range: { from: string; to: string } }) {
-  const currency = performance?.currency || "USD";
-  const rows = performance?.leakage || [];
+function LeakageModule({ dashboard, range }: { dashboard: ExecutiveDashboardResponse | null; range: { from: string; to: string } }) {
+  const currency = dashboard?.filters?.currency || "USD";
+  const brand = dashboard?.filters?.brand || null;
+  const rows = [
+    {
+      key: "refunds",
+      label: "Refunds",
+      metric: dashboard?.financial?.refunds,
+      href: "/dashboard/refunds",
+    },
+    {
+      key: "chargebacks",
+      label: "Chargebacks",
+      metric: dashboard?.financial?.chargebacks,
+      href: "/dashboard/chargebacks",
+    },
+  ];
 
   return (
-    <Card title="Where are we losing revenue?" right={<span className="text-xs text-slate-500">Refunds and chargebacks</span>}>
+    <Card title="Where are we losing revenue?" right={<span className="text-xs text-slate-500">Financial ledger events</span>}>
       <div className="grid gap-3 sm:grid-cols-2">
         {rows.map((row) => (
           <MetricCard
-            key={row.key || row.label}
-            label={row.label || "Revenue leakage"}
-            value={money(row.amount, currency)}
-            detail={`${percent(row.rate)} of gross revenue`}
-            tone={number(row.amount) > 0 ? "warn" : "good"}
-            href={row.href ? `${row.href}?${rangeQuery(range)}` : undefined}
+            key={row.key}
+            label={row.label}
+            value={amountLabel(row.metric?.amount_by_currency, currency)}
+            detail={`${row.metric?.event_count || 0} events; ${percent(row.metric?.rate_by_orders)} of orders`}
+            tone={number(amountForCurrency(row.metric?.amount_by_currency, currency)) > 0 ? "warn" : "good"}
+            href={`${row.href}?${rangeQuery(range, { brand })}`}
           />
         ))}
       </div>
+      <p className="mt-3 text-xs text-slate-500">
+        Refunds and chargebacks are event-ledger facts filtered by event timestamp, not gross commerce rows.
+      </p>
     </Card>
   );
 }
@@ -472,36 +555,38 @@ function LeakageModule({ performance, range }: { performance: ExecutivePerforman
 function RankingTable({
   title,
   rows,
-  labelKey,
   empty,
   currency,
+  partial,
 }: {
   title: string;
-  rows: ExecutiveRankingRow[];
-  labelKey: "affiliate_id" | "source";
+  rows: ExecutiveDashboardRankingRow[];
   empty: string;
   currency: string;
+  partial?: boolean;
 }) {
   return (
-    <Card title={title}>
+    <Card title={title} right={partial ? <span className="text-xs text-amber-600">Incomplete commerce coverage</span> : null}>
       {rows.length ? (
         <div className="overflow-auto">
           <table className="min-w-full text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500 dark:bg-slate-900/70">
               <tr>
                 <th className="px-3 py-2 text-left">Name</th>
-                <th className="px-3 py-2 text-right">Attributed Revenue</th>
-                <th className="px-3 py-2 text-right">Commission</th>
-                <th className="px-3 py-2 text-right">After Commission</th>
+                <th className="px-3 py-2 text-right">Sales</th>
+                <th className="px-3 py-2 text-right">Orders</th>
+                <th className="px-3 py-2 text-right">Units</th>
+                <th className="px-3 py-2 text-right">Revenue</th>
               </tr>
             </thead>
             <tbody>
               {rows.map((row, index) => (
-                <tr key={`${row[labelKey] || "unknown"}-${index}`} className="border-t dark:border-slate-800">
-                  <td className="px-3 py-3 font-medium">{row[labelKey] || "Unknown"}</td>
-                  <td className="px-3 py-3 text-right font-mono">{money(row.attributed_revenue, currency)}</td>
-                  <td className="px-3 py-3 text-right font-mono">{money(row.commission_amount, currency)}</td>
-                  <td className="px-3 py-3 text-right font-mono">{money(row.net_after_commission, currency)}</td>
+                <tr key={`${row.key || row.label}-${index}`} className="border-t dark:border-slate-800">
+                  <td className="px-3 py-3 font-medium">{row.label || "Unknown"}</td>
+                  <td className="px-3 py-3 text-right">{row.sales_count.toLocaleString("en-US")}</td>
+                  <td className="px-3 py-3 text-right">{row.order_count.toLocaleString("en-US")}</td>
+                  <td className="px-3 py-3 text-right">{row.units_sold.toLocaleString("en-US")}</td>
+                  <td className="px-3 py-3 text-right font-mono">{amountLabel(row.revenue_by_currency, currency)}</td>
                 </tr>
               ))}
             </tbody>
@@ -557,7 +642,7 @@ function OperationalHealthModule({
   ];
 
   return (
-    <Card title="What needs attention now?" right={<span className="text-xs text-slate-500">Uses existing operational surfaces</span>}>
+    <Card title="What needs attention now?" right={<span className="text-xs text-slate-500">Workspace operational signals</span>}>
       <div className="grid gap-3 md:grid-cols-3">
         {cards.map((card) => {
           const Icon = card.icon;
@@ -637,7 +722,10 @@ function FunnelPlaceholder() {
 
 export function DecisionHomeOverview() {
   const range = useDashboardPeriod();
-  const [summary, setSummary] = React.useState<ProfitSummaryResponse | null>(null);
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  const selectedBrand = searchParams.get("brand") || "";
+  const [dashboard, setDashboard] = React.useState<ExecutiveDashboardResponse | null>(null);
   const [financialHealth, setFinancialHealth] = React.useState<FinancialHealthSummary | null>(null);
   const [importHealth, setImportHealth] = React.useState<FinancialImportHealthSummary | null>(null);
   const [operations, setOperations] = React.useState<OperationsSummaryResponse | null>(null);
@@ -659,25 +747,26 @@ export function DecisionHomeOverview() {
           to: range.to,
           period: range.period,
           timezone,
-          include_executive_performance: "1",
         });
+        if (selectedBrand) params.set("brand", selectedBrand);
+
         const localQuery = new URLSearchParams({
           workspace_id: "default",
           from: range.from,
           to: range.to,
         });
 
-        const [performanceResult, reconciliationResult, importResult, operationsResult] = await Promise.allSettled([
-          apiGetJson<ProfitSummaryResponse>(`/v1/profit/summary?${params.toString()}`),
+        const [dashboardResult, reconciliationResult, importResult, operationsResult] = await Promise.allSettled([
+          sameOriginGetJson<ExecutiveDashboardResponse>(`/api/executive-dashboard?${params.toString()}`),
           sameOriginGetJson<FinancialReconciliationResponse>(`/api/financial-reconciliation?${localQuery.toString()}`),
           sameOriginGetJson<FinancialImportMonitorResponse>(`/api/financial-import-monitor?${localQuery.toString()}`),
           sameOriginGetJson<OperationsSummaryResponse>("/api/operations/summary?workspace_id=default"),
         ]);
 
-        if (performanceResult.status === "rejected") throw performanceResult.reason;
+        if (dashboardResult.status === "rejected") throw dashboardResult.reason;
 
         if (!cancelled) {
-          setSummary(performanceResult.value);
+          setDashboard(dashboardResult.value);
           setFinancialHealth(
             reconciliationResult.status === "fulfilled" && reconciliationResult.value?.ok
               ? deriveFinancialHealth(reconciliationResult.value)
@@ -705,16 +794,21 @@ export function DecisionHomeOverview() {
     return () => {
       cancelled = true;
     };
-  }, [range.from, range.to, range.period]);
+  }, [range.from, range.to, range.period, selectedBrand]);
 
-  const performance = summary?.executive_performance || null;
-  const currency = performance?.currency || "USD";
-  const warnings = performance?.diagnostics?.warnings || [];
-  const profit = performance?.profit;
-  const sales = number(performance?.headline?.sales_count);
-  const netProfit = number(performance?.headline?.net_profit);
+  const currency = dashboard?.filters?.currency || "USD";
+  const warnings = (dashboard?.partial_reasons || []).map((reason) => String(reason.message || reason.code || "")).filter(Boolean);
+  const partial = Boolean(dashboard?.partial);
+  const brands = dashboard?.brands?.available || [];
 
-  if (loading && !summary) {
+  function changeBrand(value: string) {
+    const params = new URLSearchParams(searchParams.toString());
+    if (value) params.set("brand", value);
+    else params.delete("brand");
+    router.push(`/dashboard?${params.toString()}`);
+  }
+
+  if (loading && !dashboard) {
     return (
       <div className="space-y-6">
         <div className="h-64 animate-pulse rounded-2xl bg-slate-100 dark:bg-slate-900" />
@@ -729,11 +823,34 @@ export function DecisionHomeOverview() {
   return (
     <div className="space-y-6">
       <StoryHeader
-        performance={performance}
+        dashboard={dashboard}
         range={range}
         financialHealth={financialHealth}
         importHealth={importHealth}
+        brand={selectedBrand}
       />
+
+      <div className="flex flex-col gap-3 rounded-2xl border bg-white p-4 dark:border-slate-800 dark:bg-ink/70 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <div className="text-sm font-semibold text-slate-950 dark:text-slate-50">Brand view</div>
+          <div className="mt-1 text-sm text-slate-500">Exact `raw_json.Brand` matching only; no fuzzy aliases yet.</div>
+        </div>
+        <label className="flex items-center gap-2 text-sm">
+          <span className="text-slate-500">Brand</span>
+          <select
+            value={selectedBrand}
+            onChange={(event) => changeBrand(event.target.value)}
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
+          >
+            <option value="">All brands</option>
+            {brands.map((row) => (
+              <option key={row.brand} value={row.brand}>
+                {row.brand}
+              </option>
+            ))}
+          </select>
+        </label>
+      </div>
 
       {error ? (
         <div className="rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-200">
@@ -742,48 +859,51 @@ export function DecisionHomeOverview() {
       ) : null}
 
       <div className="grid gap-6 xl:grid-cols-[1.45fr_0.95fr]">
-        <TrendModule performance={performance} metric={metric} setMetric={setMetric} />
+        <TrendModule dashboard={dashboard} metric={metric} setMetric={setMetric} />
         <Card title="Did we make money?" right={<CircleDollarSign className="h-5 w-5 text-slate-400" aria-hidden="true" />}>
           <div className="grid gap-3">
             <MetricCard
-              label="Net Profit"
-              value={money(netProfit, currency)}
-              detail={`${percent(profit?.profit_margin_pct ? number(profit.profit_margin_pct) / 100 : null)} margin`}
-              tone={netProfit >= 0 ? "good" : "bad"}
+              label="Sales Revenue"
+              value={amountLabel(dashboard?.business?.gross_revenue_by_currency, currency)}
+              detail="Regular Order revenue"
+              qualified={partial}
             />
             <MetricCard
-              label="Net Revenue"
-              value={money(profit?.net_revenue, currency)}
-              detail="After refunds and chargebacks"
+              label="Accrued Affiliate Commission"
+              value={dashboard?.financial?.accrued_affiliate_commission?.available ? amountLabel(dashboard.financial.accrued_affiliate_commission.amount_by_currency, currency) : "Unavailable"}
+              detail="Payout Engine commission ledger"
+              tone={dashboard?.financial?.accrued_affiliate_commission?.available ? "neutral" : "warn"}
             />
             <MetricCard
-              label="Orders"
-              value={sales.toLocaleString("en-US")}
-              detail={`AOV ${profit?.aov == null ? "-" : money(profit.aov, currency)}`}
+              label="After Affiliate Commission"
+              value={dashboard?.financial?.accrued_affiliate_commission?.available ? amountLabel(dashboard.financial.after_affiliate_commission_by_currency, currency) : "Unavailable"}
+              detail="Sales revenue minus accrued affiliate commission"
+              tone={dashboard?.financial?.accrued_affiliate_commission?.available ? "good" : "warn"}
+              qualified={partial && Boolean(dashboard?.financial?.accrued_affiliate_commission?.available)}
             />
           </div>
         </Card>
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
-        <CostModule performance={performance} />
-        <LeakageModule performance={performance} range={range} />
+        <LeakageModule dashboard={dashboard} range={range} />
+        <BrandPerformanceModule dashboard={dashboard} />
       </div>
 
       <div className="grid gap-6 xl:grid-cols-2">
         <RankingTable
           title="Which affiliates are profitable?"
-          rows={performance?.affiliates || []}
-          labelKey="affiliate_id"
-          empty="No affiliate commission rows exist for this period."
+          rows={dashboard?.attribution?.affiliate_rankings || []}
+          empty="No affiliate evidence exists in commerce rows for this period."
           currency={currency}
+          partial={partial}
         />
         <RankingTable
           title="Which sources are creating profitable customers?"
-          rows={performance?.sources || []}
-          labelKey="source"
-          empty="No source-level commission evidence exists for this period."
+          rows={dashboard?.attribution?.source_rankings || []}
+          empty="No source evidence exists in commerce rows for this period."
           currency={currency}
+          partial={partial}
         />
       </div>
 
@@ -792,16 +912,16 @@ export function DecisionHomeOverview() {
         <Card title="Can we trust the attribution?" right={<HeartPulse className="h-5 w-5 text-slate-400" aria-hidden="true" />}>
           <div className="grid gap-3 md:grid-cols-2">
             <MetricCard
-              label="Canonical Sales"
-              value={sales.toLocaleString("en-US")}
-              detail="Direct ledger sale count, deduped by order or transaction"
+              label="Commerce Source"
+              value={dashboard?.business?.commerce_source || "platform_orders"}
+              detail={dashboard?.business?.sales_definition || "Regular Order sales"}
               tone="good"
             />
             <MetricCard
               label="Commission Source"
-              value={performance?.headline?.affiliate_commission?.available ? "Available" : "Unavailable"}
-              detail="Payout Engine affiliate_commissions ledger"
-              tone={performance?.headline?.affiliate_commission?.available ? "good" : "warn"}
+              value={dashboard?.financial?.accrued_affiliate_commission?.available ? "Available" : "Unavailable"}
+              detail={dashboard?.financial?.accrued_affiliate_commission?.source || "Payout Engine affiliate_commissions ledger"}
+              tone={dashboard?.financial?.accrued_affiliate_commission?.available ? "good" : "warn"}
             />
           </div>
           <div className="mt-4 rounded-xl bg-slate-50 p-3 text-sm text-slate-600 dark:bg-slate-900/70 dark:text-slate-300">
@@ -809,12 +929,8 @@ export function DecisionHomeOverview() {
               <BarChart3 className="h-4 w-4" aria-hidden="true" />
               Data lineage
             </div>
-            <p className="mt-2">
-              {performance?.diagnostics?.canonical_sales_definition || "Sales definition is unavailable."}
-            </p>
-            <p className="mt-2">
-              {performance?.diagnostics?.commission_source || "Commission source is unavailable."}
-            </p>
+            <p className="mt-2">{dashboard?.business?.orders_definition || "Order definition unavailable."}</p>
+            <p className="mt-2">{dashboard?.brands?.resolver || "Brand resolver unavailable."}</p>
           </div>
         </Card>
       </div>
@@ -831,21 +947,18 @@ export function DecisionHomeOverview() {
           <div className="rounded-xl bg-slate-50 p-4 dark:bg-slate-900/70">
             <div className="font-medium">Today is workspace-local</div>
             <div className="mt-1 text-slate-500">
-              Timezone: {performance?.timezone || "UTC"} ({performance?.timezone_source || "fallback"})
+              Timezone: {dashboard?.filters?.timezone || "UTC"} ({dashboard?.filters?.timezone_source || "fallback"})
             </div>
           </div>
           <div className="rounded-xl bg-slate-50 p-4 dark:bg-slate-900/70">
             <div className="font-medium">Currency</div>
             <div className="mt-1 text-slate-500">
-              {performance?.currencies?.length ? performance.currencies.join(", ") : currency}
+              {dashboard?.filters?.currencies?.length ? dashboard.filters.currencies.join(", ") : currency}
             </div>
           </div>
           <div className="rounded-xl bg-slate-50 p-4 dark:bg-slate-900/70">
-            <div className="font-medium">Rows scanned</div>
-            <div className="mt-1 text-slate-500">
-              {number(performance?.diagnostics?.conversion_rows_scanned).toLocaleString("en-US")} ledger rows,{" "}
-              {number(performance?.diagnostics?.commission_rows_scanned).toLocaleString("en-US")} commission rows
-            </div>
+            <div className="font-medium">Generated</div>
+            <div className="mt-1 text-slate-500">{formatTimestamp(dashboard?.generated_at)}</div>
           </div>
         </div>
       </Card>
