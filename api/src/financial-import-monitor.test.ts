@@ -7,6 +7,11 @@ import {
   normalizeFinancialImportMonitorParams,
   redactFinancialImportMonitorMessage,
 } from "./financial-import-monitor.ts";
+import {
+  buildFinancialImportIssueCards,
+  deriveFinancialImportHealth,
+  recentFinancialImportActivity,
+} from "../../ui/lib/financial-import-monitor.ts";
 
 const NOW = new Date("2026-07-29T12:00:00.000Z");
 const params = normalizeFinancialImportMonitorParams({
@@ -101,6 +106,46 @@ test("configured account with no history shows Never run without exposing creden
   assert.equal(JSON.stringify(result), JSON.stringify(result).replace(/secret-should-not-appear|client-id-should-not-appear/g, ""));
 });
 
+test("financial import health presentation derives no-connectors healthy running review critical and partial states", () => {
+  const none = report();
+  assert.equal(deriveFinancialImportHealth(none as any).state, "No imports configured");
+
+  const healthy = report({
+    credentials: [{ platform: "paypal", metadata: { workspace_id: "default", merchant_account_id: "merchant-1" } }],
+    jobs: [job({ id: "job-healthy", updated_at: "2026-07-29T11:00:00.000Z", completed_at: "2026-07-29T11:00:00.000Z" })],
+  });
+  assert.equal(deriveFinancialImportHealth(healthy as any).state, "Healthy");
+  assert.equal(deriveFinancialImportHealth(healthy as any).last_successful_import, "2026-07-29T11:00:00.000Z");
+
+  const oldSuccess = report({
+    credentials: [{ platform: "paypal", metadata: { workspace_id: "default", merchant_account_id: "merchant-1" } }],
+    jobs: [job({ id: "job-old", updated_at: "2026-07-20T00:00:00.000Z", completed_at: "2026-07-20T00:00:00.000Z" })],
+  });
+  assert.equal(oldSuccess.accounts[0].status, "Waiting");
+  assert.equal(deriveFinancialImportHealth(oldSuccess as any).state, "Review needed");
+
+  const running = report({
+    credentials: [{ platform: "paypal", metadata: { workspace_id: "default", merchant_account_id: "merchant-1" } }],
+    jobs: [job({ id: "job-running", status: "running", completed_at: null, updated_at: "2026-07-29T11:00:00.000Z" })],
+    tasks: [task({ job_id: "job-running", updated_at: "2026-07-29T11:59:30.000Z" })],
+  });
+  assert.equal(deriveFinancialImportHealth(running as any).state, "Imports running");
+
+  const neverRun = report({
+    credentials: [{ platform: "paypal", metadata: { workspace_id: "default", merchant_account_id: "merchant-1" } }],
+  });
+  assert.equal(deriveFinancialImportHealth(neverRun as any).state, "Review needed");
+
+  const failed = report({
+    credentials: [{ platform: "paypal", metadata: { workspace_id: "default", merchant_account_id: "merchant-1" } }],
+    jobs: [job({ id: "job-failed", status: "failed", completed_at: null, last_error: "Queue send failed: Too Many Requests" })],
+  });
+  assert.equal(deriveFinancialImportHealth(failed as any).state, "Critical");
+
+  const partial = { ...failed, partial: true };
+  assert.equal(deriveFinancialImportHealth(partial as any).state, "Partial data");
+});
+
 test("diagnostic-only NMI account remains diagnostic and inserts no financial events", () => {
   const result = report({
     credentials: [{ platform: "nmi:lifeheater14090", metadata: { workspace_id: "default" } }],
@@ -126,6 +171,36 @@ test("diagnostic-only NMI account remains diagnostic and inserts no financial ev
   assert.equal(result.accounts[0].ingestion_mode, "diagnostic_only");
   assert.equal(result.accounts[0].inserted_events, 0);
   assert.equal(result.accounts[0].diagnostics[0].type, "diagnostic_only");
+  assert.equal(deriveFinancialImportHealth(result as any).state, "Healthy");
+  const cards = buildFinancialImportIssueCards(result as any);
+  assert.equal(cards.find((card) => card.category === "diagnostic_only")?.severity, "Info");
+  assert.equal(cards.some((card) => card.category === "failed_imports"), false);
+});
+
+test("diagnostic-only import errors are separate from intentional diagnostic-only mode", () => {
+  const result = report({
+    credentials: [{ platform: "nmi:tpaul9204", metadata: { workspace_id: "default" } }],
+    jobs: [job({
+      id: "job-failed-nmi",
+      status: "failed",
+      platform: "nmi:tpaul9204",
+      connector_id: "chargeback-ingestion",
+      last_error: "processor failed",
+      progress: {
+        accounts: {
+          "nmi:tpaul9204": { account_key: "nmi:tpaul9204", platform: "nmi:tpaul9204", family: "gateway_classic" },
+        },
+        metadata: { accounts: [{ account_key: "nmi:tpaul9204", platform: "nmi:tpaul9204", family: "gateway_classic" }] },
+      },
+    })],
+  });
+
+  assert.equal(result.accounts[0].status, "Diagnostic only");
+  assert.equal(deriveFinancialImportHealth(result as any).state, "Critical");
+  const cards = Object.fromEntries(buildFinancialImportIssueCards(result as any).map((card) => [card.category, card]));
+  assert.equal(cards.diagnostic_only.severity, "Info");
+  assert.equal(cards.failed_imports.severity, "Critical");
+  assert.equal(cards.failed_imports.account_keys[0], "nmi:tpaul9204");
 });
 
 test("active task shows Running and stale task shows Attention", () => {
@@ -240,6 +315,62 @@ test("filters can limit status, connector, mode, and attention-only views", () =
   assert.equal(buildFinancialImportMonitorReport({ ...base, params: { ...params, platform: null, status: null, ingestion_mode: null, processor_account: null, attention_only: true }, now: NOW }).accounts.length, 0);
 });
 
+test("financial import issue cards summarize actionable and intentional import states", () => {
+  const failedJob = job({ id: "job-failed", status: "failed", completed_at: null, last_error: "processor auth failed" });
+  const runningJob = job({ id: "job-running", status: "running", completed_at: null });
+  const result = report({
+    credentials: [
+      { platform: "paypal", metadata: { workspace_id: "default", merchant_account_id: "never-run" } },
+      { platform: "paypal", metadata: { workspace_id: "default", merchant_account_id: "failed" } },
+      { platform: "paypal", metadata: { workspace_id: "default", merchant_account_id: "stale" } },
+      { platform: "nmi:tpaul9204", metadata: { workspace_id: "default" } },
+    ],
+    jobs: [
+      job({
+        ...failedJob,
+        progress: {
+          accounts: {
+            "paypal:failed": { account_key: "paypal:failed", platform: "paypal", processor_account_id: "failed" },
+          },
+          metadata: { accounts: [{ account_key: "paypal:failed", platform: "paypal", processor_account_id: "failed" }] },
+        },
+      }),
+      job({
+        ...runningJob,
+        id: "job-stale",
+        progress: {
+          accounts: {
+            "paypal:stale": { account_key: "paypal:stale", platform: "paypal", processor_account_id: "stale" },
+          },
+          metadata: { accounts: [{ account_key: "paypal:stale", platform: "paypal", processor_account_id: "stale" }] },
+        },
+      }),
+    ],
+    tasks: [task({ job_id: "job-stale", payload: { account: { account_key: "paypal:stale", platform: "paypal", processor_account_id: "stale" } }, updated_at: "2026-07-29T11:58:00.000Z", locked_at: "2026-07-29T11:58:00.000Z", attempt_count: 3 })],
+    ledgerRows: [{
+      workspace_id: "default",
+      platform: "paypal",
+      processor_account_id: "failed",
+      ledger_type: "chargeback",
+      amount: "-25",
+      occurred_at: "2026-07-21T12:00:00.000Z",
+      order_id: null,
+      diagnostic_flags: ["invalid_source_record"],
+      meta: {},
+    }],
+  });
+
+  const cards = buildFinancialImportIssueCards(result as any);
+  const byCategory = Object.fromEntries(cards.map((card) => [card.category, card]));
+  assert.equal(byCategory.failed_imports.count, 1);
+  assert.equal(byCategory.stale_tasks.count, 1);
+  assert.equal(byCategory.never_run.count, 1);
+  assert.equal(byCategory.diagnostic_only.severity, "Info");
+  assert.equal(byCategory.invalid_records.count >= 1, true);
+  assert.equal(byCategory.repeated_failures.count, 1);
+  assert.equal(byCategory.diagnostic_only.account_keys.includes("nmi:tpaul9204"), true);
+});
+
 test("account detail includes bounded recent job history", () => {
   const result = report({
     credentials: [{ platform: "paypal", metadata: { workspace_id: "default", merchant_account_id: "merchant-1" } }],
@@ -249,6 +380,30 @@ test("account detail includes bounded recent job history", () => {
     })),
   });
   assert.equal(result.accounts[0].recent_jobs.length, 20);
+});
+
+test("recent financial import activity is bounded and uses not-reported metrics when counters are unavailable", () => {
+  const result = report({
+    credentials: [{ platform: "paypal", metadata: { workspace_id: "default", merchant_account_id: "merchant-1" } }],
+    jobs: [job({
+      id: "job-running",
+      status: "running",
+      completed_at: null,
+      progress: {
+        accounts: {
+          "paypal:merchant-1": { account_key: "paypal:merchant-1", platform: "paypal", processor_account_id: "merchant-1" },
+        },
+        metadata: { accounts: [{ account_key: "paypal:merchant-1", platform: "paypal", processor_account_id: "merchant-1" }] },
+      },
+    })],
+    tasks: [task({ job_id: "job-running", updated_at: "2026-07-29T11:59:30.000Z" })],
+  });
+
+  const activity = recentFinancialImportActivity(result as any, 5);
+  assert.equal(activity.length >= 1, true);
+  assert.equal(activity[0].account_key, "paypal:merchant-1");
+  assert.equal(activity.some((row) => row.metrics.some((metric) => metric.value === "Not reported")), true);
+  assert.equal(recentFinancialImportActivity(result as any, 1).length, 1);
 });
 
 test("workspace scoping excludes other workspace jobs tasks ledger and filtered accounts", () => {
@@ -412,6 +567,8 @@ test("running task takes precedence over prior failure while retaining diagnosti
   });
   assert.equal(result.accounts[0].status, "Running");
   assert.equal(result.accounts[0].diagnostics.some((item) => item.type === "import_errors"), true);
+  assert.equal(deriveFinancialImportHealth(result as any).state, "Imports running");
+  assert.equal(deriveFinancialImportHealth(result as any).running_imports, 1);
 });
 
 test("old success and generic non-financial jobs do not remain Healthy indefinitely", () => {
@@ -420,6 +577,8 @@ test("old success and generic non-financial jobs do not remain Healthy indefinit
     jobs: [job({ id: "job-old", updated_at: "2026-07-20T00:00:00.000Z", completed_at: "2026-07-20T00:00:00.000Z" })],
   });
   assert.equal(oldSuccess.accounts[0].status, "Waiting");
+  assert.equal(deriveFinancialImportHealth(oldSuccess as any).state, "Review needed");
+  assert.equal(buildFinancialImportIssueCards(oldSuccess as any).find((card) => card.category === "stale_import_evidence")?.count, 1);
 
   const generic = report({
     credentials: [{ platform: "paypal", metadata: { workspace_id: "default", merchant_account_id: "merchant-1" } }],
