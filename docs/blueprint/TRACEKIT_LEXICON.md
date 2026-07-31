@@ -17,6 +17,10 @@ Each important term has one approved product-facing definition. Other documents 
 
 The business using TraceKit and the shared context in which its customers, journeys, commerce, financial outcomes, connectors, and decisions belong together.
 
+### Brand
+
+A market-facing identity under which one or more Offers may operate.
+
 ### Customer
 
 A person or business with a continuing relationship to an Organization whose complete story connects discovery, identity, journeys, purchases, refunds, support interactions, and financial outcomes.
@@ -41,9 +45,13 @@ A commercial commitment between a Customer and an Organization that brings toget
 
 What an Organization offers and what a Customer acquires through an Order.
 
+### Offer
+
+A commercial proposition presented to a market, including the Product or bundle, price, funnel, shipping terms, Upsells, Order Bumps, and associated Traffic activity.
+
 ### Campaign
 
-An organized marketing effort intended to create customer attention, journeys, commerce, and Profit.
+A platform-specific or channel-specific marketing initiative that contributes Traffic and performance to an Offer. Campaign is tactical and subordinate to Offer.
 
 ### Affiliate
 
@@ -96,6 +104,12 @@ The narrative that explains how an object reached its current state.
 ### Permanent Context
 
 The business object that remains selected while the user investigates related information.
+
+### Business Context
+
+The selected Offer or business identity that establishes which business data, Objects, metrics, and investigations are active throughout the Workspace.
+
+Business Context is not a report filter. Changing Business Context changes the Permanent Context of the business while preserving the TraceKit Workspace.
 
 ### Temporary Context
 
@@ -158,3 +172,7 @@ The primary environment for understanding and investigating a Customer's complet
 ### Order Workspace
 
 The primary environment for understanding an Order's commercial, attribution, and financial Story.
+
+### Offer Workspace
+
+The primary environment for understanding an Offer's profitability, performance, Customer quality, Traffic contribution, and investment potential.

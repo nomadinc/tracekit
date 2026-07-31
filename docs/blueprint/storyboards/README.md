@@ -12,13 +12,15 @@ Storyboards use a three-digit sequence that remains stable for the life of the d
 
 - `001_customer_workspace.md`
 - `002_order_workspace.md`
-- `003_campaign_workspace.md`
+- `003_offer_workspace.md`
 - `004_affiliate_workspace.md`
 - `005_financial_workspace.md`
 - `006_connector_workspace.md`
 - `007_product_workspace.md`
 
 Numbers indicate library order, not implementation priority.
+
+Campaign may later receive a subordinate child-workspace storyboard if Product Review determines that a dedicated Campaign Workspace is needed. No Campaign storyboard is currently assigned a library number.
 
 ## File Naming Convention
 
