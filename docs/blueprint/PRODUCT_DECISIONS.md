@@ -230,3 +230,245 @@ Dashboards, calculations, partial-data states, alerts, and connector behavior mu
 ### Status
 
 Approved.
+
+## 2026-07-30 — Universal Forensic Analysis Is Pillar #3
+
+### Decision
+
+Universal Forensic Analysis is Pillar #3 of the TraceKit workspace philosophy.
+
+### Context
+
+Users need to move from business conclusions to supporting evidence without leaving the question or context they are investigating.
+
+### Rationale
+
+Making forensic analysis a platform-wide pillar ensures that evidence, diagnostics, relationships, and explanations are consistently available across workspaces.
+
+### Impact
+
+Every workspace must support evidence inspection and explanation without requiring a separate Investigation page.
+
+### Status
+
+Approved.
+
+## 2026-07-30 — Universal Search Accepts Any Identifier
+
+### Decision
+
+Universal Search accepts any supported identifier without requiring the user to select a search type first.
+
+### Context
+
+Users often begin with the evidence they have, such as an email, phone number, order ID, click ID, transaction ID, session ID, payment ID, or journey ID.
+
+### Rationale
+
+TraceKit should identify the likely meaning of evidence instead of making the user understand which internal system owns it.
+
+### Impact
+
+Universal Search must detect likely identifier types and return related objects in understandable business language.
+
+### Status
+
+Approved.
+
+## 2026-07-30 — Search Deep-Links Into the Appropriate Workspace
+
+### Decision
+
+Selecting a Universal Search result deep-links into the appropriate workspace and restores the relevant permanent and temporary context.
+
+### Context
+
+A search result is useful only when it leads directly to the story and evidence the user needs.
+
+### Rationale
+
+Deep-linking preserves the user's thought process and prevents search from becoming another disconnected destination.
+
+### Impact
+
+Search results must select the correct permanent context, focus matching evidence, and open the appropriate inspection experience.
+
+### Status
+
+Approved.
+
+## 2026-07-30 — Customer Is the Permanent Context
+
+### Decision
+
+The customer is the permanent context of the Customer Workspace.
+
+### Context
+
+Orders, events, payments, and attribution records are parts of a customer's story rather than isolated destinations.
+
+### Rationale
+
+Keeping the customer stable allows users to investigate related objects without losing the complete journey.
+
+### Impact
+
+Customer Workspace navigation and information hierarchy must preserve customer context throughout inspection.
+
+### Status
+
+Approved.
+
+## 2026-07-30 — Temporary Inspection Occurs Through Drawers
+
+### Decision
+
+Temporary inspection of related objects occurs through drawers while the workspace's permanent context remains visible.
+
+### Context
+
+Navigating away to inspect an event or order interrupts the user's reasoning and fragments the story.
+
+### Rationale
+
+Drawers provide forensic depth while preserving place, context, and a clear return path.
+
+### Impact
+
+Events, orders, payments, and other temporary contexts should use a shared inspection pattern where practical.
+
+### Status
+
+Approved.
+
+## 2026-07-30 — Internal Architectural Terms Remain Internal
+
+### Decision
+
+Internal architectural terms remain internal and are translated into customer-facing business language.
+
+### Context
+
+Terms describing databases, APIs, queues, import jobs, canonical models, and reconciliation machinery do not answer the user's business question.
+
+### Rationale
+
+The product should absorb implementation complexity while still making evidence, confidence, and limitations transparent.
+
+### Impact
+
+Customer-facing navigation, statuses, explanations, and alerts must use the Translation Layer.
+
+### Status
+
+Approved.
+
+## 2026-07-30 — Estimated and Reconciled Are the UI Financial Badges
+
+### Decision
+
+Estimated and Reconciled badges replace Operational Profit terminology in customer-facing UI.
+
+### Context
+
+The internal distinction between Operational Profit and Reconciled Profit is essential, but Operational Profit is not the clearest customer-facing confidence label.
+
+### Rationale
+
+Estimated and Reconciled communicate the state of a financial value in direct language while preserving the underlying financial distinction.
+
+### Impact
+
+Customer-facing profit displays must use Estimated or Reconciled qualification. Internal calculations and audit records may retain Operational Profit terminology.
+
+### Status
+
+Approved.
+
+## 2026-07-30 — Critical Information Never Relies on Color Alone
+
+### Decision
+
+Critical information must never rely on color alone.
+
+### Context
+
+Color-only status communication is inaccessible and can obscure meaning under different displays, environments, or visual abilities.
+
+### Rationale
+
+Icons, labels, shape, and contrast create redundant signals that preserve meaning.
+
+### Impact
+
+Statuses, alerts, charts, tracking health, and financial confidence indicators must communicate meaning without color dependence.
+
+### Status
+
+Approved.
+
+## 2026-07-30 — Alternate Appearance Palettes Will Be Supported
+
+### Decision
+
+TraceKit will support alternate appearance palettes, including a Color Vision Optimized palette.
+
+### Context
+
+A single color treatment cannot serve every visual need or viewing condition.
+
+### Rationale
+
+Alternate palettes improve accessibility while preserving a coherent information hierarchy and product identity.
+
+### Impact
+
+The design language must allow status, charts, and emphasis to remain legible and consistent across supported palettes.
+
+### Status
+
+Approved.
+
+## 2026-07-30 — Every Important Conclusion Supports Explain
+
+### Decision
+
+Every important conclusion in TraceKit supports Explain.
+
+### Context
+
+Users cannot trust or act on a conclusion if they cannot understand how TraceKit reached it.
+
+### Rationale
+
+Explain connects conclusions to reasoning, evidence, confidence, limitations, and raw values.
+
+### Impact
+
+Important classifications, attribution decisions, financial states, diagnostics, and recommendations must provide an explanation path.
+
+### Status
+
+Approved.
+
+## 2026-07-30 — Replay Journey Remains in the Product Vision
+
+### Decision
+
+Replay Journey remains part of the TraceKit product vision.
+
+### Context
+
+Complex customer journeys can be difficult to understand as a static sequence of records.
+
+### Rationale
+
+Replay helps users observe how a story and its evidence develop over time while retaining the ability to inspect each event.
+
+### Impact
+
+Future Customer Workspace design should preserve a sequential replay interaction without making it a separate navigation destination.
+
+### Status
+
+Approved.

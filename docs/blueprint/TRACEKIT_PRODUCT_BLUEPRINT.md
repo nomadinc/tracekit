@@ -807,7 +807,119 @@ Chapter 4 — Complete.
 
 # Chapter 5 — Navigation
 
-Status: Planned.
+Version: 1.0
+
+## Purpose
+
+Navigation in TraceKit exists to help people follow questions, stories, and evidence.
+
+It should reflect how a person thinks about the business, not how the underlying systems are organized.
+
+Navigation follows thought, not technology.
+
+## Connected Workspaces
+
+TraceKit is a collection of connected workspaces, not a collection of disconnected pages.
+
+Each workspace helps a person answer a meaningful business question. Workspaces share evidence and related objects so a user can move through the business story without losing context or reaching a dead end.
+
+The boundaries between workspaces should feel natural to the user. They must not expose the boundaries between internal systems.
+
+## Permanent Context
+
+Every workspace has one permanent context.
+
+The permanent context establishes whose or what story the user is exploring. It remains stable while the user inspects related events, orders, payments, financial records, campaigns, or other evidence.
+
+In the Customer Workspace, the customer is the permanent context. Orders and events are temporary inspection contexts. They provide depth without replacing the customer or sending the user into a disconnected experience.
+
+## Every Workspace Tells a Story
+
+Every workspace must organize information as a story:
+
+- What is this?
+- What happened?
+- What is it connected to?
+- Why does it matter?
+- What evidence supports the conclusion?
+- What should the user do next?
+
+A workspace should reveal relationships and consequences, not merely display records. Every important object must have a home, and every related object must offer a meaningful next step.
+
+## Universal Forensic Analysis
+
+Universal Forensic Analysis is Pillar #3 of the TraceKit workspace philosophy.
+
+It is a platform-wide interaction, not a separate investigation destination.
+
+Users search evidence, not systems. Universal Search accepts any identifier, detects its likely meaning, finds related objects, and deep-links into the appropriate workspace. The correct permanent context is restored, the relevant evidence is focused, and a temporary inspection drawer provides forensic depth.
+
+Universal Forensic Analysis brings together:
+
+- Evidence
+- Relationships
+- Diagnostics
+- Raw data
+- Explain
+- Replay Journey
+
+Nothing should become a dead end. A user must be able to move from a conclusion to its evidence, from evidence to related objects, and from those objects back to the larger story.
+
+## The Translation Layer
+
+TraceKit contains complex internal systems, but customers should not need to understand them.
+
+The Translation Layer converts internal architecture, financial states, tracking evidence, and operational conditions into language that supports a business decision.
+
+Internal terms such as databases, APIs, queues, import jobs, canonical models, and reconciliation logic remain internal. Customer-facing language should describe what is known, what it means, how confident TraceKit is, and what needs attention.
+
+The Translation Layer must simplify language without hiding evidence or overstating certainty.
+
+In customer-facing UI, Estimated and Reconciled badges communicate financial confidence. The interface should not require a customer to understand the internal term Operational Profit. The underlying distinction between operational and reconciled financial states remains permanent and auditable.
+
+## Progressive Disclosure
+
+TraceKit should be understandable at first glance and defensible under inspection.
+
+The default experience presents the business story, the most important conclusions, and the actions requiring attention. Additional detail appears when the user asks for it through hover previews, drawers, expanded evidence, relationships, diagnostics, raw values, and Explain.
+
+Progressive disclosure does not hide information. It gives complexity an appropriate place.
+
+Business owners should receive clarity. Specialists should be able to reach forensic depth without leaving the context of the business question.
+
+## Accessibility by Default
+
+Accessibility is a product requirement, not a later visual adjustment.
+
+Critical information must never rely on color alone. Status and meaning should combine clear labels with icons, shape, contrast, or other redundant signals.
+
+TraceKit will support alternate appearance palettes, including a Color Vision Optimized palette. Charts and other visualizations must remain understandable without relying solely on color.
+
+Accessible experiences should preserve the same evidence, actions, relationships, and explanatory depth for every user.
+
+## Explain
+
+Every important conclusion supports Explain.
+
+Explain should state what TraceKit concluded, why it reached that conclusion, what evidence supports it, and where uncertainty or missing evidence remains.
+
+Raw data is never hidden. Explain translates evidence into understandable reasoning while preserving a path to the original values and related objects.
+
+## Replay Journey
+
+Replay Journey remains part of the product vision.
+
+It allows a user to move through a story in sequence, observe how context and evidence accumulate, select an event, and inspect the evidence associated with that moment.
+
+Replay should make complex journeys easier to understand without turning the experience into a separate destination.
+
+## Product Promise
+
+> Every important business question should be answerable by following the evidence.
+
+## Chapter 5 Status
+
+Chapter 5 — Complete.
 
 # Chapter 6 — Storyboards
 
