@@ -472,3 +472,38 @@ Future Customer Workspace design should preserve a sequential replay interaction
 ### Status
 
 Approved.
+
+## 2026-07-31 — Offer Is a First-Class Strategic Object
+
+### Decision
+
+- Offer is a first-class TraceKit business Object.
+- Storyboard 003 is Offer Workspace, not Campaign Workspace.
+- Offer is strategic.
+- Campaign is tactical and subordinate to Offer.
+- The Business Context selector establishes the active Offer or business context.
+- Changing Business Context is not the same as filtering a report.
+- Business Context uses a logo, text name, and clear selected state.
+- Compare Mode is an approved Offer Workspace capability.
+- Compare Mode is part of the Core product direction.
+- TraceKit Intelligence may interpret comparisons and recommend actions, but Intelligence remains a separate future add-on.
+- MCP Chat remains part of Core and is reactive.
+
+### Context
+
+Storyboard 003 established the Offer Workspace as the strategic decision environment for understanding profitability, performance, Customer quality, Traffic contribution, and investment potential. The governing Object Model, Lexicon, and storyboard library did not yet reflect that approved direction.
+
+### Rationale
+
+TraceKit should reflect how performance marketers and business owners operate: they manage Offers and allocate Traffic through Campaigns, channels, Affiliates, and Creatives.
+
+### Impact
+
+- Offer becomes part of the Object Model and TraceKit Lexicon.
+- Campaign remains available as a tactical Object and possible child Workspace.
+- The storyboard library uses Storyboard 003 for Offer Workspace.
+- Future production architecture and navigation must preserve Offer context.
+
+### Status
+
+Approved.

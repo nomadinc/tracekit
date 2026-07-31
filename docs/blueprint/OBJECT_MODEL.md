@@ -38,7 +38,7 @@ The TraceKit universe begins with an Organization.
 
 Within an Organization, Customers move through Journeys made of Touchpoints. Identifiers connect observed evidence to the right Customer and Journey.
 
-Journeys lead to Orders containing Products. Campaigns and Affiliates may influence those journeys and commercial outcomes.
+Journeys lead to Orders containing Products. Offers establish the strategic commercial context in which tactical Campaigns, Traffic Sources, and Affiliates influence those journeys and commercial outcomes.
 
 Orders create Financial Events. Connectors bring observable information into TraceKit. Evidence supports every relationship, status, calculation, and conclusion.
 
@@ -54,7 +54,9 @@ Customer → Journey → Touchpoint
 
 Order → Product → Financial Event
 
-Campaign and Affiliate influence the journey.
+Organization → Brand, where applicable → Offer → Traffic Source → Campaign → Ad Set → Creative
+
+Campaign and Affiliate contribute tactically to Offer performance and influence the Journey.
 
 Identifier connects the story.
 
@@ -76,7 +78,7 @@ What is happening across this business, and what requires attention?
 
 ### Relationships
 
-An Organization contains Customers, Journeys, Orders, Products, Campaigns, Affiliates, Financial Events, and Connectors. Its Evidence supports business-wide conclusions and decisions.
+An Organization contains Customers, Journeys, Orders, Products, Offers, Campaigns, Affiliates, Financial Events, and Connectors. Its Evidence supports business-wide conclusions and decisions.
 
 ### Workspace
 
@@ -196,31 +198,82 @@ What did the customer buy, and what financial outcome did it create?
 
 ### Relationships
 
-A Product appears in Orders and may connect to Campaigns, Customers, Financial Events, costs, and Evidence about revenue and profitability.
+A Product appears in Orders and Offers and may connect to Campaigns, Customers, Financial Events, costs, and Evidence about revenue and profitability.
 
 ### Workspace
 
 Products belong in commerce, product-performance, and profit workspaces. They may also appear as related objects in Customer and Order inspection.
 
+## Offer
+
+### Purpose
+
+An Offer represents the commercial proposition being marketed and sold.
+
+An Offer may combine:
+
+- Product or Product bundle
+- Price
+- Order Bumps
+- Upsells
+- Shipping terms
+- Landing Pages
+- Checkout flow
+- Campaigns
+- Affiliates
+- Traffic Sources
+
+An Offer is strategic.
+
+Campaigns, Ad Sets, Creatives, Traffic Sources, and Affiliates are tactical contributors to Offer performance.
+
+### Primary Question
+
+Should I invest more money in this Offer?
+
+### Relationships
+
+An Offer belongs to an Organization and may belong to a Brand where applicable. It may connect to Products, Campaigns, Affiliates, Traffic Sources, Landing Pages, Customers, Orders, Financial Events, Connectors, and Evidence.
+
+The approved high-level product hierarchy is:
+
+Organization
+
+→ Brand, where applicable
+
+→ Offer
+
+→ Traffic Source
+
+→ Campaign
+
+→ Ad Set
+
+→ Creative
+
+### Workspace
+
+The Offer is the Permanent Context of the Offer Workspace.
+
 ## Campaign
 
 ### Purpose
 
-A Campaign represents an organized marketing effort intended to create customer attention, journeys, commerce, and profit.
+A Campaign represents a tactical, platform-specific or channel-specific marketing initiative that contributes Traffic and performance to an Offer.
 
-It provides a durable business context for evaluating marketing performance beyond clicks, conversions, or revenue alone.
+Campaigns organize execution within the strategic Offer context. They help explain how Traffic, spend, Creatives, and downstream outcomes contribute to Offer performance.
 
 ### Primary Question
 
-Which campaign created profitable customer outcomes, and why?
+How is this Campaign contributing to Offer performance?
 
 ### Relationships
 
-A Campaign may generate Touchpoints, influence Journeys, introduce Customers, produce Orders, involve Affiliates, incur Financial Events or costs, and retain attribution Evidence.
+A Campaign belongs to an Offer context. It may connect to Traffic Sources, Ad Sets, Creatives, Affiliates, generate Touchpoints, influence Journeys, introduce Customers, produce Orders, incur Financial Events or costs, and retain attribution Evidence.
 
 ### Workspace
 
-The Campaign is a primary context in marketing workspaces and a related object within Customer, Journey, Order, and financial stories.
+The Campaign is a tactical drill-down within the Offer Workspace and a related Object within Customer, Journey, Order, Affiliate, and financial stories. It may later receive a subordinate child Workspace if Product Review approves one.
 
 ## Affiliate
 
@@ -323,7 +376,10 @@ Important relationships include:
 - An Identifier connects evidence to an object.
 - A Journey may lead to an Order.
 - An Order contains Products.
-- A Campaign or Affiliate may influence a Journey and Order.
+- An Organization may contain Brands, and a Brand may contain one or more Offers.
+- An Offer combines the commercial proposition with its Products, Traffic Sources, Campaigns, Affiliates, Customers, Orders, and financial outcomes.
+- A Campaign is tactical and subordinate to an Offer.
+- A Campaign or Affiliate may influence a Journey and Order within the Offer context.
 - An Order creates Financial Events.
 - A Connector contributes observable source information.
 - Evidence supports every important relationship and conclusion.
