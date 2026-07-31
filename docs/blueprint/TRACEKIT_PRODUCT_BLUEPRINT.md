@@ -1,6 +1,6 @@
 # TraceKit Product Blueprint
 
-Version: 1.1
+Version: 1.2
 Status: Living Document
 
 ## Purpose
@@ -16,6 +16,10 @@ The Product Blueprint defines what we are building and why.
 If implementation conflicts with an approved Product Blueprint decision, the conflict must be surfaced and resolved before further implementation.
 
 ## Version History
+
+### 1.2
+
+- Chapter 4 completed
 
 ### 1.1
 
@@ -39,7 +43,7 @@ If implementation conflicts with an approved Product Blueprint decision, the con
 1. Chapter 1 — The TraceKit Manifesto
 2. Chapter 2 — The Questions We Help People Answer
 3. Chapter 3 — The TraceKit Experience
-4. Chapter 4 — Product Architecture
+4. Chapter 4 — How TraceKit Understands a Business
 5. Chapter 5 — Navigation
 6. Chapter 6 — Storyboards
 7. Chapter 7 — Profit Engine
@@ -602,9 +606,204 @@ At every stage—from first connection to the daily dashboard and month-end reco
 
 Complete.
 
-# Chapter 4 — Product Architecture
+# Chapter 4 — How TraceKit Understands a Business
 
-Status: Planned.
+## Purpose
+
+TraceKit does not organize information the way software systems do.
+
+It organizes information the way business owners think.
+
+Every screen, workflow, connector, recommendation, and report should reinforce this model.
+
+If a feature does not strengthen one of these concepts, it should be questioned before implementation.
+
+## The Anatomy of a Business
+
+Every business can be understood through three connected perspectives.
+
+### Customers
+
+Every business exists because of its customers.
+
+Customers are not simply contacts or CRM records.
+
+Every customer has a story.
+
+That story begins with a first interaction and continues through every touchpoint, purchase, refund, support interaction, and financial event.
+
+TraceKit exists to preserve that story completely.
+
+Questions TraceKit should answer include:
+
+- Who is this customer?
+- How did they find us?
+- What has their journey been?
+- What is their lifetime value?
+- What relationship do we have with them today?
+
+### Money
+
+Money tells the financial story of the business.
+
+Revenue alone is not the story.
+
+Revenue changes.
+
+Refunds occur.
+
+Chargebacks happen.
+
+Fees accumulate.
+
+Advertising costs are incurred.
+
+Affiliate commissions are paid.
+
+Profit evolves.
+
+TraceKit preserves the complete financial lifecycle of every dollar from the moment it enters the business until it is reconciled.
+
+Questions TraceKit should answer include:
+
+- Where did this revenue come from?
+- What costs affected it?
+- How profitable was it?
+- Can the final number be trusted?
+
+### Decisions
+
+The purpose of TraceKit is not reporting.
+
+The purpose of TraceKit is better decisions.
+
+Everything in the platform should help someone decide what to do next.
+
+Whether that decision belongs to a Founder, Media Buyer, Finance, Operations, or another user, TraceKit should reduce uncertainty and increase confidence.
+
+Questions TraceKit should answer include:
+
+- What changed?
+- Why did it change?
+- What requires my attention?
+- What should I do next?
+
+## How These Perspectives Connect
+
+Every business follows the same story.
+
+Customer
+
+↓
+
+Journey
+
+↓
+
+Commerce
+
+↓
+
+Money
+
+↓
+
+Decision
+
+No event should ever exist without context.
+
+No decision should ever exist without evidence.
+
+## What the Customer Experiences
+
+Customers should never think about:
+
+- Databases
+- APIs
+- Queues
+- Import jobs
+- Connector architecture
+- Reconciliation logic
+
+They should experience one connected business.
+
+Whether they are looking at a customer, an order, Operational Profit, or a campaign, they should feel like they are exploring different chapters of the same story.
+
+## Behind the Scenes
+
+Internally, TraceKit organizes information into specialized systems.
+
+Commerce.
+
+Attribution.
+
+Financials.
+
+Costs.
+
+Operations.
+
+Presentation.
+
+Those systems exist only to support the customer experience.
+
+The customer should never need to understand them.
+
+## Guiding Principle
+
+Every feature added to TraceKit should strengthen at least one of these three perspectives:
+
+- Understanding customers.
+- Understanding money.
+- Making better decisions.
+
+If it does not clearly strengthen one of those areas, it probably does not belong in TraceKit.
+
+## The Business We See
+
+Most software sees isolated records.
+
+A CRM sees contacts.
+
+A commerce platform sees orders.
+
+An affiliate platform sees clicks.
+
+A payment processor sees transactions.
+
+TraceKit sees one business.
+
+Every customer.
+
+Every dollar.
+
+Every decision.
+
+Connected.
+
+## Chapter Summary
+
+A business is not a collection of disconnected systems.
+
+It is a collection of connected stories.
+
+Customers create journeys.
+
+Journeys create commerce.
+
+Commerce creates financial outcomes.
+
+Financial outcomes drive decisions.
+
+TraceKit exists to preserve those connections so every decision is made with confidence.
+
+## Chapter Anchor
+
+> TraceKit organizes information the way business owners think—not the way software does.
+
+## Chapter Status
+
+Chapter 4 — Complete.
 
 # Chapter 5 — Navigation
 
