@@ -77,6 +77,8 @@ A Finance user should be able to explain:
 - Which expected inputs remain pending
 - Why the Profit is Estimated or Reconciled
 - How Shipping Charged, Actual Shipping Cost, and Packaging affect Net Shipping Margin
+- How a processor pricing rule, percentage rate, fixed transaction fee, and capture count produce the expected fee
+- Whether an observed processor fee matches the expected fee and what any signed variance means
 - What Evidence supports each deduction
 
 A marketing or Tracking Expert should be able to explain:
@@ -129,57 +131,47 @@ The Order Summary immediately displays:
 - Traffic Source
 - Campaign
 
-### 2. Profit Breakdown
+### 2. Profit Ledger
 
-Profit Breakdown is the hero of the Order Workspace.
+The Profit Ledger is the hero of the Order Workspace.
 
-It tells the financial Story as a clear waterfall-like explanation:
+It presents a vertical order-level P&L that reads naturally from top to bottom:
 
 Revenue
 
-↓
+Commercial composition
 
-Media Cost
+- Main Product
+- Order Bumps
+- Upsells
+- Shipping Charged
+- Discounts
+- Taxes Collected, where relevant
 
-↓
+Costs
 
-Affiliate Commission
-
-↓
-
-Processor Fees
-
-↓
-
-COGS
-
-↓
-
-Shipping Charged
-
-↓
-
-Actual Shipping Cost
-
-↓
-
-Packaging
-
-↓
-
-Taxes
-
-↓
+- Media Cost
+- Affiliate Commission
+- Processor Fees
+- COGS
+- Actual Shipping Cost
+- Packaging
+- Taxes or tax treatment
+- Refunds or chargebacks, when applicable
 
 Net Profit
 
-Every amount and deduction supports:
+Every row presents a clear line-item name, signed amount, concise source or explanation, and an inspection path to Explain, Evidence, and Related Objects. A running balance may appear where useful but must not clutter the ledger.
+
+The Profit Ledger must not use equal-sized financial cards, decorative mini-bars, repeated deduction labels, or equal visual weight for immaterial and material amounts.
+
+The ledger must remain understandable without color and must not imply that an Estimated value is final.
+
+Every amount supports:
 
 - Explain
 - Evidence
 - Related Objects
-
-The waterfall must remain understandable without color and must not imply that an Estimated value is final.
 
 ### 3. Commercial Summary
 
@@ -211,7 +203,7 @@ Approved example:
 - Packaging: $0.62
 - Net Shipping Margin: -$4.62
 
-Selecting Shipping opens the Evidence Drawer with the related Financial Events, calculation, source information, and Explain.
+Selecting Shipping opens Shipping Analysis in the Financial Analysis Drawer. Business meaning, calculation, source, status, Profit impact, and Explain appear before progressively disclosed source Evidence.
 
 ### 5. Attribution
 
@@ -269,7 +261,7 @@ Each event supports:
 
 - Hover or focus preview
 - Click inspection
-- Evidence Drawer
+- Journey / Attribution Evidence Drawer
 - Relationships
 - Explain
 
@@ -277,7 +269,7 @@ Replay Journey allows the user to step through this lifecycle while retaining th
 
 ### 7. TraceKit Intelligence
 
-TraceKit Intelligence is a future capability and is not required in Version 1 of the prototype.
+TraceKit Intelligence is a future production capability represented by clearly labeled mock observations in the prototype.
 
 It is contextual business intelligence, not AI chat.
 
@@ -294,7 +286,7 @@ Approved examples from the product design session include:
 - Affiliate 104 generates above-average Profit.
 - Offer URL conversion rate declined.
 
-These examples demonstrate the intended interaction only. No recommendation may appear unless its supporting Evidence and comparison are available.
+These examples demonstrate the intended interaction only. No recommendation may appear unless its supporting Evidence and comparison are available. Intelligence remains distinct from Core Explain and Evidence behavior and follows the core Order Story rather than competing with the Profit Ledger.
 
 ## Primary Information
 
@@ -302,7 +294,7 @@ The default hierarchy is:
 
 1. Order identity and status
 2. Profit with Estimated or Reconciled qualification
-3. Profit Breakdown
+3. Profit Ledger
 4. Customer and attribution summary
 5. Commercial Summary
 6. Shipping
@@ -329,7 +321,7 @@ No unqualified Profit value may appear.
 
 ## Primary Actions
 
-- Inspect any Profit Breakdown amount
+- Inspect any Profit Ledger amount
 - Open Explain
 - View Evidence
 - Inspect attribution
@@ -386,23 +378,71 @@ All drill-downs remain inside the Order Workspace.
 
 ## Temporary Context
 
-The Evidence Drawer is the primary Temporary Context.
+A shared responsive Drawer shell provides Temporary Context while adapting its information hierarchy to the inspected Object.
 
-Selecting Processor Fees, Affiliate Commission, Shipping, Media Cost, COGS, attribution, or a Timeline event opens the relevant Drawer while preserving the selected Order.
+> Drawers answer the question associated with the object being inspected. They do not reuse a generic information hierarchy.
 
-The Drawer uses the approved Customer Workspace interaction model and includes:
+### Financial Analysis Drawer
 
-- Summary
-- Raw URL, when relevant
+Selecting Revenue, Media Cost, Affiliate Commission, Processor Fees, COGS, Shipping, Tax, or Profit opens Financial Analysis while preserving the selected Order.
+
+The Financial Analysis Drawer answers:
+
+> Why is this amount what it is?
+
+It begins with:
+
+- Amount
+- Business meaning
+- Calculation or formula
+- Source
+- Status
+- Profit impact
+- Explain
+
+Supporting and raw source Evidence follows through progressive disclosure.
+
+### Journey / Attribution Evidence Drawer
+
+Selecting attribution or a Timeline event opens a forensic hierarchy that answers:
+
+> What happened, and what tracking evidence proves it?
+
+It may include:
+
+- Original URL, referrer, and destination
 - Query parameters
 - Identifiers
 - Redirect path
 - Tracking Diagnostics
 - Relationships
 - Explain
-- Evidence
+- Raw Evidence
 
 Closing the Drawer returns the user to the same Order and investigation position.
+
+### Processor Fee Analysis
+
+Processor Fee Analysis must make the pricing rule and calculation explicit before raw Evidence. Processor-specific values come from Evidence or configured mock data rather than being hard-coded into the generic Drawer structure.
+
+It displays:
+
+- Processor
+- Pricing rule
+- Percentage rate
+- Fixed per-transaction fee
+- Currency
+- Order or captured amount used
+- Number of captures
+- Expected fee
+- Observed imported fee
+- Signed variance with explicit comparison language
+- Settlement status
+- Profit impact
+- Explain
+- Supporting Evidence
+
+When an Order has multiple captures, each capture shows its own percentage calculation and fixed fee. The total expected fee is then compared with the observed imported fee.
 
 ## Evidence
 
@@ -411,6 +451,7 @@ Relevant Evidence includes:
 - Order and Product source information
 - Revenue, discounts, quantities, tax, and Shipping Charged
 - Payment and processor fee information
+- Processor pricing rules, capture-level calculations, expected fees, observed fees, signed variances, settlement status, transaction Identifiers, and raw processor Evidence
 - Actual Shipping Cost and Packaging Cost
 - Media Cost
 - Affiliate Commission
@@ -447,7 +488,7 @@ Selecting a result must:
 - Select the correct Order
 - Focus the matching Timeline event, financial amount, Related Object, or Evidence
 - Highlight the match
-- Open the relevant Evidence Drawer
+- Open the relevant context-adaptive Drawer
 - Preserve the searched Identifier in context
 
 Universal Search is an entry into the Order Story, not a separate destination.
@@ -458,7 +499,7 @@ Every important conclusion supports Explain, including:
 
 - Net Profit
 - Estimated or Reconciled status
-- Each Profit Breakdown amount
+- Each Profit Ledger amount
 - Net Shipping Margin
 - Attribution source and confidence
 - Tracking Health
@@ -509,25 +550,25 @@ The Order Workspace must preserve first-touch attribution while showing the Touc
 
 Desktop is the primary investigation experience.
 
-Use a master-detail structure:
+Use the shared TraceKit master-detail shell established by the Customer Workspace:
 
-- Compact Order list or selection context
-- Order Workspace
-- Evidence Drawer when Temporary Context is open
+- Compact permanent Order list on the left
+- Broad continuous Order Workspace in the center
+- Attached Temporary Context Drawer on the right
 
-Profit Breakdown is the visual and narrative hero. Commercial Summary, Shipping, Attribution, and Order Timeline follow in a clear Story hierarchy.
+The Main Workspace uses the available center width without a centered bounded canvas or permanent internal context rail. The header spans the center Workspace. The Profit Ledger is the visual and narrative hero; Commercial Summary, Shipping, Attribution, Order Timeline, and mock TraceKit Intelligence observations follow in a natural vertical hierarchy.
 
 ## Tablet Layout
 
 The Order list may collapse. The Workspace remains primary, and the Evidence Drawer may overlay more of the available width.
 
-Profit Breakdown may stack while preserving the sequence and label of every financial amount.
+The Profit Ledger preserves the sequence and label of every financial amount.
 
 ## Mobile Layout
 
 The Order list may become a temporary selection surface. The Evidence Drawer may become full-width.
 
-The hierarchy must preserve Order identity, Profit qualification, Profit Breakdown, Customer, Tracking Health, and next inspection. Wide financial and Timeline sequences may scroll without relying on color.
+The hierarchy must preserve Order identity, Profit qualification, the Profit Ledger, Customer, Tracking Health, and next inspection. Wide financial and Timeline sequences may scroll without relying on color.
 
 ## Loading State
 
@@ -573,7 +614,7 @@ Specific production roles and permission boundaries remain to be defined before 
 - Tracking Health uses a label, icon, shape, and high contrast.
 - Evidence Drawer status is explicit.
 - Timeline states use labels and shapes in addition to color.
-- Profit Breakdown remains understandable in grayscale.
+- The Profit Ledger remains understandable in grayscale through labels, signed values, hierarchy, and explicit status.
 - Charts use labels, line styles, marker shapes, or patterns in addition to color.
 - The Color Vision Optimized appearance palette remains part of the product direction.
 - Keyboard and assistive-technology users receive equivalent access to the Order Story, Evidence, Relationships, Explain, and actions.
@@ -601,12 +642,12 @@ The concept does not prescribe analytics events or introduce separate product be
 2. Paste an Everflow Transaction ID or Order ID.
 3. TraceKit detects the Identifier and opens the matching Order Workspace.
 4. Confirm the Order, Customer, Profit, Estimated or Reconciled status, and Tracking Health.
-5. Use Profit Breakdown to explain Revenue and every deduction through Net Profit.
+5. Use the Profit Ledger to explain Revenue, commercial composition, every cost, shipping economics, tax treatment, and Net Profit.
 6. Open Shipping to compare Shipping Charged, Actual Shipping Cost, Packaging, and Net Shipping Margin.
-7. Open attribution and use Explain to show why the source, Affiliate, and Campaign were assigned.
-8. Inspect URLs, parameters, Identifiers, redirects, and Tracking Diagnostics in the Evidence Drawer.
-9. Replay the Order Timeline from click through Profit and any refund.
-10. Finish with the complete Order Story and the Evidence supporting its financial and attribution conclusions.
+7. Open Processor Fees to compare the pricing rule, capture-level calculations, expected fee, observed fee, and signed variance.
+8. Open attribution and use Explain to show why the source, Affiliate, and Campaign were assigned.
+9. Inspect URLs, parameters, Identifiers, redirects, and Tracking Diagnostics in the Journey / Attribution Evidence Drawer.
+10. Replay the Order Timeline from click through Profit and any refund, then finish with the complete Order Story and supporting Evidence.
 
 This sequence should be presentable in approximately 90 seconds.
 
@@ -622,8 +663,10 @@ No other functionality is committed beyond Version 1. Later storyboard versions 
 
 - Final Order-list density and selection behavior
 - Whether the Evidence Drawer overlays or pushes content
-- Final waterfall presentation at narrower widths
-- Whether Profit Breakdown deductions should group into financial phases
+- Whether the Profit Ledger should show a running balance on every row or only at meaningful financial boundaries
+- Whether commercial composition should receive product-level prices when authoritative item allocations are available
+- Which raw source fields belong in each Financial Analysis Drawer in production Version 1
+- How rounding policy should be explained when capture-level rounded fees differ from processor-level settlement rounding
 - Whether the Order Timeline uses a horizontal, vertical, or hybrid layout
 - Whether Replay Journey adds enough practical value in the Order context
 - Final Universal Search result ranking when one Identifier matches multiple Orders or Objects
@@ -634,11 +677,14 @@ No other functionality is committed beyond Version 1. Later storyboard versions 
 
 - The Order is the Permanent Context.
 - The Workspace is an Order Profit Investigation Workspace, not an ecommerce order page.
-- Profit Breakdown is the hero.
+- The vertical Profit Ledger is the hero and replaces the equal-card waterfall presentation.
 - Profit uses Estimated or Reconciled qualification.
 - Shipping Charged, Actual Shipping Cost, Packaging, and Net Shipping Margin remain distinct.
 - Every important financial and attribution conclusion supports Explain.
-- The Evidence Drawer provides Temporary Context.
+- A shared Drawer shell provides Temporary Context with Financial Analysis and Journey / Attribution Evidence hierarchies.
+- Financial Analysis answers why an amount is what it is before exposing raw Evidence.
+- Processor Fee Analysis shows its pricing rule, capture-level formula, expected fee, observed fee, and signed variance.
+- The Order Workspace uses the shared TraceKit list–workspace–drawer shell established by the Customer Workspace.
 - Universal Search deep-links into the matching Order and Evidence.
 - Replay Journey remains part of the product vision.
 - Important states and financial sequences do not rely on color alone.
@@ -650,18 +696,22 @@ See the [Product Decision Log](../PRODUCT_DECISIONS.md).
 
 - [ ] The selected Order remains the Permanent Context throughout investigation.
 - [ ] The One Sentence Test can be answered from the Workspace.
-- [ ] Profit Breakdown is the hero and explains Revenue through Net Profit.
+- [ ] The vertical Profit Ledger is the hero and explains Revenue, commercial composition, costs, shipping, tax treatment, and Net Profit.
+- [ ] The Profit Ledger does not use equal-sized financial cards, decorative mini-bars, or repeated deduction labels.
 - [ ] Every deduction supports Explain, Evidence, and Related Objects.
 - [ ] Shipping Charged, Actual Shipping Cost, Packaging, and Net Shipping Margin are distinct and inspectable.
 - [ ] Profit uses Estimated or Reconciled qualification.
 - [ ] Attribution shows Traffic Source, Affiliate, Campaign, Creative, Offer URL, Landing Page, and Click → Purchase Delta.
 - [ ] Every important conclusion supports Explain.
 - [ ] Universal Search opens the correct Order and focuses matching Evidence.
-- [ ] The Evidence Drawer preserves the Order context.
+- [ ] The shared Drawer shell preserves the Order context and adapts its hierarchy to the inspected Object.
+- [ ] Financial Analysis begins with amount, business meaning, calculation, source, status, Profit impact, and Explain.
+- [ ] Journey / Attribution Evidence begins with what happened before exposing tracking Evidence.
+- [ ] Processor Fee Analysis shows the configured pricing rule, every capture calculation, expected fee, observed fee, signed variance, settlement status, Profit impact, Explain, and supporting Evidence.
 - [ ] Raw Evidence remains inspectable without becoming the default experience.
 - [ ] Tracking Diagnostics distinguish observed Evidence from inference.
 - [ ] No unsupported claim identifies a specific browser extension or blocker.
-- [ ] Status, Tracking Health, Timeline states, and Profit Breakdown remain understandable without color.
+- [ ] Status, Tracking Health, Timeline states, and the Profit Ledger remain understandable without color.
 - [ ] The prototype includes healthy profitable, low-margin, shipping-loss, high-affiliate-commission, refunded, chargeback, and tracking-issue scenarios.
 - [ ] TraceKit Intelligence remains clearly separated from Version 1 implementation.
 - [ ] The prototype passes [PRODUCT_REVIEW_CHECKLIST.md](../PRODUCT_REVIEW_CHECKLIST.md) before production approval.
