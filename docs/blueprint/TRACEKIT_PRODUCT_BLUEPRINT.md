@@ -15,6 +15,59 @@ The Product Blueprint defines what we are building and why.
 
 If implementation conflicts with an approved Product Blueprint decision, the conflict must be surfaced and resolved before further implementation.
 
+## Product Pyramid
+
+Vision
+
+↓
+
+Product Blueprint
+
+↓
+
+Object Model
+
+↓
+
+Workspace Design System
+
+↓
+
+Storyboards
+
+↓
+
+Interactive Concepts
+
+↓
+
+Product Review
+
+↓
+
+Production Build
+
+Each level constrains the level below it.
+
+Implementation does not redefine product philosophy.
+
+No stage should be skipped for major product work.
+
+## Blueprint Milestone 1 — Foundation Complete
+
+The first Blueprint foundation milestone establishes:
+
+- Product Blueprint
+- Product Decisions
+- Object Model
+- Workspace Design System
+- Customer Workspace concept
+- Storyboard process
+- Product development lifecycle
+- Universal Forensic Analysis
+- Translation Layer
+- Accessibility principles
+
 ## Version History
 
 ### 1.2

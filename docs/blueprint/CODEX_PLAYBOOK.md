@@ -18,6 +18,11 @@ This document tells Codex how to work inside the TraceKit repository.
 Before architecture or product work, Codex must read the documents relevant to the requested scope:
 
 - [TraceKit Product Blueprint](TRACEKIT_PRODUCT_BLUEPRINT.md)
+- [TraceKit Object Model](OBJECT_MODEL.md)
+- [TraceKit Workspace Design System](WORKSPACE_DESIGN_SYSTEM.md)
+- [TraceKit Lexicon](TRACEKIT_LEXICON.md)
+- [Storyboard Template](STORYBOARD_TEMPLATE.md)
+- [Product Review Checklist](PRODUCT_REVIEW_CHECKLIST.md)
 - [Profit Engine Specification](../architecture/PROFIT_ENGINE_SPEC_V1.md)
 - [Executive Dashboard Validation](../architecture/EXECUTIVE_DASHBOARD_VALIDATION.md)
 - [Connector Backlog](../architecture/CONNECTOR_BACKLOG.md)
@@ -38,6 +43,43 @@ Blueprint
 → Validation
 
 Do not skip a stage that is required by the scope or risk of the work.
+
+## Product Lifecycle
+
+Major product work uses this lifecycle:
+
+Idea
+→ Blueprint
+→ Object Model
+→ Workspace Design System
+→ Storyboard
+→ Interactive Concept
+→ Product Review
+→ Approval
+→ Production Build
+
+Permanent product rules:
+
+- The Product Blueprint drives development, not the other way around.
+- No production feature should be built until its business object, workspace behavior, and storyboard have been approved.
+- Codex must not invent product behavior when an approved storyboard exists.
+- Interactive concepts use mock data unless live data is explicitly approved.
+- Product review occurs before production implementation.
+- Production code must not redefine product terminology established in [TRACEKIT_LEXICON.md](TRACEKIT_LEXICON.md).
+- Internal architectural terminology should not appear in user-facing copy unless it helps the user make a decision.
+- Important states must not rely on color alone.
+
+### Terminology Guidance
+
+Prefer:
+
+- Workspace
+- View
+- Panel
+- Drawer
+- Modal
+
+Use “page” only when discussing routing or implementation.
 
 ## Core Engineering Rules
 
