@@ -11,9 +11,25 @@ import { ShellDrawerProvider } from "@/components/layout/shell-drawer";
 import { ShellRouteBoundary } from "@/components/identity/shell-route-boundary";
 
 export default function AppShell({ children }: { children: React.ReactNode }) {
+  return (
+    <IdentityProvider>
+      <CommandProvider>
+        <LiveWorkspaceProvider workspaceId="default">
+          <ShellDrawerProvider>
+            <React.Suspense fallback={<div className="flex min-h-dvh items-center justify-center bg-slate-50 text-sm font-medium text-slate-600">Preparing TraceKit…</div>}>
+              <InvestigationProvider><ShellFrame>{children}</ShellFrame></InvestigationProvider>
+            </React.Suspense>
+          </ShellDrawerProvider>
+        </LiveWorkspaceProvider>
+      </CommandProvider>
+    </IdentityProvider>
+  );
+}
+
+function ShellFrame({ children }: { children: React.ReactNode }) {
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
 
-  const shell = (
+  return (
     <div className="min-h-dvh bg-slate-50 text-slate-950 dark:bg-slate-950 dark:text-white">
       <div className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:block">
         <ProductionSidebar />
@@ -42,19 +58,5 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </main>
       </div>
     </div>
-  );
-
-  return (
-    <IdentityProvider>
-      <CommandProvider>
-        <LiveWorkspaceProvider workspaceId="default">
-          <ShellDrawerProvider>
-            <React.Suspense fallback={shell}>
-              <InvestigationProvider>{shell}</InvestigationProvider>
-            </React.Suspense>
-          </ShellDrawerProvider>
-        </LiveWorkspaceProvider>
-      </CommandProvider>
-    </IdentityProvider>
   );
 }
