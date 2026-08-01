@@ -2,9 +2,9 @@
 
 import * as React from "react";
 import { accessibleBusinessContexts, accessibleOrganizations, normalizeSession, shellVariant } from "@/lib/identity/authorization";
-import { DEFAULT_DEVELOPMENT_IDENTITY_ID, MOCK_IDENTITIES } from "@/lib/identity/mock";
+import { developmentIdentityById, developmentSessionFor, resolveDevelopmentIdentity, withDevelopmentIdentity } from "@/lib/identity/development-state";
 import { DEVELOPMENT_IDENTITY_STORAGE_KEY } from "@/lib/identity/session";
-import type { BusinessContext, Identity, IdentitySession, Organization, ShellVariant } from "@/lib/identity/types";
+import type { BusinessContext, IdentitySession, Organization, ShellVariant } from "@/lib/identity/types";
 
 type IdentityContextValue = {
   session: IdentitySession;
@@ -16,35 +16,33 @@ type IdentityContextValue = {
   setActiveBusinessContext: (contextId: string) => void;
 };
 
-function sessionFor(identity: Identity, current?: IdentitySession): IdentitySession {
-  return normalizeSession({
-    authenticated: true,
-    developmentOnly: true,
-    identity,
-    activeOrganizationId: current?.activeOrganizationId || null,
-    activeBusinessContextId: current?.activeBusinessContextId || null,
-  });
-}
-
-const defaultIdentity = MOCK_IDENTITIES.find((identity) => identity.id === DEFAULT_DEVELOPMENT_IDENTITY_ID) || MOCK_IDENTITIES[0];
-const defaultSession = sessionFor(defaultIdentity);
+const defaultIdentity = resolveDevelopmentIdentity();
+const defaultSession = developmentSessionFor(defaultIdentity);
 const IdentityContext = React.createContext<IdentityContextValue | null>(null);
 
 export function IdentityProvider({ children }: { children: React.ReactNode }) {
   const [session, setSession] = React.useState(defaultSession);
+  const [ready, setReady] = React.useState(false);
 
   React.useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const requested = params.get("dev_identity") || window.localStorage.getItem(DEVELOPMENT_IDENTITY_STORAGE_KEY);
-    const identity = MOCK_IDENTITIES.find((candidate) => candidate.id === requested);
-    if (identity) setSession((current) => sessionFor(identity, current));
+    function syncFromLocation() {
+      const params = new URLSearchParams(window.location.search);
+      const identity = resolveDevelopmentIdentity(params.get("dev_identity"), window.localStorage.getItem(DEVELOPMENT_IDENTITY_STORAGE_KEY));
+      window.localStorage.setItem(DEVELOPMENT_IDENTITY_STORAGE_KEY, identity.id);
+      setSession((current) => developmentSessionFor(identity, current));
+      setReady(true);
+    }
+    syncFromLocation();
+    window.addEventListener("popstate", syncFromLocation);
+    return () => window.removeEventListener("popstate", syncFromLocation);
   }, []);
 
   const setDevelopmentIdentity = React.useCallback((identityId: string) => {
-    const identity = MOCK_IDENTITIES.find((candidate) => candidate.id === identityId);
+    const identity = developmentIdentityById(identityId);
     if (!identity) return;
     window.localStorage.setItem(DEVELOPMENT_IDENTITY_STORAGE_KEY, identity.id);
-    setSession((current) => sessionFor(identity, current));
+    window.history.replaceState(window.history.state, "", withDevelopmentIdentity(`${window.location.pathname}${window.location.search}${window.location.hash}`, identity.id));
+    setSession((current) => developmentSessionFor(identity, current));
   }, []);
 
   const setActiveOrganization = React.useCallback((organizationId: string) => {
@@ -59,7 +57,11 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
   const businessContexts = React.useMemo(() => accessibleBusinessContexts(session.identity, session.activeOrganizationId), [session.identity, session.activeOrganizationId]);
   const value = React.useMemo<IdentityContextValue>(() => ({ session, organizations, businessContexts, variant: shellVariant(session.identity), setDevelopmentIdentity, setActiveOrganization, setActiveBusinessContext }), [session, organizations, businessContexts, setDevelopmentIdentity, setActiveOrganization, setActiveBusinessContext]);
 
-  return <IdentityContext.Provider value={value}>{children}</IdentityContext.Provider>;
+  return (
+    <IdentityContext.Provider value={value}>
+      {ready ? children : <div className="flex min-h-dvh items-center justify-center bg-slate-50 text-sm font-medium text-slate-600">Preparing development identity…</div>}
+    </IdentityContext.Provider>
+  );
 }
 
 export function useIdentity() {

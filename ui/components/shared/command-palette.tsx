@@ -24,7 +24,9 @@ import type { InvestigationTarget } from "@/lib/entities";
 import { useIdentity } from "@/components/identity/identity-provider";
 import { hasAnyPermission, shellVariant } from "@/lib/identity/authorization";
 import { navigationForIdentity } from "@/lib/identity/shell-navigation";
+import { withDevelopmentIdentity } from "@/lib/identity/development-state";
 import type { Identity } from "@/lib/identity/types";
+import { shellOverlayReducer } from "@/lib/shell/overlay-state";
 import {
   globalSearchQuery,
   type GlobalSearchResponse,
@@ -133,34 +135,31 @@ function groupItems(items: PaletteItem[]) {
   return groups;
 }
 
-export function useCommandPaletteController() {
-  const [open, setOpen] = React.useState(false);
+export function useCommandPaletteController(onOpening?: () => void) {
+  const [overlay, dispatch] = React.useReducer(shellOverlayReducer, "none");
+  const open = overlay === "search";
   const returnFocusRef = React.useRef<HTMLElement | null>(null);
 
   const openPalette = React.useCallback(() => {
     if (typeof document !== "undefined") {
       returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
     }
-    setOpen(true);
-  }, []);
+    onOpening?.();
+    dispatch({ type: "open-search" });
+  }, [onOpening]);
 
-  const closePalette = React.useCallback(() => {
-    setOpen(false);
-    window.setTimeout(() => returnFocusRef.current?.focus(), 0);
+  const closePalette = React.useCallback((restoreFocus = true) => {
+    dispatch({ type: "escape" });
+    if (restoreFocus) window.setTimeout(() => returnFocusRef.current?.focus(), 0);
   }, []);
 
   const togglePalette = React.useCallback(() => {
-    setOpen((current) => {
-      if (current) {
-        window.setTimeout(() => returnFocusRef.current?.focus(), 0);
-        return false;
-      }
-      if (typeof document !== "undefined") {
-        returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
-      }
-      return true;
-    });
-  }, []);
+    if (open) {
+      closePalette();
+      return;
+    }
+    openPalette();
+  }, [closePalette, open, openPalette]);
 
   React.useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
@@ -177,7 +176,7 @@ export function useCommandPaletteController() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [closePalette, open, togglePalette]);
 
-  return { open, setOpen, openPalette, closePalette, togglePalette };
+  return { open, openPalette, closePalette, togglePalette };
 }
 
 export function CommandPaletteButton({
@@ -223,6 +222,7 @@ export function CommandPaletteDialog({
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const requestIdRef = React.useRef(0);
   const previousPathnameRef = React.useRef(pathname);
+  const previousIdentityRef = React.useRef(session.identity.id);
   const previousBusinessContextRef = React.useRef(session.activeBusinessContextId);
   const navItems = React.useMemo(() => navigationItems(session.identity), [session.identity]);
   const [query, setQuery] = React.useState("");
@@ -240,6 +240,11 @@ export function CommandPaletteDialog({
     if (open && previousPathnameRef.current !== pathname) onClose();
     previousPathnameRef.current = pathname;
   }, [onClose, open, pathname]);
+
+  React.useEffect(() => {
+    if (open && previousIdentityRef.current !== session.identity.id) onClose();
+    previousIdentityRef.current = session.identity.id;
+  }, [onClose, open, session.identity.id]);
 
   React.useEffect(() => {
     if (open && previousBusinessContextRef.current !== session.activeBusinessContextId) onClose();
@@ -341,11 +346,11 @@ export function CommandPaletteDialog({
       return;
     }
     if (item.action === "open_notifications") {
-      router.push(withWorkspace("/notifications"));
+      router.push(withDevelopmentIdentity(withWorkspace("/notifications"), session.identity.id));
       onClose();
       return;
     }
-    if (item.href) router.push(withWorkspace(item.href));
+    if (item.href) router.push(withDevelopmentIdentity(withWorkspace(item.href), session.identity.id));
     onClose();
   }
 
