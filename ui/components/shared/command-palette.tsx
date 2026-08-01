@@ -1,23 +1,18 @@
 "use client";
 
 import * as React from "react";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import {
   ArrowRight,
   ClipboardList,
   Command,
-  Home,
   Loader2,
   Search,
   ShoppingBag,
   UserRound,
 } from "lucide-react";
 import { useInvestigation } from "@/components/investigation/investigation-context";
-import {
-  APP_NAVIGATION,
-  GLOBAL_SEARCH_PLACEHOLDER,
-  SECONDARY_NAVIGATION,
-} from "@/lib/app-navigation";
+import { GLOBAL_SEARCH_PLACEHOLDER } from "@/lib/app-navigation";
 import {
   BUILT_IN_OPERATIONS_VIEW_COMMANDS,
   BUILT_IN_SAFE_ACTION_COMMANDS,
@@ -26,6 +21,10 @@ import {
 } from "@/lib/commands";
 import { useRegisteredCommands, type ContextCommand } from "@/components/shared/command-context";
 import type { InvestigationTarget } from "@/lib/entities";
+import { useIdentity } from "@/components/identity/identity-provider";
+import { hasAnyPermission, shellVariant } from "@/lib/identity/authorization";
+import { navigationForIdentity } from "@/lib/identity/shell-navigation";
+import type { Identity } from "@/lib/identity/types";
 import {
   globalSearchQuery,
   type GlobalSearchResponse,
@@ -48,41 +47,22 @@ type PaletteItem = {
   icon: React.ComponentType<{ className?: string }>;
 };
 
-function navigationItems(): PaletteItem[] {
+function navigationItems(identity: Identity): PaletteItem[] {
   const items: PaletteItem[] = [];
-  for (const group of APP_NAVIGATION) {
-    if (group.href) {
-      items.push({
-        id: `nav:${group.href}`,
-        group: "Navigation",
-        title: `Go to ${group.label}`,
-        subtitle: group.description,
-        href: group.href,
-        icon: group.icon,
-      });
-    }
-    for (const child of group.items || []) {
-      items.push({
-        id: `nav:${child.href}:${child.label}`,
-        group: "Navigation",
-        title: `Go to ${child.label}`,
-        subtitle: child.description,
-        href: child.href,
-        icon: group.icon,
-      });
-    }
-  }
-  for (const item of SECONDARY_NAVIGATION) {
+  const variant = shellVariant(identity);
+  for (const item of navigationForIdentity(identity)) {
     items.push({
       id: `nav:${item.href}:${item.label}`,
       group: "Navigation",
       title: `Go to ${item.label}`,
-      subtitle: item.description,
+      subtitle: `${variant === "product-admin" ? "Platform" : variant === "agency" ? "Agency" : "Organization"} destination`,
       href: item.href,
-      icon: Home,
+      icon: item.icon,
     });
   }
-  for (const command of [...BUILT_IN_OPERATIONS_VIEW_COMMANDS, ...BUILT_IN_SAFE_ACTION_COMMANDS]) {
+  const operationsCommands = hasAnyPermission(identity, ["imports.view", "connectors.view"]) ? BUILT_IN_OPERATIONS_VIEW_COMMANDS : [];
+  const safeActionCommands = hasAnyPermission(identity, ["imports.manage", "connectors.manage"]) ? BUILT_IN_SAFE_ACTION_COMMANDS : [];
+  for (const command of [...operationsCommands, ...safeActionCommands]) {
     items.push(commandToItem(command));
   }
   return items;
@@ -169,18 +149,35 @@ export function useCommandPaletteController() {
     window.setTimeout(() => returnFocusRef.current?.focus(), 0);
   }, []);
 
+  const togglePalette = React.useCallback(() => {
+    setOpen((current) => {
+      if (current) {
+        window.setTimeout(() => returnFocusRef.current?.focus(), 0);
+        return false;
+      }
+      if (typeof document !== "undefined") {
+        returnFocusRef.current = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+      }
+      return true;
+    });
+  }, []);
+
   React.useEffect(() => {
     function onKeyDown(event: KeyboardEvent) {
       if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
         event.preventDefault();
-        openPalette();
+        togglePalette();
+        return;
+      }
+      if (open && event.key === "Escape") {
+        closePalette();
       }
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [openPalette]);
+  }, [closePalette, open, togglePalette]);
 
-  return { open, setOpen, openPalette, closePalette };
+  return { open, setOpen, openPalette, closePalette, togglePalette };
 }
 
 export function CommandPaletteButton({
@@ -219,11 +216,15 @@ export function CommandPaletteDialog({
   onClose: () => void;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const { session } = useIdentity();
   const investigation = useInvestigation();
   const contextCommands = useRegisteredCommands();
   const inputRef = React.useRef<HTMLInputElement | null>(null);
   const requestIdRef = React.useRef(0);
-  const navItems = React.useMemo(() => navigationItems(), []);
+  const previousPathnameRef = React.useRef(pathname);
+  const previousBusinessContextRef = React.useRef(session.activeBusinessContextId);
+  const navItems = React.useMemo(() => navigationItems(session.identity), [session.identity]);
   const [query, setQuery] = React.useState("");
   const [search, setSearch] = React.useState<GlobalSearchResponse | null>(null);
   const [loading, setLoading] = React.useState(false);
@@ -234,6 +235,16 @@ export function CommandPaletteDialog({
     if (!open) return;
     window.setTimeout(() => inputRef.current?.focus(), 0);
   }, [open]);
+
+  React.useEffect(() => {
+    if (open && previousPathnameRef.current !== pathname) onClose();
+    previousPathnameRef.current = pathname;
+  }, [onClose, open, pathname]);
+
+  React.useEffect(() => {
+    if (open && previousBusinessContextRef.current !== session.activeBusinessContextId) onClose();
+    previousBusinessContextRef.current = session.activeBusinessContextId;
+  }, [onClose, open, session.activeBusinessContextId]);
 
   React.useEffect(() => {
     if (!open) return;
@@ -341,6 +352,7 @@ export function CommandPaletteDialog({
   function onInputKeyDown(event: React.KeyboardEvent<HTMLInputElement>) {
     if (event.key === "Escape") {
       event.preventDefault();
+      event.stopPropagation();
       onClose();
       return;
     }

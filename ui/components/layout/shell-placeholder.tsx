@@ -1,0 +1,18 @@
+"use client";
+
+import { CheckCircle2, LockKeyhole } from "lucide-react";
+import { AccessBoundary } from "@/components/identity/access-control";
+import { hasPermission } from "@/lib/identity/authorization";
+import type { Permission } from "@/lib/identity/permissions";
+import type { ShellVariant } from "@/lib/identity/types";
+import { useIdentity } from "@/components/identity/identity-provider";
+
+export function ShellPlaceholder({ title, purpose, permission, variants, managementPermission }: { title: string; purpose: string; permission: Permission | readonly Permission[]; variants?: readonly ShellVariant[]; managementPermission?: Permission }) {
+  return <AccessBoundary permission={permission} variants={variants}><PlaceholderContent title={title} purpose={purpose} managementPermission={managementPermission} /></AccessBoundary>;
+}
+
+function PlaceholderContent({ title, purpose, managementPermission }: { title: string; purpose: string; managementPermission?: Permission }) {
+  const { session, organizations, businessContexts, variant } = useIdentity();
+  const canManage = managementPermission ? hasPermission(session.identity, managementPermission) : false;
+  return <div className="space-y-5"><section className="rounded-2xl border bg-white p-6 shadow-sm dark:border-white/10 dark:bg-ink"><div className="text-[10px] font-semibold uppercase tracking-[.14em] text-slate-500">Production Shell Phase 1</div><h2 className="mt-2 text-2xl font-semibold">{title}</h2><p className="mt-2 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">{purpose}</p><div className="mt-5 inline-flex items-center gap-2 rounded-full border px-3 py-1.5 text-xs font-semibold"><CheckCircle2 className="h-3.5 w-3.5" />Authorized for {variant} shell</div></section><section className="grid gap-4 md:grid-cols-3"><div className="rounded-xl border bg-white p-4 dark:border-white/10 dark:bg-ink"><div className="text-[9px] font-semibold uppercase text-slate-400">Account</div><div className="mt-2 text-sm font-semibold">{session.identity.membership.accountName}</div><div className="mt-1 text-xs text-slate-500">{session.identity.membership.role}</div></div><div className="rounded-xl border bg-white p-4 dark:border-white/10 dark:bg-ink"><div className="text-[9px] font-semibold uppercase text-slate-400">Organization scope</div><div className="mt-2 text-sm font-semibold">{organizations.length ? `${organizations.length} accessible` : "Platform scope"}</div><div className="mt-1 text-xs text-slate-500">Resolved from active membership</div></div><div className="rounded-xl border bg-white p-4 dark:border-white/10 dark:bg-ink"><div className="text-[9px] font-semibold uppercase text-slate-400">Business Context</div><div className="mt-2 text-sm font-semibold">{businessContexts.length ? `${businessContexts.length} accessible` : "Not applicable"}</div><div className="mt-1 text-xs text-slate-500">Scoped to Active Organization</div></div></section>{managementPermission ? <section className="rounded-xl border bg-white p-5 dark:border-white/10 dark:bg-ink"><h3 className="text-sm font-semibold">Management action demonstration</h3><p className="mt-1 text-xs text-slate-500">Read-only identities can view permitted content but cannot access management actions.</p><button type="button" disabled={!canManage} className="mt-4 inline-flex items-center gap-2 rounded-lg bg-slate-950 px-4 py-2 text-xs font-semibold text-white disabled:cursor-not-allowed disabled:bg-slate-200 disabled:text-slate-500"><LockKeyhole className="h-3.5 w-3.5" />{canManage ? "Management action available" : "Management permission required"}</button></section> : null}</div>;
+}

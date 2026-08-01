@@ -24,10 +24,10 @@ export type AppNavigationGroup = {
 
 export const APP_NAVIGATION: AppNavigationGroup[] = [
   {
-    label: "Home",
+    label: "Mission Control",
     href: "/",
     icon: Home,
-    description: "Your marketing command center.",
+    description: "What requires your attention across the business.",
   },
   {
     label: "Customers",
@@ -97,6 +97,24 @@ export const WORKSPACE_SUMMARY = {
 
 export function pageChromeForPath(pathname: string | null | undefined) {
   const path = String(pathname || "/");
+  const shellChrome: Record<string, { title: string; description: string; group: string }> = {
+    "/offers": { title: "Offers", description: "Strategic Offer Workspaces within the active Business Context.", group: "Workspaces" },
+    "/money": { title: "Money", description: "Qualified financial outcomes and reconciliation.", group: "Workspaces" },
+    "/clients": { title: "Clients", description: "Assigned Client Organizations within the Agency Account.", group: "Agency" },
+    "/team": { title: "Team", description: "Agency membership and permission administration.", group: "Agency" },
+    "/branding": { title: "Branding", description: "Accessible Agency identity and white-label configuration.", group: "Agency" },
+    "/platform/organizations": { title: "Organizations", description: "Platform tenant operations.", group: "Platform" },
+    "/platform/agencies": { title: "Agencies", description: "Agency Account operations.", group: "Platform" },
+    "/platform/users": { title: "Users", description: "Platform identity and membership operations.", group: "Platform" },
+    "/platform/connectors": { title: "Connectors", description: "Platform Connector operations.", group: "Platform" },
+    "/platform/imports": { title: "Imports", description: "Platform import operations.", group: "Platform" },
+    "/platform/system-health": { title: "System Health", description: "Platform operational health.", group: "Platform" },
+    "/platform/billing": { title: "Billing", description: "Platform billing operations.", group: "Platform" },
+    "/platform/audit-logs": { title: "Audit Logs", description: "Platform audit visibility.", group: "Platform" },
+    "/platform/feature-access": { title: "Feature Access", description: "Controlled product feature access.", group: "Platform" },
+    "/platform/support": { title: "Support", description: "Platform support without silent tenant access.", group: "Platform" },
+  };
+  if (shellChrome[path]) return shellChrome[path];
   const candidates: Array<AppNavigationItem & { group?: string }> = [];
   for (const group of APP_NAVIGATION) {
     if (group.href) {
