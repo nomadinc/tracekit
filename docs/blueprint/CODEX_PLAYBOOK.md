@@ -61,6 +61,7 @@ Idea
 Permanent product rules:
 
 - The Product Blueprint drives development, not the other way around.
+- No new Workspace or Platform Experience should begin implementation until the previously approved concept has been committed or explicitly abandoned.
 - No production feature should be built until its business object, workspace behavior, and storyboard have been approved.
 - Codex must not invent product behavior when an approved storyboard exists.
 - Interactive concepts use mock data unless live data is explicitly approved.

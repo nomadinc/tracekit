@@ -1,0 +1,52 @@
+export const PERMISSIONS = [
+  "organizations.view",
+  "organizations.manage",
+  "users.view",
+  "users.invite",
+  "users.remove",
+  "users.manage_permissions",
+  "offers.view",
+  "offers.manage",
+  "customers.view",
+  "customers.export",
+  "customers.view_sensitive_data",
+  "orders.view",
+  "orders.export",
+  "orders.view_financials",
+  "financials.view",
+  "financials.reconcile",
+  "connectors.view",
+  "connectors.manage",
+  "imports.view",
+  "imports.manage",
+  "audit_logs.view",
+  "branding.view",
+  "branding.manage",
+  "billing.view",
+  "billing.manage",
+  "admin.manage_tenants",
+  "admin.impersonate",
+  "admin.manage_feature_access",
+] as const;
+
+export type Permission = (typeof PERMISSIONS)[number];
+
+export const ROLE_PERMISSIONS = {
+  "platform-owner": [...PERMISSIONS],
+  "platform-admin": PERMISSIONS.filter((permission) => permission !== "admin.impersonate"),
+  support: ["organizations.view", "users.view", "offers.view", "customers.view", "orders.view", "connectors.view", "imports.view", "audit_logs.view", "admin.manage_tenants"],
+  billing: ["organizations.view", "billing.view", "billing.manage", "audit_logs.view"],
+  "read-only-operations": ["organizations.view", "users.view", "connectors.view", "imports.view", "audit_logs.view", "billing.view"],
+  "agency-owner": ["organizations.view", "organizations.manage", "users.view", "users.invite", "users.remove", "users.manage_permissions", "offers.view", "offers.manage", "customers.view", "customers.export", "orders.view", "orders.export", "orders.view_financials", "financials.view", "connectors.view", "imports.view", "branding.view", "branding.manage", "billing.view", "billing.manage"],
+  "agency-admin": ["organizations.view", "organizations.manage", "users.view", "users.invite", "offers.view", "offers.manage", "customers.view", "customers.export", "orders.view", "orders.export", "orders.view_financials", "financials.view", "connectors.view", "imports.view", "branding.view", "branding.manage", "billing.view"],
+  "team-member": ["organizations.view", "offers.view", "customers.view", "orders.view", "orders.view_financials", "financials.view", "connectors.view", "imports.view", "branding.view"],
+  "agency-read-only": ["organizations.view", "offers.view", "customers.view", "orders.view", "financials.view", "connectors.view", "imports.view", "branding.view"],
+  "organization-owner": ["organizations.view", "organizations.manage", "users.view", "users.invite", "users.remove", "users.manage_permissions", "offers.view", "offers.manage", "customers.view", "customers.export", "customers.view_sensitive_data", "orders.view", "orders.export", "orders.view_financials", "financials.view", "financials.reconcile", "connectors.view", "connectors.manage", "imports.view", "imports.manage", "audit_logs.view", "branding.view", "branding.manage", "billing.view", "billing.manage"],
+  "organization-admin": ["organizations.view", "organizations.manage", "users.view", "users.invite", "offers.view", "offers.manage", "customers.view", "customers.export", "customers.view_sensitive_data", "orders.view", "orders.export", "orders.view_financials", "financials.view", "financials.reconcile", "connectors.view", "connectors.manage", "imports.view", "imports.manage", "audit_logs.view", "branding.view", "billing.view"],
+  "analyst-operator": ["organizations.view", "offers.view", "customers.view", "customers.export", "orders.view", "orders.export", "orders.view_financials", "financials.view", "connectors.view", "imports.view"],
+  finance: ["organizations.view", "offers.view", "customers.view", "orders.view", "orders.export", "orders.view_financials", "financials.view", "financials.reconcile", "imports.view"],
+  "customer-support": ["organizations.view", "offers.view", "customers.view", "customers.view_sensitive_data", "orders.view", "connectors.view"],
+  "client-read-only": ["organizations.view", "offers.view", "customers.view", "orders.view", "financials.view", "connectors.view", "imports.view"],
+} as const satisfies Record<string, readonly Permission[]>;
+
+export type Role = keyof typeof ROLE_PERMISSIONS;
