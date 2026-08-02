@@ -1,0 +1,45 @@
+ordinal_position,column_name,data_type,udt_name,is_nullable,column_default,is_identity,identity_generation,is_generated,generation_expression,collation_name
+1,id,uuid,uuid,NO,gen_random_uuid(),NO,null,NEVER,null,null
+2,tkid,text,text,YES,null,NO,null,NEVER,null,null
+3,email,text,text,YES,null,NO,null,NEVER,null,null
+4,phone,text,text,YES,null,NO,null,NEVER,null,null
+5,click_ids,jsonb,jsonb,YES,null,NO,null,NEVER,null,null
+6,network,text,text,YES,null,NO,null,NEVER,null,null
+7,source_system,text,text,YES,null,NO,null,NEVER,null,null
+8,transaction_id,text,text,YES,null,NO,null,NEVER,null,null
+9,order_id,text,text,YES,null,NO,null,NEVER,null,null
+10,external_id,text,text,YES,null,NO,null,NEVER,null,null
+11,status,text,text,NO,'sale'::text,NO,null,NEVER,null,null
+12,amount,numeric,numeric,YES,0,NO,null,NEVER,null,null
+13,currency,text,text,YES,'USD'::text,NO,null,NEVER,null,null
+14,offer_id,text,text,YES,null,NO,null,NEVER,null,null
+15,campaign_id,text,text,YES,null,NO,null,NEVER,null,null
+16,affiliate_id,text,text,YES,null,NO,null,NEVER,null,null
+17,sub1,text,text,YES,null,NO,null,NEVER,null,null
+18,sub2,text,text,YES,null,NO,null,NEVER,null,null
+19,sub3,text,text,YES,null,NO,null,NEVER,null,null
+20,sub4,text,text,YES,null,NO,null,NEVER,null,null
+21,sub5,text,text,YES,null,NO,null,NEVER,null,null
+22,meta,jsonb,jsonb,YES,null,NO,null,NEVER,null,null
+23,ts,timestamp with time zone,timestamptz,YES,now(),NO,null,NEVER,null,null
+24,created_at,timestamp with time zone,timestamptz,YES,now(),NO,null,NEVER,null,null
+25,site_key,text,text,YES,null,NO,null,NEVER,null,null
+26,ledger_type,text,text,YES,null,NO,null,NEVER,null,null
+27,parent_transaction_id,text,text,YES,null,NO,null,NEVER,null,null
+28,platform,text,text,YES,null,NO,null,NEVER,null,null
+29,workspace_id,text,text,YES,'default'::text,NO,null,NEVER,null,null
+30,reason,text,text,YES,null,NO,null,NEVER,null,null
+31,raw,jsonb,jsonb,YES,'{}'::jsonb,NO,null,NEVER,null,null
+32,occurred_at,timestamp with time zone,timestamptz,YES,now(),NO,null,NEVER,null,null
+33,received_at,timestamp with time zone,timestamptz,YES,now(),NO,null,NEVER,null,null
+34,cost_category,text,text,YES,null,NO,null,NEVER,null,null
+35,fee_type,text,text,YES,null,NO,null,NEVER,null,null
+36,event_source,text,text,NO,'unknown'::text,NO,null,NEVER,null,null
+37,ingestion_method,text,text,NO,'unknown'::text,NO,null,NEVER,null,null
+38,connector_id,text,text,NO,'unknown'::text,NO,null,NEVER,null,null
+39,processor_account_id,text,text,YES,null,NO,null,NEVER,null,null
+40,source_event_id,text,text,YES,null,NO,null,NEVER,null,null
+41,dispute_id,text,text,YES,null,NO,null,NEVER,null,null
+42,source_amount,numeric,numeric,YES,null,NO,null,NEVER,null,null
+43,source_direction,text,text,YES,null,NO,null,NEVER,null,null
+44,diagnostic_flags,ARRAY,_text,NO,'{}'::text[],NO,null,NEVER,null,null

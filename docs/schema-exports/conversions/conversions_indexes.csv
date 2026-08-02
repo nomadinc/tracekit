@@ -1,0 +1,26 @@
+indexname,indexdef
+conversions_chargeback_account_time_idx,"CREATE INDEX conversions_chargeback_account_time_idx ON public.conversions USING btree (workspace_id, platform, processor_account_id, ledger_type, occurred_at) WHERE (ledger_type = ANY (ARRAY['chargeback'::text, 'chargeback_fee'::text, 'chargeback_reversal'::text, 'chargeback_fee_reversal'::text]))"
+conversions_chargeback_dispute_idx,"CREATE INDEX conversions_chargeback_dispute_idx ON public.conversions USING btree (workspace_id, platform, processor_account_id, dispute_id) WHERE ((dispute_id IS NOT NULL) AND (ledger_type = ANY (ARRAY['chargeback'::text, 'chargeback_fee'::text, 'chargeback_reversal'::text, 'chargeback_fee_reversal'::text])))"
+conversions_chargeback_event_uidx,"CREATE UNIQUE INDEX conversions_chargeback_event_uidx ON public.conversions USING btree (workspace_id, platform, processor_account_id, ledger_type, source_event_id) WHERE ((ledger_type = ANY (ARRAY['chargeback'::text, 'chargeback_fee'::text, 'chargeback_reversal'::text, 'chargeback_fee_reversal'::text])) AND (processor_account_id IS NOT NULL) AND (source_event_id IS NOT NULL))"
+conversions_financial_issue_range_idx,"CREATE INDEX conversions_financial_issue_range_idx ON public.conversions USING btree (workspace_id, occurred_at, ledger_type, order_id)"
+conversions_financial_reconciliation_lookup_idx,"CREATE INDEX conversions_financial_reconciliation_lookup_idx ON public.conversions USING btree (workspace_id, occurred_at, ledger_type, platform, processor_account_id, order_id) WHERE (ledger_type = ANY (ARRAY['refund'::text, 'chargeback'::text, 'chargeback_fee'::text, 'chargeback_reversal'::text, 'chargeback_fee_reversal'::text]))"
+conversions_financial_reconciliation_source_idx,"CREATE INDEX conversions_financial_reconciliation_source_idx ON public.conversions USING btree (workspace_id, platform, processor_account_id, source_event_id, ledger_type) WHERE ((source_event_id IS NOT NULL) AND (ledger_type = ANY (ARRAY['refund'::text, 'chargeback'::text, 'chargeback_fee'::text, 'chargeback_reversal'::text, 'chargeback_fee_reversal'::text])))"
+conversions_pkey,CREATE UNIQUE INDEX conversions_pkey ON public.conversions USING btree (id)
+conversions_wowsuite_refund_event_uidx,"CREATE UNIQUE INDEX conversions_wowsuite_refund_event_uidx ON public.conversions USING btree (workspace_id, platform, ledger_type, transaction_id) WHERE ((platform = ANY (ARRAY['wowboost'::text, 'wowpay'::text])) AND (ledger_type = 'refund'::text) AND (transaction_id ~~ 'wowboost:refund:%'::text))"
+idx_conv_ledger_type,CREATE INDEX idx_conv_ledger_type ON public.conversions USING btree (ledger_type)
+idx_conv_occurred_at,CREATE INDEX idx_conv_occurred_at ON public.conversions USING btree (occurred_at)
+idx_conv_order,CREATE INDEX idx_conv_order ON public.conversions USING btree (order_id)
+idx_conv_order_id,CREATE INDEX idx_conv_order_id ON public.conversions USING btree (order_id)
+idx_conv_parent_transaction_id,CREATE INDEX idx_conv_parent_transaction_id ON public.conversions USING btree (parent_transaction_id)
+idx_conv_platform,CREATE INDEX idx_conv_platform ON public.conversions USING btree (platform)
+idx_conv_tkid,CREATE INDEX idx_conv_tkid ON public.conversions USING btree (tkid)
+idx_conv_transaction,CREATE INDEX idx_conv_transaction ON public.conversions USING btree (transaction_id)
+idx_conv_transaction_id,CREATE INDEX idx_conv_transaction_id ON public.conversions USING btree (transaction_id)
+idx_conv_workspace_id,CREATE INDEX idx_conv_workspace_id ON public.conversions USING btree (workspace_id)
+idx_conversions_connector_id,CREATE INDEX idx_conversions_connector_id ON public.conversions USING btree (connector_id)
+idx_conversions_email,CREATE INDEX idx_conversions_email ON public.conversions USING btree (email)
+idx_conversions_event_source,CREATE INDEX idx_conversions_event_source ON public.conversions USING btree (event_source)
+idx_conversions_ingestion_method,CREATE INDEX idx_conversions_ingestion_method ON public.conversions USING btree (ingestion_method)
+idx_conversions_order_id,CREATE INDEX idx_conversions_order_id ON public.conversions USING btree (order_id)
+idx_conversions_tkid,CREATE INDEX idx_conversions_tkid ON public.conversions USING btree (tkid)
+idx_conversions_transaction_id,CREATE INDEX idx_conversions_transaction_id ON public.conversions USING btree (transaction_id)

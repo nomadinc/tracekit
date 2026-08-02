@@ -12,23 +12,40 @@ returns boolean
 language sql
 immutable
 as $$
-  with recursive metadata_walk(value, key_name) as (
-    select coalesce(p_metadata, '{}'::jsonb), null::text
+  -- PostgreSQL permits one recursive self-reference in one recursive term.
+  -- Expand object and array children inside a lateral subquery so the recursive
+  -- term references metadata_walk exactly once. Reject oversized or excessively
+  -- deep input rather than allowing validation cost to grow without a bound.
+  with recursive metadata_walk(value, key_name, depth) as (
+    select coalesce(p_metadata, '{}'::jsonb), null::text, 0
     union all
-    select child.value, child.key
+    select child.value, child.key_name, current.depth + 1
     from metadata_walk current
-    cross join lateral jsonb_each(current.value) child
-    where jsonb_typeof(current.value) = 'object'
-    union all
-    select child.value, null::text
-    from metadata_walk current
-    cross join lateral jsonb_array_elements(current.value) child
-    where jsonb_typeof(current.value) = 'array'
+    cross join lateral (
+      select object_child.value, object_child.key as key_name
+      from jsonb_each(
+        case
+          when jsonb_typeof(current.value) = 'object' then current.value
+          else '{}'::jsonb
+        end
+      ) object_child
+      union all
+      select array_child.value, null::text
+      from jsonb_array_elements(
+        case
+          when jsonb_typeof(current.value) = 'array' then current.value
+          else '[]'::jsonb
+        end
+      ) array_child
+    ) child
+    where current.depth < 64
   )
-  select not exists (
+  select pg_column_size(coalesce(p_metadata, '{}'::jsonb)) <= 65536
+    and not exists (
     select 1
     from metadata_walk
-    where lower(coalesce(key_name, '')) = any(array[
+    where depth >= 64
+      or lower(coalesce(key_name, '')) = any(array[
       'raw',
       'payload',
       'raw_payload',
@@ -75,7 +92,7 @@ as $$
           or value #>> '{}' ~* '([?&](client_secret|access_token|refresh_token|password|api[_-]?key|security[_-]?key|token)=)'
         )
       )
-  );
+    );
 $$;
 
 do $$
@@ -377,7 +394,7 @@ begin
 
   perform pg_advisory_xact_lock(hashtextextended('financial_event_match:' || v_workspace_id || ':' || v_idempotency_key, 0));
 
-  v_financial_event_id := v_financial_event_id_text;
+  v_financial_event_id := v_financial_event_id_text::uuid;
 
   select *
     into v_event
@@ -440,7 +457,7 @@ begin
   end if;
 
   v_request_fingerprint := encode(
-    digest(
+      extensions.digest(
       concat_ws(
         '|',
         v_workspace_id,

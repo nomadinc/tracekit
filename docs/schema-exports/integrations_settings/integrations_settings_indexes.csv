@@ -1,0 +1,2 @@
+indexname,indexdef
+integrations_settings_pkey,CREATE UNIQUE INDEX integrations_settings_pkey ON public.integrations_settings USING btree (platform)

@@ -1,0 +1,38 @@
+ordinal_position,column_name,data_type,udt_name,is_nullable,column_default,is_identity,identity_generation,is_generated,generation_expression,collation_name
+1,id,uuid,uuid,NO,gen_random_uuid(),NO,null,NEVER,null,null
+2,platform,text,text,NO,null,NO,null,NEVER,null,null
+3,module,text,text,YES,null,NO,null,NEVER,null,null
+4,status,text,text,NO,'queued'::text,NO,null,NEVER,null,null
+5,from_date,date,date,NO,null,NO,null,NEVER,null,null
+6,to_date,date,date,NO,null,NO,null,NEVER,null,null
+7,filter,text,text,YES,null,NO,null,NEVER,null,null
+8,requested_at,timestamp with time zone,timestamptz,NO,now(),NO,null,NEVER,null,null
+9,started_at,timestamp with time zone,timestamptz,YES,null,NO,null,NEVER,null,null
+10,completed_at,timestamp with time zone,timestamptz,YES,null,NO,null,NEVER,null,null
+11,fetched,integer,int4,NO,0,NO,null,NEVER,null,null
+12,upserted,integer,int4,NO,0,NO,null,NEVER,null,null
+13,pages,integer,int4,NO,0,NO,null,NEVER,null,null
+14,error,text,text,YES,null,NO,null,NEVER,null,null
+15,created_at,timestamp with time zone,timestamptz,NO,now(),NO,null,NEVER,null,null
+16,updated_at,timestamp with time zone,timestamptz,NO,now(),NO,null,NEVER,null,null
+17,retries,integer,int4,YES,0,NO,null,NEVER,null,null
+18,last_success_page,integer,int4,YES,null,NO,null,NEVER,null,null
+19,last_success_at,timestamp with time zone,timestamptz,YES,null,NO,null,NEVER,null,null
+20,last_error_at,timestamp with time zone,timestamptz,YES,null,NO,null,NEVER,null,null
+21,progress,jsonb,jsonb,NO,'{}'::jsonb,NO,null,NEVER,null,null
+22,workspace_id,text,text,NO,'default'::text,NO,null,NEVER,null,null
+23,connector_id,text,text,YES,null,NO,null,NEVER,null,null
+24,job_type,text,text,YES,null,NO,null,NEVER,null,null
+25,phase,text,text,YES,null,NO,null,NEVER,null,null
+26,requested_from,text,text,YES,null,NO,null,NEVER,null,null
+27,requested_to,text,text,YES,null,NO,null,NEVER,null,null
+28,records_discovered,integer,int4,NO,0,NO,null,NEVER,null,null
+29,records_processed,integer,int4,NO,0,NO,null,NEVER,null,null
+30,records_succeeded,integer,int4,NO,0,NO,null,NEVER,null,null
+31,records_failed,integer,int4,NO,0,NO,null,NEVER,null,null
+32,records_skipped,integer,int4,NO,0,NO,null,NEVER,null,null
+33,current_cursor,text,text,YES,null,NO,null,NEVER,null,null
+34,current_page,integer,int4,YES,null,NO,null,NEVER,null,null
+35,last_error,text,text,YES,null,NO,null,NEVER,null,null
+36,next_run_at,timestamp with time zone,timestamptz,YES,null,NO,null,NEVER,null,null
+37,metadata,jsonb,jsonb,NO,'{}'::jsonb,NO,null,NEVER,null,null
