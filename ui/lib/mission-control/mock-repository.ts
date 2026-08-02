@@ -57,14 +57,14 @@ const snapshot: MissionControlSnapshot = {
   recentActivity: [
     { id: "a1", type: "Offer", title: "Bullseye", detail: "Shipping Margin · viewed 2 hours ago", destination: "offer", businessContextId: "offer-bullseye" },
     { id: "a2", type: "Customer", title: "John Smith", detail: "Investigated yesterday", destination: "customer", businessContextId: "offer-bullseye", customerDeepLink: { customerId: "cust-123", focus: "journey" } },
-    { id: "a3", type: "Order", title: "Order TK-10482", detail: "Processor fee Evidence", destination: "order" },
+    { id: "a3", type: "Order", title: "Order TK-10482", detail: "Processor fee Evidence", destination: "order", businessContextId:"offer-bullseye", orderDeepLink:{orderId:"ord-123",focus:"ledger",lineId:"processor-fees",drawerId:"financial:processor-fees"} },
     { id: "a4", type: "Connector", title: "Manifest RX", detail: "Tracking Health reviewed", destination: "offer" },
   ],
   recentSearches: [
     { id: "s1", type: "Everflow Transaction ID", value: "ef_21a7f0ce98", destination: "customer", businessContextId: "offer-bullseye", customerDeepLink: { customerId: "cust-123", focus: "journey", eventId: "cust-123-evt-7", identifier: "ef_21a7f0ce98", drawerId: "identifier:everflow-cust-123-evt-7", search: "ef_21a7f0ce98" } },
     { id: "s2", type: "Offer", value: "Bullseye", destination: "offer", businessContextId: "offer-bullseye" },
     { id: "s3", type: "Customer", value: "john.smith@example.com", destination: "customer", businessContextId: "offer-bullseye", customerDeepLink: { customerId: "cust-123" } },
-    { id: "s4", type: "Order", value: "TK-10482", destination: "order" },
+    { id: "s4", type: "Order", value: "TK-10482", destination: "order", businessContextId:"offer-bullseye", orderDeepLink:{orderId:"ord-123"} },
   ],
 };
 

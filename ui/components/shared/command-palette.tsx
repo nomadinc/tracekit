@@ -31,6 +31,8 @@ import { offerRepository } from "@/lib/offers/mock-repository";
 import type { OfferSearchResult } from "@/lib/offers/types";
 import { customerRepository } from "@/lib/customers/mock-repository";
 import type { CustomerSearchResult } from "@/lib/customers/types";
+import { orderRepository } from "@/lib/orders/mock-repository";
+import type { OrderSearchResult } from "@/lib/orders/types";
 import {
   globalSearchQuery,
   type GlobalSearchResponse,
@@ -233,6 +235,7 @@ export function CommandPaletteDialog({
   const [search, setSearch] = React.useState<GlobalSearchResponse | null>(null);
   const [offerSearch, setOfferSearch] = React.useState<OfferSearchResult[]>([]);
   const [customerSearch, setCustomerSearch] = React.useState<CustomerSearchResult[]>([]);
+  const [orderSearch, setOrderSearch] = React.useState<OrderSearchResult[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [activeIndex, setActiveIndex] = React.useState(0);
@@ -266,6 +269,7 @@ export function CommandPaletteDialog({
       setSearch(null);
       setOfferSearch([]);
       setCustomerSearch([]);
+      setOrderSearch([]);
       setLoading(false);
       return;
     }
@@ -278,6 +282,7 @@ export function CommandPaletteDialog({
       try {
         const offerPromise = offerRepository.search({ authenticated: session.authenticated, identity: session.identity, organizationId: session.activeOrganizationId }, trimmed);
         const customerPromise = customerRepository.search({ authenticated: session.authenticated, identity: session.identity, organizationId: session.activeOrganizationId, businessContextId: session.activeBusinessContextId }, trimmed);
+        const orderPromise = orderRepository.search({ authenticated: session.authenticated, identity: session.identity, organizationId: session.activeOrganizationId, businessContextId: session.activeBusinessContextId }, trimmed);
         const res = await fetch(globalSearchQuery({ workspace_id: WORKSPACE_ID, q: trimmed, limit: SEARCH_LIMIT }), {
           cache: "no-store",
           headers: { accept: "application/json" },
@@ -289,11 +294,13 @@ export function CommandPaletteDialog({
         setSearch(json);
         setOfferSearch(await offerPromise);
         setCustomerSearch(await customerPromise);
+        setOrderSearch(await orderPromise);
       } catch (err: any) {
         if (err?.name === "AbortError" || requestIdRef.current !== requestId) return;
         setSearch(null);
         setOfferSearch([]);
         setCustomerSearch([]);
+        setOrderSearch([]);
         setError(err?.message || "Search failed.");
       } finally {
         if (requestIdRef.current === requestId) setLoading(false);
@@ -324,7 +331,7 @@ export function CommandPaletteDialog({
   }, [contextCommands, query]);
 
   const resultItems = React.useMemo(() => {
-    const items: PaletteItem[] = [...customerSearch.map(result => ({ id: `customer-search:${result.id}`, group: "Customers and forensic Evidence", title: result.title, subtitle: result.subtitle, meta: result.value, href: result.href, icon: UserRound })),...offerSearch.map(result => ({ id: `offer-search:${result.id}`, group: "Offers and related Evidence", title: result.title, subtitle: result.subtitle, meta: result.value, href: result.href, icon: Search }))];
+    const items: PaletteItem[] = [...orderSearch.map(result => ({ id:`order-search:${result.id}`,group:"Orders and financial Evidence",title:result.title,subtitle:result.subtitle,meta:result.value,href:result.href,icon:ShoppingBag })),...customerSearch.map(result => ({ id: `customer-search:${result.id}`, group: "Customers and forensic Evidence", title: result.title, subtitle: result.subtitle, meta: result.value, href: result.href, icon: UserRound })),...offerSearch.map(result => ({ id: `offer-search:${result.id}`, group: "Offers and related Evidence", title: result.title, subtitle: result.subtitle, meta: result.value, href: result.href, icon: Search }))];
     if (!search) return items;
     (Object.keys(search.groups) as Array<keyof GlobalSearchResponse["groups"]>).forEach((key) => {
       for (const result of search.groups[key] || []) {
@@ -332,7 +339,7 @@ export function CommandPaletteDialog({
       }
     });
     return items;
-  }, [customerSearch, offerSearch, search]);
+  }, [customerSearch, offerSearch, orderSearch, search]);
 
   const items = query.trim().length < 2 ? [...visibleContextItems, ...visibleNavItems] : [...resultItems, ...visibleContextItems, ...visibleNavItems];
   const grouped = groupItems(items);

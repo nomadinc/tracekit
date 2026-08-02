@@ -1,5 +1,6 @@
 import type { OfferFocus } from "@/lib/offers/types";
 import type { CustomerDeepLinkState } from "@/lib/customers/types";
+import type { OrderDeepLinkState } from "@/lib/orders/types";
 
 export type MissionTone = "Healthy" | "Opportunity" | "Warning" | "Critical" | "Information";
 export type BusinessMeasure = "profit" | "revenue" | "spend" | "orders" | "customers" | "roas" | "cpa";
@@ -19,6 +20,7 @@ export type MissionItem = {
   destination: "offer" | "customer" | "order";
   offerDeepLink?: { focus?: OfferFocus; trafficSourceId?: string; driverId?: string; eventId?: string; drawerId?: string; search?: string; compareOfferIds?: string[] };
   customerDeepLink?: Partial<CustomerDeepLinkState>;
+  orderDeepLink?: Partial<OrderDeepLinkState>;
   question: string;
   explanation: string;
   evidence: string[];
@@ -34,6 +36,6 @@ export type MissionControlSnapshot = {
   attention: MissionItem[];
   winners: Array<{ label: string; value: string; detail: string }>;
   continuation: { businessContextId: string; business: string; subject: string; detail: string; offerDeepLink?: MissionItem["offerDeepLink"] };
-  recentActivity: Array<{ id: string; type: string; title: string; detail: string; destination: "offer" | "customer" | "order"; businessContextId?: string; offerDeepLink?: MissionItem["offerDeepLink"]; customerDeepLink?: MissionItem["customerDeepLink"] }>;
-  recentSearches: Array<{ id: string; type: string; value: string; destination: "offer" | "customer" | "order"; businessContextId?: string; offerDeepLink?: MissionItem["offerDeepLink"]; customerDeepLink?: MissionItem["customerDeepLink"] }>;
+  recentActivity: Array<{ id: string; type: string; title: string; detail: string; destination: "offer" | "customer" | "order"; businessContextId?: string; offerDeepLink?: MissionItem["offerDeepLink"]; customerDeepLink?: MissionItem["customerDeepLink"]; orderDeepLink?: MissionItem["orderDeepLink"] }>;
+  recentSearches: Array<{ id: string; type: string; value: string; destination: "offer" | "customer" | "order"; businessContextId?: string; offerDeepLink?: MissionItem["offerDeepLink"]; customerDeepLink?: MissionItem["customerDeepLink"]; orderDeepLink?: MissionItem["orderDeepLink"] }>;
 };

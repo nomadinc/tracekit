@@ -10,6 +10,7 @@ import { withDevelopmentIdentity } from "@/lib/identity/development-state";
 import type { BusinessMeasure, BusinessRange, MissionControlSnapshot, MissionItem } from "@/lib/mission-control/types";
 import { offerDeepLinkHref } from "@/lib/offers/deep-link";
 import { customerDeepLinkHref } from "@/lib/customers/deep-link";
+import { orderDeepLinkHref } from "@/lib/orders/deep-link";
 
 const money = (value: number) =>
   new Intl.NumberFormat("en-US", {
@@ -162,7 +163,7 @@ export function MissionControl({ snapshot }: { snapshot: MissionControlSnapshot 
   const { session, businessContexts, setActiveBusinessContext } = useIdentity();
 
   const navigate = React.useCallback(
-    (destination: MissionItem["destination"], businessContextId?: string, deepLink?: MissionItem["offerDeepLink"], customerDeepLink?: MissionItem["customerDeepLink"]) => {
+    (destination: MissionItem["destination"], businessContextId?: string, deepLink?: MissionItem["offerDeepLink"], customerDeepLink?: MissionItem["customerDeepLink"], orderDeepLink?: MissionItem["orderDeepLink"]) => {
       if (businessContextId && businessContexts.some((context) => context.id === businessContextId)) setActiveBusinessContext(businessContextId);
       if (destination === "offer") {
         router.push(
@@ -184,6 +185,7 @@ export function MissionControl({ snapshot }: { snapshot: MissionControlSnapshot 
         return;
       }
       if (destination === "customer") { router.push(customerDeepLinkHref(customerDeepLink || {}, session.identity.id)); return; }
+      if (destination === "order") { router.push(orderDeepLinkHref(orderDeepLink || {}, session.identity.id)); return; }
       router.push(withDevelopmentIdentity(destinationRoutes[destination], session.identity.id));
     },
     [businessContexts, router, session.identity.id, setActiveBusinessContext],
@@ -342,7 +344,7 @@ export function MissionControl({ snapshot }: { snapshot: MissionControlSnapshot 
           </div>
           <div className="divide-y dark:divide-white/10">
             {snapshot.recentActivity.map((activity) => (
-              <button type="button" key={activity.id} onClick={() => navigate(activity.destination, activity.businessContextId, activity.offerDeepLink, activity.customerDeepLink)} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-slate-400 dark:hover:bg-white/5">
+              <button type="button" key={activity.id} onClick={() => navigate(activity.destination, activity.businessContextId, activity.offerDeepLink, activity.customerDeepLink, activity.orderDeepLink)} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-slate-400 dark:hover:bg-white/5">
                 <span className="rounded border px-2 py-1 text-[9px] font-semibold uppercase dark:border-white/10">{activity.type}</span>
                 <span className="min-w-0 flex-1">
                   <strong className="block truncate text-xs">{activity.title}</strong>
@@ -359,7 +361,7 @@ export function MissionControl({ snapshot }: { snapshot: MissionControlSnapshot 
           </div>
           <div className="divide-y dark:divide-white/10">
             {snapshot.recentSearches.map((search) => (
-              <button type="button" key={search.id} onClick={() => navigate(search.destination, search.businessContextId, search.offerDeepLink, search.customerDeepLink)} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-slate-400 dark:hover:bg-white/5">
+              <button type="button" key={search.id} onClick={() => navigate(search.destination, search.businessContextId, search.offerDeepLink, search.customerDeepLink, search.orderDeepLink)} className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-slate-400 dark:hover:bg-white/5">
                 <span className="min-w-0 flex-1">
                   <span className="block text-[9px] font-semibold uppercase text-slate-400">{search.type}</span>
                   <code className="block truncate text-xs">{search.value}</code>
