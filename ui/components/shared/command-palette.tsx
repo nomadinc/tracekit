@@ -29,6 +29,8 @@ import type { Identity } from "@/lib/identity/types";
 import { shellOverlayReducer } from "@/lib/shell/overlay-state";
 import { offerRepository } from "@/lib/offers/mock-repository";
 import type { OfferSearchResult } from "@/lib/offers/types";
+import { customerRepository } from "@/lib/customers/mock-repository";
+import type { CustomerSearchResult } from "@/lib/customers/types";
 import {
   globalSearchQuery,
   type GlobalSearchResponse,
@@ -230,6 +232,7 @@ export function CommandPaletteDialog({
   const [query, setQuery] = React.useState("");
   const [search, setSearch] = React.useState<GlobalSearchResponse | null>(null);
   const [offerSearch, setOfferSearch] = React.useState<OfferSearchResult[]>([]);
+  const [customerSearch, setCustomerSearch] = React.useState<CustomerSearchResult[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [activeIndex, setActiveIndex] = React.useState(0);
@@ -262,6 +265,7 @@ export function CommandPaletteDialog({
     if (trimmed.length < 2) {
       setSearch(null);
       setOfferSearch([]);
+      setCustomerSearch([]);
       setLoading(false);
       return;
     }
@@ -273,6 +277,7 @@ export function CommandPaletteDialog({
       setLoading(true);
       try {
         const offerPromise = offerRepository.search({ authenticated: session.authenticated, identity: session.identity, organizationId: session.activeOrganizationId }, trimmed);
+        const customerPromise = customerRepository.search({ authenticated: session.authenticated, identity: session.identity, organizationId: session.activeOrganizationId, businessContextId: session.activeBusinessContextId }, trimmed);
         const res = await fetch(globalSearchQuery({ workspace_id: WORKSPACE_ID, q: trimmed, limit: SEARCH_LIMIT }), {
           cache: "no-store",
           headers: { accept: "application/json" },
@@ -283,10 +288,12 @@ export function CommandPaletteDialog({
         if (!res.ok || json?.ok === false) throw new Error(json?.message || json?.error || `Search failed (${res.status})`);
         setSearch(json);
         setOfferSearch(await offerPromise);
+        setCustomerSearch(await customerPromise);
       } catch (err: any) {
         if (err?.name === "AbortError" || requestIdRef.current !== requestId) return;
         setSearch(null);
         setOfferSearch([]);
+        setCustomerSearch([]);
         setError(err?.message || "Search failed.");
       } finally {
         if (requestIdRef.current === requestId) setLoading(false);
@@ -297,7 +304,7 @@ export function CommandPaletteDialog({
       controller.abort();
       window.clearTimeout(timeout);
     };
-  }, [open, query, session.activeOrganizationId, session.authenticated, session.identity]);
+  }, [open, query, session.activeBusinessContextId, session.activeOrganizationId, session.authenticated, session.identity]);
 
   const visibleNavItems = React.useMemo(() => {
     const trimmed = query.trim().toLowerCase();
@@ -317,7 +324,7 @@ export function CommandPaletteDialog({
   }, [contextCommands, query]);
 
   const resultItems = React.useMemo(() => {
-    const items: PaletteItem[] = offerSearch.map(result => ({ id: `offer-search:${result.id}`, group: "Offers and related Evidence", title: result.title, subtitle: result.subtitle, meta: result.value, href: result.href, icon: Search }));
+    const items: PaletteItem[] = [...customerSearch.map(result => ({ id: `customer-search:${result.id}`, group: "Customers and forensic Evidence", title: result.title, subtitle: result.subtitle, meta: result.value, href: result.href, icon: UserRound })),...offerSearch.map(result => ({ id: `offer-search:${result.id}`, group: "Offers and related Evidence", title: result.title, subtitle: result.subtitle, meta: result.value, href: result.href, icon: Search }))];
     if (!search) return items;
     (Object.keys(search.groups) as Array<keyof GlobalSearchResponse["groups"]>).forEach((key) => {
       for (const result of search.groups[key] || []) {
@@ -325,7 +332,7 @@ export function CommandPaletteDialog({
       }
     });
     return items;
-  }, [offerSearch, search]);
+  }, [customerSearch, offerSearch, search]);
 
   const items = query.trim().length < 2 ? [...visibleContextItems, ...visibleNavItems] : [...resultItems, ...visibleContextItems, ...visibleNavItems];
   const grouped = groupItems(items);
