@@ -1,10 +1,154 @@
-import assert from "node:assert/strict";import test from "node:test";import { developmentIdentityById } from "../lib/identity/development-state";import { normalizeOrderDeepLink,orderDeepLinkHref,parseOrderDeepLink } from "../lib/orders/deep-link";import { calculateProcessorFee,MockOrderRepository } from "../lib/orders/mock-repository";const identity=(id:string)=>{const v=developmentIdentityById(id);assert.ok(v);return v};const scope=(id="client-admin",org:string|null="org-bullseye",offer:string|null="offer-bullseye")=>({authenticated:true,identity:identity(id),organizationId:org,businessContextId:offer});
-test("Order snapshots are scoped, cloned, and serializable",async()=>{const r=new MockOrderRepository(),list=await r.listOrders(scope());assert.ok(list.every(o=>o.organizationId==="org-bullseye"));const a=await r.loadWorkspace(scope(),"ord-123");assert.ok(a);a.order.number="Changed";const b=await r.loadWorkspace(scope(),"ord-123");assert.notEqual(b?.order.number,"Changed");assert.doesNotThrow(()=>JSON.stringify(b))});
-test("financial and Customer-sensitive data respect permissions",async()=>{const r=new MockOrderRepository(),read=await r.loadWorkspace(scope("client-read-only"),"ord-123");assert.equal(read?.ledger.length,0);assert.equal(read?.order.profit,null);assert.equal(read?.order.sensitiveMasked,true);const admin=await r.loadWorkspace(scope(),"ord-123");assert.ok(admin?.ledger.length);assert.equal(admin?.order.sensitiveMasked,false)});
-test("inaccessible and Product Admin Order scope is denied",async()=>{const r=new MockOrderRepository();assert.equal(await r.loadWorkspace(scope(),"ord-vrx-1"),null);assert.deepEqual(await r.listOrders(scope("platform-admin",null,null)),[]);assert.equal(await r.resolveOrder(scope("client-admin",null,null),"ord-vrx-1"),null);assert.deepEqual(await r.resolveOrder(scope("agency-owner",null,null),"ord-vrx-1"),{organizationId:"org-valuerx",businessContextId:"offer-valuerx-individual",orderId:"ord-vrx-1"})});
-test("deep links normalize invalid temporary context",async()=>{const r=new MockOrderRepository(),list=await r.listOrders(scope()),snap=await r.loadWorkspace(scope(),"ord-123");const n=normalizeOrderDeepLink(parseOrderDeepLink("?order_id=bad&line=bad&event_id=bad&identifier=bad&customer_id=bad&offer_id=bad&drawer=event:bad&replay=1"),list,snap);assert.equal(n.orderId,"ord-123");assert.equal(n.lineId,null);assert.equal(n.eventId,null);assert.equal(n.identifier,null);assert.equal(n.customerId,null);assert.equal(n.drawerId,null)});
-test("processor expected fee applies fixed fee to every capture",()=>{const fee=calculateProcessorFee("PayPal",2.9,.29,[{id:"1",amount:150},{id:"2",amount:74.9}],7.14);assert.equal(fee.captures[0].expectedFee,4.64);assert.equal(fee.captures[1].expectedFee,2.46);assert.equal(fee.expectedFee,7.1);assert.equal(fee.variance,.04);assert.match(fee.captures[1].formula,/\+ \$0.29/)});
-test("Shipping Margin and qualification remain explicit",async()=>{const r=new MockOrderRepository(),snap=await r.loadWorkspace(scope(),"ord-123");assert.equal(snap?.shipping.margin,-4.62);assert.equal(snap?.order.profitStatus,"Reconciled");assert.equal(snap?.ledger.find(l=>l.id==="net-shipping")?.amount,-4.62)});
-test("identifier search focuses production Order evidence",async()=>{const r=new MockOrderRepository(),results=await r.search(scope(),"ef_ord_10482");assert.ok(results.length);const state=parseOrderDeepLink(results[0].href.split("?")[1]);assert.equal(state.orderId,"ord-123");assert.ok(state.eventId);assert.match(state.drawerId||"",/^identifier:/);assert.doesNotMatch(results[0].href,/concepts/)});
-test("Order route contracts preserve production destinations",()=>{const href=orderDeepLinkHref({orderId:"ord-123",offerId:"offer-bullseye",customerId:"cust-123",focus:"ledger"},"client-admin");assert.match(href,/^\/orders\?/);assert.doesNotMatch(href,/concepts/);assert.match("/customers?customer_id=cust-123",/^\/customers/);assert.match("/offers?offer_id=offer-bullseye",/^\/offers/)});
-test("filters cover approved scenarios",async()=>{const r=new MockOrderRepository();assert.ok((await r.listOrders(scope(),{state:"shipping-loss"})).every(o=>o.shippingLoss));assert.ok((await r.listOrders(scope(),{state:"refunded"})).every(o=>o.status==="Refunded"));assert.ok((await r.listOrders(scope(),{state:"chargeback"})).every(o=>o.status==="Chargeback"))});
+import assert from "node:assert/strict";
+import test from "node:test";
+import { developmentIdentityById } from "../lib/identity/development-state";
+import {
+  normalizeOrderDeepLink,
+  orderDeepLinkHref,
+  parseOrderDeepLink,
+} from "../lib/orders/deep-link";
+import {
+  calculateProcessorFee,
+  MockOrderRepository,
+} from "../lib/orders/mock-repository";
+const identity = (id: string) => {
+  const v = developmentIdentityById(id);
+  assert.ok(v);
+  return v;
+};
+const scope = (
+  id = "client-admin",
+  org: string | null = "org-bullseye",
+  offer: string | null = "offer-bullseye",
+) => ({
+  authenticated: true,
+  identity: identity(id),
+  organizationId: org,
+  businessContextId: offer,
+});
+test("Order snapshots are scoped, cloned, and serializable", async () => {
+  const r = new MockOrderRepository(),
+    list = await r.listOrders(scope());
+  assert.ok(list.every((o) => o.organizationId === "org-bullseye"));
+  const a = await r.loadWorkspace(scope(), "ord-123");
+  assert.ok(a);
+  a.order.number = "Changed";
+  const b = await r.loadWorkspace(scope(), "ord-123");
+  assert.notEqual(b?.order.number, "Changed");
+  assert.doesNotThrow(() => JSON.stringify(b));
+});
+test("financial and Customer-sensitive data respect permissions", async () => {
+  const r = new MockOrderRepository(),
+    read = await r.loadWorkspace(scope("client-read-only"), "ord-123");
+  assert.equal(read?.ledger.length, 0);
+  assert.equal(read?.order.profit, null);
+  assert.equal(read?.order.sensitiveMasked, true);
+  const admin = await r.loadWorkspace(scope(), "ord-123");
+  assert.ok(admin?.ledger.length);
+  assert.equal(admin?.order.sensitiveMasked, false);
+});
+test("inaccessible and Product Admin Order scope is denied", async () => {
+  const r = new MockOrderRepository();
+  assert.equal(await r.loadWorkspace(scope(), "ord-vrx-1"), null);
+  assert.deepEqual(await r.listOrders(scope("platform-admin", null, null)), []);
+  assert.equal(
+    await r.resolveOrder(scope("client-admin", null, null), "ord-vrx-1"),
+    null,
+  );
+  assert.deepEqual(
+    await r.resolveOrder(scope("agency-owner", null, null), "ord-vrx-1"),
+    {
+      organizationId: "org-valuerx",
+      businessContextId: "offer-valuerx-individual",
+      orderId: "ord-vrx-1",
+    },
+  );
+});
+test("deep links normalize invalid temporary context", async () => {
+  const r = new MockOrderRepository(),
+    list = await r.listOrders(scope()),
+    snap = await r.loadWorkspace(scope(), "ord-123");
+  const n = normalizeOrderDeepLink(
+    parseOrderDeepLink(
+      "?v=1&order_id=bad&line=bad&event_id=bad&identifier_ref=bad&customer_id=bad&offer_id=bad&drawer_kind=timeline-event&drawer_id=bad&replay=1",
+    ),
+    list,
+    snap,
+  );
+  assert.equal(n.orderId, "ord-123");
+  assert.equal(n.lineId, null);
+  assert.equal(n.eventId, null);
+  assert.equal(n.identifierRef, null);
+  assert.equal(n.customerId, null);
+  assert.equal(n.drawerId, null);
+});
+test("processor expected fee applies fixed fee to every capture", () => {
+  const fee = calculateProcessorFee(
+    "PayPal",
+    2.9,
+    0.29,
+    [
+      { id: "1", amount: 150 },
+      { id: "2", amount: 74.9 },
+    ],
+    7.14,
+  );
+  assert.equal(fee.captures[0].expectedFee, 4.64);
+  assert.equal(fee.captures[1].expectedFee, 2.46);
+  assert.equal(fee.expectedFee, 7.1);
+  assert.equal(fee.variance, 0.04);
+  assert.match(fee.captures[1].formula, /\+ \$0.29/);
+});
+test("Shipping Margin and qualification remain explicit", async () => {
+  const r = new MockOrderRepository(),
+    snap = await r.loadWorkspace(scope(), "ord-123");
+  assert.equal(snap?.shipping.margin, -4.62);
+  assert.equal(snap?.order.profitStatus, "Reconciled");
+  assert.equal(
+    snap?.ledger.find((l) => l.id === "net-shipping")?.amount,
+    -4.62,
+  );
+});
+test("identifier search focuses production Order evidence", async () => {
+  const r = new MockOrderRepository(),
+    results = await r.search(scope(), "ef_ord_10482");
+  assert.ok(results.length);
+  const state = parseOrderDeepLink(results[0].href.split("?")[1]);
+  assert.equal(state.orderId, "ord-123");
+  assert.ok(state.eventId);
+  assert.equal(state.drawer?.kind, "identifier");
+  assert.doesNotMatch(results[0].href, /ef_ord_10482/);
+  assert.doesNotMatch(results[0].href, /concepts/);
+});
+test("Order route contracts preserve production destinations", () => {
+  const href = orderDeepLinkHref(
+    {
+      orderId: "ord-123",
+      offerId: "offer-bullseye",
+      customerId: "cust-123",
+      focus: "ledger",
+    },
+    "client-admin",
+  );
+  assert.match(href, /^\/orders\?/);
+  assert.doesNotMatch(href, /concepts/);
+  assert.match("/customers?customer_id=cust-123", /^\/customers/);
+  assert.match("/offers?offer_id=offer-bullseye", /^\/offers/);
+});
+test("filters cover approved scenarios", async () => {
+  const r = new MockOrderRepository();
+  assert.ok(
+    (await r.listOrders(scope(), { state: "shipping-loss" })).every(
+      (o) => o.shippingLoss,
+    ),
+  );
+  assert.ok(
+    (await r.listOrders(scope(), { state: "refunded" })).every(
+      (o) => o.status === "Refunded",
+    ),
+  );
+  assert.ok(
+    (await r.listOrders(scope(), { state: "chargeback" })).every(
+      (o) => o.status === "Chargeback",
+    ),
+  );
+});

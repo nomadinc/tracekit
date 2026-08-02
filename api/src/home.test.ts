@@ -86,15 +86,16 @@ test("home activity dedupes by deterministic ID and sorts by time", () => {
   assert.deepEqual(deduped.map((item) => item.id), ["activity:two", "activity:one"]);
 });
 
-test("home UI proxy and compatibility route are present", () => {
+test("Mission Control owns root while legacy Home API and overview compatibility remain present", () => {
   const root = readRepoFile("ui/app/page.tsx");
   const overview = readRepoFile("ui/app/(app)/overview/page.tsx");
   const proxy = readRepoFile("ui/app/api/home/route.ts");
   const navigation = readRepoFile("ui/lib/app-navigation.ts");
 
-  assert.match(root, /<HomeCommandCenter \/>/);
+  assert.match(root, /<MissionControl snapshot=\{snapshot\} \/>/);
+  assert.match(root, /missionControlRepository\.getMissionControl\(\)/);
   assert.match(overview, /<HomeCommandCenter \/>/);
   assert.match(proxy, /\/v1\/home/);
-  assert.match(navigation, /label: "Home"/);
+  assert.match(navigation, /label: "Mission Control"/);
   assert.doesNotMatch(root, /redirect\("\/overview"\)/);
 });

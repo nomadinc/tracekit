@@ -1,4 +1,5 @@
 import type { Identity } from "@/lib/identity/types";
+import type { CustomerDrawerTarget } from "@/lib/navigation/drawer-contract";
 
 export type CustomerTrackingState = "Healthy" | "Degraded" | "Interference Likely" | "Incomplete" | "Unknown";
 export type CustomerScope = { authenticated: boolean; identity: Identity; organizationId: string | null; businessContextId: string | null };
@@ -7,10 +8,10 @@ export type CustomerSummary = { id: string; organizationId: string; offerIds: st
 export type CustomerIdentifier = { id: string; type: string; value: string; status: "Observed" | "Missing" | "Recovered"; eventId: string };
 export type CustomerRedirectStep = { url: string; statusCode: number; added: string[]; removed: string[]; transition: string; elapsedMs: number };
 export type CustomerJourneyEvent = { id: string; name: string; timestamp: string; domain: string; role: string; status: string; confidence: string; trackingHealth: CustomerTrackingState; trackingStatus: string; originalUrl: string; referrer: string; destinationUrl: string; queryParameters: Record<string,string>; identifiers: CustomerIdentifier[]; redirects: CustomerRedirectStep[]; diagnostics: Array<{ label:string; result:"Observed"|"Missing"|"Likely" }>; relationships: Array<{ type:string; id:string; label:string }>; explanation: { conclusion:string; reason:string; evidence:string[] } };
-export type CustomerRelatedOrder = { id:string; date:string; amount:number; profit:number|null; profitStatus:"Estimated"|"Reconciled"; status:string; refunded:boolean; offerId:string; offerName:string; trackingHealth:CustomerTrackingState };
+export type CustomerRelatedOrder = { id:string; number:string; date:string; amount:number; profit:number|null; profitStatus:"Estimated"|"Reconciled"; status:string; refunded:boolean; offerId:string; offerName:string; trackingHealth:CustomerTrackingState };
 export type CustomerRelatedOffer = { id:string; name:string; firstTouch:string };
 export type CustomerPrivacySignal = { id:string; label:string; state:"Observed"|"Likely"|"Incomplete"; explanation:string; evidence:string[] };
 export type CustomerWorkspaceSnapshot = { customer:CustomerSummary; lifetimeRevenue:number; customerSince:string; firstTouch:string; lastPurchase:string; journeyId:string; journey:CustomerJourneyEvent[]; orders:CustomerRelatedOrder[]; offers:CustomerRelatedOffer[]; privacySignals:CustomerPrivacySignal[]; trackingExplanation:string };
 export type CustomerDrawerRecord = { id:string; kind:"event"|"identifier"|"tracking"|"privacy"|"order"|"offer"; title:string; question:string; summary:string; facts:Array<{label:string;value:string}>; originalUrl?:string; referrer?:string; destinationUrl?:string; queryParameters?:Record<string,string>; identifiers?:CustomerIdentifier[]; redirects?:CustomerRedirectStep[]; diagnostics?:CustomerJourneyEvent["diagnostics"]; evidence:string[]; relationships:Array<{type:string;id:string;label:string}> };
-export type CustomerDeepLinkState = { customerId:string|null; focus:"journey"|"orders"|"tracking"|null; eventId:string|null; identifier:string|null; orderId:string|null; offerId:string|null; drawerId:string|null; search:string|null; replay:boolean };
+export type CustomerDeepLinkState = { version:1; customerId:string|null; focus:"journey"|"orders"|"tracking"|null; eventId:string|null; identifierRef:string|null; identifier?:string|null; orderId:string|null; offerId:string|null; drawer:CustomerDrawerTarget|null; drawerId?:string|null; searchRef:string|null; search?:string|null; replay:boolean };
 export type CustomerSearchResult = { id:string; type:string; title:string; subtitle:string; value:string; href:string };

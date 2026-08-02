@@ -13,6 +13,27 @@ export function resolveDevelopmentIdentity(queryIdentityId?: string | null, pers
     || MOCK_IDENTITIES[0];
 }
 
+export type DevelopmentIdentityResolution = {
+  identity: Identity | null;
+  invalidExplicitId: string | null;
+};
+
+export function resolveDevelopmentIdentityRequest(
+  queryIdentityId?: string | null,
+  persistedIdentityId?: string | null,
+): DevelopmentIdentityResolution {
+  if (queryIdentityId !== null && queryIdentityId !== undefined && queryIdentityId !== "") {
+    const explicit = developmentIdentityById(queryIdentityId);
+    return explicit
+      ? { identity: explicit, invalidExplicitId: null }
+      : { identity: null, invalidExplicitId: queryIdentityId };
+  }
+  return {
+    identity: resolveDevelopmentIdentity(null, persistedIdentityId),
+    invalidExplicitId: null,
+  };
+}
+
 export function developmentSessionFor(identity: Identity, current?: IdentitySession): IdentitySession {
   const preserveContext = current?.identity.id === identity.id;
   return normalizeSession({

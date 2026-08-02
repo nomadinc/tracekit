@@ -1,9 +1,10 @@
 import type { Identity } from "../identity/types";
+import type { OfferDrawerTarget } from "@/lib/navigation/drawer-contract";
 
 export type OfferTrendRange = 7 | 14 | 30;
 export type OfferTrendMeasure = "profit" | "revenue" | "spend" | "orders" | "customers" | "roas" | "cpa";
 export type OfferFocus = "summary" | "trend" | "traffic-sources" | "profit-drivers" | "customer-quality" | "significant-events";
-export type OfferDrawerKind = "metric" | "traffic-source" | "profit-driver" | "significant-event" | "intelligence" | "compare-conclusion" | "customer" | "order" | "evidence";
+export type OfferDrawerKind = OfferDrawerTarget["kind"] | "compare-conclusion";
 
 export type OfferScope = { authenticated: boolean; identity: Identity; organizationId: string | null };
 export type OfferSummary = { id: string; organizationId: string; name: string; mark: string; profit: number; trend: number; status: "Estimated" | "Reconciled"; trackingHealth: "Excellent" | "Degraded" | "Poor" };
@@ -45,4 +46,4 @@ export type ComparisonConclusion = { bestOfferId: string; strongest: { offerId: 
 export type OfferComparison = { offers: OfferSummary[]; metrics: ComparisonMetric[]; trafficSources: ComparisonTrafficSource[]; conclusion: ComparisonConclusion };
 export type OfferSearchResult = { id: string; type: string; title: string; subtitle: string; value: string; href: string };
 
-export type OfferDeepLinkState = { offerId: string | null; focus: OfferFocus | null; trafficSourceId: string | null; driverId: string | null; eventId: string | null; drawerId: string | null; search: string | null; compare: boolean; comparisonOfferIds: string[] };
+export type OfferDeepLinkState = { version: 1; offerId: string | null; focus: OfferFocus | null; trafficSourceId: string | null; driverId: string | null; eventId: string | null; drawer: OfferDrawerTarget | null; drawerId?: string | null; searchRef: string | null; search?: string | null; compare: boolean; comparisonOfferIds: string[] };

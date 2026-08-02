@@ -27,6 +27,7 @@ import { navigationForIdentity } from "@/lib/identity/shell-navigation";
 import { withDevelopmentIdentity } from "@/lib/identity/development-state";
 import type { Identity } from "@/lib/identity/types";
 import { shellOverlayReducer } from "@/lib/shell/overlay-state";
+import { PRODUCTION_ROUTES } from "@/lib/navigation/production-routes";
 import { offerRepository } from "@/lib/offers/mock-repository";
 import type { OfferSearchResult } from "@/lib/offers/types";
 import { customerRepository } from "@/lib/customers/mock-repository";
@@ -112,14 +113,19 @@ function resultGroupLabel(key: keyof GlobalSearchResponse["groups"]) {
 }
 
 function resultToItem(result: GlobalSearchResult, group: string): PaletteItem {
+  const productionHref = result.type === "customer"
+    ? PRODUCTION_ROUTES.customers({ customerId: result.id, focus: "journey" })
+    : result.type === "order"
+      ? PRODUCTION_ROUTES.orders({ orderId: result.id, focus: "ledger" })
+      : result.href;
   return {
     id: `${result.type}:${result.id}`,
     group,
     title: result.title,
     subtitle: result.subtitle,
     meta: result.meta,
-    href: result.href,
-    target: { type: result.type, id: result.id, label: result.title, query: { workspace_id: WORKSPACE_ID } },
+    href: productionHref,
+    target: result.type === "work_item" ? { type: result.type, id: result.id, label: result.title, query: { workspace_id: WORKSPACE_ID } } : undefined,
     icon: resultIcon(result.type),
   };
 }
