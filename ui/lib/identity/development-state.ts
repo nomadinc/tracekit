@@ -47,9 +47,19 @@ export function developmentSessionFor(identity: Identity, current?: IdentitySess
 
 export function withDevelopmentIdentity(href: string, identityId: string): string {
   if (!href.startsWith("/")) return href;
+  if (!developmentIdentityById(identityId)) return href;
   const [pathAndQuery, hash = ""] = href.split("#", 2);
   const [pathname, query = ""] = pathAndQuery.split("?", 2);
   const params = new URLSearchParams(query);
   params.set("dev_identity", identityId);
   return `${pathname}?${params.toString()}${hash ? `#${hash}` : ""}`;
+}
+
+export function withSessionDevelopmentIdentity(
+  href: string,
+  session: IdentitySession,
+): string {
+  return session.developmentOnly
+    ? withDevelopmentIdentity(href, session.identity.id)
+    : href;
 }

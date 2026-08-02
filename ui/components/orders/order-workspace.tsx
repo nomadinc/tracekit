@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { AccessBoundary } from "@/components/identity/access-control";
 import { useIdentity } from "@/components/identity/identity-provider";
+import { mockOrganizationIdForBusinessContext } from "@/lib/identity/mock";
 import { useShellDrawer } from "@/components/layout/shell-drawer";
 import { withDevelopmentIdentity } from "@/lib/identity/development-state";
 import { PRODUCTION_ROUTES } from "@/lib/navigation/production-routes";
@@ -49,7 +50,10 @@ function OrderWorkspaceContent() {
     () => ({
       authenticated: session.authenticated,
       identity: session.identity,
-      organizationId: session.activeOrganizationId,
+      organizationId:
+        mockOrganizationIdForBusinessContext(
+          session.activeBusinessContextId,
+        ) || session.activeOrganizationId,
       businessContextId: session.activeBusinessContextId,
     }),
     [session],
@@ -100,7 +104,7 @@ function OrderWorkspaceContent() {
       )
       .then((r) => {
         if (!on || !r) return;
-        if (r.organizationId !== session.activeOrganizationId)
+        if (r.organizationId !== scope.organizationId)
           setActiveOrganization(r.organizationId);
         setActiveBusinessContext(r.businessContextId);
       });
@@ -111,7 +115,7 @@ function OrderWorkspaceContent() {
     orders,
     requested.orderId,
     scope,
-    session.activeOrganizationId,
+    scope.organizationId,
     setActiveBusinessContext,
     setActiveOrganization,
   ]);

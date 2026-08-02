@@ -5,7 +5,7 @@ import { developmentSessionFor, resolveDevelopmentIdentity, withDevelopmentIdent
 import { MOCK_IDENTITIES } from "../lib/identity/mock";
 import { NAVIGATION_POLICY } from "../lib/identity/navigation-policy";
 import { shellOverlayReducer } from "../lib/shell/overlay-state";
-import { userMenuContext } from "../lib/shell/user-menu-context";
+import { runUserMenuSignOut, shouldShowDevelopmentIdentityNotice, userMenuContext, userMenuSignOutAction } from "../lib/shell/user-menu-context";
 
 function identity(id: string) {
   const value = MOCK_IDENTITIES.find((candidate) => candidate.id === id);
@@ -81,6 +81,53 @@ test("user menu context is variant-specific", () => {
       assert.equal(context.activeBusinessContext, null);
     }
   }
+});
+
+test("development identity notice follows the resolved session origin", () => {
+  const reviewSession = developmentSessionFor(identity("client-admin"));
+  assert.equal(shouldShowDevelopmentIdentityNotice(reviewSession), true);
+  assert.equal(
+    shouldShowDevelopmentIdentityNotice({
+      ...reviewSession,
+      developmentOnly: false,
+      identity: {
+        ...reviewSession.identity,
+        id: "persistent-user-id",
+        name: "Anthony McCabe",
+        email: "anthony@example.test",
+      },
+    }),
+    false,
+  );
+});
+
+test("persistent sessions expose real sign-out without opening the placeholder drawer", () => {
+  const persistentSession = {
+    ...developmentSessionFor(identity("client-admin")),
+    developmentOnly: false,
+  };
+  const action = userMenuSignOutAction(persistentSession);
+  assert.deepEqual(action, { kind: "navigate", label: "Sign Out", href: "/auth/sign-out" });
+  const events: string[] = [];
+  runUserMenuSignOut(action, {
+    closeMenu: () => events.push("close"),
+    navigate: (href) => events.push(`navigate:${href}`),
+    openPlaceholder: () => events.push("placeholder"),
+  });
+  assert.deepEqual(events, ["close", "navigate:/auth/sign-out"]);
+});
+
+test("development review sessions retain the non-mutating sign-out placeholder", () => {
+  const action = userMenuSignOutAction(developmentSessionFor(identity("client-admin")));
+  assert.equal(action.kind, "placeholder");
+  assert.equal(action.label, "Sign Out — placeholder");
+  const events: string[] = [];
+  runUserMenuSignOut(action, {
+    closeMenu: () => events.push("close"),
+    navigate: () => events.push("navigate"),
+    openPlaceholder: () => events.push("placeholder"),
+  });
+  assert.deepEqual(events, ["close", "placeholder"]);
 });
 
 test("every registered navigation destination resolves to an allowed or denied policy outcome", () => {

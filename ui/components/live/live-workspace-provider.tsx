@@ -5,7 +5,9 @@ import { Wifi, WifiOff } from "lucide-react";
 import {
   LIVE_WORKSPACE_UPDATE_EVENT,
   isWorkspaceUpdate,
+  liveReconnectDelay,
   liveWorkspaceStreamUrl,
+  shouldReconnectLiveStream,
   type LiveConnectionState,
   type WorkspaceUpdate,
 } from "@/lib/live";
@@ -18,17 +20,11 @@ type LiveWorkspaceContextValue = {
 };
 
 const LiveWorkspaceContext = React.createContext<LiveWorkspaceContextValue>({
-  workspaceId: "default",
-  status: "connecting",
+  workspaceId: "unavailable",
+  status: "disabled",
   lastCursor: null,
   lastEventAt: null,
 });
-
-function nextBackoffMs(attempt: number) {
-  const base = Math.min(30000, 1000 * Math.pow(2, Math.max(0, attempt - 1)));
-  const jitter = Math.floor(Math.random() * 300);
-  return base + jitter;
-}
 
 function rememberSeen(seen: React.MutableRefObject<Set<string>>, id: string) {
   seen.current.add(id);
@@ -38,13 +34,15 @@ function rememberSeen(seen: React.MutableRefObject<Set<string>>, id: string) {
 }
 
 export function LiveWorkspaceProvider({
-  workspaceId = "default",
+  workspaceId = "unavailable",
+  enabled = false,
   children,
 }: {
   workspaceId?: string;
+  enabled?: boolean;
   children: React.ReactNode;
 }) {
-  const [status, setStatus] = React.useState<LiveConnectionState>("connecting");
+  const [status, setStatus] = React.useState<LiveConnectionState>(enabled ? "connecting" : "disabled");
   const [lastCursor, setLastCursor] = React.useState<string | null>(null);
   const [lastEventAt, setLastEventAt] = React.useState<string | null>(null);
   const cursorRef = React.useRef<string | null>(null);
@@ -52,6 +50,10 @@ export function LiveWorkspaceProvider({
   const reconnectAttempt = React.useRef(0);
 
   React.useEffect(() => {
+    if (!enabled) {
+      setStatus("disabled");
+      return;
+    }
     let cancelled = false;
     let reconnectTimer: number | null = null;
     let source: EventSource | null = null;
@@ -74,7 +76,11 @@ export function LiveWorkspaceProvider({
         return;
       }
       reconnectAttempt.current += 1;
-      const delay = nextBackoffMs(reconnectAttempt.current);
+      if (!shouldReconnectLiveStream(reconnectAttempt.current)) {
+        setStatus("error");
+        return;
+      }
+      const delay = liveReconnectDelay(reconnectAttempt.current);
       setStatus(reconnectAttempt.current > 1 ? "reconnecting" : "connecting");
       reconnectTimer = window.setTimeout(connect, delay);
     }
@@ -94,7 +100,7 @@ export function LiveWorkspaceProvider({
       closeSource();
       setStatus(typeof navigator !== "undefined" && !navigator.onLine ? "offline" : reconnectAttempt.current ? "reconnecting" : "connecting");
       if (typeof navigator !== "undefined" && !navigator.onLine) return;
-      source = new EventSource(liveWorkspaceStreamUrl(workspaceId, cursorRef.current));
+      source = new EventSource(liveWorkspaceStreamUrl(cursorRef.current));
       source.addEventListener("workspace.connected", () => {
         reconnectAttempt.current = 0;
         setStatus("live");
@@ -135,7 +141,7 @@ export function LiveWorkspaceProvider({
       window.removeEventListener("offline", onOffline);
       closeSource();
     };
-  }, [workspaceId]);
+  }, [enabled, workspaceId]);
 
   const value = React.useMemo(() => ({ workspaceId, status, lastCursor, lastEventAt }), [lastCursor, lastEventAt, status, workspaceId]);
   return <LiveWorkspaceContext.Provider value={value}>{children}</LiveWorkspaceContext.Provider>;
@@ -148,7 +154,7 @@ export function useLiveWorkspace() {
 export function LiveWorkspaceStatus() {
   const { status, lastEventAt } = useLiveWorkspace();
   const live = status === "live";
-  const label = live ? "Live" : status === "offline" ? "Offline" : status === "reconnecting" ? "Reconnecting" : status === "error" ? "Live issue" : "Connecting";
+  const label = live ? "Live" : status === "disabled" ? "Live unavailable" : status === "offline" ? "Offline" : status === "reconnecting" ? "Reconnecting" : status === "error" ? "Live issue" : "Connecting";
   return (
     <span
       title={lastEventAt ? `Last live update ${new Date(lastEventAt).toLocaleTimeString()}` : label}
