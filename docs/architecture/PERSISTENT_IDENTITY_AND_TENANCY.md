@@ -67,6 +67,8 @@ Required WorkOS values are `WORKOS_CLIENT_ID`, `WORKOS_API_KEY`, `WORKOS_COOKIE_
 
 Copy `ui/.env.example` to the ignored local environment file. For explicit mock review, enable development identity mode. For AuthKit review, configure a WorkOS development project, callback `http://localhost:3000/auth/callback`, sign-in endpoint `/auth/sign-in`, and logout URI; apply migration 038 to a development Supabase database; then create TraceKit Membership records explicitly. No email-domain auto-provisioning occurs.
 
+Local Next.js development and production validation follow `LOCAL_NEXTJS_LIFECYCLE.md`. The guarded npm scripts isolate production output from development output and verify emitted CSS and JavaScript before a review server is considered ready.
+
 ## Remaining Phase 2 work
 
 - Complete repository-backed Business Context access.

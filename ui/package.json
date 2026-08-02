@@ -4,11 +4,12 @@
   "version": "0.1.0",
   "type": "module",
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/next-lifecycle.mjs dev",
     "lint": "next lint",
     "test": "tsx --test tests/*.test.ts",
-    "build": "next build",
-    "start": "next start"
+    "build": "node scripts/next-lifecycle.mjs build",
+    "start": "node scripts/next-lifecycle.mjs start",
+    "review:check": "node scripts/next-lifecycle.mjs check"
   },
   "dependencies": {
     "@workos-inc/authkit-nextjs": "^4.3.1",
