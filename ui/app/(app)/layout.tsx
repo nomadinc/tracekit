@@ -1,5 +1,7 @@
-import AppShell from "@/components/layout/app-shell";
+import { AuthenticatedAppShell } from "@/components/identity/authenticated-app-shell";
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
-  return <AppShell>{children}</AppShell>;
+export const dynamic = "force-dynamic";
+
+export default async function AppLayout({ children }: { children: React.ReactNode }) {
+  return <AuthenticatedAppShell>{children}</AuthenticatedAppShell>;
 }

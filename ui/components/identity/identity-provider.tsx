@@ -5,6 +5,7 @@ import { accessibleBusinessContexts, accessibleOrganizations, normalizeSession, 
 import { developmentIdentityById, developmentSessionFor, resolveDevelopmentIdentity, resolveDevelopmentIdentityRequest, withDevelopmentIdentity } from "@/lib/identity/development-state";
 import { DEVELOPMENT_IDENTITY_STORAGE_KEY } from "@/lib/identity/session";
 import type { BusinessContext, IdentitySession, Organization, ShellVariant } from "@/lib/identity/types";
+import { identityProviderInitialization } from "@/lib/identity/identity-mode";
 
 type IdentityContextValue = {
   session: IdentitySession;
@@ -20,12 +21,16 @@ const defaultIdentity = resolveDevelopmentIdentity();
 const defaultSession = developmentSessionFor(defaultIdentity);
 const IdentityContext = React.createContext<IdentityContextValue | null>(null);
 
-export function IdentityProvider({ children }: { children: React.ReactNode }) {
-  const [session, setSession] = React.useState(defaultSession);
-  const [ready, setReady] = React.useState(false);
+export function IdentityProvider({ children, initialSession, persistentOrganizations = [], persistentBusinessContexts = [] }: { children: React.ReactNode; initialSession?: IdentitySession; persistentOrganizations?: Organization[]; persistentBusinessContexts?: BusinessContext[] }) {
+  const initialization = identityProviderInitialization(initialSession);
+  const persistent = initialization.persistent;
+  const initializeDevelopment = initialization.initializeDevelopment;
+  const [session, setSession] = React.useState(initialSession || defaultSession);
+  const [ready, setReady] = React.useState(initialization.ready);
   const [invalidExplicitIdentity, setInvalidExplicitIdentity] = React.useState<string | null>(null);
 
   React.useEffect(() => {
+    if (!initializeDevelopment) return;
     function syncFromLocation() {
       const params = new URLSearchParams(window.location.search);
       const resolution = resolveDevelopmentIdentityRequest(params.get("dev_identity"), window.localStorage.getItem(DEVELOPMENT_IDENTITY_STORAGE_KEY));
@@ -42,27 +47,34 @@ export function IdentityProvider({ children }: { children: React.ReactNode }) {
     syncFromLocation();
     window.addEventListener("popstate", syncFromLocation);
     return () => window.removeEventListener("popstate", syncFromLocation);
-  }, []);
+  }, [initializeDevelopment]);
 
   const setDevelopmentIdentity = React.useCallback((identityId: string) => {
+    if (persistent) return;
     const identity = developmentIdentityById(identityId);
     if (!identity) return;
     setInvalidExplicitIdentity(null);
     window.localStorage.setItem(DEVELOPMENT_IDENTITY_STORAGE_KEY, identity.id);
     window.history.replaceState(window.history.state, "", withDevelopmentIdentity(`${window.location.pathname}${window.location.search}${window.location.hash}`, identity.id));
     setSession((current) => developmentSessionFor(identity, current));
-  }, []);
+  }, [persistent]);
 
   const setActiveOrganization = React.useCallback((organizationId: string) => {
+    if (persistent) {
+      void fetch("/api/session/organization", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId }) })
+        .then((response) => { if (!response.ok) throw new Error("Organization switch denied"); return response.json(); })
+        .then(() => setSession((current) => ({ ...current, activeOrganizationId: organizationId, activeBusinessContextId: null })));
+      return;
+    }
     setSession((current) => normalizeSession({ ...current, activeOrganizationId: organizationId, activeBusinessContextId: null }));
-  }, []);
+  }, [persistent]);
 
   const setActiveBusinessContext = React.useCallback((contextId: string) => {
     setSession((current) => normalizeSession({ ...current, activeBusinessContextId: contextId }));
   }, []);
 
-  const organizations = React.useMemo(() => accessibleOrganizations(session.identity), [session.identity]);
-  const businessContexts = React.useMemo(() => accessibleBusinessContexts(session.identity, session.activeOrganizationId), [session.identity, session.activeOrganizationId]);
+  const organizations = React.useMemo(() => persistent ? persistentOrganizations : accessibleOrganizations(session.identity), [persistent, persistentOrganizations, session.identity]);
+  const businessContexts = React.useMemo(() => persistent ? persistentBusinessContexts.filter((context) => context.organizationId === session.activeOrganizationId) : accessibleBusinessContexts(session.identity, session.activeOrganizationId), [persistent, persistentBusinessContexts, session.identity, session.activeOrganizationId]);
   const value = React.useMemo<IdentityContextValue>(() => ({ session, organizations, businessContexts, variant: shellVariant(session.identity), setDevelopmentIdentity, setActiveOrganization, setActiveBusinessContext }), [session, organizations, businessContexts, setDevelopmentIdentity, setActiveOrganization, setActiveBusinessContext]);
 
   return (

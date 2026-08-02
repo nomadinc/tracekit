@@ -26,6 +26,7 @@ import {
 } from "recharts";
 import { AccessBoundary } from "@/components/identity/access-control";
 import { useIdentity } from "@/components/identity/identity-provider";
+import { mockOrganizationIdForBusinessContext } from "@/lib/identity/mock";
 import { useShellDrawer } from "@/components/layout/shell-drawer";
 import { OfferDrawerContent } from "./offer-drawer-content";
 import { offerRepository } from "@/lib/offers/mock-repository";
@@ -124,9 +125,17 @@ function OfferWorkspaceContent() {
     () => ({
       authenticated: session.authenticated,
       identity: session.identity,
-      organizationId: session.activeOrganizationId,
+      organizationId:
+        mockOrganizationIdForBusinessContext(
+          session.activeBusinessContextId,
+        ) || session.activeOrganizationId,
     }),
-    [session.activeOrganizationId, session.authenticated, session.identity],
+    [
+      session.activeBusinessContextId,
+      session.activeOrganizationId,
+      session.authenticated,
+      session.identity,
+    ],
   );
   const requested = React.useMemo(
     () => parseOfferDeepLink(searchParams),
@@ -187,7 +196,7 @@ function OfferWorkspaceContent() {
         if (
           active &&
           result &&
-          result.organizationId !== session.activeOrganizationId
+          result.organizationId !== scope.organizationId
         )
           setActiveOrganization(result.organizationId);
       });
@@ -198,7 +207,7 @@ function OfferWorkspaceContent() {
     offers,
     requested.offerId,
     scope,
-    session.activeOrganizationId,
+    scope.organizationId,
     setActiveOrganization,
   ]);
 

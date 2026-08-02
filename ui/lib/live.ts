@@ -1,6 +1,8 @@
 export const LIVE_WORKSPACE_UPDATE_EVENT = "tracekit:workspace-update";
 
-export type LiveConnectionState = "connecting" | "live" | "reconnecting" | "offline" | "error";
+export type LiveConnectionState = "disabled" | "connecting" | "live" | "reconnecting" | "offline" | "error";
+
+export const LIVE_RECONNECT_MAX_ATTEMPTS = 5;
 
 export type WorkspaceUpdate = {
   id: string;
@@ -32,11 +34,19 @@ export type WorkspaceUpdate = {
   payload?: Record<string, any>;
 };
 
-export function liveWorkspaceStreamUrl(workspaceId: string, cursor?: string | null) {
+export function liveWorkspaceStreamUrl(cursor?: string | null) {
   const params = new URLSearchParams();
-  params.set("workspace_id", workspaceId || "default");
   if (cursor) params.set("cursor", cursor);
-  return `/api/events/stream?${params.toString()}`;
+  const query = params.toString();
+  return `/api/events/stream${query ? `?${query}` : ""}`;
+}
+
+export function liveReconnectDelay(attempt: number, jitter = Math.floor(Math.random() * 300)) {
+  return Math.min(30000, 1000 * Math.pow(2, Math.max(0, attempt - 1))) + jitter;
+}
+
+export function shouldReconnectLiveStream(attempt: number) {
+  return attempt < LIVE_RECONNECT_MAX_ATTEMPTS;
 }
 
 export function isWorkspaceUpdate(value: unknown): value is WorkspaceUpdate {

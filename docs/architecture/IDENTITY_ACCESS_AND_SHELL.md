@@ -1,5 +1,7 @@
 # TraceKit Identity, Access, and Application Shell
 
+> Phase 1 status: the persistent WorkOS AuthKit and TraceKit tenancy foundation is documented in `PERSISTENT_IDENTITY_AND_TENANCY.md`. The original architecture below remains design history; real-data access is still blocked pending complete server-side repository authorization.
+
 Version: 1.0
 Status: Phase 1 Architecture
 

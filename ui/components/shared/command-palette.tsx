@@ -24,7 +24,7 @@ import type { InvestigationTarget } from "@/lib/entities";
 import { useIdentity } from "@/components/identity/identity-provider";
 import { hasAnyPermission, shellVariant } from "@/lib/identity/authorization";
 import { navigationForIdentity } from "@/lib/identity/shell-navigation";
-import { withDevelopmentIdentity } from "@/lib/identity/development-state";
+import { withSessionDevelopmentIdentity } from "@/lib/identity/development-state";
 import type { Identity } from "@/lib/identity/types";
 import { shellOverlayReducer } from "@/lib/shell/overlay-state";
 import { PRODUCTION_ROUTES } from "@/lib/navigation/production-routes";
@@ -373,11 +373,11 @@ export function CommandPaletteDialog({
       return;
     }
     if (item.action === "open_notifications") {
-      router.push(withDevelopmentIdentity(withWorkspace("/notifications"), session.identity.id));
+      router.push(withSessionDevelopmentIdentity(withWorkspace("/notifications"), session));
       onClose();
       return;
     }
-    if (item.href) router.push(withDevelopmentIdentity(withWorkspace(item.href), session.identity.id));
+    if (item.href) router.push(withSessionDevelopmentIdentity(withWorkspace(item.href), session));
     onClose();
   }
 

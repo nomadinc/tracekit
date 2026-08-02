@@ -9,12 +9,13 @@ import { LiveWorkspaceProvider } from "@/components/live/live-workspace-provider
 import { IdentityProvider } from "@/components/identity/identity-provider";
 import { ShellDrawerProvider } from "@/components/layout/shell-drawer";
 import { ShellRouteBoundary } from "@/components/identity/shell-route-boundary";
+import type { BusinessContext, IdentitySession, Organization } from "@/lib/identity/types";
 
-export default function AppShell({ children }: { children: React.ReactNode }) {
+export default function AppShell({ children, initialSession, organizations, businessContexts }: { children: React.ReactNode; initialSession?: IdentitySession; organizations?: Organization[]; businessContexts?: BusinessContext[] }) {
   return (
-    <IdentityProvider>
+    <IdentityProvider initialSession={initialSession} persistentOrganizations={organizations} persistentBusinessContexts={businessContexts}>
       <CommandProvider>
-        <LiveWorkspaceProvider workspaceId="default">
+        <LiveWorkspaceProvider enabled={false}>
           <ShellDrawerProvider>
             <React.Suspense fallback={<div className="flex min-h-dvh items-center justify-center bg-slate-50 text-sm font-medium text-slate-600">Preparing TraceKit…</div>}>
               <InvestigationProvider><ShellFrame>{children}</ShellFrame></InvestigationProvider>

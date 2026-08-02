@@ -5,7 +5,7 @@ import { Bell, CircleHelp, Command, LogOut, Palette, UserRound } from "lucide-re
 import { usePathname } from "next/navigation";
 import { useIdentity } from "@/components/identity/identity-provider";
 import { useShellDrawer } from "./shell-drawer";
-import { userMenuContext } from "@/lib/shell/user-menu-context";
+import { runUserMenuSignOut, shouldShowDevelopmentIdentityNotice, userMenuContext, userMenuSignOutAction } from "@/lib/shell/user-menu-context";
 
 type ProductionUserMenuProps = {
   open: boolean;
@@ -31,6 +31,7 @@ export function ProductionUserMenu({ open, onToggle, onClose, onBeforeOpen }: Pr
   }, [onClose]);
 
   const context = userMenuContext(session, organizations, businessContexts, variant);
+  const signOutAction = userMenuSignOutAction(session);
 
   React.useEffect(() => {
     if (!open) return;
@@ -67,6 +68,10 @@ export function ProductionUserMenu({ open, onToggle, onClose, onBeforeOpen }: Pr
 
   function selectAction(title: string, description: string) {
     requestClose(false);
+    openPlaceholder(title, description);
+  }
+
+  function openPlaceholder(title: string, description: string) {
     drawer.openDrawer(<div className="space-y-3"><p className="text-sm text-slate-700 dark:text-slate-200">{description}</p><div className="rounded-lg border bg-slate-50 p-3 text-xs text-slate-500 dark:border-white/10 dark:bg-white/5">Production Shell Phase 1 placeholder. No production account mutation occurs.</div></div>, title);
   }
 
@@ -76,7 +81,6 @@ export function ProductionUserMenu({ open, onToggle, onClose, onBeforeOpen }: Pr
     { label: "Keyboard Shortcuts", icon: Command, description: "Use Command+K on macOS or Control+K elsewhere to open Universal Search." },
     { label: "Appearance / Theme", icon: Palette, description: "Appearance and Color Vision Optimized preferences will be connected in a later phase." },
     { label: "Help & Support", icon: CircleHelp, description: "Support entry points will be connected after account routing is approved." },
-    { label: "Sign Out — placeholder", icon: LogOut, description: "Real sign-out is unavailable because Phase 1 uses development-only mock identity state." },
   ];
 
   return (
@@ -115,11 +119,26 @@ export function ProductionUserMenu({ open, onToggle, onClose, onBeforeOpen }: Pr
               const Icon = action.icon;
               return <button key={action.label} ref={index === 0 ? firstItemRef : undefined} type="button" role="menuitem" onClick={() => selectAction(action.label, action.description)} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:hover:bg-white/10"><Icon className="h-4 w-4 text-slate-500" /><span>{action.label}</span></button>;
             })}
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => runUserMenuSignOut(signOutAction, {
+                closeMenu: () => requestClose(false),
+                navigate: (href) => window.location.assign(href),
+                openPlaceholder,
+              })}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:hover:bg-white/10"
+            >
+              <LogOut className="h-4 w-4 text-slate-500" />
+              <span>{signOutAction.label}</span>
+            </button>
           </div>
-          <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-[10px] leading-4 text-amber-950">
-            <strong className="block uppercase tracking-[.1em]">Development identity only</strong>
-            Mock identity switching is isolated from the production account menu and is not production authentication.
-          </div>
+          {shouldShowDevelopmentIdentityNotice(session) ? (
+            <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-[10px] leading-4 text-amber-950">
+              <strong className="block uppercase tracking-[.1em]">Development identity only</strong>
+              Mock identity switching is isolated from the production account menu and is not production authentication.
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

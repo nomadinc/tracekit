@@ -11,6 +11,7 @@ test("application shell reorganizes existing routes around business navigation",
   const sidebar = readRepoFile("ui/components/layout/sidebar.tsx");
   const appLayout = readRepoFile("ui/app/(app)/layout.tsx");
   const rootPage = readRepoFile("ui/app/page.tsx");
+  const authenticatedShell = readRepoFile("ui/components/identity/authenticated-app-shell.tsx");
   const breadcrumbs = readRepoFile("ui/components/shared/breadcrumbs.tsx");
 
   for (const label of ["Mission Control", "Customers", "Marketing", "Revenue", "Operations", "Settings"]) {
@@ -25,7 +26,9 @@ test("application shell reorganizes existing routes around business navigation",
   assert.match(sidebar, /SECONDARY_NAVIGATION/);
   assert.match(navigation, /breadcrumbsForPath/);
   assert.match(breadcrumbs, /aria-label="Breadcrumb"/);
-  assert.match(appLayout, /<AppShell>{children}<\/AppShell>/);
+  assert.match(appLayout, /<AuthenticatedAppShell>{children}<\/AuthenticatedAppShell>/);
+  assert.match(authenticatedShell, /resolveApplicationSession\(\)/);
+  assert.match(authenticatedShell, /<AppShell/);
   assert.match(rootPage, /<MissionControl snapshot=\{snapshot\} \/>/);
   assert.match(rootPage, /missionControlRepository\.getMissionControl\(\)/);
   assert.doesNotMatch(rootPage, /redirect\("\/overview"\)/);
@@ -37,7 +40,7 @@ test("Mission Control owns the approved root while the legacy overview compatibi
   const home = readRepoFile("ui/components/home/home-command-center.tsx");
   const proxy = readRepoFile("ui/app/api/home/route.ts");
 
-  assert.match(root, /<AppShell>/);
+  assert.match(root, /<AuthenticatedAppShell>/);
   assert.match(root, /<MissionControl snapshot=\{snapshot\} \/>/);
   assert.match(root, /missionControlRepository\.getMissionControl\(\)/);
   assert.match(overview, /<HomeCommandCenter \/>/);
@@ -151,7 +154,7 @@ test("topbar exposes workspace search and notification affordances", () => {
   assert.match(navigation, /Your marketing command center/);
 });
 
-test("live workspace client is installed once at the shell and proxies SSE safely", () => {
+test("legacy live workspace infrastructure remains safely disabled in the production shell", () => {
   const appShell = readRepoFile("ui/components/layout/app-shell.tsx");
   const liveProvider = readRepoFile("ui/components/live/live-workspace-provider.tsx");
   const liveLib = readRepoFile("ui/lib/live.ts");
@@ -162,15 +165,18 @@ test("live workspace client is installed once at the shell and proxies SSE safel
   const customerDetail = readRepoFile("ui/app/(app)/customers/[person_id]/customer-detail-client.tsx");
   const journeyDetail = readRepoFile("ui/app/(app)/journeys/[tkid]/page.tsx");
 
-  assert.match(appShell, /<LiveWorkspaceProvider workspaceId="default">/);
+  assert.match(appShell, /<LiveWorkspaceProvider enabled=\{false\}>/);
   assert.match(liveProvider, /new EventSource/);
+  assert.match(liveProvider, /if \(!enabled\)/);
+  assert.match(liveProvider, /shouldReconnectLiveStream/);
   assert.match(liveProvider, /workspace\.update/);
   assert.match(liveProvider, /LIVE_WORKSPACE_UPDATE_EVENT/);
   assert.match(liveProvider, /seen\.current/);
   assert.match(liveLib, /tracekit:workspace-update/);
-  assert.match(proxy, /\/v1\/events\/stream/);
-  assert.match(proxy, /text\/event-stream/);
-  assert.match(proxy, /x-tk-secret/);
+  assert.match(proxy, /TRACEKIT_REAL_DATA_ENABLED/);
+  assert.match(proxy, /status: 204/);
+  assert.match(proxy, /tenant scope is derived from the authenticated TraceKit session/);
+  assert.doesNotMatch(proxy, /workspace_id|x-tk-secret|\/v1\/events\/stream/);
   assert.match(home, /LIVE_WORKSPACE_UPDATE_EVENT/);
   assert.match(operations, /LIVE_WORKSPACE_UPDATE_EVENT/);
   assert.match(notifications, /LIVE_WORKSPACE_UPDATE_EVENT/);
