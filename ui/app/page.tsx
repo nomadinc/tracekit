@@ -1,13 +1,12 @@
-import { Suspense } from "react";
 import AppShell from "@/components/layout/app-shell";
-import HomeCommandCenter, { HomeLoading } from "@/components/home/home-command-center";
+import { MissionControl } from "@/components/mission-control/mission-control";
+import { missionControlRepository } from "@/lib/mission-control/mock-repository";
 
-export default function Home() {
+export default async function Home() {
+  const snapshot = await missionControlRepository.getMissionControl();
   return (
     <AppShell>
-      <Suspense fallback={<HomeLoading />}>
-        <HomeCommandCenter />
-      </Suspense>
+      <MissionControl snapshot={snapshot} />
     </AppShell>
   );
 }
