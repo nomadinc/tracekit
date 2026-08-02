@@ -1,0 +1,9 @@
+ordinal_position,column_name,data_type,udt_name,is_nullable,column_default,is_identity,identity_generation,is_generated,generation_expression,collation_name
+1,platform,text,text,NO,null,NO,null,NEVER,null,null
+2,auto_import_enabled,boolean,bool,NO,false,NO,null,NEVER,null,null
+3,auto_import_interval_minutes,integer,int4,NO,60,NO,null,NEVER,null,null
+4,last_run_at,timestamp with time zone,timestamptz,YES,null,NO,null,NEVER,null,null
+5,last_success_at,timestamp with time zone,timestamptz,YES,null,NO,null,NEVER,null,null
+6,last_error,text,text,YES,null,NO,null,NEVER,null,null
+7,updated_at,timestamp with time zone,timestamptz,NO,now(),NO,null,NEVER,null,null
+8,auto_import_lookback_hours,integer,int4,NO,2,NO,null,NEVER,null,null

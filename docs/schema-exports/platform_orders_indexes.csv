@@ -1,0 +1,28 @@
+indexname,indexdef
+idx_platform_orders_affiliate_subs,"CREATE INDEX idx_platform_orders_affiliate_subs ON public.platform_orders USING btree (affiliate_id, sub1, sub2, sub3, sub4, sub5)"
+idx_platform_orders_email_hash,CREATE INDEX idx_platform_orders_email_hash ON public.platform_orders USING btree (customer_email_hash)
+idx_platform_orders_email_norm,CREATE INDEX idx_platform_orders_email_norm ON public.platform_orders USING btree (customer_email_normalized)
+idx_platform_orders_transaction_id,CREATE INDEX idx_platform_orders_transaction_id ON public.platform_orders USING btree (transaction_id)
+platform_orders_customer_explorer_affiliate_idx,"CREATE INDEX platform_orders_customer_explorer_affiliate_idx ON public.platform_orders USING btree (workspace_id, affiliate_id, order_ts DESC) WHERE (affiliate_id IS NOT NULL)"
+platform_orders_customer_explorer_email_idx,"CREATE INDEX platform_orders_customer_explorer_email_idx ON public.platform_orders USING btree (workspace_id, customer_email_normalized) WHERE (customer_email_normalized IS NOT NULL)"
+platform_orders_customer_explorer_order_id_idx,"CREATE INDEX platform_orders_customer_explorer_order_id_idx ON public.platform_orders USING btree (workspace_id, order_id) WHERE (order_id IS NOT NULL)"
+platform_orders_customer_explorer_person_order_idx,"CREATE INDEX platform_orders_customer_explorer_person_order_idx ON public.platform_orders USING btree (workspace_id, person_id, order_ts DESC, platform_order_id) WHERE (person_id IS NOT NULL)"
+platform_orders_customer_explorer_platform_order_idx,"CREATE INDEX platform_orders_customer_explorer_platform_order_idx ON public.platform_orders USING btree (workspace_id, platform_order_id) WHERE (platform_order_id IS NOT NULL)"
+platform_orders_customer_explorer_transaction_idx,"CREATE INDEX platform_orders_customer_explorer_transaction_idx ON public.platform_orders USING btree (workspace_id, transaction_id) WHERE (transaction_id IS NOT NULL)"
+platform_orders_event_id_idx,CREATE INDEX platform_orders_event_id_idx ON public.platform_orders USING btree (event_id)
+platform_orders_financial_issue_order_range_idx,"CREATE INDEX platform_orders_financial_issue_order_range_idx ON public.platform_orders USING btree (workspace_id, order_ts, platform, platform_order_id)"
+platform_orders_financial_issue_status_idx,"CREATE INDEX platform_orders_financial_issue_status_idx ON public.platform_orders USING btree (workspace_id, status_norm, platform_order_id, platform)"
+platform_orders_identity_backfill_linked_count_idx,"CREATE INDEX platform_orders_identity_backfill_linked_count_idx ON public.platform_orders USING btree (workspace_id, platform, order_ts) WHERE (person_id IS NOT NULL)"
+platform_orders_identity_backfill_scan_idx,"CREATE INDEX platform_orders_identity_backfill_scan_idx ON public.platform_orders USING btree (workspace_id, platform, order_ts, platform_order_id) WHERE ((person_id IS NULL) AND (platform_order_id IS NOT NULL))"
+platform_orders_identity_backfill_unlinked_count_idx,"CREATE INDEX platform_orders_identity_backfill_unlinked_count_idx ON public.platform_orders USING btree (workspace_id, platform, order_ts) WHERE (person_id IS NULL)"
+platform_orders_pkey,CREATE UNIQUE INDEX platform_orders_pkey ON public.platform_orders USING btree (id)
+platform_orders_platform_commerce_reference_idx,"CREATE INDEX platform_orders_platform_commerce_reference_idx ON public.platform_orders USING btree (platform, commerce_reference) WHERE (commerce_reference IS NOT NULL)"
+platform_orders_platform_order_id_key,CREATE UNIQUE INDEX platform_orders_platform_order_id_key ON public.platform_orders USING btree (platform_order_id)
+platform_orders_platform_order_id_lookup_idx,"CREATE INDEX platform_orders_platform_order_id_lookup_idx ON public.platform_orders USING btree (platform, order_id) WHERE (order_id IS NOT NULL)"
+platform_orders_platform_order_id_uidx,CREATE UNIQUE INDEX platform_orders_platform_order_id_uidx ON public.platform_orders USING btree (platform_order_id)
+platform_orders_platform_transaction_id_lookup_idx,"CREATE INDEX platform_orders_platform_transaction_id_lookup_idx ON public.platform_orders USING btree (platform, transaction_id) WHERE (transaction_id IS NOT NULL)"
+platform_orders_status_norm_idx,CREATE INDEX platform_orders_status_norm_idx ON public.platform_orders USING btree (status_norm)
+platform_orders_tid_idx,CREATE INDEX platform_orders_tid_idx ON public.platform_orders USING btree (everflow_transaction_id)
+platform_orders_uq,"CREATE UNIQUE INDEX platform_orders_uq ON public.platform_orders USING btree (platform, platform_order_id)"
+platform_orders_workspace_person_idx,"CREATE INDEX platform_orders_workspace_person_idx ON public.platform_orders USING btree (workspace_id, person_id) WHERE (person_id IS NOT NULL)"
+platform_orders_wowboost_reference_backfill_idx,"CREATE INDEX platform_orders_wowboost_reference_backfill_idx ON public.platform_orders USING btree (platform, order_ts, platform_order_id) WHERE ((platform_order_id IS NOT NULL) AND ((commerce_reference IS NULL) OR (btrim(commerce_reference) = ''::text)) AND (platform = ANY (ARRAY['wowboost'::text, 'wowsuite:wowboost'::text, 'wowsuite'::text])))"

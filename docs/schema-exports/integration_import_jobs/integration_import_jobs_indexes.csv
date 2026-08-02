@@ -1,0 +1,5 @@
+indexname,indexdef
+integration_import_jobs_pkey,CREATE UNIQUE INDEX integration_import_jobs_pkey ON public.integration_import_jobs USING btree (id)
+integration_import_jobs_platform_idx,"CREATE INDEX integration_import_jobs_platform_idx ON public.integration_import_jobs USING btree (platform, created_at DESC)"
+integration_import_jobs_runtime_lookup_idx,"CREATE INDEX integration_import_jobs_runtime_lookup_idx ON public.integration_import_jobs USING btree (workspace_id, connector_id, job_type, status, requested_from, requested_to)"
+integration_import_jobs_runtime_updated_idx,CREATE INDEX integration_import_jobs_runtime_updated_idx ON public.integration_import_jobs USING btree (updated_at DESC)

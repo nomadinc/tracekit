@@ -1,0 +1,218 @@
+import assert from "node:assert/strict";
+import { readFileSync, readdirSync } from "node:fs";
+import { test } from "node:test";
+
+const migrationsUrl = new URL("../../supabase/migrations/", import.meta.url);
+const exportsUrl = new URL("../../docs/schema-exports/", import.meta.url);
+
+function migration(name: string): string {
+  return readFileSync(new URL(name, migrationsUrl), "utf8");
+}
+
+test("Migration Zero owns only evidence-backed legacy prerequisites", () => {
+  const baseline = migration("000_tracekit_legacy_baseline.sql").toLowerCase();
+  const integrationStart = baseline.indexOf("create table if not exists public.integration_import_jobs");
+  const conversionsStart = baseline.indexOf("create table if not exists public.conversions");
+  const platformBaseline = baseline.slice(0, integrationStart);
+  const integrationBaseline = baseline.slice(integrationStart, conversionsStart);
+
+  assert.match(baseline, /create sequence if not exists public\.platform_orders_id_seq/);
+  assert.match(baseline, /owned by public\.platform_orders\.id/);
+  assert.match(baseline, /create table if not exists public\.platform_orders/);
+  assert.match(baseline, /constraint platform_orders_pkey primary key \(id\)/);
+  assert.match(baseline, /constraint platform_orders_platform_order_id_key unique \(platform_order_id\)/);
+
+  for (const migrationOwnedColumn of [
+    "customer_email",
+    "customer_email_normalized",
+    "customer_email_hash",
+    "transaction_id",
+    "affiliate_id",
+    "source_id",
+    "sub1",
+    "sub2",
+    "sub3",
+    "sub4",
+    "sub5",
+    "raw_json",
+    "commerce_reference",
+    "workspace_id",
+    "person_id",
+  ]) {
+    assert.doesNotMatch(
+      platformBaseline,
+      new RegExp(`\\n\\s*${migrationOwnedColumn}\\s`),
+      `${migrationOwnedColumn} belongs to a tracked migration`,
+    );
+  }
+
+  assert.doesNotMatch(platformBaseline, /references public\.people/);
+  assert.doesNotMatch(baseline, /\bto (anon|authenticated)\b/);
+
+  assert.match(baseline, /create table if not exists public\.integration_import_jobs/);
+  assert.match(baseline, /constraint integration_import_jobs_pkey primary key \(id\)/);
+  assert.match(baseline, /integration_import_jobs_platform_idx/);
+  assert.doesNotMatch(integrationBaseline, /\n\s*progress\s+jsonb/);
+  for (const runtimeColumn of [
+    "workspace_id",
+    "connector_id",
+    "job_type",
+    "phase",
+    "requested_from",
+    "requested_to",
+    "records_discovered",
+    "records_processed",
+    "records_succeeded",
+    "records_failed",
+    "records_skipped",
+    "current_cursor",
+    "current_page",
+    "last_error",
+    "next_run_at",
+    "metadata",
+  ]) {
+    assert.doesNotMatch(
+      integrationBaseline,
+      new RegExp(`\\n\\s*${runtimeColumn}\\s`),
+      `${runtimeColumn} belongs to migration 011`,
+    );
+  }
+
+  assert.match(baseline, /create table if not exists public\.conversions/);
+  assert.match(baseline, /constraint conversions_pkey primary key \(id\)/);
+  assert.match(baseline, /constraint conversions_ledger_type_check check/);
+  for (const chargebackColumn of [
+    "processor_account_id",
+    "source_event_id",
+    "dispute_id",
+    "source_amount",
+    "source_direction",
+    "diagnostic_flags",
+  ]) {
+    assert.doesNotMatch(
+      baseline,
+      new RegExp(`\\n\\s*${chargebackColumn}\\s`),
+      `${chargebackColumn} belongs to migration 035`,
+    );
+  }
+  assert.doesNotMatch(baseline, /conversions_wowsuite_refund_event_uidx/);
+  assert.doesNotMatch(baseline, /conversions_financial_issue_range_idx/);
+  assert.doesNotMatch(baseline, /conversions_chargeback_event_uidx/);
+  assert.doesNotMatch(baseline, /conversions_financial_reconciliation_lookup_idx/);
+
+  const settingsStart = baseline.indexOf("create table if not exists public.integrations_settings");
+  const settingsBaseline = baseline.slice(settingsStart);
+  assert.match(settingsBaseline, /constraint integrations_settings_pkey primary key \(platform\)/);
+  assert.match(settingsBaseline, /updated_at timestamptz not null default now\(\)/);
+  for (const migration037Column of [
+    "auto_import_enabled",
+    "auto_import_interval_minutes",
+    "auto_import_lookback_hours",
+    "last_run_at",
+    "last_success_at",
+    "last_error",
+  ]) {
+    assert.doesNotMatch(settingsBaseline, new RegExp(`\\n\\s*${migration037Column}\\s`));
+  }
+});
+
+test("tracked migrations retain ownership of platform_orders additions", () => {
+  const migration001 = migration("001_tracekit_core_ledger.sql").toLowerCase();
+  const migration008 = migration("008_commerce_reference_paypal_event_fields.sql").toLowerCase();
+  const migration014 = migration("014_identity_service_v1.sql").toLowerCase();
+
+  for (const column of [
+    "customer_email",
+    "customer_email_normalized",
+    "customer_email_hash",
+    "transaction_id",
+    "affiliate_id",
+    "source_id",
+    "sub1",
+    "sub2",
+    "sub3",
+    "sub4",
+    "sub5",
+    "raw_json",
+  ]) {
+    assert.match(migration001, new RegExp(`add column if not exists ${column}\\s`));
+  }
+
+  assert.match(migration008, /add column if not exists commerce_reference text/);
+  assert.match(migration014, /add column if not exists workspace_id text/);
+  assert.match(migration014, /add column if not exists person_id uuid references public\.people/);
+
+  const migration006 = migration("006_import_jobs_progress.sql").toLowerCase();
+  const migration011 = migration("011_connector_runtime_v1.sql").toLowerCase();
+  assert.match(migration006, /add column if not exists progress jsonb not null default '\{\}'::jsonb/);
+  assert.match(migration011, /add column if not exists workspace_id text not null default 'default'/);
+  assert.match(migration011, /integration_import_jobs_runtime_lookup_idx/);
+  assert.match(migration011, /integration_import_jobs_runtime_updated_idx/);
+
+  const migration033 = migration("033_wowboost_receipt_refund_events.sql").toLowerCase();
+  const migration034 = migration("034_financial_issue_analysis_indexes.sql").toLowerCase();
+  const migration035 = migration("035_chargeback_ingestion_v1.sql").toLowerCase();
+  const migration036 = migration("036_financial_event_matches.sql").toLowerCase();
+  assert.match(migration033, /conversions_wowsuite_refund_event_uidx/);
+  assert.match(migration034, /conversions_financial_issue_range_idx/);
+  assert.match(migration035, /add column if not exists processor_account_id text/);
+  assert.match(migration035, /add column if not exists diagnostic_flags text\[\]/);
+  assert.match(migration036, /conversions_financial_reconciliation_lookup_idx/);
+
+  const migration037 = migration("037_integrations_settings_scheduled_import_columns.sql").toLowerCase();
+  assert.match(migration037, /add column if not exists auto_import_enabled boolean not null default false/);
+  assert.match(migration037, /add column if not exists auto_import_interval_minutes integer not null default 60/);
+  assert.match(migration037, /add column if not exists auto_import_lookback_hours integer not null default 2/);
+  assert.match(migration037, /add column if not exists last_run_at timestamptz/);
+  assert.match(migration037, /add column if not exists last_success_at timestamptz/);
+  assert.match(migration037, /add column if not exists last_error text/);
+});
+
+test("migration filenames are unique and numerically ordered", () => {
+  const names = readdirSync(migrationsUrl)
+    .filter((name) => /^\d{3}_.+\.sql$/.test(name))
+    .sort();
+  const numbers = names.map((name) => name.slice(0, 3));
+
+  assert.equal(new Set(numbers).size, numbers.length);
+  assert.deepEqual(numbers, Array.from({ length: 39 }, (_, index) => String(index).padStart(3, "0")));
+});
+
+test("schema provenance exports contain metadata headers and no known secret material", () => {
+  const exportNames = readdirSync(exportsUrl).filter((name) => name.endsWith(".csv"));
+  assert.deepEqual(exportNames.sort(), [
+    "platform_orders_columns.csv",
+    "platform_orders_constraints.csv",
+    "platform_orders_grants.csv",
+    "platform_orders_indexes.csv",
+  ]);
+
+  const forbidden = /(bearer\s+[a-z0-9._~+/=-]+|access[_-]?token|refresh[_-]?token|client[_-]?secret|api[_-]?key|password)/i;
+  for (const name of exportNames) {
+    const contents = readFileSync(new URL(name, exportsUrl), "utf8");
+    assert.doesNotMatch(contents, forbidden, `${name} must remain schema metadata only`);
+  }
+});
+
+test("persistent identity migration enables RLS and revokes browser roles", () => {
+  const identityMigration = migration("038_persistent_identity_and_tenancy.sql").toLowerCase();
+  const identityTables = [
+    "tracekit_users",
+    "tracekit_accounts",
+    "tracekit_agencies",
+    "tracekit_organizations",
+    "tracekit_roles",
+    "tracekit_memberships",
+    "tracekit_permission_overrides",
+    "tracekit_agency_client_assignments",
+    "tracekit_business_context_access",
+    "tracekit_invitations",
+    "tracekit_audit_events",
+  ];
+
+  for (const table of identityTables) {
+    assert.match(identityMigration, new RegExp(`alter table public\\.${table} enable row level security`));
+  }
+  assert.match(identityMigration, /revoke all on table[\s\s]*public\.tracekit_users/);
+  assert.match(identityMigration, /from anon, authenticated/);
+});

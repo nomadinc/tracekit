@@ -1,0 +1,2 @@
+constraint_name,constraint_type,definition
+integrations_settings_pkey,p,PRIMARY KEY (platform)
