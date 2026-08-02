@@ -13,7 +13,7 @@ test("application shell reorganizes existing routes around business navigation",
   const rootPage = readRepoFile("ui/app/page.tsx");
   const breadcrumbs = readRepoFile("ui/components/shared/breadcrumbs.tsx");
 
-  for (const label of ["Home", "Customers", "Marketing", "Revenue", "Operations", "Settings"]) {
+  for (const label of ["Mission Control", "Customers", "Marketing", "Revenue", "Operations", "Settings"]) {
     assert.match(navigation, new RegExp(`label: "${label}"`));
   }
 
@@ -26,18 +26,20 @@ test("application shell reorganizes existing routes around business navigation",
   assert.match(navigation, /breadcrumbsForPath/);
   assert.match(breadcrumbs, /aria-label="Breadcrumb"/);
   assert.match(appLayout, /<AppShell>{children}<\/AppShell>/);
-  assert.match(rootPage, /<HomeCommandCenter \/>/);
+  assert.match(rootPage, /<MissionControl snapshot=\{snapshot\} \/>/);
+  assert.match(rootPage, /missionControlRepository\.getMissionControl\(\)/);
   assert.doesNotMatch(rootPage, /redirect\("\/overview"\)/);
 });
 
-test("home command center consumes one composed Home API and preserves overview compatibility", () => {
+test("Mission Control owns the approved root while the legacy overview compatibility route remains isolated", () => {
   const root = readRepoFile("ui/app/page.tsx");
   const overview = readRepoFile("ui/app/(app)/overview/page.tsx");
   const home = readRepoFile("ui/components/home/home-command-center.tsx");
   const proxy = readRepoFile("ui/app/api/home/route.ts");
 
   assert.match(root, /<AppShell>/);
-  assert.match(root, /<HomeCommandCenter \/>/);
+  assert.match(root, /<MissionControl snapshot=\{snapshot\} \/>/);
+  assert.match(root, /missionControlRepository\.getMissionControl\(\)/);
   assert.match(overview, /<HomeCommandCenter \/>/);
   assert.match(home, /homeQuery\(\{ workspace_id: WORKSPACE_ID, window: windowKey \}\)/);
   assert.match(home, /PriorityWorkItems/);
