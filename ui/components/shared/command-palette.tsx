@@ -27,6 +27,8 @@ import { navigationForIdentity } from "@/lib/identity/shell-navigation";
 import { withDevelopmentIdentity } from "@/lib/identity/development-state";
 import type { Identity } from "@/lib/identity/types";
 import { shellOverlayReducer } from "@/lib/shell/overlay-state";
+import { offerRepository } from "@/lib/offers/mock-repository";
+import type { OfferSearchResult } from "@/lib/offers/types";
 import {
   globalSearchQuery,
   type GlobalSearchResponse,
@@ -227,6 +229,7 @@ export function CommandPaletteDialog({
   const navItems = React.useMemo(() => navigationItems(session.identity), [session.identity]);
   const [query, setQuery] = React.useState("");
   const [search, setSearch] = React.useState<GlobalSearchResponse | null>(null);
+  const [offerSearch, setOfferSearch] = React.useState<OfferSearchResult[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
   const [activeIndex, setActiveIndex] = React.useState(0);
@@ -258,6 +261,7 @@ export function CommandPaletteDialog({
     setError(null);
     if (trimmed.length < 2) {
       setSearch(null);
+      setOfferSearch([]);
       setLoading(false);
       return;
     }
@@ -268,6 +272,7 @@ export function CommandPaletteDialog({
     const timeout = window.setTimeout(async () => {
       setLoading(true);
       try {
+        const offerPromise = offerRepository.search({ authenticated: session.authenticated, identity: session.identity, organizationId: session.activeOrganizationId }, trimmed);
         const res = await fetch(globalSearchQuery({ workspace_id: WORKSPACE_ID, q: trimmed, limit: SEARCH_LIMIT }), {
           cache: "no-store",
           headers: { accept: "application/json" },
@@ -277,9 +282,11 @@ export function CommandPaletteDialog({
         if (requestIdRef.current !== requestId) return;
         if (!res.ok || json?.ok === false) throw new Error(json?.message || json?.error || `Search failed (${res.status})`);
         setSearch(json);
+        setOfferSearch(await offerPromise);
       } catch (err: any) {
         if (err?.name === "AbortError" || requestIdRef.current !== requestId) return;
         setSearch(null);
+        setOfferSearch([]);
         setError(err?.message || "Search failed.");
       } finally {
         if (requestIdRef.current === requestId) setLoading(false);
@@ -290,7 +297,7 @@ export function CommandPaletteDialog({
       controller.abort();
       window.clearTimeout(timeout);
     };
-  }, [open, query]);
+  }, [open, query, session.activeOrganizationId, session.authenticated, session.identity]);
 
   const visibleNavItems = React.useMemo(() => {
     const trimmed = query.trim().toLowerCase();
@@ -310,15 +317,15 @@ export function CommandPaletteDialog({
   }, [contextCommands, query]);
 
   const resultItems = React.useMemo(() => {
-    if (!search) return [];
-    const items: PaletteItem[] = [];
+    const items: PaletteItem[] = offerSearch.map(result => ({ id: `offer-search:${result.id}`, group: "Offers and related Evidence", title: result.title, subtitle: result.subtitle, meta: result.value, href: result.href, icon: Search }));
+    if (!search) return items;
     (Object.keys(search.groups) as Array<keyof GlobalSearchResponse["groups"]>).forEach((key) => {
       for (const result of search.groups[key] || []) {
         items.push(resultToItem(result, resultGroupLabel(key)));
       }
     });
     return items;
-  }, [search]);
+  }, [offerSearch, search]);
 
   const items = query.trim().length < 2 ? [...visibleContextItems, ...visibleNavItems] : [...resultItems, ...visibleContextItems, ...visibleNavItems];
   const grouped = groupItems(items);
