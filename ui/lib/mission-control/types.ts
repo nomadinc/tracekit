@@ -1,3 +1,5 @@
+import type { OfferFocus } from "@/lib/offers/types";
+
 export type MissionTone = "Healthy" | "Opportunity" | "Warning" | "Critical" | "Information";
 export type BusinessMeasure = "profit" | "revenue" | "spend" | "orders" | "customers" | "roas" | "cpa";
 export type BusinessRange = "7 Days" | "14 Days" | "30 Days" | "90 Days" | "Year";
@@ -14,6 +16,7 @@ export type MissionItem = {
   tone: MissionTone;
   action: string;
   destination: "offer" | "customer" | "order";
+  offerDeepLink?: { focus?: OfferFocus; trafficSourceId?: string; driverId?: string; eventId?: string; drawerId?: string; search?: string; compareOfferIds?: string[] };
   question: string;
   explanation: string;
   evidence: string[];
@@ -28,7 +31,7 @@ export type MissionControlSnapshot = {
   briefing: { opportunities: number; warnings: number; recommendations: number; observation: string; reason: string; recommendation: string; evidence: string[] };
   attention: MissionItem[];
   winners: Array<{ label: string; value: string; detail: string }>;
-  continuation: { businessContextId: string; business: string; subject: string; detail: string };
-  recentActivity: Array<{ id: string; type: string; title: string; detail: string; destination: "offer" | "customer" | "order"; businessContextId?: string }>;
-  recentSearches: Array<{ id: string; type: string; value: string; destination: "offer" | "customer" | "order"; businessContextId?: string }>;
+  continuation: { businessContextId: string; business: string; subject: string; detail: string; offerDeepLink?: MissionItem["offerDeepLink"] };
+  recentActivity: Array<{ id: string; type: string; title: string; detail: string; destination: "offer" | "customer" | "order"; businessContextId?: string; offerDeepLink?: MissionItem["offerDeepLink"] }>;
+  recentSearches: Array<{ id: string; type: string; value: string; destination: "offer" | "customer" | "order"; businessContextId?: string; offerDeepLink?: MissionItem["offerDeepLink"] }>;
 };

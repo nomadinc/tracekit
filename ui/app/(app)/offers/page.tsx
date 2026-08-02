@@ -1,5 +1,6 @@
-import { ShellPlaceholder } from "@/components/layout/shell-placeholder";
+import { Suspense } from "react";
+import { OfferWorkspace } from "@/components/offers/offer-workspace";
 
 export default function OffersPage() {
-  return <ShellPlaceholder title="Offers" purpose="The production destination for strategic Offer Workspaces. Approved concepts remain isolated until their production migration is reviewed." permission="offers.view" variants={["client", "agency"]} managementPermission="offers.manage" />;
+  return <Suspense fallback={<div className="rounded-xl border bg-white p-8 text-sm text-slate-500">Loading Offer Workspace…</div>}><OfferWorkspace /></Suspense>;
 }
