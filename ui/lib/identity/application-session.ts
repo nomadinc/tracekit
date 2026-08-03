@@ -126,16 +126,9 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
         accountName: account.name,
         accountType: account.accountType,
         role: membership.role,
-        organizationIds: [
-          ...organizations.map((organization) => organization.id),
-          ...Array.from(new Set(
-            allowedContextIds.flatMap((contextId) =>
-              MOCK_BUSINESS_CONTEXTS.filter(
-                (context) => context.id === contextId,
-              ).map((context) => context.organizationId),
-            ),
-          )),
-        ],
+        // Authorization uses persistent Organization IDs only. Mock repository
+        // compatibility is resolved separately from the authorized Business Context.
+        organizationIds: organizations.map((organization) => organization.id),
         grants: permissions.filter((permission) => !ROLE_PERMISSIONS[membership.role].includes(permission as never)),
       },
     },

@@ -1,7 +1,5 @@
-import {
-  accessibleOrganizations,
-  hasPermission,
-} from "@/lib/identity/authorization";
+import { hasPermission } from "@/lib/identity/authorization";
+import { mockRepositoryScopeAllows } from "@/lib/identity/mock-repository-scope";
 import { customerDeepLinkHref, normalizeCustomerDeepLink } from "./deep-link";
 import { withDevelopmentIdentity } from "@/lib/identity/development-state";
 import type { CustomerRepository } from "./repository";
@@ -326,18 +324,14 @@ function privacy(seed: Seed): CustomerPrivacySignal[] {
 function allowed(scope: CustomerScope) {
   if (
     !scope.authenticated ||
-    !scope.organizationId ||
-    !hasPermission(scope.identity, "customers.view") ||
-    !accessibleOrganizations(scope.identity).some(
-      (o) => o.id === scope.organizationId,
-    )
+    !mockRepositoryScopeAllows(scope, "customers.view")
   )
     return [];
   return seeds.filter(
     (s) =>
-      s.summary.organizationId === scope.organizationId &&
-      (!scope.businessContextId ||
-        s.summary.offerIds.includes(scope.businessContextId)),
+      s.summary.organizationId === scope.mockOrganizationId &&
+      scope.accessibleOfferIds.includes(scope.persistentBusinessContextId!) &&
+      s.summary.offerIds.includes(scope.persistentBusinessContextId!),
   );
 }
 function mask(summary: CustomerSummary, scope: CustomerScope) {
@@ -430,15 +424,14 @@ export class MockCustomerRepository implements CustomerRepository {
   }
   async resolveCustomer(scope: CustomerScope, id: string) {
     if (
-      !scope.authenticated ||
-      !hasPermission(scope.identity, "customers.view")
+      !mockRepositoryScopeAllows(scope, "customers.view")
     )
       return null;
-    const orgs = new Set(
-      accessibleOrganizations(scope.identity).map((o) => o.id),
-    );
     const s = seeds.find(
-      (x) => x.summary.id === id && orgs.has(x.summary.organizationId),
+      (x) =>
+        x.summary.id === id &&
+        x.summary.organizationId === scope.mockOrganizationId &&
+        x.summary.offerIds.includes(scope.persistentBusinessContextId!),
     );
     return s
       ? clone({

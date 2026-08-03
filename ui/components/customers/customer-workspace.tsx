@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { AccessBoundary } from "@/components/identity/access-control";
 import { useIdentity } from "@/components/identity/identity-provider";
-import { mockOrganizationIdForBusinessContext } from "@/lib/identity/mock";
+import { resolveMockRepositoryScope } from "@/lib/identity/mock-repository-scope";
 import { useShellDrawer } from "@/components/layout/shell-drawer";
 import { customerRepository } from "@/lib/customers/mock-repository";
 import {
@@ -51,18 +51,7 @@ function CustomerWorkspaceContent() {
     drawer = useShellDrawer();
   const { session, setActiveOrganization, setActiveBusinessContext } =
     useIdentity();
-  const scope = React.useMemo(
-    () => ({
-      authenticated: session.authenticated,
-      identity: session.identity,
-      organizationId:
-        mockOrganizationIdForBusinessContext(
-          session.activeBusinessContextId,
-        ) || session.activeOrganizationId,
-      businessContextId: session.activeBusinessContextId,
-    }),
-    [session],
-  );
+  const scope = React.useMemo(() => resolveMockRepositoryScope(session), [session]);
   const requested = React.useMemo(
     () => parseCustomerDeepLink(params),
     [params],
@@ -116,13 +105,10 @@ function CustomerWorkspaceContent() {
       return;
     let on = true;
     customerRepository
-      .resolveCustomer(
-        { ...scope, organizationId: null, businessContextId: null },
-        requested.customerId,
-      )
+      .resolveCustomer(scope, requested.customerId)
       .then((r) => {
         if (!on || !r) return;
-        if (r.organizationId !== scope.organizationId)
+        if (session.developmentOnly && r.organizationId !== scope.mockOrganizationId)
           setActiveOrganization(r.organizationId);
         if (r.businessContextId) setActiveBusinessContext(r.businessContextId);
       });
@@ -133,7 +119,8 @@ function CustomerWorkspaceContent() {
     customers,
     requested.customerId,
     scope,
-    scope.organizationId,
+    scope.mockOrganizationId,
+    session.developmentOnly,
     setActiveBusinessContext,
     setActiveOrganization,
   ]);

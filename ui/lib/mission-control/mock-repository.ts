@@ -1,4 +1,5 @@
 import type { MissionControlRepository } from "./repository";
+import { mockRepositoryScopeAllows, type MockRepositoryScope } from "../identity/mock-repository-scope";
 import type {
   BusinessRange,
   MissionControlSnapshot,
@@ -415,6 +416,22 @@ export class MockMissionControlRepository implements MissionControlRepository {
   async getMissionControl(): Promise<MissionControlSnapshot> {
     return structuredClone(snapshot);
   }
+}
+
+export function scopeMissionControlSnapshot(
+  value: MissionControlSnapshot,
+  scope: MockRepositoryScope,
+): MissionControlSnapshot | null {
+  if (!mockRepositoryScopeAllows(scope, "offers.view")) return null;
+  const includes = (businessContextId?: string) =>
+    Boolean(businessContextId && scope.accessibleOfferIds.includes(businessContextId));
+  const scoped = structuredClone(value);
+  scoped.businesses = scoped.businesses.filter((item) => includes(item.businessContextId));
+  scoped.attention = scoped.attention.filter((item) => includes(item.businessContextId));
+  scoped.recentActivity = scoped.recentActivity.filter((item) => includes(item.businessContextId));
+  scoped.recentSearches = scoped.recentSearches.filter((item) => includes(item.businessContextId));
+  scoped.winners = [];
+  return includes(scoped.continuation.businessContextId) ? scoped : null;
 }
 
 export const missionControlRepository: MissionControlRepository =

@@ -1,7 +1,5 @@
-import {
-  accessibleOrganizations,
-  hasPermission,
-} from "@/lib/identity/authorization";
+import { hasPermission } from "@/lib/identity/authorization";
+import { mockRepositoryScopeAllows } from "@/lib/identity/mock-repository-scope";
 import { normalizeOrderDeepLink, orderDeepLinkHref } from "./deep-link";
 import { withDevelopmentIdentity } from "@/lib/identity/development-state";
 import type { OrderRepository } from "./repository";
@@ -261,17 +259,13 @@ const clone = <T>(v: T): T => structuredClone(v);
 function allowed(scope: OrderScope) {
   if (
     !scope.authenticated ||
-    !scope.organizationId ||
-    !hasPermission(scope.identity, "orders.view") ||
-    !accessibleOrganizations(scope.identity).some(
-      (o) => o.id === scope.organizationId,
-    )
+    !mockRepositoryScopeAllows(scope, "orders.view")
   )
     return [];
   return seeds.filter(
     (s) =>
-      s.organizationId === scope.organizationId &&
-      (!scope.businessContextId || s.offerId === scope.businessContextId),
+      s.organizationId === scope.mockOrganizationId &&
+      s.offerId === scope.persistentBusinessContextId,
   );
 }
 function summary(s: Seed, scope: OrderScope): OrderSummary {
@@ -631,12 +625,14 @@ export class MockOrderRepository implements OrderRepository {
     return clone(v);
   }
   async resolveOrder(scope: OrderScope, id: string) {
-    if (!scope.authenticated || !hasPermission(scope.identity, "orders.view"))
+    if (!mockRepositoryScopeAllows(scope, "orders.view"))
       return null;
-    const orgs = new Set(
-      accessibleOrganizations(scope.identity).map((o) => o.id),
+    const s = seeds.find(
+      (x) =>
+        x.id === id &&
+        x.organizationId === scope.mockOrganizationId &&
+        x.offerId === scope.persistentBusinessContextId,
     );
-    const s = seeds.find((x) => x.id === id && orgs.has(x.organizationId));
     return s
       ? clone({
           organizationId: s.organizationId,

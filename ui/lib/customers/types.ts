@@ -1,8 +1,8 @@
-import type { Identity } from "@/lib/identity/types";
+import type { MockRepositoryScope } from "@/lib/identity/mock-repository-scope";
 import type { CustomerDrawerTarget } from "@/lib/navigation/drawer-contract";
 
 export type CustomerTrackingState = "Healthy" | "Degraded" | "Interference Likely" | "Incomplete" | "Unknown";
-export type CustomerScope = { authenticated: boolean; identity: Identity; organizationId: string | null; businessContextId: string | null };
+export type CustomerScope = MockRepositoryScope;
 export type CustomerListFilter = { query?: string; state?: "all" | "recent" | "repeat" | "refunded" | "interference"; offerId?: string | null };
 export type CustomerSummary = { id: string; organizationId: string; offerIds: string[]; name: string; email: string; phone: string; sensitiveMasked: boolean; profit: number; profitStatus: "Estimated" | "Reconciled"; lastActivity: string; status: string; trackingHealth: CustomerTrackingState; repeat: boolean; refunded: boolean; interferenceLikely: boolean; journeyPreview: string };
 export type CustomerIdentifier = { id: string; type: string; value: string; status: "Observed" | "Missing" | "Recovered"; eventId: string };

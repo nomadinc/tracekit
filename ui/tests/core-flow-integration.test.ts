@@ -22,6 +22,7 @@ import {
   parseOrderDeepLink,
 } from "../lib/orders/deep-link";
 import { PRODUCTION_ROUTES } from "../lib/navigation/production-routes";
+import { resolveMockRepositoryScope } from "../lib/identity/mock-repository-scope";
 
 function identity(id: string) {
   const value = developmentIdentityById(id);
@@ -29,18 +30,9 @@ function identity(id: string) {
   return value;
 }
 
-const clientScope = {
-  authenticated: true,
-  identity: identity("client-admin"),
-  organizationId: "org-bullseye",
-  businessContextId: "offer-bullseye",
-};
-const agencyUnscoped = {
-  authenticated: true,
-  identity: identity("agency-owner"),
-  organizationId: null,
-  businessContextId: null,
-};
+const clientScope = resolveMockRepositoryScope({ authenticated: true, developmentOnly: true, identity: identity("client-admin"), activeOrganizationId: "org-bullseye", activeBusinessContextId: "offer-bullseye" });
+const agencyUnscoped = resolveMockRepositoryScope({ authenticated: true, developmentOnly: true, identity: identity("agency-owner"), activeOrganizationId: null, activeBusinessContextId: null });
+const agencyValueRxScope = resolveMockRepositoryScope({ authenticated: true, developmentOnly: true, identity: identity("agency-owner"), activeOrganizationId: "org-valuerx", activeBusinessContextId: "offer-valuerx-individual" });
 
 test("Mission Control and cross-Workspace builders select exact opaque objects", () => {
   const offer = PRODUCTION_ROUTES.offers({
@@ -188,44 +180,45 @@ test("invalid object and Drawer IDs normalize without disclosure or exceptions",
   );
 });
 
-test("agency can resolve assigned cross-Organization objects while direct client cannot", async () => {
+test("agency resolves an assigned active Organization while unscoped and direct-client access fail closed", async () => {
   const offers = new MockOfferRepository();
   const customers = new MockCustomerRepository();
   const orders = new MockOrderRepository();
   assert.deepEqual(
-    await offers.resolveOffer(agencyUnscoped, "offer-valuerx-individual"),
+    await offers.resolveOffer(agencyValueRxScope, "offer-valuerx-individual"),
     { organizationId: "org-valuerx", offerId: "offer-valuerx-individual" },
   );
   assert.equal(
     await offers.resolveOffer(
-      { ...clientScope, organizationId: null },
+      clientScope,
       "offer-valuerx-individual",
     ),
     null,
   );
   assert.equal(
-    (await customers.resolveCustomer(agencyUnscoped, "cust-vrx-1"))
+    (await customers.resolveCustomer(agencyValueRxScope, "cust-vrx-1"))
       ?.organizationId,
     "org-valuerx",
   );
   assert.equal(
     await customers.resolveCustomer(
-      { ...clientScope, organizationId: null },
+      clientScope,
       "cust-vrx-1",
     ),
     null,
   );
   assert.equal(
-    (await orders.resolveOrder(agencyUnscoped, "ord-vrx-1"))?.organizationId,
+    (await orders.resolveOrder(agencyValueRxScope, "ord-vrx-1"))?.organizationId,
     "org-valuerx",
   );
   assert.equal(
     await orders.resolveOrder(
-      { ...clientScope, organizationId: null },
+      clientScope,
       "ord-vrx-1",
     ),
     null,
   );
+  assert.deepEqual(await offers.listOffers(agencyUnscoped), []);
 });
 
 test("Drawer target and Business Context restore from canonical URL state", () => {

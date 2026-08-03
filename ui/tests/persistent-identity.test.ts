@@ -11,7 +11,11 @@ import { canAccessFinancialData, canAccessSensitiveCustomerData, requireActiveMe
 import { authorizeOrganizationSwitch } from "../lib/identity/organization-switching";
 import type { IdentityTenancyRepository } from "../lib/identity/persistent-repository";
 import { isProtectedApplicationPath, isPublicAuthenticationPath, isStaticAssetPath, shouldBlockLegacyRealDataProxy } from "../lib/identity/route-security";
-import { mockOrganizationIdForBusinessContext } from "../lib/identity/mock";
+import { resolveMockRepositoryScope } from "../lib/identity/mock-repository-scope";
+import { MockOfferRepository } from "../lib/offers/mock-repository";
+import { MockCustomerRepository } from "../lib/customers/mock-repository";
+import { MockOrderRepository } from "../lib/orders/mock-repository";
+import { MockMissionControlRepository, scopeMissionControlSnapshot } from "../lib/mission-control/mock-repository";
 import { withDevelopmentIdentity, withSessionDevelopmentIdentity } from "../lib/identity/development-state";
 
 const membership: PersistentMembership = { id: "mem_01", userId: "usr_01", accountId: "acct_01", organizationId: "org_01", role: "organization-admin", status: "active" };
@@ -133,13 +137,101 @@ test("persistent navigation is canonical while development review preserves iden
   assert.match(palette, /withSessionDevelopmentIdentity\(withWorkspace\(item\.href\), session\)/);
 });
 
-test("authorized persistent Business Context bridges to mock repository scope", () => {
-  assert.equal(
-    mockOrganizationIdForBusinessContext("offer-bullseye"),
-    "org-bullseye",
-  );
-  assert.equal(mockOrganizationIdForBusinessContext("unknown-offer"), null);
-  assert.equal(mockOrganizationIdForBusinessContext(null), null);
+test("persistent Organization UUID resolves to the mock repository scope only through Business Context", () => {
+  const session = {
+    authenticated: true,
+    developmentOnly: false,
+    identity: {
+      id: "user-1",
+      name: "Anthony McCabe",
+      email: "anthony@example.test",
+      title: "organization-admin",
+      membership: {
+        id: "membership-1",
+        accountId: "account-uuid",
+        accountName: "Bullseye Health",
+        accountType: "client" as const,
+        role: "organization-admin" as const,
+        organizationIds: ["85b51415-3529-47d6-8a43-c39e39d492e8"],
+      },
+    },
+    activeOrganizationId: "85b51415-3529-47d6-8a43-c39e39d492e8",
+    activeBusinessContextId: "offer-bullseye",
+  };
+  const scope = resolveMockRepositoryScope(session);
+  assert.equal(scope.persistentOrganizationId, "85b51415-3529-47d6-8a43-c39e39d492e8");
+  assert.equal(scope.mockOrganizationId, "org-bullseye");
+  assert.deepEqual(scope.accessibleOfferIds, ["offer-bullseye"]);
+  assert.equal(session.identity.membership.organizationIds.includes("org-bullseye"), false);
+});
+
+test("persistent Bullseye scope returns matching Workspace and search records only", async () => {
+  const persistentOrganizationId = "70000000-0000-0000-0000-000000000002";
+  const session = {
+    authenticated: true,
+    developmentOnly: false,
+    identity: {
+      id: "5cc87ba8-e70e-420f-a4f4-ae36833118d7",
+      name: "Anthony McCabe",
+      email: "anthony@example.test",
+      title: "organization-admin",
+      membership: {
+        id: "membership-anthony",
+        accountId: "70000000-0000-0000-0000-000000000001",
+        accountName: "Bullseye Health",
+        accountType: "client" as const,
+        role: "organization-admin" as const,
+        organizationIds: [persistentOrganizationId],
+      },
+    },
+    activeOrganizationId: persistentOrganizationId,
+    activeBusinessContextId: "offer-bullseye",
+  };
+  const scope = resolveMockRepositoryScope(session);
+  const offers = new MockOfferRepository();
+  const customers = new MockCustomerRepository();
+  const orders = new MockOrderRepository();
+  const mission = scopeMissionControlSnapshot(await new MockMissionControlRepository().getMissionControl(), scope);
+  assert.ok(mission);
+
+  assert.deepEqual((await offers.listOffers(scope)).map((item) => item.id), ["offer-bullseye"]);
+  assert.deepEqual((await customers.listCustomers(scope)).map((item) => item.id), ["cust-123", "cust-124"]);
+  assert.deepEqual((await orders.listOrders(scope)).map((item) => item.id), ["ord-123", "ord-124", "ord-125", "ord-127", "ord-128"]);
+  assert.deepEqual(mission.businesses.map((item) => item.businessContextId), ["offer-bullseye"]);
+  assert.ok(mission.attention.every((item) => item.businessContextId === "offer-bullseye"));
+
+  const searchResults = [
+    ...(await offers.search(scope, "Bullseye")),
+    ...(await customers.search(scope, "John")),
+    ...(await orders.search(scope, "TK-10482")),
+  ];
+  assert.ok(searchResults.length >= 3);
+  assert.equal(searchResults.some((item) => item.href.includes("valuerx") || item.href.includes("cust-vrx") || item.href.includes("ord-vrx")), false);
+  assert.equal(await offers.loadWorkspace(scope, "offer-valuerx-individual"), null);
+  assert.equal(await customers.loadWorkspace(scope, "cust-vrx-1"), null);
+  assert.equal(await orders.loadWorkspace(scope, "ord-vrx-1"), null);
+});
+
+test("unknown persistent Organization or Business Context produces a closed repository scope", async () => {
+  const identity = {
+    id: "user-unknown",
+    name: "Unknown",
+    email: "unknown@example.test",
+    title: "organization-admin",
+    membership: {
+      id: "membership-unknown",
+      accountId: "account-unknown",
+      accountName: "Unknown",
+      accountType: "client" as const,
+      role: "organization-admin" as const,
+      organizationIds: ["known-org"],
+    },
+  };
+  const unknownOrganization = resolveMockRepositoryScope({ authenticated: true, developmentOnly: false, identity, activeOrganizationId: "unknown-org", activeBusinessContextId: "offer-bullseye" });
+  const unknownContext = resolveMockRepositoryScope({ authenticated: true, developmentOnly: false, identity, activeOrganizationId: "known-org", activeBusinessContextId: "unknown-offer" });
+  const repository = new MockOfferRepository();
+  assert.deepEqual(await repository.listOffers(unknownOrganization), []);
+  assert.deepEqual(await repository.listOffers(unknownContext), []);
 });
 
 test("role permissions are capabilities and an explicit deny wins", () => {

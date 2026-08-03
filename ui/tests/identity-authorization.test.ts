@@ -47,6 +47,18 @@ test("route authorization checks permission, Organization scope, and shell varia
   assert.equal(authorizeShellVariant(identity("platform-admin"), ["product-admin"]).allowed, true);
 });
 
+test("persistent Organization UUIDs are authorized from membership scope without consulting mock IDs", () => {
+  const persistentIdentity = {
+    ...identity("client-admin"),
+    membership: {
+      ...identity("client-admin").membership,
+      organizationIds: ["85b51415-3529-47d6-8a43-c39e39d492e8"],
+    },
+  };
+  assert.equal(authorize(persistentIdentity, "offers.view", "85b51415-3529-47d6-8a43-c39e39d492e8").allowed, true);
+  assert.equal(authorize(persistentIdentity, "offers.view", "org-bullseye").allowed, false);
+});
+
 test("each representative identity resolves the permissions that drive its navigation", () => {
   const can = (id: string, permission: Parameters<typeof authorize>[1]) => authorize(identity(id), permission).allowed;
   assert.equal(can("platform-admin", "admin.manage_tenants"), true);
