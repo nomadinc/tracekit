@@ -10,6 +10,7 @@ import {
   calculateProcessorFee,
   MockOrderRepository,
 } from "../lib/orders/mock-repository";
+import { resolveMockRepositoryScope } from "../lib/identity/mock-repository-scope";
 const identity = (id: string) => {
   const v = developmentIdentityById(id);
   assert.ok(v);
@@ -19,12 +20,7 @@ const scope = (
   id = "client-admin",
   org: string | null = "org-bullseye",
   offer: string | null = "offer-bullseye",
-) => ({
-  authenticated: true,
-  identity: identity(id),
-  organizationId: org,
-  businessContextId: offer,
-});
+) => resolveMockRepositoryScope({ authenticated: true, developmentOnly: true, identity: identity(id), activeOrganizationId: org, activeBusinessContextId: offer });
 test("Order snapshots are scoped, cloned, and serializable", async () => {
   const r = new MockOrderRepository(),
     list = await r.listOrders(scope());
@@ -55,7 +51,7 @@ test("inaccessible and Product Admin Order scope is denied", async () => {
     null,
   );
   assert.deepEqual(
-    await r.resolveOrder(scope("agency-owner", null, null), "ord-vrx-1"),
+    await r.resolveOrder(scope("agency-owner", "org-valuerx", "offer-valuerx-individual"), "ord-vrx-1"),
     {
       organizationId: "org-valuerx",
       businessContextId: "offer-valuerx-individual",

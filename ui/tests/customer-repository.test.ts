@@ -7,6 +7,7 @@ import {
   parseCustomerDeepLink,
 } from "../lib/customers/deep-link";
 import { MockCustomerRepository } from "../lib/customers/mock-repository";
+import { resolveMockRepositoryScope } from "../lib/identity/mock-repository-scope";
 const identity = (id: string) => {
   const v = developmentIdentityById(id);
   assert.ok(v);
@@ -16,12 +17,7 @@ const scope = (
   id = "client-admin",
   organizationId: string | null = "org-bullseye",
   businessContextId: string | null = "offer-bullseye",
-) => ({
-  authenticated: true,
-  identity: identity(id),
-  organizationId,
-  businessContextId,
-});
+) => resolveMockRepositoryScope({ authenticated: true, developmentOnly: true, identity: identity(id), activeOrganizationId: organizationId, activeBusinessContextId: businessContextId });
 test("Customer snapshots are scoped, serializable, and cloned", async () => {
   const r = new MockCustomerRepository(),
     list = await r.listCustomers(scope());
@@ -54,7 +50,7 @@ test("inaccessible and platform Customer scopes are denied", async () => {
     null,
   );
   assert.deepEqual(
-    await r.resolveCustomer(scope("agency-owner", null, null), "cust-vrx-1"),
+    await r.resolveCustomer(scope("agency-owner", "org-valuerx", "offer-valuerx-individual"), "cust-vrx-1"),
     {
       organizationId: "org-valuerx",
       businessContextId: "offer-valuerx-individual",

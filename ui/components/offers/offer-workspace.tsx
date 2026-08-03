@@ -26,7 +26,7 @@ import {
 } from "recharts";
 import { AccessBoundary } from "@/components/identity/access-control";
 import { useIdentity } from "@/components/identity/identity-provider";
-import { mockOrganizationIdForBusinessContext } from "@/lib/identity/mock";
+import { resolveMockRepositoryScope } from "@/lib/identity/mock-repository-scope";
 import { useShellDrawer } from "@/components/layout/shell-drawer";
 import { OfferDrawerContent } from "./offer-drawer-content";
 import { offerRepository } from "@/lib/offers/mock-repository";
@@ -121,22 +121,7 @@ function OfferWorkspaceContent() {
     setActiveBusinessContext,
     setActiveOrganization,
   } = useIdentity();
-  const scope = React.useMemo(
-    () => ({
-      authenticated: session.authenticated,
-      identity: session.identity,
-      organizationId:
-        mockOrganizationIdForBusinessContext(
-          session.activeBusinessContextId,
-        ) || session.activeOrganizationId,
-    }),
-    [
-      session.activeBusinessContextId,
-      session.activeOrganizationId,
-      session.authenticated,
-      session.identity,
-    ],
-  );
+  const scope = React.useMemo(() => resolveMockRepositoryScope(session), [session]);
   const requested = React.useMemo(
     () => parseOfferDeepLink(searchParams),
     [searchParams],
@@ -191,12 +176,13 @@ function OfferWorkspaceContent() {
       return;
     let active = true;
     offerRepository
-      .resolveOffer({ ...scope, organizationId: null }, requested.offerId)
+      .resolveOffer(scope, requested.offerId)
       .then((result) => {
         if (
           active &&
           result &&
-          result.organizationId !== scope.organizationId
+          session.developmentOnly &&
+          result.organizationId !== scope.mockOrganizationId
         )
           setActiveOrganization(result.organizationId);
       });
@@ -207,7 +193,8 @@ function OfferWorkspaceContent() {
     offers,
     requested.offerId,
     scope,
-    scope.organizationId,
+    scope.mockOrganizationId,
+    session.developmentOnly,
     setActiveOrganization,
   ]);
 

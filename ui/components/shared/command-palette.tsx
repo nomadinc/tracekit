@@ -22,6 +22,7 @@ import {
 import { useRegisteredCommands, type ContextCommand } from "@/components/shared/command-context";
 import type { InvestigationTarget } from "@/lib/entities";
 import { useIdentity } from "@/components/identity/identity-provider";
+import { resolveMockRepositoryScope } from "@/lib/identity/mock-repository-scope";
 import { hasAnyPermission, shellVariant } from "@/lib/identity/authorization";
 import { navigationForIdentity } from "@/lib/identity/shell-navigation";
 import { withSessionDevelopmentIdentity } from "@/lib/identity/development-state";
@@ -237,6 +238,10 @@ export function CommandPaletteDialog({
   const previousIdentityRef = React.useRef(session.identity.id);
   const previousBusinessContextRef = React.useRef(session.activeBusinessContextId);
   const navItems = React.useMemo(() => navigationItems(session.identity), [session.identity]);
+  const repositoryScope = React.useMemo(
+    () => resolveMockRepositoryScope(session),
+    [session],
+  );
   const [query, setQuery] = React.useState("");
   const [search, setSearch] = React.useState<GlobalSearchResponse | null>(null);
   const [offerSearch, setOfferSearch] = React.useState<OfferSearchResult[]>([]);
@@ -286,9 +291,9 @@ export function CommandPaletteDialog({
     const timeout = window.setTimeout(async () => {
       setLoading(true);
       try {
-        const offerPromise = offerRepository.search({ authenticated: session.authenticated, identity: session.identity, organizationId: session.activeOrganizationId }, trimmed);
-        const customerPromise = customerRepository.search({ authenticated: session.authenticated, identity: session.identity, organizationId: session.activeOrganizationId, businessContextId: session.activeBusinessContextId }, trimmed);
-        const orderPromise = orderRepository.search({ authenticated: session.authenticated, identity: session.identity, organizationId: session.activeOrganizationId, businessContextId: session.activeBusinessContextId }, trimmed);
+        const offerPromise = offerRepository.search(repositoryScope, trimmed);
+        const customerPromise = customerRepository.search(repositoryScope, trimmed);
+        const orderPromise = orderRepository.search(repositoryScope, trimmed);
         const res = await fetch(globalSearchQuery({ workspace_id: WORKSPACE_ID, q: trimmed, limit: SEARCH_LIMIT }), {
           cache: "no-store",
           headers: { accept: "application/json" },
@@ -317,7 +322,7 @@ export function CommandPaletteDialog({
       controller.abort();
       window.clearTimeout(timeout);
     };
-  }, [open, query, session.activeBusinessContextId, session.activeOrganizationId, session.authenticated, session.identity]);
+  }, [open, query, repositoryScope]);
 
   const visibleNavItems = React.useMemo(() => {
     const trimmed = query.trim().toLowerCase();

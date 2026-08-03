@@ -56,7 +56,7 @@ export function authorize(identity: Identity, required: Permission | readonly Pe
   const permissions = Array.isArray(required) ? required : [required];
   const permissionAllowed = permissions.some((permission) => hasPermission(identity, permission));
   if (!permissionAllowed) return { allowed: false as const, reason: "Missing required permission." };
-  if (organizationId && !accessibleOrganizations(identity).some((organization) => organization.id === organizationId)) {
+  if (organizationId && !identity.membership.organizationIds.includes(organizationId)) {
     return { allowed: false as const, reason: "The active Organization is outside this membership's allowed data scope." };
   }
   return { allowed: true as const, reason: null };

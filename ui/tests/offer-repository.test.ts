@@ -8,6 +8,7 @@ import {
   parseOfferDeepLink,
 } from "../lib/offers/deep-link";
 import { MockOfferRepository } from "../lib/offers/mock-repository";
+import { resolveMockRepositoryScope } from "../lib/identity/mock-repository-scope";
 
 const identity = (id: string) => {
   const value = developmentIdentityById(id);
@@ -17,7 +18,7 @@ const identity = (id: string) => {
 const scope = (
   id = "client-admin",
   organizationId: string | null = "org-bullseye",
-) => ({ authenticated: true, identity: identity(id), organizationId });
+) => resolveMockRepositoryScope({ authenticated: true, developmentOnly: true, identity: identity(id), activeOrganizationId: organizationId, activeBusinessContextId: organizationId === "org-bullseye" ? "offer-bullseye" : organizationId === "org-valuerx" ? "offer-valuerx-individual" : organizationId === "org-petes" ? "offer-petes" : null });
 
 test("mock Offer snapshots are scoped, serializable, and freshly cloned", async () => {
   const repository = new MockOfferRepository();
@@ -53,7 +54,7 @@ test("Offer scope rejects inaccessible Offers and product-admin client rendering
   );
   assert.deepEqual(
     await repository.resolveOffer(
-      scope("agency-owner", null),
+      scope("agency-owner", "org-valuerx"),
       "offer-valuerx-individual",
     ),
     { organizationId: "org-valuerx", offerId: "offer-valuerx-individual" },

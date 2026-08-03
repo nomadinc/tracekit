@@ -14,22 +14,6 @@ export const MOCK_BUSINESS_CONTEXTS: BusinessContext[] = [
   { id: "offer-petes", organizationId: "org-petes", name: "Pete's Pasta", mark: "PP" },
 ];
 
-/**
- * Compatibility boundary for the mock Workspace repositories. Persistent
- * Organizations use internal UUIDs, while the approved mock read models retain
- * their original organization IDs. The authorized Business Context ID is the
- * stable bridge between those two representations.
- */
-export function mockOrganizationIdForBusinessContext(
-  businessContextId: string | null,
-): string | null {
-  return (
-    MOCK_BUSINESS_CONTEXTS.find(
-      (context) => context.id === businessContextId,
-    )?.organizationId ?? null
-  );
-}
-
 export const MOCK_IDENTITIES: Identity[] = [
   { id: "platform-admin", name: "Avery Platform", email: "avery@tracekit.dev", title: "TraceKit Platform Admin", membership: { id: "m-platform", accountId: "tracekit", accountName: "TraceKit Platform", accountType: "platform", role: "platform-admin", organizationIds: [] } },
   { id: "agency-owner", name: "Morgan Agency", email: "morgan@northstar.dev", title: "Agency Owner", membership: { id: "m-agency-owner", accountId: "agency-northstar", accountName: "Northstar Growth", accountType: "agency", role: "agency-owner", organizationIds: ["org-bullseye", "org-valuerx", "org-petes"] } },

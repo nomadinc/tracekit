@@ -34,6 +34,8 @@ import type {
 import { offerDeepLinkHref } from "@/lib/offers/deep-link";
 import { customerDeepLinkHref } from "@/lib/customers/deep-link";
 import { orderDeepLinkHref } from "@/lib/orders/deep-link";
+import { resolveMockRepositoryScope } from "@/lib/identity/mock-repository-scope";
+import { scopeMissionControlSnapshot } from "@/lib/mission-control/mock-repository";
 
 const money = (value: number) =>
   new Intl.NumberFormat("en-US", {
@@ -286,6 +288,11 @@ export function MissionControl({
   const router = useRouter();
   const drawer = useShellDrawer();
   const { session, businessContexts, setActiveBusinessContext } = useIdentity();
+  const repositoryScope = React.useMemo(() => resolveMockRepositoryScope(session), [session]);
+  const scopedSnapshot = React.useMemo(
+    () => scopeMissionControlSnapshot(snapshot, repositoryScope),
+    [repositoryScope, snapshot],
+  );
 
   const navigate = React.useCallback(
     (
@@ -346,6 +353,11 @@ export function MissionControl({
     },
     [businessContexts, router, session.identity.id, setActiveBusinessContext],
   );
+
+  if (!scopedSnapshot) {
+    return <div className="rounded-xl border bg-white p-8 text-center text-sm text-slate-500 dark:border-white/10 dark:bg-ink">No accessible Business Context is available for Mission Control.</div>;
+  }
+  snapshot = scopedSnapshot;
 
   function inspect(item: MissionItem) {
     drawer.openDrawer(

@@ -1,7 +1,5 @@
-import {
-  accessibleOrganizations,
-  hasPermission,
-} from "../identity/authorization";
+import { hasPermission } from "../identity/authorization";
+import { mockRepositoryScopeAllows } from "../identity/mock-repository-scope";
 import { withDevelopmentIdentity } from "../identity/development-state";
 import { offerDeepLinkHref } from "./deep-link";
 import type { OfferRepository } from "./repository";
@@ -478,17 +476,14 @@ function workspace(seed: OfferSeed): OfferWorkspaceSnapshot {
 function allowedSeeds(scope: OfferScope): OfferSeed[] {
   if (
     !scope.authenticated ||
-    !hasPermission(scope.identity, "offers.view") ||
-    !scope.organizationId
+    !mockRepositoryScopeAllows(scope, "offers.view")
   )
     return [];
-  if (
-    !accessibleOrganizations(scope.identity).some(
-      (org) => org.id === scope.organizationId,
-    )
-  )
-    return [];
-  return seeds.filter((seed) => seed.organizationId === scope.organizationId);
+  return seeds.filter(
+    (seed) =>
+      seed.organizationId === scope.mockOrganizationId &&
+      scope.accessibleOfferIds.includes(seed.id),
+  );
 }
 
 const clone = <T>(value: T): T => structuredClone(value);
@@ -631,13 +626,13 @@ export class MockOfferRepository implements OfferRepository {
     );
   }
   async resolveOffer(scope: OfferScope, offerId: string) {
-    const allowed = new Set(
-      accessibleOrganizations(scope.identity).map((item) => item.id),
-    );
     const seed =
-      scope.authenticated && hasPermission(scope.identity, "offers.view")
+      mockRepositoryScopeAllows(scope, "offers.view")
         ? seeds.find(
-            (item) => item.id === offerId && allowed.has(item.organizationId),
+            (item) =>
+              item.id === offerId &&
+              item.organizationId === scope.mockOrganizationId &&
+              scope.accessibleOfferIds.includes(item.id),
           )
         : null;
     return seed

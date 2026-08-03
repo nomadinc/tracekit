@@ -39,6 +39,7 @@ import {
 import { useInvestigation } from "@/components/investigation/investigation-context";
 import { parseInspectValue } from "@/lib/entities";
 import { LIVE_WORKSPACE_UPDATE_EVENT, type WorkspaceUpdate } from "@/lib/live";
+import { AccessBoundary } from "@/components/identity/access-control";
 
 const WORKSPACE_ID = "default";
 const STATUSES: Array<WorkItemStatus | "all"> = ["all", "open", "acknowledged", "in_progress", "resolved", "dismissed"];
@@ -382,6 +383,14 @@ function DetailPanel({
 }
 
 export default function OperationsClient() {
+  return (
+    <AccessBoundary permission={["imports.view", "connectors.view"]} variants={["client", "agency"]}>
+      <OperationsContent />
+    </AccessBoundary>
+  );
+}
+
+function OperationsContent() {
   const router = useRouter();
   const investigation = useInvestigation();
   const searchParams = useSearchParams();

@@ -1,4 +1,4 @@
-import type { Identity } from "../identity/types";
+import type { MockRepositoryScope } from "../identity/mock-repository-scope";
 import type { OfferDrawerTarget } from "@/lib/navigation/drawer-contract";
 
 export type OfferTrendRange = 7 | 14 | 30;
@@ -6,7 +6,7 @@ export type OfferTrendMeasure = "profit" | "revenue" | "spend" | "orders" | "cus
 export type OfferFocus = "summary" | "trend" | "traffic-sources" | "profit-drivers" | "customer-quality" | "significant-events";
 export type OfferDrawerKind = OfferDrawerTarget["kind"] | "compare-conclusion";
 
-export type OfferScope = { authenticated: boolean; identity: Identity; organizationId: string | null };
+export type OfferScope = MockRepositoryScope;
 export type OfferSummary = { id: string; organizationId: string; name: string; mark: string; profit: number; trend: number; status: "Estimated" | "Reconciled"; trackingHealth: "Excellent" | "Degraded" | "Poor" };
 export type OfferMetric = { id: string; label: string; value: number; format: "currency" | "number" | "percent" | "multiple" | "duration"; detail?: string; drawerId?: string };
 export type OfferTrendPoint = { date: string; eventIds: string[] } & Record<OfferTrendMeasure, number>;
