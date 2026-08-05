@@ -1,0 +1,7 @@
+# Commas Phase 1 discovery only. Never commit real credentials.
+COMMAS_API_KEY_SMALL_ACCOUNT=replace-with-local-small-account-read-only-key
+COMMAS_API_KEY_MAIN_ACCOUNT=replace-with-local-main-account-read-only-key
+COMMAS_BASE_URL=https://www.fanbasis.com
+COMMAS_DISCOVERY_DEBUG=false
+COMMAS_REFUND_SCAN_PAGE_CAP=10
+COMMAS_IDENTIFIER_SCAN_PAGE_CAP=5
