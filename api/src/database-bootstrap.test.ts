@@ -175,7 +175,7 @@ test("migration filenames are unique and numerically ordered", () => {
   const numbers = names.map((name) => name.slice(0, 3));
 
   assert.equal(new Set(numbers).size, numbers.length);
-  assert.deepEqual(numbers, Array.from({ length: 39 }, (_, index) => String(index).padStart(3, "0")));
+  assert.deepEqual(numbers, Array.from({ length: 40 }, (_, index) => String(index).padStart(3, "0")));
 });
 
 test("schema provenance exports contain metadata headers and no known secret material", () => {
@@ -215,4 +215,49 @@ test("persistent identity migration enables RLS and revokes browser roles", () =
   }
   assert.match(identityMigration, /revoke all on table[\s\s]*public\.tracekit_users/);
   assert.match(identityMigration, /from anon, authenticated/);
+});
+
+test("commerce persistence migration is tenant-owned and fail-closed", () => {
+  const commerceMigration = migration("039_commerce_persistence_v1.sql").toLowerCase();
+  const commerceTables = [
+    "tracekit_business_contexts",
+    "commerce_provider_connections",
+    "commerce_provider_accounts",
+    "commerce_provider_credentials",
+    "commerce_sync_runs",
+    "commerce_sync_checkpoints",
+    "commerce_evidence_records",
+    "commerce_source_mappings",
+    "canonical_offers",
+    "offer_steps",
+    "offer_variants",
+    "commerce_provider_products",
+    "person_source_identities",
+    "commerce_repository_activation",
+  ];
+
+  for (const table of commerceTables) {
+    assert.match(commerceMigration, new RegExp(`create table public\\.${table}`));
+    assert.match(commerceMigration, new RegExp(`'${table}'`));
+  }
+
+  assert.match(commerceMigration, /revoke all on table public\.%i from anon, authenticated/);
+  assert.match(commerceMigration, /commerce_provider_credentials_material_check/);
+  assert.match(commerceMigration, /secret_ciphertext bytea/);
+  assert.doesNotMatch(commerceMigration, /create table public\.integrations_credentials/);
+  assert.doesNotMatch(commerceMigration, /tracekit_real_data_enabled/);
+  assert.doesNotMatch(commerceMigration, /insert into public\.commerce_repository_activation/);
+  assert.match(commerceMigration, /alter column currency drop default/);
+  assert.match(commerceMigration, /person_source_identities_provider_customer_uidx/);
+  assert.match(commerceMigration, /where source_type = 'provider_customer_id'/);
+  assert.doesNotMatch(commerceMigration, /drop index if exists public\.person_identifiers_active_value_uidx/);
+  assert.match(commerceMigration, /commerce_provider_credentials_active_connection_uidx/);
+  assert.match(commerceMigration, /where revoked_at is null/);
+  assert.match(commerceMigration, /commerce_provider_credential_version_guard/);
+  assert.match(commerceMigration, /credential versions are immutable/);
+  assert.match(commerceMigration, /sync_run_id uuid not null/);
+  assert.match(commerceMigration, /commerce_evidence_immutable_guard/);
+  assert.match(commerceMigration, /unique \(connection_id, provider_account_id, source_object_type, source_object_id\)/);
+  assert.match(commerceMigration, /tracekit_business_context_access_context_fk/);
+  assert.match(commerceMigration, /not valid/);
 });

@@ -646,3 +646,133 @@ The following still require approval before their dependent sprint:
 | 2.9 | Dispute webhook and historical import | webhook inbox, signature/replay, disputes, chargeback ledger path | Provider signing docs; history mechanism | Signature/replay/order/unmatched/idempotency tests | Disable endpoint/consumer; preserve inbox | L | Unsupported polling, provider mutations |
 
 Phase 2A comprises Sprints 2.0–2.5. Phase 2B begins with 2.6. No sprint may skip the server authorization, evidence, tenant, idempotency or rollback gates to accelerate UI activation.
+
+## Appendix A — Sprint 2.0 implementation
+
+Status: implemented locally for architectural, security and migration review. No provider records, credentials, connections or activation rows were created.
+
+### A.1 Final persistence boundary
+
+Migration `039_commerce_persistence_v1.sql` establishes the provider-neutral ownership chain:
+
+```text
+TraceKit Account
+  -> TraceKit Organization
+    -> Commerce Provider Connection
+      -> Commerce Provider Account
+        -> Sync / Evidence / Source Mapping / Observed Product records
+```
+
+`tracekit_business_contexts` is the Organization-owned classification catalog. Its opaque text key preserves compatibility with the existing persistent-session Business Context IDs; it is not an authorization tenant. `canonical_offers`, `offer_steps` and `offer_variants` are first-class Organization-owned product objects because no equivalent durable hierarchy existed.
+
+### A.2 Existing tables reused and hardened
+
+| Existing object | Sprint 2.0 disposition |
+|---|---|
+| `tracekit_accounts`, `tracekit_organizations`, `tracekit_users` | Reused as ownership and actor authorities; composite ownership indexes support cross-table tenant FKs. |
+| `people` | Retained as the Customer identity spine; gains nullable `organization_id` for additive legacy compatibility and RLS/browser-role denial. |
+| `person_identifiers` | Retained unchanged for legacy identity resolution, including its active-value uniqueness and race-recovery contract. Shared contact evidence belongs in `person_source_identities` until the resolver itself is redesigned and separately migrated. |
+| `platform_orders` | Retained as the mutable Order snapshot; gains a nullable canonical UUID plus tenant, connection, provenance, provider-fee/net, release, reconciliation and data-quality fields. Currency becomes nullable. Legacy global provider Order-key constraints remain a compatibility boundary. |
+| `conversions` | Retained as the append-only financial ledger; gains tenant, connection, source mapping, Evidence, Order, idempotency, reconciliation and quality fields. Its implicit USD default is removed and event vocabulary is expanded additively. |
+| `financial_event_matches` | Retained unchanged as the reconciliation decision ledger. |
+| `tracekit_audit_events` | Retained as the application audit sink. Sprint 2.1 producers will use the approved commerce event vocabulary below. |
+
+`integration_import_jobs`, `connector_import_tasks` and `integration_import_errors` remain legacy connector runtime structures. Their required date ranges, `workspace_id` ownership and existing state semantics conflict with resumable page-based Commas synchronization, so Sprint 2.0 does not overload them. `commerce_sync_runs` and `commerce_sync_checkpoints` are the canonical provider-neutral sync control plane. A later worker may retain an optional compatibility link to a legacy job, but the legacy job cannot authorize or own commerce records.
+
+`integrations_credentials` is not present in a clean reconstructed database despite legacy code references and is not reused. `integrations_settings` remains a platform-keyed legacy scheduler setting and is not a tenant connection or activation authority.
+
+### A.3 New tables
+
+- `tracekit_business_contexts`
+- `commerce_provider_connections`
+- `commerce_provider_accounts`
+- `commerce_provider_credentials`
+- `commerce_sync_runs`
+- `commerce_sync_checkpoints`
+- `commerce_evidence_records`
+- `commerce_source_mappings`
+- `canonical_offers`
+- `offer_steps`
+- `offer_variants`
+- `commerce_provider_products`
+- `person_source_identities`
+- `commerce_repository_activation`
+
+All tenant-bearing relationships use composite Organization/parent foreign keys where ownership could otherwise drift. Provider object uniqueness is connection-scoped, never global.
+
+### A.4 Credential design
+
+Each canonical credential version belongs to one provider Connection. At most one version may be active per Connection, while revoked versions remain as rotation history. It supports either:
+
+- AES-GCM ciphertext with a non-secret encryption key identifier/version and separate IV; or
+- a managed-secret reference with no ciphertext in Postgres.
+
+The storage modes are mutually exclusive by constraint. `public_metadata` is protected by bounded recursive metadata validation and cannot contain token, key, credential, payload, contact or payment fields. Credential history restricts Connection deletion instead of cascading away. A database guard prevents credential material from being overwritten in place; the only permitted row update is the active-to-revoked rotation transition. The migration contains no encryption key, secret, provider credential or runtime connection. The existing AES-GCM helper may only be adapted in Sprint 2.1 after it accepts Organization/Connection ownership and never reads the legacy platform-keyed table. Application services must create a new version during rotation, revoke the previous version, and record the audit event.
+
+### A.5 Evidence design
+
+`commerce_evidence_records` implements the approved hybrid contract: immutable protected payload storage remains outside read models; Postgres stores the Sync Run, source key, payload hash, protected storage reference, source/observation/ingestion times, versions, size, PII classification and retention policy. Storage-reference and source/hash uniqueness make evidence replay-safe without storing raw payloads in the migration or normalized tables. A guard rejects mutation and ordinary deletion; the sole permitted update is the one-way `deleted_at` legal-erasure marker. Policy enforcement and protected object storage are Sprint 2.1 prerequisites.
+
+### A.6 Customer source identities
+
+`person_source_identities` binds a Person, Organization, Connection and Provider Account. `provider_customer_id` is unique within its Connection and Provider Account and is the authoritative Commas customer mapping. Email and phone observations may repeat across People and are indexed as supporting evidence, not unconditional merge keys. The legacy `person_identifiers` uniqueness remains unchanged so the current backfill and concurrent-conflict recovery behavior is not silently altered. The source identifier row cannot refer to a Person, Evidence record or provider account from another Organization.
+
+### A.7 Observed Products and mapping
+
+`commerce_provider_products` is an observed provider object, not a canonical Offer. Its immutable provider ID is unique per Connection and Provider Account. Currency is nullable; prices are observations; payment links are represented by a hash or Evidence reference rather than an unnecessary raw URL. Mapping states are `observed`, `proposed`, `review_required`, `approved`, `rejected` and `retired`. Composite hierarchy FKs prevent a mapping from combining a Business Context, Offer, Step or Variant from different branches. An approved mapping requires a reviewed Business Context, canonical Offer and Offer Step. Unknown products therefore fail closed.
+
+Current mapping pointers and `mapping_version` live on the observed Product for the first slice. A versioned mapping-decision history table remains a Sprint 2.1 design gate if audit events alone cannot meet reversible mapping-history requirements.
+
+### A.8 Order and financial compatibility
+
+The migration does not create a competing Order or financial ledger. `platform_orders` remains a compatibility snapshot and `conversions` remains append-only. A nullable `canonical_order_id` UUID aligns generic source mappings and financial events with stable TraceKit identity without changing the legacy bigint storage key. New rows can carry Organization/Connection scope, source mapping and Evidence. `provider_fee` means **Provider-observed fee** and `provider_net` means **Net proceeds**, never Profit. Missing currency remains null; the financial ledger no longer supplies an implicit USD default.
+
+Legacy `platform_orders.platform_order_id` uniqueness remains global through `platform_orders_platform_order_id_key` and `platform_orders_platform_order_id_uidx`; current WowBoost, Shopify and CheckoutChamp/Konnektive upserts use `onConflict: "platform_order_id"`. This is unsafe for providers whose IDs are unique only inside a Connection, but 039 deliberately does not introduce a competing provider-key uniqueness model. Sprint 2.1 should first add a nullable connection-scoped source key, backfill/verify all legacy rows, migrate every writer and conflict target, then replace global uniqueness in a later additive migration only after duplicate analysis. During transition, legacy `onConflict` behavior and existing read paths must remain valid. No Commas Order may be inserted until that gate is resolved. Order Lines and refund/dispute snapshots remain later normalization work.
+
+### A.9 Activation and authorization
+
+`commerce_repository_activation` is unique per Organization and Workspace with modes `mock`, `shadow`, `live_beta` and `live`. Non-mock modes require a same-Organization Connection. The migration inserts no activation rows. Mode resolution must be server-side; a query string, browser storage value or API key can never activate data.
+
+All new tables, plus hardened `people`, `person_identifiers`, `platform_orders` and `conversions`, have RLS enabled. `anon` and `authenticated` have no direct table privileges or policies. `service_role` remains server-only and must be preceded by the TraceKit session authorization gateway. This is intentionally stricter than client-readable membership RLS.
+
+Current WorkOS sessions do not create a constrained Supabase JWT/DB principal. Consequently PostgreSQL cannot yet derive an end-user Organization from `auth.uid()`; application authorization is mandatory and service-role access must stay behind server code. Sprint 2.1 must add server repository tests proving the session Membership Organization is used before any privileged query. RLS is defense in depth, not the only authorization layer.
+
+### A.10 Audit vocabulary
+
+Sprint 2.1 services must write these structured actions to `tracekit_audit_events`, without secrets or payloads:
+
+- `provider_connection.created`, `.updated`, `.disabled`
+- `provider_credential.created`, `.rotated`, `.revoked`
+- `commerce_sync.started`, `.completed`, `.failed`
+- `repository_mode.changed`
+- `product_mapping.approved`, `.rejected`
+
+Database triggers do not fabricate actors or permissions; authenticated server services produce the audit records with their existing request correlation ID.
+
+### A.11 Compatibility boundaries and Sprint 2.1 prerequisites
+
+Before a live credential or provider record is stored, Sprint 2.1 must:
+
+1. Choose and configure the protected payload backend and retention/deletion enforcement.
+2. Implement Organization-bound credential encryption/decryption or a managed-secret adapter, rotation and audit producers.
+3. Resolve the global legacy Order-key constraint with evidence and an additive connection-scoped design.
+4. Implement the server authorization gateway for connection, credential, sync and activation operations.
+5. Implement atomic Sync Run leases/cancellation/resume semantics and safe error redaction; no Commas normalizer yet.
+6. Decide whether Product mapping history requires a dedicated immutable decision table.
+7. Define audit producer tests and permission capabilities for connector administration and repository activation.
+8. Validate RLS/grants and service-role boundaries against a production-like role configuration.
+9. Keep every repository mode `mock`; shadow activation begins only after ingestion and projection code exists.
+10. Backfill `tracekit_business_contexts` for existing access IDs and validate `tracekit_business_context_access_context_fk`; until then, the access table remains compatible but cannot define catalog metadata.
+11. Implement integrity checks for the polymorphic `commerce_source_mappings.canonical_object_type/canonical_object_id` contract in the transactional normalizer, because PostgreSQL cannot express one FK across several canonical tables.
+
+### A.12 Adversarial migration and compatibility notes
+
+Repository review found no earlier persistent Business Context catalog or canonical Offer/Step/Variant tables. Migration 038 stores only membership access IDs; application-session display metadata is temporarily supplied by the approved mock catalog. Migration 039 therefore establishes the single future catalog and adds an unvalidated FK that enforces all new access grants without breaking already-issued hosted grants. Catalog backfill and FK validation are mandatory before live activation.
+
+Legacy identity resolution assumes `person_identifiers_active_value_uidx`, including recovery from concurrent `23505` conflicts. Migration 039 intentionally preserves that index. Shared household emails and reused phones are represented in the new source-evidence table; changing the legacy resolver is not hidden inside a schema sprint.
+
+The source identity key includes Provider Account because one Connection can represent multiple provider accounts. The canonical key is `(connection_id, provider_account_id, source_object_type, source_object_id)`. The same rule applies to observed Products, provider Customer IDs and financial idempotency.
+
+Alterations to large legacy tables are nullable or use metadata-only constant defaults. New CHECK and FK constraints are added `NOT VALID`, so they protect new writes without scanning all historical rows while holding the migration lock. Unique index creation and the short `ALTER TABLE` operations still require production lock review and a low-traffic migration window. A later migration should validate constraints in controlled batches after legacy-data analysis.
+
+The clean local migration replay and database contract tests cover schema creation, ownership FKs, browser denial, credential shape, durable states/checkpoints, mapping/product identity, shared contact evidence, nullable currency, evidence isolation and zero live activation.
