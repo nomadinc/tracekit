@@ -31,7 +31,7 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
 
   return (
-    <div className="min-h-dvh bg-slate-50 text-slate-950 dark:bg-slate-950 dark:text-white">
+    <div className="min-h-dvh bg-[var(--tk-background)] text-[var(--tk-text-primary)]">
       <div className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:block">
         <ProductionSidebar />
       </div>
@@ -54,7 +54,7 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
         <div className="sticky top-0 z-30">
           <ProductionHeader onMenuClick={() => setMobileNavOpen(true)} />
         </div>
-        <main className="mx-auto w-full max-w-[1440px] px-4 py-6 sm:px-6 lg:px-8">
+        <main className="tk-page">
           <ShellRouteBoundary>{children}</ShellRouteBoundary>
         </main>
       </div>
