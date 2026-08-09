@@ -175,7 +175,7 @@ test("migration filenames are unique and numerically ordered", () => {
   const numbers = names.map((name) => name.slice(0, 3));
 
   assert.equal(new Set(numbers).size, numbers.length);
-  assert.deepEqual(numbers, Array.from({ length: 42 }, (_, index) => String(index).padStart(3, "0")));
+  assert.deepEqual(numbers, Array.from({ length: 43 }, (_, index) => String(index).padStart(3, "0")));
 });
 
 test("schema provenance exports contain metadata headers and no known secret material", () => {
@@ -281,5 +281,12 @@ test("commerce control-plane migration remains additive and server-only", () => 
   assert.match(migration041, /commerce_provider_connections_org_setup_request_uidx/);
   assert.match(migration041, /organization_id, setup_request_id/);
   assert.doesNotMatch(migration041, /insert into public\.commerce_provider_connections/);
+
+  const migration042 = migration("042_commerce_evidence_storage_v1.sql").toLowerCase();
+  assert.match(migration042, /'commerce-evidence'/);
+  assert.match(migration042, /public, file_size_limit/);
+  assert.match(migration042, /false,/);
+  assert.doesNotMatch(migration042, /create policy/);
+  assert.doesNotMatch(migration042, /insert into public\.commerce_repository_activation/);
 
 });

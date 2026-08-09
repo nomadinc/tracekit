@@ -9,7 +9,8 @@
     "test": "tsx --test tests/*.test.ts",
     "build": "node scripts/next-lifecycle.mjs build",
     "start": "node scripts/next-lifecycle.mjs start",
-    "review:check": "node scripts/next-lifecycle.mjs check"
+    "review:check": "node scripts/next-lifecycle.mjs check",
+    "prove:commas-evidence": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/prove-commerce-evidence.ts --confirm-bounded-live-proof"
   },
   "dependencies": {
     "@workos-inc/authkit-nextjs": "^4.3.1",
