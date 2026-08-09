@@ -175,7 +175,7 @@ test("migration filenames are unique and numerically ordered", () => {
   const numbers = names.map((name) => name.slice(0, 3));
 
   assert.equal(new Set(numbers).size, numbers.length);
-  assert.deepEqual(numbers, Array.from({ length: 40 }, (_, index) => String(index).padStart(3, "0")));
+  assert.deepEqual(numbers, Array.from({ length: 42 }, (_, index) => String(index).padStart(3, "0")));
 });
 
 test("schema provenance exports contain metadata headers and no known secret material", () => {
@@ -260,4 +260,26 @@ test("commerce persistence migration is tenant-owned and fail-closed", () => {
   assert.match(commerceMigration, /unique \(connection_id, provider_account_id, source_object_type, source_object_id\)/);
   assert.match(commerceMigration, /tracekit_business_context_access_context_fk/);
   assert.match(commerceMigration, /not valid/);
+});
+
+test("commerce control-plane migration remains additive and server-only", () => {
+  const migration040 = migration("040_commerce_control_plane_v1.sql").toLowerCase();
+  assert.match(migration040, /provider_order_id text/);
+  assert.match(migration040, /platform_orders_provider_source_uidx/);
+  assert.doesNotMatch(migration040, /drop constraint platform_orders_platform_order_id_key/);
+  assert.match(migration040, /claim_commerce_sync_run/);
+  assert.match(migration040, /lease_expires_at/);
+  assert.match(migration040, /commerce_product_mapping_decisions/);
+  assert.match(migration040, /append-only/);
+  assert.match(migration040, /revoke all on function public\.claim_commerce_sync_run/);
+  assert.match(migration040, /where o\.id = '70000000-0000-0000-0000-000000000002'/);
+  assert.doesNotMatch(migration040, /tracekit_real_data_enabled/);
+  assert.doesNotMatch(migration040, /insert into public\.commerce_repository_activation/);
+
+  const migration041 = migration("041_commerce_connection_setup_idempotency.sql").toLowerCase();
+  assert.match(migration041, /setup_request_id uuid/);
+  assert.match(migration041, /commerce_provider_connections_org_setup_request_uidx/);
+  assert.match(migration041, /organization_id, setup_request_id/);
+  assert.doesNotMatch(migration041, /insert into public\.commerce_provider_connections/);
+
 });

@@ -3,7 +3,7 @@ import {
   ClipboardList,
   Home,
   Megaphone,
-  Settings,
+  Plug,
   Users,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
@@ -68,11 +68,13 @@ export const APP_NAVIGATION: AppNavigationGroup[] = [
     description: "Manage actionable Work Items across Health, identity, attribution, commissions, and integrations.",
   },
   {
-    label: "Settings",
-    icon: Settings,
-    description: "Workspace and operational configuration.",
+    label: "Connections",
+    icon: Plug,
+    description: "Organization-bound providers, sync health, and activation readiness.",
     items: [
-      { href: "/settings/integrations", label: "Integrations", description: "Connect commerce, tracking, and payment systems." },
+      { href: "/connections", label: "Connections", description: "Manage commerce providers and operational health." },
+      { href: "/connections/sync-runs", label: "Sync Runs", description: "Inspect durable provider synchronization state." },
+      { href: "/connections/readiness", label: "Readiness", description: "Review Shadow and Live Beta activation gates." },
       { href: "/setup", label: "Setup", description: "Finish workspace onboarding." },
       { href: "/settings", label: "Workspace Settings", description: "Manage workspace preferences." },
       { href: "/settings/product-costs", label: "Product Costs", description: "Maintain cost inputs for profit reporting." },
@@ -173,6 +175,7 @@ export function breadcrumbsForPath(pathname: string | null | undefined): AppBrea
       { label: "Integration" },
     ];
   }
+  if (path.startsWith("/connections/commerce/")) return [{ label: "Connections", href: "/connections" }, { label: "Commerce", href: "/connections/commerce" }, { label: "Connection" }];
   if (path.startsWith("/operations")) {
     return [{ label: "Operations", href: "/operations" }];
   }

@@ -20,6 +20,7 @@ const NAVIGATION_ICONS: Record<string, LucideIcon> = {
   Money: Landmark,
   Operations: ClipboardList,
   Settings,
+  Connections: Plug,
   Clients: Building2,
   Reports: Activity,
   Team: ContactRound,

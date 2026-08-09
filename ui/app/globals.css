@@ -3,3 +3,13 @@
 @tailwind utilities;
 :root { --tk-border: 1px solid rgb(230,233,239); }
 .dark :root { --tk-border: 1px solid rgb(46,52,64); }
+
+@layer components {
+  .input { @apply w-full rounded-xl border border-white/10 bg-black/30 px-3 py-2.5 text-sm text-white outline-none transition placeholder:text-slate-600; }
+  .input:focus { border-color: #1df2f0; box-shadow: 0 0 0 2px rgb(29 242 240 / .14); }
+  .subtab { @apply rounded-lg px-3 py-2 text-xs font-medium text-slate-500 transition hover:bg-white/10 hover:text-white; }
+  .subtab-active { @apply bg-white/10 text-white; }
+  .text-cyan-200, .text-cyan-300 { color: #1df2f0; }
+  .border-cyan-400\/25 { border-color: rgb(29 242 240 / .25); }
+  .bg-cyan-400\/10 { background-color: rgb(29 242 240 / .10); }
+}
