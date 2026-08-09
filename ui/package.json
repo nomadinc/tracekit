@@ -10,7 +10,9 @@
     "build": "node scripts/next-lifecycle.mjs build",
     "start": "node scripts/next-lifecycle.mjs start",
     "review:check": "node scripts/next-lifecycle.mjs check",
-    "prove:commas-evidence": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/prove-commerce-evidence.ts --confirm-bounded-live-proof"
+    "prove:commas-evidence": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/prove-commerce-evidence.ts --confirm-bounded-live-proof",
+    "sync:commas-shadow": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/run-commas-shadow-sync.ts --confirm-full-shadow",
+    "import:commas-disputes": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/import-commas-historical-disputes.ts --confirm-historical-import"
   },
   "dependencies": {
     "@workos-inc/authkit-nextjs": "^4.3.1",
