@@ -31,6 +31,20 @@ export type SafeInvestigationSummary = {
   id: string; title: string; organization: string; type: string; status: InvestigationStatus;
   period: string; primarySignal: string; evidenceQuality: string; lastUpdated: string; version: number;
   parentInvestigationId: string | null;
+  freshnessStatus: "current"|"new_evidence_available"|"refresh_queued"|"refreshing"|"refresh_failed";
+};
+
+export type SafeInvestigationCandidate = { id:string; question:string; candidateType:string; metric:string; currentValue:string|null; baselineValue:string|null; sampleSize:number; period:string; triggerReason:string; status:string; existingInvestigationId:string|null };
+
+export type InvestigationInspectionType = "product"|"cohort"|"finding"|"evidence-quality"|"journey"|"dispute"|"freshness";
+export type SafeInvestigationInspection = {
+  type: InvestigationInspectionType; key: string; label: string; title: string; context: string;
+  rows: Array<{ label: string; value: string; tone?: "neutral"|"brand"|"success"|"warning"|"danger"|"correlation" }>;
+  cohortDefinitions?: Array<{ label: "Affected"|"Control"; definition: string; sample: string }>;
+  comparisonSummary?: { label: string; statement: string; tone: "neutral"|"success"|"warning" };
+  comparisons?: Array<{ metric: string; definition?: string; affected: string; control: string; difference?: string; differenceExplanation?: string; interpretation: string; limitation?: string }>;
+  notes: string[]; sources: string[]; algorithmVersion: string;
+  relatedInvestigation?: { id: string; title: string; status: InvestigationStatus; context: string };
 };
 
 export type SafeInvestigationDetail = SafeInvestigationSummary & {
@@ -39,7 +53,10 @@ export type SafeInvestigationDetail = SafeInvestigationSummary & {
   presentation: InvestigationPresentation;
   parent: null | { id: string; title: string; question: string; version: number; branchSignal: string; branchReason: string };
   branches: SafeInvestigationSummary[];
+  inspections: SafeInvestigationInspection[];
 };
+
+export function inspectionKey(value: string): string { return value.toLowerCase().replace(/[^a-z0-9]+/g,"-").replace(/(^-|-$)/g,""); }
 
 const forbiddenPresentationKey = /(email|phone|ip_address|storage_reference|ciphertext|api_key|raw_payload)/i;
 export function assertClientSafePresentation(value: unknown, path = "presentation"): void {
