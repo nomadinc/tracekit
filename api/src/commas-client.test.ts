@@ -24,6 +24,7 @@ import { runBoundedCommasDiscovery } from "./connectors/commas/bounded-discovery
 import { discoverCommasIdentifierSurface } from "./connectors/commas/identifier-discovery.ts";
 import { selectCommasDiscoveryAccount } from "./connectors/commas/account-selection.ts";
 import { probeCommasDisputeCollections } from "./connectors/commas/dispute-discovery.ts";
+import { verifyCommasReadOnlyConnection } from "./connectors/commas/verification.ts";
 
 const syntheticProduct = {
   id: "prod_synthetic_1",
@@ -580,4 +581,20 @@ test("functional dispute probe reports structure without record values", async (
   assert.deepEqual(result.results[0].paginationKeys, ["current_page", "has_more"]);
   assert.ok(result.results[0].bodyStructure.some((field) => field.path === "data.disputes[].dispute_id" && field.type === "string"));
   assert.doesNotMatch(JSON.stringify(result), /private-dispute|99/);
+});
+
+test("connection verification performs one bounded Customer read and returns no provider values", async () => {
+  const requests: string[] = [];
+  const result = await verifyCommasReadOnlyConnection(
+    { apiKey: "synthetic-verification-secret", baseUrl: "http://127.0.0.1:8787", allowCustomBaseUrl: true, environment: "custom" },
+    { fetch: async (input) => {
+      requests.push(String(input));
+      return jsonResponse({ data: { customers: [{ id: "private-customer", email: "private@example.invalid" }], pagination: { current_page: 1, per_page: "1", total_pages: 1, total_items: 1, has_more: false } } }, 200, { "x-ratelimit-limit": "10000", "x-request-id": "request-a" });
+    } },
+  );
+  assert.equal(requests.length, 1);
+  assert.equal(new URL(requests[0]).pathname, "/public-api/customers");
+  assert.equal(new URL(requests[0]).searchParams.get("per_page"), "1");
+  assert.deepEqual(result.capabilities, ["customers.read", "transactions.read"]);
+  assert.doesNotMatch(JSON.stringify(result), /synthetic-verification-secret|private-customer|private@example/);
 });

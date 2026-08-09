@@ -13,6 +13,7 @@ export const PRODUCTION_ROUTES = {
   money: () => "/money",
   operations: () => "/operations",
   settings: () => "/settings",
+  connections: () => "/connections",
   clients: () => "/clients",
   reports: () => "/reports",
   team: () => "/team",

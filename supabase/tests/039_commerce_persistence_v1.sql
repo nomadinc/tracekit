@@ -61,8 +61,8 @@ from public.tracekit_roles where role_key = 'organization-admin';
 
 select is(
   (select convalidated from pg_constraint where conname = 'tracekit_business_context_access_context_fk'),
-  false,
-  'legacy Business Context access FK is intentionally unvalidated until catalog backfill'
+  true,
+  'Business Context access FK is validated after the Sprint 2.1 catalog bootstrap'
 );
 
 insert into public.tracekit_business_contexts
