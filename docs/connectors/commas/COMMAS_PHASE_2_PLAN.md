@@ -776,3 +776,105 @@ The source identity key includes Provider Account because one Connection can rep
 Alterations to large legacy tables are nullable or use metadata-only constant defaults. New CHECK and FK constraints are added `NOT VALID`, so they protect new writes without scanning all historical rows while holding the migration lock. Unique index creation and the short `ALTER TABLE` operations still require production lock review and a low-traffic migration window. A later migration should validate constraints in controlled batches after legacy-data analysis.
 
 The clean local migration replay and database contract tests cover schema creation, ownership FKs, browser denial, credential shape, durable states/checkpoints, mapping/product identity, shared contact evidence, nullable currency, evidence isolation and zero live activation.
+
+## Appendix B — Sprint 2.1 control plane
+
+Status: implemented locally for security, migration and compatibility review. No live provider record, credential, Sync Run, Evidence record or activation row is created by the migration or services.
+
+### B.1 Authorization and persistence boundary
+
+The server control plane accepts a resolved persistent `TraceKitSessionContext`, requires the existing capability registry, verifies the requested Organization against `availableOrganizations`, derives its Account from the session, then loads a Connection and verifies its stored Organization/Account ownership. A Connection ID locates a resource but never authorizes it. Development identity, `workspace_id`, query strings, local storage and API-key possession are not inputs to authorization.
+
+The provider-neutral service and Supabase adapter cover Connections, provisional Provider Accounts, immutable credential versions, Sync Runs, Checkpoints, source mappings, Evidence access and repository activation. No browser route is added in this sprint; route exposure remains deferred until CSRF/input-rate-limit review. Service-role access remains server-only and is always preceded by the application authorization gateway.
+
+### B.2 Credentials and bounded Commas verification
+
+Sprint 2.1 selects a dedicated `COMMERCE_CREDENTIALS_ENC_KEY`: base64-encoded, exactly 32 decoded bytes, server-only, with explicit key ID and encryption version. AES-256-GCM uses a fresh 96-bit IV per version. Rotation is one database transaction: revoke the active immutable version and insert the replacement. Errors expose only stable unavailable/configuration messages. Managed-secret references remain supported by the schema, but the initial server service uses encrypted database storage.
+
+Commas verification is an explicit injected operation, separate from Connection creation. The verified adapter performs one bounded `GET /public-api/customers?page=1&per_page=1`; it returns capability, request-ID-presence and rate-limit-presence signals only. It never returns Customer fields and does not use the known-broken Products endpoint. The operation is not invoked automatically and no live verification was run during implementation.
+
+### B.3 Sync leasing and Checkpoints
+
+Migration 040 adds lease owner/expiry, heartbeat, attempt and resume provenance. Service-role-only database RPCs atomically claim, heartbeat, transition and cancel runs using Organization and current state predicates. Active leases cannot be stolen, expired leases can be recovered, and cancelled/terminal runs cannot be claimed. Lease durations are bounded.
+
+Checkpoint identity remains `(sync_run_id, resource, page, per_page)`. Services begin idempotently, complete with a page fingerprint, fail with a durable retry count and enumerate pending/failed work. Page remains a traversal observation—not a permanent provider cursor—and no timestamp filter was invented.
+
+### B.4 Business Context, source mappings and Product decisions
+
+Migration 040 conditionally bootstraps only the already-approved `offer-bullseye` ID for the known persistent Bullseye Organization UUID when that Organization exists. It creates no Account or Organization. The Business Context compatibility FK is validated only when no unresolved access row remains; otherwise it deliberately stays unvalidated and continues rejecting invalid new grants.
+
+Source mapping services use the provider-account-scoped key from 039 and verify the canonical target exists in the authorized Organization before insertion. Migration 040 adds append-only Product mapping decisions. An atomic decision function locks the observed Product, inserts history and updates the current projection; composite FKs prevent cross-Context hierarchy decisions.
+
+### B.5 Evidence contract
+
+`CommerceEvidenceStore` defines immutable put, Organization-authorized get, erasure marking and hash verification. The committed local adapter is in-memory and synthetic-test-only. Production composition requires a protected, non-public object-store adapter; no filesystem fallback or public bucket is permitted. The Evidence access service first resolves the database reference through the authorized Organization, then requests the protected payload and emits an access audit event.
+
+### B.6 Order identity transition
+
+Migration 040 adds nullable `provider_order_id` and scoped uniqueness on `(connection_id, provider_account_id, provider_order_id)`. This allows identical Commas Transaction IDs in different Connections without changing legacy `ON CONFLICT (platform_order_id)` behavior. Sprint 2.2 must generate a collision-safe internal `platform_order_id`, populate the new provider key and use the scoped key for Commas idempotency. Global legacy uniqueness remains until every historical writer is migrated and separately reviewed.
+
+### B.7 Activation, readiness and audit
+
+Repository activation remains a control-plane record only; repositories do not consume it yet. Absence resolves to `mock`. Explicit transition rules permit shadowing and emergency rollback. `live_beta`/`live` require a same-Organization connected Connection plus structured readiness evidence for connection, credential, tenant scope, shadow sync, reconciliation, Product mapping and rollback. Threshold values remain product configuration, not hard-coded database policy.
+
+Typed audit producers cover Connection, credential, Sync, mapping, repository-mode and Evidence-access events. Metadata is allowlisted by shape and rejects secret-like keys. API keys, ciphertext, IVs and raw payloads are never audit fields.
+
+### B.8 Sprint 2.2 gates
+
+Before bounded Transaction ingestion begins, Sprint 2.2 must provide the protected production Evidence adapter, complete the Commas-to-server verifier composition, add canonical Order/Line normalizer transactions, use `provider_order_id` idempotency, validate the live Refund schema, define collision-safe legacy `platform_order_id` values, and prove replay/page-shift behavior. All repository modes remain mock; the 73,000+ Transaction and 50,000+ Customer backfills remain out of scope until those gates pass.
+
+## Appendix C — Integration Experience milestone
+
+The pre-ingestion product experience exposes the Commerce control plane at `/connections`, `/connections/commerce`, Connection detail routes, `/connections/sync-runs`, and `/connections/readiness`. The primary Client and Agency navigation label is **Connections**; general Organization settings remain directly reachable at `/settings` and Product Costs remains unchanged.
+
+The overview uses the approved provider roadmap and derives connected state only from server-loaded, Organization-scoped records. Commas detail presents identity, credential health without credential material, bounded verification, verified capability limitations, Sync Runs, readiness gates, and sanitized diagnostics. Products remain Limited, Refunds Embedded, disputes Webhook Only, and attribution identifiers Unavailable according to Phase 1 discovery.
+
+Credential creation and rotation use password inputs with no browser persistence or echo. Mutations require a persistent WorkOS-backed TraceKit session, capability authorization, same-origin request verification, bounded request-rate controls, and server-derived Organization scope. Service-role persistence, credential resolution, Commas verification, and Evidence access are protected by server-only module boundaries. Client Components import only the safe presentation contract.
+
+The Commas health check remains one bounded Customers request (`page=1`, `per_page=1`) and serializes capabilities/status only. Sync Run screens are observational. **Start Shadow Sync** is disabled because the Sprint 2.2 worker does not exist. Repository activation is neither imported nor invoked by this experience; readiness is read from server-produced evidence and cannot be supplied by the browser.
+
+Sprint 2.2 must still provide the protected production Evidence adapter, ingestion worker, concrete readiness evaluator, shadow reconciliation, reviewed Product mappings, verified Refund schema, and rollback rehearsal before any promotion control can be enabled.
+
+## Appendix D — Sprint 2.1C connection completion
+
+Connection onboarding now uses a single structured action envelope for success and failure. The client reads each response body once, accepts an intentional `204`, parses JSON only when the content type and body permit it, and converts empty, malformed, or framework HTML responses into a safe product error. Raw HTML, stack traces, provider bodies, and secrets never reach the dialog.
+
+The authorized setup sequence creates an Organization-bound draft Connection, upserts its provisional Provider Account, stores one encrypted credential version, and runs only the bounded Customers verification. Successful verification marks the Connection connected; provider failure preserves the Connection and credential in degraded state for later retry. Credential rotation and disable operations use the same response contract.
+
+Migration 041 adds an Organization-scoped setup request UUID. The browser creates it once per logical dialog submission and reuses it after network uncertainty. A partial unique index and server-side recovery make duplicate submissions converge on one Connection while leaving tenant authorization entirely session-derived. The migration inserts no Connections, Sync Runs, activations, or provider data.
+
+Local connection review requires the three server-only commerce encryption settings documented in `ui/.env.example`. Missing encryption configuration now yields a sanitized JSON failure instead of a framework response. No key value belongs in source control. Shadow ingestion remains unavailable.
+
+## Appendix E — Sprint 2.2A durable Evidence and ingestion readiness
+
+Migration 042 creates the private `commerce-evidence` Supabase Storage bucket with a 10 MiB object limit and a narrow MIME allowlist. It creates no `storage.objects` policy: `anon` and `authenticated` therefore cannot list, read, write, update, or delete objects. The server-only adapter uses the service credential only after TraceKit Membership and Connection authorization. It never creates public or signed URLs.
+
+Evidence objects are content-addressed beneath opaque tenant scope: `organization/connection/provider-account/source-object-type/sha256`. Paths contain no Customer contact data, provider object ID, Product name, or URL. Uploads use create-only semantics. An existing object is accepted only when its bytes produce the requested hash; different bytes cannot replace it. The database stores the hash, protected reference, byte size, content type, Sync Run, source identity, normalization/mapping versions, PII classification, and retention policy. Normal read models never store the raw payload.
+
+The mandatory page lifecycle is provider fetch → immutable object persistence → Evidence metadata → transactional normalization → Checkpoint completion. An object failure prevents normalization and Checkpoint completion. If normalization fails after object persistence, the Checkpoint remains retryable and replay may use the already-verified Evidence rather than refetching the provider. The bounded proof persisted one page containing two Transactions, verified its hash, replayed it through authorized server access, and completed exactly one Checkpoint and Sync Run. It created no Orders, Customers, Products, financial events, or activation.
+
+Retention policy `commerce-provider-raw-v1` identifies the initial Commerce raw-evidence lifecycle. Legal erasure is an explicit privileged operation: authorize the Connection Organization, delete the protected object, retain the database row as a tombstone using `deleted_at`, and emit `commerce_evidence.erased` with non-secret metadata. Ordinary update/delete is not part of the Evidence interface. Retention duration and production object-lock policy remain compliance decisions before deployment.
+
+The authoritative historical input is `1786135615_resolution_center_disputes.xlsx`; it remains outside Git. The streaming ExcelJS parser requires exactly these headers: State, Status, Dispute Date, Transaction Date, Customer Name, Customer Email, Dispute Reason, Dispute Closed Date, Amount, Dispute Fee, Payment Method, and Product. The supplied workbook validated at 11,096 accepted rows and zero rejected rows. Dates, monetary values, and email evidence are normalized explicitly; malformed rows are rejected rather than coerced. A stable source-row identity hashes the workbook import identity, row position, and normalized evidence fields. It does not fabricate a provider dispute ID and it does not authorize matching by email alone.
+
+ExcelJS was selected as the smallest established Node-compatible streaming XLSX parser for the worker runtime. Imports are offline, bounded, schema-validated, and limited to authorized user-supplied workbooks. Dependency advisories must remain part of release review; the parser does not process remote/untrusted workbooks in this milestone.
+
+## Appendix F — Sprint 2.2B Shadow ingestion and historical reconciliation
+
+The Commas Transaction worker is evidence-first and resumable. Each page is leased, fetched at `per_page=100`, written immutably to private Evidence, hash-verified, normalized in one database transaction, checkpointed, then heartbeated. The worker uses provider-reported page totals, stable source IDs, fingerprints, idempotent mappings, conservative pacing, bounded retry, and explicit overlap runs. Repository activation remains untouched.
+
+Transaction normalization creates Organization-scoped People keyed authoritatively by Connection/Provider Account/Commas fan ID, observed Products in `review_required`, canonical Order snapshots, extensible Order Lines, source mappings, and append-only `sale` and `provider_fee` events. Provider net remains **Net proceeds**, not Profit. Fund release remains Order state because the sampled fields do not establish a separate cash event. The first live embedded Refund established only `id`, `payment_id`, `amount`, `amount_gross`, `fee`, `refund_cost`, and `created_at`; migration 044 normalizes exactly those fields and rejects unknown schema rather than guessing.
+
+The authoritative Resolution Center workbook remains outside Git and is stored as protected immutable Evidence. Each normalized row uses workbook hash, row position, and normalized row evidence for deterministic identity; no provider dispute ID is fabricated. Reconciliation version `historical-v1` is Connection/Organization scoped. Normalized email opens the candidate set but never attaches by itself. A unique exact email/date/amount/Product candidate is high confidence; a unique candidate within three days with exact email/amount/Product is medium confidence; ambiguity or conflicting Product evidence requires review; no candidate is unmatched. Payment-method evidence is retained but not scored because the workbook and Transaction API expose non-comparable vocabularies.
+
+Chargeback Intelligence v1 remains a service-only shadow projection. It aggregates Product, disputed amount, fees, confidence coverage, and transaction-to-dispute lag. Rates use only defensibly matched Orders as dispute numerators and normalized Order counts/gross as denominators. Attribution, affiliate, campaign, and traffic-source conclusions remain explicitly out of scope.
+
+## Appendix G — Phase 2 closure and Investigation branching
+
+Migration 049 completes the Phase 2 Investigation contract with a small Organization-bound tree. A child Investigation records its immutable parent Investigation, exact parent version, branch signal, and reason. Same-Organization composite foreign keys, cycle prevention, restrictive deletion, and materialization-time immutability prevent the branch from becoming a mutable drilldown or cross-tenant reference. Parent and child versions and findings remain independent.
+
+The reviewed OTO2 Selective Dispute Analysis is the first child, branched from Accufy Version 3 and materialized as completed with warnings. It preserves the 210-Journey cohort, 12 affected and 156 primary-control Journeys, prominent negative findings, the limited dispute-reason correlation, and the charge-recognition/upsell-experience hypothesis. It explicitly stops at the historical Evidence ceiling and hands unanswered presentation, disclosure, descriptor, consent, and browser-Journey questions to future first-party instrumentation.
+
+Phase 2 now demonstrates the full shadow loop: authorize and connect; protect credentials; ingest real Commerce history through immutable Evidence and resumable checkpoints; normalize Orders, People, Products, Lines, financial events, and Refunds; import and reconcile historical disputes without forced ambiguity; link historical acquisition Journeys with explicit direct/propagated provenance; align attribution denominators to their Evidence window; and publish reproducible parent and child Investigations with controls, Journey analysis, negative findings, hypotheses, uncertainty, and safe provenance.
+
+This closure does not authorize live repository activation. `TRACEKIT_REAL_DATA_ENABLED` remains false and repository activation remains empty. Phase 3 dispute operations and TKID/browser instrumentation remain separate future work.

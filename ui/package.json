@@ -14,7 +14,8 @@
     "sync:commas-shadow": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/run-commas-shadow-sync.ts --confirm-full-shadow",
     "import:commas-disputes": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/import-commas-historical-disputes.ts --confirm-historical-import",
     "import:everflow-investigation": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/import-everflow-investigation.ts --confirm-protected-import",
-    "materialize:accufy-investigation": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/materialize-accufy-investigation.ts"
+    "materialize:accufy-investigation": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/materialize-accufy-investigation.ts",
+    "materialize:oto2-child-investigation": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/materialize-oto2-child-investigation.ts"
   },
   "dependencies": {
     "@workos-inc/authkit-nextjs": "^4.3.1",
