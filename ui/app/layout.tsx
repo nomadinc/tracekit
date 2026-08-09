@@ -2,7 +2,7 @@ import "./globals.css";
 import { Inter } from "next/font/google";
 import { ThemeProvider } from "@/components/theme-provider";
 const inter = Inter({ subsets: ["latin"] });
-export const metadata = { title: "TraceKit", description: "Follow every footprint. See every dollar." };
+export const metadata = { title: "TraceKit", description: "Track. Reconcile. Trust." };
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" suppressHydrationWarning>
