@@ -13,6 +13,7 @@ export type ShellNavigationItem = {
 };
 
 const NAVIGATION_ICONS: Record<string, LucideIcon> = {
+  Investigations: Activity,
   "Mission Control": Home,
   Offers: Megaphone,
   Customers: Users,

@@ -14,6 +14,7 @@ export const PRODUCTION_ROUTES = {
   operations: () => "/operations",
   settings: () => "/settings",
   connections: () => "/connections",
+  investigations: (investigationId?: string) => investigationId ? `/investigations/${encodeURIComponent(investigationId)}` : "/investigations",
   clients: () => "/clients",
   reports: () => "/reports",
   team: () => "/team",
