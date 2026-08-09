@@ -2,7 +2,8 @@ import "server-only";
 import { resolveApplicationSession } from "@/lib/identity/application-session";
 import { commercePersistenceRequest } from "@/lib/commerce/supabase-control-repository";
 import { authorizeInvestigationAccess } from "./authorization";
-import { assertClientSafePresentation, type InvestigationPresentation, type SafeInvestigationDetail, type SafeInvestigationSummary } from "./presentation";
+import { assertClientSafePresentation, type InvestigationPresentation, type SafeInvestigationCandidate, type SafeInvestigationDetail, type SafeInvestigationSummary } from "./presentation";
+import { buildInvestigationInspections } from "./inspection-presentation";
 
 type Row = Record<string, unknown>;
 const string = (value: unknown) => value == null ? "" : String(value);
@@ -23,8 +24,15 @@ export async function loadInvestigations(): Promise<SafeInvestigationSummary[]> 
   const investigations = await investigationRows(scope.organizationId);
   return Promise.all(investigations.map(async (investigation) => {
     const versions = await commercePersistenceRequest(`tracekit_investigation_versions?organization_id=eq.${encodeURIComponent(scope.organizationId)}&investigation_id=eq.${encodeURIComponent(string(investigation.id))}&order=version_number.desc&limit=1`) as Row[];
-    return summary(investigation, versions[0], scope.organizationName);
+    const freshness=await commercePersistenceRequest(`tracekit_investigation_freshness?organization_id=eq.${encodeURIComponent(scope.organizationId)}&investigation_id=eq.${encodeURIComponent(string(investigation.id))}&limit=1`) as Row[];
+    return summary(investigation, versions[0], scope.organizationName, freshness[0]);
   }));
+}
+
+export async function loadInvestigationCandidates():Promise<SafeInvestigationCandidate[]> {
+  const scope=await context();
+  const rows=await commercePersistenceRequest(`tracekit_investigation_candidates?organization_id=eq.${encodeURIComponent(scope.organizationId)}&status=eq.needs_review&order=last_detected_at.desc&limit=20`) as Row[];
+  return rows.map((row)=>({id:string(row.id),question:string(row.question),candidateType:string(row.candidate_type).replaceAll("_"," "),metric:string(row.metric),currentValue:row.current_value==null?null:string(row.current_value),baselineValue:row.baseline_value==null?null:string(row.baseline_value),sampleSize:Number(row.sample_size||0),period:`${shortDate(row.period_start)} – ${shortDate(row.period_end)}`,triggerReason:string(row.trigger_reason),status:string(row.status),existingInvestigationId:string(row.existing_investigation_id)||null}));
 }
 
 export async function loadInvestigation(id: string): Promise<SafeInvestigationDetail | null> {
@@ -49,10 +57,12 @@ export async function loadInvestigation(id: string): Promise<SafeInvestigationDe
   const branchRows = await commercePersistenceRequest(`tracekit_investigations?organization_id=eq.${encodeURIComponent(scope.organizationId)}&parent_investigation_id=eq.${encodeURIComponent(id)}&order=updated_at.desc`) as Row[];
   const branches = await Promise.all(branchRows.map(async branch => {
     const branchVersions = await commercePersistenceRequest(`tracekit_investigation_versions?organization_id=eq.${encodeURIComponent(scope.organizationId)}&investigation_id=eq.${encodeURIComponent(string(branch.id))}&order=version_number.desc&limit=1`) as Row[];
-    return summary(branch, branchVersions[0], scope.organizationName);
+    const branchFreshness=await commercePersistenceRequest(`tracekit_investigation_freshness?organization_id=eq.${encodeURIComponent(scope.organizationId)}&investigation_id=eq.${encodeURIComponent(string(branch.id))}&limit=1`) as Row[];
+    return summary(branch, branchVersions[0], scope.organizationName,branchFreshness[0]);
   }));
-  return {
-    ...summary(investigations[0], versions[0], scope.organizationName), runId,
+  const freshnessRows=await commercePersistenceRequest(`tracekit_investigation_freshness?organization_id=eq.${encodeURIComponent(scope.organizationId)}&investigation_id=eq.${encodeURIComponent(id)}&limit=1`) as Row[];
+  const detail:Omit<SafeInvestigationDetail,"inspections"> = {
+    ...summary(investigations[0], versions[0], scope.organizationName,freshnessRows[0]), runId,
     warnings: (((runs[0]?.warnings || []) as unknown[]) as Array<Record<string, unknown>>).map((item) => ({ code: string(item.code), message: string(item.message) })),
     versions: {
       commerce: string(runs[0]?.commerce_reconciliation_version), journey: string(runs[0]?.journey_linkage_version),
@@ -62,9 +72,12 @@ export async function loadInvestigation(id: string): Promise<SafeInvestigationDe
     presentation: { ...presentation, provenance: { ...presentation.provenance, evidenceRecords: string(snapshot.evidence_summary) || presentation.provenance.evidenceRecords } },
     parent, branches,
   };
+  const inspections=buildInvestigationInspections(detail);
+  assertClientSafePresentation(inspections,"inspections");
+  return {...detail,inspections};
 }
 
-function summary(investigation: Row, version: Row | undefined, organizationName: string): SafeInvestigationSummary {
+function summary(investigation: Row, version: Row | undefined, organizationName: string, freshness?:Row): SafeInvestigationSummary {
   return {
     id: string(investigation.id), title: string(investigation.title), organization: organizationName,
     type: string(investigation.trigger_type).replaceAll("_", " "),
@@ -74,6 +87,7 @@ function summary(investigation: Row, version: Row | undefined, organizationName:
     evidenceQuality: string(version?.evidence_quality) || "pending",
     lastUpdated: string(version?.published_at || investigation.updated_at), version: Number(version?.version_number || 0),
     parentInvestigationId: string(investigation.parent_investigation_id) || null,
+    freshnessStatus:(string(freshness?.freshness_status)||"current") as SafeInvestigationSummary["freshnessStatus"],
   };
 }
 function shortDate(value: unknown) { if (!value) return "Open"; return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(String(value))); }

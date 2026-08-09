@@ -133,4 +133,9 @@ body { background: var(--tk-background); color: var(--tk-text-primary); }
   .tk-investigation-workspace .tk-warning-panel { background: rgb(245 158 11 / .09); border-color: rgb(252 211 77 / .3); color: var(--tk-dark-text-secondary); }
   .tk-investigation-workspace .tk-warning-panel strong,
   .tk-investigation-workspace .tk-warning-panel h2 { color: #fef3c7; }
+  .tk-inspection-trigger { @apply relative w-full rounded-xl transition; }
+  .tk-inspection-trigger:hover { background-color: rgb(59 130 246 / .055); box-shadow: inset 0 0 0 1px rgb(96 165 250 / .2); }
+  .tk-inspection-affordance { @apply mt-3 inline-flex items-center gap-1 text-[9px] font-semibold uppercase tracking-wider opacity-0 transition group-hover:opacity-100 group-focus-visible:opacity-100; color: var(--tk-brand-accent); }
+  .tk-inspection-layer { @apply fixed inset-0 z-[80] flex justify-end bg-black/55 backdrop-blur-[2px]; }
+  .tk-inspection-drawer { @apply h-full w-full overflow-y-auto shadow-2xl sm:max-w-[520px]; background: var(--tk-dark-surface); border-left: 1px solid var(--tk-dark-border); }
 }
