@@ -175,7 +175,7 @@ test("migration filenames are unique and numerically ordered", () => {
   const numbers = names.map((name) => name.slice(0, 3));
 
   assert.equal(new Set(numbers).size, numbers.length);
-  assert.deepEqual(numbers, Array.from({ length: 43 }, (_, index) => String(index).padStart(3, "0")));
+  assert.deepEqual(numbers, Array.from({ length: 46 }, (_, index) => String(index).padStart(3, "0")));
 });
 
 test("schema provenance exports contain metadata headers and no known secret material", () => {
@@ -288,5 +288,16 @@ test("commerce control-plane migration remains additive and server-only", () => 
   assert.match(migration042, /false,/);
   assert.doesNotMatch(migration042, /create policy/);
   assert.doesNotMatch(migration042, /insert into public\.commerce_repository_activation/);
+
+  const migration043 = migration("043_commerce_shadow_ingestion_v1.sql").toLowerCase();
+  assert.match(migration043, /create table public\.commerce_order_lines/);
+  assert.match(migration043, /create table public\.commerce_historical_disputes/);
+  assert.doesNotMatch(migration043, /insert into public\.commerce_repository_activation/);
+  const migration044 = migration("044_commerce_refund_normalization_v1.sql").toLowerCase();
+  assert.match(migration044, /create table public\.commerce_refund_events/);
+  assert.match(migration044, /provider-observed refund fee/);
+  const migration045 = migration("045_commerce_dispute_reconciliation_v1.sql").toLowerCase();
+  assert.match(migration045, /reconcile_commerce_historical_disputes_v1/);
+  assert.doesNotMatch(migration045, /insert into public\.commerce_repository_activation/);
 
 });
