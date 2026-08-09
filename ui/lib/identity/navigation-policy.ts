@@ -10,6 +10,7 @@ export type NavigationPolicyItem = {
 export const NAVIGATION_POLICY: Record<ShellVariant, NavigationPolicyItem[]> = {
   client: [
     { label: "Mission Control", href: "/", permission: "organizations.view" },
+    { label: "Investigations", href: "/investigations", permission: "admin.manage_feature_access" },
     { label: "Offers", href: "/offers", permission: "offers.view" },
     { label: "Customers", href: "/customers", permission: "customers.view" },
     { label: "Orders", href: "/orders", permission: "orders.view" },
@@ -29,6 +30,7 @@ export const NAVIGATION_POLICY: Record<ShellVariant, NavigationPolicyItem[]> = {
     { label: "Connections", href: "/connections", permission: "connectors.view" },
   ],
   "product-admin": [
+    { label: "Investigations", href: "/investigations", permission: "admin.manage_feature_access" },
     { label: "Organizations", href: "/platform/organizations", permission: "admin.manage_tenants" },
     { label: "Agencies", href: "/platform/agencies", permission: "admin.manage_tenants" },
     { label: "Users", href: "/platform/users", permission: "users.view" },

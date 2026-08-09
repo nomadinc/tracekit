@@ -115,6 +115,7 @@ export function pageChromeForPath(pathname: string | null | undefined) {
     "/platform/audit-logs": { title: "Audit Logs", description: "Platform audit visibility.", group: "Platform" },
     "/platform/feature-access": { title: "Feature Access", description: "Controlled product feature access.", group: "Platform" },
     "/platform/support": { title: "Support", description: "Platform support without silent tenant access.", group: "Platform" },
+    "/investigations": { title: "Investigations", description: "Evidence-backed analysis of outcomes, Journeys, controls, and uncertainty.", group: "Product Intelligence" },
   };
   if (shellChrome[path]) return shellChrome[path];
   const candidates: Array<AppNavigationItem & { group?: string }> = [];
@@ -176,6 +177,7 @@ export function breadcrumbsForPath(pathname: string | null | undefined): AppBrea
     ];
   }
   if (path.startsWith("/connections/commerce/")) return [{ label: "Connections", href: "/connections" }, { label: "Commerce", href: "/connections/commerce" }, { label: "Connection" }];
+  if (path.startsWith("/investigations/")) return [{ label: "Investigations", href: "/investigations" }, { label: "Investigation" }];
   if (path.startsWith("/operations")) {
     return [{ label: "Operations", href: "/operations" }];
   }
