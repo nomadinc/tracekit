@@ -175,7 +175,7 @@ test("migration filenames are unique and numerically ordered", () => {
   const numbers = names.map((name) => name.slice(0, 3));
 
   assert.equal(new Set(numbers).size, numbers.length);
-  assert.deepEqual(numbers, Array.from({ length: 50 }, (_, index) => String(index).padStart(3, "0")));
+  assert.deepEqual(numbers, Array.from({ length: 51 }, (_, index) => String(index).padStart(3, "0")));
 });
 
 test("schema provenance exports contain metadata headers and no known secret material", () => {
@@ -316,5 +316,14 @@ test("commerce control-plane migration remains additive and server-only", () => 
   assert.match(migration049, /materialized investigation branch provenance is immutable/);
   assert.match(migration049, /on delete restrict/);
   assert.doesNotMatch(migration049, /insert into public\.commerce_repository_activation/);
+
+  const migration050 = migration("050_continuous_commerce_intelligence_v1.sql").toLowerCase();
+  assert.match(migration050, /create table public\.commerce_continuous_sync_state/);
+  assert.match(migration050, /create table public\.commerce_sync_schedules/);
+  assert.match(migration050, /create table public\.tracekit_investigation_freshness/);
+  assert.match(migration050, /create table public\.tracekit_investigation_candidates/);
+  assert.match(migration050, /enqueue_commerce_continuous_sync/);
+  assert.match(migration050, /mark_investigation_new_evidence/);
+  assert.doesNotMatch(migration050, /insert into public\.commerce_repository_activation/);
 
 });
