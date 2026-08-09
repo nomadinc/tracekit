@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import { identityMode, identityProviderInitialization, resolveIdentitySource } from "../lib/identity/identity-mode";
-import { resolveEffectivePermissions, permissionDecision } from "../lib/identity/persistent-authorization";
+import { resolveEffectivePermissions, permissionDecision, selectSessionMembership } from "../lib/identity/persistent-authorization";
 import { validateInvitationAcceptance } from "../lib/identity/invitations";
 import { redactAuditMetadata } from "../lib/identity/persistent-repository";
 import { serializeSessionForClient, type PermissionOverride, type PersistentMembership, type TraceKitSessionContext } from "../lib/identity/persistent-types";
@@ -239,6 +239,12 @@ test("role permissions are capabilities and an explicit deny wins", () => {
   assert.equal(permissionDecision(membership, [deny], "offers.view").allowed, false);
   const allowAfterDeny = [...([deny] as PermissionOverride[]), { ...deny, id: "over_02", effect: "allow" as const }];
   assert.equal(permissionDecision(membership, allowAfterDeny, "offers.view").allowed, false);
+});
+
+test("an additional Product/Admin Account membership cannot displace the Organization session", () => {
+  const platform = { ...membership, id: "membership-platform", accountId: "account-platform", organizationId: null, role: "platform-admin" as const };
+  assert.equal(selectSessionMembership([platform, membership])?.id, membership.id);
+  assert.equal(selectSessionMembership([platform])?.id, platform.id);
 });
 
 test("suspended membership has no permissions", () => {

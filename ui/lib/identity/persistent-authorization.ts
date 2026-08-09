@@ -1,6 +1,10 @@
 import { ROLE_PERMISSIONS, type Permission } from "./permissions";
 import type { PermissionOverride, PersistentMembership } from "./persistent-types";
 
+export function selectSessionMembership(memberships: readonly PersistentMembership[]) {
+  return memberships.find((candidate) => candidate.organizationId) || memberships[0];
+}
+
 export function resolveEffectivePermissions(membership: PersistentMembership, overrides: readonly PermissionOverride[]) {
   if (membership.status !== "active") return new Set<Permission>();
   const permissions = new Set<Permission>(ROLE_PERMISSIONS[membership.role]);
