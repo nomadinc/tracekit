@@ -1,0 +1,8 @@
+import assert from"node:assert/strict";import test from"node:test";
+import{buildPartialJourney,distributionDelta,matureAt,normalizeReason,percentile,stableInvestigationId,timingBucket}from"../lib/investigations/chargeback-analysis";
+test("reason normalization preserves distinct evidence families",()=>{assert.equal(normalizeReason("fraudulent"),"fraud_or_unauthorized");assert.equal(normalizeReason("Merchandise/Services Not Received"),"not_received");assert.equal(normalizeReason("general"),"general");});
+test("timing and percentile calculations are deterministic",()=>{assert.equal(percentile([60,15,30,45],.5),37.5);assert.deepEqual([5,20,40,90,300,800,1500].map(timingBucket),["<15m","15-30m","30-60m","1-2h","2-6h","6-24h",">24h"]);});
+test("distribution comparison requires an explicit control",()=>{assert.ok(Math.abs(distributionDelta({Mobile:94,Tablet:6},{Mobile:93,Tablet:7}).Mobile.delta-.01)<1e-12);});
+test("maturity windows prevent immature cohort claims",()=>{assert.equal(matureAt("2026-07-10T00:00:00Z",28),"2026-08-07T00:00:00.000Z");});
+test("Journey construction is ordered, partial, and exposes evidence gaps",()=>{const j=buildPartialJourney({clickAt:"2026-01-01T00:00:00Z",conversionAt:"2026-01-01T00:30:00Z",orders:[{at:"2026-01-01T00:32:00Z",product:"Upsell",amount:99},{at:"2026-01-01T00:31:00Z",product:"Main",amount:49}],disputeAt:"2026-01-20T00:00:00Z"});assert.deepEqual(j.steps.map(s=>s.event),["click","conversion","charge","charge","dispute"]);assert.ok(j.evidenceGaps.includes("vsl_watch_percentage"));});
+test("Investigation identity and output are replay deterministic",()=>{const input={affiliate:"Pear Media LLC",sub1:"nandi",version:"v1"};assert.equal(stableInvestigationId(input),stableInvestigationId(input));});

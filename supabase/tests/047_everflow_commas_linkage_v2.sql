@@ -1,0 +1,13 @@
+begin;
+select plan(9);
+select has_table('public','everflow_acquisition_journeys','versioned acquisition journeys exist');
+select has_table('public','everflow_journey_order_links','Journey-to-Order evidence exists');
+select has_function('public','reconcile_everflow_orders_v2',array['uuid','uuid'],'v2 reconciliation exists');
+select is((select count(*)::integer from information_schema.role_table_grants where table_schema='public' and table_name='everflow_acquisition_journeys' and grantee in('anon','authenticated')),0,'browser roles cannot read Journeys');
+select is((select count(*)::integer from information_schema.role_table_grants where table_schema='public' and table_name='everflow_journey_order_links' and grantee in('anon','authenticated')),0,'browser roles cannot read Journey links');
+select col_is_pk('public','everflow_acquisition_journeys','id','Journey identity is explicit');
+select has_fk('public','everflow_journey_order_links','Journey links enforce scoped foreign keys');
+select is((select count(*)::integer from public.everflow_acquisition_journeys j left join public.everflow_historical_imports i on i.organization_id=j.organization_id and i.id=j.import_id where i.id is null),0,'every Journey retains scoped source Evidence');
+select is((select count(*)::integer from public.commerce_repository_activation),0,'migration creates no activation');
+select * from finish();
+rollback;

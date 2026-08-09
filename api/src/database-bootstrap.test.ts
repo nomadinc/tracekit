@@ -175,7 +175,7 @@ test("migration filenames are unique and numerically ordered", () => {
   const numbers = names.map((name) => name.slice(0, 3));
 
   assert.equal(new Set(numbers).size, numbers.length);
-  assert.deepEqual(numbers, Array.from({ length: 46 }, (_, index) => String(index).padStart(3, "0")));
+  assert.deepEqual(numbers, Array.from({ length: 48 }, (_, index) => String(index).padStart(3, "0")));
 });
 
 test("schema provenance exports contain metadata headers and no known secret material", () => {
@@ -299,5 +299,12 @@ test("commerce control-plane migration remains additive and server-only", () => 
   const migration045 = migration("045_commerce_dispute_reconciliation_v1.sql").toLowerCase();
   assert.match(migration045, /reconcile_commerce_historical_disputes_v1/);
   assert.doesNotMatch(migration045, /insert into public\.commerce_repository_activation/);
+
+  const migration047 = migration("047_everflow_commas_linkage_v2.sql").toLowerCase();
+  assert.match(migration047, /create table public\.everflow_acquisition_journeys/);
+  assert.match(migration047, /create table public\.everflow_journey_order_links/);
+  assert.match(migration047, /propagated_within_journey/);
+  assert.match(migration047, /competing_journey_count/);
+  assert.doesNotMatch(migration047, /insert into public\.commerce_repository_activation/);
 
 });

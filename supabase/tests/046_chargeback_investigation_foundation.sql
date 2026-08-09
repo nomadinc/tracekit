@@ -1,0 +1,10 @@
+begin;select plan(8);
+select has_table('public','everflow_conversion_events','Everflow event evidence exists');
+select has_table('public','tracekit_investigations','Investigation model exists');
+select has_table('public','tracekit_investigation_cohorts','control cohorts exist');
+select has_table('public','tracekit_investigation_findings','typed findings exist');
+select has_table('public','tracekit_investigation_journeys','Journey evidence exists');
+select has_function('public','reconcile_everflow_orders_v1',array['uuid','uuid'],'Everflow reconciliation exists');
+select is((select count(*)::integer from information_schema.role_table_grants where table_schema='public' and table_name='everflow_conversion_events' and grantee in('anon','authenticated')),0,'browser roles cannot access evidence');
+select is((select count(*)::integer from public.commerce_repository_activation),0,'migration creates no activation');
+select * from finish();rollback;
