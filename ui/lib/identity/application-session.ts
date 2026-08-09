@@ -5,7 +5,7 @@ import { ROLE_PERMISSIONS } from "./permissions";
 import type { IdentitySession } from "./types";
 import type { SafeClientSession, TraceKitSessionContext, WorkOSIdentityInput } from "./persistent-types";
 import { serializeSessionForClient } from "./persistent-types";
-import { resolveEffectivePermissions } from "./persistent-authorization";
+import { resolveEffectivePermissions, selectSessionMembership } from "./persistent-authorization";
 import { SupabaseIdentityTenancyRepository } from "./supabase-identity-repository";
 import { cookies } from "next/headers";
 import { headers } from "next/headers";
@@ -71,7 +71,11 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
     profilePictureUrl: auth.user.profilePictureUrl,
   });
   const memberships = await repository.membershipsForUser(user.id);
-  const membership = memberships[0];
+  // An authenticated reviewer may hold an additional Account-level platform
+  // entitlement. Keep the tenant session anchored to its Organization
+  // membership; explicit capability overrides remain the narrow bridge for
+  // Product/Admin review inside that Organization.
+  const membership = selectSessionMembership(memberships);
   if (!membership) return { kind: "no-membership" };
   const directlyScopedOrganizations = membership.organizationId ? await repository.organizationsForMembership(membership, null) : [];
   const accountId = membership.accountId || directlyScopedOrganizations[0]?.owningAccountId;
