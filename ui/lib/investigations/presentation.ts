@@ -30,12 +30,15 @@ export type InvestigationPresentation = {
 export type SafeInvestigationSummary = {
   id: string; title: string; organization: string; type: string; status: InvestigationStatus;
   period: string; primarySignal: string; evidenceQuality: string; lastUpdated: string; version: number;
+  parentInvestigationId: string | null;
 };
 
 export type SafeInvestigationDetail = SafeInvestigationSummary & {
   runId: string; warnings: Array<{ code: string; message: string }>;
   versions: { commerce: string; journey: string; dispute: string; reason: string; cohort: string; algorithm: string };
   presentation: InvestigationPresentation;
+  parent: null | { id: string; title: string; question: string; version: number; branchSignal: string; branchReason: string };
+  branches: SafeInvestigationSummary[];
 };
 
 const forbiddenPresentationKey = /(email|phone|ip_address|storage_reference|ciphertext|api_key|raw_payload)/i;

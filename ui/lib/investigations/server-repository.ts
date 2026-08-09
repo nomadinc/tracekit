@@ -38,6 +38,19 @@ export async function loadInvestigation(id: string): Promise<SafeInvestigationDe
   const presentation = versions[0].presentation as InvestigationPresentation;
   assertClientSafePresentation(presentation);
   const snapshot = (runs[0]?.source_snapshot || {}) as Record<string, unknown>;
+  const parentId = string(investigations[0].parent_investigation_id);
+  let parent: SafeInvestigationDetail["parent"] = null;
+  if (parentId) {
+    const parentRows = await investigationRows(scope.organizationId, parentId);
+    const parentVersions = await commercePersistenceRequest(`tracekit_investigation_versions?organization_id=eq.${encodeURIComponent(scope.organizationId)}&id=eq.${encodeURIComponent(string(investigations[0].parent_investigation_version_id))}&investigation_id=eq.${encodeURIComponent(parentId)}&limit=1`) as Row[];
+    if (!parentRows[0] || !parentVersions[0]) throw new Error("The requested resource is unavailable.");
+    parent = { id: parentId, title: string(parentRows[0].title), question: string(parentRows[0].question), version: Number(parentVersions[0].version_number), branchSignal: string(investigations[0].branch_signal), branchReason: string(investigations[0].branch_reason) };
+  }
+  const branchRows = await commercePersistenceRequest(`tracekit_investigations?organization_id=eq.${encodeURIComponent(scope.organizationId)}&parent_investigation_id=eq.${encodeURIComponent(id)}&order=updated_at.desc`) as Row[];
+  const branches = await Promise.all(branchRows.map(async branch => {
+    const branchVersions = await commercePersistenceRequest(`tracekit_investigation_versions?organization_id=eq.${encodeURIComponent(scope.organizationId)}&investigation_id=eq.${encodeURIComponent(string(branch.id))}&order=version_number.desc&limit=1`) as Row[];
+    return summary(branch, branchVersions[0], scope.organizationName);
+  }));
   return {
     ...summary(investigations[0], versions[0], scope.organizationName), runId,
     warnings: (((runs[0]?.warnings || []) as unknown[]) as Array<Record<string, unknown>>).map((item) => ({ code: string(item.code), message: string(item.message) })),
@@ -47,6 +60,7 @@ export async function loadInvestigation(id: string): Promise<SafeInvestigationDe
       cohort: string(runs[0]?.cohort_definition_version), algorithm: string(runs[0]?.algorithm_version),
     },
     presentation: { ...presentation, provenance: { ...presentation.provenance, evidenceRecords: string(snapshot.evidence_summary) || presentation.provenance.evidenceRecords } },
+    parent, branches,
   };
 }
 
@@ -59,6 +73,7 @@ function summary(investigation: Row, version: Row | undefined, organizationName:
     primarySignal: string(version?.primary_signal) || "Analysis pending",
     evidenceQuality: string(version?.evidence_quality) || "pending",
     lastUpdated: string(version?.published_at || investigation.updated_at), version: Number(version?.version_number || 0),
+    parentInvestigationId: string(investigation.parent_investigation_id) || null,
   };
 }
 function shortDate(value: unknown) { if (!value) return "Open"; return new Intl.DateTimeFormat("en", { month: "short", day: "numeric", year: "numeric", timeZone: "UTC" }).format(new Date(String(value))); }
