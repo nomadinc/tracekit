@@ -5,3 +5,12 @@ COMMAS_BASE_URL=https://www.fanbasis.com
 COMMAS_DISCOVERY_DEBUG=false
 COMMAS_REFUND_SCAN_PAGE_CAP=10
 COMMAS_IDENTIFIER_SCAN_PAGE_CAP=5
+
+# Production-intelligence capability controls (server-only, disabled by default).
+TRACEKIT_PRODUCTION_WORKER_HOST=cloudflare_worker_queue
+TRACEKIT_COMMERCE_SCHEDULER_ENABLED=false
+TRACEKIT_COMMERCE_KILL_SWITCH=disabled
+TRACEKIT_TKID_INGESTION_ENABLED=false
+TRACEKIT_TKID_HANDOFF_KEY_REF=replace-with-server-secret-reference
+TRACEKIT_TKID_ABUSE_ADAPTER=replace-with-distributed-counter-adapter
+TRACEKIT_OPERATIONAL_ALERT_DESTINATION_REF=configuration-required

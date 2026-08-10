@@ -175,7 +175,7 @@ test("migration filenames are unique and numerically ordered", () => {
   const numbers = names.map((name) => name.slice(0, 3));
 
   assert.equal(new Set(numbers).size, numbers.length);
-  assert.deepEqual(numbers, Array.from({ length: 52 }, (_, index) => String(index).padStart(3, "0")));
+  assert.deepEqual(numbers, Array.from({ length: 53 }, (_, index) => String(index).padStart(3, "0")));
 });
 
 test("schema provenance exports contain metadata headers and no known secret material", () => {
@@ -331,5 +331,12 @@ test("commerce control-plane migration remains additive and server-only", () => 
   assert.match(migration051,/revoke all on public\.%i from anon,authenticated/);
   assert.match(migration051,/linked_by='server_checkout'/);
   assert.doesNotMatch(migration051,/insert into public\.commerce_repository_activation/);
+
+  const migration052 = migration("052_production_intelligence_readiness_v1.sql").toLowerCase();
+  for (const table of ["tracekit_production_controls","commerce_connection_pauses","tkid_handoff_keys","tracekit_operational_alerts"]) assert.match(migration052,new RegExp(`create table public\\.${table}`));
+  assert.match(migration052,/activation_state text not null default 'disabled'/);
+  assert.match(migration052,/commerce_schedule_permitted/);
+  assert.match(migration052,/revoke all on public\.%i from anon,authenticated/);
+  assert.doesNotMatch(migration052,/insert into public\.commerce_repository_activation/);
 
 });
