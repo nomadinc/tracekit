@@ -175,7 +175,7 @@ test("migration filenames are unique and numerically ordered", () => {
   const numbers = names.map((name) => name.slice(0, 3));
 
   assert.equal(new Set(numbers).size, numbers.length);
-  assert.deepEqual(numbers, Array.from({ length: 54 }, (_, index) => String(index).padStart(3, "0")));
+  assert.deepEqual(numbers, Array.from({ length: 55 }, (_, index) => String(index).padStart(3, "0")));
 });
 
 test("schema provenance exports contain metadata headers and no known secret material", () => {
@@ -346,5 +346,12 @@ test("commerce control-plane migration remains additive and server-only", () => 
   assert.doesNotMatch(migration053,/delete from public\.commerce_orders/);
   assert.match(migration053,/revoke all on public\.%i from anon,authenticated/);
   assert.doesNotMatch(migration053,/insert into public\.commerce_repository_activation/);
+
+  const migration054 = migration("054_managed_tkid_origin_registry_v1.sql").toLowerCase();
+  for (const table of ["tkid_source_origins","tkid_origin_verifications"]) assert.match(migration054,new RegExp(`create table public\\.${table}`));
+  assert.match(migration054,/tkid_active_origin/);
+  assert.match(migration054,/lifecycle_status text not null default 'pending'/);
+  assert.match(migration054,/revoke all on public\.tkid_source_origins,public\.tkid_origin_verifications from anon,authenticated/);
+  assert.doesNotMatch(migration054,/insert into public\.commerce_repository_activation/);
 
 });

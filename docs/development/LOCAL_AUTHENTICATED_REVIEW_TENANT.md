@@ -24,9 +24,10 @@ Expected scope after bootstrap:
 - Membership: active Organization membership using `organization-admin`
 - Product review entitlement: active Account membership using `platform-admin`
 - Investigation capability: explicit local `admin.manage_feature_access` allow on the Bullseye Organization membership
+- Managed TKID origin capability: separate explicit local `admin.manage_feature_access` allow scoped to `tkid_origin_registry`
 - Business Context: Bullseye (`offer-bullseye`, digital)
 - Business Context access: active
 
 This fixture contains no WorkOS credential, session token, provider credential, customer row, or production data.
 
-The platform membership does not replace the Bullseye membership. Session resolution remains anchored to the Organization membership so Bullseye and `offer-bullseye` continue to authorize normally. The local capability override grants only the existing Product/Admin Investigation capability; it does not expose Investigations to ordinary Organization, Client, or Agency memberships.
+The platform membership does not replace the Bullseye membership. Session resolution remains anchored to the Organization membership so Bullseye and `offer-bullseye` continue to authorize normally. Separate local capability overrides grant only Investigation and managed-TKID-origin Product/Admin review. They do not expose either resource to ordinary Organization, Client, or Agency memberships.

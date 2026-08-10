@@ -21,11 +21,13 @@ test("local review tenant uses stable fixture identity and idempotent conflict k
   assert.match(sql, /on conflict \(membership_id, organization_id, business_context_id\) do update/);
 });
 
-test("local review identity has explicit platform membership and narrow Investigation entitlement", () => {
+test("local review identity has explicit platform membership and narrow Product/Admin entitlements", () => {
   assert.match(sql, /account_type, name, status[\s\S]*'platform', 'TraceKit Local Product Review'/);
   assert.match(sql, /role\.role_key = 'platform-admin'/);
   assert.match(sql, /'admin\.manage_feature_access', 'allow'/);
   assert.match(sql, /'investigation'/);
+  assert.match(sql, /'tkid_origin_registry'/);
+  assert.match(sql, /70000000-0000-0000-0000-000000000008/);
 });
 
 test("local bootstrap remains separate from production migrations and documents post-login restore", () => {
