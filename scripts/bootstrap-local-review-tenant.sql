@@ -76,6 +76,20 @@ set membership_id = excluded.membership_id, capability = excluded.capability,
     effect = excluded.effect, organization_id = excluded.organization_id,
     resource_type = excluded.resource_type, reason = excluded.reason, updated_at = now();
 
+insert into public.tracekit_permission_overrides
+  (id, membership_id, capability, effect, organization_id, resource_type, reason)
+select '70000000-0000-0000-0000-000000000008', membership.id,
+       'admin.manage_feature_access', 'allow',
+       '70000000-0000-0000-0000-000000000002', 'tkid_origin_registry',
+       'Local authenticated Product/Admin managed TKID origin review'
+from public.tracekit_memberships membership
+join tracekit_fixture_user fixture on fixture.id = membership.user_id
+where membership.organization_id = '70000000-0000-0000-0000-000000000002'
+on conflict (id) do update
+set membership_id = excluded.membership_id, capability = excluded.capability,
+    effect = excluded.effect, organization_id = excluded.organization_id,
+    resource_type = excluded.resource_type, reason = excluded.reason, updated_at = now();
+
 insert into public.tracekit_business_context_access (id, membership_id, organization_id, business_context_id, status)
 select '70000000-0000-0000-0000-000000000004', membership.id,
        '70000000-0000-0000-0000-000000000002', 'offer-bullseye', 'active'
