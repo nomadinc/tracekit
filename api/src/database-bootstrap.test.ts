@@ -175,7 +175,7 @@ test("migration filenames are unique and numerically ordered", () => {
   const numbers = names.map((name) => name.slice(0, 3));
 
   assert.equal(new Set(numbers).size, numbers.length);
-  assert.deepEqual(numbers, Array.from({ length: 53 }, (_, index) => String(index).padStart(3, "0")));
+  assert.deepEqual(numbers, Array.from({ length: 54 }, (_, index) => String(index).padStart(3, "0")));
 });
 
 test("schema provenance exports contain metadata headers and no known secret material", () => {
@@ -338,5 +338,13 @@ test("commerce control-plane migration remains additive and server-only", () => 
   assert.match(migration052,/commerce_schedule_permitted/);
   assert.match(migration052,/revoke all on public\.%i from anon,authenticated/);
   assert.doesNotMatch(migration052,/insert into public\.commerce_repository_activation/);
+
+  const migration053 = migration("053_production_worker_abuse_erasure_v1.sql").toLowerCase();
+  for (const table of ["tkid_abuse_counters","tkid_erasure_runs","tkid_erasure_objects"]) assert.match(migration053,new RegExp(`create table public\\.${table}`));
+  assert.match(migration053,/consume_tkid_abuse_limit/);
+  assert.match(migration053,/complete_tkid_journey_erasure/);
+  assert.doesNotMatch(migration053,/delete from public\.commerce_orders/);
+  assert.match(migration053,/revoke all on public\.%i from anon,authenticated/);
+  assert.doesNotMatch(migration053,/insert into public\.commerce_repository_activation/);
 
 });

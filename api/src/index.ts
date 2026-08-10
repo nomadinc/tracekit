@@ -3,6 +3,8 @@
 // Integrations: CheckoutChamp/Konnektive + WOWSuite (WowBoost + WowPay umbrella)
 
 import { createClient } from "@supabase/supabase-js";
+import { consumeCommerceMessage, runCommerceCron, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
+import { enforceTkidRate, ephemeralTransportDimension, TkidRateLimitError, type DistributedCounterStore, type TkidAbuseClass } from "./tkid-distributed-abuse";
 import {
   DEFAULT_SHOPIFY_API_VERSION,
   SHOPIFY_CONNECTION_TEST_QUERY,
@@ -528,6 +530,10 @@ type Env = {
   LIVE_WORKSPACE_PROJECTION_MAX_EVENTS?: string;
   LIVE_WORKSPACE_PROJECTION_MAX_WORKSPACES?: string;
   wowboost_imports?: Queue<any>;
+  continuous_commerce?: Queue<CommerceQueueMessage>;
+  CONTINUOUS_COMMERCE_RUNTIME?: Fetcher;
+  TRACEKIT_COMMERCE_SCHEDULER_ENABLED?: string;
+  TRACEKIT_COMMERCE_KILL_SWITCH?: string;
 };
 
 type RunImportArgs = {
@@ -712,6 +718,66 @@ function getSupabase(env: Env) {
   const key = String(env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim();
   if (!url || !key) throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
   return createClient(url, key, { auth: { persistSession: false } });
+}
+
+function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterRepository {
+  const db = getSupabase(env);
+  return {
+    async schedulerEnabled() {
+      if (env.TRACEKIT_COMMERCE_SCHEDULER_ENABLED !== "true" || env.TRACEKIT_COMMERCE_KILL_SWITCH !== "enabled") return false;
+      const { count, error } = await db.from("tracekit_production_controls").select("id", { count: "exact", head: true }).eq("capability", "commerce_scheduler").eq("activation_state", "enabled");
+      if (error) throw error;
+      return (count || 0) > 0;
+    },
+    async eligibleJobs(now) {
+      const { data, error } = await db.from("commerce_sync_schedules").select("id,connection_id,resource,next_overlap_at,next_deep_reconciliation_at,quota_minimum_remaining,deep_request_budget").eq("enabled", true).eq("activation_state", "enabled");
+      if (error) throw error;
+      const jobs: any[] = [];
+      for (const row of data || []) {
+        const overlapDue = !row.next_overlap_at || Date.parse(row.next_overlap_at) <= Date.parse(now);
+        const deepDue = row.next_deep_reconciliation_at && Date.parse(row.next_deep_reconciliation_at) <= Date.parse(now);
+        if (!overlapDue && !deepDue) continue;
+        const mode = deepDue ? "deep_reconciliation" : "continuous";
+        const { data: latest } = await db.from("commerce_sync_runs").select("metadata").eq("connection_id", row.connection_id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+        const quotaRemaining = Number((latest?.metadata as any)?.rate_limit_end);
+        jobs.push({ connectionId: row.connection_id, resource: row.resource, mode, schedulerIdentity: `${row.id}:${mode}:${now.slice(0,16)}`, quotaRemaining: Number.isFinite(quotaRemaining) ? quotaRemaining : null, requestBudget: mode === "deep_reconciliation" ? row.deep_request_budget : 8, quotaFloor: row.quota_minimum_remaining });
+      }
+      return jobs;
+    },
+    async connectionPermitted(connectionId) {
+      const { data: connection } = await db.from("commerce_provider_connections").select("organization_id").eq("id", connectionId).maybeSingle();
+      if (!connection) return false;
+      const { data, error } = await db.rpc("commerce_schedule_permitted", { p_organization_id: connection.organization_id, p_connection_id: connectionId });
+      if (error) throw error;
+      return data === true;
+    },
+    async reserve(message) {
+      const { count, error } = await db.from("commerce_sync_runs").select("id", { count: "exact", head: true }).eq("connection_id", message.connection_id).eq("scheduler_idempotency_key", message.scheduler_identity);
+      if (error) throw error;
+      return (count || 0) > 0 ? "duplicate" : "reserved";
+    },
+    async recordMetric(event, details) { console.log("[TraceKit] continuous commerce adapter", { event, ...details }); },
+  };
+}
+
+function getTkidDistributedCounterStore(env: Env): DistributedCounterStore {
+  const db = getSupabase(env);
+  return { async consume(input) {
+    const { data, error } = await db.rpc("consume_tkid_abuse_limit", {
+      p_organization_id: input.organizationId, p_source_id: input.sourceId, p_rate_class: input.rateClass,
+      p_key_hash: input.keyHash, p_limit: input.limit, p_window_seconds: input.windowSeconds, p_now: input.now,
+    });
+    if (error) throw error;
+    const row = Array.isArray(data) ? data[0] : data;
+    if (!row) throw new Error("abuse_control_unavailable");
+    return { allowed: row.allowed, count: row.current_count, limit: row.limit_value, resetAt: row.reset_at };
+  }};
+}
+
+async function enforceTkidDistributedRequest(env: Env, req: Request, source: any, rateClass: TkidAbuseClass, limit: number) {
+  const origin = new URL(req.headers.get("origin") || "https://invalid.local").origin;
+  const transport = await ephemeralTransportDimension(req.headers.get("cf-connecting-ip"), origin);
+  return enforceTkidRate({ store: getTkidDistributedCounterStore(env), organizationId: source.organization_id, sourceId: source.id, rateClass, dimension: transport, limit });
 }
 
 type SupabaseClientAny = ReturnType<typeof getSupabase>;
@@ -15194,18 +15260,19 @@ async function router(req: Request, env: Env): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname;
   const tkidRoute = matchTkidRoute(req.method, path);
-  if (req.method === "OPTIONS" && path.startsWith("/v1/tkid/")) {const origin=req.headers.get("origin")||"",sourceId=req.headers.get("x-tracekit-source")||"",{data:source}=await getSupabase(env).from("tkid_sources").select("allowed_origins,status").eq("public_source_id",sourceId).eq("status","active").maybeSingle();let normalized="";try{const u=new URL(origin);normalized=`${u.protocol}//${u.host}`}catch{}const allowed=Boolean(source&&(source.allowed_origins||[]).includes(normalized));return new Response(null,{status:allowed?204:403,headers:{...(allowed?{"access-control-allow-origin":normalized}:{}),"access-control-allow-methods":"POST, OPTIONS","access-control-allow-headers":"content-type, x-tracekit-source","vary":"origin"}})}
+  if (req.method === "OPTIONS" && path.startsWith("/v1/tkid/")) {const origin=req.headers.get("origin")||"",sourceId=req.headers.get("x-tracekit-source")||"",{data:source}=await getSupabase(env).from("tkid_sources").select("allowed_origins,status").eq("public_source_id",sourceId).in("status",["shadow","active"]).maybeSingle();let normalized="";try{const u=new URL(origin);normalized=`${u.protocol}//${u.host}`}catch{}const allowed=Boolean(source&&(source.allowed_origins||[]).includes(normalized));return new Response(null,{status:allowed?204:403,headers:{...(allowed?{"access-control-allow-origin":normalized}:{}),"access-control-allow-methods":"POST, OPTIONS","access-control-allow-headers":"content-type, x-tracekit-source","vary":"origin"}})}
   if (tkidRoute === "method_not_allowed") return json({ok:false,error:"method_not_allowed"},405,{Allow:"POST"});
   if (tkidRoute === "bootstrap") {
-    try {const sourceId=req.headers.get("x-tracekit-source")||"",origin=req.headers.get("origin"),db=getSupabase(env),{data:source}=await db.from("tkid_sources").select("allowed_origins,status,capture_mode").eq("public_source_id",sourceId).eq("status","active").maybeSingle();let normalized="";try{const u=new URL(origin||"");normalized=`${u.protocol}//${u.host}`}catch{}if(!source||!source.allowed_origins.includes(normalized))throw new TkidError("source_not_found","source unavailable",404);const now=new Date().toISOString();return json({journey_id:opaqueId(),browser_session_id:opaqueId(),started_at:now,journey_expires_at:journeyExpiry(now),browser_session_expires_at:browserSessionExpiry(now),privacy_mode:source.capture_mode,schema_version:1},200,{"access-control-allow-origin":normalized,"cache-control":"no-store"})}catch(e:any){const x=e instanceof TkidError?e:new TkidError("bootstrap_failed","TKID bootstrap unavailable",500);return json({ok:false,error:x.code,message:x.message},x.status)}
+    try {const sourceId=req.headers.get("x-tracekit-source")||"",origin=req.headers.get("origin"),db=getSupabase(env),{data:source}=await db.from("tkid_sources").select("allowed_origins,status,capture_mode").eq("public_source_id",sourceId).in("status",["shadow","active"]).maybeSingle();let normalized="";try{const u=new URL(origin||"");normalized=`${u.protocol}//${u.host}`}catch{}if(!source||!source.allowed_origins.includes(normalized))throw new TkidError("source_not_found","source unavailable",404);const now=new Date().toISOString();return json({journey_id:opaqueId(),browser_session_id:opaqueId(),started_at:now,journey_expires_at:journeyExpiry(now),browser_session_expires_at:browserSessionExpiry(now),privacy_mode:source.capture_mode,schema_version:1},200,{"access-control-allow-origin":normalized,"cache-control":"no-store"})}catch(e:any){const x=e instanceof TkidError?e:new TkidError("bootstrap_failed","TKID bootstrap unavailable",500);return json({ok:false,error:x.code,message:x.message},x.status)}
   }
   if (tkidRoute === "handoff") {
     try {
       if(!env.TRACEKIT_TKID_HANDOFF_SECRET)throw new TkidError("handoff_not_configured","handoff signing is unavailable",503);
       const body=await readJsonBody(req),sourceId=req.headers.get("x-tracekit-source")||"",db=getSupabase(env);
       const currentOrigin=new URL(req.headers.get("origin")||"").origin;
-      const {data:source}=await db.from("tkid_sources").select("id,organization_id,public_source_id,allowed_origins,status,capture_mode,rate_limit_per_minute,business_context_id").eq("public_source_id",sourceId).eq("status","active").maybeSingle();
+      const {data:source}=await db.from("tkid_sources").select("id,organization_id,public_source_id,allowed_origins,status,capture_mode,rate_limit_per_minute,business_context_id").eq("public_source_id",sourceId).in("status",["shadow","active"]).maybeSingle();
       if(!source||!source.allowed_origins.includes(currentOrigin))throw new TkidError("source_not_found","source unavailable",404);
+      await enforceTkidDistributedRequest(env,req,source,body.action==="issue"?"handoff_issue":"handoff_consume",Math.max(5,source.rate_limit_per_minute));
       const sourceModel={...source,organizationId:source.organization_id,businessContextId:source.business_context_id,publicSourceId:source.public_source_id,allowedOrigins:source.allowed_origins,rateLimitPerMinute:source.rate_limit_per_minute,captureMode:source.capture_mode};
       if(body.action==="issue"){
         const target=new URL(body.target_origin).origin;if(!source.allowed_origins.includes(target))throw new TkidError("origin_not_allowed","target origin is not approved",403);
@@ -15216,7 +15283,7 @@ async function router(req: Request, env: Env): Promise<Response> {
       const decoded=await validateHandoff(body.token,env.TRACEKIT_TKID_HANDOFF_SECRET,sourceModel,currentOrigin,new Set());
       const {data:claimed,error}=await db.from("tkid_handoffs").update({consumed_at:new Date().toISOString()}).eq("organization_id",source.organization_id).eq("id",decoded.handoffId).is("consumed_at",null).select("id").maybeSingle();if(error||!claimed)throw new TkidError("handoff_replayed","handoff was already consumed",409);
       return json({journey_id:decoded.journeyId,browser_session_id:decoded.browserSessionId},200,{"access-control-allow-origin":currentOrigin,"cache-control":"no-store"});
-    }catch(e:any){const x=e instanceof TkidError?e:new TkidError("handoff_failed","handoff could not be processed",400);return json({ok:false,error:x.code,message:x.message},x.status)}
+    }catch(e:any){const x=e instanceof TkidError?e:e instanceof TkidRateLimitError?new TkidError("rate_limited","TKID request rate limit exceeded",429):new TkidError(e?.code==="abuse_control_unavailable"?"abuse_control_unavailable":"handoff_failed",e?.code==="abuse_control_unavailable"?"TKID handoff is temporarily unavailable":"handoff could not be processed",e?.status||400);return json({ok:false,error:x.code,message:x.message},x.status,e?.retryAfter?{"retry-after":String(e.retryAfter)}:undefined)}
   }
   if (tkidRoute === "checkout_association") {
     const auth=adminAuthError(req,env);if(auth)return auth;try{const body=await readJsonBody(req),db=getSupabase(env);const {error}=await db.from("tkid_commerce_links").insert({organization_id:body.organization_id,journey_id:body.journey_id,checkout_session_id:body.checkout_session_id,canonical_order_id:body.canonical_order_id||null,provider_connection_id:body.provider_connection_id||null,provider_order_reference:body.provider_order_reference||null,charge_reference:body.charge_reference,parent_charge_reference:body.parent_charge_reference||null,sequence_position:body.sequence_position,relationship:body.relationship,provenance:"tkid_direct",linked_by:"server_checkout"});if(error)throw error;return json({ok:true,linked:true,provenance:"tkid_direct"},201)}catch{return json({ok:false,error:"checkout_association_failed",message:"Server checkout association failed"},400)}
@@ -15225,11 +15292,11 @@ async function router(req: Request, env: Env): Promise<Response> {
     try {
       const length=Number(req.headers.get("content-length")||0); if(length>32768) throw new TkidError("payload_too_large","payload exceeds 32 KiB",413);
       const publicSourceId=req.headers.get("x-tracekit-source")||"", origin=req.headers.get("origin"), db=getSupabase(env);
-      const {data:source,error:sourceError}=await db.from("tkid_sources").select("id,account_id,organization_id,business_context_id,public_source_id,allowed_origins,status,capture_mode,rate_limit_per_minute").eq("public_source_id",publicSourceId).eq("status","active").maybeSingle();
+      const {data:source,error:sourceError}=await db.from("tkid_sources").select("id,account_id,organization_id,business_context_id,public_source_id,allowed_origins,status,capture_mode,rate_limit_per_minute").eq("public_source_id",publicSourceId).in("status",["shadow","active"]).maybeSingle();
       if(sourceError||!source) throw new TkidError("source_not_found","source unavailable",404);
       let normalizedOrigin="";try{const parsed=new URL(origin||"");normalizedOrigin=`${parsed.protocol}//${parsed.host}`}catch{throw new TkidError("origin_not_allowed","origin is not approved",403)}
       if(!(source.allowed_origins||[]).includes(normalizedOrigin))throw new TkidError("origin_not_allowed","origin is not approved",403);
-      const rate=checkBrowserEventRateLimit({workspace_id:`tkid:${source.id}`,request_hash:normalizedOrigin,limit_per_minute:source.rate_limit_per_minute});if(!rate.ok)throw new TkidError("rate_limited","source rate limit exceeded",429);
+      await enforceTkidDistributedRequest(env,req,source,"event_accepted",source.rate_limit_per_minute);
       const rawEvents=validateBatch(await readJsonBody(req)),receivedAt=new Date().toISOString();let accepted=0,duplicates=0;
       for(const raw of rawEvents){const event=await normalizeEvent(raw,receivedAt);if(event.privacy_mode==="analytics_allowed"&&source.capture_mode!=="analytics_allowed")throw new TkidError("privacy_mode_not_allowed","source permits essential events only",403);
         const {data:existing}=await db.from("tkid_event_evidence").select("evidence_hash").eq("organization_id",source.organization_id).eq("event_id",event.event_id).maybeSingle();if(existing){if(existing.evidence_hash!==event.evidence_hash)throw new TkidError("event_id_conflict","event_id payload differs",409);duplicates++;continue}
@@ -15240,7 +15307,7 @@ async function router(req: Request, env: Env): Promise<Response> {
         const bounded={...event};delete (bounded as any).evidence_hash;const {data:evidence,error:evidenceError}=await db.from("tkid_event_evidence").insert({organization_id:source.organization_id,source_id:source.id,event_id:event.event_id,evidence_hash:event.evidence_hash,schema_version:event.schema_version,bounded_payload:bounded,received_at:receivedAt}).select("id").single();if(evidenceError)throw evidenceError;
         const {price,error:clientError,...base}=event;const {error:eventError}=await db.from("tkid_events").insert({...base,id:event.event_id,organization_id:source.organization_id,source_id:source.id,evidence_id:evidence.id,price_amount:price?.amount,currency:price?.currency,billing_cadence:price?.billing_cadence,recurring:price?.recurring,trial_state:price?.trial_state,error_code:clientError?.code,error_category:clientError?.category});if(eventError)throw eventError;accepted++}
       return json({ok:true,accepted,duplicates,rejected:0},202,{"access-control-allow-origin":normalizedOrigin,"cache-control":"no-store"});
-    } catch(e:any){const error=e instanceof TkidError?e:new TkidError("ingestion_failed","TKID Evidence could not be accepted",500);return json({ok:false,error:error.code,message:error.message},error.status)}
+    } catch(e:any){const error=e instanceof TkidError?e:e instanceof TkidRateLimitError?new TkidError("rate_limited","TKID request rate limit exceeded",429):new TkidError(e?.code==="abuse_control_unavailable"?"abuse_control_unavailable":"ingestion_failed",e?.code==="abuse_control_unavailable"?"TKID collection is temporarily unavailable":"TKID Evidence could not be accepted",e?.status||500);return json({ok:false,error:error.code,message:error.message},error.status,e?.retryAfter?{"retry-after":String(e.retryAfter)}:undefined)}
   }
   const browserRoute = matchBrowserEventRoute(req.method, path);
   const browserPath = browserRoute?.path || path;
@@ -21905,6 +21972,23 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 
 		  for (const msg of batch.messages) {
 		    const body = msg.body || {};
+		    if (body.schema_version === 1 && /^commerce_(continuous|deep_reconciliation)$/.test(String(body.job_type || ""))) {
+		      const repository = getContinuousCommerceAdapterRepository(env);
+		      const outcome = await consumeCommerceMessage({
+		        value: body,
+		        repository,
+		        runtime: {
+		          async run(message) {
+		            if (!env.CONTINUOUS_COMMERCE_RUNTIME) throw Object.assign(new Error("continuous_runtime_binding_missing"), { code: "invalid_configuration" });
+		            const response = await env.CONTINUOUS_COMMERCE_RUNTIME.fetch("https://continuous-runtime.internal/v1/commerce/sync", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(message) });
+		            if (!response.ok) throw Object.assign(new Error(`continuous_runtime_${response.status}`), { code: response.status === 429 ? "429" : response.status >= 500 ? "runtime_timeout" : "invalid_runtime_request" });
+		            return await response.json() as { status: "completed" | "completed_with_warnings"; providerRequests: number };
+		          },
+		        },
+		      });
+		      if (outcome.retry) msg.retry(); else msg.ack();
+		      continue;
+		    }
 		    const runtimeTaskId = String(body.runtime_task_id ?? body.task_id ?? "").trim();
 
 			console.log("[WowBoost Queue] MESSAGE BODY", body);
@@ -22791,6 +22875,13 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 },
 
   async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+    if (env.continuous_commerce) {
+      ctx.waitUntil(runCommerceCron({
+        now: new Date().toISOString(),
+        repository: getContinuousCommerceAdapterRepository(env),
+        queue: { send: async (message) => { await env.continuous_commerce!.send(message); } },
+      }).catch((error) => console.error("[TraceKit] continuous commerce cron failed", { code: "scheduler_failure", message: String(error?.message || error) })));
+    }
     ctx.waitUntil(runScheduledCheckoutChampImport(env));
     ctx.waitUntil(runScheduledShopifyImport(env));
     ctx.waitUntil(runScheduledPaypalImport(env));

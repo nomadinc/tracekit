@@ -8,6 +8,9 @@ compatibility_date = "2024-06-20"
   SUPABASE_SERVICE_ROLE_KEY = ""
   TRACEKIT_ROOT_DOMAIN = "buyecowatt.com"
   TRACEKIT_AUTO_LINK_OUTBOUND = "true"
+  TRACEKIT_COMMERCE_SCHEDULER_ENABLED = "false"
+  TRACEKIT_COMMERCE_KILL_SWITCH = "disabled"
+  TRACEKIT_TKID_ERASURE_EXECUTOR_ENABLED = "false"
   INTEGRATIONS_ENC_KEY = ""
   
   [[queues.producers]]
@@ -19,10 +22,26 @@ queue = "wowboost-imports"
 max_batch_size = 1
 max_batch_timeout = 5
 max_retries = 10
+
+# Phase 2.8 Continuous Commerce orchestration. The binding may be deployed,
+# but the database control and environment switch both default disabled.
+[[queues.producers]]
+queue = "continuous-commerce"
+binding = "continuous_commerce"
+
+[[queues.consumers]]
+queue = "continuous-commerce"
+max_batch_size = 1
+max_batch_timeout = 5
+max_retries = 5
   
 
 [triggers]
 crons = ["0 * * * *"] # every hour
+
+# Phase 2.8 note: this existing trigger is not authorization to run Continuous
+# Commas or TKID. Production-intelligence jobs must pass the database capability
+# controls and server-only configuration validator; their controls deploy disabled.
 
 # Required Cloudflare Worker secrets:
 # - SUPABASE_SERVICE_ROLE_KEY
@@ -30,6 +49,9 @@ crons = ["0 * * * *"] # every hour
 # - EVERFLOW_INGEST_TOKEN
 # - INTEGRATIONS_ENC_KEY
 # - TK_SECRET_KEY
+# - TKID_HANDOFF_SIGNING_KEY_CURRENT (separate key; referenced by TKID handoff key metadata)
+# - TKID_HANDOFF_SIGNING_KEY_PREVIOUS (rotation window only)
+# - OPERATIONAL_ALERT_DESTINATION (when an approved existing destination is selected)
 #
 # Set each with:
 # npx wrangler secret put SECRET_NAME
