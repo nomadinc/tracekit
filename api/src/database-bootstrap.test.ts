@@ -175,7 +175,7 @@ test("migration filenames are unique and numerically ordered", () => {
   const numbers = names.map((name) => name.slice(0, 3));
 
   assert.equal(new Set(numbers).size, numbers.length);
-  assert.deepEqual(numbers, Array.from({ length: 55 }, (_, index) => String(index).padStart(3, "0")));
+  assert.deepEqual(numbers, Array.from({ length: 56 }, (_, index) => String(index).padStart(3, "0")));
 });
 
 test("schema provenance exports contain metadata headers and no known secret material", () => {
@@ -353,5 +353,13 @@ test("commerce control-plane migration remains additive and server-only", () => 
   assert.match(migration054,/lifecycle_status text not null default 'pending'/);
   assert.match(migration054,/revoke all on public\.tkid_source_origins,public\.tkid_origin_verifications from anon,authenticated/);
   assert.doesNotMatch(migration054,/insert into public\.commerce_repository_activation/);
+
+  const migration055 = migration("055_tkid_continuity_relay_v1.sql").toLowerCase();
+  for (const table of ["tkid_relay_flows","tkid_relay_continuities","tkid_relay_events"]) assert.match(migration055,new RegExp(`create table public\\.${table}`));
+  assert.match(migration055,/status text not null default 'draft'/);
+  assert.match(migration055,/tkid_relay_one_open_browser_flow_uidx/);
+  assert.match(migration055,/erase_tkid_relay_on_journey_tombstone/);
+  assert.match(migration055,/revoke all on public\.tkid_relay_flows,public\.tkid_relay_continuities,public\.tkid_relay_events from anon,authenticated/);
+  assert.doesNotMatch(migration055,/insert into public\.commerce_repository_activation/);
 
 });
