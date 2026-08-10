@@ -1,6 +1,7 @@
 name = "tracekit-api"
 main = "src/index.ts"
 compatibility_date = "2024-06-20"
+routes = [{ pattern = "journey.trace-kit.io", custom_domain = true }]
 
 
 [vars]
@@ -12,6 +13,7 @@ compatibility_date = "2024-06-20"
   TRACEKIT_COMMERCE_KILL_SWITCH = "disabled"
   TRACEKIT_TKID_ERASURE_EXECUTOR_ENABLED = "false"
   TRACEKIT_TKID_RELAY_ENABLED = "false"
+  TRACEKIT_TKID_RELAY_ORIGIN = "https://journey.trace-kit.io"
   INTEGRATIONS_ENC_KEY = ""
   
   [[queues.producers]]
@@ -52,6 +54,7 @@ crons = ["0 * * * *"] # every hour
 # - TK_SECRET_KEY
 # - TKID_HANDOFF_SIGNING_KEY_CURRENT (separate key; referenced by TKID handoff key metadata)
 # - TKID_HANDOFF_SIGNING_KEY_PREVIOUS (rotation window only)
+# - TRACEKIT_TKID_HANDOFF_SECRET (current v1 runtime binding; server-only, never a plain var)
 # - OPERATIONAL_ALERT_DESTINATION (when an approved existing destination is selected)
 #
 # Set each with:

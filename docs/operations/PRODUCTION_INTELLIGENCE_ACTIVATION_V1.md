@@ -95,7 +95,11 @@ Public browser-safe values are the pinned SDK URL/version and opaque public sour
 
 ## Migration, deployment, rollback, and activation order
 
-Production migration expectation must be verified rather than assumed. Apply missing additive migrations in numeric order through 053 only after backup/change approval. Validate extensions, RLS/grants, tenant FKs, private `commerce-evidence` bucket, object/MIME limits, hashes, and zero activation rows. Prefer a forward fix; destructive rollback is not assumed safe.
+The proposed continuity host is the exact Cloudflare Worker custom domain `https://journey.trace-kit.io`. It shares the existing API Worker, but host routing exposes only the minimal root status and `/v1/tkid/relay/*`; it does not expose the shared Worker's other APIs. The root response sets no continuity cookie and reports relay execution disabled without tenant, binding, or database details. `TRACEKIT_TKID_RELAY_ORIGIN=https://journey.trace-kit.io` is server configuration and `TRACEKIT_TKID_RELAY_ENABLED=false` is mandatory on initial deployment. Cloudflare manages DNS and TLS for the exact custom domain—no wildcard—and responses retain HSTS, no-referrer, nosniff, no-store, and non-rendering CSP headers.
+
+Host deployment currently requires the existing `continuous-commerce` Queue binding to exist even though Commerce scheduling remains disabled. Do not create that shared production resource under a relay-only change without its separate operational approval. A production TKID handoff signing secret and confirmed remote migrations through 055 are also prerequisites for relay activation, not for disabled host health. Commas return configuration changes only after host health, flow configuration, managed-origin activation, and a separate review.
+
+Production migration expectation must be verified rather than assumed. Apply missing additive migrations in numeric order through 055 only after backup/change approval. Validate extensions, RLS/grants, tenant FKs, private `commerce-evidence` bucket, object/MIME limits, hashes, and zero activation rows. Prefer a forward fix; destructive rollback is not assumed safe.
 
 Deploy only an approved branch/commit and green build after migrations. Supply server configuration/secrets, deploy Worker/API/UI with Commerce/TKID controls disabled, smoke-test health/readiness and unauthorized access, then separately approve activation. Deployment must not alter remote schedules/source states.
 

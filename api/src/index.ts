@@ -15277,9 +15277,13 @@ async function relayEvidence(db:any,continuity:any,eventName:string){await db.fr
 async function router(req: Request, env: Env): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname;
+  let configuredRelayOrigin:string|null=null;try{configuredRelayOrigin=env.TRACEKIT_TKID_RELAY_ORIGIN?relayHost(env.TRACEKIT_TKID_RELAY_ORIGIN,env.TRACEKIT_ENVIRONMENT==="production"):null}catch{}
+  const relayHostRequest=configuredRelayOrigin!==null&&url.origin===configuredRelayOrigin;
+  if(relayHostRequest&&path==="/"&&req.method==="GET")return new Response(JSON.stringify({service:"TraceKit Journey Relay",status:"available",relay:env.TRACEKIT_TKID_RELAY_ENABLED==="true"?"available":"disabled"}),{status:200,headers:{"content-type":"application/json; charset=utf-8",...relaySecurityHeaders()}});
+  if(relayHostRequest&&!path.startsWith("/v1/tkid/relay/"))return new Response(JSON.stringify({ok:false,error:"not_found"}),{status:404,headers:{"content-type":"application/json; charset=utf-8",...relaySecurityHeaders()}});
   const relayMatch=path.match(/^\/v1\/tkid\/relay\/(initiate|out|return)\/([a-z0-9][a-z0-9_-]{2,63})$/);
   if(relayMatch){
-    const action=relayMatch[1],flowKey=relayMatch[2],db=getSupabase(env),configuredOrigin=env.TRACEKIT_TKID_RELAY_ORIGIN?relayHost(env.TRACEKIT_TKID_RELAY_ORIGIN,env.TRACEKIT_ENVIRONMENT==="production"):null;
+    const action=relayMatch[1],flowKey=relayMatch[2],db=getSupabase(env),configuredOrigin=configuredRelayOrigin;
     if(env.TRACEKIT_TKID_RELAY_ENABLED!=="true"||!configuredOrigin||url.origin!==configuredOrigin)return json({ok:false,error:"relay_unavailable",message:"Continuity relay is unavailable."},404,relaySecurityHeaders());
     const flow=await relayFlow(db,flowKey);if(!flow||flow.status!=="enabled")return json({ok:false,error:"relay_unavailable",message:"Continuity relay is unavailable."},404,relaySecurityHeaders());
     let checkoutDestination:string;try{checkoutDestination=configuredCheckout(flow.checkout_destination,[flow.checkout_host])}catch{return json({ok:false,error:"relay_unavailable",message:"Continuity relay is unavailable."},404,relaySecurityHeaders())}
