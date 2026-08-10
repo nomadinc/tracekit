@@ -343,6 +343,7 @@ import {
   serializeBrowserEventCursor,
   type BrowserRawEventRow,
 } from "./browser-events";
+import { matchTkidRoute, normalizeEvent, validateBatch, TkidError, opaqueId, journeyExpiry, browserSessionExpiry, issueHandoff, validateHandoff, sha256 } from "./tkid";
 import {
   PaypalApiError,
   buildPaypalLedgerEventsFromRecord,
@@ -522,6 +523,7 @@ type Env = {
   TRACEKIT_BROWSER_ALLOWED_ORIGINS?: string;
   TRACEKIT_BROWSER_RATE_LIMIT_PER_MINUTE?: string;
   TRACEKIT_BROWSER_IP_HASH_SALT?: string;
+  TRACEKIT_TKID_HANDOFF_SECRET?: string;
   LIVE_WORKSPACE_PROJECTION_BATCH_SIZE?: string;
   LIVE_WORKSPACE_PROJECTION_MAX_EVENTS?: string;
   LIVE_WORKSPACE_PROJECTION_MAX_WORKSPACES?: string;
@@ -15191,6 +15193,55 @@ async function rebuildCustomerProfiles(env: Env) {
 async function router(req: Request, env: Env): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname;
+  const tkidRoute = matchTkidRoute(req.method, path);
+  if (req.method === "OPTIONS" && path.startsWith("/v1/tkid/")) {const origin=req.headers.get("origin")||"",sourceId=req.headers.get("x-tracekit-source")||"",{data:source}=await getSupabase(env).from("tkid_sources").select("allowed_origins,status").eq("public_source_id",sourceId).eq("status","active").maybeSingle();let normalized="";try{const u=new URL(origin);normalized=`${u.protocol}//${u.host}`}catch{}const allowed=Boolean(source&&(source.allowed_origins||[]).includes(normalized));return new Response(null,{status:allowed?204:403,headers:{...(allowed?{"access-control-allow-origin":normalized}:{}),"access-control-allow-methods":"POST, OPTIONS","access-control-allow-headers":"content-type, x-tracekit-source","vary":"origin"}})}
+  if (tkidRoute === "method_not_allowed") return json({ok:false,error:"method_not_allowed"},405,{Allow:"POST"});
+  if (tkidRoute === "bootstrap") {
+    try {const sourceId=req.headers.get("x-tracekit-source")||"",origin=req.headers.get("origin"),db=getSupabase(env),{data:source}=await db.from("tkid_sources").select("allowed_origins,status,capture_mode").eq("public_source_id",sourceId).eq("status","active").maybeSingle();let normalized="";try{const u=new URL(origin||"");normalized=`${u.protocol}//${u.host}`}catch{}if(!source||!source.allowed_origins.includes(normalized))throw new TkidError("source_not_found","source unavailable",404);const now=new Date().toISOString();return json({journey_id:opaqueId(),browser_session_id:opaqueId(),started_at:now,journey_expires_at:journeyExpiry(now),browser_session_expires_at:browserSessionExpiry(now),privacy_mode:source.capture_mode,schema_version:1},200,{"access-control-allow-origin":normalized,"cache-control":"no-store"})}catch(e:any){const x=e instanceof TkidError?e:new TkidError("bootstrap_failed","TKID bootstrap unavailable",500);return json({ok:false,error:x.code,message:x.message},x.status)}
+  }
+  if (tkidRoute === "handoff") {
+    try {
+      if(!env.TRACEKIT_TKID_HANDOFF_SECRET)throw new TkidError("handoff_not_configured","handoff signing is unavailable",503);
+      const body=await readJsonBody(req),sourceId=req.headers.get("x-tracekit-source")||"",db=getSupabase(env);
+      const currentOrigin=new URL(req.headers.get("origin")||"").origin;
+      const {data:source}=await db.from("tkid_sources").select("id,organization_id,public_source_id,allowed_origins,status,capture_mode,rate_limit_per_minute,business_context_id").eq("public_source_id",sourceId).eq("status","active").maybeSingle();
+      if(!source||!source.allowed_origins.includes(currentOrigin))throw new TkidError("source_not_found","source unavailable",404);
+      const sourceModel={...source,organizationId:source.organization_id,businessContextId:source.business_context_id,publicSourceId:source.public_source_id,allowedOrigins:source.allowed_origins,rateLimitPerMinute:source.rate_limit_per_minute,captureMode:source.capture_mode};
+      if(body.action==="issue"){
+        const target=new URL(body.target_origin).origin;if(!source.allowed_origins.includes(target))throw new TkidError("origin_not_allowed","target origin is not approved",403);
+        const handoffId=opaqueId(),expiresAt=new Date(Date.now()+5*60_000).toISOString(),input={handoffId,journeyId:body.journey_id,browserSessionId:body.browser_session_id,sourceId:source.id,targetOrigin:target,expiresAt},token=await issueHandoff(input,env.TRACEKIT_TKID_HANDOFF_SECRET);
+        const {error}=await db.from("tkid_handoffs").insert({id:handoffId,organization_id:source.organization_id,source_id:source.id,journey_id:body.journey_id,browser_session_id:body.browser_session_id,issued_origin:currentOrigin,target_origin:target,issued_at:new Date().toISOString(),expires_at:expiresAt,token_digest:await sha256(token)});if(error)throw error;
+        return json({token,expires_at:expiresAt,target_origin:target},200,{"access-control-allow-origin":currentOrigin,"cache-control":"no-store"});
+      }
+      const decoded=await validateHandoff(body.token,env.TRACEKIT_TKID_HANDOFF_SECRET,sourceModel,currentOrigin,new Set());
+      const {data:claimed,error}=await db.from("tkid_handoffs").update({consumed_at:new Date().toISOString()}).eq("organization_id",source.organization_id).eq("id",decoded.handoffId).is("consumed_at",null).select("id").maybeSingle();if(error||!claimed)throw new TkidError("handoff_replayed","handoff was already consumed",409);
+      return json({journey_id:decoded.journeyId,browser_session_id:decoded.browserSessionId},200,{"access-control-allow-origin":currentOrigin,"cache-control":"no-store"});
+    }catch(e:any){const x=e instanceof TkidError?e:new TkidError("handoff_failed","handoff could not be processed",400);return json({ok:false,error:x.code,message:x.message},x.status)}
+  }
+  if (tkidRoute === "checkout_association") {
+    const auth=adminAuthError(req,env);if(auth)return auth;try{const body=await readJsonBody(req),db=getSupabase(env);const {error}=await db.from("tkid_commerce_links").insert({organization_id:body.organization_id,journey_id:body.journey_id,checkout_session_id:body.checkout_session_id,canonical_order_id:body.canonical_order_id||null,provider_connection_id:body.provider_connection_id||null,provider_order_reference:body.provider_order_reference||null,charge_reference:body.charge_reference,parent_charge_reference:body.parent_charge_reference||null,sequence_position:body.sequence_position,relationship:body.relationship,provenance:"tkid_direct",linked_by:"server_checkout"});if(error)throw error;return json({ok:true,linked:true,provenance:"tkid_direct"},201)}catch{return json({ok:false,error:"checkout_association_failed",message:"Server checkout association failed"},400)}
+  }
+  if (tkidRoute === "ingest") {
+    try {
+      const length=Number(req.headers.get("content-length")||0); if(length>32768) throw new TkidError("payload_too_large","payload exceeds 32 KiB",413);
+      const publicSourceId=req.headers.get("x-tracekit-source")||"", origin=req.headers.get("origin"), db=getSupabase(env);
+      const {data:source,error:sourceError}=await db.from("tkid_sources").select("id,account_id,organization_id,business_context_id,public_source_id,allowed_origins,status,capture_mode,rate_limit_per_minute").eq("public_source_id",publicSourceId).eq("status","active").maybeSingle();
+      if(sourceError||!source) throw new TkidError("source_not_found","source unavailable",404);
+      let normalizedOrigin="";try{const parsed=new URL(origin||"");normalizedOrigin=`${parsed.protocol}//${parsed.host}`}catch{throw new TkidError("origin_not_allowed","origin is not approved",403)}
+      if(!(source.allowed_origins||[]).includes(normalizedOrigin))throw new TkidError("origin_not_allowed","origin is not approved",403);
+      const rate=checkBrowserEventRateLimit({workspace_id:`tkid:${source.id}`,request_hash:normalizedOrigin,limit_per_minute:source.rate_limit_per_minute});if(!rate.ok)throw new TkidError("rate_limited","source rate limit exceeded",429);
+      const rawEvents=validateBatch(await readJsonBody(req)),receivedAt=new Date().toISOString();let accepted=0,duplicates=0;
+      for(const raw of rawEvents){const event=await normalizeEvent(raw,receivedAt);if(event.privacy_mode==="analytics_allowed"&&source.capture_mode!=="analytics_allowed")throw new TkidError("privacy_mode_not_allowed","source permits essential events only",403);
+        const {data:existing}=await db.from("tkid_event_evidence").select("evidence_hash").eq("organization_id",source.organization_id).eq("event_id",event.event_id).maybeSingle();if(existing){if(existing.evidence_hash!==event.evidence_hash)throw new TkidError("event_id_conflict","event_id payload differs",409);duplicates++;continue}
+        const expiresAt=new Date(Date.parse(event.occurred_at)+2*60*60*1000).toISOString(),sessionExpires=new Date(Date.parse(event.occurred_at)+30*60*1000).toISOString();
+        const {error:journeyError}=await db.from("tkid_journeys").upsert({id:event.journey_id,account_id:source.account_id,organization_id:source.organization_id,business_context_id:source.business_context_id,source_id:source.id,started_at:event.occurred_at,expires_at:expiresAt,privacy_mode:event.privacy_mode,source_version:"tkid-sdk-v1",normalizer_version:event.normalizer_version},{onConflict:"organization_id,id",ignoreDuplicates:true});if(journeyError)throw journeyError;
+        const {error:sessionError}=await db.from("tkid_browser_sessions").upsert({id:event.browser_session_id,organization_id:source.organization_id,journey_id:event.journey_id,source_id:source.id,started_at:event.occurred_at,last_seen_at:event.occurred_at,expires_at:sessionExpires},{onConflict:"organization_id,id",ignoreDuplicates:true});if(sessionError)throw sessionError;
+        if(event.checkout_session_id){const {error}=await db.from("tkid_checkout_sessions").upsert({id:event.checkout_session_id,organization_id:source.organization_id,journey_id:event.journey_id,browser_session_id:event.browser_session_id,source_id:source.id,started_at:event.occurred_at,state:event.event_name==="checkout_submitted"?"submitted":"started"},{onConflict:"organization_id,id",ignoreDuplicates:true});if(error)throw error}
+        const bounded={...event};delete (bounded as any).evidence_hash;const {data:evidence,error:evidenceError}=await db.from("tkid_event_evidence").insert({organization_id:source.organization_id,source_id:source.id,event_id:event.event_id,evidence_hash:event.evidence_hash,schema_version:event.schema_version,bounded_payload:bounded,received_at:receivedAt}).select("id").single();if(evidenceError)throw evidenceError;
+        const {price,error:clientError,...base}=event;const {error:eventError}=await db.from("tkid_events").insert({...base,id:event.event_id,organization_id:source.organization_id,source_id:source.id,evidence_id:evidence.id,price_amount:price?.amount,currency:price?.currency,billing_cadence:price?.billing_cadence,recurring:price?.recurring,trial_state:price?.trial_state,error_code:clientError?.code,error_category:clientError?.category});if(eventError)throw eventError;accepted++}
+      return json({ok:true,accepted,duplicates,rejected:0},202,{"access-control-allow-origin":normalizedOrigin,"cache-control":"no-store"});
+    } catch(e:any){const error=e instanceof TkidError?e:new TkidError("ingestion_failed","TKID Evidence could not be accepted",500);return json({ok:false,error:error.code,message:error.message},error.status)}
+  }
   const browserRoute = matchBrowserEventRoute(req.method, path);
   const browserPath = browserRoute?.path || path;
 

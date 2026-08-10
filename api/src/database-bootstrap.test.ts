@@ -175,7 +175,7 @@ test("migration filenames are unique and numerically ordered", () => {
   const numbers = names.map((name) => name.slice(0, 3));
 
   assert.equal(new Set(numbers).size, numbers.length);
-  assert.deepEqual(numbers, Array.from({ length: 51 }, (_, index) => String(index).padStart(3, "0")));
+  assert.deepEqual(numbers, Array.from({ length: 52 }, (_, index) => String(index).padStart(3, "0")));
 });
 
 test("schema provenance exports contain metadata headers and no known secret material", () => {
@@ -325,5 +325,11 @@ test("commerce control-plane migration remains additive and server-only", () => 
   assert.match(migration050, /enqueue_commerce_continuous_sync/);
   assert.match(migration050, /mark_investigation_new_evidence/);
   assert.doesNotMatch(migration050, /insert into public\.commerce_repository_activation/);
+
+  const migration051 = migration("051_tkid_journey_evidence_v1.sql").toLowerCase();
+  for (const table of ["tkid_sources","tkid_journeys","tkid_browser_sessions","tkid_checkout_sessions","tkid_event_evidence","tkid_events","tkid_commerce_links","tkid_handoffs"]) assert.match(migration051,new RegExp(`create table public\\.${table}`));
+  assert.match(migration051,/revoke all on public\.%i from anon,authenticated/);
+  assert.match(migration051,/linked_by='server_checkout'/);
+  assert.doesNotMatch(migration051,/insert into public\.commerce_repository_activation/);
 
 });
