@@ -11,6 +11,7 @@ compatibility_date = "2024-06-20"
   TRACEKIT_COMMERCE_SCHEDULER_ENABLED = "false"
   TRACEKIT_COMMERCE_KILL_SWITCH = "disabled"
   TRACEKIT_TKID_ERASURE_EXECUTOR_ENABLED = "false"
+  TRACEKIT_TKID_RELAY_ENABLED = "false"
   INTEGRATIONS_ENC_KEY = ""
   
   [[queues.producers]]

@@ -1,4 +1,4 @@
-export type TkidAbuseClass="event_accepted"|"event_invalid"|"handoff_issue"|"handoff_consume"|"checkout_association"|"transport";
+export type TkidAbuseClass="event_accepted"|"event_invalid"|"handoff_issue"|"handoff_consume"|"checkout_association"|"transport"|"relay_out"|"relay_return";
 export type DistributedCounterResult={allowed:boolean;count:number;limit:number;resetAt:string};
 export type DistributedCounterStore={consume(input:{organizationId:string;sourceId:string;rateClass:TkidAbuseClass;keyHash:string;limit:number;windowSeconds:number;now:string}):Promise<DistributedCounterResult>};
 export class TkidRateLimitError extends Error{code="rate_limited";status=429;retryAfter:number;constructor(retryAfter:number){super("TKID request rate limit exceeded.");this.retryAfter=retryAfter}}
