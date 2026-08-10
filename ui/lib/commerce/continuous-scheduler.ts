@@ -1,11 +1,13 @@
 export type ContinuousSchedule = {
-  id:string; enabled:boolean; nextOverlapAt:string|null; nextDeepReconciliationAt:string|null;
+  id:string; enabled:boolean; activationState?:"disabled"|"ready"|"enabled"|"paused";
+  globalAllowed?:boolean; connectionPaused?:boolean;
+  nextOverlapAt:string|null; nextDeepReconciliationAt:string|null;
 };
 
 export type ScheduledJobKind = "continuous"|"deep_reconciliation";
 
 export function eligibleScheduledJobs(schedule:ContinuousSchedule,now=new Date()):ScheduledJobKind[] {
-  if(!schedule.enabled)return [];
+  if(!schedule.enabled||schedule.activationState&&schedule.activationState!=="enabled"||schedule.globalAllowed===false||schedule.connectionPaused===true)return [];
   const due=(value:string|null)=>Boolean(value&&Date.parse(value)<=now.getTime());
   if(due(schedule.nextDeepReconciliationAt))return ["deep_reconciliation"];
   if(due(schedule.nextOverlapAt))return ["continuous"];

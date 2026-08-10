@@ -82,6 +82,14 @@ test("scheduler prioritizes due deep reconciliation and ignores disabled schedul
   assert.deepEqual(jobs,["s:deep_reconciliation"]);
 });
 
+test("production scheduler requires explicit activation and honors global and Connection kill switches",()=>{
+  const due={id:"s",enabled:true,activationState:"enabled" as const,globalAllowed:true,connectionPaused:false,nextOverlapAt:"2026-08-08T11:00:00Z",nextDeepReconciliationAt:null};
+  assert.deepEqual(eligibleScheduledJobs(due,new Date("2026-08-08T12:00:00Z")),["continuous"]);
+  assert.deepEqual(eligibleScheduledJobs({...due,activationState:"ready"},new Date("2026-08-08T12:00:00Z")),[]);
+  assert.deepEqual(eligibleScheduledJobs({...due,globalAllowed:false},new Date("2026-08-08T12:00:00Z")),[]);
+  assert.deepEqual(eligibleScheduledJobs({...due,connectionPaused:true},new Date("2026-08-08T12:00:00Z")),[]);
+});
+
 test("zero-change boundary is a completed outcome",()=>{
   const stable={...initial(),consecutiveStableKnownPages:2,pagesScanned:2};
   const result=continuousStopDecision({state:stable,ordering:"newest_first",page:2,totalPages:745,maxPages:8,rateLimitRemaining:9900});
