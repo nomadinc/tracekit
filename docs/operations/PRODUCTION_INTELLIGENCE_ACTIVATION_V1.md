@@ -154,3 +154,49 @@ Abort without taking a backup if new messages continue arriving, a continuation
 cannot converge, webhook delivery could be lost, a database writer remains, a long
 transaction or blocking lock exists, health degrades, or the migration ledger
 changes unexpectedly.
+
+### Database quiescence telemetry
+
+`public.get_database_quiescence_state(integer)` is a service-only, aggregate-only
+catalog inspection function. Its threshold defaults to 30 seconds and accepts
+values from 1 through 3600 seconds. It returns no SQL, PIDs, roles, client
+addresses, relation names, or application data. `active_transactions` is
+deliberately conservative: it counts every other active client backend with a
+transaction rather than claiming PostgreSQL can prove which transactions wrote.
+The function excludes its own inspection backend. `access_exclusive_locks` counts
+database-local `AccessExclusiveLock` entries as a bounded DDL-risk signal; it is
+not a claim that PostgreSQL exposes a perfect classification of every DDL command.
+
+Only `service_role` may execute the function. `PUBLIC`, `anon`, and
+`authenticated` are explicitly denied. The safe operator call is an authenticated
+service-only RPC invocation of `get_database_quiescence_state` with
+`{"p_long_transaction_seconds":30}`; credentials and the raw HTTP response must
+not be logged. A direct administrative SQL session may instead run:
+
+```sql
+select * from public.get_database_quiescence_state(30);
+```
+
+The database is only one layer of the backup gate. All of the following must hold
+for the approved observation window:
+
+- maintenance gate is active;
+- Queue backlog and bytes are zero, with no oldest message;
+- Connector Runtime queued, running, retrying, future-available, and
+  future-enqueue-capable counts are zero;
+- database active transactions, idle-in-transaction sessions, long transactions,
+  blocked sessions, blocking sessions, and AccessExclusive locks are zero;
+- project health is `ACTIVE_HEALTHY`; and
+- the migration ledger remains at the approved boundary.
+
+Terminal failed/exhausted Connector tasks do not block quiescence when they cannot
+enqueue future work, but operators must inventory them before maintenance and must
+not silently delete or retry them.
+
+Production currently ends at migration 032, so normal ordered migration tooling
+cannot install migration 056 before migrations 033–055. Do not repair or skip the
+ledger. Before the migration gap is applied, the exact function DDL from migration
+056 requires a separate, explicit temporary-operational-SQL approval. That direct
+installation must not insert migration 056 into the ledger. Migration 056 later
+converges through `CREATE OR REPLACE FUNCTION` in normal order and reapplies the
+same owner and grants.
