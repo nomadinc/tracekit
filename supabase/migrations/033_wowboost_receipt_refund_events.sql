@@ -105,6 +105,8 @@ end;
 $$;
 
 revoke all on function public.insert_wowsuite_refund_events(jsonb) from public;
+revoke all on function public.insert_wowsuite_refund_events(jsonb) from anon;
+revoke all on function public.insert_wowsuite_refund_events(jsonb) from authenticated;
 grant execute on function public.insert_wowsuite_refund_events(jsonb) to service_role;
 
 comment on function public.insert_wowsuite_refund_events(jsonb) is

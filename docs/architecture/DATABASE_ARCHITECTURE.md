@@ -167,11 +167,11 @@ For unresolved legacy tables, column, constraint, index, sequence, trigger, poli
 | Category | Baseline ownership | Later tracked ownership | Intentional difference |
 |---|---|---|---|
 | Columns | 38 legacy ledger columns through `connector_id` | 035 adds six processor/chargeback diagnostic fields | None |
-| Constraints | UUID primary key and `conversions_ledger_type_check` | None identified | The hosted CHECK predates tracked migrations but does not include migration-035 reversal labels; future additive review required |
+| Constraints | UUID primary key and `conversions_ledger_type_check` | 035 converges the ledger-type CHECK to preserve all legacy values and add chargeback reversal labels | The hosted CHECK predates tracked migrations and is intentionally replaced during Batch 1 |
 | Indexes | PK plus 17 exported legacy indexes | 033 adds WowSuite refund uniqueness; 034 adds financial-issue range; 035 adds three chargeback indexes; 036 adds two reconciliation indexes | Duplicate legacy order/transaction/TKID indexes preserved as exported evidence |
 | Sequences | None | None | None |
 | RLS/policies/triggers | RLS disabled; no policies; no triggers | None identified | None |
-| Grants | Server role retained | None identified | Hosted broad anon/authenticated grants intentionally omitted |
+| Grants | Server role retained | 033 and 035 explicitly revoke direct browser-role execution on their ingestion RPCs and retain `service_role` | Hosted broad anon/authenticated grants are actively removed during Batch 1 |
 | Dependencies | Hosted `everflow_vs_backend` view depends on the table | No tracked owner or definition | Not placed in Migration Zero because tracked replay does not require it and its definition was not exported |
 
 ### Migration 036 compatibility repair
