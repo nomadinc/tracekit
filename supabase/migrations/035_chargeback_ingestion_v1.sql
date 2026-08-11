@@ -13,6 +13,33 @@ alter table if exists public.conversions
   add column if not exists source_direction text,
   add column if not exists diagnostic_flags text[] not null default '{}'::text[];
 
+-- The legacy conversions constraint predates chargeback reversal ingestion.
+-- Replace it with the complete canonical ledger vocabulary so the RPC below
+-- cannot accept an event that the table subsequently rejects.
+alter table public.conversions
+  drop constraint if exists conversions_ledger_type_check;
+
+alter table public.conversions
+  add constraint conversions_ledger_type_check check (
+    ledger_type = any (array[
+      'sale'::text,
+      'refund'::text,
+      'chargeback'::text,
+      'chargeback_fee'::text,
+      'chargeback_reversal'::text,
+      'chargeback_fee_reversal'::text,
+      'processor_fee'::text,
+      'bank_fee'::text,
+      'shipping_cost'::text,
+      'tax'::text,
+      'cogs'::text,
+      'affiliate_payout'::text,
+      'ad_spend'::text,
+      'reversal'::text,
+      'adjustment'::text
+    ])
+  );
+
 create unique index if not exists conversions_chargeback_event_uidx
   on public.conversions (workspace_id, platform, processor_account_id, ledger_type, source_event_id)
   where ledger_type in (
@@ -191,6 +218,8 @@ end;
 $$;
 
 revoke all on function public.insert_chargeback_ledger_events(jsonb) from public;
+revoke all on function public.insert_chargeback_ledger_events(jsonb) from anon;
+revoke all on function public.insert_chargeback_ledger_events(jsonb) from authenticated;
 grant execute on function public.insert_chargeback_ledger_events(jsonb) to service_role;
 
 comment on function public.insert_chargeback_ledger_events(jsonb) is
