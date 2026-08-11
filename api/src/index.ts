@@ -3,6 +3,13 @@
 // Integrations: CheckoutChamp/Konnektive + WOWSuite (WowBoost + WowPay umbrella)
 
 import { createClient } from "@supabase/supabase-js";
+import {
+  classifyHttpMaintenanceRequest,
+  isMaintenanceWriteGateEnabled,
+  maintenanceBlockedResponse,
+  maintenanceRequiresAdminAuthorization,
+  maintenanceWriteAllowed,
+} from "./maintenance-write-gate";
 import { consumeCommerceMessage, runCommerceCron, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
 import { enforceTkidRate, ephemeralTransportDimension, TkidRateLimitError, type DistributedCounterStore, type TkidAbuseClass } from "./tkid-distributed-abuse";
 import {
@@ -530,6 +537,7 @@ type Env = {
   TRACEKIT_TKID_HANDOFF_SECRET?: string;
   TRACEKIT_TKID_RELAY_ORIGIN?: string;
   TRACEKIT_TKID_RELAY_ENABLED?: string;
+  TRACEKIT_MAINTENANCE_WRITE_GATE_ENABLED?: string;
   LIVE_WORKSPACE_PROJECTION_BATCH_SIZE?: string;
   LIVE_WORKSPACE_PROJECTION_MAX_EVENTS?: string;
   LIVE_WORKSPACE_PROJECTION_MAX_WORKSPACES?: string;
@@ -21740,6 +21748,14 @@ async function runWowBoostImportPage(
     try {
       const url = new URL(req.url);
       const path = url.pathname;
+      const maintenanceClass = classifyHttpMaintenanceRequest(req.method, path);
+      if (!maintenanceWriteAllowed(env, maintenanceClass)) {
+        if (maintenanceRequiresAdminAuthorization(maintenanceClass)) {
+          const auth = adminAuthError(req, env);
+          if (auth) return auth;
+        }
+        return maintenanceBlockedResponse(maintenanceClass);
+      }
 
       if (
         (
@@ -22028,8 +22044,6 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 		    }
 		    const runtimeTaskId = String(body.runtime_task_id ?? body.task_id ?? "").trim();
 
-			console.log("[WowBoost Queue] MESSAGE BODY", body);
-
 			console.log("[WowBoost Queue] ROUTING", {
 			  runtimeTaskId: runtimeTaskId || null,
 			  keys: Object.keys(body),
@@ -22240,7 +22254,7 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 		        const availableAt = task.available_at ? Date.parse(task.available_at) : 0;
 		        if (availableAt && availableAt > Date.now()) {
 		          const delaySeconds = Math.max(1, Math.ceil((availableAt - Date.now()) / 1000));
-		          if (env.wowboost_imports) {
+		          if (env.wowboost_imports && maintenanceWriteAllowed(env, "queue_continuation")) {
 		            await sendConnectorRuntimeTaskQueueMessage(env, task, connectorRuntimeTaskMessage({
 	              id: task.id,
 	              job_id: task.job_id,
@@ -22353,7 +22367,7 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 	                });
 	              await updateConnectorRuntimeJobProgress(env, job, nextProgress).catch(() => {});
 	            }
-		            if (env.wowboost_imports) {
+		            if (env.wowboost_imports && maintenanceWriteAllowed(env, "queue_continuation")) {
 		              await sendConnectorRuntimeTaskQueueMessage(env, task, connectorRuntimeTaskMessage({
 		                id: task.id,
 		                job_id: task.job_id,
@@ -22768,7 +22782,13 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
           to: job.to_date,
           importedRows: nextUpserted,
         });
-        ctx.waitUntil((async () => {
+	        if (!maintenanceWriteAllowed(env, "queue_follow_on")) {
+	          console.warn("[TraceKit] maintenance write blocked", {
+	            event: "maintenance.write_blocked",
+	            source_category: "queue_follow_on",
+	            timestamp: new Date().toISOString(),
+	          });
+	        } else ctx.waitUntil((async () => {
           try {
             const identityBackfill = await startIdentityBackfillRuntimeJob(env, {
               workspace_id: identityWorkspaceId,
@@ -22803,10 +22823,10 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
               stack: e?.stack,
             });
           }
-        })());
+	        })());
       }
 
-	      if (continuationDecision.enqueue_next && continuationDecision.next_page) {
+	      if (env.wowboost_imports && continuationDecision.enqueue_next && continuationDecision.next_page && maintenanceWriteAllowed(env, "queue_continuation")) {
 	        console.log("[WowBoost Queue] QUEUE NEXT PAGE", {
 	          jobId,
 	          currentPage: page,
@@ -22898,7 +22918,7 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 	        continue;
 	      }
 
-	      await env.wowboost_imports.send({
+	      if (env.wowboost_imports && maintenanceWriteAllowed(env, "queue_continuation")) await env.wowboost_imports.send({
 	        job_id: jobId,
 	        page: retryPage,
 	        pageSize,
@@ -22912,6 +22932,14 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 },
 
   async scheduled(_event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+    if (isMaintenanceWriteGateEnabled(env)) {
+      console.warn("[TraceKit] maintenance write blocked", {
+        event: "maintenance.write_blocked",
+        source_category: "scheduled_producer",
+        timestamp: new Date().toISOString(),
+      });
+      return;
+    }
     if (env.continuous_commerce) {
       ctx.waitUntil(runCommerceCron({
         now: new Date().toISOString(),
