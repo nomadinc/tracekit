@@ -112,3 +112,45 @@ Rollback rehearsal contract: globally disable scheduler, pause Connection, disab
 Required inputs not inferable from the repository: production funnel origins, Business Context/funnel selection, merchant checkout integration point/auth, consent mode/legal approval, retention and erasure policies, secret-manager references/owners, Worker deployment approval, quota/cadence approval, alert destination, production migration level, CSP asset/API origins, and bounded-proof operator/stop authority. Commas dispute webhook remains contract-only and Everflow live ingestion remains not configured. Live Workspace activation and Phase 3 are out of scope.
 
 Activation therefore remains blocked by: **PRODUCTION ORIGIN INVENTORY REQUIRED**, **CONSENT POLICY APPROVAL REQUIRED**, **RETENTION POLICY APPROVAL REQUIRED**, **OPERATIONAL ALERT DESTINATION REQUIRED**, **CHECKOUT INTEGRATION APPROVAL REQUIRED**, **WORKER DEPLOYMENT APPROVAL REQUIRED**, **CADENCE/QUOTA APPROVAL REQUIRED**, **CSP APPROVAL REQUIRED**, **PRODUCTION MIGRATION APPROVAL REQUIRED**, and **INVESTIGATION TKID EVIDENCE REVIEW REQUIRED**.
+# Production maintenance write gate
+
+`TRACEKIT_MAINTENANCE_WRITE_GATE_ENABLED` is a server-only emergency/maintenance
+control. It defaults to `false`. Deploying support for the control does not enter
+maintenance mode. Only the exact values `true` and `1` activate it.
+
+When active, HTTP business-data mutations and the entire scheduled handler are
+blocked with a sanitized `503` and `Retry-After: 60`. Health, authorized read-only
+inspection, and the existing `wowboost-imports` Queue consumer remain available.
+The consumer may finish bounded continuations/retries belonging to accepted work,
+but it may not start unrelated follow-on task chains. This is a drain control, not
+a database lock and not an authorization substitute.
+
+Changing a Cloudflare Worker variable creates a new Worker version/deployment.
+For a future approved window, change only
+`TRACEKIT_MAINTENANCE_WRITE_GATE_ENABLED`, preserving every other binding, route,
+trigger, and capability setting. Do not use a public/browser variable.
+
+## Operator sequence (not currently active)
+
+1. Record the deployed version, variable state, cron, Queue bindings, backlog,
+   provider ingress, and migration ledger. Confirm the gate is `false`.
+2. Confirm there is no active webhook whose retry/buffering contract is unknown.
+3. Set the Worker variable to `true` through the Cloudflare dashboard and deploy
+   that configuration-only version. Verify a representative authorized mutation
+   receives `503`, while health and read-only inspection still work.
+4. Let `wowboost-imports` continue consuming. Confirm scheduled invocation causes
+   no provider call, Queue production, or database write.
+5. Observe backlog, delayed/retry tasks, consumer activity, database writers,
+   transactions, locks, health, and the migration ledger until the approved
+   quiescence criteria pass.
+6. Optionally pause Queue delivery only after backlog and in-flight work are zero.
+7. Create, encrypt, hash, and inventory the logical backup.
+8. Resume Queue delivery if paused. Set the Worker variable back to `false` and
+   deploy that configuration-only version.
+9. Verify scheduled/manual ingress, run the bounded catch-up procedure, and monitor
+   duplicate prevention, retries, errors, Queue depth, and provider-request rate.
+
+Abort without taking a backup if new messages continue arriving, a continuation
+cannot converge, webhook delivery could be lost, a database writer remains, a long
+transaction or blocking lock exists, health degrades, or the migration ledger
+changes unexpectedly.
