@@ -141,9 +141,50 @@ create table if not exists public.tracekit_invitations (
   check (target_account_id is not null or target_organization_id is not null)
 );
 
-alter table public.tracekit_memberships
-  add constraint tracekit_memberships_invitation_fk
-  foreign key (invitation_id) references public.tracekit_invitations(id);
+do $migration$
+begin
+  if not exists (
+    select 1
+    from pg_catalog.pg_constraint c
+    where c.conrelid = 'public.tracekit_memberships'::regclass
+      and c.conname = 'tracekit_memberships_invitation_fk'
+      and c.contype = 'f'
+      and c.conkey = array[(
+        select a.attnum
+        from pg_catalog.pg_attribute a
+        where a.attrelid = 'public.tracekit_memberships'::regclass
+          and a.attname = 'invitation_id'
+          and not a.attisdropped
+      )]::smallint[]
+      and c.confrelid = 'public.tracekit_invitations'::regclass
+      and c.confkey = array[(
+        select a.attnum
+        from pg_catalog.pg_attribute a
+        where a.attrelid = 'public.tracekit_invitations'::regclass
+          and a.attname = 'id'
+          and not a.attisdropped
+      )]::smallint[]
+      and c.confupdtype = 'a'
+      and c.confdeltype = 'a'
+      and c.convalidated
+  ) then
+    if exists (
+      select 1
+      from pg_catalog.pg_constraint c
+      where c.conrelid = 'public.tracekit_memberships'::regclass
+        and c.conname = 'tracekit_memberships_invitation_fk'
+    ) then
+      raise exception
+        'tracekit_memberships_invitation_fk exists with an incompatible definition';
+    end if;
+
+    alter table public.tracekit_memberships
+      add constraint tracekit_memberships_invitation_fk
+      foreign key (invitation_id)
+      references public.tracekit_invitations(id);
+  end if;
+end
+$migration$;
 
 create table if not exists public.tracekit_audit_events (
   id uuid primary key default gen_random_uuid(),
@@ -187,7 +228,7 @@ revoke all on table public.tracekit_users, public.tracekit_accounts, public.trac
   public.tracekit_organizations, public.tracekit_roles, public.tracekit_memberships,
   public.tracekit_permission_overrides, public.tracekit_agency_client_assignments,
   public.tracekit_business_context_access, public.tracekit_invitations,
-  public.tracekit_audit_events from anon, authenticated;
+  public.tracekit_audit_events from public, anon, authenticated, service_role;
 
 grant select, insert, update, delete on table public.tracekit_users, public.tracekit_accounts,
   public.tracekit_agencies, public.tracekit_organizations, public.tracekit_roles,
