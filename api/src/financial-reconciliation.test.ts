@@ -373,6 +373,8 @@ test("migration source enforces idempotency, concurrency, immutable history, and
   assert.match(migration, /pg_advisory_xact_lock\(hashtextextended/);
   assert.match(migration, /for update/);
   assert.match(migration, /request_fingerprint text not null/);
+  assert.equal((migration.match(/extensions\.digest\(/g) ?? []).length, 2);
+  assert.doesNotMatch(migration, /(?<!\.)\bdigest\(/);
   assert.match(migration, /idempotency_key_conflict/);
   assert.match(migration, /financial_event_matches_immutable_guard/);
   assert.match(migration, /new\.is_active = false/);
