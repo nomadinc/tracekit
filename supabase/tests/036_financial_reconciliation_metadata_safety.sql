@@ -1,6 +1,22 @@
 begin;
 
-select plan(20);
+select plan(23);
+
+select is(
+  encode(extensions.digest('tracekit-fingerprint-fixture', 'sha256'), 'hex'),
+  encode(extensions.digest('tracekit-fingerprint-fixture', 'sha256'), 'hex'),
+  'schema-qualified fingerprint digest is deterministic'
+);
+select isnt(
+  encode(extensions.digest('tracekit-fingerprint-fixture', 'sha256'), 'hex'),
+  encode(extensions.digest('tracekit-fingerprint-fixture-changed', 'sha256'), 'hex'),
+  'schema-qualified fingerprint digest changes with relevant input'
+);
+select is(
+  to_regprocedure('extensions.digest(text,text)') is not null,
+  true,
+  'fingerprint digest resolves explicitly from the trusted extensions schema'
+);
 
 select is(public.financial_reconciliation_metadata_is_safe('{}'::jsonb), true, 'empty object is safe');
 select is(public.financial_reconciliation_metadata_is_safe('[]'::jsonb), true, 'empty array is safe');

@@ -168,7 +168,7 @@ alter table public.financial_event_matches
 
 update public.financial_event_matches fem
 set request_fingerprint = encode(
-  digest(
+  extensions.digest(
     concat_ws(
       '|',
       fem.workspace_id,
