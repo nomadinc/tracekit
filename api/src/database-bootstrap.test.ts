@@ -194,7 +194,7 @@ test("schema provenance exports contain metadata headers and no known secret mat
   }
 });
 
-test("persistent identity migration enables RLS and revokes browser roles", () => {
+test("persistent identity migration converges its invitation FK and table privileges", () => {
   const identityMigration = migration("038_persistent_identity_and_tenancy.sql").toLowerCase();
   const identityTables = [
     "tracekit_users",
@@ -214,7 +214,14 @@ test("persistent identity migration enables RLS and revokes browser roles", () =
     assert.match(identityMigration, new RegExp(`alter table public\\.${table} enable row level security`));
   }
   assert.match(identityMigration, /revoke all on table[\s\s]*public\.tracekit_users/);
-  assert.match(identityMigration, /from anon, authenticated/);
+  assert.match(identityMigration, /from public, anon, authenticated, service_role/);
+  assert.match(identityMigration, /grant select, insert, update, delete on table/);
+  assert.match(identityMigration, /to service_role/);
+  assert.match(identityMigration, /c\.contype = 'f'/);
+  assert.match(identityMigration, /c\.confupdtype = 'a'/);
+  assert.match(identityMigration, /c\.confdeltype = 'a'/);
+  assert.match(identityMigration, /c\.convalidated/);
+  assert.match(identityMigration, /tracekit_memberships_invitation_fk exists with an incompatible definition/);
 });
 
 test("commerce persistence migration is tenant-owned and fail-closed", () => {
