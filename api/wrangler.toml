@@ -6,7 +6,6 @@ routes = [{ pattern = "journey.trace-kit.io", custom_domain = true }]
 
 [vars]
   SUPABASE_URL = "https://uoeosoiegatlqtzemsfv.supabase.co"
-  SUPABASE_SERVICE_ROLE_KEY = ""
   TRACEKIT_ROOT_DOMAIN = "buyecowatt.com"
   TRACEKIT_AUTO_LINK_OUTBOUND = "true"
   TRACEKIT_COMMERCE_SCHEDULER_ENABLED = "false"
@@ -15,7 +14,6 @@ routes = [{ pattern = "journey.trace-kit.io", custom_domain = true }]
   TRACEKIT_TKID_ERASURE_EXECUTOR_ENABLED = "false"
   TRACEKIT_TKID_RELAY_ENABLED = "false"
   TRACEKIT_TKID_RELAY_ORIGIN = "https://journey.trace-kit.io"
-  INTEGRATIONS_ENC_KEY = ""
   
   [[queues.producers]]
 queue = "wowboost-imports"
