@@ -50,6 +50,9 @@ crons = ["0 * * * *"] # every hour
 # - KONNEKTIVE_INGEST_TOKEN
 # - EVERFLOW_INGEST_TOKEN
 # - INTEGRATIONS_ENC_KEY
+# - INTEGRATIONS_ENC_KEY_V1 (explicit legacy key; preferred during transition)
+# - INTEGRATIONS_ENC_KEY_V2 (future replacement; not required while writes remain v1)
+# INTEGRATIONS_ENC_WRITE_VERSION is a non-secret var and defaults to 1 when absent.
 # - TK_SECRET_KEY
 # - TKID_HANDOFF_SIGNING_KEY_CURRENT (separate key; referenced by TKID handoff key metadata)
 # - TKID_HANDOFF_SIGNING_KEY_PREVIOUS (rotation window only)

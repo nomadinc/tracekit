@@ -148,3 +148,18 @@ test("settings GET handlers return disabled defaults without destructive upsert"
   assert.doesNotMatch(paypalGet, /\.upsert\(/);
   assert.match(wowboostGet, /getIntegrationSettings\(env, settingsPlatform/);
 });
+
+test("credential writes persist key version, IV, and ciphertext atomically", () => {
+  const source = indexSource();
+  const saveSource = functionSource(
+    source,
+    "async function saveCredential",
+    "async function updateCredentialMetadata",
+  );
+
+  assert.match(saveSource, /encryptIntegrationSecret\(env, args\.password\)/);
+  assert.match(saveSource, /password_key_version:\s*encrypted\.version/);
+  assert.match(saveSource, /password_iv:\s*encrypted\.iv_b64/);
+  assert.match(saveSource, /password_ciphertext:\s*encrypted\.ct_b64/);
+  assert.match(saveSource, /\.upsert\(payload as any, \{ onConflict: "platform" \}\)/);
+});

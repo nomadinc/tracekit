@@ -4,6 +4,10 @@
 
 import { createClient } from "@supabase/supabase-js";
 import {
+  decryptIntegrationSecretFromRow,
+  encryptIntegrationSecret,
+} from "./integration-credential-crypto";
+import {
   classifyHttpMaintenanceRequest,
   isMaintenanceWriteGateEnabled,
   maintenanceBlockedResponse,
@@ -518,7 +522,11 @@ type Env = {
   SUPABASE_SERVICE_ROLE_KEY: string;
   DEFAULT_WOWSUITE_AUTH_BASE?: string;
   DEFAULT_WOWSUITE_EXPORT_BASE?: string;
-  INTEGRATIONS_ENC_KEY: string;
+  /** Transitional v1 compatibility binding; prefer INTEGRATIONS_ENC_KEY_V1. */
+  INTEGRATIONS_ENC_KEY?: string;
+  INTEGRATIONS_ENC_KEY_V1?: string;
+  INTEGRATIONS_ENC_KEY_V2?: string;
+  INTEGRATIONS_ENC_WRITE_VERSION?: string;
   TK_SECRET_KEY?: string;
   DEFAULT_CC_BASE?: string;
   IDENTITY_WOWBOOST_RESOLUTION_ENABLED?: string;
@@ -3976,44 +3984,8 @@ function defaultDashboardDateRange(url: URL) {
   return { from, to };
 }
 
-function b64ToU8(b64: string): Uint8Array {
-  const bin = atob(b64);
-  const out = new Uint8Array(bin.length);
-  for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
-  return out;
-}
-
-function u8ToB64(u8: Uint8Array): string {
-  let s = "";
-  for (let i = 0; i < u8.length; i++) s += String.fromCharCode(u8[i]);
-  return btoa(s);
-}
-
-async function importAesKey(env: Env) {
-  const b64 = String(env.INTEGRATIONS_ENC_KEY ?? "").trim();
-  if (!b64) throw new Error("Missing INTEGRATIONS_ENC_KEY");
-  const raw = b64ToU8(b64);
-  if (raw.byteLength !== 32) throw new Error("INTEGRATIONS_ENC_KEY must be base64 of 32 bytes");
-  return crypto.subtle.importKey("raw", raw, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
-}
-
-async function encryptSecret(env: Env, plaintext: string) {
-  const key = await importAesKey(env);
-  const iv = crypto.getRandomValues(new Uint8Array(12));
-  const ct = await crypto.subtle.encrypt({ name: "AES-GCM", iv }, key, new TextEncoder().encode(plaintext));
-  return { v: 1, alg: "AES-GCM", iv_b64: u8ToB64(iv), ct_b64: u8ToB64(new Uint8Array(ct)) };
-}
-
-async function decryptSecret(env: Env, iv_b64: string, ct_b64: string) {
-  const key = await importAesKey(env);
-  const iv = b64ToU8(String(iv_b64 ?? "").trim());
-  const ct = b64ToU8(String(ct_b64 ?? "").trim());
-  const pt = await crypto.subtle.decrypt({ name: "AES-GCM", iv }, key, ct);
-  return new TextDecoder().decode(pt);
-}
-
 async function decryptSecretFromCredRow(env: Env, cred: any) {
-  return decryptSecret(env, String(cred.password_iv ?? ""), String(cred.password_ciphertext ?? ""));
+  return decryptIntegrationSecretFromRow(env, cred);
 }
 
 type WowSuiteSub = "wowboost" | "wowpay";
@@ -8210,12 +8182,13 @@ async function saveIntegrationSettings(env: Env, platform: string, body: any, de
 async function saveCredential(env: Env, args: { platform: string; baseUrl: string; username: string; password: string; metadata?: Record<string, any> }) {
   const supabase = getSupabase(env);
   const platform = coercePlatformKey(args.platform);
-  const encrypted = await encryptSecret(env, args.password);
+  const encrypted = await encryptIntegrationSecret(env, args.password);
 
   const payload: Record<string, any> = {
     platform,
     base_url: String(args.baseUrl || "").trim().replace(/\/+$/, ""),
     username: String(args.username || "").trim(),
+    password_key_version: encrypted.version,
     password_iv: encrypted.iv_b64,
     password_ciphertext: encrypted.ct_b64,
     updated_at: new Date().toISOString(),
