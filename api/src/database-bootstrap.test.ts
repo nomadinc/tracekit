@@ -175,7 +175,19 @@ test("migration filenames are unique and numerically ordered", () => {
   const numbers = names.map((name) => name.slice(0, 3));
 
   assert.equal(new Set(numbers).size, numbers.length);
-  assert.deepEqual(numbers, Array.from({ length: 57 }, (_, index) => String(index).padStart(3, "0")));
+  assert.deepEqual(numbers, Array.from({ length: 58 }, (_, index) => String(index).padStart(3, "0")));
+});
+
+test("Migration 057 adds convergent credential key-version metadata without rewriting ciphertext", () => {
+  const migration057 = migration("057_integration_credential_key_versioning_v1.sql").toLowerCase();
+  assert.match(migration057, /add column if not exists password_key_version smallint/);
+  assert.match(migration057, /if to_regclass\('public\.integrations_credentials'\) is null then/);
+  assert.match(migration057, /set password_key_version = 1\s+where password_key_version is null/);
+  assert.match(migration057, /alter column password_key_version set default 1/);
+  assert.match(migration057, /alter column password_key_version set not null/);
+  assert.match(migration057, /check \(password_key_version > 0\) not valid/);
+  assert.doesNotMatch(migration057, /password_iv\s*=/);
+  assert.doesNotMatch(migration057, /password_ciphertext\s*=/);
 });
 
 test("schema provenance exports contain metadata headers and no known secret material", () => {
