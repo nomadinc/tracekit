@@ -25,18 +25,8 @@ max_batch_size = 1
 max_batch_timeout = 5
 max_retries = 10
 
-# Phase 2.8 Continuous Commerce orchestration. The binding may be deployed,
-# but the database control and environment switch both default disabled.
-[[queues.producers]]
-queue = "continuous-commerce"
-binding = "continuous_commerce"
-
-[[queues.consumers]]
-queue = "continuous-commerce"
-max_batch_size = 1
-max_batch_timeout = 5
-max_retries = 5
-  
+# Phase 2.8 Continuous Commerce implementation remains dormant in source.
+# Production Queue attachment requires a separate reviewed configuration change.
 
 [triggers]
 crons = ["0 * * * *"] # every hour
