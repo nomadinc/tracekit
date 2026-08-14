@@ -175,7 +175,7 @@ test("migration filenames are unique and numerically ordered", () => {
   const numbers = names.map((name) => name.slice(0, 3));
 
   assert.equal(new Set(numbers).size, numbers.length);
-  assert.deepEqual(numbers, Array.from({ length: 58 }, (_, index) => String(index).padStart(3, "0")));
+  assert.deepEqual(numbers, Array.from({ length: 59 }, (_, index) => String(index).padStart(3, "0")));
 });
 
 test("Migration 057 adds convergent credential key-version metadata without rewriting ciphertext", () => {
@@ -188,6 +188,18 @@ test("Migration 057 adds convergent credential key-version metadata without rewr
   assert.match(migration057, /check \(password_key_version > 0\) not valid/);
   assert.doesNotMatch(migration057, /password_iv\s*=/);
   assert.doesNotMatch(migration057, /password_ciphertext\s*=/);
+});
+
+test("Migration 058 makes integration credentials server-only without rewriting secrets", () => {
+  const migration058 = migration("058_integrations_credentials_authorization_hardening.sql").toLowerCase();
+  assert.match(migration058, /if to_regclass\('public\.integrations_credentials'\) is null then/);
+  assert.match(migration058, /alter table public\.integrations_credentials enable row level security/);
+  assert.match(migration058, /revoke all on table public\.integrations_credentials\s+from public, anon, authenticated, service_role/);
+  assert.match(migration058, /grant select, insert, update on table public\.integrations_credentials\s+to service_role/);
+  assert.match(migration058, /has unexpected row-level security policies/);
+  assert.doesNotMatch(migration058, /grant[^;]*(anon|authenticated)/);
+  assert.doesNotMatch(migration058, /password_iv\s*=/);
+  assert.doesNotMatch(migration058, /password_ciphertext\s*=/);
 });
 
 test("schema provenance exports contain metadata headers and no known secret material", () => {

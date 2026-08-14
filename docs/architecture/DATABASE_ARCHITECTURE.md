@@ -133,6 +133,7 @@ Migration Zero becomes effectively immutable after approval. Future corrections 
 | `conversions` | 033 required | LEGACY BASELINE REQUIRED | Authoritative hosted exports available; distinct legacy financial ledger baseline implemented |
 | `integrations_credentials` | 004 guarded | OPTIONAL / CONDITIONALLY GUARDED | Used by runtime; authoritative export needed before deciding baseline ownership |
 | `integrations_credentials.password_key_version` | 057 | ADDITIVE / SERVER-ONLY | Non-secret positive key version; existing credentials become v1 without ciphertext rewrite. Production remains at 037 with 038–056 pending, so early installation requires the separately reviewed convergent operational DDL. |
+| `integrations_credentials` authorization | 058 | SERVER-ONLY / CONVERGENT | RLS enabled with no policies; PUBLIC, `anon`, and `authenticated` receive no table privileges. `service_role` receives only SELECT, INSERT, and UPDATE. The exact migration DDL may be installed temporarily before ledger 038 as reviewed emergency containment; normal 058 application later converges without history repair. |
 | `integrations_settings` | 037 required | LEGACY BASELINE REQUIRED | Authoritative hosted exports available; two-column pre-037 baseline implemented |
 | `payment_transactions` | 001 | CREATED BY TRACKED MIGRATION | Later guarded/unguarded alterations are ordered after creation |
 | `everflow_conversions` | 001 | CREATED BY TRACKED MIGRATION | Separate attribution-source table; not a substitute for `conversions` |
