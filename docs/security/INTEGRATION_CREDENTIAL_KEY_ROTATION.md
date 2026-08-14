@@ -1,5 +1,22 @@
 # Integration credential key rotation
 
+## Credential-table authorization prerequisite
+
+`public.integrations_credentials` is server-only. Migration 058 enables RLS,
+keeps the table policy-free, removes all privileges from PUBLIC, `anon`, and
+`authenticated`, and limits `service_role` to SELECT, INSERT, and UPDATE. The
+Worker does not use a browser credential-table path and has no credential
+deletion path.
+
+Because production is at migration 037, urgent containment may install the
+exact committed Migration 058 DDL outside the ledger after separate production
+approval. That installation must not insert or repair migration history. The
+normal 038 through 058 sequence must later apply unchanged; Migration 058 is
+convergent when its authorization state is already present.
+
+Authorization containment does not rotate the exposed legacy encryption key or
+the underlying provider credentials. Those remain separate incident gates.
+
 TraceKit integration credentials use server-only AES-256-GCM keys. The database
 stores a non-secret `password_key_version` beside the Base64 IV and authenticated
 ciphertext. Runtime key selection is deterministic:
