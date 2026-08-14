@@ -1,16 +1,71 @@
 begin;
 
-select plan(26);
+select plan(33);
 
 create or replace procedure pg_temp.converge_tracekit_memberships_invitation_fk()
 language plpgsql
 as $procedure$
+declare
+  v_invitation_fk_count integer;
+  v_equivalent_fk_name text;
 begin
-  if not exists (
+  if exists (
     select 1
     from pg_catalog.pg_constraint c
     where c.conrelid = 'public.tracekit_memberships'::regclass
       and c.conname = 'tracekit_memberships_invitation_fk'
+  ) then
+    if not exists (
+      select 1
+      from pg_catalog.pg_constraint c
+      where c.conrelid = 'public.tracekit_memberships'::regclass
+        and c.conname = 'tracekit_memberships_invitation_fk'
+        and c.contype = 'f'
+        and c.conkey = array[(
+          select a.attnum
+          from pg_catalog.pg_attribute a
+          where a.attrelid = 'public.tracekit_memberships'::regclass
+            and a.attname = 'invitation_id'
+            and not a.attisdropped
+        )]::smallint[]
+        and c.confrelid = 'public.tracekit_invitations'::regclass
+        and c.confkey = array[(
+          select a.attnum
+          from pg_catalog.pg_attribute a
+          where a.attrelid = 'public.tracekit_invitations'::regclass
+            and a.attname = 'id'
+            and not a.attisdropped
+        )]::smallint[]
+        and c.confupdtype = 'a'
+        and c.confdeltype = 'a'
+        and c.convalidated
+        and not c.condeferrable
+        and not c.condeferred
+    ) then
+      raise exception
+        'tracekit_memberships_invitation_fk exists with an incompatible definition';
+    end if;
+  else
+    select
+      count(*),
+      min(c.conname) filter (
+        where c.confrelid = 'public.tracekit_invitations'::regclass
+          and c.confkey = array[(
+            select a.attnum
+            from pg_catalog.pg_attribute a
+            where a.attrelid = 'public.tracekit_invitations'::regclass
+              and a.attname = 'id'
+              and not a.attisdropped
+          )]::smallint[]
+          and c.confupdtype = 'a'
+          and c.confdeltype = 'a'
+          and c.convalidated
+          and not c.condeferrable
+          and not c.condeferred
+      )
+    into v_invitation_fk_count, v_equivalent_fk_name
+    from pg_catalog.pg_constraint c
+    where c.conrelid = 'public.tracekit_memberships'::regclass
       and c.contype = 'f'
       and c.conkey = array[(
         select a.attnum
@@ -18,33 +73,22 @@ begin
         where a.attrelid = 'public.tracekit_memberships'::regclass
           and a.attname = 'invitation_id'
           and not a.attisdropped
-      )]::smallint[]
-      and c.confrelid = 'public.tracekit_invitations'::regclass
-      and c.confkey = array[(
-        select a.attnum
-        from pg_catalog.pg_attribute a
-        where a.attrelid = 'public.tracekit_invitations'::regclass
-          and a.attname = 'id'
-          and not a.attisdropped
-      )]::smallint[]
-      and c.confupdtype = 'a'
-      and c.confdeltype = 'a'
-      and c.convalidated
-  ) then
-    if exists (
-      select 1
-      from pg_catalog.pg_constraint c
-      where c.conrelid = 'public.tracekit_memberships'::regclass
-        and c.conname = 'tracekit_memberships_invitation_fk'
-    ) then
-      raise exception
-        'tracekit_memberships_invitation_fk exists with an incompatible definition';
-    end if;
+      )]::smallint[];
 
-    alter table public.tracekit_memberships
-      add constraint tracekit_memberships_invitation_fk
-      foreign key (invitation_id)
-      references public.tracekit_invitations(id);
+    if v_invitation_fk_count = 0 then
+      alter table public.tracekit_memberships
+        add constraint tracekit_memberships_invitation_fk
+        foreign key (invitation_id)
+        references public.tracekit_invitations(id);
+    elsif v_invitation_fk_count = 1 and v_equivalent_fk_name is not null then
+      execute format(
+        'alter table public.tracekit_memberships rename constraint %I to tracekit_memberships_invitation_fk',
+        v_equivalent_fk_name
+      );
+    else
+      raise exception
+        'tracekit_memberships.invitation_id has an incompatible or ambiguous foreign key definition';
+    end if;
   end if;
 end
 $procedure$;
@@ -66,6 +110,8 @@ select is(
 select is((select confupdtype from pg_catalog.pg_constraint where conrelid = 'public.tracekit_memberships'::regclass and conname = 'tracekit_memberships_invitation_fk'), 'a'::"char", 'invitation FK uses ON UPDATE NO ACTION');
 select is((select confdeltype from pg_catalog.pg_constraint where conrelid = 'public.tracekit_memberships'::regclass and conname = 'tracekit_memberships_invitation_fk'), 'a'::"char", 'invitation FK uses ON DELETE NO ACTION');
 select is((select convalidated from pg_catalog.pg_constraint where conrelid = 'public.tracekit_memberships'::regclass and conname = 'tracekit_memberships_invitation_fk'), true, 'invitation FK is validated');
+select is((select condeferrable from pg_catalog.pg_constraint where conrelid = 'public.tracekit_memberships'::regclass and conname = 'tracekit_memberships_invitation_fk'), false, 'invitation FK is not deferrable');
+select is((select condeferred from pg_catalog.pg_constraint where conrelid = 'public.tracekit_memberships'::regclass and conname = 'tracekit_memberships_invitation_fk'), false, 'invitation FK is initially immediate');
 
 select lives_ok(
   'call pg_temp.converge_tracekit_memberships_invitation_fk()',
@@ -114,6 +160,55 @@ select is(
      and conname = 'tracekit_memberships_invitation_fk'),
   'c'::"char",
   'failed incompatible convergence does not replace or weaken the conflicting FK'
+);
+alter table public.tracekit_memberships drop constraint tracekit_memberships_invitation_fk;
+call pg_temp.converge_tracekit_memberships_invitation_fk();
+
+alter table public.tracekit_memberships drop constraint tracekit_memberships_invitation_fk;
+alter table public.tracekit_memberships
+  add constraint legacy_tracekit_memberships_invitation_fk
+  foreign key (invitation_id) references public.tracekit_invitations(id);
+select lives_ok(
+  'call pg_temp.converge_tracekit_memberships_invitation_fk()',
+  'an equivalent alternate-name invitation FK converges to the canonical name'
+);
+select is(
+  (select count(*)::integer from pg_catalog.pg_constraint
+   where conrelid = 'public.tracekit_memberships'::regclass
+     and conname = 'tracekit_memberships_invitation_fk'),
+  1,
+  'alternate-name convergence creates the canonical FK name'
+);
+select is(
+  (select count(*)::integer from pg_catalog.pg_constraint
+   where conrelid = 'public.tracekit_memberships'::regclass
+     and conkey = array[(
+       select attnum from pg_catalog.pg_attribute
+       where attrelid = 'public.tracekit_memberships'::regclass
+         and attname = 'invitation_id'
+         and not attisdropped
+     )]::smallint[]),
+  1,
+  'alternate-name convergence does not duplicate the invitation FK'
+);
+
+alter table public.tracekit_memberships drop constraint tracekit_memberships_invitation_fk;
+alter table public.tracekit_memberships
+  add constraint tracekit_memberships_invitation_fk
+  foreign key (invitation_id) references public.tracekit_invitations(id)
+  deferrable initially immediate;
+select throws_ok(
+  'call pg_temp.converge_tracekit_memberships_invitation_fk()',
+  'P0001',
+  'tracekit_memberships_invitation_fk exists with an incompatible definition',
+  'a deferrable same-named invitation FK fails loudly'
+);
+select is(
+  (select condeferrable from pg_catalog.pg_constraint
+   where conrelid = 'public.tracekit_memberships'::regclass
+     and conname = 'tracekit_memberships_invitation_fk'),
+  true,
+  'failed deferrability convergence leaves the incompatible fixture unchanged'
 );
 alter table public.tracekit_memberships drop constraint tracekit_memberships_invitation_fk;
 call pg_temp.converge_tracekit_memberships_invitation_fk();

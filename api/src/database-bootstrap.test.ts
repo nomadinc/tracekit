@@ -233,7 +233,11 @@ test("persistent identity migration converges its invitation FK and table privil
   assert.match(identityMigration, /c\.confupdtype = 'a'/);
   assert.match(identityMigration, /c\.confdeltype = 'a'/);
   assert.match(identityMigration, /c\.convalidated/);
+  assert.match(identityMigration, /not c\.condeferrable/);
+  assert.match(identityMigration, /not c\.condeferred/);
+  assert.match(identityMigration, /rename constraint %i to tracekit_memberships_invitation_fk/);
   assert.match(identityMigration, /tracekit_memberships_invitation_fk exists with an incompatible definition/);
+  assert.match(identityMigration, /invitation_id has an incompatible or ambiguous foreign key definition/);
 });
 
 test("commerce persistence migration is tenant-owned and fail-closed", () => {
