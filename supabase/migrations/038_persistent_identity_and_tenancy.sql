@@ -142,12 +142,67 @@ create table if not exists public.tracekit_invitations (
 );
 
 do $migration$
+declare
+  v_invitation_fk_count integer;
+  v_equivalent_fk_name text;
 begin
-  if not exists (
+  if exists (
     select 1
     from pg_catalog.pg_constraint c
     where c.conrelid = 'public.tracekit_memberships'::regclass
       and c.conname = 'tracekit_memberships_invitation_fk'
+  ) then
+    if not exists (
+      select 1
+      from pg_catalog.pg_constraint c
+      where c.conrelid = 'public.tracekit_memberships'::regclass
+        and c.conname = 'tracekit_memberships_invitation_fk'
+        and c.contype = 'f'
+        and c.conkey = array[(
+          select a.attnum
+          from pg_catalog.pg_attribute a
+          where a.attrelid = 'public.tracekit_memberships'::regclass
+            and a.attname = 'invitation_id'
+            and not a.attisdropped
+        )]::smallint[]
+        and c.confrelid = 'public.tracekit_invitations'::regclass
+        and c.confkey = array[(
+          select a.attnum
+          from pg_catalog.pg_attribute a
+          where a.attrelid = 'public.tracekit_invitations'::regclass
+            and a.attname = 'id'
+            and not a.attisdropped
+        )]::smallint[]
+        and c.confupdtype = 'a'
+        and c.confdeltype = 'a'
+        and c.convalidated
+        and not c.condeferrable
+        and not c.condeferred
+    ) then
+      raise exception
+        'tracekit_memberships_invitation_fk exists with an incompatible definition';
+    end if;
+  else
+    select
+      count(*),
+      min(c.conname) filter (
+        where c.confrelid = 'public.tracekit_invitations'::regclass
+          and c.confkey = array[(
+            select a.attnum
+            from pg_catalog.pg_attribute a
+            where a.attrelid = 'public.tracekit_invitations'::regclass
+              and a.attname = 'id'
+              and not a.attisdropped
+          )]::smallint[]
+          and c.confupdtype = 'a'
+          and c.confdeltype = 'a'
+          and c.convalidated
+          and not c.condeferrable
+          and not c.condeferred
+      )
+    into v_invitation_fk_count, v_equivalent_fk_name
+    from pg_catalog.pg_constraint c
+    where c.conrelid = 'public.tracekit_memberships'::regclass
       and c.contype = 'f'
       and c.conkey = array[(
         select a.attnum
@@ -155,33 +210,22 @@ begin
         where a.attrelid = 'public.tracekit_memberships'::regclass
           and a.attname = 'invitation_id'
           and not a.attisdropped
-      )]::smallint[]
-      and c.confrelid = 'public.tracekit_invitations'::regclass
-      and c.confkey = array[(
-        select a.attnum
-        from pg_catalog.pg_attribute a
-        where a.attrelid = 'public.tracekit_invitations'::regclass
-          and a.attname = 'id'
-          and not a.attisdropped
-      )]::smallint[]
-      and c.confupdtype = 'a'
-      and c.confdeltype = 'a'
-      and c.convalidated
-  ) then
-    if exists (
-      select 1
-      from pg_catalog.pg_constraint c
-      where c.conrelid = 'public.tracekit_memberships'::regclass
-        and c.conname = 'tracekit_memberships_invitation_fk'
-    ) then
-      raise exception
-        'tracekit_memberships_invitation_fk exists with an incompatible definition';
-    end if;
+      )]::smallint[];
 
-    alter table public.tracekit_memberships
-      add constraint tracekit_memberships_invitation_fk
-      foreign key (invitation_id)
-      references public.tracekit_invitations(id);
+    if v_invitation_fk_count = 0 then
+      alter table public.tracekit_memberships
+        add constraint tracekit_memberships_invitation_fk
+        foreign key (invitation_id)
+        references public.tracekit_invitations(id);
+    elsif v_invitation_fk_count = 1 and v_equivalent_fk_name is not null then
+      execute format(
+        'alter table public.tracekit_memberships rename constraint %I to tracekit_memberships_invitation_fk',
+        v_equivalent_fk_name
+      );
+    else
+      raise exception
+        'tracekit_memberships.invitation_id has an incompatible or ambiguous foreign key definition';
+    end if;
   end if;
 end
 $migration$;
