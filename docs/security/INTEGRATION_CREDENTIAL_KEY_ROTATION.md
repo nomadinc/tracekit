@@ -19,13 +19,21 @@ the underlying provider credentials. Those remain separate incident gates.
 
 TraceKit integration credentials use server-only AES-256-GCM keys. The database
 stores a non-secret `password_key_version` beside the Base64 IV and authenticated
-ciphertext. Runtime key selection is deterministic:
+ciphertext. Recovery investigation proved two distinct legacy populations:
+Legacy B covers 16 rows and all three active integrations; Legacy C covers two
+inactive rows created before Legacy B. The earlier generic "V1" recovery record
+authenticates none of the 18 rows and remains only as disproven incident evidence.
 
-- version 1 uses `INTEGRATIONS_ENC_KEY_V1`, with `INTEGRATIONS_ENC_KEY` accepted
-  only as a temporary compatibility source;
-- version 2 uses `INTEGRATIONS_ENC_KEY_V2`;
+Runtime key selection is deterministic:
+
+- version 1 is Legacy B and prefers `INTEGRATIONS_ENC_KEY_LEGACY_B`;
+  `INTEGRATIONS_ENC_KEY_V1` and `INTEGRATIONS_ENC_KEY` are temporary
+  compatibility sources only when every supplied value matches;
+- version 3 is decrypt-only Legacy C and uses
+  `INTEGRATIONS_ENC_KEY_LEGACY_C` without fallback;
+- version 2 remains reserved for the future key and uses `INTEGRATIONS_ENC_KEY_V2`;
 - `INTEGRATIONS_ENC_WRITE_VERSION` selects the key for new writes and defaults
-  to version 1 during rollout;
+  to version 1 during rollout; version 3 is never writable;
 - missing, malformed, mismatched, or unsupported keys and versions fail closed.
 
 No key value, key fingerprint, credential plaintext, IV, or ciphertext belongs
@@ -44,20 +52,25 @@ The safe rollout is:
 2. take a fresh encrypted local and off-device recovery point;
 3. install the exact additive Migration 057 DDL outside the ledger, leaving the
    default at version 1;
-4. provision the explicit v1 Worker secret and deploy the dual-key runtime in
-   v1-write mode;
-5. verify all legacy credentials decrypt without provider calls;
-6. generate a random 32-byte v2 key, store it as a Worker secret, and independently
+4. create and independently verify distinct Legacy B and Legacy C recovery records;
+5. deploy a runtime that understands versions 1, 2, and 3 while writes remain 1;
+6. classify exactly the two proven Legacy C rows as version 3 through a separately
+   approved, fail-closed operator transaction;
+7. verify all 16 Legacy B and two Legacy C rows without provider calls;
+8. generate a random 32-byte v2 key, store it as a Worker secret, and independently
    verify a recovery copy before activating v2 writes;
-7. switch writes to v2 and rotate legacy rows in short compare-and-swap transactions;
-8. require zero v1/unknown/partial rows and zero decrypt failures;
-9. retain v1 through an observation and recovery-point retention window, then
-   retire it only when all active and rollback Worker versions are dual-key capable.
+9. switch writes to v2 and rotate both legacy populations in short compare-and-swap transactions;
+10. require zero version-1/version-3/unknown/partial rows and zero decrypt failures;
+11. retire C and B independently after their dependency counts reach zero.
 
 The future normal application of Migration 057 must converge without changing the
-ledger history or rewriting ciphertext. Once all deployed writers explicitly send
-the version, a later migration should remove the database default to prevent stale
-writers from being silently classified as v1.
+ledger history or rewriting ciphertext. Migration 059 adds the closed lineage set
+`1=legacy-b`, `2=future`, `3=legacy-c`; it embeds no row identifiers or encrypted
+values. Production classification uses an ephemeral reviewed list of the two
+internal row keys, asserts both targets are inactive version-1 rows, updates only
+their non-secret version to 3, and proves IV/ciphertext fingerprints unchanged.
+Once all writers explicitly send the version, a later migration should remove the
+default so stale writers cannot be silently classified as Legacy B.
 
 ## Rotation operator contract
 
@@ -70,18 +83,20 @@ only. Rotation does not call providers.
 
 Dry-run validates configuration and decryptability without updates. Live mode
 requires the expected project, schema state, maintenance state, bounded candidate
-count, stop-on-first-error behavior, and post-update verification. Mixed v1/v2
-state remains readable throughout. Once any v2 row exists, a v1-only Worker is no
-longer a safe rollback target.
+count, stop-on-first-error behavior, and post-update verification. Once any row is
+classified as version 3, only a Worker that understands both legacy lineages is a
+safe rollback target. Once any version-2 row exists, only a runtime understanding
+every still-active lineage may receive traffic.
 
 Use a short approved maintenance window for the 18-row production rewrite so
 credential replacement cannot race rotation. Connector consumers may continue
-decrypting mixed v1/v2 rows with the dual-key runtime, but rotation itself must
+decrypting mixed Legacy B, Legacy C, and future-key rows with the multi-key runtime, but rotation itself must
 make no provider calls. Record the first deployed dual-key-capable Worker version
-as the minimum safe rollback version before any row becomes v2; confirm no active
-traffic or rollback target points to an older v1-only version before retiring v1.
+as the minimum safe rollback version before any row becomes version 2; confirm no active
+traffic or rollback target points to a runtime lacking any active lineage before
+retiring Legacy B or Legacy C.
 
-The legacy recovery copy remains sealed through successful v2 migration, the
+Both verified legacy recovery copies remain sealed through successful future-key migration, the
 observation period, database recovery retention, and coordinated Git-history
 remediation. Backup ciphertext and encryption-key recovery copies remain in
 separate failure domains.
