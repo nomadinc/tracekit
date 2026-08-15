@@ -39,12 +39,14 @@ crons = ["0 * * * *"] # every hour
 # - SUPABASE_SERVICE_ROLE_KEY
 # - KONNEKTIVE_INGEST_TOKEN
 # - EVERFLOW_INGEST_TOKEN
+# - INTEGRATIONS_ENC_KEY_V2 (current version-2 write and decrypt key)
+# Temporary retirement-pending secrets; current rows do not depend on them:
 # - INTEGRATIONS_ENC_KEY
-# - INTEGRATIONS_ENC_KEY_V1 (temporary version-1 compatibility binding)
-# - INTEGRATIONS_ENC_KEY_LEGACY_B (deterministic version-1 legacy lineage)
-# - INTEGRATIONS_ENC_KEY_LEGACY_C (decrypt-only version-3 legacy lineage)
-# - INTEGRATIONS_ENC_KEY_V2 (future replacement; not required while writes remain v1)
-# INTEGRATIONS_ENC_WRITE_VERSION is a non-secret var and defaults to 1 when absent.
+# - INTEGRATIONS_ENC_KEY_V1
+# - INTEGRATIONS_ENC_KEY_LEGACY_B
+# - INTEGRATIONS_ENC_KEY_LEGACY_C
+# Production must explicitly set INTEGRATIONS_ENC_WRITE_VERSION=2. The source
+# default remains 1 only for compatibility and is not a safe production fallback.
 # - TK_SECRET_KEY
 # - TKID_HANDOFF_SIGNING_KEY_CURRENT (separate key; referenced by TKID handoff key metadata)
 # - TKID_HANDOFF_SIGNING_KEY_PREVIOUS (rotation window only)

@@ -41,8 +41,6 @@ test("production Worker configuration preserves route, cron, maintenance, and ke
 
   const source = readFileSync(configUrl, "utf8");
   for (const binding of [
-    "INTEGRATIONS_ENC_KEY",
-    "INTEGRATIONS_ENC_KEY_V1",
     "INTEGRATIONS_ENC_KEY_V2",
     "INTEGRATIONS_ENC_WRITE_VERSION",
   ]) {

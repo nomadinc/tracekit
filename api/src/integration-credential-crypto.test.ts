@@ -100,6 +100,47 @@ test("row key requirements and unknown versions fail closed without blind fallba
   await assert.rejects(decryptIntegrationSecret(configured, 99, v1.iv_b64, v1.ct_b64), code("integration_encryption_key_version_unsupported"));
 });
 
+test("V2-only runtime supports an 18-row population and version-2 writes without legacy bindings", async () => {
+  const configured: IntegrationEncryptionEnv = {
+    INTEGRATIONS_ENC_KEY_V2: key(),
+    INTEGRATIONS_ENC_WRITE_VERSION: "2",
+  };
+  const rows = await Promise.all(Array.from({ length: 18 }, async (_, index) => {
+    const encrypted = await encryptIntegrationSecret(configured, `v2-only-${index}`);
+    assert.equal(encrypted.version, 2);
+    return {
+      password_key_version: encrypted.version,
+      password_iv: encrypted.iv_b64,
+      password_ciphertext: encrypted.ct_b64,
+    };
+  }));
+
+  const plaintexts = await Promise.all(rows.map((row) => decryptIntegrationSecretFromRow(configured, row)));
+  assert.deepEqual(plaintexts, Array.from({ length: 18 }, (_, index) => `v2-only-${index}`));
+  await assert.rejects(
+    decryptIntegrationSecret({ ...configured, INTEGRATIONS_ENC_KEY_V2: key() }, 2, rows[0].password_iv, rows[0].password_ciphertext),
+    code("integration_credential_decryption_failed"),
+  );
+  const tampered = Buffer.from(rows[0].password_ciphertext, "base64");
+  tampered[0] ^= 1;
+  await assert.rejects(
+    decryptIntegrationSecret(configured, 2, rows[0].password_iv, tampered.toString("base64")),
+    code("integration_credential_decryption_failed"),
+  );
+  await assert.rejects(
+    decryptIntegrationSecret(configured, 1, rows[0].password_iv, rows[0].password_ciphertext),
+    code("integration_encryption_key_missing"),
+  );
+  await assert.rejects(
+    decryptIntegrationSecret(configured, 3, rows[0].password_iv, rows[0].password_ciphertext),
+    code("integration_encryption_key_missing"),
+  );
+  await assert.rejects(
+    decryptIntegrationSecret(configured, 99, rows[0].password_iv, rows[0].password_ciphertext),
+    code("integration_encryption_key_version_unsupported"),
+  );
+});
+
 test("synthetic 16 Legacy B and 2 Legacy C rows use deterministic keys with no fallback", async () => {
   const configured = env();
   const rows = [];

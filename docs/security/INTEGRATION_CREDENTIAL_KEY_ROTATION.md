@@ -31,9 +31,10 @@ Runtime key selection is deterministic:
   compatibility sources only when every supplied value matches;
 - version 3 is decrypt-only Legacy C and uses
   `INTEGRATIONS_ENC_KEY_LEGACY_C` without fallback;
-- version 2 remains reserved for the future key and uses `INTEGRATIONS_ENC_KEY_V2`;
+- version 2 is the current production key and uses `INTEGRATIONS_ENC_KEY_V2`;
 - `INTEGRATIONS_ENC_WRITE_VERSION` selects the key for new writes and defaults
-  to version 1 during rollout; version 3 is never writable;
+  to version 1 only when absent for compatibility; production explicitly uses
+  version 2 and version 3 is never writable;
 - missing, malformed, mismatched, or unsupported keys and versions fail closed.
 
 No key value, key fingerprint, credential plaintext, IV, or ciphertext belongs
@@ -100,6 +101,38 @@ Both verified legacy recovery copies remain sealed through successful future-key
 observation period, database recovery retention, and coordinated Git-history
 remediation. Backup ciphertext and encryption-key recovery copies remain in
 separate failure domains.
+
+## Post-migration retirement readiness
+
+Production has completed the ciphertext migration: all 18 credential rows use
+version 2, the version-1 and version-3 populations are zero, all three active
+integrations use version 2, and aggregate deterministic decryption is 18/18.
+Legacy B and Legacy C bindings and their compatibility aliases remain installed
+pending a separately authorized retirement transaction. Their secure recovery
+copies and the canary plus eight batch rollback artifacts remain retained.
+
+The runtime resolves keys lazily by the persisted row version. A V2-only Worker
+with `INTEGRATIONS_ENC_KEY_V2` and explicit write version 2 starts, reads, and
+writes without Legacy B, Legacy C, `INTEGRATIONS_ENC_KEY_V1`, or
+`INTEGRATIONS_ENC_KEY`. If a version-1 or version-3 row reappears while its key is
+absent, decryption fails closed; unsupported versions also fail closed. There is
+no cross-key guessing.
+
+After binding retirement, the minimum safe rollback target must be the reviewed
+V2-only Worker version created by that retirement transaction. Version
+`88dacc8f-ecb4-4e67-8825-804784984913` is the source/runtime baseline and writes
+version 2, but it still snapshots retirement-pending bindings. Earlier versions
+must not receive traffic: `627d0444-e8f2-498a-a54f-2024b6a86fa9` lacks V2 support,
+`8c812329-ff93-4984-a854-1bc06b622acc` lacks the V2 binding and writes version 1,
+and `cdc758ec-542d-4bd5-a2de-f26b22be5255` has V2 but defaults writes to version 1.
+Cloudflare retains deployable historical versions, so the deployment runbook must
+prohibit selecting any pre-retirement version after legacy bindings are removed.
+
+Provider credential rotation remains required because it addresses prior browser
+exposure, but it is independent of encryption-key retirement. Git-history
+remediation for historically exposed key material is also separate and remains
+pending. Neither obligation requires current ciphertext to remain dependent on
+legacy decryption bindings.
 
 Coordinated Git-history remediation begins only after v1 is inactive, no database
 row depends on it, v2 is stable, protected refs and CI implications are reviewed,
