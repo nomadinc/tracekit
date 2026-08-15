@@ -175,7 +175,7 @@ test("migration filenames are unique and numerically ordered", () => {
   const numbers = names.map((name) => name.slice(0, 3));
 
   assert.equal(new Set(numbers).size, numbers.length);
-  assert.deepEqual(numbers, Array.from({ length: 59 }, (_, index) => String(index).padStart(3, "0")));
+  assert.deepEqual(numbers, Array.from({ length: 60 }, (_, index) => String(index).padStart(3, "0")));
 });
 
 test("Migration 057 adds convergent credential key-version metadata without rewriting ciphertext", () => {
@@ -188,6 +188,15 @@ test("Migration 057 adds convergent credential key-version metadata without rewr
   assert.match(migration057, /check \(password_key_version > 0\) not valid/);
   assert.doesNotMatch(migration057, /password_iv\s*=/);
   assert.doesNotMatch(migration057, /password_ciphertext\s*=/);
+});
+
+test("Migration 059 defines deterministic Legacy B, future, and Legacy C lineage semantics", () => {
+  const migration059 = migration("059_integration_credential_legacy_lineages_v1.sql");
+  assert.match(migration059, /password_key_version in \(1, 2, 3\)/);
+  assert.match(migration059, /1=legacy-b, 2=future rotation key, 3=legacy-c/);
+  assert.match(migration059, /not embedded/i);
+  assert.doesNotMatch(migration059, /password_iv\s*=/i);
+  assert.doesNotMatch(migration059, /password_ciphertext\s*=/i);
 });
 
 test("Migration 058 makes integration credentials server-only without rewriting secrets", () => {
