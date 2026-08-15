@@ -522,9 +522,11 @@ type Env = {
   SUPABASE_SERVICE_ROLE_KEY: string;
   DEFAULT_WOWSUITE_AUTH_BASE?: string;
   DEFAULT_WOWSUITE_EXPORT_BASE?: string;
-  /** Transitional v1 compatibility binding; prefer INTEGRATIONS_ENC_KEY_V1. */
+  /** Transitional version-1 compatibility binding; prefer the Legacy B binding. */
   INTEGRATIONS_ENC_KEY?: string;
   INTEGRATIONS_ENC_KEY_V1?: string;
+  INTEGRATIONS_ENC_KEY_LEGACY_B?: string;
+  INTEGRATIONS_ENC_KEY_LEGACY_C?: string;
   INTEGRATIONS_ENC_KEY_V2?: string;
   INTEGRATIONS_ENC_WRITE_VERSION?: string;
   TK_SECRET_KEY?: string;

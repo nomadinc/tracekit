@@ -1,11 +1,16 @@
-export const LEGACY_INTEGRATION_KEY_VERSION = 1 as const;
+export const LEGACY_B_INTEGRATION_KEY_VERSION = 1 as const;
 export const CURRENT_INTEGRATION_KEY_VERSION = 2 as const;
-export type IntegrationKeyVersion = 1 | 2;
+export const LEGACY_C_INTEGRATION_KEY_VERSION = 3 as const;
+export const LEGACY_INTEGRATION_KEY_VERSION = LEGACY_B_INTEGRATION_KEY_VERSION;
+export type IntegrationKeyVersion = 1 | 2 | 3;
+export type IntegrationWriteKeyVersion = 1 | 2;
 
 export type IntegrationEncryptionEnv = {
-  /** Transitional v1 compatibility binding. Remove after explicit v1 cutover. */
+  /** Transitional version-1 compatibility binding. Remove after Legacy B cutover. */
   INTEGRATIONS_ENC_KEY?: string;
   INTEGRATIONS_ENC_KEY_V1?: string;
+  INTEGRATIONS_ENC_KEY_LEGACY_B?: string;
+  INTEGRATIONS_ENC_KEY_LEGACY_C?: string;
   INTEGRATIONS_ENC_KEY_V2?: string;
   INTEGRATIONS_ENC_WRITE_VERSION?: string;
 };
@@ -28,6 +33,7 @@ export type IntegrationEncryptionErrorCode =
   | "integration_encryption_key_invalid"
   | "integration_encryption_key_version_unsupported"
   | "integration_encryption_key_mismatch"
+  | "integration_encryption_key_decrypt_only"
   | "integration_credential_decryption_failed";
 
 export class IntegrationEncryptionError extends Error {
@@ -87,18 +93,22 @@ function normalizeVersion(value: unknown, allowMissingLegacy: boolean): Integrat
   if ((value === null || value === undefined || value === "") && allowMissingLegacy) {
     return LEGACY_INTEGRATION_KEY_VERSION;
   }
-  if (typeof value !== "number" && value !== "1" && value !== "2") {
+  if (typeof value !== "number" && value !== "1" && value !== "2" && value !== "3") {
     throw new IntegrationEncryptionError("integration_encryption_key_version_unsupported");
   }
   const numeric = typeof value === "number" ? value : Number(value);
-  if (numeric !== LEGACY_INTEGRATION_KEY_VERSION && numeric !== CURRENT_INTEGRATION_KEY_VERSION) {
+  if (![LEGACY_B_INTEGRATION_KEY_VERSION, CURRENT_INTEGRATION_KEY_VERSION, LEGACY_C_INTEGRATION_KEY_VERSION].includes(numeric as IntegrationKeyVersion)) {
     throw new IntegrationEncryptionError("integration_encryption_key_version_unsupported");
   }
   return numeric;
 }
 
-export function integrationEncryptionWriteVersion(env: IntegrationEncryptionEnv): IntegrationKeyVersion {
-  return normalizeVersion(env.INTEGRATIONS_ENC_WRITE_VERSION ?? "1", false);
+export function integrationEncryptionWriteVersion(env: IntegrationEncryptionEnv): IntegrationWriteKeyVersion {
+  const version = normalizeVersion(env.INTEGRATIONS_ENC_WRITE_VERSION ?? "1", false);
+  if (version === LEGACY_C_INTEGRATION_KEY_VERSION) {
+    throw new IntegrationEncryptionError("integration_encryption_key_decrypt_only");
+  }
+  return version;
 }
 
 function encodedKeyForVersion(env: IntegrationEncryptionEnv, version: IntegrationKeyVersion): string {
@@ -109,19 +119,28 @@ function encodedKeyForVersion(env: IntegrationEncryptionEnv, version: Integratio
     return env.INTEGRATIONS_ENC_KEY_V2;
   }
 
-  const explicit = env.INTEGRATIONS_ENC_KEY_V1;
-  const compatibility = env.INTEGRATIONS_ENC_KEY;
-  if (!explicit && !compatibility) {
+  if (version === LEGACY_C_INTEGRATION_KEY_VERSION) {
+    if (!env.INTEGRATIONS_ENC_KEY_LEGACY_C) {
+      throw new IntegrationEncryptionError("integration_encryption_key_missing");
+    }
+    return env.INTEGRATIONS_ENC_KEY_LEGACY_C;
+  }
+
+  const candidates = [
+    env.INTEGRATIONS_ENC_KEY_LEGACY_B,
+    env.INTEGRATIONS_ENC_KEY_V1,
+    env.INTEGRATIONS_ENC_KEY,
+  ].filter((value): value is string => Boolean(value));
+  if (!candidates.length) {
     throw new IntegrationEncryptionError("integration_encryption_key_missing");
   }
-  if (explicit && compatibility) {
-    const explicitRaw = decodeEncryptionKey(explicit);
-    const compatibilityRaw = decodeEncryptionKey(compatibility);
-    if (!equalBytes(explicitRaw, compatibilityRaw)) {
+  const selectedRaw = decodeEncryptionKey(candidates[0]);
+  for (const candidate of candidates.slice(1)) {
+    if (!equalBytes(selectedRaw, decodeEncryptionKey(candidate))) {
       throw new IntegrationEncryptionError("integration_encryption_key_mismatch");
     }
   }
-  return explicit ?? compatibility!;
+  return candidates[0];
 }
 
 async function importEncryptionKey(env: IntegrationEncryptionEnv, version: IntegrationKeyVersion): Promise<CryptoKey> {
@@ -134,6 +153,9 @@ export async function encryptIntegrationSecret(
   plaintext: string,
   version = integrationEncryptionWriteVersion(env),
 ): Promise<EncryptedIntegrationSecret> {
+  if (version === LEGACY_C_INTEGRATION_KEY_VERSION) {
+    throw new IntegrationEncryptionError("integration_encryption_key_decrypt_only");
+  }
   const key = await importEncryptionKey(env, version);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const ciphertext = await crypto.subtle.encrypt(
@@ -186,7 +208,7 @@ export async function decryptIntegrationSecretFromRow(
 export async function reencryptIntegrationSecret(
   env: IntegrationEncryptionEnv,
   row: IntegrationCredentialCipherRow,
-  targetVersion: IntegrationKeyVersion = CURRENT_INTEGRATION_KEY_VERSION,
+  targetVersion: IntegrationWriteKeyVersion = CURRENT_INTEGRATION_KEY_VERSION,
 ): Promise<EncryptedIntegrationSecret> {
   const plaintext = await decryptIntegrationSecretFromRow(env, row);
   return encryptIntegrationSecret(env, plaintext, targetVersion);
