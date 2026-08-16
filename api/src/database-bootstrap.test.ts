@@ -175,7 +175,18 @@ test("migration filenames are unique and numerically ordered", () => {
   const numbers = names.map((name) => name.slice(0, 3));
 
   assert.equal(new Set(numbers).size, numbers.length);
-  assert.deepEqual(numbers, Array.from({ length: 60 }, (_, index) => String(index).padStart(3, "0")));
+  assert.deepEqual(numbers, Array.from({ length: 61 }, (_, index) => String(index).padStart(3, "0")));
+});
+
+test("Migration 060 converges protected table ACLs without changing default privileges", () => {
+  const migration060 = migration("060_systemic_service_role_table_acl_convergence.sql").toLowerCase();
+  assert.match(migration060, /revoke all privileges on table[\s\S]*from service_role/);
+  assert.match(migration060, /grant select, insert, update, delete on table[\s\S]*to service_role/);
+  assert.match(migration060, /grant select, insert on table public\.commerce_product_mapping_decisions\s+to service_role/);
+  assert.match(migration060, /revoke all privileges on table[\s\S]*from public, anon, authenticated/);
+  assert.doesNotMatch(migration060, /alter default privileges/);
+  assert.doesNotMatch(migration060, /alter table[^;]*(enable|disable|force|no force) row level security/);
+  assert.doesNotMatch(migration060, /create policy|drop policy|alter policy/);
 });
 
 test("Migration 057 adds convergent credential key-version metadata without rewriting ciphertext", () => {
