@@ -324,6 +324,8 @@ test("commerce control-plane migration remains additive and server-only", () => 
   assert.match(migration041, /setup_request_id uuid/);
   assert.match(migration041, /commerce_provider_connections_org_setup_request_uidx/);
   assert.match(migration041, /organization_id, setup_request_id/);
+  assert.match(migration041, /revoke all on function public\.commerce_product_mapping_decision_immutable_guard\(\)/);
+  assert.match(migration041, /from public, anon, authenticated/);
   assert.doesNotMatch(migration041, /insert into public\.commerce_provider_connections/);
 
   const migration042 = migration("042_commerce_evidence_storage_v1.sql").toLowerCase();

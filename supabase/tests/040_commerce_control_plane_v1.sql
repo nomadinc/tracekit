@@ -1,6 +1,6 @@
 begin;
 
-select plan(34);
+select plan(37);
 
 select has_column('public', 'commerce_sync_runs', 'lease_owner', 'Sync Runs have a lease owner');
 select has_column('public', 'commerce_sync_runs', 'lease_expires_at', 'Sync Runs have lease expiry');
@@ -11,6 +11,9 @@ select is((select relrowsecurity from pg_class where oid = 'public.commerce_prod
 select is(has_table_privilege('authenticated', 'public.commerce_product_mapping_decisions', 'SELECT'), false, 'browser roles cannot read mapping decisions');
 select is(has_function_privilege('authenticated', 'public.claim_commerce_sync_run(uuid,uuid,uuid,text,integer)', 'EXECUTE'), false, 'browser role cannot claim Sync Runs');
 select is(has_function_privilege('authenticated', 'public.rotate_commerce_provider_credential(uuid,uuid,uuid,text,text,integer,bytea,bytea)', 'EXECUTE'), false, 'browser role cannot rotate credentials');
+select is(has_function_privilege('public', 'public.commerce_product_mapping_decision_immutable_guard()', 'EXECUTE'), false, 'PUBLIC cannot execute the immutable mapping-decision guard');
+select is(has_function_privilege('anon', 'public.commerce_product_mapping_decision_immutable_guard()', 'EXECUTE'), false, 'anon cannot execute the immutable mapping-decision guard');
+select is(has_function_privilege('authenticated', 'public.commerce_product_mapping_decision_immutable_guard()', 'EXECUTE'), false, 'authenticated cannot execute the immutable mapping-decision guard');
 select has_column('public', 'platform_orders', 'provider_order_id', 'Orders have an additive provider-scoped source ID');
 select has_index('public', 'platform_orders', 'platform_orders_provider_source_uidx', 'provider Order IDs have scoped uniqueness');
 select ok((select count(*) = 1 from pg_constraint where conname = 'platform_orders_platform_order_id_key'), 'legacy global Order uniqueness remains present');
