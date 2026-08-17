@@ -175,7 +175,20 @@ test("migration filenames are unique and numerically ordered", () => {
   const numbers = names.map((name) => name.slice(0, 3));
 
   assert.equal(new Set(numbers).size, numbers.length);
-  assert.deepEqual(numbers, Array.from({ length: 61 }, (_, index) => String(index).padStart(3, "0")));
+  assert.deepEqual(numbers, Array.from({ length: 62 }, (_, index) => String(index).padStart(3, "0")));
+});
+
+test("Migration 061 converges trigger-only guard functions without changing definitions or defaults", () => {
+  const migration061 = migration("061_systemic_function_acl_convergence.sql").toLowerCase();
+  assert.match(migration061, /revoke all privileges on function[\s\S]*commerce_provider_credential_version_guard\(\)/);
+  assert.match(migration061, /commerce_evidence_immutable_guard\(\)/);
+  assert.match(migration061, /tracekit_investigation_version_immutable_guard\(\)/);
+  assert.match(migration061, /tracekit_investigation_branch_guard\(\)/);
+  assert.match(migration061, /tracekit_investigation_branch_immutable_guard\(\)/);
+  assert.match(migration061, /from public, anon, authenticated, service_role/);
+  assert.doesNotMatch(migration061, /alter default privileges/);
+  assert.doesNotMatch(migration061, /create or replace function|alter function/);
+  assert.doesNotMatch(migration061, /grant execute/);
 });
 
 test("Migration 060 converges protected table ACLs without changing default privileges", () => {

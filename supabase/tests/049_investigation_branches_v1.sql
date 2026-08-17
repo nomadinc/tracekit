@@ -1,10 +1,23 @@
-begin; select plan(19);
+begin; select plan(31);
 
 select col_is_null('public','tracekit_investigations','parent_investigation_id','root Investigation has no parent by default');
 select col_is_null('public','tracekit_investigations','parent_investigation_version_id','root Investigation has no parent version by default');
 select has_fk('public','tracekit_investigations','branch relationship is foreign-key protected');
 select has_function('public','tracekit_investigation_branch_guard',array[]::text[],'cycle guard exists');
 select is((select count(*)::integer from information_schema.role_routine_grants where routine_schema='public' and routine_name in('tracekit_investigation_branch_guard','tracekit_investigation_branch_immutable_guard') and grantee in('anon','authenticated')),0,'browser roles cannot execute branch guards');
+revoke all privileges on function public.tracekit_investigation_branch_guard(), public.tracekit_investigation_branch_immutable_guard() from public, anon, authenticated, service_role;
+select ok(has_function_privilege('postgres','public.tracekit_investigation_branch_guard()','execute'),'branch guard owner retains execution');
+select ok(has_function_privilege('postgres','public.tracekit_investigation_branch_immutable_guard()','execute'),'branch immutable guard owner retains execution');
+select ok(not has_function_privilege('service_role','public.tracekit_investigation_branch_guard()','execute'),'service_role cannot execute branch guard');
+select ok(not has_function_privilege('service_role','public.tracekit_investigation_branch_immutable_guard()','execute'),'service_role cannot execute branch immutable guard');
+select ok(not has_function_privilege('public','public.tracekit_investigation_branch_guard()','execute'),'PUBLIC cannot execute branch guard');
+select ok(not has_function_privilege('anon','public.tracekit_investigation_branch_guard()','execute'),'anon cannot execute branch guard');
+select ok(not has_function_privilege('authenticated','public.tracekit_investigation_branch_guard()','execute'),'authenticated cannot execute branch guard');
+select ok(not has_function_privilege('public','public.tracekit_investigation_branch_immutable_guard()','execute'),'PUBLIC cannot execute branch immutable guard');
+select ok(not has_function_privilege('anon','public.tracekit_investigation_branch_immutable_guard()','execute'),'anon cannot execute branch immutable guard');
+select ok(not has_function_privilege('authenticated','public.tracekit_investigation_branch_immutable_guard()','execute'),'authenticated cannot execute branch immutable guard');
+select is((select count(*)::integer from pg_trigger where not tgisinternal and tgfoid='public.tracekit_investigation_branch_guard()'::regprocedure and tgrelid='public.tracekit_investigations'::regclass),1,'branch cycle trigger targets exact guard');
+select is((select count(*)::integer from pg_trigger where not tgisinternal and tgfoid='public.tracekit_investigation_branch_immutable_guard()'::regprocedure and tgrelid='public.tracekit_investigations'::regclass),1,'branch immutable trigger targets exact guard');
 
 insert into public.tracekit_accounts(id,account_type,name) values
  ('a4900000-0000-0000-0000-000000000001','client','Branch A'),
