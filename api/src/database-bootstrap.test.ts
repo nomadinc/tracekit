@@ -175,7 +175,7 @@ test("migration filenames are unique and numerically ordered", () => {
   const numbers = names.map((name) => name.slice(0, 3));
 
   assert.equal(new Set(numbers).size, numbers.length);
-  assert.deepEqual(numbers, Array.from({ length: 62 }, (_, index) => String(index).padStart(3, "0")));
+  assert.deepEqual(numbers, Array.from({ length: 63 }, (_, index) => String(index).padStart(3, "0")));
 });
 
 test("Migration 061 converges trigger-only guard functions without changing definitions or defaults", () => {
@@ -431,5 +431,10 @@ test("commerce control-plane migration remains additive and server-only", () => 
   assert.match(migration055,/erase_tkid_relay_on_journey_tombstone/);
   assert.match(migration055,/revoke all on public\.tkid_relay_flows,public\.tkid_relay_continuities,public\.tkid_relay_events from anon,authenticated/);
   assert.doesNotMatch(migration055,/insert into public\.commerce_repository_activation/);
+
+  const migration062 = migration("062_tkid_relay_trigger_function_acl_convergence.sql").toLowerCase();
+  assert.match(migration062,/revoke all privileges on function/);
+  assert.match(migration062,/erase_tkid_relay_on_journey_tombstone\(\)/);
+  assert.doesNotMatch(migration062,/create table|alter table|create trigger|create or replace function|insert into|update |delete from/);
 
 });
