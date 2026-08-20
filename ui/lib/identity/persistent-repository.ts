@@ -31,9 +31,26 @@ export type AuditEventInput = {
   metadata?: Record<string, unknown>;
 };
 
+export type FirstAdminBootstrapInput = {
+  userId: string;
+  authenticatedIdentityId: string;
+  organizationName: string;
+  accountName: string;
+  correlationId: string;
+};
+
+export type FirstAdminBootstrapResult = {
+  accountId: string;
+  organizationId: string;
+  membershipId: string;
+  roleKey: "organization-owner";
+};
+
 export interface IdentityTenancyRepository {
   synchronizeUser(identity: WorkOSIdentityInput): Promise<PersistentUser>;
   membershipsForUser(userId: string): Promise<PersistentMembership[]>;
+  isEmptyInstallation(): Promise<boolean>;
+  bootstrapFirstAdmin(input: FirstAdminBootstrapInput): Promise<FirstAdminBootstrapResult>;
   accountById(accountId: string): Promise<PersistentAccount | null>;
   agencyByAccountId(accountId: string): Promise<PersistentAgency | null>;
   organizationsForMembership(membership: PersistentMembership, agency: PersistentAgency | null): Promise<PersistentOrganizationRecord[]>;

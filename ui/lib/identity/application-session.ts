@@ -18,6 +18,7 @@ const DEVELOPMENT_REVIEW_HEADER = "x-tracekit-development-review";
 export type ApplicationSessionResolution =
   | { kind: "development" }
   | { kind: "authenticated"; session: TraceKitSessionContext; clientSession: SafeClientSession; legacySession: IdentitySession }
+  | { kind: "bootstrap" }
   | { kind: "no-membership" }
   | { kind: "provider-unavailable" }
   | { kind: "unauthenticated" };
@@ -36,6 +37,26 @@ export async function recordAuthenticationSuccess(identity: WorkOSIdentityInput)
   const user = await repository.synchronizeUser(identity);
   await repository.recordAuditEvent({ actorUserId: user.id, authenticatedIdentityId: identity.id, accountId: null, organizationId: null, action: "authentication.sign_in.succeeded", result: "success", correlationId: randomUUID(), metadata: { provider: "workos" } });
   return user;
+}
+
+export async function resolveAuthenticatedPersistentIdentity() {
+  if (!configured()) return null;
+  let auth: Awaited<ReturnType<typeof withAuth>>;
+  try {
+    auth = await withAuth();
+  } catch {
+    return null;
+  }
+  if (!auth.user) return null;
+  const repository = new SupabaseIdentityTenancyRepository();
+  const user = await repository.synchronizeUser({
+    id: auth.user.id,
+    email: auth.user.email,
+    firstName: auth.user.firstName,
+    lastName: auth.user.lastName,
+    profilePictureUrl: auth.user.profilePictureUrl,
+  });
+  return { user, externalWorkosUserId: auth.user.id, repository };
 }
 
 export async function resolveApplicationSession(): Promise<ApplicationSessionResolution> {
@@ -76,7 +97,7 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
   // membership; explicit capability overrides remain the narrow bridge for
   // Product/Admin review inside that Organization.
   const membership = selectSessionMembership(memberships);
-  if (!membership) return { kind: "no-membership" };
+  if (!membership) return (await repository.isEmptyInstallation()) ? { kind: "bootstrap" } : { kind: "no-membership" };
   const directlyScopedOrganizations = membership.organizationId ? await repository.organizationsForMembership(membership, null) : [];
   const accountId = membership.accountId || directlyScopedOrganizations[0]?.owningAccountId;
   if (!accountId) return { kind: "no-membership" };

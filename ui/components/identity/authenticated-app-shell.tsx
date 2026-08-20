@@ -1,11 +1,13 @@
 import Link from "next/link";
 import AppShell from "@/components/layout/app-shell";
 import { resolveApplicationSession } from "@/lib/identity/application-session";
+import FirstAdminBootstrap from "./first-admin-bootstrap";
 
 export async function AuthenticatedAppShell({ children }: { children: React.ReactNode }) {
   const resolution = await resolveApplicationSession();
   if (resolution.kind === "provider-unavailable") return <SessionState title="Authentication unavailable" description="WorkOS and persistent identity configuration are required for authenticated TraceKit operation." />;
   if (resolution.kind === "unauthenticated") return <SessionState title="Sign in required" description="Authenticate to continue." signIn />;
+  if (resolution.kind === "bootstrap") return <FirstAdminBootstrap />;
   if (resolution.kind === "no-membership") return <SessionState title="No TraceKit access" description="Your identity is verified, but no active TraceKit account membership is assigned." />;
   if (resolution.kind === "development") return <AppShell>{children}</AppShell>;
   return <AppShell initialSession={resolution.legacySession} organizations={resolution.session.availableOrganizations} businessContexts={resolution.session.accessibleBusinessContexts}>{children}</AppShell>;

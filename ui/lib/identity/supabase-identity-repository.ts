@@ -1,4 +1,4 @@
-import type { IdentityTenancyRepository, AuditEventInput, PersistentOrganizationRecord } from "./persistent-repository";
+import type { IdentityTenancyRepository, AuditEventInput, FirstAdminBootstrapInput, PersistentOrganizationRecord } from "./persistent-repository";
 import { redactAuditMetadata } from "./persistent-repository";
 import type { PermissionOverride, PersistentAccount, PersistentAgency, PersistentMembership, PersistentUser, WorkOSIdentityInput } from "./persistent-types";
 import type { Role } from "./permissions";
@@ -36,6 +36,36 @@ export class SupabaseIdentityTenancyRepository implements IdentityTenancyReposit
   async membershipsForUser(userId: string) {
     const rows = await rest(`tracekit_memberships?user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=*,tracekit_roles(role_key)`) as Array<Row & { tracekit_roles?: { role_key?: string } }>;
     return rows.map((row) => ({ id: String(row.id), userId: String(row.user_id), accountId: row.account_id ? String(row.account_id) : null, organizationId: row.organization_id ? String(row.organization_id) : null, role: String(row.tracekit_roles?.role_key) as Role, status: row.status as PersistentMembership["status"] }));
+  }
+
+  async isEmptyInstallation() {
+    const [organizations, accounts, memberships] = await Promise.all([
+      rest("tracekit_organizations?select=id&limit=1"),
+      rest("tracekit_accounts?select=id&limit=1"),
+      rest("tracekit_memberships?select=id&limit=1"),
+    ]) as [Row[], Row[], Row[]];
+    return organizations.length === 0 && accounts.length === 0 && memberships.length === 0;
+  }
+
+  async bootstrapFirstAdmin(input: FirstAdminBootstrapInput) {
+    const rows = await rest("rpc/bootstrap_tracekit_first_admin", {
+      method: "POST",
+      body: JSON.stringify({
+        p_user_id: input.userId,
+        p_authenticated_identity_id: input.authenticatedIdentityId,
+        p_organization_name: input.organizationName,
+        p_account_name: input.accountName,
+        p_correlation_id: input.correlationId,
+      }),
+    }) as Row[];
+    const row = rows[0];
+    if (!row) throw new Error("TraceKit bootstrap did not create an installation.");
+    return {
+      accountId: String(row.account_id),
+      organizationId: String(row.organization_id),
+      membershipId: String(row.membership_id),
+      roleKey: "organization-owner" as const,
+    };
   }
 
   async accountById(accountId: string) {
