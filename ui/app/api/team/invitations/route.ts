@@ -4,6 +4,7 @@ import { teamScopeFromSession } from "@/lib/identity/team-api";
 import { requirePermission } from "@/lib/identity/authorization-gateway";
 import { normalizeInvitationEmail, requireRoleForAccountType } from "@/lib/identity/team-management";
 import { SupabaseTeamRepository } from "@/lib/identity/supabase-team-repository";
+import type { TeamScope } from "@/lib/identity/team-repository";
 
 const INVITATION_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -28,8 +29,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "The requested resource is unavailable." }, { status: 404 });
   }
   const repository = new SupabaseTeamRepository();
-  const scope = teamScopeFromSession(resolution.session);
+  let scope: TeamScope | null = null;
   try {
+    scope = teamScopeFromSession(resolution.session);
     requirePermission(resolution.session, "users.invite");
     const body = await request.json().catch(() => null) as { email?: unknown; role?: unknown } | null;
     const intendedEmail = normalizeInvitationEmail(body?.email);
@@ -41,11 +43,11 @@ export async function POST(request: Request) {
       repository.listInvitations(scope),
     ]);
     if (members.some((member) => member.status !== "removed" && member.primaryEmail.trim().toLowerCase() === intendedEmail)) {
-      return NextResponse.json({ error: "A team member already uses that email." }, { status: 409 });
+      throw new Error("member_exists");
     }
     const now = Date.now();
     if (invitations.some((invitation) => invitation.status === "pending" && Date.parse(invitation.expiresAt) > now && invitation.intendedEmail.trim().toLowerCase() === intendedEmail)) {
-      return NextResponse.json({ error: "A pending invitation already exists for that email." }, { status: 409 });
+      throw new Error("invitation_exists");
     }
 
     const invitation = await repository.createInvitation({
@@ -69,20 +71,23 @@ export async function POST(request: Request) {
     });
     return NextResponse.json({ invitation }, { status: 201 });
   } catch (error) {
-    await repository.recordAuditEvent({
-      actorUserId: resolution.session.user.id,
-      authenticatedIdentityId: resolution.session.externalWorkosUserId,
-      scope,
-      action: "team.invitation.create_denied",
-      targetType: "invitation",
-      targetId: "new",
-      result: "denied",
-      permissionEvaluated: "users.invite",
-      correlationId: resolution.session.correlationId,
-      metadata: { reason: error instanceof Error ? error.message : "unknown" },
-    }).catch(() => undefined);
+    if (scope) {
+      await repository.recordAuditEvent({
+        actorUserId: resolution.session.user.id,
+        authenticatedIdentityId: resolution.session.externalWorkosUserId,
+        scope,
+        action: "team.invitation.create_denied",
+        targetType: "invitation",
+        targetId: "new",
+        result: "denied",
+        permissionEvaluated: "users.invite",
+        correlationId: resolution.session.correlationId,
+        metadata: { reason: error instanceof Error ? error.message : "unknown" },
+      }).catch(() => undefined);
+    }
     const message = error instanceof Error ? error.message : "";
-    const status = /invalid_email|invalid_role/.test(message) ? 400 : 404;
-    return NextResponse.json({ error: status === 400 ? "The invitation details are invalid." : "The requested resource is unavailable." }, { status });
+    const status = /member_exists|invitation_exists/.test(message) ? 409 : /invalid_email|invalid_role/.test(message) ? 400 : 404;
+    const responseMessage = status === 409 ? "That user already has a membership or pending invitation." : status === 400 ? "The invitation details are invalid." : "The requested resource is unavailable.";
+    return NextResponse.json({ error: responseMessage }, { status });
   }
 }
