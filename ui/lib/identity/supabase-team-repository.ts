@@ -95,7 +95,7 @@ export class SupabaseTeamRepository implements TeamRepository {
 
   async listInvitations(scope: TeamScope) {
     const filter = scopeFilter(scope, "target_account_id", "target_organization_id");
-    const rows = await rest(`tracekit_invitations?${filter}&select=id,intended_email,status,expires_at,created_at,workos_invitation_id,tracekit_roles:requested_role_id(role_key)&order=created_at.desc`) as Array<Row & { tracekit_roles?: RoleJoin }>;
+    const rows = await rest(`tracekit_invitations?${filter}&select=id,intended_email,status,expires_at,created_at,workos_invitation_id,tracekit_roles(role_key)&order=created_at.desc`) as Array<Row & { tracekit_roles?: RoleJoin }>;
     return rows.map(mapInvitation);
   }
 
@@ -104,7 +104,7 @@ export class SupabaseTeamRepository implements TeamRepository {
   }
 
   async invitationById(invitationId: string) {
-    const rows = await rest(`tracekit_invitations?id=eq.${encodeURIComponent(invitationId)}&select=id,intended_email,status,expires_at,created_at,workos_invitation_id,target_account_id,target_organization_id,tracekit_roles:requested_role_id(role_key)&limit=1`) as Array<Row & { tracekit_roles?: RoleJoin }>;
+    const rows = await rest(`tracekit_invitations?id=eq.${encodeURIComponent(invitationId)}&select=id,intended_email,status,expires_at,created_at,workos_invitation_id,target_account_id,target_organization_id,tracekit_roles(role_key)&limit=1`) as Array<Row & { tracekit_roles?: RoleJoin }>;
     const row = rows[0];
     if (!row) return null;
     return {
@@ -151,7 +151,7 @@ export class SupabaseTeamRepository implements TeamRepository {
       status: "pending",
       expires_at: input.expiresAt,
     };
-    const rows = await rest("tracekit_invitations?select=id,intended_email,status,expires_at,created_at,workos_invitation_id,tracekit_roles:requested_role_id(role_key)", {
+    const rows = await rest("tracekit_invitations?select=id,intended_email,status,expires_at,created_at,workos_invitation_id,tracekit_roles(role_key)", {
       method: "POST",
       body: JSON.stringify(payload),
     }) as Array<Row & { tracekit_roles?: RoleJoin }>;
