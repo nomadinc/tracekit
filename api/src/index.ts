@@ -14,7 +14,7 @@ import {
   maintenanceRequiresAdminAuthorization,
   maintenanceWriteAllowed,
 } from "./maintenance-write-gate";
-import { consumeCommerceMessage, isConnectedCommasConnection, runCommerceCron, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
+import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, runCommerceCron, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
 import { enforceTkidRate, ephemeralTransportDimension, TkidRateLimitError, type DistributedCounterStore, type TkidAbuseClass } from "./tkid-distributed-abuse";
 import {
   DEFAULT_SHOPIFY_API_VERSION,
@@ -752,10 +752,20 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
       return (count || 0) > 0;
     },
     async eligibleJobs(now) {
-      const { data, error } = await db.from("commerce_sync_schedules").select("id,connection_id,resource,next_overlap_at,next_deep_reconciliation_at,quota_minimum_remaining,deep_request_budget,commerce_provider_connections!inner(provider,status)").eq("enabled", true).eq("activation_state", "enabled").eq("commerce_provider_connections.provider", "commas").eq("commerce_provider_connections.status", "connected");
+      // Schedules have a composite FK to provider accounts, not a direct FK to
+      // provider connections. Avoid PostgREST relationship embedding here: the
+      // relationship is not valid for this table and can fail on schema-cache
+      // refreshes even when the underlying IDs are sound.
+      const { data, error } = await db.from("commerce_sync_schedules").select("id,organization_id,connection_id,provider_account_id,resource,next_overlap_at,next_deep_reconciliation_at,quota_minimum_remaining,deep_request_budget").eq("enabled", true).eq("activation_state", "enabled");
       if (error) throw error;
       const jobs: any[] = [];
       for (const row of data || []) {
+        const { data: connection, error: connectionError } = await db.from("commerce_provider_connections").select("organization_id,provider,status").eq("organization_id", row.organization_id).eq("id", row.connection_id).maybeSingle();
+        if (connectionError) throw connectionError;
+        if (!connection || !isConnectedCommasConnection(connection)) continue;
+        const { data: activeAccounts, error: accountError } = await db.from("commerce_provider_accounts").select("id,status").eq("organization_id", row.organization_id).eq("connection_id", row.connection_id).eq("status", "active");
+        if (accountError) throw accountError;
+        if (!isEligibleCommasScheduleScope(connection, (activeAccounts || []).map((account: any) => account.id), row.provider_account_id)) continue;
         const overlapDue = !row.next_overlap_at || Date.parse(row.next_overlap_at) <= Date.parse(now);
         const deepDue = row.next_deep_reconciliation_at && Date.parse(row.next_deep_reconciliation_at) <= Date.parse(now);
         if (!overlapDue && !deepDue) continue;
