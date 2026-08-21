@@ -554,6 +554,7 @@ type Env = {
   wowboost_imports?: Queue<any>;
   continuous_commerce?: Queue<CommerceQueueMessage>;
   CONTINUOUS_COMMERCE_RUNTIME?: Fetcher;
+  CONTINUOUS_RUNTIME_SHARED_SECRET?: string;
   TRACEKIT_COMMERCE_SCHEDULER_ENABLED?: string;
   TRACEKIT_COMMERCE_KILL_SWITCH?: string;
 };
@@ -776,7 +777,7 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
         const unknownQuota = !Number.isFinite(quotaRemaining);
         const bootstrapAttempted = latestMetadata.quota_bootstrap_attempted === true;
         const bootstrap = mode === "continuous" && unknownQuota && !bootstrapAttempted;
-        jobs.push({ connectionId: row.connection_id, resource: row.resource, mode, schedulerIdentity: bootstrap ? `${row.id}:quota-bootstrap` : `${row.id}:${mode}:${now.slice(0,16)}`, quotaRemaining: Number.isFinite(quotaRemaining) ? quotaRemaining : null, requestBudget: bootstrap ? 1 : mode === "deep_reconciliation" ? row.deep_request_budget : 8, quotaFloor: row.quota_minimum_remaining, ...(bootstrap ? { bootstrap: true as const } : {}) });
+        jobs.push({ organizationId: row.organization_id, connectionId: row.connection_id, providerAccountId: row.provider_account_id, resource: row.resource, mode, schedulerIdentity: bootstrap ? `${row.id}:quota-bootstrap` : `${row.id}:${mode}:${now.slice(0,16)}`, quotaRemaining: Number.isFinite(quotaRemaining) ? quotaRemaining : null, requestBudget: bootstrap ? 1 : mode === "deep_reconciliation" ? row.deep_request_budget : 8, quotaFloor: row.quota_minimum_remaining, ...(bootstrap ? { bootstrap: true as const } : {}) });
       }
       return jobs;
     },
@@ -22022,7 +22023,7 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 		        runtime: {
 		          async run(message) {
 		            if (!env.CONTINUOUS_COMMERCE_RUNTIME) throw Object.assign(new Error("continuous_runtime_binding_missing"), { code: "invalid_configuration" });
-		            const response = await env.CONTINUOUS_COMMERCE_RUNTIME.fetch("https://continuous-runtime.internal/v1/commerce/sync", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(message) });
+		            const response = await env.CONTINUOUS_COMMERCE_RUNTIME.fetch("https://continuous-runtime.internal/v1/commerce/sync", { method: "POST", headers: { "content-type": "application/json", "x-tracekit-runtime-secret": String(env.TK_SECRET_KEY || "") }, body: JSON.stringify(message) });
 		            if (!response.ok) throw Object.assign(new Error(`continuous_runtime_${response.status}`), { code: response.status === 429 ? "429" : response.status >= 500 ? "runtime_timeout" : "invalid_runtime_request" });
 		            return await response.json() as { status: "completed" | "completed_with_warnings"; providerRequests: number };
 		          },
