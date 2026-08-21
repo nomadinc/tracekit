@@ -40,9 +40,9 @@ const number=(value:unknown)=>{const parsed=Number(value);return Number.isFinite
 const sleep=(ms:number)=>new Promise((resolve)=>setTimeout(resolve,ms));
 const bytea=(value:unknown)=>Uint8Array.from(Buffer.from(String(value).replace(/^\\x/,""),"hex"));
 
-async function fetchProviderPage(secret:string,page:number,perPage:number,correlationId:string) {
+async function fetchProviderPage(secret:string,page:number,perPage:number,correlationId:string,maxAttempts=3) {
   let lastStatus=0;
-  for(let attempt=1;attempt<=3;attempt++) {
+  for(let attempt=1;attempt<=maxAttempts;attempt++) {
     try {
       const response=await fetch(`https://www.fanbasis.com/public-api/checkout-sessions/transactions?page=${page}&per_page=${perPage}`,{headers:{"x-api-key":secret,Accept:"application/json","x-correlation-id":correlationId},signal:AbortSignal.timeout(30_000)});
       lastStatus=response.status;
@@ -51,20 +51,21 @@ async function fetchProviderPage(secret:string,page:number,perPage:number,correl
       if(![429,500,502,503,504].includes(response.status)) throw new Error("Commas rejected the continuous sync request.");
       await sleep(rateLimitDelay({status:response.status,retryAfterSeconds:number(response.headers.get("retry-after")),remaining:rateLimit.remaining,attempt}));
     } catch(error) {
-      if(attempt===3)throw error;
+      if(attempt===maxAttempts)throw error;
       await sleep(rateLimitDelay({status:lastStatus,retryAfterSeconds:null,remaining:null,attempt}));
     }
   }
   throw new Error(`Commas continuous sync exhausted retries (${lastStatus||"network"}).`);
 }
 
-async function scopedConnection() {
+async function scopedConnection(expected?:{organizationId:string;connectionId:string;providerAccountId:string}) {
   const connections=await db("commerce_provider_connections?provider=eq.commas&status=eq.connected&select=id,organization_id,account_id&limit=2");
   if(connections.length!==1)throw new Error("Continuous sync requires exactly one connected Commas Connection.");
   const connectionId=String(connections[0].id),organizationId=String(connections[0].organization_id),accountId=String(connections[0].account_id);
   const accounts=await db(`commerce_provider_accounts?connection_id=eq.${connectionId}&organization_id=eq.${organizationId}&status=eq.active&select=id&limit=2`);
   if(accounts.length!==1)throw new Error("Continuous sync requires one active Provider Account.");
   const providerAccountId=String(accounts[0].id);
+  if(expected&&(`${expected.organizationId}:${expected.connectionId}:${expected.providerAccountId}`!==`${organizationId}:${connectionId}:${providerAccountId}`))throw new Error("Continuous sync provider scope does not match the scheduler request.");
   const credentials=await db(`commerce_provider_credentials?connection_id=eq.${connectionId}&organization_id=eq.${organizationId}&revoked_at=is.null&select=encryption_key_id,encryption_version,secret_iv,secret_ciphertext&limit=2`);
   if(credentials.length!==1)throw new Error("Continuous sync credential unavailable.");
   const keyId=process.env.COMMERCE_CREDENTIALS_KEY_ID,version=Number(process.env.COMMERCE_CREDENTIALS_ENCRYPTION_VERSION||"1"),credential=credentials[0];
@@ -118,12 +119,12 @@ async function ensureReferenceInvestigationDependencies(scope:{accountId:string;
   }
 }
 
-export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_reconciliation";maxPages?:number;overlapPages?:number;perPage?:number;paceMs?:number;requestKey?:string;bootstrap?:boolean}={}):Promise<ContinuousSyncResult> {
+export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_reconciliation";maxPages?:number;overlapPages?:number;perPage?:number;paceMs?:number;requestKey?:string;bootstrap?:boolean;expectedScope?:{organizationId:string;connectionId:string;providerAccountId:string}}={}):Promise<ContinuousSyncResult> {
   const mode=options.mode??"continuous",bootstrap=options.bootstrap===true;
   const bounds=continuousRequestBounds({bootstrap,mode,maxPages:options.maxPages,perPage:options.perPage,overlapPages:options.overlapPages});
   const {perPage,maxPages,overlapPages}=bounds,paceMs=options.paceMs??100;
   if(perPage<1||perPage>100||maxPages<1||overlapPages<1)throw new Error("Continuous sync bounds are invalid.");
-  const scope=await scopedConnection(),owner=`commas-continuous-${randomUUID()}`,started=Date.now();
+  const scope=await scopedConnection(options.expectedScope),owner=`commas-continuous-${randomUUID()}`,started=Date.now();
   await ensureReferenceInvestigationDependencies(scope);
   const key=options.requestKey??contentFingerprint({connectionId:scope.connectionId,providerAccountId:scope.providerAccountId,resource:"transactions",mode,bucket:new Date().toISOString().slice(0,16)});
   const enqueued=await db("rpc/enqueue_commerce_continuous_sync",{method:"POST",body:JSON.stringify({p_account_id:scope.accountId,p_organization_id:scope.organizationId,p_connection_id:scope.connectionId,p_provider_account_id:scope.providerAccountId,p_resource:"transactions",p_mode:mode,p_idempotency_key:key})});
@@ -144,7 +145,7 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
       const page=queue[queueIndex++],pageStarted=Date.now();
       const checkpoint=await ensureCheckpoint({...scope,runId,page,perPage});
       try {
-        const fetched=await fetchProviderPage(scope.secret,page,perPage,owner); providerRequests++; retries+=fetched.attempts-1;
+        const fetched=await fetchProviderPage(scope.secret,page,perPage,owner,bootstrap?1:3); providerRequests++; retries+=fetched.attempts-1;
         rateLimitStart??=fetched.rateLimit.remaining;rateLimitEnd=fetched.rateLimit.remaining;rateLimitReset=fetched.rateLimit.reset;
         if(bootstrap)await db(`commerce_sync_runs?id=eq.${runId}`,{method:"PATCH",body:JSON.stringify({metadata:{account_id:scope.accountId,quota_bootstrap_attempted:true,quota_bootstrap_state:fetched.rateLimit.remaining===null?"unknown":"observed",rate_limit_start:rateLimitStart,rate_limit_end:rateLimitEnd,rate_limit_reset:rateLimitReset}})});
         const evidence=await evidenceForPage({...scope,runId,page,perPage,bytes:fetched.bytes}); evidence.reused?evidenceReuses++:evidenceWrites++;

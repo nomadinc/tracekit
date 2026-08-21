@@ -1,9 +1,14 @@
 name = "tracekit-continuous-runtime"
 main = "src/index.ts"
 compatibility_date = "2024-06-20"
+compatibility_flags = ["nodejs_compat"]
 
 [vars]
+SUPABASE_URL = "https://uoeosoiegatlqtzemsfv.supabase.co"
+COMMERCE_CREDENTIALS_ENCRYPTION_VERSION = "1"
 TRACEKIT_COMMERCE_SCHEDULER_ENABLED = "false"
 TRACEKIT_COMMERCE_KILL_SWITCH = "disabled"
 
 # This Worker intentionally has no cron, queue, producer, or consumer bindings.
+# Required server-only secrets (set with `wrangler secret put`):
+# SUPABASE_SERVICE_ROLE_KEY, COMMERCE_CREDENTIALS_ENC_KEY, COMMERCE_CREDENTIALS_KEY_ID, TK_SECRET_KEY

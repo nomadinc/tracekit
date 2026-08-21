@@ -5,7 +5,7 @@ import { unstable_readConfig } from "wrangler";
 import runtime, { validateRuntimeMessage, validateRuntimeScope } from "../continuous-runtime/src/index.ts";
 
 const id = "11111111-1111-4111-8111-111111111111";
-const message = { schema_version: 1, job_type: "commerce_continuous", connection_id: id, resource: "transactions", requested_mode: "continuous", scheduler_identity: "schedule:bucket", requested_at: "2026-08-10T00:00:00Z" } as const;
+const message = { schema_version: 1, job_type: "commerce_continuous", provider: "commas", organization_id: id, connection_id: id, provider_account_id: id, resource: "transactions", requested_mode: "continuous", scheduler_identity: "schedule:bucket", requested_at: "2026-08-10T00:00:00Z" } as const;
 const config = unstable_readConfig({ config: new URL("../continuous-runtime/wrangler.toml", import.meta.url).pathname });
 
 test("runtime configuration is inert and has no scheduler or queue bindings", () => {
