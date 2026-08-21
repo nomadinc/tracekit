@@ -25,16 +25,16 @@ begin
      or length(v_organization_name) > 120 or length(v_account_name) > 120 then
     raise exception 'bootstrap names are invalid';
   end if;
-  if not exists (select 1 from public.tracekit_users where id = p_user_id and status = 'active') then
+  if not exists (select 1 from public.tracekit_users u where u.id = p_user_id and u.status = 'active') then
     raise exception 'authenticated TraceKit user is unavailable';
   end if;
-  if exists (select 1 from public.tracekit_organizations)
-     or exists (select 1 from public.tracekit_accounts)
-     or exists (select 1 from public.tracekit_memberships) then
+  if exists (select 1 from public.tracekit_organizations o)
+     or exists (select 1 from public.tracekit_accounts a)
+     or exists (select 1 from public.tracekit_memberships m) then
     raise exception 'TraceKit installation is already initialized';
   end if;
-  select id into v_role_id from public.tracekit_roles
-    where role_key = v_role_key and account_type = 'client' and system_role = true;
+  select r.id into v_role_id from public.tracekit_roles r
+    where r.role_key = v_role_key and r.account_type = 'client' and r.system_role = true;
   if v_role_id is null then raise exception 'required bootstrap role is unavailable'; end if;
 
   insert into public.tracekit_accounts (account_type, name, status)

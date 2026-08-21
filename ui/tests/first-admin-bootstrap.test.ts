@@ -36,9 +36,9 @@ test("bootstrap derives identity and role server-side", () => {
 
 test("bootstrap is transactional, conflict-safe, and service-role-only", () => {
   assert.match(migration, /pg_advisory_xact_lock/);
-  assert.match(migration, /tracekit_organizations\)/);
-  assert.match(migration, /tracekit_accounts\)/);
-  assert.match(migration, /tracekit_memberships\)/);
+  assert.match(migration, /tracekit_organizations o\)/);
+  assert.match(migration, /tracekit_accounts a\)/);
+  assert.match(migration, /tracekit_memberships m\)/);
   assert.match(migration, /installation\.bootstrap\.completed/);
   assert.match(migration, /revoke all on function/);
   assert.match(migration, /grant execute on function .* to service_role/);
@@ -55,14 +55,17 @@ test("bootstrap creates exactly one account, organization, membership, and audit
 });
 
 test("second bootstrap and every partially initialized state are rejected", () => {
-  assert.match(migration, /exists \(select 1 from public\.tracekit_organizations\)/);
-  assert.match(migration, /exists \(select 1 from public\.tracekit_accounts\)/);
-  assert.match(migration, /exists \(select 1 from public\.tracekit_memberships\)/);
+  assert.match(migration, /exists \(select 1 from public\.tracekit_organizations o\)/);
+  assert.match(migration, /exists \(select 1 from public\.tracekit_accounts a\)/);
+  assert.match(migration, /exists \(select 1 from public\.tracekit_memberships m\)/);
   assert.match(migration, /TraceKit installation is already initialized/);
 });
 
 test("the authenticated user receives the existing owner role", () => {
-  assert.match(migration, /where role_key = v_role_key and account_type = 'client'/);
+  assert.match(migration, /from public\.tracekit_roles r/);
+  assert.match(migration, /r\.role_key = v_role_key/);
+  assert.match(migration, /r\.account_type = 'client'/);
+  assert.match(migration, /r\.system_role = true/);
   assert.match(migration, /values \(p_user_id, v_organization_id, v_role_id, 'active'\)/);
   assert.match(migration, /'organization-owner'/);
 });
