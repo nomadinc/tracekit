@@ -2,7 +2,9 @@
 
 create or replace function public.accept_tracekit_team_invitation(
   p_invitation_id uuid,
-  p_accepted_by_user_id uuid
+  p_accepted_by_user_id uuid,
+  p_authenticated_identity_id text,
+  p_correlation_id text
 )
 returns table(membership_id uuid)
 language plpgsql
@@ -14,9 +16,14 @@ declare
   v_user public.tracekit_users%rowtype;
   v_role public.tracekit_roles%rowtype;
   v_account_type text;
+  v_audit_account_id uuid;
   v_existing_membership_id uuid;
   v_membership_id uuid;
 begin
+  if nullif(btrim(p_authenticated_identity_id), '') is null or nullif(btrim(p_correlation_id), '') is null then
+    raise exception 'invalid_audit_context';
+  end if;
+
   select * into v_invitation
   from public.tracekit_invitations
   where id = p_invitation_id
@@ -60,12 +67,12 @@ begin
   end if;
 
   if v_invitation.target_account_id is not null then
-    select account_type into v_account_type
+    select id, account_type into v_audit_account_id, v_account_type
     from public.tracekit_accounts
     where id = v_invitation.target_account_id
       and status = 'active';
   else
-    select a.account_type into v_account_type
+    select a.id, a.account_type into v_audit_account_id, v_account_type
     from public.tracekit_organizations o
     join public.tracekit_accounts a on a.id = o.owning_account_id
     where o.id = v_invitation.target_organization_id
@@ -122,6 +129,32 @@ begin
       updated_at = now()
   where id = v_invitation.id;
 
+  insert into public.tracekit_audit_events (
+    actor_user_id,
+    authenticated_identity_id,
+    account_id,
+    organization_id,
+    action,
+    target_type,
+    target_id,
+    result,
+    permission_evaluated,
+    correlation_id,
+    metadata
+  ) values (
+    p_accepted_by_user_id,
+    p_authenticated_identity_id,
+    v_audit_account_id,
+    v_invitation.target_organization_id,
+    'team.invitation.accepted',
+    'invitation',
+    v_invitation.id::text,
+    'success',
+    null,
+    p_correlation_id,
+    jsonb_build_object('membership_id', v_membership_id, 'role', v_role.role_key)
+  );
+
   return query select v_membership_id;
 end;
 $$;
@@ -129,7 +162,11 @@ $$;
 create or replace function public.mutate_tracekit_team_membership(
   p_membership_id uuid,
   p_new_role_key text default null,
-  p_new_status text default null
+  p_new_status text default null,
+  p_actor_user_id uuid default null,
+  p_authenticated_identity_id text default null,
+  p_permission_evaluated text default null,
+  p_correlation_id text default null
 )
 returns table(membership_id uuid)
 language plpgsql
@@ -141,12 +178,26 @@ declare
   v_current_role public.tracekit_roles%rowtype;
   v_new_role public.tracekit_roles%rowtype;
   v_scope_account_type text;
+  v_audit_account_id uuid;
   v_owner_role_key text;
   v_next_status text;
   v_owner_count integer;
   v_new_role_id uuid;
   v_removes_ownership boolean := false;
 begin
+  if p_actor_user_id is null
+     or nullif(btrim(p_authenticated_identity_id), '') is null
+     or nullif(btrim(p_correlation_id), '') is null
+     or p_permission_evaluated not in ('users.remove', 'users.manage_permissions') then
+    raise exception 'invalid_audit_context';
+  end if;
+  if not exists (
+    select 1 from public.tracekit_users
+    where id = p_actor_user_id and status = 'active'
+  ) then
+    raise exception 'actor_unavailable';
+  end if;
+
   select * into v_membership
   from public.tracekit_memberships
   where id = p_membership_id
@@ -165,11 +216,11 @@ begin
   end if;
 
   if v_membership.account_id is not null then
-    select account_type into v_scope_account_type
+    select id, account_type into v_audit_account_id, v_scope_account_type
     from public.tracekit_accounts
     where id = v_membership.account_id;
   else
-    select a.account_type into v_scope_account_type
+    select a.id, a.account_type into v_audit_account_id, v_scope_account_type
     from public.tracekit_organizations o
     join public.tracekit_accounts a on a.id = o.owning_account_id
     where o.id = v_membership.organization_id;
@@ -224,11 +275,7 @@ begin
 
   if v_removes_ownership then
     if v_membership.account_id is not null then
-      perform 1
-      from public.tracekit_memberships
-      where account_id = v_membership.account_id
-      for update;
-
+      perform pg_advisory_xact_lock(hashtext('tracekit:team-owner:account:' || v_membership.account_id::text));
       select count(*) into v_owner_count
       from public.tracekit_memberships m
       join public.tracekit_roles r on r.id = m.role_id
@@ -236,11 +283,7 @@ begin
         and m.status = 'active'
         and r.role_key = v_owner_role_key;
     else
-      perform 1
-      from public.tracekit_memberships
-      where organization_id = v_membership.organization_id
-      for update;
-
+      perform pg_advisory_xact_lock(hashtext('tracekit:team-owner:organization:' || v_membership.organization_id::text));
       select count(*) into v_owner_count
       from public.tracekit_memberships m
       join public.tracekit_roles r on r.id = m.role_id
@@ -261,11 +304,42 @@ begin
       updated_at = now()
   where id = v_membership.id;
 
+  insert into public.tracekit_audit_events (
+    actor_user_id,
+    authenticated_identity_id,
+    account_id,
+    organization_id,
+    action,
+    target_type,
+    target_id,
+    result,
+    permission_evaluated,
+    correlation_id,
+    metadata
+  ) values (
+    p_actor_user_id,
+    p_authenticated_identity_id,
+    v_audit_account_id,
+    v_membership.organization_id,
+    'team.membership.updated',
+    'membership',
+    v_membership.id::text,
+    'success',
+    p_permission_evaluated,
+    p_correlation_id,
+    jsonb_build_object(
+      'previous_role', v_current_role.role_key,
+      'new_role', v_new_role.role_key,
+      'previous_status', v_membership.status,
+      'new_status', v_next_status
+    )
+  );
+
   return query select v_membership.id;
 end;
 $$;
 
-revoke all on function public.accept_tracekit_team_invitation(uuid, uuid) from public, anon, authenticated;
-revoke all on function public.mutate_tracekit_team_membership(uuid, text, text) from public, anon, authenticated;
-grant execute on function public.accept_tracekit_team_invitation(uuid, uuid) to service_role;
-grant execute on function public.mutate_tracekit_team_membership(uuid, text, text) to service_role;
+revoke all on function public.accept_tracekit_team_invitation(uuid, uuid, text, text) from public, anon, authenticated;
+revoke all on function public.mutate_tracekit_team_membership(uuid, text, text, uuid, text, text, text) from public, anon, authenticated;
+grant execute on function public.accept_tracekit_team_invitation(uuid, uuid, text, text) to service_role;
+grant execute on function public.mutate_tracekit_team_membership(uuid, text, text, uuid, text, text, text) to service_role;
