@@ -38,7 +38,12 @@ const user = (row: Row): PersistentUser => ({ id: String(row.id), workosUserId: 
 export class SupabaseIdentityTenancyRepository implements IdentityTenancyRepository {
   async synchronizeUser(identity: WorkOSIdentityInput) {
     const displayName = [identity.firstName, identity.lastName].filter(Boolean).join(" ") || identity.email;
-    const rows = await rest("tracekit_users?on_conflict=workos_user_id", { method: "POST", body: JSON.stringify({ workos_user_id: identity.id, primary_email: identity.email, display_name: displayName, avatar_url: identity.profilePictureUrl || null, last_sign_in_at: new Date().toISOString(), updated_at: new Date().toISOString() }), headers: { Prefer: "resolution=merge-duplicates,return=representation" } }) as Row[];
+    const payload = { workos_user_id: identity.id, primary_email: identity.email, display_name: displayName, avatar_url: identity.profilePictureUrl || null, last_sign_in_at: new Date().toISOString(), updated_at: new Date().toISOString() };
+    let rows = await rest(`tracekit_users?workos_user_id=eq.${encodeURIComponent(identity.id)}`, { method: "PATCH", body: JSON.stringify(payload), headers: { Prefer: "return=representation" } }) as Row[];
+    if (!rows[0]) {
+      rows = await rest("tracekit_users?on_conflict=workos_user_id", { method: "POST", body: JSON.stringify(payload), headers: { Prefer: "resolution=ignore-duplicates,return=representation" } }) as Row[];
+    }
+    if (!rows[0]) rows = await rest(`tracekit_users?workos_user_id=eq.${encodeURIComponent(identity.id)}&limit=1`) as Row[];
     if (!rows[0]) throw new Error("Authenticated user synchronization returned no record.");
     return user(rows[0]);
   }

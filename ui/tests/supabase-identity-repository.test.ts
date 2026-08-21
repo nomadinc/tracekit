@@ -51,3 +51,30 @@ test("empty-installation detection distinguishes bootstrap from ordinary no-memb
     assert.equal(await new SupabaseIdentityTenancyRepository().isEmptyInstallation(), true);
   });
 });
+
+test("synchronizeUser updates an existing WorkOS identity without merge-upsert", async () => {
+  const previousUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const previousKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const previousFetch = globalThis.fetch;
+  const requests: Array<{ method: string; url: string }> = [];
+  process.env.NEXT_PUBLIC_SUPABASE_URL = "https://example.supabase.co";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "sb_secret_test";
+  globalThis.fetch = (async (input, init) => {
+    const url = String(input);
+    requests.push({ method: init?.method || "GET", url });
+    return new Response(JSON.stringify([{ id: "user-1", workos_user_id: "workos-1", primary_email: "user@example.invalid", display_name: "Test User", status: "active" }]), { status: 200, headers: { "content-type": "application/json" } });
+  }) as typeof fetch;
+  try {
+    const result = await new SupabaseIdentityTenancyRepository().synchronizeUser({ id: "workos-1", email: "user@example.invalid", firstName: "Test", lastName: "User", profilePictureUrl: null });
+    assert.equal(result.id, "user-1");
+    assert.equal(requests.length, 1);
+    assert.equal(requests[0].method, "PATCH");
+    assert.match(requests[0].url, /tracekit_users\?workos_user_id=eq\.workos-1$/);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (previousUrl === undefined) delete process.env.NEXT_PUBLIC_SUPABASE_URL;
+    else process.env.NEXT_PUBLIC_SUPABASE_URL = previousUrl;
+    if (previousKey === undefined) delete process.env.SUPABASE_SERVICE_ROLE_KEY;
+    else process.env.SUPABASE_SERVICE_ROLE_KEY = previousKey;
+  }
+});
