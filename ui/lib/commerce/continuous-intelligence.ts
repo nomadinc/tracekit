@@ -123,6 +123,16 @@ export function rateLimitDelay(input: { status: number; retryAfterSeconds?: numb
   return Math.min(500*2**Math.max(0,input.attempt-1),5_000);
 }
 
+export function continuousRequestBounds(input: { bootstrap?: boolean; mode: "continuous"|"deep_reconciliation"; maxPages?: number; perPage?: number; overlapPages?: number }) {
+  if (input.bootstrap && input.mode !== "continuous") throw new Error("Quota bootstrap supports continuous mode only.");
+  const bootstrap = input.bootstrap === true;
+  return {
+    perPage: bootstrap ? 1 : input.perPage ?? 100,
+    maxPages: bootstrap ? 1 : input.mode === "deep_reconciliation" ? input.maxPages ?? Number.MAX_SAFE_INTEGER : input.maxPages ?? 8,
+    overlapPages: bootstrap ? 1 : input.overlapPages ?? DEFAULT_OVERLAP_PAGES,
+  };
+}
+
 export function candidateKey(input: { organizationId: string; candidateType: string; metric: string; entityType?: string | null; entityId?: string | null; periodStart?: string | null; periodEnd?: string | null; baselineVersion: string }) {
   return contentFingerprint({organizationId:input.organizationId,candidateType:input.candidateType,metric:input.metric,entityType:input.entityType??null,entityId:input.entityId??null,periodStart:input.periodStart??null,periodEnd:input.periodEnd??null,baselineVersion:input.baselineVersion});
 }

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   advanceStability, attributionAvailability, candidateKey, classifySource, continuousStopDecision,
-  detectProviderOrdering, evaluateRateCandidate, firstContinuousPages, parseContinuousPage, rateLimitDelay,
+  continuousRequestBounds, detectProviderOrdering, evaluateRateCandidate, firstContinuousPages, parseContinuousPage, rateLimitDelay,
   type StabilityState,
 } from "../lib/commerce/continuous-intelligence";
 import { dispatchEligibleSchedules, eligibleScheduledJobs } from "../lib/commerce/continuous-scheduler";
@@ -53,6 +53,11 @@ test("unknown ordering and low quota fail conservatively",()=>{
   assert.equal(continuousStopDecision({state:initial(),ordering:"unknown",page:1,totalPages:10,maxPages:8,rateLimitRemaining:9000}).reason,"provider_ordering_unverified");
   assert.equal(continuousStopDecision({state:initial(),ordering:"newest_first",page:1,totalPages:10,maxPages:8,rateLimitRemaining:50}).reason,"rate_limit_safety_boundary");
   assert.equal(rateLimitDelay({status:429,retryAfterSeconds:7,remaining:50,attempt:1}),7000);
+});
+
+test("unknown-quota bootstrap is capped to one request and cannot traverse page two",()=>{
+  assert.deepEqual(continuousRequestBounds({bootstrap:true,mode:"continuous",maxPages:99,perPage:100,overlapPages:3}),{perPage:1,maxPages:1,overlapPages:1});
+  assert.throws(()=>continuousRequestBounds({bootstrap:true,mode:"deep_reconciliation"}),/continuous mode only/);
 });
 
 test("absence of live attribution source is not failed attribution",()=>{

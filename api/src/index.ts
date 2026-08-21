@@ -771,8 +771,12 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
         if (!overlapDue && !deepDue) continue;
         const mode = deepDue ? "deep_reconciliation" : "continuous";
         const { data: latest } = await db.from("commerce_sync_runs").select("metadata").eq("connection_id", row.connection_id).order("created_at", { ascending: false }).limit(1).maybeSingle();
-        const quotaRemaining = Number((latest?.metadata as any)?.rate_limit_end);
-        jobs.push({ connectionId: row.connection_id, resource: row.resource, mode, schedulerIdentity: `${row.id}:${mode}:${now.slice(0,16)}`, quotaRemaining: Number.isFinite(quotaRemaining) ? quotaRemaining : null, requestBudget: mode === "deep_reconciliation" ? row.deep_request_budget : 8, quotaFloor: row.quota_minimum_remaining });
+        const latestMetadata = (latest?.metadata && typeof latest.metadata === "object") ? latest.metadata as Record<string, unknown> : {};
+        const quotaRemaining = Number(latestMetadata.rate_limit_end);
+        const unknownQuota = !Number.isFinite(quotaRemaining);
+        const bootstrapAttempted = latestMetadata.quota_bootstrap_attempted === true;
+        const bootstrap = mode === "continuous" && unknownQuota && !bootstrapAttempted;
+        jobs.push({ connectionId: row.connection_id, resource: row.resource, mode, schedulerIdentity: bootstrap ? `${row.id}:quota-bootstrap` : `${row.id}:${mode}:${now.slice(0,16)}`, quotaRemaining: Number.isFinite(quotaRemaining) ? quotaRemaining : null, requestBudget: bootstrap ? 1 : mode === "deep_reconciliation" ? row.deep_request_budget : 8, quotaFloor: row.quota_minimum_remaining, ...(bootstrap ? { bootstrap: true as const } : {}) });
       }
       return jobs;
     },
