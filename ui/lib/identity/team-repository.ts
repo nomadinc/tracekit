@@ -47,10 +47,12 @@ export interface TeamRepository {
   listInvitations(scope: TeamScope): Promise<TeamInvitationRecord[]>;
   roleExistsForAccountType(role: Role, accountType: AccountType): Promise<boolean>;
   invitationById(invitationId: string): Promise<(TeamInvitationRecord & { targetAccountId: string | null; targetOrganizationId: string | null }) | null>;
+  invitationByWorkOSId(workosInvitationId: string): Promise<(TeamInvitationRecord & { targetAccountId: string | null; targetOrganizationId: string | null }) | null>;
   membershipById(membershipId: string): Promise<(TeamMemberRecord & { accountId: string | null; organizationId: string | null }) | null>;
   countActiveOwners(scope: TeamScope, ownerRole: Role): Promise<number>;
+  workosOrganizationIdForScope(scope: TeamScope): Promise<string | null>;
   createInvitation(input: { inviterUserId: string; intendedEmail: string; scope: TeamScope; role: Role; expiresAt: string; workosInvitationId?: string | null }): Promise<TeamInvitationRecord>;
-  setInvitationDeliveryId(invitationId: string, workosInvitationId: string | null): Promise<void>;
+  setInvitationDelivery(input: { invitationId: string; workosInvitationId: string; expiresAt?: string | null }): Promise<void>;
   revokeInvitation(invitationId: string): Promise<void>;
   markInvitationExpired(invitationId: string): Promise<void>;
   acceptInvitation(input: { invitationId: string; acceptedByUserId: string; authenticatedIdentityId: string; correlationId: string }): Promise<TeamMemberRecord>;
