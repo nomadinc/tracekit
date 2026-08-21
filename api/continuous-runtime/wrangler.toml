@@ -1,0 +1,9 @@
+name = "tracekit-continuous-runtime"
+main = "src/index.ts"
+compatibility_date = "2024-06-20"
+
+[vars]
+TRACEKIT_COMMERCE_SCHEDULER_ENABLED = "false"
+TRACEKIT_COMMERCE_KILL_SWITCH = "disabled"
+
+# This Worker intentionally has no cron, queue, producer, or consumer bindings.
