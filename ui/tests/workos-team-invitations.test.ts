@@ -28,7 +28,7 @@ test("invitation creation persists WorkOS delivery and revokes local state when 
 
 test("revoke blocks TraceKit access before WorkOS delivery cleanup", () => {
   const route = source("ui/app/api/team/invitations/[id]/revoke/route.ts");
-  assert.ok(route.indexOf("repository.revokeInvitation(id)") < route.indexOf("revokeWorkOSInvitation"));
+  assert.ok(route.indexOf("await repository.revokeInvitation(id)") < route.indexOf("await revokeWorkOSInvitation"));
   assert.match(route, /revoked_delivery_cleanup_failed/);
 });
 
