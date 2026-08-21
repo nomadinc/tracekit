@@ -53,7 +53,7 @@ export interface TeamRepository {
   setInvitationDeliveryId(invitationId: string, workosInvitationId: string | null): Promise<void>;
   revokeInvitation(invitationId: string): Promise<void>;
   markInvitationExpired(invitationId: string): Promise<void>;
-  acceptInvitation(input: { invitationId: string; acceptedByUserId: string; role: Role; scope: TeamScope }): Promise<TeamMemberRecord>;
+  acceptInvitation(input: { invitationId: string; acceptedByUserId: string }): Promise<TeamMemberRecord>;
   updateMembership(input: { membershipId: string; role?: Role; status?: TeamMembershipStatus }): Promise<TeamMemberRecord>;
   recordAuditEvent(input: TeamAuditInput): Promise<void>;
 }
