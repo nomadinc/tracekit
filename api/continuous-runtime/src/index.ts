@@ -6,7 +6,7 @@ export type ContinuousRuntimeEnv = {
   COMMERCE_CREDENTIALS_ENC_KEY?: string;
   COMMERCE_CREDENTIALS_KEY_ID?: string;
   COMMERCE_CREDENTIALS_ENCRYPTION_VERSION?: string;
-  TK_SECRET_KEY?: string;
+  CONTINUOUS_RUNTIME_SHARED_SECRET?: string;
   TRACEKIT_COMMERCE_SCHEDULER_ENABLED?: string;
   TRACEKIT_COMMERCE_KILL_SWITCH?: string;
 };
@@ -43,7 +43,7 @@ export default {
     const url = new URL(request.url);
     if (request.method !== "POST" || url.pathname !== "/v1/commerce/sync") return json({ ok: false, error: "not_found" }, 404);
     if (env.TRACEKIT_COMMERCE_SCHEDULER_ENABLED !== "true" || env.TRACEKIT_COMMERCE_KILL_SWITCH !== "enabled") return json({ ok: false, error: "continuous_runtime_disabled" }, 503);
-    if (!env.TK_SECRET_KEY || request.headers.get("x-tracekit-runtime-secret") !== env.TK_SECRET_KEY) return json({ ok: false, error: "continuous_runtime_internal_only" }, 403);
+    if (!env.CONTINUOUS_RUNTIME_SHARED_SECRET || request.headers.get("x-tracekit-runtime-secret") !== env.CONTINUOUS_RUNTIME_SHARED_SECRET) return json({ ok: false, error: "continuous_runtime_internal_only" }, 403);
     let body: unknown;
     try { body = await request.json(); } catch { return json({ ok: false, error: "invalid_json" }, 400); }
     try {

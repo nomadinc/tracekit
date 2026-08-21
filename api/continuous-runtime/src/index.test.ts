@@ -10,7 +10,7 @@ const message = {
   resource: "transactions", requested_mode: "continuous", scheduler_identity: "schedule:quota-bootstrap",
   requested_at: "2026-08-21T00:00:00Z", bootstrap: true,
 } as const;
-const env = { TRACEKIT_COMMERCE_SCHEDULER_ENABLED: "false", TRACEKIT_COMMERCE_KILL_SWITCH: "disabled", TK_SECRET_KEY: "test-only" };
+const env = { TRACEKIT_COMMERCE_SCHEDULER_ENABLED: "false", TRACEKIT_COMMERCE_KILL_SWITCH: "disabled", CONTINUOUS_RUNTIME_SHARED_SECRET: "test-only" };
 
 test("startup is inert and makes no provider request", async () => {
   const response = await handler.fetch(new Request("https://runtime/v1/commerce/sync", { method: "POST", headers: { "x-tracekit-runtime-secret": "test-only" }, body: JSON.stringify(message) }), env);

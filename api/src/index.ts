@@ -22023,7 +22023,7 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 		        runtime: {
 		          async run(message) {
 		            if (!env.CONTINUOUS_COMMERCE_RUNTIME) throw Object.assign(new Error("continuous_runtime_binding_missing"), { code: "invalid_configuration" });
-		            const response = await env.CONTINUOUS_COMMERCE_RUNTIME.fetch("https://continuous-runtime.internal/v1/commerce/sync", { method: "POST", headers: { "content-type": "application/json", "x-tracekit-runtime-secret": String(env.TK_SECRET_KEY || "") }, body: JSON.stringify(message) });
+		            const response = await env.CONTINUOUS_COMMERCE_RUNTIME.fetch("https://continuous-runtime.internal/v1/commerce/sync", { method: "POST", headers: { "content-type": "application/json", "x-tracekit-runtime-secret": String(env.CONTINUOUS_RUNTIME_SHARED_SECRET || "") }, body: JSON.stringify(message) });
 		            if (!response.ok) throw Object.assign(new Error(`continuous_runtime_${response.status}`), { code: response.status === 429 ? "429" : response.status >= 500 ? "runtime_timeout" : "invalid_runtime_request" });
 		            return await response.json() as { status: "completed" | "completed_with_warnings"; providerRequests: number };
 		          },
