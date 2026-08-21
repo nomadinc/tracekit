@@ -19,6 +19,12 @@
     "paths": {
       "@/*": [
         "./*"
+      ],
+      "exceljs": [
+        "./node_modules/exceljs"
+      ],
+      "fast-csv": [
+        "./node_modules/fast-csv"
       ]
     },
     "allowJs": true,
