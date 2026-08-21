@@ -50,11 +50,13 @@ test("commerce API and runtime entrypoints remain present", () => {
   assert.equal(existsSync(`${repoRoot}/api/continuous-runtime/wrangler.toml`), true);
 });
 
-test("migration sequence is monotonic, includes 063, and has no duplicate numbers", () => {
+test("migration sequence is monotonic, includes 063/064, and has no duplicate numbers", () => {
   const files = readdirSync(`${repoRoot}/supabase/migrations`).filter((name) => /^\d+_.+\.sql$/.test(name));
   const versions = files.map((name) => Number(name.match(/^\d+/)?.[0]));
   assert.equal(versions.includes(63), true, "migration 063 must remain represented");
+  assert.equal(versions.includes(64), true, "migration 064 must remain represented");
   assert.equal(new Set(versions).size, versions.length, "duplicate migration numbers are forbidden");
   assert.deepEqual([...versions].sort((a, b) => a - b), versions, "migration numbering must not go backwards");
   assert.equal(files.filter((name) => name.startsWith("063_")).length, 1);
+  assert.equal(files.filter((name) => name.startsWith("064_")).length, 1);
 });

@@ -48,7 +48,8 @@ export default {
     try {
       const message = validateRuntimeMessage(body);
       const bootstrap = message.bootstrap === true && message.bootstrap_mode === "quota-bootstrap";
-      if (!bootstrap && (env.TRACEKIT_COMMERCE_SCHEDULER_ENABLED !== "true" || env.TRACEKIT_COMMERCE_KILL_SWITCH !== "enabled")) return json({ ok: false, error: "continuous_runtime_disabled" }, 503);
+      const manual = message.manual === true;
+      if (!bootstrap && !manual && (env.TRACEKIT_COMMERCE_SCHEDULER_ENABLED !== "true" || env.TRACEKIT_COMMERCE_KILL_SWITCH !== "enabled")) return json({ ok: false, error: "continuous_runtime_disabled" }, 503);
       const scope = validateRuntimeScope({ provider: message.provider, status: "connected", connectionId: message.connection_id, organizationId: message.organization_id, providerAccountId: message.provider_account_id });
       installRuntimeEnvironment(env);
       const mode = message.requested_mode === "deep_reconciliation" ? "deep_reconciliation" : "continuous";

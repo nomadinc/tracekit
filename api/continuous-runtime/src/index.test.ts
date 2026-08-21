@@ -25,6 +25,11 @@ test("quota bootstrap is explicitly allowed through the internal path while norm
   assert.notEqual(response.status, 503);
 });
 
+test("manual invocation is explicitly allowed through the internal path while normal controls remain disabled", async () => {
+  const response = await handler.fetch(new Request("https://runtime/v1/commerce/sync", { method: "POST", headers: { "x-tracekit-runtime-secret": "test-only" }, body: JSON.stringify({ ...message, bootstrap: undefined, bootstrap_mode: undefined, manual: true }) }), env);
+  assert.notEqual(response.status, 503);
+});
+
 test("ordinary direct HTTP invocation cannot bypass the internal contract", async () => {
   const response = await handler.fetch(new Request("https://runtime/v1/commerce/sync", { method: "POST", body: JSON.stringify(message) }), { ...env, TRACEKIT_COMMERCE_SCHEDULER_ENABLED: "true", TRACEKIT_COMMERCE_KILL_SWITCH: "enabled" });
   assert.equal(response.status, 403);

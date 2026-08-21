@@ -14,7 +14,7 @@ import {
   maintenanceRequiresAdminAuthorization,
   maintenanceWriteAllowed,
 } from "./maintenance-write-gate";
-import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, runCommerceCron, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
+import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, runCommerceCron, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
 import { enforceTkidRate, ephemeralTransportDimension, TkidRateLimitError, type DistributedCounterStore, type TkidAbuseClass } from "./tkid-distributed-abuse";
 import {
   DEFAULT_SHOPIFY_API_VERSION,
@@ -757,7 +757,7 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
       // provider connections. Avoid PostgREST relationship embedding here: the
       // relationship is not valid for this table and can fail on schema-cache
       // refreshes even when the underlying IDs are sound.
-      const { data, error } = await db.from("commerce_sync_schedules").select("id,organization_id,connection_id,provider_account_id,resource,next_overlap_at,next_deep_reconciliation_at,quota_minimum_remaining,deep_request_budget").eq("enabled", true).eq("activation_state", "enabled");
+      const { data, error } = await db.from("commerce_sync_schedules").select("id,organization_id,connection_id,provider_account_id,resource,sync_frequency,last_enqueued_at,next_overlap_at,next_deep_reconciliation_at,quota_minimum_remaining,deep_request_budget").eq("enabled", true).eq("activation_state", "enabled");
       if (error) throw error;
       const jobs: any[] = [];
       for (const row of data || []) {
@@ -767,6 +767,7 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
         const { data: activeAccounts, error: accountError } = await db.from("commerce_provider_accounts").select("id,status").eq("organization_id", row.organization_id).eq("connection_id", row.connection_id).eq("status", "active");
         if (accountError) throw accountError;
         if (!isEligibleCommasScheduleScope(connection, (activeAccounts || []).map((account: any) => account.id), row.provider_account_id)) continue;
+        if (!isSyncScheduleDue({ frequency: row.sync_frequency, lastEnqueuedAt: row.last_enqueued_at, now })) continue;
         const overlapDue = !row.next_overlap_at || Date.parse(row.next_overlap_at) <= Date.parse(now);
         const deepDue = row.next_deep_reconciliation_at && Date.parse(row.next_deep_reconciliation_at) <= Date.parse(now);
         if (!overlapDue && !deepDue) continue;
@@ -777,7 +778,9 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
         const unknownQuota = !Number.isFinite(quotaRemaining);
         const bootstrapAttempted = latestMetadata.quota_bootstrap_attempted === true;
         const bootstrap = mode === "continuous" && unknownQuota && !bootstrapAttempted;
-        jobs.push({ accountId: String(connection.account_id), organizationId: row.organization_id, connectionId: row.connection_id, providerAccountId: row.provider_account_id, resource: row.resource, mode, schedulerIdentity: bootstrap ? `${row.id}:quota-bootstrap` : `${row.id}:${mode}:${now.slice(0,16)}`, quotaRemaining: Number.isFinite(quotaRemaining) ? quotaRemaining : null, requestBudget: bootstrap ? 1 : mode === "deep_reconciliation" ? row.deep_request_budget : 8, quotaFloor: row.quota_minimum_remaining, ...(bootstrap ? { bootstrap: true as const } : {}) });
+        const cadenceMinutes = syncFrequencyMinutes(row.sync_frequency);
+        const cadenceWindow = cadenceMinutes ? Math.floor(Date.parse(now) / (cadenceMinutes * 60_000)) : "manual";
+        jobs.push({ accountId: String(connection.account_id), organizationId: row.organization_id, connectionId: row.connection_id, providerAccountId: row.provider_account_id, resource: row.resource, mode, schedulerIdentity: bootstrap ? `${row.id}:quota-bootstrap` : `${row.id}:${mode}:${cadenceWindow}`, quotaRemaining: Number.isFinite(quotaRemaining) ? quotaRemaining : null, requestBudget: bootstrap ? 1 : mode === "deep_reconciliation" ? row.deep_request_budget : 8, quotaFloor: row.quota_minimum_remaining, ...(bootstrap ? { bootstrap: true as const } : {}) });
       }
       return jobs;
     },
@@ -787,6 +790,10 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
       const { data, error } = await db.rpc("commerce_schedule_permitted", { p_organization_id: connection.organization_id, p_connection_id: connectionId });
       if (error) throw error;
       return data === true;
+    },
+    async markEnqueued(message, now) {
+      const { error } = await db.from("commerce_sync_schedules").update({ last_enqueued_at: now, updated_at: now }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource);
+      if (error) throw error;
     },
     async bootstrapPermitted(message) {
       if (!message.bootstrap || message.bootstrap_mode !== "quota-bootstrap") return false;
@@ -800,6 +807,23 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
       if (connectionError || accountError || controlError || scheduleError || activeRunError || liveActivationError || latestError) return false;
       const metadata = latest?.metadata && typeof latest.metadata === "object" ? latest.metadata as Record<string, unknown> : {};
       return bootstrapExecutionAllowed({ provider: String(connection?.provider || ""), connected: String(connection?.status || "") === "connected" && (accounts || []).length === 1 && String((accounts || [])[0]?.id || "") === message.provider_account_id, activeAccountCount: (accounts || []).length, quotaRemaining: Number.isFinite(Number(metadata.rate_limit_end)) ? Number(metadata.rate_limit_end) : null, attempted: metadata.quota_bootstrap_attempted === true, schedulerEnabled: Number(controls || 0) > 0, scheduleEnabled: Number(schedules || 0) > 0, activeRuns: Number(activeRuns || 0), liveActivationCount: Number(liveActivation || 0) });
+    },
+    async manualPermitted(message) {
+      if (!message.manual || message.bootstrap_mode) return false;
+      const [{ data: connection, error: connectionError }, { data: accounts, error: accountError }, { data: schedules, error: scheduleError }, { data: pauses, error: pauseError }, { count: activeRuns, error: activeRunError }, { count: liveActivation, error: liveActivationError }, { data: latest, error: latestError }] = await Promise.all([
+        db.from("commerce_provider_connections").select("organization_id,account_id,provider,status").eq("organization_id", message.organization_id).eq("id", message.connection_id).maybeSingle(),
+        db.from("commerce_provider_accounts").select("id").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("status", "active"),
+        db.from("commerce_sync_schedules").select("sync_frequency,enabled,activation_state,quota_minimum_remaining").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1),
+        db.from("commerce_connection_pauses").select("paused").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).limit(1),
+        db.from("commerce_sync_runs").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).in("status", ["queued", "running", "paused"]),
+        db.from("commerce_repository_activation").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).in("mode", ["live", "live_beta"]),
+        db.from("commerce_sync_runs").select("metadata").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      ]);
+      if (connectionError || accountError || scheduleError || pauseError || activeRunError || liveActivationError || latestError) return false;
+      const schedule = schedules?.[0] as Record<string, unknown> | undefined;
+      const metadata = latest?.metadata && typeof latest.metadata === "object" ? latest.metadata as Record<string, unknown> : {};
+      const quotaRemaining = Number(metadata.rate_limit_end);
+      return String(connection?.provider || "") === "commas" && String(connection?.status || "") === "connected" && (accounts || []).length === 1 && String(accounts?.[0]?.id || "") === message.provider_account_id && String(schedule?.sync_frequency || "") === "manual" && schedule?.enabled === true && schedule?.activation_state !== "paused" && !Boolean(pauses?.[0]?.paused) && Number(activeRuns || 0) === 0 && Number(liveActivation || 0) === 0 && Number.isFinite(quotaRemaining) && quotaRemaining - 8 >= Number(schedule?.quota_minimum_remaining || 1000);
     },
     async reserve(message) {
       if (message.bootstrap) {
@@ -15294,6 +15318,24 @@ async function relayEvidence(db:any,continuity:any,eventName:string){await db.fr
 async function router(req: Request, env: Env): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname;
+  if (path === "/v1/commerce/sync-now" && req.method === "POST") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const body = await readJsonBody(req);
+      const ids = { account_id: String(body.account_id || ""), organization_id: String(body.organization_id || ""), connection_id: String(body.connection_id || ""), provider_account_id: String(body.provider_account_id || "") };
+      if (![ids.account_id, ids.organization_id, ids.connection_id, ids.provider_account_id].every((value) => /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value))) return json({ ok: false, error: "invalid_scope" }, 400);
+      if (!env.continuous_commerce) return json({ ok: false, error: "continuous_queue_unavailable" }, 503);
+      const message: CommerceQueueMessage = { schema_version: 1, job_type: "commerce_continuous", provider: "commas", ...ids, resource: "transactions", requested_mode: "continuous", scheduler_identity: `manual:${crypto.randomUUID()}`, requested_at: new Date().toISOString(), manual: true };
+      const repository = getContinuousCommerceAdapterRepository(env);
+      if (!await repository.manualPermitted?.(message)) return json({ ok: false, error: "manual_sync_not_permitted" }, 409);
+      if (await repository.reserve(message) === "duplicate") return json({ ok: true, status: "duplicate" }, 200);
+      await env.continuous_commerce.send(message);
+      return json({ ok: true, status: "queued" }, 202);
+    } catch (error: any) {
+      return json({ ok: false, error: "manual_sync_failed", message: String(error?.message || error) }, 500);
+    }
+  }
   let configuredRelayOrigin:string|null=null;try{configuredRelayOrigin=env.TRACEKIT_TKID_RELAY_ORIGIN?relayHost(env.TRACEKIT_TKID_RELAY_ORIGIN,env.TRACEKIT_ENVIRONMENT==="production"):null}catch{}
   const relayHostRequest=configuredRelayOrigin!==null&&url.origin===configuredRelayOrigin;
   if(relayHostRequest&&path==="/"&&req.method==="GET")return new Response(JSON.stringify({service:"TraceKit Journey Relay",status:"available",relay:env.TRACEKIT_TKID_RELAY_ENABLED==="true"?"available":"disabled"}),{status:200,headers:{"content-type":"application/json; charset=utf-8",...relaySecurityHeaders()}});

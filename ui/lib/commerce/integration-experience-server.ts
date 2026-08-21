@@ -2,12 +2,13 @@ import "server-only";
 import { resolveApplicationSession } from "@/lib/identity/application-session";
 import { requirePermission } from "@/lib/identity/authorization-gateway";
 import { commercePersistenceRequest } from "./supabase-control-repository";
-import { COMMAS_CAPABILITIES, type ConnectionExperience, type SafeReadinessGate, type SafeSyncRun } from "./integration-experience";
+import { COMMAS_CAPABILITIES, type ConnectionExperience, type SafeReadinessGate, type SafeSyncRun, type SyncFrequency } from "./integration-experience";
 import { canManageTkidOrigins } from "@/lib/tkid/origin-authorization";
 
 type Row = Record<string, unknown>;
 const text = (value: unknown) => value == null ? null : String(value);
 const number = (value: unknown) => Number(value || 0);
+const frequencyMinutes = (value: unknown) => ({ hourly: 60, "30_minutes": 30, "15_minutes": 15, "5_minutes": 5 } as Record<string, number>)[String(value)] || 60;
 async function optionalRows(path:string){try{return await commercePersistenceRequest(path) as Row[]}catch{return [] as Row[]}}
 
 async function authorizedSession(permission: "connectors.view" | "connectors.manage") {
@@ -65,8 +66,11 @@ async function loadConnectionExperienceRow(organizationName: string, row: Row, c
   });
   const latest = syncRuns[0];
   const freshness=freshnessRows[0];
+  const syncFrequency = (String(schedules[0]?.sync_frequency || "hourly") as SyncFrequency);
+  const lastEnqueuedAt = text(schedules[0]?.last_enqueued_at);
+  const nextSyncAt = syncFrequency === "manual" ? null : lastEnqueuedAt ? new Date(new Date(lastEnqueuedAt).getTime() + frequencyMinutes(syncFrequency) * 60_000).toISOString() : new Date().toISOString();
   return {
-    id, provider: String(row.provider), displayName: String(row.display_name), environment: String(row.environment), status: String(row.status), organizationName,
+    id, provider: String(row.provider), displayName: String(row.display_name), environment: String(row.environment), status: String(row.status), organizationName, syncFrequency, nextSyncAt,
     providerAccountLabel: accounts[0] ? String(accounts[0].provider_account_label || accounts[0].provider_account_external_id) : null,
     lastVerifiedAt: text(row.last_success_at), lastSyncAt: latest?.completedAt || latest?.startedAt || null,
     capabilities: String(row.provider) === "commas" ? COMMAS_CAPABILITIES : [], syncRuns,

@@ -44,7 +44,7 @@ test("production Worker configuration preserves route, cron, maintenance, and ke
   const config = productionConfig();
 
   assert.deepEqual(config.routes, [{ pattern: "journey.trace-kit.io", custom_domain: true }]);
-  assert.deepEqual(config.triggers?.crons, ["0 * * * *"]);
+  assert.deepEqual(config.triggers?.crons, ["*/5 * * * *"]);
   assert.equal(config.vars?.TRACEKIT_MAINTENANCE_WRITE_GATE_ENABLED, "false");
   assert.equal(config.vars?.TRACEKIT_COMMERCE_SCHEDULER_ENABLED, "false");
   assert.equal(config.vars?.TRACEKIT_COMMERCE_KILL_SWITCH, "disabled");

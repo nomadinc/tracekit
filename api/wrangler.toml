@@ -45,7 +45,7 @@ service = "tracekit-continuous-runtime"
 # Production Queue attachment requires a separate reviewed configuration change.
 
 [triggers]
-crons = ["0 * * * *"] # every hour
+crons = ["*/5 * * * *"] # cadence selection runs every five minutes; schedules decide eligibility
 
 # Phase 2.8 note: this existing trigger is not authorization to run Continuous
 # Commas or TKID. Production-intelligence jobs must pass the database capability
