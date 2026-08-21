@@ -7,7 +7,7 @@ const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 const source = (relative: string) => readFileSync(`${repoRoot}/${relative}`, "utf8");
 
 test("team invitation acceptance is atomic, identity-bound, and audited", () => {
-  const migration = source("supabase/migrations/064_team_membership_mutations.sql");
+  const migration = source("supabase/migrations/065_team_membership_mutations.sql");
   assert.match(migration, /accept_tracekit_team_invitation/);
   assert.match(migration, /security definer/);
   assert.match(migration, /for update/);
@@ -21,7 +21,7 @@ test("team invitation acceptance is atomic, identity-bound, and audited", () => 
 });
 
 test("team membership mutation enforces transition and final-owner invariants in the database", () => {
-  const migration = source("supabase/migrations/064_team_membership_mutations.sql");
+  const migration = source("supabase/migrations/065_team_membership_mutations.sql");
   assert.match(migration, /mutate_tracekit_team_membership/);
   assert.match(migration, /v_membership\.status = 'removed'/);
   assert.match(migration, /v_owner_role_key := case v_scope_account_type/);
@@ -33,7 +33,7 @@ test("team membership mutation enforces transition and final-owner invariants in
 });
 
 test("team mutation RPCs are service-role only", () => {
-  const migration = source("supabase/migrations/064_team_membership_mutations.sql");
+  const migration = source("supabase/migrations/065_team_membership_mutations.sql");
   assert.match(migration, /revoke all on function public\.accept_tracekit_team_invitation\(uuid, uuid, text, text\) from public, anon, authenticated/);
   assert.match(migration, /revoke all on function public\.mutate_tracekit_team_membership\(uuid, text, text, uuid, text, text, text\) from public, anon, authenticated/);
   assert.match(migration, /grant execute on function public\.accept_tracekit_team_invitation\(uuid, uuid, text, text\) to service_role/);
