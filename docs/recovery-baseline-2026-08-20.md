@@ -27,3 +27,11 @@ This is the frozen recovery checkpoint for the first initialized TraceKit instal
 Preview deployments must be Git-backed from clean commits. Finished work must not
 remain only on a local branch or in a working tree. Production Vercel remains
 separate from this recovery Preview.
+
+## Recovery ownership and regression rules
+
+- `main` will eventually become the authoritative complete product branch after recovery.
+- Finished features must be merged into that authoritative branch; no completed feature may exist only in a working tree or local-only branch.
+- A Git-backed Preview from a clean commit is required before production promotion.
+- The capability regression gate must pass before merge.
+- The current capability inventory is maintained in `docs/tracekit-capability-manifest.md`.
