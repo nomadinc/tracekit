@@ -12,6 +12,7 @@ import { headers } from "next/headers";
 import { ACTIVE_ORGANIZATION_COOKIE, readActiveOrganization } from "./active-organization-cookie";
 import type { BusinessContext } from "./types";
 import { MOCK_BUSINESS_CONTEXTS } from "./mock";
+import { resolveUnaffiliatedSessionState } from "./first-admin-bootstrap";
 
 const DEVELOPMENT_REVIEW_HEADER = "x-tracekit-development-review";
 
@@ -97,7 +98,7 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
   // membership; explicit capability overrides remain the narrow bridge for
   // Product/Admin review inside that Organization.
   const membership = selectSessionMembership(memberships);
-  if (!membership) return (await repository.isEmptyInstallation()) ? { kind: "bootstrap" } : { kind: "no-membership" };
+  if (!membership) return resolveUnaffiliatedSessionState(() => repository.isEmptyInstallation());
   const directlyScopedOrganizations = membership.organizationId ? await repository.organizationsForMembership(membership, null) : [];
   const accountId = membership.accountId || directlyScopedOrganizations[0]?.owningAccountId;
   if (!accountId) return { kind: "no-membership" };

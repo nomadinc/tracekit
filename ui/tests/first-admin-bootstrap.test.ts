@@ -1,11 +1,12 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { canBootstrapEmptyInstallation, FIRST_ADMIN_ROLE, normalizeBootstrapName } from "../lib/identity/first-admin-bootstrap";
+import { canBootstrapEmptyInstallation, FIRST_ADMIN_ROLE, normalizeBootstrapName, resolveUnaffiliatedSessionState } from "../lib/identity/first-admin-bootstrap";
 
 const route = readFileSync(new URL("../app/api/identity/bootstrap/route.ts", import.meta.url), "utf8");
 const migration = readFileSync(new URL("../../supabase/migrations/063_first_admin_bootstrap.sql", import.meta.url), "utf8");
 const shell = readFileSync(new URL("../components/identity/authenticated-app-shell.tsx", import.meta.url), "utf8");
+const applicationSession = readFileSync(new URL("../lib/identity/application-session.ts", import.meta.url), "utf8");
 
 test("only a completely empty installation can bootstrap", () => {
   assert.equal(canBootstrapEmptyInstallation({ organizations: 0, accounts: 0, memberships: 0 }), true);
@@ -69,4 +70,19 @@ test("the authenticated user receives the existing owner role", () => {
 test("empty installations render setup while existing no-membership remains distinct", () => {
   assert.match(shell, /resolution\.kind === "bootstrap"/);
   assert.match(shell, /resolution\.kind === "no-membership"/);
+});
+
+test("top-level unaffiliated session resolution selects bootstrap only for an empty installation", async () => {
+  assert.match(applicationSession, /if \(!membership\) return resolveUnaffiliatedSessionState/);
+  const bootstrap = readFileSync(new URL("../lib/identity/first-admin-bootstrap.ts", import.meta.url), "utf8");
+  assert.match(bootstrap, /TRACEKIT_SESSION_STATE=\$\{state\}/);
+  assert.match(bootstrap, /TRACEKIT_EMPTY_INSTALLATION=\$\{emptyInstallation\}/);
+  assert.deepEqual(
+    await resolveUnaffiliatedSessionState(async () => true),
+    { kind: "bootstrap" },
+  );
+  assert.deepEqual(
+    await resolveUnaffiliatedSessionState(async () => false),
+    { kind: "no-membership" },
+  );
 });
