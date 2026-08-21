@@ -9,12 +9,18 @@ export async function AuthenticatedAppShell({ children }: { children: React.Reac
   if (resolution.kind === "bootstrap" || resolution.kind === "no-membership") {
     console.log(`TRACEKIT_EMPTY_INSTALLATION=${resolution.kind === "bootstrap"}`);
   }
-  if (resolution.kind === "provider-unavailable") return <SessionState title="Authentication unavailable" description="WorkOS and persistent identity configuration are required for authenticated TraceKit operation." />;
-  if (resolution.kind === "unauthenticated") return <SessionState title="Sign in required" description="Authenticate to continue." signIn />;
-  if (resolution.kind === "bootstrap") return <FirstAdminBootstrap />;
-  if (resolution.kind === "no-membership") return <SessionState title="No TraceKit access" description="Your identity is verified, but no active TraceKit account membership is assigned." />;
-  if (resolution.kind === "development") return <AppShell>{children}</AppShell>;
-  return <AppShell initialSession={resolution.legacySession} organizations={resolution.session.availableOrganizations} businessContexts={resolution.session.accessibleBusinessContexts}>{children}</AppShell>;
+  const diagnostic = <PreviewSessionDiagnostic kind={resolution.kind} />;
+  if (resolution.kind === "provider-unavailable") return <>{diagnostic}<SessionState title="Authentication unavailable" description="WorkOS and persistent identity configuration are required for authenticated TraceKit operation." /></>;
+  if (resolution.kind === "unauthenticated") return <>{diagnostic}<SessionState title="Sign in required" description="Authenticate to continue." signIn /></>;
+  if (resolution.kind === "bootstrap") return <>{diagnostic}<FirstAdminBootstrap /></>;
+  if (resolution.kind === "no-membership") return <>{diagnostic}<SessionState title="No TraceKit access" description="Your identity is verified, but no active TraceKit account membership is assigned." /></>;
+  if (resolution.kind === "development") return <>{diagnostic}<AppShell>{children}</AppShell></>;
+  return <>{diagnostic}<AppShell initialSession={resolution.legacySession} organizations={resolution.session.availableOrganizations} businessContexts={resolution.session.accessibleBusinessContexts}>{children}</AppShell></>;
+}
+
+function PreviewSessionDiagnostic({ kind }: { kind: string }) {
+  if (process.env.VERCEL_ENV !== "preview") return null;
+  return <aside className="fixed bottom-3 right-3 z-50 rounded border bg-white px-3 py-2 text-xs text-black shadow"><div>DEBUG SESSION: {kind}</div>{kind === "bootstrap" || kind === "no-membership" ? <div>DEBUG EMPTY INSTALLATION: {String(kind === "bootstrap")}</div> : null}</aside>;
 }
 
 function SessionState({ title, description, signIn = false }: { title: string; description: string; signIn?: boolean }) {
