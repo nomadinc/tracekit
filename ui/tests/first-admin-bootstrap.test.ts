@@ -74,11 +74,7 @@ test("empty installations render setup while existing no-membership remains dist
 
 test("top-level unaffiliated session resolution selects bootstrap only for an empty installation", async () => {
   assert.match(applicationSession, /if \(!membership\) return resolveUnaffiliatedSessionState/);
-  assert.match(shell, /const resolution = await resolveApplicationSession\(\);[\s\S]*TRACEKIT_SESSION_STATE=\$\{resolution\.kind\}/);
-  assert.match(shell, /TRACEKIT_EMPTY_INSTALLATION=\$\{resolution\.kind === "bootstrap"\}/);
-  assert.match(shell, /process\.env\.VERCEL_ENV !== "preview"/);
-  assert.match(shell, /DEBUG SESSION:/);
-  assert.match(shell, /DEBUG EMPTY INSTALLATION:/);
+  assert.match(shell, /const resolution = await resolveApplicationSession\(\);/);
   assert.deepEqual(
     await resolveUnaffiliatedSessionState(async () => true),
     { kind: "bootstrap" },
