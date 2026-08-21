@@ -30,6 +30,7 @@
     "allowJs": true,
     "incremental": true,
     "esModuleInterop": true,
+    "allowImportingTsExtensions": true,
     "plugins": [
       {
         "name": "next"
