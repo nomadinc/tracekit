@@ -180,7 +180,7 @@ export class SupabaseTeamRepository implements TeamRepository {
     });
   }
 
-  async acceptInvitation(input: { invitationId: string; acceptedByUserId: string; role: Role; scope: TeamScope }) {
+  async acceptInvitation(input: { invitationId: string; acceptedByUserId: string }) {
     const rows = await rest("rpc/accept_tracekit_team_invitation", {
       method: "POST",
       body: JSON.stringify({
