@@ -6,7 +6,8 @@ import { assetPathsFromHtml, missingManifestAssets, nextProcessesForDirectory } 
 const mode = process.argv[2];
 const uiDirectory = resolve(import.meta.dirname, "..");
 const devDirectory = resolve(uiDirectory, ".next");
-const buildDirectory = resolve(uiDirectory, ".next-build");
+const buildOutputName = process.env.VERCEL ? ".next" : ".next-build";
+const buildDirectory = resolve(uiDirectory, buildOutputName);
 const nextBinary = resolve(uiDirectory, "node_modules/next/dist/bin/next");
 const nextEnvironmentTypes = resolve(uiDirectory, "next-env.d.ts");
 
@@ -75,7 +76,7 @@ if (mode === "dev") {
   requireNoNextProcesses();
   rmSync(buildDirectory, { recursive: true, force: true });
   const originalEnvironmentTypes = readFileSync(nextEnvironmentTypes, "utf8");
-  const child = runNext(["build"], { ...process.env, NEXT_DIST_DIR: ".next-build" });
+  const child = runNext(["build"], { ...process.env, NEXT_DIST_DIR: buildOutputName });
   child.on("exit", (code) => {
     writeFileSync(nextEnvironmentTypes, originalEnvironmentTypes);
     if (code) { process.exitCode = code; return; }
@@ -89,7 +90,7 @@ if (mode === "dev") {
   requireNoNextProcesses();
   const missing = missingManifestAssets(buildDirectory);
   if (missing.length) throw new Error(`Production build is incomplete:\n${missing.join("\n")}`);
-  exitWithChild(runNext(["start", "--port", "3000"], { ...process.env, NEXT_DIST_DIR: ".next-build" }));
+  exitWithChild(runNext(["start", "--port", "3000"], { ...process.env, NEXT_DIST_DIR: buildOutputName }));
 } else if (mode === "check") {
   const active = activeProcesses();
   if (active.length !== 1) throw new Error(`Expected exactly one TraceKit Next.js process; found ${active.length}.`);
