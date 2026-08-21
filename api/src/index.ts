@@ -761,7 +761,7 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
       if (error) throw error;
       const jobs: any[] = [];
       for (const row of data || []) {
-        const { data: connection, error: connectionError } = await db.from("commerce_provider_connections").select("organization_id,provider,status").eq("organization_id", row.organization_id).eq("id", row.connection_id).maybeSingle();
+        const { data: connection, error: connectionError } = await db.from("commerce_provider_connections").select("organization_id,account_id,provider,status").eq("organization_id", row.organization_id).eq("id", row.connection_id).maybeSingle();
         if (connectionError) throw connectionError;
         if (!connection || !isConnectedCommasConnection(connection)) continue;
         const { data: activeAccounts, error: accountError } = await db.from("commerce_provider_accounts").select("id,status").eq("organization_id", row.organization_id).eq("connection_id", row.connection_id).eq("status", "active");
@@ -777,7 +777,7 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
         const unknownQuota = !Number.isFinite(quotaRemaining);
         const bootstrapAttempted = latestMetadata.quota_bootstrap_attempted === true;
         const bootstrap = mode === "continuous" && unknownQuota && !bootstrapAttempted;
-        jobs.push({ organizationId: row.organization_id, connectionId: row.connection_id, providerAccountId: row.provider_account_id, resource: row.resource, mode, schedulerIdentity: bootstrap ? `${row.id}:quota-bootstrap` : `${row.id}:${mode}:${now.slice(0,16)}`, quotaRemaining: Number.isFinite(quotaRemaining) ? quotaRemaining : null, requestBudget: bootstrap ? 1 : mode === "deep_reconciliation" ? row.deep_request_budget : 8, quotaFloor: row.quota_minimum_remaining, ...(bootstrap ? { bootstrap: true as const } : {}) });
+        jobs.push({ accountId: String(connection.account_id), organizationId: row.organization_id, connectionId: row.connection_id, providerAccountId: row.provider_account_id, resource: row.resource, mode, schedulerIdentity: bootstrap ? `${row.id}:quota-bootstrap` : `${row.id}:${mode}:${now.slice(0,16)}`, quotaRemaining: Number.isFinite(quotaRemaining) ? quotaRemaining : null, requestBudget: bootstrap ? 1 : mode === "deep_reconciliation" ? row.deep_request_budget : 8, quotaFloor: row.quota_minimum_remaining, ...(bootstrap ? { bootstrap: true as const } : {}) });
       }
       return jobs;
     },
@@ -788,7 +788,26 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
       if (error) throw error;
       return data === true;
     },
+    async bootstrapPermitted(message) {
+      if (!message.bootstrap || message.bootstrap_mode !== "quota-bootstrap") return false;
+      const { data: connection, error: connectionError } = await db.from("commerce_provider_connections").select("organization_id,account_id,provider,status").eq("organization_id", message.organization_id).eq("id", message.connection_id).maybeSingle();
+      const { data: accounts, error: accountError } = await db.from("commerce_provider_accounts").select("id").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("status", "active");
+      const { count: controls, error: controlError } = await db.from("tracekit_production_controls").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("capability", "commerce_scheduler").eq("activation_state", "enabled");
+      const { count: schedules, error: scheduleError } = await db.from("commerce_sync_schedules").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("enabled", true).eq("activation_state", "enabled");
+      const { count: activeRuns, error: activeRunError } = await db.from("commerce_sync_runs").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).in("status", ["queued", "running", "paused"]);
+      const { count: liveActivation, error: liveActivationError } = await db.from("commerce_repository_activation").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).in("mode", ["live", "live_beta"]);
+      const { data: latest, error: latestError } = await db.from("commerce_sync_runs").select("metadata").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+      if (connectionError || accountError || controlError || scheduleError || activeRunError || liveActivationError || latestError) return false;
+      const metadata = latest?.metadata && typeof latest.metadata === "object" ? latest.metadata as Record<string, unknown> : {};
+      return bootstrapExecutionAllowed({ provider: String(connection?.provider || ""), connected: String(connection?.status || "") === "connected" && (accounts || []).length === 1 && String((accounts || [])[0]?.id || "") === message.provider_account_id, activeAccountCount: (accounts || []).length, quotaRemaining: Number.isFinite(Number(metadata.rate_limit_end)) ? Number(metadata.rate_limit_end) : null, attempted: metadata.quota_bootstrap_attempted === true, schedulerEnabled: Number(controls || 0) > 0, scheduleEnabled: Number(schedules || 0) > 0, activeRuns: Number(activeRuns || 0), liveActivationCount: Number(liveActivation || 0) });
+    },
     async reserve(message) {
+      if (message.bootstrap) {
+        const { error } = await db.from("commerce_sync_runs").insert({ organization_id: message.organization_id, connection_id: message.connection_id, provider_account_id: message.provider_account_id, sync_type: message.resource, mode: "continuous", scheduler_idempotency_key: message.scheduler_identity, metadata: { account_id: message.account_id, quota_bootstrap_attempted: true, quota_bootstrap_state: "pending" } }).select("id").maybeSingle();
+        if (error?.code === "23505") return "duplicate";
+        if (error) throw error;
+        return "reserved";
+      }
       const { count, error } = await db.from("commerce_sync_runs").select("id", { count: "exact", head: true }).eq("connection_id", message.connection_id).eq("scheduler_idempotency_key", message.scheduler_identity);
       if (error) throw error;
       return (count || 0) > 0 ? "duplicate" : "reserved";

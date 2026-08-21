@@ -42,17 +42,18 @@ export default {
   async fetch(request: Request, env: ContinuousRuntimeEnv) {
     const url = new URL(request.url);
     if (request.method !== "POST" || url.pathname !== "/v1/commerce/sync") return json({ ok: false, error: "not_found" }, 404);
-    if (env.TRACEKIT_COMMERCE_SCHEDULER_ENABLED !== "true" || env.TRACEKIT_COMMERCE_KILL_SWITCH !== "enabled") return json({ ok: false, error: "continuous_runtime_disabled" }, 503);
     if (!env.CONTINUOUS_RUNTIME_SHARED_SECRET || request.headers.get("x-tracekit-runtime-secret") !== env.CONTINUOUS_RUNTIME_SHARED_SECRET) return json({ ok: false, error: "continuous_runtime_internal_only" }, 403);
     let body: unknown;
     try { body = await request.json(); } catch { return json({ ok: false, error: "invalid_json" }, 400); }
     try {
       const message = validateRuntimeMessage(body);
+      const bootstrap = message.bootstrap === true && message.bootstrap_mode === "quota-bootstrap";
+      if (!bootstrap && (env.TRACEKIT_COMMERCE_SCHEDULER_ENABLED !== "true" || env.TRACEKIT_COMMERCE_KILL_SWITCH !== "enabled")) return json({ ok: false, error: "continuous_runtime_disabled" }, 503);
       const scope = validateRuntimeScope({ provider: message.provider, status: "connected", connectionId: message.connection_id, organizationId: message.organization_id, providerAccountId: message.provider_account_id });
       installRuntimeEnvironment(env);
       const mode = message.requested_mode === "deep_reconciliation" ? "deep_reconciliation" : "continuous";
       const { runContinuousCommasSync } = await import("../../../ui/lib/commerce/commas-continuous-worker.ts");
-      const result = await runContinuousCommasSync({ mode, bootstrap: message.bootstrap === true, maxPages: message.bootstrap === true ? 1 : undefined, perPage: message.bootstrap === true ? 1 : undefined, overlapPages: message.bootstrap === true ? 1 : undefined, requestKey: message.scheduler_identity, expectedScope: { organizationId: String(scope.organizationId), connectionId: String(scope.connectionId), providerAccountId: String(scope.providerAccountId) } });
+      const result = await runContinuousCommasSync({ mode, bootstrap, maxPages: bootstrap ? 1 : undefined, perPage: bootstrap ? 1 : undefined, overlapPages: bootstrap ? 1 : undefined, requestKey: message.scheduler_identity, expectedScope: { organizationId: String(scope.organizationId), connectionId: String(scope.connectionId), providerAccountId: String(scope.providerAccountId) } });
       return json({ ok: true, status: result.status, providerRequests: result.providerRequests, pagesScanned: result.pagesScanned, rateLimitStart: result.rateLimitStart, rateLimitEnd: result.rateLimitEnd }, 200);
     } catch (error) { return json({ ok: false, error: error instanceof Error ? error.message : "continuous_runtime_failed" }, 400); }
   },
