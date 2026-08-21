@@ -5,6 +5,10 @@ import FirstAdminBootstrap from "./first-admin-bootstrap";
 
 export async function AuthenticatedAppShell({ children }: { children: React.ReactNode }) {
   const resolution = await resolveApplicationSession();
+  console.log(`TRACEKIT_SESSION_STATE=${resolution.kind}`);
+  if (resolution.kind === "bootstrap" || resolution.kind === "no-membership") {
+    console.log(`TRACEKIT_EMPTY_INSTALLATION=${resolution.kind === "bootstrap"}`);
+  }
   if (resolution.kind === "provider-unavailable") return <SessionState title="Authentication unavailable" description="WorkOS and persistent identity configuration are required for authenticated TraceKit operation." />;
   if (resolution.kind === "unauthenticated") return <SessionState title="Sign in required" description="Authenticate to continue." signIn />;
   if (resolution.kind === "bootstrap") return <FirstAdminBootstrap />;

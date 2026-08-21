@@ -74,9 +74,8 @@ test("empty installations render setup while existing no-membership remains dist
 
 test("top-level unaffiliated session resolution selects bootstrap only for an empty installation", async () => {
   assert.match(applicationSession, /if \(!membership\) return resolveUnaffiliatedSessionState/);
-  const bootstrap = readFileSync(new URL("../lib/identity/first-admin-bootstrap.ts", import.meta.url), "utf8");
-  assert.match(bootstrap, /TRACEKIT_SESSION_STATE=\$\{state\}/);
-  assert.match(bootstrap, /TRACEKIT_EMPTY_INSTALLATION=\$\{emptyInstallation\}/);
+  assert.match(shell, /const resolution = await resolveApplicationSession\(\);[\s\S]*TRACEKIT_SESSION_STATE=\$\{resolution\.kind\}/);
+  assert.match(shell, /TRACEKIT_EMPTY_INSTALLATION=\$\{resolution\.kind === "bootstrap"\}/);
   assert.deepEqual(
     await resolveUnaffiliatedSessionState(async () => true),
     { kind: "bootstrap" },
