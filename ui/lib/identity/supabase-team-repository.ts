@@ -131,14 +131,7 @@ export class SupabaseTeamRepository implements TeamRepository {
     return rows.filter((row) => row.tracekit_roles?.role_key === ownerRole).length;
   }
 
-  async createInvitation(input: {
-    inviterUserId: string;
-    intendedEmail: string;
-    scope: TeamScope;
-    role: Role;
-    expiresAt: string;
-    workosInvitationId?: string | null;
-  }) {
+  async createInvitation(input: { inviterUserId: string; intendedEmail: string; scope: TeamScope; role: Role; expiresAt: string; workosInvitationId?: string | null }) {
     const requestedRoleId = await roleId(input.role, input.scope.accountType);
     if (!requestedRoleId) throw new Error("invalid_role");
     const payload = {
@@ -151,41 +144,31 @@ export class SupabaseTeamRepository implements TeamRepository {
       status: "pending",
       expires_at: input.expiresAt,
     };
-    const rows = await rest("tracekit_invitations?select=id,intended_email,status,expires_at,created_at,workos_invitation_id,tracekit_roles(role_key)", {
-      method: "POST",
-      body: JSON.stringify(payload),
-    }) as Array<Row & { tracekit_roles?: RoleJoin }>;
+    const rows = await rest("tracekit_invitations?select=id,intended_email,status,expires_at,created_at,workos_invitation_id,tracekit_roles(role_key)", { method: "POST", body: JSON.stringify(payload) }) as Array<Row & { tracekit_roles?: RoleJoin }>;
     if (!rows[0]) throw new Error("invitation_create_failed");
     return mapInvitation(rows[0]);
   }
 
   async setInvitationDeliveryId(invitationId: string, workosInvitationId: string | null) {
-    await rest(`tracekit_invitations?id=eq.${encodeURIComponent(invitationId)}&status=eq.pending`, {
-      method: "PATCH",
-      body: JSON.stringify({ workos_invitation_id: workosInvitationId, updated_at: new Date().toISOString() }),
-    });
+    await rest(`tracekit_invitations?id=eq.${encodeURIComponent(invitationId)}&status=eq.pending`, { method: "PATCH", body: JSON.stringify({ workos_invitation_id: workosInvitationId, updated_at: new Date().toISOString() }) });
   }
 
   async revokeInvitation(invitationId: string) {
-    await rest(`tracekit_invitations?id=eq.${encodeURIComponent(invitationId)}&status=eq.pending`, {
-      method: "PATCH",
-      body: JSON.stringify({ status: "revoked", updated_at: new Date().toISOString() }),
-    });
+    await rest(`tracekit_invitations?id=eq.${encodeURIComponent(invitationId)}&status=eq.pending`, { method: "PATCH", body: JSON.stringify({ status: "revoked", updated_at: new Date().toISOString() }) });
   }
 
   async markInvitationExpired(invitationId: string) {
-    await rest(`tracekit_invitations?id=eq.${encodeURIComponent(invitationId)}&status=eq.pending`, {
-      method: "PATCH",
-      body: JSON.stringify({ status: "expired", updated_at: new Date().toISOString() }),
-    });
+    await rest(`tracekit_invitations?id=eq.${encodeURIComponent(invitationId)}&status=eq.pending`, { method: "PATCH", body: JSON.stringify({ status: "expired", updated_at: new Date().toISOString() }) });
   }
 
-  async acceptInvitation(input: { invitationId: string; acceptedByUserId: string }) {
+  async acceptInvitation(input: { invitationId: string; acceptedByUserId: string; authenticatedIdentityId: string; correlationId: string }) {
     const rows = await rest("rpc/accept_tracekit_team_invitation", {
       method: "POST",
       body: JSON.stringify({
         p_invitation_id: input.invitationId,
         p_accepted_by_user_id: input.acceptedByUserId,
+        p_authenticated_identity_id: input.authenticatedIdentityId,
+        p_correlation_id: input.correlationId,
       }),
     }) as Row[];
     const membershipId = rows[0]?.membership_id ? String(rows[0].membership_id) : null;
@@ -195,13 +178,17 @@ export class SupabaseTeamRepository implements TeamRepository {
     return member;
   }
 
-  async updateMembership(input: { membershipId: string; role?: Role; status?: TeamMembershipStatus }) {
+  async updateMembership(input: { membershipId: string; role?: Role; status?: TeamMembershipStatus; actorUserId: string; authenticatedIdentityId: string; permissionEvaluated: "users.remove" | "users.manage_permissions"; correlationId: string }) {
     const rows = await rest("rpc/mutate_tracekit_team_membership", {
       method: "POST",
       body: JSON.stringify({
         p_membership_id: input.membershipId,
         p_new_role_key: input.role ?? null,
         p_new_status: input.status ?? null,
+        p_actor_user_id: input.actorUserId,
+        p_authenticated_identity_id: input.authenticatedIdentityId,
+        p_permission_evaluated: input.permissionEvaluated,
+        p_correlation_id: input.correlationId,
       }),
     }) as Row[];
     const membershipId = rows[0]?.membership_id ? String(rows[0].membership_id) : null;
