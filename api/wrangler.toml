@@ -15,15 +15,31 @@ routes = [{ pattern = "journey.trace-kit.io", custom_domain = true }]
   TRACEKIT_TKID_RELAY_ENABLED = "false"
   TRACEKIT_TKID_RELAY_ORIGIN = "https://journey.trace-kit.io"
   
-  [[queues.producers]]
+[[queues.producers]]
 queue = "wowboost-imports"
 binding = "wowboost_imports"
+
+# Continuous Commerce remains disabled by environment/database controls.
+[[queues.producers]]
+queue = "continuous-commerce"
+binding = "continuous_commerce"
 
 [[queues.consumers]]
 queue = "wowboost-imports"
 max_batch_size = 1
 max_batch_timeout = 5
 max_retries = 10
+
+[[queues.consumers]]
+queue = "continuous-commerce"
+max_batch_size = 1
+max_batch_timeout = 5
+max_retries = 10
+
+# This service must be provisioned separately; the binding does not authorize work.
+[[services]]
+binding = "CONTINUOUS_COMMERCE_RUNTIME"
+service = "tracekit-continuous-runtime"
 
 # Phase 2.8 Continuous Commerce implementation remains dormant in source.
 # Production Queue attachment requires a separate reviewed configuration change.

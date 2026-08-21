@@ -16,8 +16,18 @@ test("production Worker configuration preserves the authorized Queue topology", 
 
   assert.equal(producers.filter((entry: any) => entry.queue === "wowboost-imports").length, 1);
   assert.equal(consumers.filter((entry: any) => entry.queue === "wowboost-imports").length, 1);
-  assert.equal(producers.filter((entry: any) => entry.queue === "continuous-commerce").length, 0);
-  assert.equal(consumers.filter((entry: any) => entry.queue === "continuous-commerce").length, 0);
+  assert.equal(producers.filter((entry: any) => entry.queue === "continuous-commerce").length, 1);
+  assert.equal(consumers.filter((entry: any) => entry.queue === "continuous-commerce").length, 1);
+  const continuousProducer = producers.find((entry: any) => entry.queue === "continuous-commerce");
+  const continuousConsumer = consumers.find((entry: any) => entry.queue === "continuous-commerce");
+  assert.equal(continuousProducer.binding, "continuous_commerce");
+  assert.deepEqual(continuousConsumer, {
+    queue: "continuous-commerce",
+    max_batch_size: 1,
+    max_batch_timeout: 5,
+    max_retries: 10,
+  });
+  assert.deepEqual(config.services, [{ binding: "CONTINUOUS_COMMERCE_RUNTIME", service: "tracekit-continuous-runtime" }]);
 
   const wowboostProducer = producers.find((entry: any) => entry.queue === "wowboost-imports");
   const wowboostConsumer = consumers.find((entry: any) => entry.queue === "wowboost-imports");
