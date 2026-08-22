@@ -2,10 +2,16 @@ export const CONTINUOUS_COMMERCE_QUEUE_SCHEMA=1;
 export type CommerceJobType="commerce_continuous"|"commerce_deep_reconciliation"|"investigation_candidate_evaluation"|"investigation_refresh";
 export type CommerceQueueMessage={schema_version:1;job_type:CommerceJobType;provider:"commas";account_id:string;organization_id:string;connection_id:string;provider_account_id:string;resource:string;requested_mode:"continuous"|"deep_reconciliation"|"candidate_evaluation"|"investigation_refresh";scheduler_identity:string;requested_at:string;bootstrap?:true;bootstrap_mode?:"quota-bootstrap";reserved_run_id?:string;manual?:true};
 export const QUEUE_OBSERVABILITY_TEST_TYPE = "queue-observability-test" as const;
+export const RUNTIME_DISPATCH_PROBE_TYPE = "runtime-dispatch-probe" as const;
 export function isQueueObservabilityTest(value: unknown): value is { type: typeof QUEUE_OBSERVABILITY_TEST_TYPE } {
   return !!value && typeof value === "object"
     && Object.keys(value).length === 1
     && (value as { type?: unknown }).type === QUEUE_OBSERVABILITY_TEST_TYPE;
+}
+export function isRuntimeDispatchProbe(value: unknown): value is { type: typeof RUNTIME_DISPATCH_PROBE_TYPE } {
+  return !!value && typeof value === "object"
+    && Object.keys(value).length === 1
+    && (value as { type?: unknown }).type === RUNTIME_DISPATCH_PROBE_TYPE;
 }
 export type EligibleCommerceJob={accountId:string;organizationId:string;connectionId:string;providerAccountId:string;resource:string;mode:"continuous"|"deep_reconciliation";schedulerIdentity:string;quotaRemaining:number|null;requestBudget:number;quotaFloor:number;bootstrap?:true};
 export type CommerceAdapterRepository={schedulerEnabled():Promise<boolean>;eligibleJobs(now:string):Promise<EligibleCommerceJob[]>;connectionPermitted(connectionId:string):Promise<boolean>;bootstrapPermitted?(message:CommerceQueueMessage):Promise<boolean>;manualPermitted?(message:CommerceQueueMessage):Promise<boolean>;preReservedRunPermitted?(message:CommerceQueueMessage):Promise<boolean>;reservedRunId?(message:CommerceQueueMessage):Promise<string|null>;reserve(message:CommerceQueueMessage):Promise<"reserved"|"duplicate">;markEnqueued?(message:CommerceQueueMessage,now:string):Promise<void>;recordMetric(event:string,details:Record<string,unknown>):Promise<void>};

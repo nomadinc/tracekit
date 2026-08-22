@@ -14,7 +14,7 @@ import {
   maintenanceRequiresAdminAuthorization,
   maintenanceWriteAllowed,
 } from "./maintenance-write-gate";
-import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, runCommerceCron, validateCommerceQueueMessage, isQueueObservabilityTest, isPreReservedRunMatch, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
+import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, runCommerceCron, validateCommerceQueueMessage, isQueueObservabilityTest, isRuntimeDispatchProbe, isPreReservedRunMatch, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
 import { readQuotaBootstrapGate } from "./quota-bootstrap-gate";
 import { enforceTkidRate, ephemeralTransportDimension, TkidRateLimitError, type DistributedCounterStore, type TkidAbuseClass } from "./tkid-distributed-abuse";
 import {
@@ -22096,6 +22096,23 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 		    if (isQueueObservabilityTest(body)) {
 		      console.log("[TraceKit] queue observability test delivered", { event: "queue_observability_test.delivered" });
 		      msg.ack();
+		      continue;
+		    }
+		    if (isRuntimeDispatchProbe(body)) {
+		      try {
+		        if (!env.CONTINUOUS_COMMERCE_RUNTIME) throw new Error("continuous_runtime_binding_missing");
+		        const response = await env.CONTINUOUS_COMMERCE_RUNTIME.fetch("https://continuous-runtime.internal/v1/commerce/sync", {
+		          method: "POST",
+		          headers: { "content-type": "application/json", "x-tracekit-runtime-secret": String(env.CONTINUOUS_RUNTIME_SHARED_SECRET || "") },
+		          body: JSON.stringify(body),
+		        });
+		        const result = await response.json().catch(() => ({})) as Record<string, unknown>;
+		        if (!response.ok || result.probe !== "runtime-dispatch-probe" || result.authPassed !== true) throw new Error(`runtime_dispatch_probe_${response.status}`);
+		        msg.ack();
+		      } catch (error) {
+		        console.log("[TraceKit] runtime dispatch probe failed", { event: "runtime_dispatch_probe.failed", code: String((error as Error)?.message || "runtime_dispatch_probe_failed").slice(0, 80) });
+		        msg.ack();
+		      }
 		      continue;
 		    }
 		    if (body.schema_version === 1 && /^commerce_(continuous|deep_reconciliation)$/.test(String(body.job_type || ""))) {
