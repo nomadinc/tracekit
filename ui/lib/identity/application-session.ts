@@ -98,7 +98,30 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
   // membership; explicit capability overrides remain the narrow bridge for
   // Product/Admin review inside that Organization.
   const membership = selectSessionMembership(memberships);
-  if (!membership) return resolveUnaffiliatedSessionState(() => repository.isEmptyInstallation());
+  if (!membership) {
+    const inactiveMemberships = await repository.inactiveMembershipsForUser(user.id);
+    const deniedMembership = inactiveMemberships[0];
+    if (deniedMembership) {
+      await repository.recordAuditEvent({
+        actorUserId: user.id,
+        authenticatedIdentityId: auth.user.id,
+        accountId: deniedMembership.accountId,
+        organizationId: deniedMembership.organizationId,
+        action: "user.access.denied",
+        targetType: "membership",
+        targetId: deniedMembership.id,
+        result: "denied",
+        correlationId,
+        metadata: {
+          reason: "no_active_membership",
+          membership_status: deniedMembership.status,
+          role: deniedMembership.role,
+        },
+      });
+      return { kind: "no-membership" };
+    }
+    return resolveUnaffiliatedSessionState(() => repository.isEmptyInstallation());
+  }
   const directlyScopedOrganizations = membership.organizationId ? await repository.organizationsForMembership(membership, null) : [];
   const accountId = membership.accountId || directlyScopedOrganizations[0]?.owningAccountId;
   if (!accountId) return { kind: "no-membership" };
@@ -161,17 +184,5 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
     activeOrganizationId: activeOrganization?.id || null,
     activeBusinessContextId,
   };
-  await repository.recordAuditEvent({
-    actorUserId: user.id,
-    authenticatedIdentityId: auth.user.id,
-    accountId: account.id,
-    organizationId: activeOrganization?.id ?? null,
-    action: "membership.resolved",
-    targetType: "membership",
-    targetId: membership.id,
-    result: "success",
-    correlationId,
-    metadata: { role: membership.role, accountType: account.accountType },
-  });
   return { kind: "authenticated", session, clientSession: serializeSessionForClient(session), legacySession };
 }
