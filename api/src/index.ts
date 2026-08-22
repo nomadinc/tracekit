@@ -14,7 +14,7 @@ import {
   maintenanceRequiresAdminAuthorization,
   maintenanceWriteAllowed,
 } from "./maintenance-write-gate";
-import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, runCommerceCron, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
+import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, runCommerceCron, isQueueObservabilityTest, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
 import { enforceTkidRate, ephemeralTransportDimension, TkidRateLimitError, type DistributedCounterStore, type TkidAbuseClass } from "./tkid-distributed-abuse";
 import {
   DEFAULT_SHOPIFY_API_VERSION,
@@ -22076,6 +22076,11 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 
 		  for (const msg of batch.messages) {
 		    const body = msg.body || {};
+		    if (isQueueObservabilityTest(body)) {
+		      console.log("[TraceKit] queue observability test delivered", { event: "queue_observability_test.delivered" });
+		      msg.ack();
+		      continue;
+		    }
 		    if (body.schema_version === 1 && /^commerce_(continuous|deep_reconciliation)$/.test(String(body.job_type || ""))) {
 		      const repository = getContinuousCommerceAdapterRepository(env);
 		      const outcome = await consumeCommerceMessage({
