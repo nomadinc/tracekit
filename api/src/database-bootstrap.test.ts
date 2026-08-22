@@ -175,7 +175,32 @@ test("migration filenames are unique and numerically ordered", () => {
   const numbers = names.map((name) => name.slice(0, 3));
 
   assert.equal(new Set(numbers).size, numbers.length);
-  assert.deepEqual(numbers, Array.from({ length: 65 }, (_, index) => String(index).padStart(3, "0")));
+  assert.deepEqual(numbers, Array.from({ length: 66 }, (_, index) => String(index).padStart(3, "0")));
+});
+
+test("Migration 065 provides a one-time service-role-only quota bootstrap retry", () => {
+  const migration065 = migration("065_quota_bootstrap_retry_recovery.sql").toLowerCase();
+  assert.match(migration065, /create or replace function public\.retry_commerce_quota_bootstrap\(\s*p_run_id uuid,\s*p_provider_requests integer default 0\s*\)/);
+  assert.match(migration065, /security definer/);
+  assert.match(migration065, /pg_advisory_xact_lock/);
+  assert.match(migration065, /for update/);
+  assert.match(migration065, /status <> 'cancelled'/);
+  assert.match(migration065, /p_provider_requests is distinct from 0/);
+  assert.match(migration065, /quota_bootstrap_attempted/);
+  assert.match(migration065, /quota_bootstrap_retry_consumed/);
+  assert.match(migration065, /quota_bootstrap_provider_requests/);
+  assert.match(migration065, /failure_class.*pre_provider_dispatch/);
+  assert.match(migration065, /recorded provider requests/);
+  assert.match(migration065, /v_connection\.account_id is distinct from v_account_id/);
+  assert.match(migration065, /quota_bootstrap_original_run_id/);
+  assert.match(migration065, /insert into public\.commerce_sync_runs/);
+  assert.match(migration065, /reserved_run_id/);
+  assert.match(migration065, /status in\s*\('queued',\s*'running',\s*'paused'\)/);
+  assert.match(migration065, /mode in\s*\('live',\s*'live_beta'\)/);
+  assert.match(migration065, /activation_state = 'enabled'/);
+  assert.match(migration065, /revoke all on function public\.retry_commerce_quota_bootstrap\(uuid, integer\) from public, anon, authenticated/);
+  assert.match(migration065, /grant execute on function public\.retry_commerce_quota_bootstrap\(uuid, integer\) to service_role/);
+  assert.doesNotMatch(migration065, /env\.continuous_commerce|http|fetch\(/);
 });
 
 test("Migration 061 converges trigger-only guard functions without changing definitions or defaults", () => {
