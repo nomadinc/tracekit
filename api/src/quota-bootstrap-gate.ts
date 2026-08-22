@@ -1,4 +1,4 @@
-import { bootstrapRejectionCode, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
+import { bootstrapRejectionCode, type CommerceQueueMessage } from "./continuous-commerce-cloudflare.ts";
 
 export function sanitizedReadResult(error: any) {
   return error ? { ok: false, status: 400, code: String(error.code || "postgrest_error") } : { ok: true, status: 200 };
@@ -10,7 +10,9 @@ export async function readQuotaBootstrapGate(db: any, message: CommerceQueueMess
   const { count: controls, error: controlError } = await db.from("tracekit_production_controls").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("capability", "commerce_scheduler").eq("activation_state", "enabled");
   const { count: schedules, error: scheduleError } = await db.from("commerce_sync_schedules").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("enabled", true).eq("activation_state", "enabled");
   const { count: activeRuns, error: activeRunError } = await db.from("commerce_sync_runs").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).in("status", ["queued", "running", "paused"]);
-  const { count: liveActivation, error: liveActivationError } = await db.from("commerce_repository_activation").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).in("mode", ["live", "live_beta"]);
+  // commerce_repository_activation has a composite (organization_id, workspace)
+  // primary key and intentionally has no synthetic id column.
+  const { count: liveActivation, error: liveActivationError } = await db.from("commerce_repository_activation").select("organization_id", { count: "exact", head: true }).eq("organization_id", message.organization_id).in("mode", ["live", "live_beta"]);
   const { data: latest, error: latestError } = await db.from("commerce_sync_runs").select("metadata").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).order("created_at", { ascending: false }).limit(1).maybeSingle();
   const reads = {
     connection: sanitizedReadResult(connectionError), provider_account: sanitizedReadResult(accountError), scheduler_control: sanitizedReadResult(controlError),

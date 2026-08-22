@@ -808,7 +808,7 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
         db.from("commerce_sync_schedules").select("sync_frequency,enabled,activation_state,quota_minimum_remaining").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1),
         db.from("commerce_connection_pauses").select("paused").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).limit(1),
         db.from("commerce_sync_runs").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).in("status", ["queued", "running", "paused"]),
-        db.from("commerce_repository_activation").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).in("mode", ["live", "live_beta"]),
+        db.from("commerce_repository_activation").select("organization_id", { count: "exact", head: true }).eq("organization_id", message.organization_id).in("mode", ["live", "live_beta"]),
         db.from("commerce_sync_runs").select("metadata").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       ]);
       if (connectionError || accountError || scheduleError || pauseError || activeRunError || liveActivationError || latestError) return false;
