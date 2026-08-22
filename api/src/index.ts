@@ -14,7 +14,7 @@ import {
   maintenanceRequiresAdminAuthorization,
   maintenanceWriteAllowed,
 } from "./maintenance-write-gate";
-import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, runCommerceCron, bootstrapRejectionCode, isQueueObservabilityTest, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
+import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, runCommerceCron, bootstrapRejectionCode, validateCommerceQueueMessage, isQueueObservabilityTest, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
 import { enforceTkidRate, ephemeralTransportDimension, TkidRateLimitError, type DistributedCounterStore, type TkidAbuseClass } from "./tkid-distributed-abuse";
 import {
   DEFAULT_SHOPIFY_API_VERSION,
@@ -743,6 +743,28 @@ function getSupabase(env: Env) {
   return createClient(url, key, { auth: { persistSession: false } });
 }
 
+function sanitizedReadResult(error: any) {
+  return error ? { ok: false, status: 400, code: String(error.code || "postgrest_error") } : { ok: true, status: 200 };
+}
+
+async function readQuotaBootstrapGate(db: any, message: CommerceQueueMessage) {
+  const { data: connection, error: connectionError } = await db.from("commerce_provider_connections").select("organization_id,account_id,provider,status").eq("organization_id", message.organization_id).eq("id", message.connection_id).maybeSingle();
+  const { data: accounts, error: accountError } = await db.from("commerce_provider_accounts").select("id").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("status", "active");
+  const { count: controls, error: controlError } = await db.from("tracekit_production_controls").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("capability", "commerce_scheduler").eq("activation_state", "enabled");
+  const { count: schedules, error: scheduleError } = await db.from("commerce_sync_schedules").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("enabled", true).eq("activation_state", "enabled");
+  const { count: activeRuns, error: activeRunError } = await db.from("commerce_sync_runs").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).in("status", ["queued", "running", "paused"]);
+  const { count: liveActivation, error: liveActivationError } = await db.from("commerce_repository_activation").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).in("mode", ["live", "live_beta"]);
+  const { data: latest, error: latestError } = await db.from("commerce_sync_runs").select("metadata").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+  const reads = {
+    connection: sanitizedReadResult(connectionError), provider_account: sanitizedReadResult(accountError), scheduler_control: sanitizedReadResult(controlError),
+    schedule: sanitizedReadResult(scheduleError), active_run: sanitizedReadResult(activeRunError), live_activation: sanitizedReadResult(liveActivationError), quota: sanitizedReadResult(latestError), bootstrap_attempt: sanitizedReadResult(latestError),
+  };
+  if (connectionError || accountError || controlError || scheduleError || activeRunError || liveActivationError || latestError) return { reads, rejection: "database_read_error" as const };
+  const metadata = latest?.metadata && typeof latest.metadata === "object" ? latest.metadata as Record<string, unknown> : {};
+  const decision = { provider: String(connection?.provider || ""), connected: String(connection?.status || "") === "connected" && (accounts || []).length === 1 && String((accounts || [])[0]?.id || "") === message.provider_account_id, activeAccountCount: (accounts || []).length, quotaRemaining: Number.isFinite(Number(metadata.rate_limit_end)) ? Number(metadata.rate_limit_end) : null, attempted: metadata.quota_bootstrap_attempted === true, schedulerEnabled: Number(controls || 0) > 0, scheduleEnabled: Number(schedules || 0) > 0, activeRuns: Number(activeRuns || 0), liveActivationCount: Number(liveActivation || 0) };
+  return { reads, rejection: bootstrapRejectionCode(decision) };
+}
+
 function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterRepository {
   const db = getSupabase(env);
   return {
@@ -797,17 +819,7 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
     },
     async bootstrapPermitted(message) {
       if (!message.bootstrap || message.bootstrap_mode !== "quota-bootstrap") return false;
-      const { data: connection, error: connectionError } = await db.from("commerce_provider_connections").select("organization_id,account_id,provider,status").eq("organization_id", message.organization_id).eq("id", message.connection_id).maybeSingle();
-      const { data: accounts, error: accountError } = await db.from("commerce_provider_accounts").select("id").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("status", "active");
-      const { count: controls, error: controlError } = await db.from("tracekit_production_controls").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("capability", "commerce_scheduler").eq("activation_state", "enabled");
-      const { count: schedules, error: scheduleError } = await db.from("commerce_sync_schedules").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("enabled", true).eq("activation_state", "enabled");
-      const { count: activeRuns, error: activeRunError } = await db.from("commerce_sync_runs").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).in("status", ["queued", "running", "paused"]);
-      const { count: liveActivation, error: liveActivationError } = await db.from("commerce_repository_activation").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).in("mode", ["live", "live_beta"]);
-      const { data: latest, error: latestError } = await db.from("commerce_sync_runs").select("metadata").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).order("created_at", { ascending: false }).limit(1).maybeSingle();
-      if (connectionError || accountError || controlError || scheduleError || activeRunError || liveActivationError || latestError) { console.log("[TraceKit] quota_bootstrap_rejected: database_read_error"); return false; }
-      const metadata = latest?.metadata && typeof latest.metadata === "object" ? latest.metadata as Record<string, unknown> : {};
-      const decision = { provider: String(connection?.provider || ""), connected: String(connection?.status || "") === "connected" && (accounts || []).length === 1 && String((accounts || [])[0]?.id || "") === message.provider_account_id, activeAccountCount: (accounts || []).length, quotaRemaining: Number.isFinite(Number(metadata.rate_limit_end)) ? Number(metadata.rate_limit_end) : null, attempted: metadata.quota_bootstrap_attempted === true, schedulerEnabled: Number(controls || 0) > 0, scheduleEnabled: Number(schedules || 0) > 0, activeRuns: Number(activeRuns || 0), liveActivationCount: Number(liveActivation || 0) };
-      const rejection = bootstrapRejectionCode(decision); if (rejection) console.log(`[TraceKit] quota_bootstrap_rejected: ${rejection}`); return !rejection;
+      const result = await readQuotaBootstrapGate(db, message); if (result.rejection) console.log(`[TraceKit] quota_bootstrap_rejected: ${result.rejection}`); return !result.rejection;
     },
     async manualPermitted(message) {
       if (!message.manual || message.bootstrap_mode) return false;
@@ -15319,6 +15331,18 @@ async function relayEvidence(db:any,continuity:any,eventName:string){await db.fr
 async function router(req: Request, env: Env): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname;
+  if (path === "/internal/diagnostics/quota-bootstrap-reads" && req.method === "POST") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const body = await readJsonBody(req);
+      const message = validateCommerceQueueMessage({ ...body, schema_version: 1, job_type: "commerce_continuous", provider: "commas", resource: "transactions", requested_mode: "continuous", scheduler_identity: "diagnostic", requested_at: new Date().toISOString(), bootstrap: true, bootstrap_mode: "quota-bootstrap" });
+      const result = await readQuotaBootstrapGate(getSupabase(env), message);
+      return json({ ok: true, reads: result.reads, rejection: result.rejection }, 200);
+    } catch (error: any) {
+      return json({ ok: false, error: "diagnostic_failed", code: String(error?.code || "invalid_request") }, 400);
+    }
+  }
   if (path === "/v1/commerce/sync-now" && req.method === "POST") {
     const auth = adminAuthError(req, env);
     if (auth) return auth;
