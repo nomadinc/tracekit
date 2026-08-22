@@ -14,7 +14,7 @@ import {
   maintenanceRequiresAdminAuthorization,
   maintenanceWriteAllowed,
 } from "./maintenance-write-gate";
-import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, runCommerceCron, isQueueObservabilityTest, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
+import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, runCommerceCron, bootstrapRejectionCode, isQueueObservabilityTest, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
 import { enforceTkidRate, ephemeralTransportDimension, TkidRateLimitError, type DistributedCounterStore, type TkidAbuseClass } from "./tkid-distributed-abuse";
 import {
   DEFAULT_SHOPIFY_API_VERSION,
@@ -804,9 +804,10 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
       const { count: activeRuns, error: activeRunError } = await db.from("commerce_sync_runs").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).in("status", ["queued", "running", "paused"]);
       const { count: liveActivation, error: liveActivationError } = await db.from("commerce_repository_activation").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).in("mode", ["live", "live_beta"]);
       const { data: latest, error: latestError } = await db.from("commerce_sync_runs").select("metadata").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).order("created_at", { ascending: false }).limit(1).maybeSingle();
-      if (connectionError || accountError || controlError || scheduleError || activeRunError || liveActivationError || latestError) return false;
+      if (connectionError || accountError || controlError || scheduleError || activeRunError || liveActivationError || latestError) { console.log("[TraceKit] quota_bootstrap_rejected: database_read_error"); return false; }
       const metadata = latest?.metadata && typeof latest.metadata === "object" ? latest.metadata as Record<string, unknown> : {};
-      return bootstrapExecutionAllowed({ provider: String(connection?.provider || ""), connected: String(connection?.status || "") === "connected" && (accounts || []).length === 1 && String((accounts || [])[0]?.id || "") === message.provider_account_id, activeAccountCount: (accounts || []).length, quotaRemaining: Number.isFinite(Number(metadata.rate_limit_end)) ? Number(metadata.rate_limit_end) : null, attempted: metadata.quota_bootstrap_attempted === true, schedulerEnabled: Number(controls || 0) > 0, scheduleEnabled: Number(schedules || 0) > 0, activeRuns: Number(activeRuns || 0), liveActivationCount: Number(liveActivation || 0) });
+      const decision = { provider: String(connection?.provider || ""), connected: String(connection?.status || "") === "connected" && (accounts || []).length === 1 && String((accounts || [])[0]?.id || "") === message.provider_account_id, activeAccountCount: (accounts || []).length, quotaRemaining: Number.isFinite(Number(metadata.rate_limit_end)) ? Number(metadata.rate_limit_end) : null, attempted: metadata.quota_bootstrap_attempted === true, schedulerEnabled: Number(controls || 0) > 0, scheduleEnabled: Number(schedules || 0) > 0, activeRuns: Number(activeRuns || 0), liveActivationCount: Number(liveActivation || 0) };
+      const rejection = bootstrapRejectionCode(decision); if (rejection) console.log(`[TraceKit] quota_bootstrap_rejected: ${rejection}`); return !rejection;
     },
     async manualPermitted(message) {
       if (!message.manual || message.bootstrap_mode) return false;
