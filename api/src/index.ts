@@ -14,7 +14,7 @@ import {
   maintenanceRequiresAdminAuthorization,
   maintenanceWriteAllowed,
 } from "./maintenance-write-gate";
-import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, runCommerceCron, validateCommerceQueueMessage, isQueueObservabilityTest, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
+import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, runCommerceCron, validateCommerceQueueMessage, isQueueObservabilityTest, isPreReservedRunMatch, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
 import { readQuotaBootstrapGate } from "./quota-bootstrap-gate";
 import { enforceTkidRate, ephemeralTransportDimension, TkidRateLimitError, type DistributedCounterStore, type TkidAbuseClass } from "./tkid-distributed-abuse";
 import {
@@ -798,7 +798,20 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
     },
     async bootstrapPermitted(message) {
       if (!message.bootstrap || message.bootstrap_mode !== "quota-bootstrap") return false;
+      if (message.reserved_run_id && !await this.preReservedRunPermitted!(message)) return false;
       const result = await readQuotaBootstrapGate(db, message); if (result.rejection) console.log(`[TraceKit] quota_bootstrap_rejected: ${result.rejection}`); return !result.rejection;
+    },
+    async preReservedRunPermitted(message) {
+      if (!message.bootstrap || !message.reserved_run_id) return false;
+      const { data: run, error } = await db.from("commerce_sync_runs").select("id,organization_id,connection_id,provider_account_id,sync_type,mode,status,scheduler_idempotency_key,metadata").eq("id", message.reserved_run_id).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("scheduler_idempotency_key", message.scheduler_identity).eq("status", "queued").maybeSingle();
+      if (error || !run) return false;
+      return isPreReservedRunMatch(run, message);
+    },
+    async reservedRunId(message) {
+      if (!message.bootstrap) return null;
+      const { data, error } = await db.from("commerce_sync_runs").select("id").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("scheduler_idempotency_key", message.scheduler_identity).eq("status", "queued").maybeSingle();
+      if (error) throw error;
+      return data?.id ? String(data.id) : null;
     },
     async manualPermitted(message) {
       if (!message.manual || message.bootstrap_mode) return false;

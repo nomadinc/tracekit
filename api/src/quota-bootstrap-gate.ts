@@ -9,7 +9,9 @@ export async function readQuotaBootstrapGate(db: any, message: CommerceQueueMess
   const { data: accounts, error: accountError } = await db.from("commerce_provider_accounts").select("id").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("status", "active");
   const { count: controls, error: controlError } = await db.from("tracekit_production_controls").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("capability", "commerce_scheduler").eq("activation_state", "enabled");
   const { count: schedules, error: scheduleError } = await db.from("commerce_sync_schedules").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("enabled", true).eq("activation_state", "enabled");
-  const { count: activeRuns, error: activeRunError } = await db.from("commerce_sync_runs").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).in("status", ["queued", "running", "paused"]);
+  let activeRunQuery = db.from("commerce_sync_runs").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).in("status", ["queued", "running", "paused"]);
+  if (message.reserved_run_id) activeRunQuery = activeRunQuery.neq("id", message.reserved_run_id);
+  const { count: activeRuns, error: activeRunError } = await activeRunQuery;
   // commerce_repository_activation has a composite (organization_id, workspace)
   // primary key and intentionally has no synthetic id column.
   const { count: liveActivation, error: liveActivationError } = await db.from("commerce_repository_activation").select("organization_id", { count: "exact", head: true }).eq("organization_id", message.organization_id).in("mode", ["live", "live_beta"]);
