@@ -8,6 +8,14 @@ export type HistoricalBackfillArgs = {
   perPage: number;
 };
 
+export type HistoricalBatchArgs = {
+  confirmed: boolean;
+  runId: string | null;
+  fromDate: string | null;
+  toDate: string | null;
+  maxChunks: number;
+};
+
 export type OrderingState = "unknown" | "newest_first" | "oldest_first" | "ambiguous";
 export type HistoricalChunkTransition = "paused" | "completed" | "completed_with_warnings";
 
@@ -27,6 +35,20 @@ export function historicalResumePage(metadata: Record<string, unknown> | null | 
 
 export function historicalInvocationHasBudget(providerRequests: number, maxPages: number) {
   return providerRequests < maxPages;
+}
+
+export function parseHistoricalBatchArgs(argv: string[]): HistoricalBatchArgs {
+  const value = (name: string) => argv.find((arg) => arg.startsWith(`${name}=`))?.slice(name.length + 1) || null;
+  const result = { confirmed: argv.includes("--confirm-historical-commas-batch"), runId: value("--run-id"), fromDate: value("--from-date"), toDate: value("--to-date"), maxChunks: Number(value("--max-chunks") || "0") };
+  if (!result.confirmed) throw new Error("Historical batch requires --confirm-historical-commas-batch.");
+  if (!result.runId) throw new Error("Historical batch requires --run-id.");
+  if (!result.fromDate || !result.toDate || !/^\d{4}-\d{2}-\d{2}$/.test(result.fromDate) || !/^\d{4}-\d{2}-\d{2}$/.test(result.toDate) || result.fromDate > result.toDate) throw new Error("Historical batch requires valid --from-date and --to-date bounds.");
+  if (!Number.isInteger(result.maxChunks) || result.maxChunks < 1 || result.maxChunks > 10) throw new Error("Historical batch max-chunks must be between 1 and 10.");
+  return result;
+}
+
+export function historicalBatchMadeProgress(before: { resumePage: number; inRange: number; earliest: string | null }, after: { resumePage: number; inRange: number; earliest: string | null; rangeComplete: boolean }) {
+  return after.rangeComplete || after.resumePage > before.resumePage || after.inRange > before.inRange || (after.earliest !== null && (before.earliest === null || after.earliest < before.earliest));
 }
 
 export function parseHistoricalBackfillArgs(argv: string[]): HistoricalBackfillArgs {

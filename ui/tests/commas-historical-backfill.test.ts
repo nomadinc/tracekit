@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { combineOrdering, historicalChunkTransition, historicalInvocationHasBudget, historicalQuotaAllowed, historicalResumePage, inHistoricalRange, orderingForPage, parseHistoricalBackfillArgs, rangePassed } from "../lib/commerce/commas-historical-backfill.ts";
+import { combineOrdering, historicalBatchMadeProgress, historicalChunkTransition, historicalInvocationHasBudget, historicalQuotaAllowed, historicalResumePage, inHistoricalRange, orderingForPage, parseHistoricalBackfillArgs, parseHistoricalBatchArgs, rangePassed } from "../lib/commerce/commas-historical-backfill.ts";
 
 test("historical mode requires confirmation and date bounds", () => {
   assert.throws(() => parseHistoricalBackfillArgs(["--historical-backfill"]), /confirm-historical/);
@@ -34,6 +34,16 @@ test("resumed chunks use persisted resume_page and an invocation-local page budg
   assert.equal(historicalInvocationHasBudget(0, 8), true);
   assert.equal(historicalInvocationHasBudget(7, 8), true);
   assert.equal(historicalInvocationHasBudget(8, 8), false);
+});
+
+test("batch driver requires confirmation, caps chunks, and stops on unsafe progress", () => {
+  assert.throws(() => parseHistoricalBatchArgs(["--run-id=x", "--from-date=2025-11-14", "--to-date=2026-08-23", "--max-chunks=1"]), /confirm-historical-commas-batch/);
+  assert.throws(() => parseHistoricalBatchArgs(["--confirm-historical-commas-batch", "--run-id=x", "--from-date=2025-11-14", "--to-date=2026-08-23", "--max-chunks=11"]), /max-chunks/);
+  const args = parseHistoricalBatchArgs(["--confirm-historical-commas-batch", "--run-id=x", "--from-date=2025-11-14", "--to-date=2026-08-23", "--max-chunks=10"]);
+  assert.equal(args.maxChunks, 10);
+  assert.equal(historicalBatchMadeProgress({ resumePage: 9, inRange: 1500, earliest: "2026-08-16T20:59:17Z" }, { resumePage: 17, inRange: 3000, earliest: "2026-08-10T00:00:00Z", rangeComplete: false }), true);
+  assert.equal(historicalBatchMadeProgress({ resumePage: 9, inRange: 1500, earliest: "2026-08-16T20:59:17Z" }, { resumePage: 9, inRange: 1500, earliest: "2026-08-16T20:59:17Z", rangeComplete: false }), false);
+  assert.equal(historicalBatchMadeProgress({ resumePage: 9, inRange: 1500, earliest: "2026-08-16T20:59:17Z" }, { resumePage: 9, inRange: 1500, earliest: "2026-08-16T20:59:17Z", rangeComplete: true }), true);
 });
 
 test("migration provides an owner-bound lease release without touching scheduler state", async () => {
@@ -80,6 +90,7 @@ test("historical mode resumes from an explicit page and reuses the idempotent sh
   const source = await readFile(new URL("../scripts/run-commas-shadow-sync.ts", import.meta.url), "utf8");
   assert.match(source, /normalize_commerce_transaction_page_v2/);
   assert.match(source, /commerce_sync_checkpoints/);
+  assert.match(source, /start_page: state\.effectiveStartPage \?\? args\.startPage/);
   assert.doesNotMatch(source, /run-commas-continuous|commerce_scheduler|bootstrap_mode/);
 });
 

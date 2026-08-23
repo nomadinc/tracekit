@@ -71,8 +71,8 @@ async function evidenceMetadata(input: { organizationId: string; connectionId: s
   return String(rows[0].id);
 }
 
-function metadataFor(args: ReturnType<typeof parseHistoricalBackfillArgs>, state: { pagesFetched: number; earliest: string | null; latest: string | null; inRange: number; outOfRange: number; invalid: number; ordering: OrderingState; complete: boolean; resumePage: number }) {
-  return args.historical ? { historical_backfill: true, from_date: args.fromDate, to_date: args.toDate, start_page: args.startPage, max_pages: args.maxPages, per_page: args.perPage, pages_fetched: state.pagesFetched, earliest_seen_timestamp: state.earliest, latest_seen_timestamp: state.latest, in_range_records: state.inRange, out_of_range_records: state.outOfRange, invalid_missing_date_records: state.invalid, ordering_state: state.ordering, range_complete: state.complete, resume_page: state.resumePage } : {};
+function metadataFor(args: ReturnType<typeof parseHistoricalBackfillArgs>, state: { pagesFetched: number; earliest: string | null; latest: string | null; inRange: number; outOfRange: number; invalid: number; ordering: OrderingState; complete: boolean; resumePage: number; effectiveStartPage?: number }) {
+  return args.historical ? { historical_backfill: true, from_date: args.fromDate, to_date: args.toDate, start_page: state.effectiveStartPage ?? args.startPage, max_pages: args.maxPages, per_page: args.perPage, pages_fetched: state.pagesFetched, earliest_seen_timestamp: state.earliest, latest_seen_timestamp: state.latest, in_range_records: state.inRange, out_of_range_records: state.outOfRange, invalid_missing_date_records: state.invalid, ordering_state: state.ordering, range_complete: state.complete, resume_page: state.resumePage } : {};
 }
 
 async function main() {
@@ -151,7 +151,7 @@ async function main() {
       }
       const results = normalized.length ? await db("rpc/normalize_commerce_transaction_page_v2", { method: "POST", body: JSON.stringify({ p_organization_id: organizationId, p_account_id: accountId, p_connection_id: connectionId, p_provider_account_id: providerAccountId, p_evidence_id: evidenceId, p_records: normalized }) }) : [];
       const result = results[0] || {}; recordsSeen += Number(result.records_seen || 0); recordsCreated += Number(result.orders_created || 0); recordsUpdated += Number(result.orders_updated || 0); pagesCompleted += 1;
-      const runMetadata = metadataFor(historical, { pagesFetched: providerRequests, earliest, latest, inRange, outOfRange, invalid, ordering: orderingState, complete: rangeComplete, resumePage: page + 1 });
+      const runMetadata = metadataFor(historical, { pagesFetched: providerRequests, earliest, latest, inRange, outOfRange, invalid, ordering: orderingState, complete: rangeComplete, resumePage: page + 1, effectiveStartPage: startPage });
       await db(`commerce_sync_checkpoints?id=eq.${checkpoint.id}`, { method: "PATCH", body: JSON.stringify({ state: "completed", source_total_items: totalItems, source_total_pages: totalPages, page_fingerprint: stored.payloadHash, first_source_id: ids[0] || null, last_source_id: ids.at(-1) || null, completed_at: new Date().toISOString(), metadata: { provider_attempts: providerAttempts, rate_limit_remaining: rateRemaining, replayed_evidence: providerAttempts === 0, ...runMetadata } }) });
       await db(`commerce_sync_runs?id=eq.${runId}`, { method: "PATCH", body: JSON.stringify({ source_total_items: totalItems, pages_planned: totalPages, pages_completed: pagesCompleted, records_seen: recordsSeen, records_created: recordsCreated, records_updated: recordsUpdated, warnings_count: warnings, metadata: { normalizer_version: NORMALIZER_VERSION, per_page: perPage, provider_requests: providerRequests, retries, ...runMetadata } }) });
       await db("rpc/heartbeat_commerce_sync_run", { method: "POST", body: JSON.stringify({ p_run_id: runId, p_organization_id: organizationId, p_connection_id: connectionId, p_lease_owner: owner, p_lease_seconds: LEASE_SECONDS }) });
@@ -160,7 +160,7 @@ async function main() {
       if (!parsed.pagination.hasMore || (overlapPages && page >= overlapPages) || rangeComplete) break;
       page += 1;
     }
-    const finalMetadata = metadataFor(historical, { pagesFetched: providerRequests, earliest, latest, inRange, outOfRange, invalid, ordering: orderingState, complete: rangeComplete, resumePage: page });
+    const finalMetadata = metadataFor(historical, { pagesFetched: providerRequests, earliest, latest, inRange, outOfRange, invalid, ordering: orderingState, complete: rangeComplete, resumePage: page, effectiveStartPage: startPage });
     const transition = historical.historical ? historicalChunkTransition(rangeComplete, warnings) : (warnings ? "completed_with_warnings" : "completed");
     if (transition === "paused") {
       const released = await db("rpc/release_commerce_sync_run", { method: "POST", body: JSON.stringify({ p_run_id: runId, p_organization_id: organizationId, p_connection_id: connectionId, p_lease_owner: owner }) });
