@@ -28,6 +28,25 @@ export type HistoricalDisputeRow = {
 
 export type WorkbookImportSummary = { workbookHash: string; accepted: number; rejected: number; headers: string[] };
 
+export type WorkbookShape = { workbookHash: string; worksheetNames: string[]; headers: string[]; totalDataRows: number };
+
+export async function inspectResolutionCenterWorkbook(filePath: string): Promise<WorkbookShape> {
+  const workbookHash = await hashFile(filePath);
+  const reader = new ExcelJS.stream.xlsx.WorkbookReader(filePath, { worksheets: "emit", sharedStrings: "cache", styles: "ignore", hyperlinks: "ignore" });
+  const worksheetNames: string[] = [];
+  let headers: string[] = [];
+  let totalDataRows = 0;
+  for await (const worksheet of reader) {
+    worksheetNames.push(worksheet.name);
+    for await (const row of worksheet) {
+      const values = row.values as unknown[];
+      if (row.number === 1) headers = values.slice(1).map(textValue);
+      else if (values.slice(1).some((value) => textValue(value) !== "")) totalDataRows += 1;
+    }
+  }
+  return { workbookHash, worksheetNames, headers, totalDataRows };
+}
+
 export async function parseResolutionCenterWorkbook(input: {
   filePath: string;
   onAccepted: (row: HistoricalDisputeRow) => Promise<void> | void;

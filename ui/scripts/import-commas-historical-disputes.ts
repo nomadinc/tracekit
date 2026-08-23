@@ -1,12 +1,13 @@
 import { readFile } from "node:fs/promises";
 import { createHash } from "node:crypto";
-import { parseResolutionCenterWorkbook, type HistoricalDisputeRow } from "../../api/src/connectors/commas/resolution-center-import";
+import { inspectResolutionCenterWorkbook, parseResolutionCenterWorkbook, type HistoricalDisputeRow } from "../../api/src/connectors/commas/resolution-center-import";
 import { SupabaseCommerceEvidenceStore } from "../lib/commerce/supabase-evidence-store-core";
 import { supabaseAuthHeaders } from "../lib/commerce/supabase-auth";
 
 type Row = Record<string, unknown>;
 const WORKBOOK = process.env.COMMAS_DISPUTE_WORKBOOK_PATH;
 const MAX_ROWS = Math.min(100_000, Math.max(1, Number(process.env.COMMAS_DISPUTE_MAX_ROWS || 25_000)));
+const PREVIEW = process.argv.includes("--preview");
 
 function uuid(namespace: string, value: string) {
   const hash = createHash("sha256").update(`${namespace}\0${value}`).digest("hex").slice(0, 32).split("");
@@ -42,13 +43,60 @@ async function main() {
   // storage mutation. Malformed rows are retained as rejected diagnostics.
   const rows: HistoricalDisputeRow[] = [];
   const rejected: Array<{ rowNumber: number; codes: string[] }> = [];
-  const summary = await parseResolutionCenterWorkbook({
-    filePath: WORKBOOK,
-    maxRows: MAX_ROWS,
-    onAccepted: (row) => { rows.push(row); },
-    onRejected: (finding) => { rejected.push(finding); },
-  });
+  let summary;
+  try {
+    summary = await parseResolutionCenterWorkbook({
+      filePath: WORKBOOK,
+      maxRows: MAX_ROWS,
+      onAccepted: (row) => { rows.push(row); },
+      onRejected: (finding) => { rejected.push(finding); },
+    });
+  } catch (error) {
+    if (!PREVIEW) throw error;
+    const shape = await inspectResolutionCenterWorkbook(WORKBOOK);
+    console.log(JSON.stringify({
+      event: "historical_disputes_preview",
+      writes: 0,
+      providerRequests: 0,
+      reconciliationCalls: 0,
+      schedulerActivity: false,
+      workbookRecognized: false,
+      approvedContract: false,
+      workbookHash: shape.workbookHash,
+      worksheetNames: shape.worksheetNames,
+      headers: shape.headers,
+      totalDataRows: shape.totalDataRows,
+      acceptedRows: 0,
+      rejectedRows: null,
+      rejectionCounts: { invalid_workbook_headers: 1 },
+      rowValidation: "not_run_after_contract_failure",
+      validationError: "Workbook headers do not match the approved Resolution Center schema.",
+      duplicateWorkbook: "not_checked_after_contract_failure",
+      dateRange: null,
+      stateDistribution: {},
+      statusDistribution: {},
+      currencies: { present: [], source: "Currency is not a column in the approved Resolution Center workbook contract." },
+      disputedAmountsWithoutCurrency: { amount: null, fee: null, safeToAggregate: false },
+      productCounts: {},
+    }, null, 2));
+    return;
+  }
   if (summary.workbookHash.length !== 64) throw new Error("Workbook hash validation failed.");
+
+  if (PREVIEW) {
+    const connections = await db("commerce_provider_connections?provider=eq.commas&status=eq.connected&select=id,organization_id&limit=2");
+    let duplicateWorkbook = false;
+    if (connections.length === 1) {
+      const connection = connections[0];
+      const accounts = await db(`commerce_provider_accounts?connection_id=eq.${connection.id}&organization_id=eq.${connection.organization_id}&status=eq.active&select=id&limit=2`);
+      if (accounts.length === 1) {
+        const prior = await db(`commerce_historical_dispute_imports?organization_id=eq.${connection.organization_id}&connection_id=eq.${connection.id}&provider_account_id=eq.${accounts[0].id}&workbook_hash=eq.${summary.workbookHash}&select=id&limit=1`);
+        duplicateWorkbook = prior.length > 0;
+      }
+    }
+    console.log(JSON.stringify(buildPreviewReport({ summary, rows, rejected, duplicateWorkbook }), null, 2));
+    return;
+  }
 
   const connections = await db("commerce_provider_connections?provider=eq.commas&status=eq.connected&select=id,organization_id,account_id&limit=2");
   if (connections.length !== 1) throw new Error("Historical import requires one connected Commas Connection.");
@@ -86,4 +134,34 @@ async function main() {
   console.log(JSON.stringify({ event: "historical_disputes_completed", runId, accepted: summary.accepted, rejected: summary.rejected, rejectedFindings: rejected, reconciliation: reconciliation[0] }));
 }
 
-void main();
+
+export function buildPreviewReport(input: { summary: { workbookHash: string; accepted: number; rejected: number; headers: string[] }; rows: HistoricalDisputeRow[]; rejected: Array<{ rowNumber: number; codes: string[] }>; duplicateWorkbook: boolean }) {
+  const dates = input.rows.flatMap((row) => [row.transactionDate, row.disputeDate, row.closedDate].filter((value): value is string => Boolean(value))).sort();
+  const distribution = (field: "state" | "status") => Object.fromEntries([...input.rows.reduce((counts, row) => counts.set(row[field], (counts.get(row[field]) || 0) + 1), new Map<string, number>())].sort(([a], [b]) => a.localeCompare(b)));
+  const productCounts = Object.fromEntries([...input.rows.reduce((counts, row) => counts.set(row.product, (counts.get(row.product) || 0) + 1), new Map<string, number>())].sort(([a], [b]) => a.localeCompare(b)));
+  const rejectionCounts = Object.fromEntries([...input.rejected.flatMap((finding) => finding.codes).reduce((counts, code) => counts.set(code, (counts.get(code) || 0) + 1), new Map<string, number>())].sort(([a], [b]) => a.localeCompare(b)));
+  const sum = (field: "amount" | "fee") => input.rows.reduce((total, row) => total + (row[field] ? Number(row[field]) : 0), 0).toFixed(2);
+  return {
+    event: "historical_disputes_preview",
+    writes: 0,
+    providerRequests: 0,
+    reconciliationCalls: 0,
+    schedulerActivity: false,
+    workbookRecognized: input.summary.headers.length > 0,
+    approvedContract: input.summary.headers.length === 12,
+    workbookHash: input.summary.workbookHash,
+    totalDataRows: input.summary.accepted + input.summary.rejected,
+    acceptedRows: input.summary.accepted,
+    rejectedRows: input.summary.rejected,
+    rejectionCounts,
+    duplicateWorkbook: input.duplicateWorkbook,
+    dateRange: dates.length ? { first: dates[0], last: dates[dates.length - 1] } : null,
+    stateDistribution: distribution("state"),
+    statusDistribution: distribution("status"),
+    currencies: { present: [], source: "Currency is not a column in the approved Resolution Center workbook contract." },
+    disputedAmountsWithoutCurrency: { amount: sum("amount"), fee: sum("fee"), safeToAggregate: false },
+    productCounts,
+  };
+}
+
+if (process.argv[1]?.endsWith("import-commas-historical-disputes.ts")) void main();

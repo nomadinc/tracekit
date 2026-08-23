@@ -19,6 +19,7 @@
     "sync:commas-shadow": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/run-commas-shadow-sync.ts --confirm-full-shadow",
     "sync:commas-continuous": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/run-commas-continuous-sync.ts --confirm-bounded-continuous-proof",
     "import:commas-disputes": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/import-commas-historical-disputes.ts --confirm-historical-import",
+    "preview:commas-disputes": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/import-commas-historical-disputes.ts --confirm-historical-import --preview",
     "import:everflow-investigation": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/import-everflow-investigation.ts --confirm-protected-import",
     "materialize:accufy-investigation": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/materialize-accufy-investigation.ts",
     "materialize:oto2-child-investigation": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/materialize-oto2-child-investigation.ts"
