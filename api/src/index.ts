@@ -805,7 +805,9 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
       if (!message.bootstrap || !message.reserved_run_id) return false;
       const { data: run, error } = await db.from("commerce_sync_runs").select("id,organization_id,connection_id,provider_account_id,sync_type,mode,status,scheduler_idempotency_key,metadata").eq("id", message.reserved_run_id).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("scheduler_idempotency_key", message.scheduler_identity).eq("status", "queued").maybeSingle();
       if (error || !run) return false;
-      return isPreReservedRunMatch(run, message);
+      const valid = isPreReservedRunMatch(run, message);
+      console.log("[TraceKit] commerce pre-reserved validation", { event: valid ? "commerce.pre_reserved.validation_passed" : "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id });
+      return valid;
     },
     async reservedRunId(message) {
       if (!message.bootstrap) return null;
@@ -22124,9 +22126,13 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 		        runtime: {
 		          async run(message) {
 		            if (!env.CONTINUOUS_COMMERCE_RUNTIME) throw Object.assign(new Error("continuous_runtime_binding_missing"), { code: "invalid_configuration" });
+		            console.log("[TraceKit] commerce runtime dispatch started", { event: "commerce.runtime_dispatch.started", run_id: message.reserved_run_id || null });
 		            const response = await env.CONTINUOUS_COMMERCE_RUNTIME.fetch("https://continuous-runtime.internal/v1/commerce/sync", { method: "POST", headers: { "content-type": "application/json", "x-tracekit-runtime-secret": String(env.CONTINUOUS_RUNTIME_SHARED_SECRET || "") }, body: JSON.stringify(message) });
+		            const result = await response.json().catch(() => ({})) as Record<string, unknown>;
+		            const errorCode = typeof result.error === "string" ? result.error.replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 80) : undefined;
+		            console.log("[TraceKit] commerce runtime dispatch response", { event: "commerce.runtime_dispatch.response", run_id: message.reserved_run_id || null, statusCode: response.status, ...(errorCode ? { errorCode } : {}) });
 		            if (!response.ok) throw Object.assign(new Error(`continuous_runtime_${response.status}`), { code: response.status === 429 ? "429" : response.status >= 500 ? "runtime_timeout" : "invalid_runtime_request" });
-		            return await response.json() as { status: "completed" | "completed_with_warnings"; providerRequests: number };
+		            return result as { status: "completed" | "completed_with_warnings"; providerRequests: number };
 		          },
 		        },
 		      });
