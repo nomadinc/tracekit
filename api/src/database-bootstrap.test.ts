@@ -175,7 +175,26 @@ test("migration filenames are unique and numerically ordered", () => {
   const numbers = names.map((name) => name.slice(0, 3));
 
   assert.equal(new Set(numbers).size, numbers.length);
-  assert.deepEqual(numbers, Array.from({ length: 66 }, (_, index) => String(index).padStart(3, "0")));
+  assert.deepEqual(numbers, Array.from({ length: 67 }, (_, index) => String(index).padStart(3, "0")));
+});
+
+test("Migration 066 bounds quota bootstrap retries at the chain root and provides exceptional recovery", () => {
+  const migration066 = migration("066_quota_bootstrap_chain_recovery.sql").toLowerCase();
+  assert.match(migration066, /rename to retry_commerce_quota_bootstrap_legacy/);
+  assert.match(migration066, /quota-bootstrap-chain/);
+  assert.match(migration066, /quota_bootstrap_original_run_id/);
+  assert.match(migration066, /quota_bootstrap_retry_consumed/);
+  assert.match(migration066, /retry already consumed at chain root/);
+  assert.match(migration066, /revoke all on function public\.retry_commerce_quota_bootstrap_legacy\(uuid, integer\)[\s\S]*service_role/);
+  assert.match(migration066, /create or replace function public\.recover_commerce_quota_bootstrap_chain\(\s*p_root_run_id uuid,\s*p_failed_run_id uuid/);
+  assert.match(migration066, /quota_bootstrap_exceptional_recovery_consumed/);
+  assert.match(migration066, /runtime_secret_repaired/);
+  assert.match(migration066, /p_root_provider_requests is distinct from 0/);
+  assert.match(migration066, /p_failed_provider_requests is distinct from 0/);
+  assert.match(migration066, /for update/);
+  assert.match(migration066, /reserved_run_id/);
+  assert.match(migration066, /grant execute on function public\.recover_commerce_quota_bootstrap_chain\(uuid, uuid, integer, integer\)\s+to service_role/);
+  assert.doesNotMatch(migration066, /fetch\(|http|continuous_commerce\.send/);
 });
 
 test("Migration 065 provides a one-time service-role-only quota bootstrap retry", () => {
