@@ -16,6 +16,7 @@ import {
 } from "./maintenance-write-gate";
 import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, runCommerceCron, validateCommerceQueueMessage, isQueueObservabilityTest, isRuntimeDispatchProbe, isPreReservedRunMatch, preReservedRunMatchDetails, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
 import { readQuotaBootstrapGate } from "./quota-bootstrap-gate";
+import { createSupabaseServerFetch } from "./supabase-server-fetch";
 import { enforceTkidRate, ephemeralTransportDimension, TkidRateLimitError, type DistributedCounterStore, type TkidAbuseClass } from "./tkid-distributed-abuse";
 import {
   DEFAULT_SHOPIFY_API_VERSION,
@@ -741,7 +742,7 @@ function getSupabase(env: Env) {
   const url = String(env.SUPABASE_URL ?? "").trim().replace(/\/+$/, "");
   const key = String(env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim();
   if (!url || !key) throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
-  return createClient(url, key, { auth: { persistSession: false } });
+  return createClient(url, key, { auth: { persistSession: false }, global: { fetch: createSupabaseServerFetch(key) } });
 }
 
 function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterRepository {
@@ -804,7 +805,8 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
     async preReservedRunPermitted(message) {
       if (!message.bootstrap || !message.reserved_run_id) return false;
       const { data: run, error } = await db.from("commerce_sync_runs").select("id,organization_id,connection_id,provider_account_id,sync_type,mode,status,scheduler_idempotency_key,metadata").eq("id", message.reserved_run_id).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("scheduler_idempotency_key", message.scheduler_identity).eq("status", "queued").maybeSingle();
-      if (error || !run) { console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, ...preReservedRunMatchDetails(null, message) }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); return false; }
+      if (error) { console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, lookup: "postgrest_error", status: Number(error.status || error.statusCode || 0) || null, code: String(error.code || "postgrest_error") }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); return false; }
+      if (!run) { console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, lookup: "not_found", ...preReservedRunMatchDetails(null, message) }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); return false; }
       const valid = isPreReservedRunMatch(run, message);
       if (!valid) { console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, ...preReservedRunMatchDetails(run, message) }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); }
       else { console.log("[TraceKit] commerce.queue.pre_reserved_accepted", { reserved_run_id: message.reserved_run_id }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_passed", run_id: message.reserved_run_id }); }

@@ -6,6 +6,7 @@ import runtime, { validateRuntimeMessage, validateRuntimeScope } from "../contin
 import { buildContinuousWorkerRequestInit } from "../../ui/lib/commerce/continuous-worker-request.ts";
 import { decodeBase64, decodeHex, encodeHex } from "../../ui/lib/commerce/web-encoding.ts";
 import { decodeCommerceCredentialKey } from "../../ui/lib/commerce/credential-crypto.ts";
+import { createSupabaseServerFetch } from "./supabase-server-fetch.ts";
 
 const id = "11111111-1111-4111-8111-111111111111";
 const message = { schema_version: 1, job_type: "commerce_continuous", provider: "commas", account_id: id, organization_id: id, connection_id: id, provider_account_id: id, resource: "transactions", requested_mode: "continuous", scheduler_identity: "schedule:bucket", requested_at: "2026-08-10T00:00:00Z" } as const;
@@ -60,4 +61,14 @@ test("continuous runtime encoding path works without global Buffer", () => {
     if (previous === undefined) delete (globalThis as { Buffer?: unknown }).Buffer;
     else (globalThis as { Buffer?: unknown }).Buffer = previous;
   }
+});
+
+test("Supabase server fetch strips Authorization only for sb_secret keys", async () => {
+  let captured: Headers | undefined;
+  const baseFetch: typeof fetch = async (_input, init) => { captured = new Headers(init?.headers); return new Response(null, { status: 200 }); };
+  await createSupabaseServerFetch("sb_secret_test", baseFetch)("https://supabase.test", { headers: { Authorization: "Bearer sb_secret_test", apikey: "sb_secret_test" } });
+  assert.equal(captured?.has("authorization"), false);
+  assert.equal(captured?.get("apikey"), "sb_secret_test");
+  await createSupabaseServerFetch("eyJlegacy", baseFetch)("https://supabase.test", { headers: { Authorization: "Bearer eyJlegacy" } });
+  assert.equal(captured?.get("authorization"), "Bearer eyJlegacy");
 });
