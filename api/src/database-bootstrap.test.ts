@@ -175,7 +175,23 @@ test("migration filenames are unique and numerically ordered", () => {
   const numbers = names.map((name) => name.slice(0, 3));
 
   assert.equal(new Set(numbers).size, numbers.length);
-  assert.deepEqual(numbers, Array.from({ length: 70 }, (_, index) => String(index).padStart(3, "0")));
+  assert.deepEqual(numbers, Array.from({ length: 71 }, (_, index) => String(index).padStart(3, "0")));
+});
+
+test("Migration 070 defines a one-time post-fix Worker cache replay", () => {
+  const migration070 = migration("070_workers_request_cache_fixed_replay.sql").toLowerCase();
+  assert.match(migration070, /create or replace function public\.replay_commerce_workers_request_cache_fixed\(\)/);
+  assert.match(migration070, /37e77c92-f333-437a-91a9-2acb38e73eca/);
+  assert.match(migration070, /workers_request_cache_fixed_replay_consumed/);
+  assert.match(migration070, /status <> 'cancelled'/);
+  assert.match(migration070, /quota_bootstrap_provider_requests/);
+  assert.match(migration070, /status in \('queued', 'running', 'paused'\)/);
+  assert.match(migration070, /mode in \('live', 'live_beta'\)/);
+  assert.match(migration070, /for update/);
+  assert.match(migration070, /reserved_run_id/);
+  assert.match(migration070, /revoke all on function public\.replay_commerce_workers_request_cache_fixed\(\)/);
+  assert.match(migration070, /grant execute on function public\.replay_commerce_workers_request_cache_fixed\(\)\s+to service_role/);
+  assert.doesNotMatch(migration070, /fetch\(|http|continuous_commerce\.send/);
 });
 
 test("Migration 069 defines a one-time early-ack observability replay", () => {
