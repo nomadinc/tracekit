@@ -2,7 +2,7 @@ import { decodeCommerceCredentialKey, decryptCommerceCredential } from "../lib/c
 import { supabaseAuthHeaders } from "../lib/commerce/supabase-auth";
 import { exactTargetMatch, summarizeWebhookSubscription, type WebhookSubscriptionRow } from "../lib/commerce/commas-webhook-inspector";
 
-const TARGET_URL = "https://webhooks.trace-kit.io/v1/connectors/commas/webhooks";
+export const TARGET_URL = "https://webhooks.trace-kit.io/v1/connectors/commas/webhooks";
 type Row = Record<string, unknown>;
 
 function configuration() {
@@ -30,7 +30,7 @@ function bytes(value: unknown) {
   return output;
 }
 
-async function resolveCommasApiKey() {
+export async function resolveCommasApiKey() {
   const connections = await readSupabase("commerce_provider_connections?provider=eq.commas&status=eq.connected&select=id,organization_id&limit=2");
   if (connections.length !== 1) throw new Error("Expected exactly one connected Commas connection.");
   const connection = connections[0];
@@ -45,16 +45,20 @@ async function resolveCommasApiKey() {
   return decryptCommerceCredential({ keyId, encryptionVersion: version, iv: bytes(credential.secret_iv), ciphertext: bytes(credential.secret_ciphertext) }, decodeCommerceCredentialKey(process.env.COMMERCE_CREDENTIALS_ENC_KEY));
 }
 
-export async function inspectCommasWebhookSubscriptions(fetchImpl: typeof fetch = fetch) {
+export async function listCommasWebhookSubscriptions(apiKey: string, fetchImpl: typeof fetch = fetch) {
   const baseUrl = (process.env.COMMAS_BASE_URL || "https://www.fanbasis.com").replace(/\/$/, "");
-  const apiKey = await resolveCommasApiKey();
   const response = await fetchImpl(`${baseUrl}/public-api/webhook-subscriptions`, {
     headers: { "x-api-key": apiKey, Accept: "application/json" },
   });
   if (!response.ok) throw new Error(`Commas webhook subscription read failed (${response.status}).`);
   const payload = await response.json() as { data?: unknown };
   const rows = Array.isArray(payload.data) ? payload.data.filter((value): value is WebhookSubscriptionRow => Boolean(value) && typeof value === "object") : [];
-  const subscriptions = rows.map(summarizeWebhookSubscription);
+  return rows.map(summarizeWebhookSubscription);
+}
+
+export async function inspectCommasWebhookSubscriptions(fetchImpl: typeof fetch = fetch) {
+  const apiKey = await resolveCommasApiKey();
+  const subscriptions = await listCommasWebhookSubscriptions(apiKey, fetchImpl);
   return { provider: "Commas", subscriptionCount: subscriptions.length, subscriptions, exactTargetMatch: exactTargetMatch(subscriptions, TARGET_URL) };
 }
 
