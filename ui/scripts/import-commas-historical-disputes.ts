@@ -54,6 +54,7 @@ async function main() {
   } catch (error) {
     if (!PREVIEW) throw error;
     const shape = await inspectResolutionCenterWorkbook(WORKBOOK);
+    const duplicateWorkbook = await findDuplicateWorkbook(shape.workbookHash);
     console.log(JSON.stringify({
       event: "historical_disputes_preview",
       writes: 0,
@@ -71,7 +72,7 @@ async function main() {
       rejectionCounts: { invalid_workbook_headers: 1 },
       rowValidation: "not_run_after_contract_failure",
       validationError: "Workbook headers do not match the approved Resolution Center schema.",
-      duplicateWorkbook: "not_checked_after_contract_failure",
+      duplicateWorkbook,
       dateRange: null,
       stateDistribution: {},
       statusDistribution: {},
@@ -85,15 +86,7 @@ async function main() {
 
   if (PREVIEW) {
     const connections = await db("commerce_provider_connections?provider=eq.commas&status=eq.connected&select=id,organization_id&limit=2");
-    let duplicateWorkbook = false;
-    if (connections.length === 1) {
-      const connection = connections[0];
-      const accounts = await db(`commerce_provider_accounts?connection_id=eq.${connection.id}&organization_id=eq.${connection.organization_id}&status=eq.active&select=id&limit=2`);
-      if (accounts.length === 1) {
-        const prior = await db(`commerce_historical_dispute_imports?organization_id=eq.${connection.organization_id}&connection_id=eq.${connection.id}&provider_account_id=eq.${accounts[0].id}&workbook_hash=eq.${summary.workbookHash}&select=id&limit=1`);
-        duplicateWorkbook = prior.length > 0;
-      }
-    }
+    const duplicateWorkbook = await findDuplicateWorkbook(summary.workbookHash);
     console.log(JSON.stringify(buildPreviewReport({ summary, rows, rejected, duplicateWorkbook }), null, 2));
     return;
   }
@@ -132,6 +125,20 @@ async function main() {
   const reconciliation = await db("rpc/reconcile_commerce_historical_disputes_v1", { method: "POST", body: JSON.stringify({ p_organization_id: organizationId, p_connection_id: connectionId }) });
   await db(`commerce_sync_runs?id=eq.${runId}`, { method: "PATCH", body: JSON.stringify({ status: "completed", started_at: new Date().toISOString(), completed_at: new Date().toISOString(), records_seen: summary.accepted, records_created: summary.accepted, metadata: { source: "resolution_center_export", workbook_hash: summary.workbookHash, algorithm_version: "historical-v1", accepted_rows: summary.accepted, rejected_rows: summary.rejected } }) });
   console.log(JSON.stringify({ event: "historical_disputes_completed", runId, accepted: summary.accepted, rejected: summary.rejected, rejectedFindings: rejected, reconciliation: reconciliation[0] }));
+}
+
+async function findDuplicateWorkbook(workbookHash: string): Promise<boolean | "not_checked_scope_unavailable" | "not_checked_database_unavailable"> {
+  try {
+    const connections = await db("commerce_provider_connections?provider=eq.commas&status=eq.connected&select=id,organization_id&limit=2");
+    if (connections.length !== 1) return "not_checked_scope_unavailable";
+    const connection = connections[0];
+    const accounts = await db(`commerce_provider_accounts?connection_id=eq.${connection.id}&organization_id=eq.${connection.organization_id}&status=eq.active&select=id&limit=2`);
+    if (accounts.length !== 1) return "not_checked_scope_unavailable";
+    const prior = await db(`commerce_historical_dispute_imports?organization_id=eq.${connection.organization_id}&connection_id=eq.${connection.id}&provider_account_id=eq.${accounts[0].id}&workbook_hash=eq.${workbookHash}&select=id&limit=1`);
+    return prior.length > 0;
+  } catch {
+    return "not_checked_database_unavailable";
+  }
 }
 
 
