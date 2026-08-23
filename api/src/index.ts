@@ -17,7 +17,7 @@ import {
 import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, runCommerceCron, validateCommerceQueueMessage, isQueueObservabilityTest, isRuntimeDispatchProbe, isPreReservedRunMatch, preReservedRunMatchDetails, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
 import { readQuotaBootstrapGate } from "./quota-bootstrap-gate";
 import { createSupabaseServerFetch } from "./supabase-server-fetch";
-import { deriveCommasDisputeLedgerEvents, normalizeCommasDisputeEvent, sha256HexBytes, verifyCommasWebhookSignature, webhookStoragePath } from "./commas-dispute-webhook";
+import { deriveCommasDisputeLedgerEvents, normalizeCommasDisputeEvent, secretFingerprint8, sha256HexBytes, verifyCommasWebhookSignature, webhookStoragePath } from "./commas-dispute-webhook";
 import { enforceTkidRate, ephemeralTransportDimension, TkidRateLimitError, type DistributedCounterStore, type TkidAbuseClass } from "./tkid-distributed-abuse";
 import {
   DEFAULT_SHOPIFY_API_VERSION,
@@ -717,7 +717,21 @@ async function handleCommasDisputeWebhook(req: Request, env: Env): Promise<Respo
   if (declaredLength > 262144) return json({ ok: false, error: "payload_too_large" }, 413);
   const raw = new Uint8Array(await req.arrayBuffer());
   if (raw.byteLength === 0 || raw.byteLength > 262144) return json({ ok: false, error: "invalid_payload" }, 400);
-  if (!await verifyCommasWebhookSignature(raw, req.headers.get("x-webhook-signature"), env.COMMAS_WEBHOOK_SECRET)) {
+  const suppliedSignature = req.headers.get("x-webhook-signature");
+  const suppliedSignatureFormatValid = Boolean(suppliedSignature && /^[a-f0-9]{64}$/i.test(suppliedSignature.trim()));
+  const signatureMatched = await verifyCommasWebhookSignature(raw, suppliedSignature, env.COMMAS_WEBHOOK_SECRET);
+  console.log("[TraceKit] Commas dispute webhook signature diagnostic", {
+    event: "commas.dispute_webhook.signature_diagnostic",
+    secretConfigured: Boolean(env.COMMAS_WEBHOOK_SECRET),
+    secretLength: String(env.COMMAS_WEBHOOK_SECRET || "").length,
+    secretFingerprint: await secretFingerprint8(env.COMMAS_WEBHOOK_SECRET),
+    rawBodyLength: raw.byteLength,
+    suppliedSignaturePresent: Boolean(suppliedSignature),
+    suppliedSignatureLength: suppliedSignature?.trim().length || 0,
+    suppliedSignatureFormatValid,
+    signatureMatched,
+  });
+  if (!signatureMatched) {
     console.log("[TraceKit] Commas dispute webhook authentication failed", { event: "commas.dispute_webhook.authentication_failed" });
     return json({ ok: false, error: "unauthorized" }, 401);
   }
