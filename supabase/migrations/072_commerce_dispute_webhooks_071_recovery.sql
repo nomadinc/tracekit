@@ -1,19 +1,14 @@
--- Native Commas dispute webhook capture. Additive; no scheduler or repository activation.
+-- Idempotent recovery for a database where migration 071 stopped after creating
+-- commerce_dispute_webhook_events. It intentionally creates no destructive DDL.
+-- Run only after read-only inspection confirms any existing table is empty and
+-- matches migration 071's intended definition.
+
 create table if not exists public.commerce_dispute_webhook_events (
-  id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null,
-  account_id uuid not null,
-  connection_id uuid not null,
-  provider_account_id uuid not null,
-  provider_event_id text not null,
-  event_type text not null check (event_type in ('dispute.created','dispute.updated')),
-  provider_dispute_id text not null,
-  evidence_id uuid not null,
-  payload_hash text not null,
-  observed_at timestamptz not null default now(),
-  provider_created_at timestamptz,
-  provider_updated_at timestamptz,
-  metadata jsonb not null default '{}'::jsonb,
+  id uuid primary key default gen_random_uuid(), organization_id uuid not null, account_id uuid not null,
+  connection_id uuid not null, provider_account_id uuid not null, provider_event_id text not null,
+  event_type text not null check (event_type in ('dispute.created','dispute.updated')), provider_dispute_id text not null,
+  evidence_id uuid not null, payload_hash text not null, observed_at timestamptz not null default now(),
+  provider_created_at timestamptz, provider_updated_at timestamptz, metadata jsonb not null default '{}'::jsonb,
   constraint commerce_dispute_webhook_events_account_fk foreign key (organization_id, account_id) references public.tracekit_organizations(id, owning_account_id),
   constraint commerce_dispute_webhook_events_scope_fk foreign key (organization_id, connection_id, provider_account_id) references public.commerce_provider_accounts(organization_id, connection_id, id),
   constraint commerce_dispute_webhook_events_evidence_fk foreign key (organization_id, evidence_id) references public.commerce_evidence_records(organization_id, id),
@@ -21,35 +16,14 @@ create table if not exists public.commerce_dispute_webhook_events (
 );
 
 create table if not exists public.commerce_provider_disputes (
-  id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null,
-  account_id uuid not null,
-  connection_id uuid not null,
-  provider_account_id uuid not null,
-  provider_dispute_id text not null,
-  latest_event_id uuid not null references public.commerce_dispute_webhook_events(id),
-  latest_evidence_id uuid not null references public.commerce_evidence_records(id),
-  provider_transaction_id text,
-  payment_intent_id text,
-  payment_id text,
-  order_id text,
-  external_order_id text,
-  amount numeric,
-  currency text check (currency is null or currency ~ '^[A-Z]{3}$'),
-  fee numeric,
-  status text,
-  state text,
-  reason text,
-  reason_code text,
-  response_deadline timestamptz,
-  opened_at timestamptz,
-  closed_at timestamptz,
-  buyer_reference text,
-  product_reference text,
-  reconciliation_state text not null default 'unmatched' check (reconciliation_state in ('matched','review','unmatched')),
-  matched_canonical_order_id uuid,
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
+  id uuid primary key default gen_random_uuid(), organization_id uuid not null, account_id uuid not null,
+  connection_id uuid not null, provider_account_id uuid not null, provider_dispute_id text not null,
+  latest_event_id uuid not null references public.commerce_dispute_webhook_events(id), latest_evidence_id uuid not null references public.commerce_evidence_records(id),
+  provider_transaction_id text, payment_intent_id text, payment_id text, order_id text, external_order_id text,
+  amount numeric, currency text check (currency is null or currency ~ '^[A-Z]{3}$'), fee numeric, status text, state text,
+  reason text, reason_code text, response_deadline timestamptz, opened_at timestamptz, closed_at timestamptz,
+  buyer_reference text, product_reference text, reconciliation_state text not null default 'unmatched' check (reconciliation_state in ('matched','review','unmatched')),
+  matched_canonical_order_id uuid, created_at timestamptz not null default now(), updated_at timestamptz not null default now(),
   constraint commerce_provider_disputes_account_fk foreign key (organization_id, account_id) references public.tracekit_organizations(id, owning_account_id),
   constraint commerce_provider_disputes_scope_fk foreign key (organization_id, connection_id, provider_account_id) references public.commerce_provider_accounts(organization_id, connection_id, id),
   constraint commerce_provider_disputes_order_fk foreign key (organization_id, matched_canonical_order_id) references public.platform_orders(organization_id, canonical_order_id),
@@ -57,19 +31,11 @@ create table if not exists public.commerce_provider_disputes (
 );
 
 create table if not exists public.commerce_provider_dispute_lifecycle_events (
-  id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null,
-  connection_id uuid not null,
-  provider_account_id uuid not null,
-  dispute_id uuid not null references public.commerce_provider_disputes(id),
+  id uuid primary key default gen_random_uuid(), organization_id uuid not null, connection_id uuid not null,
+  provider_account_id uuid not null, dispute_id uuid not null references public.commerce_provider_disputes(id),
   webhook_event_id uuid not null references public.commerce_dispute_webhook_events(id),
-  event_type text not null check (event_type in ('dispute.created','dispute.updated')),
-  status text,
-  state text,
-  reason text,
-  reason_code text,
-  observed_at timestamptz not null default now(),
-  metadata jsonb not null default '{}'::jsonb,
+  event_type text not null check (event_type in ('dispute.created','dispute.updated')), status text, state text,
+  reason text, reason_code text, observed_at timestamptz not null default now(), metadata jsonb not null default '{}'::jsonb,
   unique (webhook_event_id)
 );
 

@@ -67,6 +67,27 @@ test("migration adds immutable event, projection, and lifecycle storage without 
   assert.doesNotMatch(source, /commerce_scheduler|commerce_sync_schedules|create queue|drop table/i);
   assert.match(source, /enable row level security/);
   assert.match(source, /revoke all on public\.commerce_dispute_webhook_events/);
+  assert.equal((source.match(/\bupdated_at\s+timestamptz/g) || []).length, 1);
+  assert.match(source, /create table if not exists public\.commerce_dispute_webhook_events/);
+});
+
+test("migration 072 is safe for the partial-071 state and repeats no destructive operation", async () => {
+  const source = await (await import("node:fs/promises")).readFile(new URL("../../supabase/migrations/072_commerce_dispute_webhooks_071_recovery.sql", import.meta.url), "utf8");
+  for (const table of ["commerce_dispute_webhook_events", "commerce_provider_disputes", "commerce_provider_dispute_lifecycle_events"]) {
+    assert.match(source, new RegExp(`create table if not exists public\\.${table}`));
+  }
+  assert.match(source, /create index if not exists/);
+  assert.doesNotMatch(source, /drop table|delete from|truncate|alter table .* drop/i);
+});
+
+test("migration 073 enforces the exact dispute-table ACL matrix without changing ownership or policies", async () => {
+  const source = await (await import("node:fs/promises")).readFile(new URL("../../supabase/migrations/073_commerce_dispute_webhook_acl_hardening.sql", import.meta.url), "utf8");
+  assert.match(source, /revoke all[\s\S]*from service_role, public, anon, authenticated/);
+  assert.match(source, /grant select, insert on public\.commerce_dispute_webhook_events to service_role/);
+  assert.match(source, /grant select, insert, update on public\.commerce_provider_disputes to service_role/);
+  assert.match(source, /grant select, insert on public\.commerce_provider_dispute_lifecycle_events to service_role/);
+  assert.doesNotMatch(source, /owner to|alter table .* owner|create policy|drop policy/);
+  assert.match(source, /enable row level security/);
 });
 
 test("router exposes only the Commas webhook POST path and keeps scheduler/provider paths separate", async () => {
