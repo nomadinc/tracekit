@@ -35,3 +35,22 @@ test("audit history reader never accepts browser-provided tenant scope", () => {
   assert.match(repository, /organization_id=eq\.\$\{encodeURIComponent\(organizationId\)\}/);
   assert.match(repository, /account_id=eq\.\$\{encodeURIComponent\(accountId\)\}/);
 });
+
+test("activity feed suppresses routine membership resolution noise", () => {
+  const repository = source("ui/lib/identity/supabase-audit-repository.ts");
+  assert.match(repository, /action=neq\.membership\.resolved/);
+});
+
+test("successful login is audited after invitation reconciliation with tenant scope", () => {
+  const callback = source("ui/app/auth/callback/route.ts");
+  const audit = source("ui/lib/identity/authentication-audit.ts");
+  const reconcileIndex = callback.indexOf("reconcileAcceptedWorkOSInvitations");
+  const auditIndex = callback.indexOf("recordScopedAuthenticationSuccess");
+  assert.ok(reconcileIndex >= 0);
+  assert.ok(auditIndex > reconcileIndex);
+  assert.match(audit, /membershipsForUser/);
+  assert.match(audit, /organizationsForMembership/);
+  assert.match(audit, /authentication\.sign_in\.succeeded/);
+  assert.match(audit, /accountId/);
+  assert.match(audit, /organizationId/);
+});
