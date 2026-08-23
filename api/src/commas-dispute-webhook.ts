@@ -84,11 +84,6 @@ export async function sha256HexBytes(input: Uint8Array) {
   return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
-export async function secretFingerprint8(secret: string | null | undefined) {
-  if (!secret) return null;
-  return (await sha256HexBytes(new TextEncoder().encode(secret))).slice(0, 8);
-}
-
 export async function hmacSha256Hex(secret: string, body: Uint8Array) {
   const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
   const signature = await crypto.subtle.sign("HMAC", key, body);

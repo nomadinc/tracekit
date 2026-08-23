@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { COMMAS_DISPUTE_EVENT_TYPES, deriveCommasDisputeLedgerEvents, hmacSha256Hex, normalizeCommasDisputeEvent, secretFingerprint8, verifyCommasWebhookSignature, webhookStoragePath } from "./commas-dispute-webhook.ts";
+import { COMMAS_DISPUTE_EVENT_TYPES, deriveCommasDisputeLedgerEvents, hmacSha256Hex, normalizeCommasDisputeEvent, verifyCommasWebhookSignature, webhookStoragePath } from "./commas-dispute-webhook.ts";
 
 const fixture = {
   id: "event-1",
@@ -43,14 +43,6 @@ test("Commas webhook signature uses raw bytes and fails closed", async () => {
   assert.equal(await verifyCommasWebhookSignature(raw, signature, "wrong"), false);
   assert.equal(await verifyCommasWebhookSignature(raw, null, "secret"), false);
   assert.equal(await verifyCommasWebhookSignature(new TextEncoder().encode(`${JSON.stringify(fixture)} `), signature, "secret"), false);
-});
-
-test("signature diagnostics expose only bounded metadata and match the local fingerprint helper", async () => {
-  assert.equal(await secretFingerprint8("secret"), "2bb80d53");
-  const source = await (await import("node:fs/promises")).readFile(new URL("../scripts/commas-webhook-secret-fingerprint.sh", import.meta.url), "utf8");
-  assert.match(source, /shasum -a 256/);
-  assert.match(source, /cut -c1-8/);
-  assert.doesNotMatch(source, /echo\s+"\$COMMAS_WEBHOOK_SECRET"/);
 });
 
 test("webhook storage path is scoped and deterministic", () => {
@@ -102,7 +94,10 @@ test("router exposes only the Commas webhook POST path and keeps scheduler/provi
   const source = await (await import("node:fs/promises")).readFile(new URL("./index.ts", import.meta.url), "utf8");
   assert.equal(source.includes('path === "/v1/connectors/commas/webhooks"'), true);
   assert.equal(source.includes("x-webhook-signature"), true);
-  for (const field of ["secretConfigured", "secretLength", "secretFingerprint", "rawBodyLength", "suppliedSignaturePresent", "suppliedSignatureLength", "suppliedSignatureFormatValid", "signatureMatched"]) assert.equal(source.includes(field), true);
-  assert.equal(source.includes("expected HMAC"), false);
+  assert.match(source, /X-TK-Secret, X-Webhook-Signature/);
+  const signature = "a".repeat(64);
+  const request = new Request("https://tracekit.test/v1/connectors/commas/webhooks", { method: "POST", headers: { "content-type": "application/json", "x-webhook-signature": signature }, body: "{}" });
+  assert.equal(request.headers.get("x-webhook-signature"), signature);
+  assert.doesNotMatch(source.slice(source.indexOf("async function handleCommasDisputeWebhook"), source.indexOf("function parseYmd")), /new Request|new Headers/);
   assert.doesNotMatch(source.slice(source.indexOf("async function handleCommasDisputeWebhook"), source.indexOf("function parseYmd")), /listTransactions|getTransaction|continuous_commerce\.send/);
 });
