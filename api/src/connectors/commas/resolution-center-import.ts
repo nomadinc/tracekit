@@ -67,7 +67,9 @@ function normalizeRow(values: unknown[], rowNumber: number, workbookHash: string
   if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(normalizedEmail)) codes.push("invalid_customer_email"); if (!reason) codes.push("missing_reason"); if (amount === null) codes.push("invalid_amount"); if (!product) codes.push("missing_product");
   if (codes.length || !disputeDate || !transactionDate || amount === null) return { codes };
   const normalized = { state, status, disputeDate, transactionDate, customerName, normalizedEmail, reason, closedDate, amount, fee, paymentMethod, product };
-  const sourceId = createHash("sha256").update(JSON.stringify({ import: workbookHash, rowNumber, ...normalized })).digest("hex");
+  // The workbook hash identifies the import; the row number preserves the
+  // original workbook identity independently of mutable display fields.
+  const sourceId = createHash("sha256").update(`${workbookHash}\0row:${rowNumber}`).digest("hex");
   return { sourceId, rowNumber, ...normalized };
 }
 

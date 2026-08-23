@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { mkdtemp, rm } from "node:fs/promises";
+import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import { tmpdir } from "node:os";
 import ExcelJS from "exceljs";
@@ -23,4 +24,15 @@ test("Resolution Center parser fails closed on unexpected headers", async () => 
   const directory = await mkdtemp(join(tmpdir(), "tracekit-resolution-")); const file = join(directory, "synthetic.xlsx");
   try { const workbook = new ExcelJS.stream.xlsx.WorkbookWriter({ filename: file }); const sheet = workbook.addWorksheet("Disputes"); sheet.addRow(["Unexpected"]).commit(); sheet.commit(); await workbook.commit(); await assert.rejects(() => parseResolutionCenterWorkbook({ filePath: file, onAccepted: () => {} }), /headers/); }
   finally { await rm(directory, { recursive: true, force: true }); }
+});
+
+test("historical importer validates before mutation and uses secret-key-compatible Supabase auth", () => {
+  const source = readFileSync(new URL("../../ui/scripts/import-commas-historical-disputes.ts", import.meta.url), "utf8");
+  assert.match(source, /parseResolutionCenterWorkbook/);
+  assert.match(source, /onRejected/);
+  assert.match(source, /supabaseAuthHeaders\(key\)/);
+  assert.match(source, /priorImport/);
+  assert.match(source, /historical_disputes_duplicate/);
+  assert.doesNotMatch(source, /Authorization:\s*`Bearer \$\{key\}`/);
+  assert.ok(source.indexOf("parseResolutionCenterWorkbook") < source.indexOf("putImmutable"));
 });
