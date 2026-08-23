@@ -175,7 +175,25 @@ test("migration filenames are unique and numerically ordered", () => {
   const numbers = names.map((name) => name.slice(0, 3));
 
   assert.equal(new Set(numbers).size, numbers.length);
-  assert.deepEqual(numbers, Array.from({ length: 68 }, (_, index) => String(index).padStart(3, "0")));
+  assert.deepEqual(numbers, Array.from({ length: 69 }, (_, index) => String(index).padStart(3, "0")));
+});
+
+test("Migration 068 defines a one-time exact-run runtime dispatch diagnostic replay", () => {
+  const migration068 = migration("068_runtime_dispatch_diagnostic_replay.sql").toLowerCase();
+  assert.match(migration068, /create or replace function public\.replay_commerce_runtime_dispatch_diagnostic\(\)/);
+  assert.match(migration068, /1387dfce-3c6f-414f-a939-c4921e364280/);
+  assert.match(migration068, /runtime_dispatch_diagnostic_replay_consumed/);
+  assert.match(migration068, /quota_bootstrap_exceptional_recovery/);
+  assert.match(migration068, /status <> 'cancelled'/);
+  assert.match(migration068, /quota_bootstrap_provider_requests/);
+  assert.match(migration068, /status in \('queued', 'running', 'paused'\)/);
+  assert.match(migration068, /mode in \('live', 'live_beta'\)/);
+  assert.match(migration068, /activation_state = 'enabled'/);
+  assert.match(migration068, /for update/);
+  assert.match(migration068, /reserved_run_id/);
+  assert.match(migration068, /revoke all on function public\.replay_commerce_runtime_dispatch_diagnostic\(\)/);
+  assert.match(migration068, /grant execute on function public\.replay_commerce_runtime_dispatch_diagnostic\(\)\s+to service_role/);
+  assert.doesNotMatch(migration068, /fetch\(|http|continuous_commerce\.send/);
 });
 
 test("Migration 067 accepts absent or self-referencing roots without weakening recovery guards", () => {
