@@ -34,6 +34,14 @@ test("ordinary direct HTTP invocation cannot bypass the internal contract", asyn
   const response = await handler.fetch(new Request("https://runtime/v1/commerce/sync", { method: "POST", body: JSON.stringify(message) }), { ...env, TRACEKIT_COMMERCE_SCHEDULER_ENABLED: "true", TRACEKIT_COMMERCE_KILL_SWITCH: "enabled" });
   assert.equal(response.status, 403);
 });
+test("runtime dispatch probe requires the shared secret and performs no commerce execution", async () => {
+  const body = JSON.stringify({ type: "runtime-dispatch-probe" });
+  const denied = await handler.fetch(new Request("https://runtime/v1/commerce/sync", { method: "POST", body }), { ...env, CONTINUOUS_RUNTIME_SHARED_SECRET: "correct" });
+  assert.equal(denied.status, 403);
+  const accepted = await handler.fetch(new Request("https://runtime/v1/commerce/sync", { method: "POST", headers: { "x-tracekit-runtime-secret": "correct" }, body }), { ...env, CONTINUOUS_RUNTIME_SHARED_SECRET: "correct" });
+  assert.equal(accepted.status, 200);
+  assert.deepEqual(await accepted.json(), { ok: true, probe: "runtime-dispatch-probe", runtimeReached: true, authPassed: true, statusCode: 200 });
+});
 
 test("runtime requires connected Commas scope and explicit IDs", () => {
   assert.deepEqual(validateRuntimeScope({ provider: "commas", status: "connected", connectionId: message.connection_id, organizationId: message.organization_id, providerAccountId: message.provider_account_id }).provider, "commas");

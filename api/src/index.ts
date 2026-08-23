@@ -14,7 +14,9 @@ import {
   maintenanceRequiresAdminAuthorization,
   maintenanceWriteAllowed,
 } from "./maintenance-write-gate";
-import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, runCommerceCron, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
+import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, runCommerceCron, validateCommerceQueueMessage, isQueueObservabilityTest, isRuntimeDispatchProbe, isPreReservedRunMatch, preReservedRunMatchDetails, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
+import { readQuotaBootstrapGate } from "./quota-bootstrap-gate";
+import { createSupabaseServerFetch } from "./supabase-server-fetch";
 import { enforceTkidRate, ephemeralTransportDimension, TkidRateLimitError, type DistributedCounterStore, type TkidAbuseClass } from "./tkid-distributed-abuse";
 import {
   DEFAULT_SHOPIFY_API_VERSION,
@@ -740,7 +742,7 @@ function getSupabase(env: Env) {
   const url = String(env.SUPABASE_URL ?? "").trim().replace(/\/+$/, "");
   const key = String(env.SUPABASE_SERVICE_ROLE_KEY ?? "").trim();
   if (!url || !key) throw new Error("Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY");
-  return createClient(url, key, { auth: { persistSession: false } });
+  return createClient(url, key, { auth: { persistSession: false }, global: { fetch: createSupabaseServerFetch(key) } });
 }
 
 function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterRepository {
@@ -797,16 +799,24 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
     },
     async bootstrapPermitted(message) {
       if (!message.bootstrap || message.bootstrap_mode !== "quota-bootstrap") return false;
-      const { data: connection, error: connectionError } = await db.from("commerce_provider_connections").select("organization_id,account_id,provider,status").eq("organization_id", message.organization_id).eq("id", message.connection_id).maybeSingle();
-      const { data: accounts, error: accountError } = await db.from("commerce_provider_accounts").select("id").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("status", "active");
-      const { count: controls, error: controlError } = await db.from("tracekit_production_controls").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("capability", "commerce_scheduler").eq("activation_state", "enabled");
-      const { count: schedules, error: scheduleError } = await db.from("commerce_sync_schedules").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("enabled", true).eq("activation_state", "enabled");
-      const { count: activeRuns, error: activeRunError } = await db.from("commerce_sync_runs").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).in("status", ["queued", "running", "paused"]);
-      const { count: liveActivation, error: liveActivationError } = await db.from("commerce_repository_activation").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).in("mode", ["live", "live_beta"]);
-      const { data: latest, error: latestError } = await db.from("commerce_sync_runs").select("metadata").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).order("created_at", { ascending: false }).limit(1).maybeSingle();
-      if (connectionError || accountError || controlError || scheduleError || activeRunError || liveActivationError || latestError) return false;
-      const metadata = latest?.metadata && typeof latest.metadata === "object" ? latest.metadata as Record<string, unknown> : {};
-      return bootstrapExecutionAllowed({ provider: String(connection?.provider || ""), connected: String(connection?.status || "") === "connected" && (accounts || []).length === 1 && String((accounts || [])[0]?.id || "") === message.provider_account_id, activeAccountCount: (accounts || []).length, quotaRemaining: Number.isFinite(Number(metadata.rate_limit_end)) ? Number(metadata.rate_limit_end) : null, attempted: metadata.quota_bootstrap_attempted === true, schedulerEnabled: Number(controls || 0) > 0, scheduleEnabled: Number(schedules || 0) > 0, activeRuns: Number(activeRuns || 0), liveActivationCount: Number(liveActivation || 0) });
+      if (message.reserved_run_id && !await this.preReservedRunPermitted!(message)) { console.log("[TraceKit] commerce.queue.bootstrap_rejected", { rejection_code: "invalid_reserved_run", reserved_run_present: true, reserved_run_id: message.reserved_run_id }); return false; }
+      const result = await readQuotaBootstrapGate(db, message); if (result.rejection) console.log("[TraceKit] commerce.queue.bootstrap_rejected", { rejection_code: result.rejection, reserved_run_present: Boolean(message.reserved_run_id), ...(message.reserved_run_id ? { reserved_run_id: message.reserved_run_id } : {}) }); return !result.rejection;
+    },
+    async preReservedRunPermitted(message) {
+      if (!message.bootstrap || !message.reserved_run_id) return false;
+      const { data: run, error } = await db.from("commerce_sync_runs").select("id,organization_id,connection_id,provider_account_id,sync_type,mode,status,scheduler_idempotency_key,metadata").eq("id", message.reserved_run_id).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("scheduler_idempotency_key", message.scheduler_identity).eq("status", "queued").maybeSingle();
+      if (error) { console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, lookup: "postgrest_error", status: Number(error.status || error.statusCode || 0) || null, code: String(error.code || "postgrest_error") }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); return false; }
+      if (!run) { console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, lookup: "not_found", ...preReservedRunMatchDetails(null, message) }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); return false; }
+      const valid = isPreReservedRunMatch(run, message);
+      if (!valid) { console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, ...preReservedRunMatchDetails(run, message) }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); }
+      else { console.log("[TraceKit] commerce.queue.pre_reserved_accepted", { reserved_run_id: message.reserved_run_id }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_passed", run_id: message.reserved_run_id }); }
+      return valid;
+    },
+    async reservedRunId(message) {
+      if (!message.bootstrap) return null;
+      const { data, error } = await db.from("commerce_sync_runs").select("id").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("scheduler_idempotency_key", message.scheduler_identity).eq("status", "queued").maybeSingle();
+      if (error) throw error;
+      return data?.id ? String(data.id) : null;
     },
     async manualPermitted(message) {
       if (!message.manual || message.bootstrap_mode) return false;
@@ -816,7 +826,7 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
         db.from("commerce_sync_schedules").select("sync_frequency,enabled,activation_state,quota_minimum_remaining").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1),
         db.from("commerce_connection_pauses").select("paused").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).limit(1),
         db.from("commerce_sync_runs").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).in("status", ["queued", "running", "paused"]),
-        db.from("commerce_repository_activation").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).in("mode", ["live", "live_beta"]),
+        db.from("commerce_repository_activation").select("organization_id", { count: "exact", head: true }).eq("organization_id", message.organization_id).in("mode", ["live", "live_beta"]),
         db.from("commerce_sync_runs").select("metadata").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       ]);
       if (connectionError || accountError || scheduleError || pauseError || activeRunError || liveActivationError || latestError) return false;
@@ -15318,6 +15328,18 @@ async function relayEvidence(db:any,continuity:any,eventName:string){await db.fr
 async function router(req: Request, env: Env): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname;
+  if (path === "/internal/diagnostics/quota-bootstrap-reads" && req.method === "POST") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const body = await readJsonBody(req);
+      const message = validateCommerceQueueMessage({ ...body, schema_version: 1, job_type: "commerce_continuous", provider: "commas", resource: "transactions", requested_mode: "continuous", scheduler_identity: "diagnostic", requested_at: new Date().toISOString(), bootstrap: true, bootstrap_mode: "quota-bootstrap" });
+      const result = await readQuotaBootstrapGate(getSupabase(env), message);
+      return json({ ok: true, reads: result.reads, rejection: result.rejection }, 200);
+    } catch (error: any) {
+      return json({ ok: false, error: "diagnostic_failed", code: String(error?.code || "invalid_request") }, 400);
+    }
+  }
   if (path === "/v1/commerce/sync-now" && req.method === "POST") {
     const auth = adminAuthError(req, env);
     if (auth) return auth;
@@ -22076,6 +22098,29 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 
 		  for (const msg of batch.messages) {
 		    const body = msg.body || {};
+		    if (isQueueObservabilityTest(body)) {
+		      console.log("[TraceKit] queue observability test delivered", { event: "queue_observability_test.delivered" });
+		      msg.ack();
+		      continue;
+		    }
+		    if (isRuntimeDispatchProbe(body)) {
+		      try {
+		        if (!env.CONTINUOUS_COMMERCE_RUNTIME) throw new Error("continuous_runtime_binding_missing");
+		        const response = await env.CONTINUOUS_COMMERCE_RUNTIME.fetch("https://continuous-runtime.internal/v1/commerce/sync", {
+		          method: "POST",
+		          headers: { "content-type": "application/json", "x-tracekit-runtime-secret": String(env.CONTINUOUS_RUNTIME_SHARED_SECRET || "") },
+		          body: JSON.stringify(body),
+		        });
+		        const result = await response.json().catch(() => ({})) as Record<string, unknown>;
+		        if (!response.ok || result.probe !== "runtime-dispatch-probe" || result.authPassed !== true) throw new Error(`runtime_dispatch_probe_${response.status}`);
+		        console.log("[TraceKit] runtime dispatch probe succeeded", { event: "runtime_dispatch_probe.succeeded", runtimeReached: true, authPassed: true, statusCode: response.status });
+		        msg.ack();
+		      } catch (error) {
+		        console.log("[TraceKit] runtime dispatch probe failed", { event: "runtime_dispatch_probe.failed", code: String((error as Error)?.message || "runtime_dispatch_probe_failed").slice(0, 80) });
+		        msg.ack();
+		      }
+		      continue;
+		    }
 		    if (body.schema_version === 1 && /^commerce_(continuous|deep_reconciliation)$/.test(String(body.job_type || ""))) {
 		      const repository = getContinuousCommerceAdapterRepository(env);
 		      const outcome = await consumeCommerceMessage({
@@ -22084,9 +22129,13 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 		        runtime: {
 		          async run(message) {
 		            if (!env.CONTINUOUS_COMMERCE_RUNTIME) throw Object.assign(new Error("continuous_runtime_binding_missing"), { code: "invalid_configuration" });
+		            console.log("[TraceKit] commerce runtime dispatch started", { event: "commerce.runtime_dispatch.started", run_id: message.reserved_run_id || null });
 		            const response = await env.CONTINUOUS_COMMERCE_RUNTIME.fetch("https://continuous-runtime.internal/v1/commerce/sync", { method: "POST", headers: { "content-type": "application/json", "x-tracekit-runtime-secret": String(env.CONTINUOUS_RUNTIME_SHARED_SECRET || "") }, body: JSON.stringify(message) });
+		            const result = await response.json().catch(() => ({})) as Record<string, unknown>;
+		            const errorCode = typeof result.error === "string" ? result.error.replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 80) : undefined;
+		            console.log("[TraceKit] commerce runtime dispatch response", { event: "commerce.runtime_dispatch.response", run_id: message.reserved_run_id || null, statusCode: response.status, ...(errorCode ? { errorCode } : {}) });
 		            if (!response.ok) throw Object.assign(new Error(`continuous_runtime_${response.status}`), { code: response.status === 429 ? "429" : response.status >= 500 ? "runtime_timeout" : "invalid_runtime_request" });
-		            return await response.json() as { status: "completed" | "completed_with_warnings"; providerRequests: number };
+		            return result as { status: "completed" | "completed_with_warnings"; providerRequests: number };
 		          },
 		        },
 		      });

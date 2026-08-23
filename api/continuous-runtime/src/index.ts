@@ -1,4 +1,4 @@
-import { isConnectedCommasConnection, validateCommerceQueueMessage, type CommerceQueueMessage } from "../../src/continuous-commerce-cloudflare.ts";
+import { isConnectedCommasConnection, isRuntimeDispatchProbe, validateCommerceQueueMessage, type CommerceQueueMessage } from "../../src/continuous-commerce-cloudflare.ts";
 
 export type ContinuousRuntimeEnv = {
   SUPABASE_URL?: string;
@@ -46,6 +46,7 @@ export default {
     let body: unknown;
     try { body = await request.json(); } catch { return json({ ok: false, error: "invalid_json" }, 400); }
     try {
+      if (isRuntimeDispatchProbe(body)) return json({ ok: true, probe: "runtime-dispatch-probe", runtimeReached: true, authPassed: true, statusCode: 200 }, 200);
       const message = validateRuntimeMessage(body);
       const bootstrap = message.bootstrap === true && message.bootstrap_mode === "quota-bootstrap";
       const manual = message.manual === true;

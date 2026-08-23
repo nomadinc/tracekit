@@ -175,7 +175,117 @@ test("migration filenames are unique and numerically ordered", () => {
   const numbers = names.map((name) => name.slice(0, 3));
 
   assert.equal(new Set(numbers).size, numbers.length);
-  assert.deepEqual(numbers, Array.from({ length: 65 }, (_, index) => String(index).padStart(3, "0")));
+  assert.deepEqual(numbers, Array.from({ length: 71 }, (_, index) => String(index).padStart(3, "0")));
+});
+
+test("Migration 070 defines a one-time post-fix Worker cache replay", () => {
+  const migration070 = migration("070_workers_request_cache_fixed_replay.sql").toLowerCase();
+  assert.match(migration070, /create or replace function public\.replay_commerce_workers_request_cache_fixed\(\)/);
+  assert.match(migration070, /37e77c92-f333-437a-91a9-2acb38e73eca/);
+  assert.match(migration070, /workers_request_cache_fixed_replay_consumed/);
+  assert.match(migration070, /status <> 'cancelled'/);
+  assert.match(migration070, /quota_bootstrap_provider_requests/);
+  assert.match(migration070, /status in \('queued', 'running', 'paused'\)/);
+  assert.match(migration070, /mode in \('live', 'live_beta'\)/);
+  assert.match(migration070, /for update/);
+  assert.match(migration070, /reserved_run_id/);
+  assert.match(migration070, /revoke all on function public\.replay_commerce_workers_request_cache_fixed\(\)/);
+  assert.match(migration070, /grant execute on function public\.replay_commerce_workers_request_cache_fixed\(\)\s+to service_role/);
+  assert.doesNotMatch(migration070, /fetch\(|http|continuous_commerce\.send/);
+});
+
+test("Migration 069 defines a one-time early-ack observability replay", () => {
+  const migration069 = migration("069_early_ack_observability_replay.sql").toLowerCase();
+  assert.match(migration069, /create or replace function public\.replay_commerce_early_ack_observability\(\)/);
+  assert.match(migration069, /f15782cd-858d-4840-8901-b1bb65939d7b/);
+  assert.match(migration069, /early_ack_observability_replay_consumed/);
+  assert.match(migration069, /status <> 'cancelled'/);
+  assert.match(migration069, /quota_bootstrap_provider_requests/);
+  assert.match(migration069, /status in \('queued', 'running', 'paused'\)/);
+  assert.match(migration069, /mode in \('live', 'live_beta'\)/);
+  assert.match(migration069, /for update/);
+  assert.match(migration069, /reserved_run_id/);
+  assert.match(migration069, /revoke all on function public\.replay_commerce_early_ack_observability\(\)/);
+  assert.match(migration069, /grant execute on function public\.replay_commerce_early_ack_observability\(\)\s+to service_role/);
+  assert.doesNotMatch(migration069, /fetch\(|http|continuous_commerce\.send/);
+});
+
+test("Migration 068 defines a one-time exact-run runtime dispatch diagnostic replay", () => {
+  const migration068 = migration("068_runtime_dispatch_diagnostic_replay.sql").toLowerCase();
+  assert.match(migration068, /create or replace function public\.replay_commerce_runtime_dispatch_diagnostic\(\)/);
+  assert.match(migration068, /1387dfce-3c6f-414f-a939-c4921e364280/);
+  assert.match(migration068, /runtime_dispatch_diagnostic_replay_consumed/);
+  assert.match(migration068, /quota_bootstrap_exceptional_recovery/);
+  assert.match(migration068, /status <> 'cancelled'/);
+  assert.match(migration068, /quota_bootstrap_provider_requests/);
+  assert.match(migration068, /status in \('queued', 'running', 'paused'\)/);
+  assert.match(migration068, /mode in \('live', 'live_beta'\)/);
+  assert.match(migration068, /activation_state = 'enabled'/);
+  assert.match(migration068, /for update/);
+  assert.match(migration068, /reserved_run_id/);
+  assert.match(migration068, /revoke all on function public\.replay_commerce_runtime_dispatch_diagnostic\(\)/);
+  assert.match(migration068, /grant execute on function public\.replay_commerce_runtime_dispatch_diagnostic\(\)\s+to service_role/);
+  assert.doesNotMatch(migration068, /fetch\(|http|continuous_commerce\.send/);
+});
+
+test("Migration 067 accepts absent or self-referencing roots without weakening recovery guards", () => {
+  const migration067 = migration("067_quota_bootstrap_root_self_reference_fix.sql").toLowerCase();
+  assert.match(migration067, /create or replace function public\.recover_commerce_quota_bootstrap_chain/);
+  assert.match(migration067, /quota_bootstrap_original_run_id.*<> p_root_run_id::text/);
+  assert.match(migration067, /quota_bootstrap_exceptional_recovery_consumed/);
+  assert.match(migration067, /p_root_provider_requests is distinct from 0/);
+  assert.match(migration067, /p_failed_provider_requests is distinct from 0/);
+  assert.match(migration067, /status in \('queued', 'running', 'paused'\)/);
+  assert.match(migration067, /mode in \('live', 'live_beta'\)/);
+  assert.match(migration067, /activation_state = 'enabled'/);
+  assert.match(migration067, /for update/);
+  assert.match(migration067, /reserved_run_id/);
+  assert.match(migration067, /revoke all on function public\.recover_commerce_quota_bootstrap_chain\(uuid, uuid, integer, integer\)/);
+  assert.match(migration067, /grant execute on function public\.recover_commerce_quota_bootstrap_chain\(uuid, uuid, integer, integer\)\s+to service_role/);
+});
+
+test("Migration 066 bounds quota bootstrap retries at the chain root and provides exceptional recovery", () => {
+  const migration066 = migration("066_quota_bootstrap_chain_recovery.sql").toLowerCase();
+  assert.match(migration066, /rename to retry_commerce_quota_bootstrap_legacy/);
+  assert.match(migration066, /quota-bootstrap-chain/);
+  assert.match(migration066, /quota_bootstrap_original_run_id/);
+  assert.match(migration066, /quota_bootstrap_retry_consumed/);
+  assert.match(migration066, /retry already consumed at chain root/);
+  assert.match(migration066, /revoke all on function public\.retry_commerce_quota_bootstrap_legacy\(uuid, integer\)[\s\S]*service_role/);
+  assert.match(migration066, /create or replace function public\.recover_commerce_quota_bootstrap_chain\(\s*p_root_run_id uuid,\s*p_failed_run_id uuid/);
+  assert.match(migration066, /quota_bootstrap_exceptional_recovery_consumed/);
+  assert.match(migration066, /runtime_secret_repaired/);
+  assert.match(migration066, /p_root_provider_requests is distinct from 0/);
+  assert.match(migration066, /p_failed_provider_requests is distinct from 0/);
+  assert.match(migration066, /for update/);
+  assert.match(migration066, /reserved_run_id/);
+  assert.match(migration066, /grant execute on function public\.recover_commerce_quota_bootstrap_chain\(uuid, uuid, integer, integer\)\s+to service_role/);
+  assert.doesNotMatch(migration066, /fetch\(|http|continuous_commerce\.send/);
+});
+
+test("Migration 065 provides a one-time service-role-only quota bootstrap retry", () => {
+  const migration065 = migration("065_quota_bootstrap_retry_recovery.sql").toLowerCase();
+  assert.match(migration065, /create or replace function public\.retry_commerce_quota_bootstrap\(\s*p_run_id uuid,\s*p_provider_requests integer default 0\s*\)/);
+  assert.match(migration065, /security definer/);
+  assert.match(migration065, /pg_advisory_xact_lock/);
+  assert.match(migration065, /for update/);
+  assert.match(migration065, /status <> 'cancelled'/);
+  assert.match(migration065, /p_provider_requests is distinct from 0/);
+  assert.match(migration065, /quota_bootstrap_attempted/);
+  assert.match(migration065, /quota_bootstrap_retry_consumed/);
+  assert.match(migration065, /quota_bootstrap_provider_requests/);
+  assert.match(migration065, /failure_class.*pre_provider_dispatch/);
+  assert.match(migration065, /recorded provider requests/);
+  assert.match(migration065, /v_connection\.account_id is distinct from v_account_id/);
+  assert.match(migration065, /quota_bootstrap_original_run_id/);
+  assert.match(migration065, /insert into public\.commerce_sync_runs/);
+  assert.match(migration065, /reserved_run_id/);
+  assert.match(migration065, /status in\s*\('queued',\s*'running',\s*'paused'\)/);
+  assert.match(migration065, /mode in\s*\('live',\s*'live_beta'\)/);
+  assert.match(migration065, /activation_state = 'enabled'/);
+  assert.match(migration065, /revoke all on function public\.retry_commerce_quota_bootstrap\(uuid, integer\) from public, anon, authenticated/);
+  assert.match(migration065, /grant execute on function public\.retry_commerce_quota_bootstrap\(uuid, integer\) to service_role/);
+  assert.doesNotMatch(migration065, /env\.continuous_commerce|http|fetch\(/);
 });
 
 test("Migration 061 converges trigger-only guard functions without changing definitions or defaults", () => {

@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import { buildContinuousWorkerRequestInit } from "./continuous-worker-request";
+import { decodeHex } from "./web-encoding.ts";
 import { decodeCommerceCredentialKey, decryptCommerceCredential } from "./credential-crypto";
 import { normalizeCommasTransaction } from "./commas-shadow-normalizer";
 import { SupabaseCommerceEvidenceStore } from "./supabase-evidence-store-core";
@@ -28,7 +30,7 @@ function configuration() {
 
 async function db(path:string,init:RequestInit={}) {
   const {url,key}=configuration();
-  const response=await fetch(`${url}/rest/v1/${path}`,{...init,cache:"no-store",headers:{apikey:key,Authorization:`Bearer ${key}`,"Content-Type":"application/json",Prefer:"return=representation",...init.headers}});
+  const response=await fetch(`${url}/rest/v1/${path}`,buildContinuousWorkerRequestInit(key,init));
   if(!response.ok) throw new Error(`Continuous Commerce persistence failed (${response.status}).`);
   if(response.status===204)return [] as Row[];
   const value=await response.json() as unknown;
@@ -38,7 +40,7 @@ async function db(path:string,init:RequestInit={}) {
 const object=(value:unknown):Row|null=>value&&typeof value==="object"&&!Array.isArray(value)?value as Row:null;
 const number=(value:unknown)=>{const parsed=Number(value);return Number.isFinite(parsed)?parsed:null;};
 const sleep=(ms:number)=>new Promise((resolve)=>setTimeout(resolve,ms));
-const bytea=(value:unknown)=>Uint8Array.from(Buffer.from(String(value).replace(/^\\x/,""),"hex"));
+const bytea=(value:unknown)=>decodeHex(String(value));
 
 async function fetchProviderPage(secret:string,page:number,perPage:number,correlationId:string,maxAttempts=3) {
   let lastStatus=0;
@@ -129,8 +131,11 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
   const key=options.requestKey??contentFingerprint({connectionId:scope.connectionId,providerAccountId:scope.providerAccountId,resource:"transactions",mode,bucket:new Date().toISOString().slice(0,16)});
   const enqueued=await db("rpc/enqueue_commerce_continuous_sync",{method:"POST",body:JSON.stringify({p_account_id:scope.accountId,p_organization_id:scope.organizationId,p_connection_id:scope.connectionId,p_provider_account_id:scope.providerAccountId,p_resource:"transactions",p_mode:mode,p_idempotency_key:key})});
   const runId=String(enqueued[0].id);
-  const claimed=await db("rpc/claim_commerce_sync_run",{method:"POST",body:JSON.stringify({p_run_id:runId,p_organization_id:scope.organizationId,p_connection_id:scope.connectionId,p_lease_owner:owner,p_lease_seconds:900})});
-  if(!claimed[0])throw new Error("Continuous sync lease unavailable.");
+  let claimed:any;
+  try { claimed=await db("rpc/claim_commerce_sync_run",{method:"POST",body:JSON.stringify({p_run_id:runId,p_organization_id:scope.organizationId,p_connection_id:scope.connectionId,p_lease_owner:owner,p_lease_seconds:900})}); }
+  catch(error) { console.log("[TraceKit] commerce lease acquisition failed",{event:"commerce.lease.acquire_failed",errorCode:String((error as Error)?.message||"lease_error").replace(/[^a-zA-Z0-9_.-]/g,"_").slice(0,80)}); throw error; }
+  if(!claimed[0]) { console.log("[TraceKit] commerce lease acquisition failed",{event:"commerce.lease.acquire_failed",errorCode:"lease_unavailable"}); throw new Error("Continuous sync lease unavailable."); }
+  console.log("[TraceKit] commerce lease acquired",{event:"commerce.lease.acquired"});
   if(bootstrap)await db(`commerce_sync_runs?id=eq.${runId}`,{method:"PATCH",body:JSON.stringify({metadata:{account_id:scope.accountId,quota_bootstrap_attempted:true,quota_bootstrap_state:"pending"}})});
   await audit(scope,mode==="deep_reconciliation"?"commerce.deep_reconciliation_started":"commerce.continuous_sync_started",runId,"success",{resource:"transactions",mode}).catch(()=>{});
   const priorState=(await db(`commerce_continuous_sync_state?connection_id=eq.${scope.connectionId}&provider_account_id=eq.${scope.providerAccountId}&resource=eq.transactions&select=*&limit=1`))[0];
@@ -200,12 +205,13 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
     }
     const warnings=deeperReconciliationRequired?1:0,status=warnings?"completed_with_warnings":"completed";
     await db(`commerce_sync_runs?id=eq.${runId}`,{method:"PATCH",body:JSON.stringify({source_total_items:providerTotalEnd,pages_planned:null,pages_completed:pagesScanned,records_seen:recordsObserved,records_created:recordsNew,records_updated:recordsUpdated,records_unchanged:recordsUnchanged,records_failed:recordsFailed,warnings_count:warnings,provider_request_count:providerRequests,evidence_writes:evidenceWrites,evidence_reuses:evidenceReuses,provider_total_start:providerTotalStart,provider_total_end:providerTotalEnd,stopping_reason:stoppingReason,overlap_pages_scanned:pagesScanned,page_shift_detected:stability.pageShiftDetected,deeper_reconciliation_required:deeperReconciliationRequired,freshness_result:changedRows.length?"changed":"current",metadata:{normalizer_version:CONTINUOUS_NORMALIZER_VERSION,evidence_contract_version:COMMERCE_EVIDENCE_CONTRACT_VERSION,retries,rate_limit_start:rateLimitStart,rate_limit_end:rateLimitEnd,rate_limit_reset:rateLimitReset,quota_bootstrap_attempted:bootstrap,quota_bootstrap_state:bootstrap?(rateLimitEnd===null?"unknown":"observed"):undefined,refunds_new:refundsNew,refunds_updated:refundsUpdated,ordering}})});
-    await db("rpc/transition_commerce_sync_run",{method:"POST",body:JSON.stringify({p_run_id:runId,p_organization_id:scope.organizationId,p_connection_id:scope.connectionId,p_lease_owner:owner,p_transition:status,p_error_code:null,p_error_summary:null})});
+    const transitioned=await db("rpc/transition_commerce_sync_run",{method:"POST",body:JSON.stringify({p_run_id:runId,p_organization_id:scope.organizationId,p_connection_id:scope.connectionId,p_lease_owner:owner,p_transition:status,p_error_code:null,p_error_summary:null})});
+    console.log("[TraceKit] commerce run transition",{event:"commerce.run.transition",result:transitioned?.[0]===true?"succeeded":"not_applied",status});
     await audit(scope,mode==="deep_reconciliation"?"commerce.deep_reconciliation_completed":"commerce.continuous_sync_completed",runId,"success",{resource:"transactions",mode,pages_scanned:pagesScanned,records_new:recordsNew,records_updated:recordsUpdated,records_unchanged:recordsUnchanged,stopping_reason:stoppingReason}).catch(()=>{});
     return {runId,status,providerRequests,pagesScanned,recordsObserved,recordsNew,recordsUpdated,recordsUnchanged,recordsFailed,refundsNew,refundsUpdated,evidenceWrites,evidenceReuses,durationMs:Date.now()-started,averagePageDurationMs:pageDurations.length?Math.round(pageDurations.reduce((a,b)=>a+b,0)/pageDurations.length):0,retries,rateLimitStart,rateLimitEnd,stoppingReason,pageShiftDetected:stability.pageShiftDetected,deeperReconciliationRequired,ordering};
   } catch(error) {
     await db(`commerce_continuous_sync_state?on_conflict=connection_id,provider_account_id,resource`,{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=representation"},body:JSON.stringify({account_id:scope.accountId,organization_id:scope.organizationId,connection_id:scope.connectionId,provider_account_id:scope.providerAccountId,resource:"transactions",last_attempted_at:new Date().toISOString(),normalizer_version:CONTINUOUS_NORMALIZER_VERSION,evidence_contract_version:COMMERCE_EVIDENCE_CONTRACT_VERSION,status:"failed",attribution_source_state:"unavailable",warnings:[{code:"continuous_sync_failed"}],updated_at:new Date().toISOString()})}).catch(()=>{});
-    await db("rpc/transition_commerce_sync_run",{method:"POST",body:JSON.stringify({p_run_id:runId,p_organization_id:scope.organizationId,p_connection_id:scope.connectionId,p_lease_owner:owner,p_transition:"failed",p_error_code:"continuous_sync_failed",p_error_summary:"Continuous Commerce sync stopped safely."})}).catch(()=>{});
+    await db("rpc/transition_commerce_sync_run",{method:"POST",body:JSON.stringify({p_run_id:runId,p_organization_id:scope.organizationId,p_connection_id:scope.connectionId,p_lease_owner:owner,p_transition:"failed",p_error_code:"continuous_sync_failed",p_error_summary:"Continuous Commerce sync stopped safely."})}).then((transitioned)=>console.log("[TraceKit] commerce run transition",{event:"commerce.run.transition",result:transitioned?.[0]===true?"succeeded":"not_applied",status:"failed"})).catch((error)=>console.log("[TraceKit] commerce run transition failed",{event:"commerce.run.transition_failed",errorCode:String((error as Error)?.message||"transition_error").replace(/[^a-zA-Z0-9_.-]/g,"_").slice(0,80)}));
     await audit(scope,mode==="deep_reconciliation"?"commerce.deep_reconciliation_failed":"commerce.continuous_sync_failed",runId,"failure",{resource:"transactions",mode,error_code:"continuous_sync_failed"}).catch(()=>{});
     throw error;
   }

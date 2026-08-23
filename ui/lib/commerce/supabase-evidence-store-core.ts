@@ -1,4 +1,5 @@
 import { sha256Hex, type CommerceEvidenceStore, type StoredEvidence } from "./evidence-store";
+import { supabaseAuthHeaders } from "./supabase-auth";
 
 const BUCKET = "commerce-evidence";
 
@@ -27,7 +28,7 @@ export class SupabaseCommerceEvidenceStore implements CommerceEvidenceStore {
     if (!input.connectionId || !input.providerAccountId || !input.sourceObjectType) throw new Error("Durable Commerce Evidence requires complete server scope.");
     const payloadHash = await sha256Hex(input.payload);
     const path = objectPath({ organizationId: input.organizationId, connectionId: input.connectionId, providerAccountId: input.providerAccountId, sourceObjectType: input.sourceObjectType }, payloadHash);
-    const response = await this.storageRequest(path, { method: "POST", headers: { "Content-Type": input.contentType, "x-upsert": "false" }, body: Buffer.from(input.payload) });
+    const response = await this.storageRequest(path, { method: "POST", headers: { "Content-Type": input.contentType, "x-upsert": "false" }, body: input.payload });
     if (!response.ok) {
       const existing = await this.getAuthorized({ organizationId: input.organizationId, storageReference: `${BUCKET}/${path}` });
       if (!existing || (await sha256Hex(existing)) !== payloadHash) throw new Error("Commerce Evidence could not be persisted immutably.");
@@ -57,6 +58,6 @@ export class SupabaseCommerceEvidenceStore implements CommerceEvidenceStore {
 
   private async storageRequest(path: string, init: RequestInit) {
     const { url, key } = configuration();
-    return fetch(`${url}/storage/v1/object/${BUCKET}/${encodedPath(path)}`, { ...init, cache: "no-store", headers: { apikey: key, Authorization: `Bearer ${key}`, ...init.headers } });
+    return fetch(`${url}/storage/v1/object/${BUCKET}/${encodedPath(path)}`, { ...init, headers: { ...supabaseAuthHeaders(key), ...init.headers } });
   }
 }

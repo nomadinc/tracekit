@@ -3,6 +3,10 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { unstable_readConfig } from "wrangler";
 import runtime, { validateRuntimeMessage, validateRuntimeScope } from "../continuous-runtime/src/index.ts";
+import { buildContinuousWorkerRequestInit } from "../../ui/lib/commerce/continuous-worker-request.ts";
+import { decodeBase64, decodeHex, encodeHex } from "../../ui/lib/commerce/web-encoding.ts";
+import { decodeCommerceCredentialKey } from "../../ui/lib/commerce/credential-crypto.ts";
+import { createSupabaseServerFetch } from "./supabase-server-fetch.ts";
 
 const id = "11111111-1111-4111-8111-111111111111";
 const message = { schema_version: 1, job_type: "commerce_continuous", provider: "commas", account_id: id, organization_id: id, connection_id: id, provider_account_id: id, resource: "transactions", requested_mode: "continuous", scheduler_identity: "schedule:bucket", requested_at: "2026-08-10T00:00:00Z" } as const;
@@ -34,4 +38,37 @@ test("runtime message contract cannot request live activation", () => {
   assert.deepEqual(validateRuntimeMessage(message), message);
   assert.throws(() => validateRuntimeMessage({ ...message, requested_mode: "live" }), /invalid_queue_message/);
   assert.doesNotMatch(readFileSync(new URL("../continuous-runtime/src/index.ts", import.meta.url), "utf8"), /commerce_provider_connections|platform_orders|live_beta|workspace_repository/);
+});
+
+test("Cloudflare continuous-worker requests omit unsupported cache while preserving options", () => {
+  const init = buildContinuousWorkerRequestInit("server-key", { method: "POST", cache: "no-store", body: "{}", signal: new AbortController().signal, headers: { "x-test": "ok" } });
+  assert.equal("cache" in init, false);
+  assert.equal(init.method, "POST");
+  assert.equal(init.body, "{}");
+  assert.equal((init.headers as Record<string, string>)["x-test"], "ok");
+  assert.equal((init.headers as Record<string, string>).apikey, "server-key");
+});
+
+test("continuous runtime encoding path works without global Buffer", () => {
+  const previous = (globalThis as { Buffer?: unknown }).Buffer;
+  try {
+    delete (globalThis as { Buffer?: unknown }).Buffer;
+    const key = decodeCommerceCredentialKey("AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA=");
+    assert.equal(key.byteLength, 32);
+    assert.equal(encodeHex(decodeHex("\\x0001fe")), "0001fe");
+    assert.equal(decodeBase64("AAH+" )[2], 254);
+  } finally {
+    if (previous === undefined) delete (globalThis as { Buffer?: unknown }).Buffer;
+    else (globalThis as { Buffer?: unknown }).Buffer = previous;
+  }
+});
+
+test("Supabase server fetch strips Authorization only for sb_secret keys", async () => {
+  let captured: Headers | undefined;
+  const baseFetch: typeof fetch = async (_input, init) => { captured = new Headers(init?.headers); return new Response(null, { status: 200 }); };
+  await createSupabaseServerFetch("sb_secret_test", baseFetch)("https://supabase.test", { headers: { Authorization: "Bearer sb_secret_test", apikey: "sb_secret_test" } });
+  assert.equal(captured?.has("authorization"), false);
+  assert.equal(captured?.get("apikey"), "sb_secret_test");
+  await createSupabaseServerFetch("eyJlegacy", baseFetch)("https://supabase.test", { headers: { Authorization: "Bearer eyJlegacy" } });
+  assert.equal(captured?.get("authorization"), "Bearer eyJlegacy");
 });
