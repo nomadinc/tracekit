@@ -14,7 +14,7 @@ import {
   maintenanceRequiresAdminAuthorization,
   maintenanceWriteAllowed,
 } from "./maintenance-write-gate";
-import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, runCommerceCron, validateCommerceQueueMessage, isQueueObservabilityTest, isRuntimeDispatchProbe, isPreReservedRunMatch, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
+import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, runCommerceCron, validateCommerceQueueMessage, isQueueObservabilityTest, isRuntimeDispatchProbe, isPreReservedRunMatch, preReservedRunMatchDetails, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
 import { readQuotaBootstrapGate } from "./quota-bootstrap-gate";
 import { enforceTkidRate, ephemeralTransportDimension, TkidRateLimitError, type DistributedCounterStore, type TkidAbuseClass } from "./tkid-distributed-abuse";
 import {
@@ -798,15 +798,16 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
     },
     async bootstrapPermitted(message) {
       if (!message.bootstrap || message.bootstrap_mode !== "quota-bootstrap") return false;
-      if (message.reserved_run_id && !await this.preReservedRunPermitted!(message)) return false;
-      const result = await readQuotaBootstrapGate(db, message); if (result.rejection) console.log(`[TraceKit] quota_bootstrap_rejected: ${result.rejection}`); return !result.rejection;
+      if (message.reserved_run_id && !await this.preReservedRunPermitted!(message)) { console.log("[TraceKit] commerce.queue.bootstrap_rejected", { rejection_code: "invalid_reserved_run", reserved_run_present: true, reserved_run_id: message.reserved_run_id }); return false; }
+      const result = await readQuotaBootstrapGate(db, message); if (result.rejection) console.log("[TraceKit] commerce.queue.bootstrap_rejected", { rejection_code: result.rejection, reserved_run_present: Boolean(message.reserved_run_id), ...(message.reserved_run_id ? { reserved_run_id: message.reserved_run_id } : {}) }); return !result.rejection;
     },
     async preReservedRunPermitted(message) {
       if (!message.bootstrap || !message.reserved_run_id) return false;
       const { data: run, error } = await db.from("commerce_sync_runs").select("id,organization_id,connection_id,provider_account_id,sync_type,mode,status,scheduler_idempotency_key,metadata").eq("id", message.reserved_run_id).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("scheduler_idempotency_key", message.scheduler_identity).eq("status", "queued").maybeSingle();
-      if (error || !run) return false;
+      if (error || !run) { console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, ...preReservedRunMatchDetails(null, message) }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); return false; }
       const valid = isPreReservedRunMatch(run, message);
-      console.log("[TraceKit] commerce pre-reserved validation", { event: valid ? "commerce.pre_reserved.validation_passed" : "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id });
+      if (!valid) { console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, ...preReservedRunMatchDetails(run, message) }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); }
+      else { console.log("[TraceKit] commerce.queue.pre_reserved_accepted", { reserved_run_id: message.reserved_run_id }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_passed", run_id: message.reserved_run_id }); }
       return valid;
     },
     async reservedRunId(message) {
