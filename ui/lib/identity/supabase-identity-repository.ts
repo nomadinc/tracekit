@@ -34,6 +34,7 @@ async function rest(path: string, init: RequestInit = {}) {
 }
 
 const user = (row: Row): PersistentUser => ({ id: String(row.id), workosUserId: String(row.workos_user_id), primaryEmail: String(row.primary_email), displayName: String(row.display_name), avatarUrl: row.avatar_url ? String(row.avatar_url) : null, status: row.status as PersistentUser["status"] });
+const membership = (row: Row & { tracekit_roles?: { role_key?: string } }): PersistentMembership => ({ id: String(row.id), userId: String(row.user_id), accountId: row.account_id ? String(row.account_id) : null, organizationId: row.organization_id ? String(row.organization_id) : null, role: String(row.tracekit_roles?.role_key) as Role, status: row.status as PersistentMembership["status"] });
 
 export class SupabaseIdentityTenancyRepository implements IdentityTenancyRepository {
   async synchronizeUser(identity: WorkOSIdentityInput) {
@@ -50,7 +51,12 @@ export class SupabaseIdentityTenancyRepository implements IdentityTenancyReposit
 
   async membershipsForUser(userId: string) {
     const rows = await rest(`tracekit_memberships?user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=*,tracekit_roles(role_key)`) as Array<Row & { tracekit_roles?: { role_key?: string } }>;
-    return rows.map((row) => ({ id: String(row.id), userId: String(row.user_id), accountId: row.account_id ? String(row.account_id) : null, organizationId: row.organization_id ? String(row.organization_id) : null, role: String(row.tracekit_roles?.role_key) as Role, status: row.status as PersistentMembership["status"] }));
+    return rows.map(membership);
+  }
+
+  async inactiveMembershipsForUser(userId: string) {
+    const rows = await rest(`tracekit_memberships?user_id=eq.${encodeURIComponent(userId)}&status=neq.active&select=*,tracekit_roles(role_key)&order=updated_at.desc`) as Array<Row & { tracekit_roles?: { role_key?: string } }>;
+    return rows.map(membership);
   }
 
   async isEmptyInstallation() {

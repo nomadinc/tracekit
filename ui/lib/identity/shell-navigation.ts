@@ -25,6 +25,7 @@ const NAVIGATION_ICONS: Record<string, LucideIcon> = {
   Clients: Building2,
   Reports: Activity,
   Team: ContactRound,
+  Activity: FileClock,
   Branding: Tags,
   Organizations: Building2,
   Agencies: ShieldCheck,

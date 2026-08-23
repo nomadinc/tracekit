@@ -29,7 +29,14 @@ export default function middleware(request: NextRequest, event: NextFetchEvent) 
     request.nextUrl.pathname.startsWith("/concepts/")
   )
     return NextResponse.next();
+
+  const previewRedirectUri =
+    process.env.VERCEL_ENV === "preview" && process.env.VERCEL_BRANCH_URL
+      ? `https://${process.env.VERCEL_BRANCH_URL}/auth/callback`
+      : undefined;
+
   return authkitMiddleware({
+    redirectUri: previewRedirectUri,
     middlewareAuth: {
       enabled: true,
       unauthenticatedPaths: ["/auth/:path*", "/api/health"],
