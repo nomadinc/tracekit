@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { resolveApplicationSession } from "@/lib/identity/application-session";
+import { requirePermission } from "@/lib/identity/authorization-gateway";
 
 function apiBaseUrl() {
   return String(
@@ -52,10 +54,25 @@ async function customerExplorerFetch(pathAndQuery: string) {
 }
 
 export async function GET(req: Request, context: any) {
-  const path = await customerPathFromContext(context);
-  if (!path) return NextResponse.json({ ok: false, error: "bad_request", message: "customer path is required." }, { status: 400 });
-  const url = new URL(req.url);
-  const search = url.searchParams.toString();
-  const result = await customerExplorerFetch(`/v1/customers/${path}${search ? `?${search}` : ""}`);
-  return NextResponse.json(result.body, { status: result.status });
+  const resolution = await resolveApplicationSession();
+  if (resolution.kind !== "authenticated") {
+    return NextResponse.json({ error: "The requested resource is unavailable." }, { status: 404 });
+  }
+  try {
+    requirePermission(resolution.session, "customers.view");
+    const organizationId = resolution.session.activeOrganization?.id;
+    if (!organizationId) throw new Error("customer_scope_unavailable");
+
+    const path = await customerPathFromContext(context);
+    if (!path) return NextResponse.json({ ok: false, error: "bad_request", message: "customer path is required." }, { status: 400 });
+    const url = new URL(req.url);
+    url.searchParams.delete("workspace_id");
+    url.searchParams.delete("workspaceId");
+    url.searchParams.set("workspace_id", organizationId);
+    const search = url.searchParams.toString();
+    const result = await customerExplorerFetch(`/v1/customers/${path}?${search}`);
+    return NextResponse.json(result.body, { status: result.status });
+  } catch {
+    return NextResponse.json({ error: "The requested resource is unavailable." }, { status: 404 });
+  }
 }
