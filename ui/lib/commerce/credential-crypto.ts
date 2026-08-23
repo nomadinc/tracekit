@@ -1,5 +1,6 @@
 const KEY_BYTES = 32;
 const IV_BYTES = 12;
+import { decodeBase64 } from "./web-encoding.ts";
 
 export type EncryptedCommerceCredential = {
   keyId: string;
@@ -21,7 +22,7 @@ export class CommerceCredentialResolutionError extends Error {
 export function decodeCommerceCredentialKey(encoded: string | undefined) {
   if (!encoded) throw new CommerceCredentialConfigurationError();
   let bytes: Uint8Array;
-  try { bytes = Uint8Array.from(Buffer.from(encoded, "base64")); }
+  try { bytes = decodeBase64(encoded); }
   catch { throw new CommerceCredentialConfigurationError(); }
   if (bytes.byteLength !== KEY_BYTES) throw new CommerceCredentialConfigurationError();
   return bytes;

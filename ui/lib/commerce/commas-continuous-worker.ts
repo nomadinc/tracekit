@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { buildContinuousWorkerRequestInit } from "./continuous-worker-request";
+import { decodeHex } from "./web-encoding.ts";
 import { decodeCommerceCredentialKey, decryptCommerceCredential } from "./credential-crypto";
 import { normalizeCommasTransaction } from "./commas-shadow-normalizer";
 import { SupabaseCommerceEvidenceStore } from "./supabase-evidence-store-core";
@@ -39,7 +40,7 @@ async function db(path:string,init:RequestInit={}) {
 const object=(value:unknown):Row|null=>value&&typeof value==="object"&&!Array.isArray(value)?value as Row:null;
 const number=(value:unknown)=>{const parsed=Number(value);return Number.isFinite(parsed)?parsed:null;};
 const sleep=(ms:number)=>new Promise((resolve)=>setTimeout(resolve,ms));
-const bytea=(value:unknown)=>Uint8Array.from(Buffer.from(String(value).replace(/^\\x/,""),"hex"));
+const bytea=(value:unknown)=>decodeHex(String(value));
 
 async function fetchProviderPage(secret:string,page:number,perPage:number,correlationId:string,maxAttempts=3) {
   let lastStatus=0;

@@ -27,7 +27,7 @@ export class SupabaseCommerceEvidenceStore implements CommerceEvidenceStore {
     if (!input.connectionId || !input.providerAccountId || !input.sourceObjectType) throw new Error("Durable Commerce Evidence requires complete server scope.");
     const payloadHash = await sha256Hex(input.payload);
     const path = objectPath({ organizationId: input.organizationId, connectionId: input.connectionId, providerAccountId: input.providerAccountId, sourceObjectType: input.sourceObjectType }, payloadHash);
-    const response = await this.storageRequest(path, { method: "POST", headers: { "Content-Type": input.contentType, "x-upsert": "false" }, body: Buffer.from(input.payload) });
+    const response = await this.storageRequest(path, { method: "POST", headers: { "Content-Type": input.contentType, "x-upsert": "false" }, body: input.payload });
     if (!response.ok) {
       const existing = await this.getAuthorized({ organizationId: input.organizationId, storageReference: `${BUCKET}/${path}` });
       if (!existing || (await sha256Hex(existing)) !== payloadHash) throw new Error("Commerce Evidence could not be persisted immutably.");
