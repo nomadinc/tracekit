@@ -6,11 +6,12 @@ import test from "node:test";
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 const source = (relative: string) => readFileSync(`${repoRoot}/${relative}`, "utf8");
 
-test("persistent organization switch refreshes the server-derived session", () => {
+test("persistent organization switch reloads the server-derived session", () => {
   const provider = source("ui/components/identity/identity-provider.tsx");
   assert.match(provider, /fetch\("\/api\/session\/organization"/);
-  assert.match(provider, /router\.refresh\(\)/);
+  assert.match(provider, /window\.location\.reload\(\)/);
   assert.match(provider, /setSession\(initialSession\)/);
+  assert.doesNotMatch(provider, /router\.refresh\(\)/);
 });
 
 test("organization switch endpoint authorizes before sealing cookie", () => {
