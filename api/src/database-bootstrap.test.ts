@@ -175,7 +175,23 @@ test("migration filenames are unique and numerically ordered", () => {
   const numbers = names.map((name) => name.slice(0, 3));
 
   assert.equal(new Set(numbers).size, numbers.length);
-  assert.deepEqual(numbers, Array.from({ length: 69 }, (_, index) => String(index).padStart(3, "0")));
+  assert.deepEqual(numbers, Array.from({ length: 70 }, (_, index) => String(index).padStart(3, "0")));
+});
+
+test("Migration 069 defines a one-time early-ack observability replay", () => {
+  const migration069 = migration("069_early_ack_observability_replay.sql").toLowerCase();
+  assert.match(migration069, /create or replace function public\.replay_commerce_early_ack_observability\(\)/);
+  assert.match(migration069, /f15782cd-858d-4840-8901-b1bb65939d7b/);
+  assert.match(migration069, /early_ack_observability_replay_consumed/);
+  assert.match(migration069, /status <> 'cancelled'/);
+  assert.match(migration069, /quota_bootstrap_provider_requests/);
+  assert.match(migration069, /status in \('queued', 'running', 'paused'\)/);
+  assert.match(migration069, /mode in \('live', 'live_beta'\)/);
+  assert.match(migration069, /for update/);
+  assert.match(migration069, /reserved_run_id/);
+  assert.match(migration069, /revoke all on function public\.replay_commerce_early_ack_observability\(\)/);
+  assert.match(migration069, /grant execute on function public\.replay_commerce_early_ack_observability\(\)\s+to service_role/);
+  assert.doesNotMatch(migration069, /fetch\(|http|continuous_commerce\.send/);
 });
 
 test("Migration 068 defines a one-time exact-run runtime dispatch diagnostic replay", () => {
