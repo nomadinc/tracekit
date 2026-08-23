@@ -64,6 +64,7 @@ crons = ["*/5 * * * *"] # cadence selection runs every five minutes; schedules d
 # Production must explicitly set INTEGRATIONS_ENC_WRITE_VERSION=2. The source
 # default remains 1 only for compatibility and is not a safe production fallback.
 # - TK_SECRET_KEY
+# - COMMAS_WEBHOOK_SECRET (secret_key returned by the Commas webhook subscription)
 # - TKID_HANDOFF_SIGNING_KEY_CURRENT (separate key; referenced by TKID handoff key metadata)
 # - TKID_HANDOFF_SIGNING_KEY_PREVIOUS (rotation window only)
 # - TRACEKIT_TKID_HANDOFF_SECRET (current v1 runtime binding; server-only, never a plain var)
