@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { accessibleBusinessContexts, accessibleOrganizations, normalizeSession, shellVariant } from "@/lib/identity/authorization";
 import { developmentIdentityById, developmentSessionFor, resolveDevelopmentIdentity, resolveDevelopmentIdentityRequest, withDevelopmentIdentity } from "@/lib/identity/development-state";
 import { DEVELOPMENT_IDENTITY_STORAGE_KEY } from "@/lib/identity/session";
@@ -22,12 +23,18 @@ const defaultSession = developmentSessionFor(defaultIdentity);
 const IdentityContext = React.createContext<IdentityContextValue | null>(null);
 
 export function IdentityProvider({ children, initialSession, persistentOrganizations = [], persistentBusinessContexts = [] }: { children: React.ReactNode; initialSession?: IdentitySession; persistentOrganizations?: Organization[]; persistentBusinessContexts?: BusinessContext[] }) {
+  const router = useRouter();
   const initialization = identityProviderInitialization(initialSession);
   const persistent = initialization.persistent;
   const initializeDevelopment = initialization.initializeDevelopment;
   const [session, setSession] = React.useState(initialSession || defaultSession);
   const [ready, setReady] = React.useState(initialization.ready);
   const [invalidExplicitIdentity, setInvalidExplicitIdentity] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    if (!persistent || !initialSession) return;
+    setSession(initialSession);
+  }, [persistent, initialSession]);
 
   React.useEffect(() => {
     if (!initializeDevelopment) return;
@@ -63,11 +70,14 @@ export function IdentityProvider({ children, initialSession, persistentOrganizat
     if (persistent) {
       void fetch("/api/session/organization", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId }) })
         .then((response) => { if (!response.ok) throw new Error("Organization switch denied"); return response.json(); })
-        .then(() => setSession((current) => ({ ...current, activeOrganizationId: organizationId, activeBusinessContextId: null })));
+        .then(() => {
+          setSession((current) => ({ ...current, activeOrganizationId: organizationId, activeBusinessContextId: null }));
+          router.refresh();
+        });
       return;
     }
     setSession((current) => normalizeSession({ ...current, activeOrganizationId: organizationId, activeBusinessContextId: null }));
-  }, [persistent]);
+  }, [persistent, router]);
 
   const setActiveBusinessContext = React.useCallback((contextId: string) => {
     setSession((current) => normalizeSession({ ...current, activeBusinessContextId: contextId }));
