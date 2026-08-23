@@ -37,6 +37,24 @@ test("migration provides an owner-bound lease release without touching scheduler
   assert.doesNotMatch(migration, /commerce_scheduler|commerce_sync_schedules|Commas/i);
 });
 
+test("legacy recovery is hard-coded, one-time, and preserves the run payload", async () => {
+  const migration = await readFile(new URL("../../supabase/migrations/075_legacy_historical_backfill_recovery.sql", import.meta.url), "utf8");
+  assert.match(migration, /59bf7114-5902-481b-ba49-baa698114109/g);
+  assert.match(migration, /status <> 'completed'/);
+  assert.match(migration, /historical_backfill/);
+  assert.match(migration, /range_complete/);
+  assert.match(migration, /resume_page/);
+  assert.match(migration, /lease_owner is not null/);
+  assert.match(migration, /lease_expires_at is not null/);
+  assert.match(migration, /cancelled_at is not null/);
+  assert.match(migration, /recovery already consumed/);
+  assert.match(migration, /set status = 'paused', updated_at = now\(\)/);
+  assert.doesNotMatch(migration, /metadata\s*=/);
+  assert.doesNotMatch(migration, /commerce_sync_checkpoints/);
+  assert.match(migration, /security definer/i);
+  assert.match(migration, /grant execute .* to service_role/i);
+});
+
 test("historical mode resumes from an explicit page and reuses the idempotent shadow normalizer", async () => {
   const args = parseHistoricalBackfillArgs(["--historical-backfill", "--confirm-historical-commas-backfill", "--from-date=2025-11-14", "--to-date=2026-08-23", "--start-page=7", "--max-pages=8", "--per-page=100"]);
   assert.equal(args.startPage, 7);
