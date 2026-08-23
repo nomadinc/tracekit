@@ -13,7 +13,20 @@ export type CommasDisputeProbeResult = {
   paginationKeys: string[];
   redactedErrorMessage: string | null;
   bodyStructure: Array<{ path: string; type: string }>;
+  sanitizedFixture: unknown;
+  contract: CommasDisputeContract;
   jsonParsed: boolean;
+};
+
+export type CommasDisputeContract = {
+  durableDisputeId: boolean;
+  durableTransactionId: boolean;
+  durablePaymentId: boolean;
+  durableOrderId: boolean;
+  lifecycleFields: boolean;
+  reasonCode: boolean;
+  financialFields: boolean;
+  deterministicReconciliation: boolean;
 };
 
 export async function probeCommasDisputeCollections(args: {
@@ -21,6 +34,7 @@ export async function probeCommasDisputeCollections(args: {
   baseUrl?: string;
   fetch?: typeof fetch;
   timeoutMs?: number;
+  includeSanitizedFixture?: boolean;
 }): Promise<{ endpointsTested: number; results: CommasDisputeProbeResult[] }> {
   const apiKey = String(args.apiKey ?? "").trim();
   if (!apiKey) throw new Error("A selected Commas account credential is required.");
@@ -37,17 +51,27 @@ export async function probeCommasDisputeCollections(args: {
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort("timeout"), timeoutMs);
     let response: Response;
+    let text = "";
+    let parsed: unknown | undefined;
     try {
       response = await fetcher(url.toString(), {
         method: "GET",
         headers: { accept: "application/json", "x-api-key": apiKey },
         signal: controller.signal,
       });
+      text = await response.text();
+      parsed = safeJson(text);
+    } catch (error) {
+      results.push({
+        url: `${url.origin}${url.pathname}?page=1&per_page=2`, method: "GET", status: 0,
+        classification: "provider_error", responseHeaders: {}, providerRequestIdPresent: false,
+        topLevelResponseKeys: [], paginationKeys: [], redactedErrorMessage: redactCommasText(error instanceof Error ? error.message : "Provider request failed."),
+        bodyStructure: [], sanitizedFixture: null, contract: emptyContract(), jsonParsed: false,
+      });
+      continue;
     } finally {
       clearTimeout(timeout);
     }
-    const text = await response.text();
-    const parsed = safeJson(text);
     const requestId = response.headers.get("x-request-id") || response.headers.get("request-id") || object(parsed)?.request_id;
     results.push({
       url: `${url.origin}${url.pathname}?page=1&per_page=2`,
@@ -60,10 +84,57 @@ export async function probeCommasDisputeCollections(args: {
       paginationKeys: paginationKeys(parsed),
       redactedErrorMessage: response.ok ? null : providerMessage(parsed, text),
       bodyStructure: bodyStructure(parsed),
+      sanitizedFixture: args.includeSanitizedFixture ? sanitizeCommasFixture(parsed) : null,
+      contract: inferContract(parsed),
       jsonParsed: parsed !== undefined,
     });
   }
   return { endpointsTested: ALLOWED_PATHS.length, results };
+}
+
+function emptyContract(): CommasDisputeContract {
+  return { durableDisputeId: false, durableTransactionId: false, durablePaymentId: false, durableOrderId: false, lifecycleFields: false, reasonCode: false, financialFields: false, deterministicReconciliation: false };
+}
+
+function inferContract(value: unknown): CommasDisputeContract {
+  const paths = bodyStructure(value).map((entry) => entry.path.toLowerCase());
+  const has = (pattern: RegExp) => paths.some((path) => pattern.test(path));
+  const durableDisputeId = has(/(?:^|\.)(?:dispute_id|chargeback_id|processor_dispute_id|dispute\.id)$/);
+  const durableTransactionId = has(/(?:^|\.)(?:transaction_id|transaction\.id|seller_transaction_id|buyer_transaction_id|processor_transaction_id)$/);
+  const durablePaymentId = has(/(?:^|\.)(?:payment_id|payment\.id)$/);
+  const durableOrderId = has(/(?:^|\.)(?:order_id|external_order_id|platform_order_id|invoice_id)$/);
+  const lifecycleFields = has(/(?:status|state|outcome|closed_date|close_date|update_time|updated_at|dispute_life_cycle|representment|retrieval|reversal|deadline)/);
+  const reasonCode = has(/(?:reason_code|reason\.code|dispute_reason_code)/);
+  const financialFields = has(/(?:amount|currency|fee|principal|gross_amount|dispute_amount)/);
+  return { durableDisputeId, durableTransactionId, durablePaymentId, durableOrderId, lifecycleFields, reasonCode, financialFields, deterministicReconciliation: durableDisputeId && durableTransactionId };
+}
+
+/** Preserve shape and relationship-bearing values without retaining provider data. */
+export function sanitizeCommasFixture(value: unknown): unknown {
+  const ids = new Map<string, string>();
+  const visit = (item: unknown, key = ""): unknown => {
+    if (Array.isArray(item)) return item.map((child) => visit(child, key));
+    if (item && typeof item === "object") return Object.fromEntries(Object.entries(item as Record<string, unknown>).map(([childKey, child]) => [safeKey(childKey), visit(child, childKey)]));
+    if (typeof item !== "string") return item;
+    const normalized = key.toLowerCase();
+    if (/token|secret|password|credential|authorization|cookie|card|cvv|cvc|iban|routing|address|phone|email|name/.test(normalized)) {
+      const bucket = /email/.test(normalized) ? "email" : /phone/.test(normalized) ? "phone" : "redacted";
+      if (!ids.has(`${bucket}:${item}`)) ids.set(`${bucket}:${item}`, `${bucket}_${stableToken(item)}`);
+      return ids.get(`${bucket}:${item}`);
+    }
+    if (/(^|_)(id|identifier)$/.test(normalized) || /(?:transaction|payment|order|dispute|chargeback|customer|account).*id/.test(normalized)) {
+      if (!ids.has(`id:${item}`)) ids.set(`id:${item}`, `id_${stableToken(item)}`);
+      return ids.get(`id:${item}`);
+    }
+    return item;
+  };
+  return visit(value);
+}
+
+function stableToken(value: string) {
+  let hash = 2166136261;
+  for (let index = 0; index < value.length; index += 1) hash = Math.imul(hash ^ value.charCodeAt(index), 16777619);
+  return (hash >>> 0).toString(16).padStart(8, "0");
 }
 
 function classify(status: number): CommasDisputeProbeResult["classification"] {

@@ -1,5 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { CommasClient, type CommasDiscoveryDiagnosticEvent } from "./connectors/commas/client.ts";
 import {
   CommasAuthenticationError,
@@ -23,7 +24,7 @@ import { compareCommasProductMap } from "./connectors/commas/product-map.ts";
 import { runBoundedCommasDiscovery } from "./connectors/commas/bounded-discovery.ts";
 import { discoverCommasIdentifierSurface } from "./connectors/commas/identifier-discovery.ts";
 import { selectCommasDiscoveryAccount } from "./connectors/commas/account-selection.ts";
-import { probeCommasDisputeCollections } from "./connectors/commas/dispute-discovery.ts";
+import { probeCommasDisputeCollections, sanitizeCommasFixture } from "./connectors/commas/dispute-discovery.ts";
 import { verifyCommasReadOnlyConnection } from "./connectors/commas/verification.ts";
 
 const syntheticProduct = {
@@ -581,6 +582,43 @@ test("functional dispute probe reports structure without record values", async (
   assert.deepEqual(result.results[0].paginationKeys, ["current_page", "has_more"]);
   assert.ok(result.results[0].bodyStructure.some((field) => field.path === "data.disputes[].dispute_id" && field.type === "string"));
   assert.doesNotMatch(JSON.stringify(result), /private-dispute|99/);
+});
+
+test("sanitized dispute fixture removes PII/secrets while preserving relationships and enums", () => {
+  const fixture = sanitizeCommasFixture({ data: { disputes: [{ dispute_id: "D-1", transaction_id: "T-1", status: "OPEN", reason_code: "FRAUD", amount: "12.00", customer_email: "person@example.invalid", api_token: "secret-token" }, { dispute_id: "D-2", transaction_id: "T-1", status: "WON" }] } }) as any;
+  assert.match(fixture.data.disputes[0].dispute_id, /^id_[0-9a-f]+$/);
+  assert.notEqual(fixture.data.disputes[0].dispute_id, fixture.data.disputes[1].dispute_id);
+  assert.equal(fixture.data.disputes[0].transaction_id, fixture.data.disputes[1].transaction_id);
+  assert.equal(fixture.data.disputes[0].status, "OPEN");
+  assert.equal(fixture.data.disputes[0].reason_code, "FRAUD");
+  assert.match(fixture.data.disputes[0].customer_email, /^email_[0-9a-f]+$/);
+  assert.match(fixture.data.disputes[0].api_token, /^redacted_[0-9a-f]+$/);
+  assert.doesNotMatch(JSON.stringify(fixture), /person@example|secret-token/);
+});
+
+test("dispute endpoint failures are isolated and each candidate stays page-one/per-page-two", async () => {
+  const requests: string[] = [];
+  const result = await probeCommasDisputeCollections({ apiKey: "synthetic", baseUrl: "http://127.0.0.1:8787", fetch: async (input) => {
+    requests.push(String(input));
+    if (String(input).includes("/disputes?")) throw new Error("network unavailable");
+    return jsonResponse({ data: { chargebacks: [] } }, 200, { "x-ratelimit-remaining": "9988" });
+  } });
+  assert.equal(requests.length, 2);
+  assert.deepEqual(result.results.map((entry) => entry.status), [0, 200]);
+  for (const request of requests) {
+    const url = new URL(request);
+    assert.equal(url.searchParams.get("page"), "1");
+    assert.equal(url.searchParams.get("per_page"), "2");
+  }
+});
+
+test("manual contract runner is read-only, explicit, and never enters scheduler code", () => {
+  const source = readFileSync(new URL("../../ui/scripts/run-commas-dispute-contract-discovery.ts", import.meta.url), "utf8");
+  assert.match(source, /--confirm-commas-dispute-contract-discovery/);
+  assert.match(source, /providerRequestsMaximum: 2/);
+  assert.doesNotMatch(source, /method:\s*["'](?:POST|PATCH|DELETE|PUT)/);
+  assert.doesNotMatch(source, /commerce_sync_checkpoints|commerce_sync_runs.*(?:POST|insert)|commerce_evidence_records/);
+  assert.doesNotMatch(source, /runCommerceCron|queue\.send|TRACEKIT_COMMERCE_SCHEDULER/);
 });
 
 test("connection verification performs one bounded Customer read and returns no provider values", async () => {
