@@ -13,6 +13,7 @@
     "prove:commas-evidence": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/prove-commerce-evidence.ts --confirm-bounded-live-proof",
     "validate:commas-bounded": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/run-commas-bounded-validation.ts",
     "discover:commas-dispute-contract": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/run-commas-dispute-contract-discovery.ts",
+    "inspect:commas-webhooks": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/inspect-commas-webhooks.ts",
     "sync:commas-shadow": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/run-commas-shadow-sync.ts --confirm-full-shadow",
     "sync:commas-continuous": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/run-commas-continuous-sync.ts --confirm-bounded-continuous-proof",
     "import:commas-disputes": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/import-commas-historical-disputes.ts --confirm-historical-import",
