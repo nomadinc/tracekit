@@ -20,6 +20,15 @@ export function historicalChunkTransition(rangeComplete: boolean, warnings: numb
   return warnings ? "completed_with_warnings" : "completed";
 }
 
+export function historicalResumePage(metadata: Record<string, unknown> | null | undefined, fallback: number) {
+  const value = Number(metadata?.resume_page);
+  return Number.isInteger(value) && value >= 1 ? value : fallback;
+}
+
+export function historicalInvocationHasBudget(providerRequests: number, maxPages: number) {
+  return providerRequests < maxPages;
+}
+
 export function parseHistoricalBackfillArgs(argv: string[]): HistoricalBackfillArgs {
   const historical = argv.includes("--historical-backfill");
   const confirmed = argv.includes("--confirm-historical-commas-backfill");

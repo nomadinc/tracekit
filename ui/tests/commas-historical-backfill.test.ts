@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { combineOrdering, historicalChunkTransition, historicalQuotaAllowed, inHistoricalRange, orderingForPage, parseHistoricalBackfillArgs, rangePassed } from "../lib/commerce/commas-historical-backfill.ts";
+import { combineOrdering, historicalChunkTransition, historicalInvocationHasBudget, historicalQuotaAllowed, historicalResumePage, inHistoricalRange, orderingForPage, parseHistoricalBackfillArgs, rangePassed } from "../lib/commerce/commas-historical-backfill.ts";
 
 test("historical mode requires confirmation and date bounds", () => {
   assert.throws(() => parseHistoricalBackfillArgs(["--historical-backfill"]), /confirm-historical/);
@@ -26,6 +26,14 @@ test("incomplete historical chunks release as resumable and complete only at the
   assert.equal(historicalChunkTransition(false, 2), "paused");
   assert.equal(historicalChunkTransition(true, 0), "completed");
   assert.equal(historicalChunkTransition(true, 1), "completed_with_warnings");
+});
+
+test("resumed chunks use persisted resume_page and an invocation-local page budget", () => {
+  assert.equal(historicalResumePage({ resume_page: 9 }, 1), 9);
+  assert.equal(historicalResumePage({}, 1), 1);
+  assert.equal(historicalInvocationHasBudget(0, 8), true);
+  assert.equal(historicalInvocationHasBudget(7, 8), true);
+  assert.equal(historicalInvocationHasBudget(8, 8), false);
 });
 
 test("migration provides an owner-bound lease release without touching scheduler state", async () => {

@@ -1,7 +1,7 @@
 import { decodeCommerceCredentialKey, decryptCommerceCredential } from "../lib/commerce/credential-crypto";
 import { normalizeCommasTransaction } from "../lib/commerce/commas-shadow-normalizer";
 import { SupabaseCommerceEvidenceStore } from "../lib/commerce/supabase-evidence-store-core";
-import { combineOrdering, historicalChunkTransition, historicalQuotaAllowed, inHistoricalRange, orderingForPage, parseHistoricalBackfillArgs, rangePassed, type OrderingState } from "../lib/commerce/commas-historical-backfill";
+import { combineOrdering, historicalChunkTransition, historicalInvocationHasBudget, historicalQuotaAllowed, historicalResumePage, inHistoricalRange, orderingForPage, parseHistoricalBackfillArgs, rangePassed, type OrderingState } from "../lib/commerce/commas-historical-backfill";
 
 type Row = Record<string, any>;
 const DEFAULT_PER_PAGE = 100;
@@ -109,19 +109,18 @@ async function main() {
     [run] = await db("commerce_sync_runs", { method: "POST", body: JSON.stringify({ organization_id: organizationId, connection_id: connectionId, provider_account_id: providerAccountId, sync_type: "transactions", mode: historical.historical ? "historical_backfill" : overlapPages ? "reconciliation" : "shadow", metadata: { normalizer_version: NORMALIZER_VERSION, per_page: historical.historical ? historical.perPage : DEFAULT_PER_PAGE, overlap_pages: overlapPages || null, ...metadataFor(historical, { pagesFetched: 0, earliest: null, latest: null, inRange: 0, outOfRange: 0, invalid: 0, ordering: "unknown", complete: false, resumePage: historical.startPage }) } }) });
   }
   const runId = String(run.id);
-  const startPage = historical.historical ? historical.startPage : 1;
+  const startPage = historical.historical ? (resumeArg ? historicalResumePage(run.metadata, historical.startPage) : historical.startPage) : 1;
   console.log(JSON.stringify({ event: "shadow_sync_started", runId, historicalBackfill: historical.historical, fromDate: historical.fromDate, toDate: historical.toDate, startPage, maxPages: historical.maxPages, perPage: historical.perPage }));
   const claimed = await db("rpc/claim_commerce_sync_run", { method: "POST", body: JSON.stringify({ p_run_id: runId, p_organization_id: organizationId, p_connection_id: connectionId, p_lease_owner: owner, p_lease_seconds: LEASE_SECONDS }) });
   if (!claimed[0]) throw new Error("Shadow Sync lease unavailable.");
   const completedRows = await db(`commerce_sync_checkpoints?sync_run_id=eq.${runId}&resource=eq.transactions&state=eq.completed&select=page,page_fingerprint&order=page.asc`);
   const completed = new Map(completedRows.map((row) => [Number(row.page), String(row.page_fingerprint)]));
   let page = startPage, pagesCompleted = completed.size, recordsSeen = 0, recordsCreated = 0, recordsUpdated = 0, retries = 0, warnings = 0, providerRequests = 0, totalPages: number | null = null, totalItems: number | null = null;
-  let orderingState: OrderingState = "unknown", previousLast: string | null = null, earliest: string | null = null, latest: string | null = null, inRange = 0, outOfRange = 0, invalid = 0, rangeComplete = false;
-  const invocationStartPage = page;
+  let orderingState: OrderingState = historical.historical && ["unknown", "newest_first", "oldest_first", "ambiguous"].includes(String(run.metadata?.ordering_state)) ? String(run.metadata.ordering_state) as OrderingState : "unknown", previousLast: string | null = null, earliest: string | null = historical.historical && typeof run.metadata?.earliest_seen_timestamp === "string" ? run.metadata.earliest_seen_timestamp : null, latest: string | null = historical.historical && typeof run.metadata?.latest_seen_timestamp === "string" ? run.metadata.latest_seen_timestamp : null, inRange = historical.historical ? Number(run.metadata?.in_range_records || 0) : 0, outOfRange = historical.historical ? Number(run.metadata?.out_of_range_records || 0) : 0, invalid = historical.historical ? Number(run.metadata?.invalid_missing_date_records || 0) : 0, rangeComplete = historical.historical && run.metadata?.range_complete === true;
   const seenIds = new Set<string>();
   try {
-    while ((totalPages === null || page <= totalPages) && (!historical.historical || providerRequests < historical.maxPages)) {
-      if (historical.historical && page >= invocationStartPage + historical.maxPages) break;
+    while ((totalPages === null || page <= totalPages) && (!historical.historical || historicalInvocationHasBudget(providerRequests, historical.maxPages))) {
+      if (historical.historical && !historicalInvocationHasBudget(providerRequests, historical.maxPages)) break;
       if (completed.has(page)) { page += 1; continue; }
       const perPage = historical.historical ? historical.perPage : DEFAULT_PER_PAGE;
       const existingCheckpoint = await db(`commerce_sync_checkpoints?sync_run_id=eq.${runId}&resource=eq.transactions&page=eq.${page}&per_page=eq.${perPage}&select=*&limit=1`);
