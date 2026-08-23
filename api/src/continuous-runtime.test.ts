@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 import { unstable_readConfig } from "wrangler";
 import runtime, { validateRuntimeMessage, validateRuntimeScope } from "../continuous-runtime/src/index.ts";
+import { buildContinuousWorkerRequestInit } from "../../ui/lib/commerce/continuous-worker-request.ts";
 
 const id = "11111111-1111-4111-8111-111111111111";
 const message = { schema_version: 1, job_type: "commerce_continuous", provider: "commas", account_id: id, organization_id: id, connection_id: id, provider_account_id: id, resource: "transactions", requested_mode: "continuous", scheduler_identity: "schedule:bucket", requested_at: "2026-08-10T00:00:00Z" } as const;
@@ -34,4 +35,13 @@ test("runtime message contract cannot request live activation", () => {
   assert.deepEqual(validateRuntimeMessage(message), message);
   assert.throws(() => validateRuntimeMessage({ ...message, requested_mode: "live" }), /invalid_queue_message/);
   assert.doesNotMatch(readFileSync(new URL("../continuous-runtime/src/index.ts", import.meta.url), "utf8"), /commerce_provider_connections|platform_orders|live_beta|workspace_repository/);
+});
+
+test("Cloudflare continuous-worker requests omit unsupported cache while preserving options", () => {
+  const init = buildContinuousWorkerRequestInit("server-key", { method: "POST", cache: "no-store", body: "{}", signal: new AbortController().signal, headers: { "x-test": "ok" } });
+  assert.equal("cache" in init, false);
+  assert.equal(init.method, "POST");
+  assert.equal(init.body, "{}");
+  assert.equal((init.headers as Record<string, string>)["x-test"], "ok");
+  assert.equal((init.headers as Record<string, string>).apikey, "server-key");
 });

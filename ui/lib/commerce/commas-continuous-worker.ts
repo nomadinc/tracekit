@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { buildContinuousWorkerRequestInit } from "./continuous-worker-request";
 import { decodeCommerceCredentialKey, decryptCommerceCredential } from "./credential-crypto";
 import { normalizeCommasTransaction } from "./commas-shadow-normalizer";
 import { SupabaseCommerceEvidenceStore } from "./supabase-evidence-store-core";
@@ -28,7 +29,7 @@ function configuration() {
 
 async function db(path:string,init:RequestInit={}) {
   const {url,key}=configuration();
-  const response=await fetch(`${url}/rest/v1/${path}`,{...init,cache:"no-store",headers:{apikey:key,Authorization:`Bearer ${key}`,"Content-Type":"application/json",Prefer:"return=representation",...init.headers}});
+  const response=await fetch(`${url}/rest/v1/${path}`,buildContinuousWorkerRequestInit(key,init));
   if(!response.ok) throw new Error(`Continuous Commerce persistence failed (${response.status}).`);
   if(response.status===204)return [] as Row[];
   const value=await response.json() as unknown;
