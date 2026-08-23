@@ -33,8 +33,8 @@ export class SupabaseAuditHistoryRepository {
     const actorIds = Array.from(new Set(rows.map((row) => row.actor_user_id).filter(Boolean).map(String)));
     const actors = new Map<string, { name: string; email: string }>();
     if (actorIds.length) {
-      const encoded = actorIds.map((id) => `\"${id}\"`).join(",");
-      const userRows = await rest(`tracekit_users?id=in.(${encodeURIComponent(encoded)})&select=id,display_name,primary_email`) as Row[];
+      const actorList = encodeURIComponent(actorIds.join(","));
+      const userRows = await rest(`tracekit_users?id=in.(${actorList})&select=id,display_name,primary_email`) as Row[];
       for (const row of userRows) actors.set(String(row.id), { name: String(row.display_name), email: String(row.primary_email) });
     }
     return rows.map((row) => {
