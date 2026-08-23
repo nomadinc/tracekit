@@ -30,10 +30,40 @@ export class SupabaseCommerceEvidenceStore implements CommerceEvidenceStore {
     const path = objectPath({ organizationId: input.organizationId, connectionId: input.connectionId, providerAccountId: input.providerAccountId, sourceObjectType: input.sourceObjectType }, payloadHash);
     const response = await this.storageRequest(path, { method: "POST", headers: { "Content-Type": input.contentType, "x-upsert": "false" }, body: input.payload });
     if (!response.ok) {
-      const existing = await this.getAuthorized({ organizationId: input.organizationId, storageReference: `${BUCKET}/${path}` });
-      if (!existing || (await sha256Hex(existing)) !== payloadHash) throw new Error("Commerce Evidence could not be persisted immutably.");
+      const conflict = response.status === 400 || response.status === 409;
+      this.logPersistence("post_failed", input.sourceObjectType, payloadHash, response.status, conflict);
+      if (!conflict) throw new Error(`Commerce Evidence storage POST failed (${response.status}).`);
+      const verification = await this.verifyExistingObject(path, payloadHash);
+      if (!verification.matched) throw new Error("Commerce Evidence could not be persisted immutably.");
+      this.logPersistence("reused", input.sourceObjectType, payloadHash, verification.status, true, verification.attempts);
+    } else {
+      this.logPersistence("persisted", input.sourceObjectType, payloadHash, response.status, false);
     }
     return { storageBackend: "protected_object_storage", storageReference: `${BUCKET}/${path}`, contentType: input.contentType, byteSize: input.payload.byteLength, payloadHash };
+  }
+
+  private async verifyExistingObject(path: string, payloadHash: string) {
+    let status = 0;
+    for (let attempt = 1; attempt <= 3; attempt += 1) {
+      try {
+        const response = await this.storageRequest(path, { method: "GET" });
+        status = response.status;
+        if (response.ok) {
+          const bytes = new Uint8Array(await response.arrayBuffer());
+          return { matched: (await sha256Hex(bytes)) === payloadHash, status, attempts: attempt };
+        }
+        if (response.status === 404) return { matched: false, status, attempts: attempt };
+      } catch {
+        status = 0;
+      }
+      if (attempt < 3) await new Promise((resolve) => setTimeout(resolve, 25 * attempt));
+    }
+    this.logPersistence("verification_failed", "unknown", payloadHash, status, true, 3);
+    return { matched: false, status, attempts: 3 };
+  }
+
+  private logPersistence(result: string, sourceObjectType: string, payloadHash: string, statusCode: number, conflict: boolean, verificationAttempts?: number) {
+    console.log(JSON.stringify({ event: "commerce.evidence.persistence", result, statusCode, conflict, sourceObjectType, scope: "tenant_scoped", payloadHashPrefix: payloadHash.slice(0, 8), verificationAttempts: verificationAttempts ?? 0 }));
   }
 
   async getAuthorized(input: { organizationId: string; storageReference: string }) {
