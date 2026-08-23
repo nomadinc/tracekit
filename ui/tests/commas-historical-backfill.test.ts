@@ -55,6 +55,17 @@ test("legacy recovery is hard-coded, one-time, and preserves the run payload", a
   assert.match(migration, /grant execute .* to service_role/i);
 });
 
+test("legacy recovery repair is safe after marker-table statements partially applied", async () => {
+  const migration = await readFile(new URL("../../supabase/migrations/076_legacy_historical_backfill_recovery_075_repair.sql", import.meta.url), "utf8");
+  assert.match(migration, /create table if not exists/);
+  assert.match(migration, /drop function if exists/);
+  assert.match(migration, /returns boolean/i);
+  assert.match(migration, /status = 'paused'/);
+  assert.match(migration, /set status = 'paused', updated_at = now\(\)/);
+  assert.doesNotMatch(migration, /metadata\s*=/);
+  assert.doesNotMatch(migration, /commerce_sync_checkpoints/);
+});
+
 test("historical mode resumes from an explicit page and reuses the idempotent shadow normalizer", async () => {
   const args = parseHistoricalBackfillArgs(["--historical-backfill", "--confirm-historical-commas-backfill", "--from-date=2025-11-14", "--to-date=2026-08-23", "--start-page=7", "--max-pages=8", "--per-page=100"]);
   assert.equal(args.startPage, 7);
