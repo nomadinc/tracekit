@@ -51,6 +51,13 @@ export function historicalBatchMadeProgress(before: { resumePage: number; inRang
   return after.rangeComplete || after.resumePage > before.resumePage || after.inRange > before.inRange || (after.earliest !== null && (before.earliest === null || after.earliest < before.earliest));
 }
 
+export function historicalWarningDelta(before: number, after: number, reported: number) {
+  if (after > before) return after - before;
+  if (reported > before) return reported - before;
+  if (reported < before) return reported;
+  return 0;
+}
+
 export function parseHistoricalBackfillArgs(argv: string[]): HistoricalBackfillArgs {
   const historical = argv.includes("--historical-backfill");
   const confirmed = argv.includes("--confirm-historical-commas-backfill");

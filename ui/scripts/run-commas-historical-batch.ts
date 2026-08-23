@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { combineOrdering, historicalBatchMadeProgress, historicalQuotaAllowed, parseHistoricalBatchArgs, type OrderingState } from "../lib/commerce/commas-historical-backfill";
+import { historicalBatchMadeProgress, historicalQuotaAllowed, historicalWarningDelta, parseHistoricalBatchArgs, type OrderingState } from "../lib/commerce/commas-historical-backfill";
 
 type Row = Record<string, any>;
 const MAX_PAGES_PER_CHUNK = 8;
@@ -46,11 +46,11 @@ async function main() {
   let chunksCompleted = 0; let providerRequestsTotal = 0; let stopReason = "max_chunks";
   let previousOrdering: OrderingState = "unknown";
   while (chunksCompleted < args.maxChunks) {
-    const [run] = await db(`commerce_sync_runs?id=eq.${encodeURIComponent(args.runId!)}&select=status,organization_id,connection_id,lease_owner,lease_expires_at,metadata,pages_completed&limit=1`);
+    const [run] = await db(`commerce_sync_runs?id=eq.${encodeURIComponent(args.runId!)}&select=status,organization_id,connection_id,lease_owner,lease_expires_at,metadata,pages_completed,warnings_count,records_seen,records_created,records_updated&limit=1`);
     if (!run) throw new Error("Historical batch run not found.");
     const metadata = run.metadata || {};
     const startPage = Number(metadata.resume_page);
-    const before = { resumePage: Number.isInteger(startPage) ? startPage : 0, inRange: Number(metadata.in_range_records || 0), earliest: typeof metadata.earliest_seen_timestamp === "string" ? metadata.earliest_seen_timestamp : null };
+    const before = { resumePage: Number.isInteger(startPage) ? startPage : 0, inRange: Number(metadata.in_range_records || 0), earliest: typeof metadata.earliest_seen_timestamp === "string" ? metadata.earliest_seen_timestamp : null, warnings: Number(run.warnings_count || 0), recordsSeen: Number(run.records_seen || 0), recordsCreated: Number(run.records_created || 0), recordsUpdated: Number(run.records_updated || 0) };
     if (run.status !== "paused" || run.lease_owner !== null || run.lease_expires_at !== null) { stopReason = "run_not_resumable"; throw new Error(`Historical batch stopped: ${stopReason}.`); }
     if (metadata.range_complete === true) { stopReason = "range_complete"; break; }
     const currentOrdering = ordering(metadata.ordering_state);
@@ -62,15 +62,17 @@ async function main() {
     const lines = await invokeChunk(args);
     const completion = lines.find((line) => line.event === "shadow_sync_completed");
     const started = lines.find((line) => line.event === "shadow_sync_started");
-    if (!completion || Number(completion.providerRequests) > MAX_PAGES_PER_CHUNK || Number(completion.warnings) > 0) { stopReason = "chunk_failed_or_unsafe"; throw new Error(`Historical batch stopped: ${stopReason}.`); }
-    const [afterRun] = await db(`commerce_sync_runs?id=eq.${encodeURIComponent(args.runId!)}&select=status,metadata,pages_completed&limit=1`);
+    if (!completion || Number(completion.providerRequests) > MAX_PAGES_PER_CHUNK) { stopReason = "chunk_failed_or_unsafe"; throw new Error(`Historical batch stopped: ${stopReason}.`); }
+    const [afterRun] = await db(`commerce_sync_runs?id=eq.${encodeURIComponent(args.runId!)}&select=status,metadata,pages_completed,warnings_count,records_seen,records_created,records_updated&limit=1`);
     if (!afterRun || !["paused", "completed", "completed_with_warnings"].includes(String(afterRun.status))) { stopReason = "unexpected_run_state"; throw new Error(`Historical batch stopped: ${stopReason}.`); }
     const afterMetadata = afterRun?.metadata || {};
     const after = { resumePage: Number(afterMetadata.resume_page), inRange: Number(afterMetadata.in_range_records || 0), earliest: typeof afterMetadata.earliest_seen_timestamp === "string" ? afterMetadata.earliest_seen_timestamp : null, rangeComplete: afterMetadata.range_complete === true };
+    const warningDelta = historicalWarningDelta(before.warnings, Number(afterRun.warnings_count || 0), Number(completion.warnings || 0));
+    if (warningDelta > 0) { stopReason = "chunk_warnings"; throw new Error(`Historical batch stopped: ${stopReason}.`); }
     if (!historicalBatchMadeProgress(before, after)) { stopReason = "no_progress"; throw new Error(`Historical batch stopped: ${stopReason}.`); }
     const endPage = after.resumePage - 1;
     const chunkRequests = Number(completion.providerRequests || 0); providerRequestsTotal += chunkRequests; chunksCompleted += 1;
-    console.log(JSON.stringify({ chunk: chunksCompleted, startPage: Number(started?.startPage || before.resumePage), endPage, providerRequests: chunkRequests, cumulativePagesCompleted: Number(afterRun?.pages_completed || 0), resumePage: after.resumePage, earliestTimestamp: after.earliest, inRangeTotal: after.inRange, quotaRemaining: quota, rangeComplete: after.rangeComplete }));
+    console.log(JSON.stringify({ chunk: chunksCompleted, startPage: Number(started?.startPage || before.resumePage), endPage, providerRequests: chunkRequests, warningDelta, recordsSeenDelta: Number(afterRun?.records_seen || 0) - before.recordsSeen, recordsCreatedDelta: Number(afterRun?.records_created || 0) - before.recordsCreated, recordsUpdatedDelta: Number(afterRun?.records_updated || 0) - before.recordsUpdated, cumulativePagesCompleted: Number(afterRun?.pages_completed || 0), resumePage: after.resumePage, earliestTimestamp: after.earliest, inRangeTotal: after.inRange, quotaRemaining: quota, rangeComplete: after.rangeComplete }));
     if (after.rangeComplete) { stopReason = "range_complete"; break; }
   }
   const [finalRun] = await db(`commerce_sync_runs?id=eq.${encodeURIComponent(args.runId!)}&select=status,metadata,pages_completed&limit=1`);
