@@ -774,7 +774,11 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
         const deepDue = row.next_deep_reconciliation_at && Date.parse(row.next_deep_reconciliation_at) <= Date.parse(now);
         if (!overlapDue && !deepDue) continue;
         const mode = deepDue ? "deep_reconciliation" : "continuous";
-        const { data: latest } = await db.from("commerce_sync_runs").select("metadata").eq("connection_id", row.connection_id).order("created_at", { ascending: false }).limit(1).maybeSingle();
+        // A later run (for example a bounded shadow validation) may not carry
+        // the provider's rate-limit observation. Select the newest run that
+        // actually has an observed quota instead of treating that unrelated
+        // run as an unknown-quota bootstrap candidate.
+        const { data: latest } = await db.from("commerce_sync_runs").select("metadata").eq("organization_id", row.organization_id).eq("connection_id", row.connection_id).not("metadata->>rate_limit_end", "is", "null").order("created_at", { ascending: false }).limit(1).maybeSingle();
         const latestMetadata = (latest?.metadata && typeof latest.metadata === "object") ? latest.metadata as Record<string, unknown> : {};
         const quotaRemaining = Number(latestMetadata.rate_limit_end);
         const unknownQuota = !Number.isFinite(quotaRemaining);
