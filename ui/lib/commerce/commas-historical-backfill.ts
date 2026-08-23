@@ -9,9 +9,15 @@ export type HistoricalBackfillArgs = {
 };
 
 export type OrderingState = "unknown" | "newest_first" | "oldest_first" | "ambiguous";
+export type HistoricalChunkTransition = "paused" | "completed" | "completed_with_warnings";
 
 export function historicalQuotaAllowed(quotaRemaining: number | null, maxRequests: number) {
   return quotaRemaining !== null && Number.isFinite(quotaRemaining) && quotaRemaining - maxRequests >= 1000;
+}
+
+export function historicalChunkTransition(rangeComplete: boolean, warnings: number): HistoricalChunkTransition {
+  if (!rangeComplete) return "paused";
+  return warnings ? "completed_with_warnings" : "completed";
 }
 
 export function parseHistoricalBackfillArgs(argv: string[]): HistoricalBackfillArgs {

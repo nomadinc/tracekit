@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { combineOrdering, historicalQuotaAllowed, inHistoricalRange, orderingForPage, parseHistoricalBackfillArgs, rangePassed } from "../lib/commerce/commas-historical-backfill.ts";
+import { combineOrdering, historicalChunkTransition, historicalQuotaAllowed, inHistoricalRange, orderingForPage, parseHistoricalBackfillArgs, rangePassed } from "../lib/commerce/commas-historical-backfill.ts";
 
 test("historical mode requires confirmation and date bounds", () => {
   assert.throws(() => parseHistoricalBackfillArgs(["--historical-backfill"]), /confirm-historical/);
@@ -19,6 +19,22 @@ test("quota floor is fail-closed and does not depend on scheduler state", () => 
   assert.equal(historicalQuotaAllowed(null, 8), false);
   assert.equal(historicalQuotaAllowed(1008, 8), true);
   assert.equal(historicalQuotaAllowed(1007, 8), false);
+});
+
+test("incomplete historical chunks release as resumable and complete only at the range boundary", () => {
+  assert.equal(historicalChunkTransition(false, 0), "paused");
+  assert.equal(historicalChunkTransition(false, 2), "paused");
+  assert.equal(historicalChunkTransition(true, 0), "completed");
+  assert.equal(historicalChunkTransition(true, 1), "completed_with_warnings");
+});
+
+test("migration provides an owner-bound lease release without touching scheduler state", async () => {
+  const migration = await readFile(new URL("../../supabase/migrations/074_historical_backfill_resumable_release.sql", import.meta.url), "utf8");
+  assert.match(migration, /status = 'paused'/);
+  assert.match(migration, /lease_owner = p_lease_owner/);
+  assert.match(migration, /lease_owner = null/);
+  assert.match(migration, /grant execute .* to service_role/i);
+  assert.doesNotMatch(migration, /commerce_scheduler|commerce_sync_schedules|Commas/i);
 });
 
 test("historical mode resumes from an explicit page and reuses the idempotent shadow normalizer", async () => {

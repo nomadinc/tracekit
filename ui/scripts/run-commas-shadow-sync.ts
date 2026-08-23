@@ -1,7 +1,7 @@
 import { decodeCommerceCredentialKey, decryptCommerceCredential } from "../lib/commerce/credential-crypto";
 import { normalizeCommasTransaction } from "../lib/commerce/commas-shadow-normalizer";
 import { SupabaseCommerceEvidenceStore } from "../lib/commerce/supabase-evidence-store-core";
-import { combineOrdering, historicalQuotaAllowed, inHistoricalRange, orderingForPage, parseHistoricalBackfillArgs, rangePassed, type OrderingState } from "../lib/commerce/commas-historical-backfill";
+import { combineOrdering, historicalChunkTransition, historicalQuotaAllowed, inHistoricalRange, orderingForPage, parseHistoricalBackfillArgs, rangePassed, type OrderingState } from "../lib/commerce/commas-historical-backfill";
 
 type Row = Record<string, any>;
 const DEFAULT_PER_PAGE = 100;
@@ -162,7 +162,13 @@ async function main() {
       page += 1;
     }
     const finalMetadata = metadataFor(historical, { pagesFetched: providerRequests, earliest, latest, inRange, outOfRange, invalid, ordering: orderingState, complete: rangeComplete, resumePage: page });
-    await db("rpc/transition_commerce_sync_run", { method: "POST", body: JSON.stringify({ p_run_id: runId, p_organization_id: organizationId, p_connection_id: connectionId, p_lease_owner: owner, p_transition: warnings ? "completed_with_warnings" : "completed", p_error_code: null, p_error_summary: null }) });
+    const transition = historical.historical ? historicalChunkTransition(rangeComplete, warnings) : (warnings ? "completed_with_warnings" : "completed");
+    if (transition === "paused") {
+      const released = await db("rpc/release_commerce_sync_run", { method: "POST", body: JSON.stringify({ p_run_id: runId, p_organization_id: organizationId, p_connection_id: connectionId, p_lease_owner: owner }) });
+      if (released[0] !== true) throw new Error("Historical backfill chunk could not release its lease.");
+    } else {
+      await db("rpc/transition_commerce_sync_run", { method: "POST", body: JSON.stringify({ p_run_id: runId, p_organization_id: organizationId, p_connection_id: connectionId, p_lease_owner: owner, p_transition: warnings ? "completed_with_warnings" : "completed", p_error_code: null, p_error_summary: null }) });
+    }
     console.log(JSON.stringify({ event: "shadow_sync_completed", runId, pagesCompleted, recordsSeen, recordsCreated, recordsUpdated, warnings, providerRequests, retries, ...finalMetadata }));
   } catch (error) {
     await db("rpc/transition_commerce_sync_run", { method: "POST", body: JSON.stringify({ p_run_id: runId, p_organization_id: organizationId, p_connection_id: connectionId, p_lease_owner: owner, p_transition: "failed", p_error_code: "shadow_sync_failed", p_error_summary: "Shadow Sync stopped safely." }) }).catch(() => {});
