@@ -1,4 +1,5 @@
 import { sha256Hex, type CommerceEvidenceStore, type StoredEvidence } from "./evidence-store";
+import { supabaseAuthHeaders } from "./supabase-auth";
 
 const BUCKET = "commerce-evidence";
 
@@ -57,6 +58,6 @@ export class SupabaseCommerceEvidenceStore implements CommerceEvidenceStore {
 
   private async storageRequest(path: string, init: RequestInit) {
     const { url, key } = configuration();
-    return fetch(`${url}/storage/v1/object/${BUCKET}/${encodedPath(path)}`, { ...init, cache: "no-store", headers: { apikey: key, Authorization: `Bearer ${key}`, ...init.headers } });
+    return fetch(`${url}/storage/v1/object/${BUCKET}/${encodedPath(path)}`, { ...init, headers: { ...supabaseAuthHeaders(key), ...init.headers } });
   }
 }

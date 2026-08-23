@@ -9,8 +9,10 @@ function storageHarness() {
   const objects = new Map<string, Uint8Array>();
   const originalFetch = globalThis.fetch;
   process.env.NEXT_PUBLIC_SUPABASE_URL = "http://127.0.0.1:54321";
-  process.env.SUPABASE_SERVICE_ROLE_KEY = "synthetic-service-role";
+  process.env.SUPABASE_SERVICE_ROLE_KEY = "sb_secret_synthetic-service-role";
+  const requests: RequestInit[] = [];
   globalThis.fetch = async (input, init = {}) => {
+    requests.push(init);
     const path = new URL(String(input)).pathname.replace("/storage/v1/object/commerce-evidence/", "");
     if (init.method === "POST") {
       if (objects.has(path)) return new Response(JSON.stringify({ message: "Duplicate" }), { status: 400 });
@@ -21,7 +23,7 @@ function storageHarness() {
     const value = objects.get(path);
     return value ? new Response(Buffer.from(value), { status: 200 }) : new Response(null, { status: 404 });
   };
-  return { objects, restore: () => { globalThis.fetch = originalFetch; } };
+  return { objects, requests, restore: () => { globalThis.fetch = originalFetch; } };
 }
 
 test("durable Evidence is hash-addressed, idempotent, private-path scoped, and erasable", async () => {
@@ -33,6 +35,10 @@ test("durable Evidence is hash-addressed, idempotent, private-path scoped, and e
     const repeated = await store.putImmutable({ ...scope, payload, contentType: "application/json" });
     assert.equal(first.storageReference, repeated.storageReference);
     assert.equal(harness.objects.size, 1);
+    const firstHeaders = new Headers(harness.requests[0].headers);
+    assert.equal(firstHeaders.get("apikey"), "sb_secret_synthetic-service-role");
+    assert.equal(firstHeaders.has("authorization"), false);
+    assert.equal("cache" in harness.requests[0], false);
     assert.match(first.storageReference, new RegExp(`${scope.organizationId}/${scope.connectionId}/${scope.providerAccountId}/transaction_page/[a-f0-9]{64}$`));
     assert.doesNotMatch(first.storageReference, /synthetic@example/);
     assert.equal(await store.verifyHash({ organizationId: scope.organizationId, storageReference: first.storageReference, payloadHash: first.payloadHash }), true);
