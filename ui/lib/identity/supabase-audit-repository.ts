@@ -20,12 +20,12 @@ async function rest(path: string) {
 
 export class SupabaseAuditHistoryRepository {
   async listForOrganization(organizationId: string, limit = 100): Promise<AuditHistoryRecord[]> {
-    const rows = await rest(`tracekit_audit_events?organization_id=eq.${encodeURIComponent(organizationId)}&select=id,occurred_at,action,result,actor_user_id,target_type,target_id,permission_evaluated,metadata&order=occurred_at.desc&limit=${Math.min(Math.max(limit, 1), 200)}`) as Row[];
+    const rows = await rest(`tracekit_audit_events?organization_id=eq.${encodeURIComponent(organizationId)}&action=neq.membership.resolved&select=id,occurred_at,action,result,actor_user_id,target_type,target_id,permission_evaluated,metadata&order=occurred_at.desc&limit=${Math.min(Math.max(limit, 1), 200)}`) as Row[];
     return this.withActors(rows);
   }
 
   async listForAccount(accountId: string, limit = 100): Promise<AuditHistoryRecord[]> {
-    const rows = await rest(`tracekit_audit_events?account_id=eq.${encodeURIComponent(accountId)}&select=id,occurred_at,action,result,actor_user_id,target_type,target_id,permission_evaluated,metadata&order=occurred_at.desc&limit=${Math.min(Math.max(limit, 1), 200)}`) as Row[];
+    const rows = await rest(`tracekit_audit_events?account_id=eq.${encodeURIComponent(accountId)}&action=neq.membership.resolved&select=id,occurred_at,action,result,actor_user_id,target_type,target_id,permission_evaluated,metadata&order=occurred_at.desc&limit=${Math.min(Math.max(limit, 1), 200)}`) as Row[];
     return this.withActors(rows);
   }
 
