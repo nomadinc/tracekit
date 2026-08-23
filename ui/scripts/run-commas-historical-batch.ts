@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { historicalBatchMadeProgress, historicalDurableWarningDelta, historicalQuotaAllowed, parseHistoricalBatchArgs, type OrderingState } from "../lib/commerce/commas-historical-backfill";
+import { historicalBatchMadeProgress, historicalDurableWarningDelta, historicalQuotaAllowed, historicalQuotaObservationUsable, parseHistoricalBatchArgs, type OrderingState } from "../lib/commerce/commas-historical-backfill";
 
 type Row = Record<string, any>;
 const MAX_PAGES_PER_CHUNK = 8;
@@ -56,9 +56,13 @@ async function main() {
     const currentOrdering = ordering(metadata.ordering_state);
     if (currentOrdering === "unknown" || currentOrdering === "ambiguous" || (previousOrdering !== "unknown" && currentOrdering !== previousOrdering)) { stopReason = "ordering_inconsistent"; throw new Error(`Historical batch stopped: ${stopReason}.`); }
     previousOrdering = currentOrdering;
-    const quotaRows = await db(`commerce_sync_runs?organization_id=eq.${encodeURIComponent(String(run.organization_id || ""))}&connection_id=eq.${encodeURIComponent(String(run.connection_id || ""))}&select=metadata&order=created_at.desc&limit=50`);
-    const quota = quotaRows.map((row) => Number(row.metadata?.rate_limit_end)).find((value) => Number.isFinite(value));
-    if (quota === undefined || !historicalQuotaAllowed(quota, MAX_PAGES_PER_CHUNK)) { stopReason = "quota_unknown_or_insufficient"; throw new Error(`Historical batch stopped: ${stopReason}.`); }
+    const quotaRows = await db(`commerce_sync_runs?organization_id=eq.${encodeURIComponent(String(run.organization_id || ""))}&connection_id=eq.${encodeURIComponent(String(run.connection_id || ""))}&select=metadata,updated_at&order=updated_at.desc&limit=50`);
+    const checkpointRows = await db(`commerce_sync_checkpoints?sync_run_id=eq.${encodeURIComponent(args.runId!)}&state=eq.completed&select=page,metadata,updated_at,completed_at&order=page.desc&limit=100`);
+    const runObservation = quotaRows.map((row) => historicalQuotaObservationUsable(row.metadata?.rate_limit_remaining, row.metadata?.rate_limit_observed_at || row.updated_at)).find(Boolean);
+    const checkpointObservation = checkpointRows.map((row) => historicalQuotaObservationUsable(row.metadata?.rate_limit_remaining, row.metadata?.rate_limit_observed_at || row.completed_at || row.updated_at)).find(Boolean);
+    const observation = runObservation || checkpointObservation;
+    const quota = observation?.quota ?? null;
+    if (!observation || !historicalQuotaAllowed(quota, MAX_PAGES_PER_CHUNK)) { stopReason = "quota_unknown_or_insufficient"; throw new Error(`Historical batch stopped: ${stopReason}.`); }
     const lines = await invokeChunk(args);
     const completion = lines.find((line) => line.event === "shadow_sync_completed");
     const started = lines.find((line) => line.event === "shadow_sync_started");
@@ -67,13 +71,15 @@ async function main() {
     if (!afterRun || !["paused", "completed", "completed_with_warnings"].includes(String(afterRun.status))) { stopReason = "unexpected_run_state"; throw new Error(`Historical batch stopped: ${stopReason}.`); }
     const afterMetadata = afterRun?.metadata || {};
     const after = { resumePage: Number(afterMetadata.resume_page), inRange: Number(afterMetadata.in_range_records || 0), earliest: typeof afterMetadata.earliest_seen_timestamp === "string" ? afterMetadata.earliest_seen_timestamp : null, rangeComplete: afterMetadata.range_complete === true };
+    const afterObservation = historicalQuotaObservationUsable(afterMetadata.rate_limit_remaining, afterMetadata.rate_limit_observed_at);
     const warningDelta = historicalDurableWarningDelta(before.warnings, afterRun.warnings_count);
     if (warningDelta === null) { stopReason = "warning_state_unavailable"; throw new Error(`Historical batch stopped: ${stopReason}.`); }
     if (warningDelta > 0) { stopReason = "chunk_warnings"; throw new Error(`Historical batch stopped: ${stopReason}.`); }
     if (!historicalBatchMadeProgress(before, after)) { stopReason = "no_progress"; throw new Error(`Historical batch stopped: ${stopReason}.`); }
     const endPage = after.resumePage - 1;
     const chunkRequests = Number(completion.providerRequests || 0); providerRequestsTotal += chunkRequests; chunksCompleted += 1;
-    console.log(JSON.stringify({ chunk: chunksCompleted, startPage: Number(started?.startPage || before.resumePage), endPage, providerRequests: chunkRequests, warningDelta, recordsSeenInvocation: Number(completion.recordsSeen || 0), recordsCreatedInvocation: Number(completion.recordsCreated || 0), recordsUpdatedInvocation: Number(completion.recordsUpdated || 0), cumulativePagesCompleted: Number(afterRun?.pages_completed || 0), resumePage: after.resumePage, earliestTimestamp: after.earliest, inRangeTotal: after.inRange, quotaRemaining: quota, rangeComplete: after.rangeComplete }));
+    const currentObservation = afterObservation || observation;
+    console.log(JSON.stringify({ chunk: chunksCompleted, startPage: Number(started?.startPage || before.resumePage), endPage, providerRequests: chunkRequests, warningDelta, recordsSeenInvocation: Number(completion.recordsSeen || 0), recordsCreatedInvocation: Number(completion.recordsCreated || 0), recordsUpdatedInvocation: Number(completion.recordsUpdated || 0), cumulativePagesCompleted: Number(afterRun?.pages_completed || 0), resumePage: after.resumePage, earliestTimestamp: after.earliest, inRangeTotal: after.inRange, quotaRemaining: currentObservation.quota, quotaObservedAt: currentObservation.observedAt, rangeComplete: after.rangeComplete }));
     if (after.rangeComplete) { stopReason = "range_complete"; break; }
   }
   const [finalRun] = await db(`commerce_sync_runs?id=eq.${encodeURIComponent(args.runId!)}&select=status,metadata,pages_completed&limit=1`);

@@ -18,6 +18,7 @@
     "test:commas-dispute-webhook": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/test-commas-dispute-webhook.ts",
     "sync:commas-shadow": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/run-commas-shadow-sync.ts --confirm-full-shadow",
     "backfill:commas-history": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/run-commas-historical-batch.ts",
+    "inspect:commas-historical-quota": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/inspect-commas-historical-quota.ts",
     "sync:commas-continuous": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/run-commas-continuous-sync.ts --confirm-bounded-continuous-proof",
     "import:commas-disputes": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/import-commas-historical-disputes.ts --confirm-historical-import",
     "preview:commas-disputes": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/import-commas-historical-disputes.ts --confirm-historical-import --preview",

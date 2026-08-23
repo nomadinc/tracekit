@@ -58,6 +58,17 @@ export function historicalDurableWarningDelta(before: unknown, after: unknown): 
   return Number.isFinite(previous) && Number.isFinite(current) ? current - previous : null;
 }
 
+export function usableHistoricalQuota(value: unknown) {
+  const quota = Number(value);
+  return Number.isFinite(quota) && quota >= 0 ? quota : null;
+}
+
+export function historicalQuotaObservationUsable(value: unknown, observedAt: unknown, now = Date.now(), maxAgeMs = 24 * 60 * 60 * 1000) {
+  const quota = usableHistoricalQuota(value);
+  const timestamp = typeof observedAt === "string" ? Date.parse(observedAt) : Number.NaN;
+  return quota !== null && Number.isFinite(timestamp) && timestamp <= now && now - timestamp <= maxAgeMs ? { quota, observedAt: new Date(timestamp).toISOString() } : null;
+}
+
 export function parseHistoricalBackfillArgs(argv: string[]): HistoricalBackfillArgs {
   const historical = argv.includes("--historical-backfill");
   const confirmed = argv.includes("--confirm-historical-commas-backfill");

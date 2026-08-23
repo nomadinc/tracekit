@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { combineOrdering, historicalBatchMadeProgress, historicalChunkTransition, historicalDurableWarningDelta, historicalInvocationHasBudget, historicalQuotaAllowed, historicalResumePage, inHistoricalRange, orderingForPage, parseHistoricalBackfillArgs, parseHistoricalBatchArgs, rangePassed } from "../lib/commerce/commas-historical-backfill.ts";
+import { combineOrdering, historicalBatchMadeProgress, historicalChunkTransition, historicalDurableWarningDelta, historicalInvocationHasBudget, historicalQuotaAllowed, historicalQuotaObservationUsable, historicalResumePage, inHistoricalRange, orderingForPage, parseHistoricalBackfillArgs, parseHistoricalBatchArgs, rangePassed } from "../lib/commerce/commas-historical-backfill.ts";
 
 test("historical mode requires confirmation and date bounds", () => {
   assert.throws(() => parseHistoricalBackfillArgs(["--historical-backfill"]), /confirm-historical/);
@@ -51,6 +51,13 @@ test("warning classification uses only durable before/after values", () => {
   assert.equal(historicalDurableWarningDelta(1, 2), 1);
   assert.equal(historicalDurableWarningDelta(null, 1), null);
   assert.equal(historicalDurableWarningDelta(1, null), null);
+});
+
+test("newer historical quota observations supersede bootstrap quota and stale values fail closed", () => {
+  assert.deepEqual(historicalQuotaObservationUsable(9980, "2026-08-23T12:00:00Z", Date.parse("2026-08-23T12:01:00Z")), { quota: 9980, observedAt: "2026-08-23T12:00:00.000Z" });
+  assert.equal(historicalQuotaObservationUsable(9988, "2026-08-20T12:00:00Z", Date.parse("2026-08-23T12:01:00Z")), null);
+  assert.equal(historicalQuotaAllowed(9980, 8), true);
+  assert.equal(historicalQuotaAllowed(9972, 8), true);
 });
 
 test("batch reporting labels runner counters invocation-local", async () => {
