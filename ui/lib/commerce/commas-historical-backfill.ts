@@ -51,11 +51,11 @@ export function historicalBatchMadeProgress(before: { resumePage: number; inRang
   return after.rangeComplete || after.resumePage > before.resumePage || after.inRange > before.inRange || (after.earliest !== null && (before.earliest === null || after.earliest < before.earliest));
 }
 
-export function historicalWarningDelta(before: number, after: number, reported: number) {
-  if (after > before) return after - before;
-  if (reported > before) return reported - before;
-  if (reported < before) return reported;
-  return 0;
+export function historicalDurableWarningDelta(before: unknown, after: unknown): number | null {
+  if (before === null || before === undefined || after === null || after === undefined || before === "" || after === "") return null;
+  const previous = Number(before);
+  const current = Number(after);
+  return Number.isFinite(previous) && Number.isFinite(current) ? current - previous : null;
 }
 
 export function parseHistoricalBackfillArgs(argv: string[]): HistoricalBackfillArgs {

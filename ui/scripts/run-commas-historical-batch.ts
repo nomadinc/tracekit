@@ -1,5 +1,5 @@
 import { spawn } from "node:child_process";
-import { historicalBatchMadeProgress, historicalQuotaAllowed, historicalWarningDelta, parseHistoricalBatchArgs, type OrderingState } from "../lib/commerce/commas-historical-backfill";
+import { historicalBatchMadeProgress, historicalDurableWarningDelta, historicalQuotaAllowed, parseHistoricalBatchArgs, type OrderingState } from "../lib/commerce/commas-historical-backfill";
 
 type Row = Record<string, any>;
 const MAX_PAGES_PER_CHUNK = 8;
@@ -67,12 +67,13 @@ async function main() {
     if (!afterRun || !["paused", "completed", "completed_with_warnings"].includes(String(afterRun.status))) { stopReason = "unexpected_run_state"; throw new Error(`Historical batch stopped: ${stopReason}.`); }
     const afterMetadata = afterRun?.metadata || {};
     const after = { resumePage: Number(afterMetadata.resume_page), inRange: Number(afterMetadata.in_range_records || 0), earliest: typeof afterMetadata.earliest_seen_timestamp === "string" ? afterMetadata.earliest_seen_timestamp : null, rangeComplete: afterMetadata.range_complete === true };
-    const warningDelta = historicalWarningDelta(before.warnings, Number(afterRun.warnings_count || 0), Number(completion.warnings || 0));
+    const warningDelta = historicalDurableWarningDelta(before.warnings, afterRun.warnings_count);
+    if (warningDelta === null) { stopReason = "warning_state_unavailable"; throw new Error(`Historical batch stopped: ${stopReason}.`); }
     if (warningDelta > 0) { stopReason = "chunk_warnings"; throw new Error(`Historical batch stopped: ${stopReason}.`); }
     if (!historicalBatchMadeProgress(before, after)) { stopReason = "no_progress"; throw new Error(`Historical batch stopped: ${stopReason}.`); }
     const endPage = after.resumePage - 1;
     const chunkRequests = Number(completion.providerRequests || 0); providerRequestsTotal += chunkRequests; chunksCompleted += 1;
-    console.log(JSON.stringify({ chunk: chunksCompleted, startPage: Number(started?.startPage || before.resumePage), endPage, providerRequests: chunkRequests, warningDelta, recordsSeenDelta: Number(afterRun?.records_seen || 0) - before.recordsSeen, recordsCreatedDelta: Number(afterRun?.records_created || 0) - before.recordsCreated, recordsUpdatedDelta: Number(afterRun?.records_updated || 0) - before.recordsUpdated, cumulativePagesCompleted: Number(afterRun?.pages_completed || 0), resumePage: after.resumePage, earliestTimestamp: after.earliest, inRangeTotal: after.inRange, quotaRemaining: quota, rangeComplete: after.rangeComplete }));
+    console.log(JSON.stringify({ chunk: chunksCompleted, startPage: Number(started?.startPage || before.resumePage), endPage, providerRequests: chunkRequests, warningDelta, recordsSeenInvocation: Number(completion.recordsSeen || 0), recordsCreatedInvocation: Number(completion.recordsCreated || 0), recordsUpdatedInvocation: Number(completion.recordsUpdated || 0), cumulativePagesCompleted: Number(afterRun?.pages_completed || 0), resumePage: after.resumePage, earliestTimestamp: after.earliest, inRangeTotal: after.inRange, quotaRemaining: quota, rangeComplete: after.rangeComplete }));
     if (after.rangeComplete) { stopReason = "range_complete"; break; }
   }
   const [finalRun] = await db(`commerce_sync_runs?id=eq.${encodeURIComponent(args.runId!)}&select=status,metadata,pages_completed&limit=1`);

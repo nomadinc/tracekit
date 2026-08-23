@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { combineOrdering, historicalBatchMadeProgress, historicalChunkTransition, historicalInvocationHasBudget, historicalQuotaAllowed, historicalResumePage, historicalWarningDelta, inHistoricalRange, orderingForPage, parseHistoricalBackfillArgs, parseHistoricalBatchArgs, rangePassed } from "../lib/commerce/commas-historical-backfill.ts";
+import { combineOrdering, historicalBatchMadeProgress, historicalChunkTransition, historicalDurableWarningDelta, historicalInvocationHasBudget, historicalQuotaAllowed, historicalResumePage, inHistoricalRange, orderingForPage, parseHistoricalBackfillArgs, parseHistoricalBatchArgs, rangePassed } from "../lib/commerce/commas-historical-backfill.ts";
 
 test("historical mode requires confirmation and date bounds", () => {
   assert.throws(() => parseHistoricalBackfillArgs(["--historical-backfill"]), /confirm-historical/);
@@ -46,11 +46,19 @@ test("batch driver requires confirmation, caps chunks, and stops on unsafe progr
   assert.equal(historicalBatchMadeProgress({ resumePage: 9, inRange: 1500, earliest: "2026-08-16T20:59:17Z" }, { resumePage: 9, inRange: 1500, earliest: "2026-08-16T20:59:17Z", rangeComplete: true }), true);
 });
 
-test("warning classification uses chunk-local deltas instead of old cumulative warnings", () => {
-  assert.equal(historicalWarningDelta(1, 1, 1), 0);
-  assert.equal(historicalWarningDelta(1, 2, 2), 1);
-  assert.equal(historicalWarningDelta(1, 1, 0), 0);
-  assert.equal(historicalWarningDelta(1, 1, 1), 0);
+test("warning classification uses only durable before/after values", () => {
+  assert.equal(historicalDurableWarningDelta(1, 1), 0);
+  assert.equal(historicalDurableWarningDelta(1, 2), 1);
+  assert.equal(historicalDurableWarningDelta(null, 1), null);
+  assert.equal(historicalDurableWarningDelta(1, null), null);
+});
+
+test("batch reporting labels runner counters invocation-local", async () => {
+  const source = await readFile(new URL("../scripts/run-commas-historical-batch.ts", import.meta.url), "utf8");
+  assert.match(source, /recordsSeenInvocation/);
+  assert.match(source, /recordsCreatedInvocation/);
+  assert.match(source, /recordsUpdatedInvocation/);
+  assert.doesNotMatch(source, /recordsSeenDelta|recordsCreatedDelta|recordsUpdatedDelta/);
 });
 
 test("migration provides an owner-bound lease release without touching scheduler state", async () => {
