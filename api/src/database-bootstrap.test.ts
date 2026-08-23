@@ -175,7 +175,23 @@ test("migration filenames are unique and numerically ordered", () => {
   const numbers = names.map((name) => name.slice(0, 3));
 
   assert.equal(new Set(numbers).size, numbers.length);
-  assert.deepEqual(numbers, Array.from({ length: 67 }, (_, index) => String(index).padStart(3, "0")));
+  assert.deepEqual(numbers, Array.from({ length: 68 }, (_, index) => String(index).padStart(3, "0")));
+});
+
+test("Migration 067 accepts absent or self-referencing roots without weakening recovery guards", () => {
+  const migration067 = migration("067_quota_bootstrap_root_self_reference_fix.sql").toLowerCase();
+  assert.match(migration067, /create or replace function public\.recover_commerce_quota_bootstrap_chain/);
+  assert.match(migration067, /quota_bootstrap_original_run_id.*<> p_root_run_id::text/);
+  assert.match(migration067, /quota_bootstrap_exceptional_recovery_consumed/);
+  assert.match(migration067, /p_root_provider_requests is distinct from 0/);
+  assert.match(migration067, /p_failed_provider_requests is distinct from 0/);
+  assert.match(migration067, /status in \('queued', 'running', 'paused'\)/);
+  assert.match(migration067, /mode in \('live', 'live_beta'\)/);
+  assert.match(migration067, /activation_state = 'enabled'/);
+  assert.match(migration067, /for update/);
+  assert.match(migration067, /reserved_run_id/);
+  assert.match(migration067, /revoke all on function public\.recover_commerce_quota_bootstrap_chain\(uuid, uuid, integer, integer\)/);
+  assert.match(migration067, /grant execute on function public\.recover_commerce_quota_bootstrap_chain\(uuid, uuid, integer, integer\)\s+to service_role/);
 });
 
 test("Migration 066 bounds quota bootstrap retries at the chain root and provides exceptional recovery", () => {
