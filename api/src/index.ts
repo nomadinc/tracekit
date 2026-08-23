@@ -22108,6 +22108,7 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 		        });
 		        const result = await response.json().catch(() => ({})) as Record<string, unknown>;
 		        if (!response.ok || result.probe !== "runtime-dispatch-probe" || result.authPassed !== true) throw new Error(`runtime_dispatch_probe_${response.status}`);
+		        console.log("[TraceKit] runtime dispatch probe succeeded", { event: "runtime_dispatch_probe.succeeded", runtimeReached: true, authPassed: true, statusCode: response.status });
 		        msg.ack();
 		      } catch (error) {
 		        console.log("[TraceKit] runtime dispatch probe failed", { event: "runtime_dispatch_probe.failed", code: String((error as Error)?.message || "runtime_dispatch_probe_failed").slice(0, 80) });
