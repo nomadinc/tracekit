@@ -56,6 +56,8 @@ test("commerce API and runtime entrypoints remain present", () => {
   assert.equal(existsSync(`${repoRoot}/api/continuous-runtime/wrangler.toml`), true);
   assert.equal(existsSync(`${repoRoot}/ui/app/api/chargebacks/route.ts`), true);
   assert.match(source("ui/components/chargebacks/chargeback-review-workspace.tsx"), /Needs Review/);
+  assert.match(source("ui/components/chargebacks/chargeback-review-workspace.tsx"), /FinancialIssueAnalysisClient/);
+  assert.match(source("ui/app/(app)/dashboard/financial-issue-analysis-client.tsx"), /\/v1\/chargebacks\/analysis/);
 });
 
 test("migration sequence is monotonic, includes 063/064, and has no duplicate numbers", () => {
