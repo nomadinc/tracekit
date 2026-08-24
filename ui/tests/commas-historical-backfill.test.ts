@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
-import { combineOrdering, historicalBatchMadeProgress, historicalChunkTransition, historicalDurableWarningDelta, historicalInvocationHasBudget, historicalQuotaAllowed, historicalQuotaObservationUsable, historicalResumePage, inHistoricalRange, orderingForPage, parseHistoricalBackfillArgs, parseHistoricalBatchArgs, rangePassed } from "../lib/commerce/commas-historical-backfill.ts";
+import { classifyHistoricalPageOverlap, combineOrdering, historicalBatchMadeProgress, historicalChunkTransition, historicalDurableWarningDelta, historicalInvocationHasBudget, historicalQuotaAllowed, historicalQuotaObservationUsable, historicalResumePage, inHistoricalRange, orderingForPage, parseHistoricalBackfillArgs, parseHistoricalBatchArgs, rangePassed } from "../lib/commerce/commas-historical-backfill.ts";
 
 test("historical mode requires confirmation and date bounds", () => {
   assert.throws(() => parseHistoricalBackfillArgs(["--historical-backfill"]), /confirm-historical/);
@@ -58,6 +58,15 @@ test("newer historical quota observations supersede bootstrap quota and stale va
   assert.equal(historicalQuotaObservationUsable(9988, "2026-08-20T12:00:00Z", Date.parse("2026-08-23T12:01:00Z")), null);
   assert.equal(historicalQuotaAllowed(9980, 8), true);
   assert.equal(historicalQuotaAllowed(9972, 8), true);
+});
+
+test("only one adjacent tail/head overlap is benign and excluded from unsafe warnings", () => {
+  const prior = new Set(["a", "b"]);
+  assert.deepEqual(classifyHistoricalPageOverlap("b", ["b", "c"], prior), { repeatedCount: 1, boundaryOverlapCount: 1, nonBoundaryRepeatCount: 0, classification: "benign_boundary_overlap" });
+  assert.equal(classifyHistoricalPageOverlap("b", ["b", "c"], prior).nonBoundaryRepeatCount, 0);
+  assert.equal(classifyHistoricalPageOverlap("b", ["x", "b"], prior).classification, "pagination_instability");
+  assert.equal(classifyHistoricalPageOverlap("b", ["b", "b"], prior).classification, "pagination_instability");
+  assert.equal(classifyHistoricalPageOverlap("b", ["b", "c"], prior, 0).classification, "pagination_instability");
 });
 
 test("batch reporting labels runner counters invocation-local", async () => {

@@ -18,6 +18,7 @@ export type HistoricalBatchArgs = {
 
 export type OrderingState = "unknown" | "newest_first" | "oldest_first" | "ambiguous";
 export type HistoricalChunkTransition = "paused" | "completed" | "completed_with_warnings";
+export type PaginationOverlapClassification = "none" | "benign_boundary_overlap" | "pagination_instability";
 
 export function historicalQuotaAllowed(quotaRemaining: number | null, maxRequests: number) {
   return quotaRemaining !== null && Number.isFinite(quotaRemaining) && quotaRemaining - maxRequests >= 1000;
@@ -67,6 +68,15 @@ export function historicalQuotaObservationUsable(value: unknown, observedAt: unk
   const quota = usableHistoricalQuota(value);
   const timestamp = typeof observedAt === "string" ? Date.parse(observedAt) : Number.NaN;
   return quota !== null && Number.isFinite(timestamp) && timestamp <= now && now - timestamp <= maxAgeMs ? { quota, observedAt: new Date(timestamp).toISOString() } : null;
+}
+
+export function classifyHistoricalPageOverlap(previousPageLastId: string | null, currentPageIds: string[], priorIds: Set<string>, maxBoundaryOverlap = 1) {
+  const repeated = currentPageIds.filter((id) => priorIds.has(id));
+  const boundary = previousPageLastId !== null && currentPageIds[0] === previousPageLastId ? 1 : 0;
+  const nonBoundary = repeated.length - boundary;
+  const withinPage = currentPageIds.length - new Set(currentPageIds).size;
+  const classification: PaginationOverlapClassification = withinPage > 0 || nonBoundary > 0 || boundary > maxBoundaryOverlap ? "pagination_instability" : boundary > 0 ? "benign_boundary_overlap" : "none";
+  return { repeatedCount: repeated.length, boundaryOverlapCount: boundary, nonBoundaryRepeatCount: nonBoundary, classification };
 }
 
 export function parseHistoricalBackfillArgs(argv: string[]): HistoricalBackfillArgs {
