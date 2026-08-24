@@ -2,7 +2,6 @@ import type { CustomerRepository } from "./repository";
 import type {
   CustomerDeepLinkState,
   CustomerDrawerRecord,
-  CustomerJourneyEvent,
   CustomerListFilter,
   CustomerRelatedOffer,
   CustomerScope,
@@ -149,17 +148,17 @@ function snapshotFromDetail(body: any, organizationId: string): CustomerWorkspac
 }
 
 export class ApiCustomerRepository implements CustomerRepository {
-  async listCustomers(scope: CustomerScope, filter: CustomerListFilter = {}) {
+  async listCustomers(scope: CustomerScope, filter: CustomerListFilter = {}): Promise<CustomerSummary[]> {
     if (!scope.authenticated) return [];
     const params = new URLSearchParams({ limit: "25" });
     if (filter.query) params.set("search", filter.query);
     if (filter.offerId) params.set("offer_id", filter.offerId);
     const body = await apiGet(`/api/customers?${params.toString()}`);
     const organizationId = String(scope.mockOrganizationId || "");
-    let values = (Array.isArray(body?.customers) ? body.customers : []).map((row: any) => customerSummaryFromList(row, organizationId));
-    if (filter.state === "repeat") values = values.filter((customer: CustomerSummary) => customer.repeat);
-    if (filter.state === "refunded") values = values.filter((customer: CustomerSummary) => customer.refunded);
-    if (filter.state === "interference") values = values.filter((customer: CustomerSummary) => customer.interferenceLikely);
+    let values: CustomerSummary[] = (Array.isArray(body?.customers) ? body.customers : []).map((row: any) => customerSummaryFromList(row, organizationId));
+    if (filter.state === "repeat") values = values.filter((customer) => customer.repeat);
+    if (filter.state === "refunded") values = values.filter((customer) => customer.refunded);
+    if (filter.state === "interference") values = values.filter((customer) => customer.interferenceLikely);
     return values;
   }
 
@@ -192,8 +191,8 @@ export class ApiCustomerRepository implements CustomerRepository {
   }
 
   async search(scope: CustomerScope, query: string): Promise<CustomerSearchResult[]> {
-    const customers = await this.listCustomers(scope, { query });
-    return customers.slice(0, 12).map((customer) => ({
+    const customers: CustomerSummary[] = await this.listCustomers(scope, { query });
+    return customers.slice(0, 12).map((customer: CustomerSummary) => ({
       id: `customer:${customer.id}`,
       type: "Customer",
       title: customer.name,
