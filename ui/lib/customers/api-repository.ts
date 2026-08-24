@@ -4,6 +4,7 @@ import type {
   CustomerDrawerRecord,
   CustomerJourneyEvent,
   CustomerListFilter,
+  CustomerRelatedOffer,
   CustomerScope,
   CustomerSearchResult,
   CustomerSummary,
@@ -59,7 +60,6 @@ function dateText(value: unknown, fallback = "No activity") {
 function customerSummaryFromList(row: any, organizationId: string): CustomerSummary {
   const customer = row?.customer || {};
   const source = row?.attributed_source?.source || row?.source_systems?.[0] || null;
-  const hasPurchase = Boolean(row?.has_purchase || numeric(row?.order_count) > 0);
   return {
     id: String(customer.id || ""),
     organizationId,
@@ -88,7 +88,7 @@ function customerSummaryFromDetail(body: any, organizationId: string): CustomerS
   return {
     id: String(customer.id || ""),
     organizationId,
-    offerIds: Array.from(new Set((body?.orders || []).map((order: any) => String(order.offer_id || "")).filter(Boolean))),
+    offerIds: Array.from(new Set((body?.orders || []).map((order: any) => String(order.offer_id || "")).filter(Boolean))) as string[],
     name: String(customer.display_name || [customer.first_name, customer.last_name].filter(Boolean).join(" ") || customer.primary_email || "Unnamed Customer"),
     email: String(customer.primary_email || ""),
     phone: String(customer.primary_phone || ""),
@@ -105,43 +105,22 @@ function customerSummaryFromDetail(body: any, organizationId: string): CustomerS
   };
 }
 
-function journeyEvent(event: any): CustomerJourneyEvent {
-  const id = String(event.id || crypto.randomUUID());
-  const url = String(event.url || event.technical?.metadata?.url || "");
-  let domain = "";
-  try { domain = url ? new URL(url).host : ""; } catch { domain = ""; }
-  return {
-    id,
-    name: String(event.title || event.event_type || "Event"),
-    timestamp: String(event.event_time || event.occurred_at || ""),
-    domain,
-    role: String(event.category || "Journey touchpoint"),
-    status: String(event.status || "Observed"),
-    confidence: String(event.confidence || "Observed"),
-    trackingHealth: trackingState(event.tracking_health),
-    trackingStatus: String(event.tracking_status || "Evidence recorded"),
-    originalUrl: url,
-    referrer: String(event.referrer || ""),
-    destinationUrl: String(event.destination_url || url),
-    queryParameters: event.query_parameters || {},
-    identifiers: [],
-    redirects: [],
-    diagnostics: [],
-    relationships: [],
-    explanation: {
-      conclusion: String(event.summary || event.title || "Event recorded"),
-      reason: String(event.explanation?.reason || "Recorded customer evidence."),
-      evidence: Array.isArray(event.evidence) ? event.evidence.map(String) : [],
-    },
-  };
-}
-
 function snapshotFromDetail(body: any, organizationId: string): CustomerWorkspaceSnapshot {
   const customer = customerSummaryFromDetail(body, organizationId);
   const summary = body?.summary || {};
   const journeys = Array.isArray(body?.journeys) ? body.journeys : [];
   const orders = Array.isArray(body?.orders) ? body.orders : [];
   const firstJourney = journeys[0] || null;
+  const offersById = new Map<string, CustomerRelatedOffer>();
+  for (const order of orders) {
+    const id = String(order?.offer_id || order?.everflow_offer_id || "");
+    if (!id || offersById.has(id)) continue;
+    offersById.set(id, {
+      id,
+      name: String(order?.offer_name || order?.offer_id || order?.everflow_offer_id || "Offer"),
+      firstTouch: "Recorded commerce relationship",
+    });
+  }
   return {
     customer,
     lifetimeRevenue: numeric(summary.lifetime_revenue),
@@ -163,10 +142,7 @@ function snapshotFromDetail(body: any, organizationId: string): CustomerWorkspac
       offerName: String(order.offer_name || order.offer_id || order.everflow_offer_id || "Offer"),
       trackingHealth: "Unknown" as CustomerTrackingState,
     })),
-    offers: Array.from(new Map(orders
-      .map((order: any) => ({ id: String(order.offer_id || order.everflow_offer_id || ""), name: String(order.offer_name || order.offer_id || order.everflow_offer_id || "Offer"), firstTouch: "Recorded commerce relationship" }))
-      .filter((offer: any) => offer.id)
-      .map((offer: any) => [offer.id, offer])).values()),
+    offers: Array.from(offersById.values()),
     privacySignals: [],
     trackingExplanation: String(body?.customer_360?.operational_health?.explanation || "Customer evidence loaded from the TraceKit Customer Explorer."),
   };
