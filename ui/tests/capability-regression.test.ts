@@ -5,7 +5,13 @@ import test from "node:test";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 const source = (relative: string) => readFileSync(`${repoRoot}/${relative}`, "utf8");
-const route = (relative: string) => `${repoRoot}/ui/app/${relative}`;
+const route = (relative: string) => {
+  const base = `${repoRoot}/ui/app/${relative}`;
+  if (existsSync(base)) return base;
+  if (existsSync(base.replace(/\.tsx$/, ".ts"))) return base.replace(/\.tsx$/, ".ts");
+  if (existsSync(base.replace(/\.ts$/, ".tsx"))) return base.replace(/\.ts$/, ".tsx");
+  return base;
+};
 
 test("capability manifest records established and planned capabilities", () => {
   const manifest = source("docs/tracekit-capability-manifest.md");
@@ -28,7 +34,7 @@ test("critical UI routes and auth/session entrypoints remain present and non-pla
     "page.tsx", "(app)/connections/page.tsx", "(app)/connections/commerce/page.tsx",
     "(app)/journeys/page.tsx", "(app)/customers/page.tsx", "(app)/money/page.tsx",
     "(app)/dashboard/page.tsx", "(app)/dashboard/financial-reconciliation/page.tsx",
-    "(app)/dashboard/financial-import-monitor/page.tsx", "auth/callback/route.ts",
+    "(app)/dashboard/financial-import-monitor/page.tsx", "(app)/dashboard/chargebacks/page.tsx", "auth/callback/route.tsx",
   ];
   const nonPlaceholderRoutes = new Set(routes.filter((relative) => relative !== "(app)/money/page.tsx"));
   for (const relative of routes) {
@@ -48,6 +54,8 @@ test("commerce API and runtime entrypoints remain present", () => {
   assert.match(source("api/src/index.ts"), /continuous_commerce/);
   assert.equal(existsSync(`${repoRoot}/api/continuous-runtime/src/index.ts`), true);
   assert.equal(existsSync(`${repoRoot}/api/continuous-runtime/wrangler.toml`), true);
+  assert.equal(existsSync(`${repoRoot}/ui/app/api/chargebacks/route.ts`), true);
+  assert.match(source("ui/components/chargebacks/chargeback-review-workspace.tsx"), /Needs Review/);
 });
 
 test("migration sequence is monotonic, includes 063/064, and has no duplicate numbers", () => {
