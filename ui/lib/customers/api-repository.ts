@@ -49,6 +49,12 @@ function trackingState(value: unknown): CustomerTrackingState {
   return "Unknown";
 }
 
+function scalarText(value: unknown, fallback: string) {
+  if (typeof value === "string" && value.trim()) return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return fallback;
+}
+
 function dateText(value: unknown, fallback = "No activity") {
   if (!value) return fallback;
   const date = new Date(String(value));
@@ -70,7 +76,7 @@ function customerSummaryFromList(row: any, organizationId: string): CustomerSumm
     profit: 0,
     profitStatus: "Estimated",
     lastActivity: dateText(row?.last_activity_at),
-    status: String(customer.status || "active"),
+    status: scalarText(customer.status, "active"),
     trackingHealth: trackingState(row?.tracking_health),
     repeat: numeric(row?.order_count) > 1,
     refunded: Boolean(row?.refunded),
@@ -82,7 +88,7 @@ function customerSummaryFromList(row: any, organizationId: string): CustomerSumm
 function customerSummaryFromDetail(body: any, organizationId: string): CustomerSummary {
   const customer = body?.customer || {};
   const summary = body?.summary || {};
-  const status = body?.customer_360?.status || customer.status || "active";
+  const status = scalarText(body?.customer_360?.status, scalarText(customer.status, "active"));
   const health = body?.customer_360?.operational_health?.tracking_health || body?.customer_360?.operational_health?.status;
   return {
     id: String(customer.id || ""),
@@ -95,7 +101,7 @@ function customerSummaryFromDetail(body: any, organizationId: string): CustomerS
     profit: 0,
     profitStatus: "Estimated",
     lastActivity: dateText(summary.last_seen_at),
-    status: String(status),
+    status,
     trackingHealth: trackingState(health),
     repeat: numeric(summary.total_orders) > 1,
     refunded: Boolean(body?.customer_360?.refunds?.count || 0),
@@ -154,7 +160,7 @@ function snapshotFromDetail(body: any, organizationId: string): CustomerWorkspac
     customer,
     lifetimeRevenue: numeric(summary.lifetime_revenue),
     customerSince: dateText(summary.first_seen_at, "Unknown"),
-    firstTouch: String(body?.customer_360?.acquisition?.first_touch?.source || body?.customer_360?.acquisition?.source || "Unknown"),
+    firstTouch: scalarText(body?.customer_360?.acquisition?.first_touch?.source, scalarText(body?.customer_360?.acquisition?.source, "Unknown")),
     lastPurchase: orders[0]?.order_ts ? dateText(orders[0].order_ts) : "No purchases",
     journeyId: String(firstJourney?.id || "No journey"),
     journey: [fallbackJourneyEvent(body)],
@@ -165,7 +171,7 @@ function snapshotFromDetail(body: any, organizationId: string): CustomerWorkspac
       amount: numeric(order.gross_amount ?? order.receipt_total ?? order.amount),
       profit: null,
       profitStatus: "Estimated" as const,
-      status: String(order.status_norm || order.status || "Recorded"),
+      status: scalarText(order.status_norm, scalarText(order.status, "Recorded")),
       refunded: /refund|return|void|chargeback/i.test(String(order.status_norm || order.status || "")),
       offerId: String(order.offer_id || order.everflow_offer_id || ""),
       offerName: String(order.offer_name || order.offer_id || order.everflow_offer_id || "Offer"),
@@ -173,7 +179,7 @@ function snapshotFromDetail(body: any, organizationId: string): CustomerWorkspac
     })),
     offers: Array.from(offersById.values()),
     privacySignals: [],
-    trackingExplanation: String(body?.customer_360?.operational_health?.explanation || "Customer evidence loaded from the TraceKit Customer Explorer."),
+    trackingExplanation: scalarText(body?.customer_360?.operational_health?.explanation, "Customer evidence loaded from the TraceKit Customer Explorer."),
   };
 }
 
