@@ -240,3 +240,5 @@ export class ApiCustomerRepository implements CustomerRepository {
 }
 
 export const apiCustomerRepository: CustomerRepository = new ApiCustomerRepository();
+// Compatibility export for CustomerWorkspace, whose mock-repository import is aliased here in Preview.
+export const customerRepository: CustomerRepository = apiCustomerRepository;
