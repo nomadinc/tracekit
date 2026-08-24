@@ -36,6 +36,17 @@ async function rest(path: string, init: RequestInit = {}) {
 const user = (row: Row): PersistentUser => ({ id: String(row.id), workosUserId: String(row.workos_user_id), primaryEmail: String(row.primary_email), displayName: String(row.display_name), avatarUrl: row.avatar_url ? String(row.avatar_url) : null, status: row.status as PersistentUser["status"] });
 const membership = (row: Row & { tracekit_roles?: { role_key?: string } }): PersistentMembership => ({ id: String(row.id), userId: String(row.user_id), accountId: row.account_id ? String(row.account_id) : null, organizationId: row.organization_id ? String(row.organization_id) : null, role: String(row.tracekit_roles?.role_key) as Role, status: row.status as PersistentMembership["status"] });
 
+function persistentOrganization(row: Row): PersistentOrganizationRecord {
+  return {
+    id: String(row.id),
+    owningAccountId: String(row.owning_account_id),
+    agencyId: row.agency_id ? String(row.agency_id) : null,
+    workosOrganizationId: row.workos_organization_id ? String(row.workos_organization_id) : null,
+    name: String(row.name),
+    status: String(row.status),
+  };
+}
+
 export class SupabaseIdentityTenancyRepository implements IdentityTenancyRepository {
   async synchronizeUser(identity: WorkOSIdentityInput) {
     const displayName = [identity.firstName, identity.lastName].filter(Boolean).join(" ") || identity.email;
@@ -102,12 +113,30 @@ export class SupabaseIdentityTenancyRepository implements IdentityTenancyReposit
   }
 
   async organizationsForMembership(membership: PersistentMembership, agency: PersistentAgency | null) {
-    let path: string;
-    if (membership.organizationId) path = `tracekit_organizations?id=eq.${encodeURIComponent(membership.organizationId)}&status=eq.active`;
-    else if (agency) path = `tracekit_agency_client_assignments?agency_id=eq.${encodeURIComponent(agency.id)}&status=eq.active&select=tracekit_organizations(*)`;
-    else path = "tracekit_organizations?id=eq.00000000-0000-0000-0000-000000000000";
-    const rows = await rest(path) as Array<Row & { tracekit_organizations?: Row }>;
-    return rows.map((source) => source.tracekit_organizations || source).map((row): PersistentOrganizationRecord => ({ id: String(row.id), owningAccountId: String(row.owning_account_id), agencyId: row.agency_id ? String(row.agency_id) : null, workosOrganizationId: row.workos_organization_id ? String(row.workos_organization_id) : null, name: String(row.name), status: String(row.status) }));
+    if (membership.organizationId) {
+      const rows = await rest(`tracekit_organizations?id=eq.${encodeURIComponent(membership.organizationId)}&status=eq.active`) as Row[];
+      return rows.map(persistentOrganization);
+    }
+
+    if (!agency) return [];
+
+    const assignmentRows = await rest(`tracekit_agency_client_assignments?agency_id=eq.${encodeURIComponent(agency.id)}&status=eq.active&select=tracekit_organizations(*)`) as Array<Row & { tracekit_organizations?: Row }>;
+    const assignedOrganizations = assignmentRows
+      .map((source) => source.tracekit_organizations)
+      .filter((row): row is Row => Boolean(row))
+      .map(persistentOrganization);
+
+    if (membership.role === "agency-owner" || membership.role === "agency-admin") {
+      return assignedOrganizations;
+    }
+
+    if (membership.role === "team-member" || membership.role === "agency-read-only") {
+      const accessRows = await rest(`tracekit_agency_member_client_access?membership_id=eq.${encodeURIComponent(membership.id)}&status=eq.active&select=organization_id`) as Row[];
+      const allowedOrganizationIds = new Set(accessRows.map((row) => String(row.organization_id)));
+      return assignedOrganizations.filter((organization) => allowedOrganizationIds.has(organization.id));
+    }
+
+    return [];
   }
 
   async permissionOverrides(membershipId: string) {
