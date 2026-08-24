@@ -142,11 +142,11 @@ async function findDuplicateWorkbook(workbookHash: string): Promise<boolean | "n
 }
 
 
-export function buildPreviewReport(input: { summary: { workbookHash: string; accepted: number; rejected: number; headers: string[] }; rows: HistoricalDisputeRow[]; rejected: Array<{ rowNumber: number; codes: string[] }>; duplicateWorkbook: boolean }) {
+export function buildPreviewReport(input: { summary: { workbookHash: string; accepted: number; rejected: number; headers: string[] }; rows: HistoricalDisputeRow[]; rejected: Array<{ rowNumber: number; codes: string[] }>; duplicateWorkbook: boolean | "not_checked_scope_unavailable" | "not_checked_database_unavailable" }) {
   const dates = input.rows.flatMap((row) => [row.transactionDate, row.disputeDate, row.closedDate].filter((value): value is string => Boolean(value))).sort();
-  const distribution = (field: "state" | "status") => Object.fromEntries([...input.rows.reduce((counts, row) => counts.set(row[field], (counts.get(row[field]) || 0) + 1), new Map<string, number>())].sort(([a], [b]) => a.localeCompare(b)));
-  const productCounts = Object.fromEntries([...input.rows.reduce((counts, row) => counts.set(row.product, (counts.get(row.product) || 0) + 1), new Map<string, number>())].sort(([a], [b]) => a.localeCompare(b)));
-  const rejectionCounts = Object.fromEntries([...input.rejected.flatMap((finding) => finding.codes).reduce((counts, code) => counts.set(code, (counts.get(code) || 0) + 1), new Map<string, number>())].sort(([a], [b]) => a.localeCompare(b)));
+  const distribution = (field: "state" | "status") => Object.fromEntries(Array.from(input.rows.reduce((counts, row) => counts.set(row[field], (counts.get(row[field]) || 0) + 1), new Map<string, number>())).sort(([a], [b]) => a.localeCompare(b)));
+  const productCounts = Object.fromEntries(Array.from(input.rows.reduce((counts, row) => counts.set(row.product, (counts.get(row.product) || 0) + 1), new Map<string, number>())).sort(([a], [b]) => a.localeCompare(b)));
+  const rejectionCounts = Object.fromEntries(Array.from(input.rejected.flatMap((finding) => finding.codes).reduce((counts, code) => counts.set(code, (counts.get(code) || 0) + 1), new Map<string, number>())).sort(([a], [b]) => a.localeCompare(b)));
   const sum = (field: "amount" | "fee") => input.rows.reduce((total, row) => total + (row[field] ? Number(row[field]) : 0), 0).toFixed(2);
   return {
     event: "historical_disputes_preview",

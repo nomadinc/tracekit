@@ -194,7 +194,7 @@ function bodyStructure(value: unknown) {
     if (path) result.set(path, item === null ? "null" : typeof item);
   };
   visit(value, "", 0);
-  return [...result.entries()].filter(([path]) => path).sort(([a], [b]) => a.localeCompare(b)).map(([path, type]) => ({ path, type }));
+  return Array.from(result.entries()).filter(([path]) => path).sort(([a], [b]) => a.localeCompare(b)).map(([path, type]) => ({ path, type }));
 }
 
 function safeKey(key: string) {

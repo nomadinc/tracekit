@@ -28,7 +28,7 @@ export class SupabaseCommerceEvidenceStore implements CommerceEvidenceStore {
     if (!input.connectionId || !input.providerAccountId || !input.sourceObjectType) throw new Error("Durable Commerce Evidence requires complete server scope.");
     const payloadHash = await sha256Hex(input.payload);
     const path = objectPath({ organizationId: input.organizationId, connectionId: input.connectionId, providerAccountId: input.providerAccountId, sourceObjectType: input.sourceObjectType }, payloadHash);
-    const response = await this.storageRequest(path, { method: "POST", headers: { "Content-Type": input.contentType, "x-upsert": "false" }, body: input.payload });
+    const response = await this.storageRequest(path, { method: "POST", headers: { "Content-Type": input.contentType, "x-upsert": "false" }, body: input.payload.slice().buffer as ArrayBuffer });
     if (!response.ok) {
       const conflict = response.status === 400 || response.status === 409;
       this.logPersistence("post_failed", input.sourceObjectType, payloadHash, response.status, conflict);

@@ -31,7 +31,7 @@ function summary(rows: Row[], reconciliations: Row[] = []) {
   const confidence: Record<string, number> = {};
   for (const row of rows) { const c = normalizeConfidence(row.matching_state); confidence[c] = (confidence[c] || 0) + 1; }
   for (const row of reconciliations) { const c = normalizeConfidence(row.confidence_band); confidence[c] = (confidence[c] || 0) + 1; }
-  return { total: rows.length, disputedAmount: currencies.size <= 1 ? disputedAmount : null, fees: currencies.size <= 1 ? fees : null, currencies: [...currencies], statuses: counts, confidence };
+  return { total: rows.length, disputedAmount: currencies.size <= 1 ? disputedAmount : null, fees: currencies.size <= 1 ? fees : null, currencies: Array.from(currencies), statuses: counts, confidence };
 }
 
 export async function GET(request: Request) {

@@ -166,7 +166,7 @@ async function main() {
     const transition = historical.historical ? historicalChunkTransition(rangeComplete, warnings) : (warnings ? "completed_with_warnings" : "completed");
     if (transition === "paused") {
       const released = await db("rpc/release_commerce_sync_run", { method: "POST", body: JSON.stringify({ p_run_id: runId, p_organization_id: organizationId, p_connection_id: connectionId, p_lease_owner: owner }) });
-      if (released[0] !== true) throw new Error("Historical backfill chunk could not release its lease.");
+      if ((released as unknown as unknown[])[0] !== true) throw new Error("Historical backfill chunk could not release its lease.");
     } else {
       await db("rpc/transition_commerce_sync_run", { method: "POST", body: JSON.stringify({ p_run_id: runId, p_organization_id: organizationId, p_connection_id: connectionId, p_lease_owner: owner, p_transition: warnings ? "completed_with_warnings" : "completed", p_error_code: null, p_error_summary: null }) });
     }

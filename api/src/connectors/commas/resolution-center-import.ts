@@ -37,7 +37,10 @@ export async function inspectResolutionCenterWorkbook(filePath: string): Promise
   let headers: string[] = [];
   let totalDataRows = 0;
   for await (const worksheet of reader) {
-    worksheetNames.push(worksheet.name);
+    // ExcelJS exposes `name` at runtime on streamed worksheets, but its
+    // WorksheetReader declaration omits that runtime field.
+    const worksheetName = (worksheet as unknown as { name?: unknown }).name;
+    worksheetNames.push(typeof worksheetName === "string" ? worksheetName : `Sheet${worksheetNames.length + 1}`);
     for await (const row of worksheet) {
       const values = row.values as unknown[];
       if (row.number === 1) headers = values.slice(1).map(textValue);

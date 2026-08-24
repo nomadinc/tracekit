@@ -16,7 +16,7 @@ function Metric({label,value,detail}:{label:string;value:string;detail?:string})
 export function ChargebackReviewWorkspace() {
   const [filters,setFilters]=React.useState({status:"",confidence:"",search:"",matched:"",product:"",reason:"",from:"",to:"",page:1});
   const [data,setData]=React.useState<Data|null>(null); const [loading,setLoading]=React.useState(true); const [error,setError]=React.useState<string|null>(null); const [selected,setSelected]=React.useState<Row|null>(null); const [detail,setDetail]=React.useState<Detail|null>(null);
-  const load=React.useCallback(async()=>{setLoading(true);setError(null);try{const q=new URLSearchParams({page:String(filters.page),page_size:"50"});for(const [k,v] of Object.entries(filters))if(k!=="page"&&v)q.set(k,v);setData(await apiGetJson<Data>(`/api/chargebacks?${q}`));}catch(e:any){setError(e?.message||"Chargeback review is unavailable.");}finally{setLoading(false);}},[filters]);
+  const load=React.useCallback(async()=>{setLoading(true);setError(null);try{const q=new URLSearchParams({page:String(filters.page),page_size:"50"});for(const [k,v] of Object.entries(filters))if(k!=="page"&&v)q.set(k,String(v));setData(await apiGetJson<Data>(`/api/chargebacks?${q}`));}catch(e:any){setError(e?.message||"Chargeback review is unavailable.");}finally{setLoading(false);}},[filters]);
   React.useEffect(()=>{void load();},[load]);
   React.useEffect(()=>{if(!selected){setDetail(null);return;}void apiGetJson<Detail>(`/api/chargebacks/${selected.id}`).then(setDetail).catch(()=>setDetail(null));},[selected]);
   const summary=data?.summary;
