@@ -104,6 +104,36 @@ function customerSummaryFromDetail(body: any, organizationId: string): CustomerS
   };
 }
 
+function fallbackJourneyEvent(body: any) {
+  const customer = body?.customer || {};
+  const summary = body?.summary || {};
+  const timestamp = String(summary.last_seen_at || summary.first_seen_at || customer.updated_at || customer.created_at || "");
+  return {
+    id: `customer-profile:${String(customer.id || "unknown")}`,
+    name: "Customer profile observed",
+    timestamp,
+    domain: "",
+    role: "Customer profile",
+    status: "Observed",
+    confidence: "Observed",
+    trackingHealth: "Unknown" as CustomerTrackingState,
+    trackingStatus: "Customer record available",
+    originalUrl: "",
+    referrer: "",
+    destinationUrl: "",
+    queryParameters: {},
+    identifiers: [],
+    redirects: [],
+    diagnostics: [],
+    relationships: [],
+    explanation: {
+      conclusion: "Customer profile is available in TraceKit.",
+      reason: "The Customer Explorer returned a tenant-scoped customer record.",
+      evidence: ["Customer profile record"],
+    },
+  };
+}
+
 function snapshotFromDetail(body: any, organizationId: string): CustomerWorkspaceSnapshot {
   const customer = customerSummaryFromDetail(body, organizationId);
   const summary = body?.summary || {};
@@ -127,7 +157,7 @@ function snapshotFromDetail(body: any, organizationId: string): CustomerWorkspac
     firstTouch: String(body?.customer_360?.acquisition?.first_touch?.source || body?.customer_360?.acquisition?.source || "Unknown"),
     lastPurchase: orders[0]?.order_ts ? dateText(orders[0].order_ts) : "No purchases",
     journeyId: String(firstJourney?.id || "No journey"),
-    journey: [],
+    journey: [fallbackJourneyEvent(body)],
     orders: orders.map((order: any) => ({
       id: String(order.platform_order_id || order.order_id || order.id || ""),
       number: String(order.order_id || order.platform_order_id || order.id || "Order"),
