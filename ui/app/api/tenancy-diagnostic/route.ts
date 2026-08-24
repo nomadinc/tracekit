@@ -3,6 +3,7 @@ import { resolveApplicationSession } from "@/lib/identity/application-session";
 import { requirePermission } from "@/lib/identity/authorization-gateway";
 
 // Temporary restore-environment diagnostic. Remove after agency tenancy certification.
+// Rebuild marker: synchronized branch-scoped TK secret.
 function hostOf(value: string | undefined) {
   try {
     return value ? new URL(value).host : null;
