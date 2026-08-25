@@ -39,3 +39,16 @@ test("review workspace preserves the existing affiliate/source chargeback report
   assert.match(source, /Affiliate &amp; source performance/);
   assert.match(await readFile(new URL("../app/(app)/dashboard/financial-issue-analysis-client.tsx", import.meta.url), "utf8"), /\/v1\/chargebacks\/analysis/);
 });
+
+test("chargeback routes use same-origin JSON while Worker APIs keep their configured base", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const workspace = await readFile(new URL("../components/chargebacks/chargeback-review-workspace.tsx", import.meta.url), "utf8");
+  const api = await readFile(new URL("../lib/api.ts", import.meta.url), "utf8");
+  assert.match(workspace, /sameOriginGetJson<Data>\(`\/api\/chargebacks\?/);
+  assert.match(workspace, /sameOriginGetJson<Detail>\(`\/api\/chargebacks\/\$\{selected\.id\}`\)/);
+  assert.match(api, /export async function sameOriginGetJson/);
+  assert.match(api, /const url = pathAndQuery\.startsWith\("\/"\) \? pathAndQuery/);
+  assert.match(api, /export async function apiGetJson/);
+  assert.match(api, /const base = getApiBaseUrl\(\)/);
+  assert.doesNotMatch(workspace, /NEXT_PUBLIC_API_BASE_URL|TK_SECRET_KEY|SUPABASE_SERVICE_ROLE_KEY/);
+});

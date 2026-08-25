@@ -1,6 +1,6 @@
 "use client";
 import * as React from "react";
-import { apiGetJson } from "@/lib/api";
+import { sameOriginGetJson } from "@/lib/api";
 import { CONFIDENCE_LABELS, type ReviewConfidence } from "@/lib/chargebacks/review";
 import { FinancialIssueAnalysisClient } from "@/app/(app)/dashboard/financial-issue-analysis-client";
 
@@ -17,9 +17,9 @@ function Metric({label,value,detail}:{label:string;value:string;detail?:string})
 export function ChargebackReviewWorkspace() {
   const [filters,setFilters]=React.useState({status:"",confidence:"",search:"",matched:"",product:"",reason:"",from:"",to:"",page:1});
   const [data,setData]=React.useState<Data|null>(null); const [loading,setLoading]=React.useState(true); const [error,setError]=React.useState<string|null>(null); const [selected,setSelected]=React.useState<Row|null>(null); const [detail,setDetail]=React.useState<Detail|null>(null);
-  const load=React.useCallback(async()=>{setLoading(true);setError(null);try{const q=new URLSearchParams({page:String(filters.page),page_size:"50"});for(const [k,v] of Object.entries(filters))if(k!=="page"&&v)q.set(k,String(v));setData(await apiGetJson<Data>(`/api/chargebacks?${q}`));}catch(e:any){setError(e?.message||"Chargeback review is unavailable.");}finally{setLoading(false);}},[filters]);
+  const load=React.useCallback(async()=>{setLoading(true);setError(null);try{const q=new URLSearchParams({page:String(filters.page),page_size:"50"});for(const [k,v] of Object.entries(filters))if(k!=="page"&&v)q.set(k,String(v));setData(await sameOriginGetJson<Data>(`/api/chargebacks?${q}`));}catch(e:any){setError(e?.message||"Chargeback review is unavailable.");}finally{setLoading(false);}},[filters]);
   React.useEffect(()=>{void load();},[load]);
-  React.useEffect(()=>{if(!selected){setDetail(null);return;}void apiGetJson<Detail>(`/api/chargebacks/${selected.id}`).then(setDetail).catch(()=>setDetail(null));},[selected]);
+  React.useEffect(()=>{if(!selected){setDetail(null);return;}void sameOriginGetJson<Detail>(`/api/chargebacks/${selected.id}`).then(setDetail).catch(()=>setDetail(null));},[selected]);
   const summary=data?.summary;
   return <main className="space-y-6"><div className="flex flex-wrap items-end justify-between gap-4"><div><div className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700 dark:text-teal-300">Commerce operations</div><h1 className="mt-2 text-3xl font-semibold tracking-tight">Chargeback Review</h1><p className="mt-2 text-sm text-slate-500">Review historical Resolution Center matches and live provider events without changing reconciliation decisions.</p></div><div className="rounded-full border bg-white px-3 py-1.5 text-xs text-slate-500 dark:bg-ink/60">Historical Import · Live Provider Event</div></div>
     <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4"><Metric label="Total disputes" value={summary?summary.total.toLocaleString():"—"} detail="Current scoped result"/><Metric label="Disputed amount" value={summary?.disputedAmount==null?"Unavailable":money(summary.disputedAmount)} detail={summary?.currencies?.length?summary.currencies.join(", "):"Currency not supplied"}/><Metric label="Needs review" value={summary?.confidence?.needs_review?.toLocaleString()||"0"} detail="Ambiguous candidates"/><Metric label="Unmatched" value={summary?.confidence?.unmatched?.toLocaleString()||"0"} detail="No defensible candidate"/></div>

@@ -127,6 +127,41 @@ export async function apiGetJson<T>(
   }
 }
 
+/** Fetch a Next.js application route from the current origin.
+ *
+ * Worker-backed callers should continue using apiGetJson(); application routes
+ * must not be prefixed with NEXT_PUBLIC_API_BASE_URL.
+ */
+export async function sameOriginGetJson<T>(
+  pathAndQuery: string,
+  init?: RequestInit
+): Promise<T> {
+  const url = pathAndQuery.startsWith("/") ? pathAndQuery : `/${pathAndQuery}`;
+  const res = await fetch(url, {
+    ...init,
+    method: "GET",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: {
+      ...(init?.headers || {}),
+      Accept: "application/json",
+    },
+  });
+
+  const text = await readTextSafe(res);
+  if (!res.ok) {
+    throw apiError(res.status, url, summarizeApiError(res, text));
+  }
+  if (isProbablyHtml(text)) {
+    throw apiError(res.status, url, "Expected JSON but received HTML");
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw apiError(res.status, url, "Invalid JSON response");
+  }
+}
+
 function getTkSecretForRequest(): string {
   // Best practice: keep this DEV-only.
   // In local dev, we can read from NEXT_PUBLIC_TK_SECRET_KEY (ui/.env.local).
