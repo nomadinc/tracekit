@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { resolveApplicationSession } from "@/lib/identity/application-session";
+import { AuthorizationDeniedError } from "@/lib/identity/authorization-gateway";
 import { createCommerceControlPlane } from "@/lib/commerce/server-control-plane";
 import { MemoryCommerceEvidenceStore } from "@/lib/commerce/evidence-store";
 import { BoundedCommasConnectionVerifier } from "@/lib/commerce/commas-verifier";
@@ -77,7 +78,8 @@ export async function POST(request: Request, context: { params: Promise<{ commer
       try {
         const result = await plane.verifyConnection(resolution.session, connectionId);
         return success(requestId, { verified: true, status: result.status, verification: { providerStatus: result.providerStatus ?? null, providerRequestIdPresent: result.providerRequestIdPresent ?? false, rateLimitRemaining: result.rateLimitRemaining ?? null } });
-      } catch {
+      } catch (error) {
+        if (error instanceof AuthorizationDeniedError) throw error;
         return failure(requestId, 502, "provider_verification_failed", "Connection verification did not succeed.", true);
       }
     }
@@ -91,7 +93,10 @@ export async function POST(request: Request, context: { params: Promise<{ commer
       return success(requestId, { status: "disabled", message: "Connection disabled." });
     }
     return failure(requestId, 404, "resource_unavailable", "The requested resource is unavailable.");
-  } catch {
+  } catch (error) {
+    if (error instanceof AuthorizationDeniedError) {
+      return failure(requestId, 404, "resource_unavailable", "The requested resource is unavailable.");
+    }
     return failure(requestId, 500, "internal_error", "TraceKit could not complete the connection operation.", true);
   }
 }
