@@ -21,6 +21,7 @@
     "inspect:commas-historical-quota": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/inspect-commas-historical-quota.ts",
     "sync:commas-continuous": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/run-commas-continuous-sync.ts --confirm-bounded-continuous-proof",
     "dispatch:commas-one-shot-shadow": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/run-one-shot-continuous-shadow.ts",
+    "probe:commas-quota": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/probe-commas-quota.ts",
     "import:commas-disputes": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/import-commas-historical-disputes.ts --confirm-historical-import",
     "preview:commas-disputes": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/import-commas-historical-disputes.ts --confirm-historical-import --preview",
     "import:everflow-investigation": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/import-everflow-investigation.ts --confirm-protected-import",

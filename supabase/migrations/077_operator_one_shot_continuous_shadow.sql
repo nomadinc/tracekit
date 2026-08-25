@@ -1,3 +1,10 @@
+alter table public.commerce_continuous_sync_state
+  add column if not exists quota_limit integer,
+  add column if not exists quota_remaining integer,
+  add column if not exists quota_reset text,
+  add column if not exists quota_observed_at timestamptz,
+  add column if not exists quota_source text;
+
 -- Explicit, non-scheduled acceptance dispatch.  This function only reserves a
 -- bounded shadow run; the API Worker remains responsible for queue delivery.
 create or replace function public.enqueue_commerce_operator_one_shot_shadow(
@@ -60,9 +67,10 @@ begin
   if v_live <> 0 then raise exception 'operator live activation exists' using errcode = '42501'; end if;
   select count(*) into v_controls from public.tracekit_production_controls where capability = 'commerce_scheduler' and activation_state = 'enabled';
   if v_controls <> 0 then raise exception 'operator scheduler control enabled' using errcode = '42501'; end if;
-  select nullif(metadata->>'rate_limit_end', '')::numeric into v_quota from public.commerce_sync_runs
-    where organization_id = p_organization_id and connection_id = p_connection_id and metadata ? 'rate_limit_end'
-    order by created_at desc limit 1;
+  select quota_remaining into v_quota from public.commerce_continuous_sync_state
+    where organization_id = p_organization_id and connection_id = p_connection_id and provider_account_id = p_provider_account_id and resource = p_resource
+      and quota_observed_at is not null and quota_observed_at >= now() - interval '15 minutes'
+    limit 1;
   v_floor := coalesce(v_schedule.quota_minimum_remaining, 1000);
   if v_quota is null or v_quota - 8 < v_floor then raise exception 'operator quota unavailable' using errcode = '42501'; end if;
   return query insert into public.commerce_sync_runs(organization_id, connection_id, provider_account_id, sync_type, mode, scheduler_idempotency_key, metadata)

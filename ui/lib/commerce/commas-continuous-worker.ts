@@ -12,6 +12,11 @@ import {
 
 type Row = Record<string, unknown>;
 type RateLimit = { limit: number | null; remaining: number | null; reset: string | null };
+export const COMMAS_QUOTA_OBSERVATION_MAX_AGE_MS = 15 * 60 * 1000;
+export function isFreshCommasQuotaObservation(observedAt: string | null | undefined, now = Date.now()) {
+  const timestamp = observedAt ? Date.parse(observedAt) : NaN;
+  return Number.isFinite(timestamp) && timestamp <= now && now - timestamp <= COMMAS_QUOTA_OBSERVATION_MAX_AGE_MS;
+}
 
 export type ContinuousSyncResult = {
   runId:string; status:"completed"|"completed_with_warnings"; providerRequests:number; pagesScanned:number;
@@ -58,6 +63,25 @@ async function fetchProviderPage(secret:string,page:number,perPage:number,correl
     }
   }
   throw new Error(`Commas continuous sync exhausted retries (${lastStatus||"network"}).`);
+}
+
+export async function runCommasQuotaProbe(options: { connectionId: string; confirm: boolean }) {
+  const expectedConnectionId = "ea1c2313-6120-4692-84c5-ec3562e7dcf6";
+  if (!options.confirm) throw new Error("Commas quota probe requires explicit confirmation.");
+  if (options.connectionId !== expectedConnectionId) throw new Error("Quota probe is restricted to the approved Commas connection.");
+  if (process.env.TRACEKIT_COMMERCE_KILL_SWITCH !== "enabled") throw new Error("Commerce kill switch blocks the quota probe.");
+  const scope = await scopedConnection();
+  if (scope.connectionId !== expectedConnectionId) throw new Error("Quota probe connection scope mismatch.");
+  const paused = await db(`commerce_connection_pauses?organization_id=eq.${scope.organizationId}&connection_id=eq.${scope.connectionId}&paused=eq.true&select=connection_id&limit=1`);
+  if (paused.length) throw new Error("Quota probe connection is paused.");
+  const activeRuns = await db(`commerce_sync_runs?organization_id=eq.${scope.organizationId}&connection_id=eq.${scope.connectionId}&status=in.(queued,running,paused)&select=id&limit=1`);
+  if (activeRuns.length) throw new Error("Quota probe has a conflicting active run.");
+  const liveActivation = await db(`commerce_repository_activation?organization_id=eq.${scope.organizationId}&mode=in.(live,live_beta)&select=organization_id&limit=1`);
+  if (liveActivation.length) throw new Error("Quota probe is blocked by live repository activation.");
+  const fetched = await fetchProviderPage(scope.secret, 1, 1, `commas-quota-probe-${randomUUID()}`, 1);
+  const observedAt = new Date().toISOString();
+  await db(`commerce_continuous_sync_state?on_conflict=connection_id,provider_account_id,resource`, { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ account_id: scope.accountId, organization_id: scope.organizationId, connection_id: scope.connectionId, provider_account_id: scope.providerAccountId, resource: "transactions", quota_limit: fetched.rateLimit.limit, quota_remaining: fetched.rateLimit.remaining, quota_reset: fetched.rateLimit.reset, quota_observed_at: observedAt, quota_source: "operator_quota_probe", updated_at: observedAt }) });
+  return { provider: "commas", connectionId: scope.connectionId, providerAccountId: scope.providerAccountId, providerRequests: 1, quotaLimit: fetched.rateLimit.limit, quotaRemaining: fetched.rateLimit.remaining, quotaReset: fetched.rateLimit.reset, observedAt, source: "operator_quota_probe" as const };
 }
 
 async function scopedConnection(expected?:{organizationId:string;connectionId:string;providerAccountId:string}) {

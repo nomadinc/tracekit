@@ -177,6 +177,15 @@ test("migration filenames are unique and numerically ordered", () => {
   assert.equal(new Set(numbers).size, numbers.length);
   assert.deepEqual(numbers, Array.from({ length: Number(numbers.at(-1)) + 1 }, (_, index) => String(index).padStart(3, "0")));
 });
+test("operator one-shot quota reservation includes durable freshness fields and service-role ACL", () => {
+  const migration = readFileSync(new URL("../../supabase/migrations/077_operator_one_shot_continuous_shadow.sql", import.meta.url), "utf8");
+  assert.match(migration, /quota_remaining integer/);
+  assert.match(migration, /quota_observed_at timestamptz/);
+  assert.match(migration, /quota_source text/);
+  assert.match(migration, /quota_observed_at >= now\(\) - interval '15 minutes'/);
+  assert.match(migration, /security definer/);
+  assert.match(migration, /grant execute on function[\s\S]*service_role/);
+});
 
 test("Migration 070 defines a one-time post-fix Worker cache replay", () => {
   const migration070 = migration("070_workers_request_cache_fixed_replay.sql").toLowerCase();

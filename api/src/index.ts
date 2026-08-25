@@ -942,13 +942,15 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
         db.from("commerce_connection_pauses").select("paused").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).limit(1).maybeSingle(),
         db.from("commerce_sync_runs").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).in("status", ["queued", "running", "paused"]),
         db.from("commerce_repository_activation").select("organization_id", { count: "exact", head: true }).eq("organization_id", message.organization_id).in("mode", ["live", "live_beta"]),
-        db.from("commerce_sync_runs").select("metadata").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).not("metadata->>rate_limit_end", "is", "null").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+        db.from("commerce_continuous_sync_state").select("quota_remaining,quota_observed_at").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1).maybeSingle(),
         db.from("tracekit_production_controls").select("id", { count: "exact", head: true }).eq("capability", "commerce_scheduler").eq("activation_state", "enabled"),
       ]);
       if (connectionError || accountError || credentialError || scheduleError || pauseError || activeError || activationError || latestError || controlError) return false;
-      const metadata = latest?.metadata && typeof latest.metadata === "object" ? latest.metadata as Record<string, unknown> : {};
-      const quotaRemaining = Number(metadata.rate_limit_end);
-      return String(connection?.provider || "") === "commas" && String(connection?.status || "") === "connected" && String(connection?.account_id || "") === message.account_id && (accounts || []).length === 1 && String(accounts?.[0]?.id || "") === message.provider_account_id && Boolean(credential) && String(schedule?.sync_frequency || "") === "hourly" && schedule?.enabled === false && schedule?.activation_state !== "paused" && !Boolean(pause?.paused) && Number(activeRuns || 0) === 0 && Number(liveActivation || 0) === 0 && Number(schedulerControl || 0) === 0 && Number.isFinite(quotaRemaining) && quotaRemaining - 8 >= Number(schedule?.quota_minimum_remaining || 1000);
+      const quotaRemaining = Number(latest?.quota_remaining);
+      const observedAt = Date.parse(String(latest?.quota_observed_at || ""));
+      const age = Date.now() - observedAt;
+      const quotaFresh = Number.isFinite(observedAt) && age >= 0 && age <= 15 * 60 * 1000;
+      return String(connection?.provider || "") === "commas" && String(connection?.status || "") === "connected" && String(connection?.account_id || "") === message.account_id && (accounts || []).length === 1 && String(accounts?.[0]?.id || "") === message.provider_account_id && Boolean(credential) && String(schedule?.sync_frequency || "") === "hourly" && schedule?.enabled === false && schedule?.activation_state !== "paused" && !Boolean(pause?.paused) && Number(activeRuns || 0) === 0 && Number(liveActivation || 0) === 0 && Number(schedulerControl || 0) === 0 && quotaFresh && Number.isFinite(quotaRemaining) && quotaRemaining - 8 >= Number(schedule?.quota_minimum_remaining || 1000);
     },
     async reserve(message) {
       if (message.bootstrap) {
