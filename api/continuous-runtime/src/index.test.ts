@@ -30,6 +30,14 @@ test("manual invocation is explicitly allowed through the internal path while no
   assert.notEqual(response.status, 503);
 });
 
+test("operator one-shot is allowed without scheduler enablement but remains kill-switch guarded", async () => {
+  const operatorMessage = { ...normalMessage, operator_one_shot: true, acceptance_cycle: true, max_pages: 8, per_page: 100, request_key: "55555555-5555-4555-8555-555555555555", reserved_run_id: "66666666-6666-4666-8666-666666666666" };
+  const allowed = await handler.fetch(new Request("https://runtime/v1/commerce/sync", { method: "POST", headers: { "x-tracekit-runtime-secret": "test-only" }, body: JSON.stringify(operatorMessage) }), { ...env, TRACEKIT_COMMERCE_KILL_SWITCH: "enabled" });
+  assert.notEqual(allowed.status, 503);
+  const blocked = await handler.fetch(new Request("https://runtime/v1/commerce/sync", { method: "POST", headers: { "x-tracekit-runtime-secret": "test-only" }, body: JSON.stringify(operatorMessage) }), env);
+  assert.equal(blocked.status, 503);
+});
+
 test("ordinary direct HTTP invocation cannot bypass the internal contract", async () => {
   const response = await handler.fetch(new Request("https://runtime/v1/commerce/sync", { method: "POST", body: JSON.stringify(message) }), { ...env, TRACEKIT_COMMERCE_SCHEDULER_ENABLED: "true", TRACEKIT_COMMERCE_KILL_SWITCH: "enabled" });
   assert.equal(response.status, 403);

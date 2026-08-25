@@ -889,11 +889,20 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
       const result = await readQuotaBootstrapGate(db, message); if (result.rejection) console.log("[TraceKit] commerce.queue.bootstrap_rejected", { rejection_code: result.rejection, reserved_run_present: Boolean(message.reserved_run_id), ...(message.reserved_run_id ? { reserved_run_id: message.reserved_run_id } : {}) }); return !result.rejection;
     },
     async preReservedRunPermitted(message) {
-      if (!message.bootstrap || !message.reserved_run_id) return false;
+      if ((!message.bootstrap && !message.operator_one_shot) || !message.reserved_run_id) return false;
       const { data: run, error } = await db.from("commerce_sync_runs").select("id,organization_id,connection_id,provider_account_id,sync_type,mode,status,scheduler_idempotency_key,metadata").eq("id", message.reserved_run_id).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("scheduler_idempotency_key", message.scheduler_identity).eq("status", "queued").maybeSingle();
       if (error) { console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, lookup: "postgrest_error", status: Number(error.status || error.statusCode || 0) || null, code: String(error.code || "postgrest_error") }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); return false; }
       if (!run) { console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, lookup: "not_found", ...preReservedRunMatchDetails(null, message) }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); return false; }
-      const valid = isPreReservedRunMatch(run, message);
+      const valid = message.operator_one_shot
+        ? String((run as any).sync_type || "") === message.resource
+          && String((run as any).mode || "") === "continuous"
+          && String((run as any).status || "") === "queued"
+          && String((run as any).scheduler_idempotency_key || "") === message.scheduler_identity
+          && String(((run as any).metadata || {}).dispatch_source || "") === "operator_one_shot"
+          && ((run as any).metadata || {}).acceptance_cycle === true
+          && Number(((run as any).metadata || {}).max_pages) === 8
+          && Number(((run as any).metadata || {}).per_page) === 100
+        : isPreReservedRunMatch(run, message);
       if (!valid) { console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, ...preReservedRunMatchDetails(run, message) }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); }
       else { console.log("[TraceKit] commerce.queue.pre_reserved_accepted", { reserved_run_id: message.reserved_run_id }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_passed", run_id: message.reserved_run_id }); }
       return valid;
@@ -920,6 +929,26 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
       const metadata = latest?.metadata && typeof latest.metadata === "object" ? latest.metadata as Record<string, unknown> : {};
       const quotaRemaining = Number(metadata.rate_limit_end);
       return String(connection?.provider || "") === "commas" && String(connection?.status || "") === "connected" && (accounts || []).length === 1 && String(accounts?.[0]?.id || "") === message.provider_account_id && String(schedule?.sync_frequency || "") === "manual" && schedule?.enabled === true && schedule?.activation_state !== "paused" && !Boolean(pauses?.[0]?.paused) && Number(activeRuns || 0) === 0 && Number(liveActivation || 0) === 0 && Number.isFinite(quotaRemaining) && quotaRemaining - 8 >= Number(schedule?.quota_minimum_remaining || 1000);
+    },
+    async operatorOneShotPermitted(message) {
+      if (!message.operator_one_shot || !message.acceptance_cycle || !message.reserved_run_id) return false;
+      if (message.connection_id !== "ea1c2313-6120-4692-84c5-ec3562e7dcf6") return false;
+      if (env.TRACEKIT_COMMERCE_KILL_SWITCH !== "enabled") return false;
+      const [{ data: connection, error: connectionError }, { data: accounts, error: accountError }, { data: credential, error: credentialError }, { data: schedule, error: scheduleError }, { data: pause, error: pauseError }, { count: activeRuns, error: activeError }, { count: liveActivation, error: activationError }, { data: latest, error: latestError }, { count: schedulerControl, error: controlError }] = await Promise.all([
+        db.from("commerce_provider_connections").select("organization_id,account_id,provider,status").eq("organization_id", message.organization_id).eq("id", message.connection_id).maybeSingle(),
+        db.from("commerce_provider_accounts").select("id").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("status", "active"),
+        db.from("commerce_provider_credentials").select("id").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).is("revoked_at", null).limit(1),
+        db.from("commerce_sync_schedules").select("sync_frequency,enabled,activation_state,quota_minimum_remaining").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1).maybeSingle(),
+        db.from("commerce_connection_pauses").select("paused").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).limit(1).maybeSingle(),
+        db.from("commerce_sync_runs").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).in("status", ["queued", "running", "paused"]),
+        db.from("commerce_repository_activation").select("organization_id", { count: "exact", head: true }).eq("organization_id", message.organization_id).in("mode", ["live", "live_beta"]),
+        db.from("commerce_sync_runs").select("metadata").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).not("metadata->>rate_limit_end", "is", "null").order("created_at", { ascending: false }).limit(1).maybeSingle(),
+        db.from("tracekit_production_controls").select("id", { count: "exact", head: true }).eq("capability", "commerce_scheduler").eq("activation_state", "enabled"),
+      ]);
+      if (connectionError || accountError || credentialError || scheduleError || pauseError || activeError || activationError || latestError || controlError) return false;
+      const metadata = latest?.metadata && typeof latest.metadata === "object" ? latest.metadata as Record<string, unknown> : {};
+      const quotaRemaining = Number(metadata.rate_limit_end);
+      return String(connection?.provider || "") === "commas" && String(connection?.status || "") === "connected" && String(connection?.account_id || "") === message.account_id && (accounts || []).length === 1 && String(accounts?.[0]?.id || "") === message.provider_account_id && Boolean(credential) && String(schedule?.sync_frequency || "") === "hourly" && schedule?.enabled === false && schedule?.activation_state !== "paused" && !Boolean(pause?.paused) && Number(activeRuns || 0) === 0 && Number(liveActivation || 0) === 0 && Number(schedulerControl || 0) === 0 && Number.isFinite(quotaRemaining) && quotaRemaining - 8 >= Number(schedule?.quota_minimum_remaining || 1000);
     },
     async reserve(message) {
       if (message.bootstrap) {
@@ -15429,6 +15458,38 @@ async function router(req: Request, env: Env): Promise<Response> {
       return json({ ok: true, reads: result.reads, rejection: result.rejection }, 200);
     } catch (error: any) {
       return json({ ok: false, error: "diagnostic_failed", code: String(error?.code || "invalid_request") }, 400);
+    }
+  }
+  if (path === "/internal/commerce/one-shot-shadow" && req.method === "POST") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const body = await readJsonBody(req);
+      if (body.confirmation !== "one-shot-continuous-shadow" || body.resource !== "transactions" || body.mode !== "continuous" || body.max_pages !== 8 || body.per_page !== 100) return json({ ok: false, error: "explicit_one_shot_confirmation_required" }, 400);
+      const connectionId = String(body.connection_id || "");
+      if (connectionId !== "ea1c2313-6120-4692-84c5-ec3562e7dcf6") return json({ ok: false, error: "connection_not_authorized" }, 403);
+      const requestKey = String(body.request_key || "");
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(requestKey)) return json({ ok: false, error: "request_key_required" }, 400);
+      if (!env.continuous_commerce) return json({ ok: false, error: "continuous_queue_unavailable" }, 503);
+      if (env.TRACEKIT_COMMERCE_KILL_SWITCH !== "enabled") return json({ ok: false, error: "commerce_kill_switch_blocked" }, 409);
+      const db = getSupabase(env);
+      const { data: connection, error: connectionError } = await db.from("commerce_provider_connections").select("id,organization_id,account_id,provider,status").eq("id", connectionId).maybeSingle();
+      if (connectionError || !connection) return json({ ok: false, error: "connection_unavailable" }, 409);
+      const { data: accounts, error: accountError } = await db.from("commerce_provider_accounts").select("id").eq("organization_id", connection.organization_id).eq("connection_id", connectionId).eq("status", "active");
+      if (accountError || !accounts || accounts.length !== 1) return json({ ok: false, error: "provider_account_scope_unavailable" }, 409);
+      const providerAccountId = String(accounts[0].id);
+      const { data: reserved, error: reserveError } = await db.rpc("enqueue_commerce_operator_one_shot_shadow", { p_account_id: connection.account_id, p_organization_id: connection.organization_id, p_connection_id: connectionId, p_provider_account_id: providerAccountId, p_resource: "transactions", p_request_key: requestKey });
+      if (reserveError) return json({ ok: false, error: "one_shot_not_permitted" }, 409);
+      const row = Array.isArray(reserved) ? reserved[0] : reserved;
+      if (!row?.run_id) return json({ ok: false, error: "one_shot_reservation_unavailable" }, 409);
+      if (row.created === false) return json({ ok: true, status: "duplicate", run_id: row.run_id }, 200);
+      const message: CommerceQueueMessage = { schema_version: 1, job_type: "commerce_continuous", provider: "commas", account_id: String(connection.account_id), organization_id: String(connection.organization_id), connection_id: connectionId, provider_account_id: providerAccountId, resource: "transactions", requested_mode: "continuous", scheduler_identity: `operator-one-shot:${requestKey}`, requested_at: new Date().toISOString(), operator_one_shot: true, acceptance_cycle: true, max_pages: 8, per_page: 100, request_key: requestKey, reserved_run_id: String(row.run_id) };
+      const repository = getContinuousCommerceAdapterRepository(env);
+      if (!await repository.operatorOneShotPermitted?.(message)) return json({ ok: false, error: "one_shot_not_permitted" }, 409);
+      await env.continuous_commerce.send(message);
+      return json({ ok: true, status: "queued", run_id: String(row.run_id), dispatch_source: "operator_one_shot", acceptance_cycle: true, max_pages: 8, per_page: 100 }, 202);
+    } catch (error: any) {
+      return json({ ok: false, error: "one_shot_dispatch_failed", code: String(error?.code || "operator_one_shot_failed").replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 80) }, 500);
     }
   }
   if (path === "/v1/commerce/sync-now" && req.method === "POST") {

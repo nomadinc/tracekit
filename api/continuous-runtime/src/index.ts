@@ -50,12 +50,14 @@ export default {
       const message = validateRuntimeMessage(body);
       const bootstrap = message.bootstrap === true && message.bootstrap_mode === "quota-bootstrap";
       const manual = message.manual === true;
-      if (!bootstrap && !manual && (env.TRACEKIT_COMMERCE_SCHEDULER_ENABLED !== "true" || env.TRACEKIT_COMMERCE_KILL_SWITCH !== "enabled")) return json({ ok: false, error: "continuous_runtime_disabled" }, 503);
+      const operatorOneShot = message.operator_one_shot === true;
+      if ((operatorOneShot || !bootstrap && !manual) && env.TRACEKIT_COMMERCE_KILL_SWITCH !== "enabled") return json({ ok: false, error: "continuous_runtime_disabled" }, 503);
+      if (!operatorOneShot && !bootstrap && !manual && env.TRACEKIT_COMMERCE_SCHEDULER_ENABLED !== "true") return json({ ok: false, error: "continuous_runtime_disabled" }, 503);
       const scope = validateRuntimeScope({ provider: message.provider, status: "connected", connectionId: message.connection_id, organizationId: message.organization_id, providerAccountId: message.provider_account_id });
       installRuntimeEnvironment(env);
       const mode = message.requested_mode === "deep_reconciliation" ? "deep_reconciliation" : "continuous";
       const { runContinuousCommasSync } = await import("../../../ui/lib/commerce/commas-continuous-worker.ts");
-      const result = await runContinuousCommasSync({ mode, bootstrap, maxPages: bootstrap ? 1 : undefined, perPage: bootstrap ? 1 : undefined, overlapPages: bootstrap ? 1 : undefined, requestKey: message.scheduler_identity, expectedScope: { organizationId: String(scope.organizationId), connectionId: String(scope.connectionId), providerAccountId: String(scope.providerAccountId) } });
+      const result = await runContinuousCommasSync({ mode, bootstrap, maxPages: bootstrap ? 1 : operatorOneShot ? 8 : undefined, perPage: bootstrap ? 1 : operatorOneShot ? 100 : undefined, overlapPages: bootstrap ? 1 : undefined, requestKey: message.request_key || message.scheduler_identity, expectedScope: { organizationId: String(scope.organizationId), connectionId: String(scope.connectionId), providerAccountId: String(scope.providerAccountId) } });
       return json({ ok: true, status: result.status, providerRequests: result.providerRequests, pagesScanned: result.pagesScanned, rateLimitStart: result.rateLimitStart, rateLimitEnd: result.rateLimitEnd }, 200);
     } catch (error) { return json({ ok: false, error: error instanceof Error ? error.message : "continuous_runtime_failed" }, 400); }
   },
