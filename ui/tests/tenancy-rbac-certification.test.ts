@@ -53,12 +53,13 @@ test("orders route always scopes by active organization and workspace before obj
 test("commerce write authorization denials remain generic 404 responses", () => {
   const route = source("ui/app/api/commerce/[...commercePath]/route.ts");
   assert.match(route, /AuthorizationDeniedError/);
-  assert.match(route, /error instanceof AuthorizationDeniedError/);
-  assert.match(route, /failure\(requestId, 404, "resource_unavailable", "The requested resource is unavailable\."\)/);
-  assert.doesNotMatch(
-    route,
-    /if \(error instanceof AuthorizationDeniedError\)[\s\S]{0,180}failure\(requestId, 500/,
+  const denialCatch = route.match(
+    /if \(error instanceof AuthorizationDeniedError\)\s*\{\s*return failure\(requestId, (\d+), "([^"]+)", "([^"]+)"\);\s*\}/,
   );
+  assert.ok(denialCatch, "authorization denial catch must return a structured failure");
+  assert.equal(denialCatch[1], "404");
+  assert.equal(denialCatch[2], "resource_unavailable");
+  assert.equal(denialCatch[3], "The requested resource is unavailable.");
 });
 
 test("direct client sessions remain organization scoped while account context is derived", () => {
