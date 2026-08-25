@@ -19,6 +19,26 @@ export async function commercePersistenceRequest(path: string, init: RequestInit
   return (Array.isArray(json) ? json : [json]) as Row[];
 }
 
+/** Read an exact tenant-scoped count without materializing the matching rows. */
+export async function commercePersistenceCount(path: string) {
+  const { url, key } = configuration();
+  const response = await fetch(`${url}/rest/v1/${path}`, {
+    method: "GET",
+    cache: "no-store",
+    headers: {
+      apikey: key,
+      Authorization: `Bearer ${key}`,
+      Accept: "application/json",
+      Prefer: "count=exact",
+    },
+  });
+  if (!response.ok) throw new Error(`Commerce persistence count failed (${response.status}).`);
+  const range = response.headers.get("content-range") || "";
+  const total = Number(range.slice(range.lastIndexOf("/") + 1));
+  if (!Number.isFinite(total)) throw new Error("Commerce persistence count unavailable.");
+  return total;
+}
+
 const request = commercePersistenceRequest;
 
 const connection = (row: Row): CommerceConnection => ({ id: String(row.id), accountId: String(row.account_id), organizationId: String(row.organization_id), provider: String(row.provider), displayName: String(row.display_name), environment: String(row.environment), status: row.status as CommerceConnection["status"], lastSuccessAt: row.last_success_at ? String(row.last_success_at) : null, lastErrorAt: row.last_error_at ? String(row.last_error_at) : null, lastErrorCode: row.last_error_code ? String(row.last_error_code) : null, capabilities: (row.capabilities as Record<string, unknown>) || {}, setupRequestId: row.setup_request_id ? String(row.setup_request_id) : null });

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { CONFIDENCE_LABELS, evidenceFactorLabels, normalizeConfidence, parseReviewFilters } from "../lib/chargebacks/review.ts";
+import { summaryFromExactCounts } from "../lib/chargebacks/summary.ts";
 
 test("chargeback review filters are bounded and preserve server pagination", () => {
   const filters = parseReviewFilters(new URLSearchParams("page=0&page_size=1000&confidence=needs_review&matched=unmatched"));
@@ -51,4 +52,29 @@ test("chargeback routes use same-origin JSON while Worker APIs keep their config
   assert.match(api, /export async function apiGetJson/);
   assert.match(api, /const base = getApiBaseUrl\(\)/);
   assert.doesNotMatch(workspace, /NEXT_PUBLIC_API_BASE_URL|TK_SECRET_KEY|SUPABASE_SERVICE_ROLE_KEY/);
+});
+
+test("chargeback summaries use exact server counts instead of the PostgREST row ceiling", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const route = await readFile(new URL("../app/api/chargebacks/route.ts", import.meta.url), "utf8");
+  const repository = await readFile(new URL("../lib/commerce/supabase-control-repository.ts", import.meta.url), "utf8");
+  const summary = await readFile(new URL("../lib/chargebacks/summary.ts", import.meta.url), "utf8");
+  assert.match(route, /commercePersistenceCount/);
+  assert.match(repository, /Prefer: "count=exact"/);
+  assert.doesNotMatch(route, /limit=20000/);
+  assert.match(summary, /disputedAmount: null,\s*fees: null/);
+  assert.match(route, /limit=1/);
+});
+
+test("large scoped populations retain exact confidence counts while rows stay paginated", () => {
+  const summary = summaryFromExactCounts({
+    total: 12168,
+    statuses: { lost: 636, won: 32, needs_response: 199, under_review: 133 },
+    confidence: { high_confidence: 9061, medium_confidence: 2476, needs_review: 572, unmatched: 59 },
+  });
+  assert.equal(summary.total, 12168);
+  assert.equal(summary.confidence.needs_review, 572);
+  assert.equal(summary.confidence.unmatched, 59);
+  assert.equal(summary.disputedAmount, null);
+  assert.equal(summary.fees, null);
 });
