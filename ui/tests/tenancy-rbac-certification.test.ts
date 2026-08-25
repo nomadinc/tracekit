@@ -2,18 +2,19 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
-import { ROLE_PERMISSIONS } from "../lib/identity/permissions";
+import { ROLE_PERMISSIONS, type Role } from "../lib/identity/permissions";
 
 const repoRoot = fileURLToPath(new URL("../../", import.meta.url));
 const source = (relative: string) => readFileSync(`${repoRoot}/${relative}`, "utf8");
+const permissionsFor = (role: Role) => ROLE_PERMISSIONS[role] as readonly string[];
 
 test("read-only agency and client roles cannot manage connectors", () => {
-  assert.equal(ROLE_PERMISSIONS["agency-read-only"].includes("connectors.manage"), false);
-  assert.equal(ROLE_PERMISSIONS["client-read-only"].includes("connectors.manage"), false);
-  assert.equal(ROLE_PERMISSIONS["agency-read-only"].includes("customers.view"), true);
-  assert.equal(ROLE_PERMISSIONS["agency-read-only"].includes("orders.view"), true);
-  assert.equal(ROLE_PERMISSIONS["client-read-only"].includes("customers.view"), true);
-  assert.equal(ROLE_PERMISSIONS["client-read-only"].includes("orders.view"), true);
+  assert.equal(permissionsFor("agency-read-only").includes("connectors.manage"), false);
+  assert.equal(permissionsFor("client-read-only").includes("connectors.manage"), false);
+  assert.equal(permissionsFor("agency-read-only").includes("customers.view"), true);
+  assert.equal(permissionsFor("agency-read-only").includes("orders.view"), true);
+  assert.equal(permissionsFor("client-read-only").includes("customers.view"), true);
+  assert.equal(permissionsFor("client-read-only").includes("orders.view"), true);
 });
 
 test("organization switching is authorized before the active organization cookie is written", () => {
