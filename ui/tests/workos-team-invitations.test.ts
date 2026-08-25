@@ -53,7 +53,7 @@ test("auth callback reconciles accepted WorkOS delivery IDs into TraceKit member
 
 test("TraceKit remains authorization authority after WorkOS delivery", () => {
   const reconciliation = source("ui/lib/identity/workos-invitation-reconciliation.ts");
-  const migration = source("supabase/migrations/065_team_membership_mutations.sql");
+  const migration = source("supabase/migrations/072_team_membership_mutations.sql");
   assert.match(reconciliation, /repository\.acceptInvitation/);
   assert.match(migration, /lower\(btrim\(v_user\.primary_email\)\) <> lower\(btrim\(v_invitation\.intended_email\)\)/);
   assert.match(migration, /v_role\.account_type <> v_account_type/);
