@@ -29,6 +29,16 @@ test("capability manifest records established and planned capabilities", () => {
   assert.match(manifest, /Not implemented:\*\* 29Next/);
 });
 
+test("UI convergence remains deferred and Legacy Dashboard is explicitly transitional", () => {
+  const requirement = source("docs/tracekit-ui-convergence-requirement.md");
+  const baseline = source("docs/recovery-baseline-2026-08-20.md");
+  assert.match(requirement, /TRACEKIT UI CONVERGENCE: DEFERRED — REQUIRED BEFORE LAUNCH/);
+  assert.match(requirement, /Legacy Dashboard[\s\S]*temporary scaffolding/);
+  assert.match(requirement, /one[\s\S]*canonical TraceKit application[\s\S]*shell/);
+  assert.match(requirement, /capability regression gate must pass before[\s\S]*merge/);
+  assert.match(baseline, /tracekit-ui-convergence-requirement\.md/);
+});
+
 test("critical UI routes and auth/session entrypoints remain present and non-placeholder", () => {
   const routes = [
     "page.tsx", "(app)/connections/page.tsx", "(app)/connections/commerce/page.tsx",

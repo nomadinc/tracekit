@@ -35,3 +35,6 @@ separate from this recovery Preview.
 - A Git-backed Preview from a clean commit is required before production promotion.
 - The capability regression gate must pass before merge.
 - The current capability inventory is maintained in `docs/tracekit-capability-manifest.md`.
+- UI convergence is a deferred launch requirement recorded in
+  `docs/tracekit-ui-convergence-requirement.md`. The Legacy Dashboard shell is
+  temporary scaffolding and must not be treated as the approved final product.
