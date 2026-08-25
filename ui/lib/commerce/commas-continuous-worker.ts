@@ -33,10 +33,31 @@ function configuration() {
   return {url,key};
 }
 
+export type CommercePersistenceDiagnostic = { status:number; code:string; message:string; detail:string; hint:string; table:string; operation:string };
+const safePersistenceText=(value:unknown)=>String(value??"")
+  .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi,"[redacted-email]")
+  .replace(/Bearer\s+\S+/gi,"[redacted-auth]")
+  .replace(/[^a-zA-Z0-9_.:() /-]/g,"_").slice(0,160);
+export function persistenceDiagnostic(status:number,path:string,method:string,body:Row):CommercePersistenceDiagnostic {
+  return {
+    status,
+    code:safePersistenceText(body.code||body.error_code||"http_error")||"http_error",
+    message:safePersistenceText(body.message), detail:safePersistenceText(body.details||body.detail), hint:safePersistenceText(body.hint),
+    table:path.split("?",1)[0].slice(0,120), operation:String(method||"GET").toUpperCase(),
+  };
+}
+
 async function db(path:string,init:RequestInit={}) {
   const {url,key}=configuration();
   const response=await fetch(`${url}/rest/v1/${path}`,buildContinuousWorkerRequestInit(key,init));
-  if(!response.ok) throw new Error(`Continuous Commerce persistence failed (${response.status}).`);
+  if(!response.ok) {
+    let body:Row={};
+    try { body=object(await response.json())??{}; } catch { /* preserve the HTTP failure when the body is not JSON */ }
+    const diagnostic=persistenceDiagnostic(response.status,path,String(init.method||"GET"),body);
+    const error=new Error(`Continuous Commerce persistence failed (${response.status}): ${diagnostic.code}`) as Error & { persistence?: typeof diagnostic };
+    error.persistence=diagnostic;
+    throw error;
+  }
   if(response.status===204)return [] as Row[];
   const value=await response.json() as unknown;
   return (Array.isArray(value)?value:[value]) as Row[];
@@ -80,8 +101,33 @@ export async function runCommasQuotaProbe(options: { connectionId: string; confi
   if (liveActivation.length) throw new Error("Quota probe is blocked by live repository activation.");
   const fetched = await fetchProviderPage(scope.secret, 1, 1, `commas-quota-probe-${randomUUID()}`, 1);
   const observedAt = new Date().toISOString();
-  await db(`commerce_continuous_sync_state?on_conflict=connection_id,provider_account_id,resource`, { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify({ account_id: scope.accountId, organization_id: scope.organizationId, connection_id: scope.connectionId, provider_account_id: scope.providerAccountId, resource: "transactions", quota_limit: fetched.rateLimit.limit, quota_remaining: fetched.rateLimit.remaining, quota_reset: fetched.rateLimit.reset, quota_observed_at: observedAt, quota_source: "operator_quota_probe", updated_at: observedAt }) });
+  await persistCommasQuotaObservation({
+    accountId:scope.accountId, organizationId:scope.organizationId, connectionId:scope.connectionId,
+    providerAccountId:scope.providerAccountId, quotaLimit:fetched.rateLimit.limit,
+    quotaRemaining:fetched.rateLimit.remaining, quotaReset:fetched.rateLimit.reset, observedAt,
+  });
   return { provider: "commas", connectionId: scope.connectionId, providerAccountId: scope.providerAccountId, providerRequests: 1, quotaLimit: fetched.rateLimit.limit, quotaRemaining: fetched.rateLimit.remaining, quotaReset: fetched.rateLimit.reset, observedAt, source: "operator_quota_probe" as const };
+}
+
+type QuotaObservation = {
+  accountId:string; organizationId:string; connectionId:string; providerAccountId:string;
+  quotaLimit:number|null; quotaRemaining:number|null; quotaReset:string|null; observedAt:string;
+};
+type PersistenceRequest = (path:string, init?:RequestInit)=>Promise<Row[]>;
+
+/** Persist an already-observed quota without ever refetching the provider. */
+export async function persistCommasQuotaObservation(input:QuotaObservation, request:PersistenceRequest=db) {
+  const quota={quota_limit:input.quotaLimit,quota_remaining:input.quotaRemaining,quota_reset:input.quotaReset,quota_observed_at:input.observedAt,quota_source:"operator_quota_probe",updated_at:input.observedAt};
+  const scopeQuery=`commerce_continuous_sync_state?organization_id=eq.${input.organizationId}&connection_id=eq.${input.connectionId}&provider_account_id=eq.${input.providerAccountId}&resource=eq.transactions&select=id&limit=1`;
+  const updated=await request(scopeQuery,{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify(quota)});
+  if(updated.length)return {mode:"updated_existing" as const};
+  const row={
+    account_id:input.accountId,organization_id:input.organizationId,connection_id:input.connectionId,provider_account_id:input.providerAccountId,
+    resource:"transactions",normalizer_version:CONTINUOUS_NORMALIZER_VERSION,evidence_contract_version:COMMERCE_EVIDENCE_CONTRACT_VERSION,
+    status:"unknown",attribution_source_state:"unavailable",recent_source_ids:[],page_fingerprints:{},last_stability_boundary:{},warnings:[],...quota,
+  };
+  await request("commerce_continuous_sync_state",{method:"POST",headers:{Prefer:"return=minimal"},body:JSON.stringify(row)});
+  return {mode:"created_state" as const};
 }
 
 async function scopedConnection(expected?:{organizationId:string;connectionId:string;providerAccountId:string}) {

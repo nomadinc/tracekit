@@ -7,4 +7,10 @@ if (!connectionId) throw new Error("--connection-id is required.");
 void (async () => {
   const result = await runCommasQuotaProbe({ connectionId, confirm });
   console.log(JSON.stringify({ ok: true, provider: result.provider, connection_id: result.connectionId, provider_requests: result.providerRequests, quota_limit: result.quotaLimit, quota_remaining: result.quotaRemaining, quota_reset: result.quotaReset, observed_at: result.observedAt, source: result.source }));
-})().catch((error) => { console.error(error instanceof Error ? error.message : "Quota probe failed."); process.exitCode = 1; });
+})().catch((error) => {
+  const diagnostic = error && typeof error === "object" && "persistence" in error
+    ? (error as { persistence?: unknown }).persistence
+    : undefined;
+  console.error(JSON.stringify(diagnostic ? { ok: false, persistence: diagnostic } : { ok: false, error: error instanceof Error ? error.message : "Quota probe failed." }));
+  process.exitCode = 1;
+});
