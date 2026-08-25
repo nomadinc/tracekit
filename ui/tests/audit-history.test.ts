@@ -44,8 +44,8 @@ test("activity feed suppresses routine membership resolution noise", () => {
 test("successful login is audited after invitation reconciliation with tenant scope", () => {
   const callback = source("ui/app/auth/callback/route.ts");
   const audit = source("ui/lib/identity/authentication-audit.ts");
-  const reconcileIndex = callback.indexOf("reconcileAcceptedWorkOSInvitations");
-  const auditIndex = callback.indexOf("recordScopedAuthenticationSuccess");
+  const reconcileIndex = callback.indexOf("await reconcileAcceptedWorkOSInvitations");
+  const auditIndex = callback.indexOf("await recordScopedAuthenticationSuccess");
   assert.ok(reconcileIndex >= 0);
   assert.ok(auditIndex > reconcileIndex);
   assert.match(audit, /membershipsForUser/);
