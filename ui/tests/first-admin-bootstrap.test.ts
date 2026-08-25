@@ -73,7 +73,13 @@ test("empty installations render setup while existing no-membership remains dist
 });
 
 test("top-level unaffiliated session resolution selects bootstrap only for an empty installation", async () => {
-  assert.match(applicationSession, /if \(!membership\) return resolveUnaffiliatedSessionState/);
+  const inactiveIndex = applicationSession.indexOf("inactiveMembershipsForUser");
+  const deniedIndex = applicationSession.indexOf('action: "user.access.denied"');
+  const bootstrapIndex = applicationSession.indexOf("return resolveUnaffiliatedSessionState");
+  assert.ok(inactiveIndex >= 0);
+  assert.ok(deniedIndex > inactiveIndex);
+  assert.ok(bootstrapIndex > deniedIndex);
+  assert.match(applicationSession, /return \{ kind: "no-membership" \};/);
   assert.match(shell, /const resolution = await resolveApplicationSession\(\);/);
   assert.deepEqual(
     await resolveUnaffiliatedSessionState(async () => true),
