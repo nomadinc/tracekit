@@ -898,6 +898,7 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
           && String((run as any).mode || "") === "continuous"
           && String((run as any).status || "") === "queued"
           && String((run as any).scheduler_idempotency_key || "") === message.scheduler_identity
+          && String(((run as any).metadata || {}).account_id || "") === message.account_id
           && String(((run as any).metadata || {}).dispatch_source || "") === "operator_one_shot"
           && ((run as any).metadata || {}).acceptance_cycle === true
           && Number(((run as any).metadata || {}).max_pages) === 8

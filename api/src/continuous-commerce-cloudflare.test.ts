@@ -47,6 +47,7 @@ test("operator gate excludes only its validated reservation and keeps post-reser
   assert.match(gate,/preReservedRunPermitted!\(message\)/);
   assert.match(gate,/\.neq\("id", message\.reserved_run_id\)/);
   assert.match(gate,/\(activeRuns \|\| \[\]\)\.length === 0/);
+  assert.match(gate,/metadata \|\| \{\}\).*account_id|metadata \|\| \{\}\)\.account_id|\.account_id \|\| ""\) === message\.account_id/);
   const route=source.slice(source.indexOf('path === "/internal/commerce/one-shot-shadow"'),source.indexOf('path === "/v1/commerce/sync-now"'));
   assert.match(route,/reservation_rejected/);
   assert.match(route,/post_reservation_validation_rejected/);
