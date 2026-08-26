@@ -934,13 +934,14 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
       if (!message.operator_one_shot || !message.acceptance_cycle || !message.reserved_run_id) return false;
       if (message.connection_id !== "ea1c2313-6120-4692-84c5-ec3562e7dcf6") return false;
       if (env.TRACEKIT_COMMERCE_KILL_SWITCH !== "enabled") return false;
-      const [{ data: connection, error: connectionError }, { data: accounts, error: accountError }, { data: credential, error: credentialError }, { data: schedule, error: scheduleError }, { data: pause, error: pauseError }, { count: activeRuns, error: activeError }, { count: liveActivation, error: activationError }, { data: latest, error: latestError }, { count: schedulerControl, error: controlError }] = await Promise.all([
+      if (!await this.preReservedRunPermitted!(message)) return false;
+      const [{ data: connection, error: connectionError }, { data: accounts, error: accountError }, { data: credential, error: credentialError }, { data: schedule, error: scheduleError }, { data: pause, error: pauseError }, { data: activeRuns, error: activeError }, { count: liveActivation, error: activationError }, { data: latest, error: latestError }, { count: schedulerControl, error: controlError }] = await Promise.all([
         db.from("commerce_provider_connections").select("organization_id,account_id,provider,status").eq("organization_id", message.organization_id).eq("id", message.connection_id).maybeSingle(),
         db.from("commerce_provider_accounts").select("id").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("status", "active"),
         db.from("commerce_provider_credentials").select("id").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).is("revoked_at", null).limit(1),
         db.from("commerce_sync_schedules").select("sync_frequency,enabled,activation_state,quota_minimum_remaining").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1).maybeSingle(),
         db.from("commerce_connection_pauses").select("paused").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).limit(1).maybeSingle(),
-        db.from("commerce_sync_runs").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).in("status", ["queued", "running", "paused"]),
+        db.from("commerce_sync_runs").select("id").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).neq("id", message.reserved_run_id).in("status", ["queued", "running", "paused"]),
         db.from("commerce_repository_activation").select("organization_id", { count: "exact", head: true }).eq("organization_id", message.organization_id).in("mode", ["live", "live_beta"]),
         db.from("commerce_continuous_sync_state").select("quota_remaining,quota_observed_at").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1).maybeSingle(),
         db.from("tracekit_production_controls").select("id", { count: "exact", head: true }).eq("capability", "commerce_scheduler").eq("activation_state", "enabled"),
@@ -950,7 +951,7 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
       const observedAt = Date.parse(String(latest?.quota_observed_at || ""));
       const age = Date.now() - observedAt;
       const quotaFresh = Number.isFinite(observedAt) && age >= 0 && age <= 15 * 60 * 1000;
-      return String(connection?.provider || "") === "commas" && String(connection?.status || "") === "connected" && String(connection?.account_id || "") === message.account_id && (accounts || []).length === 1 && String(accounts?.[0]?.id || "") === message.provider_account_id && Boolean(credential) && String(schedule?.sync_frequency || "") === "hourly" && schedule?.enabled === false && schedule?.activation_state !== "paused" && !Boolean(pause?.paused) && Number(activeRuns || 0) === 0 && Number(liveActivation || 0) === 0 && Number(schedulerControl || 0) === 0 && quotaFresh && Number.isFinite(quotaRemaining) && quotaRemaining - 8 >= Number(schedule?.quota_minimum_remaining || 1000);
+      return String(connection?.provider || "") === "commas" && String(connection?.status || "") === "connected" && String(connection?.account_id || "") === message.account_id && (accounts || []).length === 1 && String(accounts?.[0]?.id || "") === message.provider_account_id && Boolean(credential) && String(schedule?.sync_frequency || "") === "hourly" && schedule?.enabled === false && schedule?.activation_state !== "paused" && !Boolean(pause?.paused) && (activeRuns || []).length === 0 && Number(liveActivation || 0) === 0 && Number(schedulerControl || 0) === 0 && quotaFresh && Number.isFinite(quotaRemaining) && quotaRemaining - 8 >= Number(schedule?.quota_minimum_remaining || 1000);
     },
     async reserve(message) {
       if (message.bootstrap) {
@@ -15481,13 +15482,13 @@ async function router(req: Request, env: Env): Promise<Response> {
       if (accountError || !accounts || accounts.length !== 1) return json({ ok: false, error: "provider_account_scope_unavailable" }, 409);
       const providerAccountId = String(accounts[0].id);
       const { data: reserved, error: reserveError } = await db.rpc("enqueue_commerce_operator_one_shot_shadow", { p_account_id: connection.account_id, p_organization_id: connection.organization_id, p_connection_id: connectionId, p_provider_account_id: providerAccountId, p_resource: "transactions", p_request_key: requestKey });
-      if (reserveError) return json({ ok: false, error: "one_shot_not_permitted" }, 409);
+      if (reserveError) return json({ ok: false, error: "reservation_rejected", code: "reservation_rejected" }, 409);
       const row = Array.isArray(reserved) ? reserved[0] : reserved;
       if (!row?.run_id) return json({ ok: false, error: "one_shot_reservation_unavailable" }, 409);
       if (row.created === false) return json({ ok: true, status: "duplicate", run_id: row.run_id }, 200);
       const message: CommerceQueueMessage = { schema_version: 1, job_type: "commerce_continuous", provider: "commas", account_id: String(connection.account_id), organization_id: String(connection.organization_id), connection_id: connectionId, provider_account_id: providerAccountId, resource: "transactions", requested_mode: "continuous", scheduler_identity: `operator-one-shot:${requestKey}`, requested_at: new Date().toISOString(), operator_one_shot: true, acceptance_cycle: true, max_pages: 8, per_page: 100, request_key: requestKey, reserved_run_id: String(row.run_id) };
       const repository = getContinuousCommerceAdapterRepository(env);
-      if (!await repository.operatorOneShotPermitted?.(message)) return json({ ok: false, error: "one_shot_not_permitted" }, 409);
+      if (!await repository.operatorOneShotPermitted?.(message)) return json({ ok: false, error: "post_reservation_validation_rejected", code: "post_reservation_gate_rejected", run_id: String(row.run_id) }, 409);
       await env.continuous_commerce.send(message);
       return json({ ok: true, status: "queued", run_id: String(row.run_id), dispatch_source: "operator_one_shot", acceptance_cycle: true, max_pages: 8, per_page: 100 }, 202);
     } catch (error: any) {
