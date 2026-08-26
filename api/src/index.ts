@@ -890,19 +890,22 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
     },
     async preReservedRunPermitted(message) {
       if ((!message.bootstrap && !message.operator_one_shot) || !message.reserved_run_id) return false;
-      const { data: run, error } = await db.from("commerce_sync_runs").select("id,organization_id,connection_id,provider_account_id,sync_type,mode,status,scheduler_idempotency_key,metadata").eq("id", message.reserved_run_id).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("scheduler_idempotency_key", message.scheduler_identity).eq("status", "queued").maybeSingle();
+      const recovery = message.operator_recovery === true;
+      const { data: run, error } = await db.from("commerce_sync_runs").select("id,organization_id,connection_id,provider_account_id,sync_type,mode,status,scheduler_idempotency_key,lease_expires_at,metadata").eq("id", message.reserved_run_id).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("scheduler_idempotency_key", message.scheduler_identity).in("status", recovery ? ["queued", "running"] : ["queued"]).maybeSingle();
       if (error) { console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, lookup: "postgrest_error", status: Number(error.status || error.statusCode || 0) || null, code: String(error.code || "postgrest_error") }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); return false; }
       if (!run) { console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, lookup: "not_found", ...preReservedRunMatchDetails(null, message) }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); return false; }
       const valid = message.operator_one_shot
         ? String((run as any).sync_type || "") === message.resource
           && String((run as any).mode || "") === "continuous"
-          && String((run as any).status || "") === "queued"
+          && (recovery ? (String((run as any).status || "") === "running" && Date.parse(String((run as any).lease_expires_at || "")) < Date.now()) : String((run as any).status || "") === "queued")
           && String((run as any).scheduler_idempotency_key || "") === message.scheduler_identity
           && String(((run as any).metadata || {}).account_id || "") === message.account_id
           && String(((run as any).metadata || {}).dispatch_source || "") === "operator_one_shot"
           && ((run as any).metadata || {}).acceptance_cycle === true
+          && ((run as any).metadata || {}).shadow_only === true
           && Number(((run as any).metadata || {}).max_pages) === 8
           && Number(((run as any).metadata || {}).per_page) === 100
+          && (!recovery || ((run as any).metadata || {}).operator_recovery_dispatched === true)
         : isPreReservedRunMatch(run, message);
       if (!valid) { console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, ...preReservedRunMatchDetails(run, message) }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); }
       else { console.log("[TraceKit] commerce.queue.pre_reserved_accepted", { reserved_run_id: message.reserved_run_id }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_passed", run_id: message.reserved_run_id }); }
@@ -15494,6 +15497,33 @@ async function router(req: Request, env: Env): Promise<Response> {
       return json({ ok: true, status: "queued", run_id: String(row.run_id), dispatch_source: "operator_one_shot", acceptance_cycle: true, max_pages: 8, per_page: 100 }, 202);
     } catch (error: any) {
       return json({ ok: false, error: "one_shot_dispatch_failed", code: String(error?.code || "operator_one_shot_failed").replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 80) }, 500);
+    }
+  }
+  if (path === "/internal/commerce/recover-stranded-one-shot" && req.method === "POST") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const body = await readJsonBody(req);
+      if (body.confirmation !== "recover-stranded-commas-one-shot") return json({ ok: false, error: "explicit_recovery_confirmation_required" }, 400);
+      if (env.TRACEKIT_COMMERCE_SCHEDULER_ENABLED !== "false" || env.TRACEKIT_COMMERCE_KILL_SWITCH !== "enabled") return json({ ok: false, error: "recovery_controls_blocked" }, 409);
+      if (!env.continuous_commerce) return json({ ok: false, error: "continuous_queue_unavailable" }, 503);
+      const db = getSupabase(env);
+      const { data, error } = await db.rpc("requeue_stranded_operator_one_shot_9c8731d7");
+      if (error || !Array.isArray(data) || data.length !== 1) return json({ ok: false, error: "recovery_preflight_rejected", code: "recovery_preflight_rejected" }, 409);
+      const row = data[0] as Record<string, unknown>;
+      const message: CommerceQueueMessage = {
+        schema_version: 1, job_type: "commerce_continuous", provider: "commas",
+        account_id: String(row.account_id), organization_id: String(row.organization_id), connection_id: String(row.connection_id), provider_account_id: String(row.provider_account_id),
+        resource: "transactions", requested_mode: "continuous", scheduler_identity: String(row.scheduler_identity), requested_at: new Date().toISOString(),
+        operator_one_shot: true, operator_recovery: true, acceptance_cycle: true, max_pages: 8, per_page: 100,
+        request_key: String(row.request_key), reserved_run_id: String(row.run_id),
+      };
+      const repository = getContinuousCommerceAdapterRepository(env);
+      if (!await repository.operatorOneShotPermitted?.(message)) return json({ ok: false, error: "recovery_gate_rejected", code: "recovery_gate_rejected" }, 409);
+      await env.continuous_commerce.send(message);
+      return json({ ok: true, status: "queued", run_id: String(row.run_id), operator_recovery: true, dispatch_source: "operator_one_shot", max_pages: 8, per_page: 100 }, 202);
+    } catch (error: any) {
+      return json({ ok: false, error: "recovery_dispatch_failed", code: String(error?.code || "recovery_dispatch_failed").replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 80) }, 500);
     }
   }
   if (path === "/v1/commerce/sync-now" && req.method === "POST") {

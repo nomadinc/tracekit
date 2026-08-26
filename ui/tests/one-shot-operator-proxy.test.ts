@@ -35,3 +35,15 @@ test("proxy does not mutate scheduler, schedule, activation, or provider state",
   assert.doesNotMatch(route, /commerce_sync_schedules.*(update|insert|delete)|tracekit_production_controls|commerce_repository_activation/);
   assert.doesNotMatch(route, /fanbasis|public-api|continuous_commerce\.send|CONTINUOUS_COMMERCE_RUNTIME/);
 });
+
+test("stranded-run recovery proxy is authenticated, confirmation-bound, and server-only",()=>{
+  const recovery=readFileSync(new URL("../app/api/commerce/recover-stranded-one-shot/route.ts",import.meta.url),"utf8");
+  assert.match(recovery,/sameOrigin\(request\)/);
+  assert.match(recovery,/resolveApplicationSession\(\)/);
+  assert.match(recovery,/requirePermission\(resolution\.session, "connectors\.manage"\)/);
+  assert.match(recovery,/recover-stranded-commas-one-shot/);
+  assert.match(recovery,/internal\/commerce\/recover-stranded-one-shot/);
+  assert.match(recovery,/process\.env\.TK_SECRET_KEY/);
+  assert.doesNotMatch(recovery,/NEXT_PUBLIC_TK_SECRET_KEY|localStorage|console\.(log|error)|request\.body\.run/);
+  assert.match(recovery,/operator_recovery: payload\.operator_recovery === true/);
+});
