@@ -72,7 +72,7 @@ function dedupeOrders(rows: OrderCandidate[]) {
     const id = canonicalId(row);
     if (id) byId.set(id, row);
   }
-  return [...byId.values()];
+  return Array.from(byId.values());
 }
 
 async function directCandidates(organizationId: string, transactionId: string) {
