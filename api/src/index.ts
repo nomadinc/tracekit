@@ -957,7 +957,27 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
       const age = Date.now() - observedAt;
       const quotaFresh = Number.isFinite(observedAt) && age >= 0 && age <= 15 * 60 * 1000;
       const requestBudget = orderingVerification ? 3 : 8;
-      return String(connection?.provider || "") === "commas" && String(connection?.status || "") === "connected" && String(connection?.account_id || "") === message.account_id && (accounts || []).length === 1 && String(accounts?.[0]?.id || "") === message.provider_account_id && Boolean(credential) && String(schedule?.sync_frequency || "") === "hourly" && schedule?.enabled === false && schedule?.activation_state !== "paused" && !Boolean(pause?.paused) && (activeRuns || []).length === 0 && Number(liveActivation || 0) === 0 && Number(schedulerControl || 0) === 0 && quotaFresh && Number.isFinite(quotaRemaining) && quotaRemaining - requestBudget >= Number(schedule?.quota_minimum_remaining || 1000);
+      const checks = {
+        connection_provider: String(connection?.provider || "") === "commas",
+        connection_status: String(connection?.status || "") === "connected",
+        account_scope: String(connection?.account_id || "") === message.account_id,
+        active_provider_account: (accounts || []).length === 1,
+        provider_account_match: String(accounts?.[0]?.id || "") === message.provider_account_id,
+        credential_active: Boolean(credential),
+        schedule_hourly: String(schedule?.sync_frequency || "") === "hourly",
+        schedule_disabled: schedule?.enabled === false,
+        schedule_not_paused: schedule?.activation_state !== "paused",
+        connection_not_paused: !Boolean(pause?.paused),
+        no_conflicting_active_run: (activeRuns || []).length === 0,
+        no_live_activation: Number(liveActivation || 0) === 0,
+        scheduler_control_disabled: Number(schedulerControl || 0) === 0,
+        quota_fresh: quotaFresh,
+        quota_known: Number.isFinite(quotaRemaining),
+        quota_capacity: Number.isFinite(quotaRemaining) && quotaRemaining - requestBudget >= Number(schedule?.quota_minimum_remaining || 1000),
+      };
+      const permitted = Object.values(checks).every(Boolean);
+      if (!permitted) console.log("[TraceKit] commerce ordering verification gate rejected", { event: "commerce.ordering_verification.gate_rejected", failed_checks: Object.entries(checks).filter(([, value]) => !value).map(([name]) => name), request_budget: requestBudget });
+      return permitted;
     },
     async reserve(message) {
       if (message.bootstrap) {
