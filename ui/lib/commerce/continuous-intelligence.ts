@@ -7,6 +7,7 @@ export const STABLE_KNOWN_PAGES_REQUIRED = 2;
 
 export type SourceChange = "new" | "source_changed" | "source_identical" | "normalizer_changed";
 export type ProviderOrdering = "newest_first" | "oldest_first" | "unstable" | "unknown";
+export type PaginationClassification = "none" | "benign_boundary_overlap" | "pagination_instability";
 export type AttributionAvailability = "attribution_source_available" | "attribution_source_unavailable" | "eligible_unattributed" | "outside_source_evidence";
 
 export type PageObservation = {
@@ -27,6 +28,66 @@ export type StabilityState = {
   changedRecords: number;
   pageShiftDetected: boolean;
 };
+
+export type OrderingPageObservation = {
+  page: number;
+  direction: ProviderOrdering;
+  firstTimestamp: string | null;
+  lastTimestamp: string | null;
+  firstSourceId: string | null;
+  lastSourceId: string | null;
+  ids: string[];
+  fingerprint?: string | null;
+};
+
+export type OrderingObserverState = {
+  ordering: ProviderOrdering;
+  pagesObserved: number;
+  boundaryOverlapCount: number;
+  paginationClassification: PaginationClassification;
+  pageShiftDetected: boolean;
+  previous: OrderingPageObservation | null;
+};
+
+export function initialOrderingObserver(): OrderingObserverState {
+  return { ordering: "unknown", pagesObserved: 0, boundaryOverlapCount: 0, paginationClassification: "none", pageShiftDetected: false, previous: null };
+}
+
+export function observeOrderingPage(state: OrderingObserverState, current: OrderingPageObservation, maxBoundaryOverlap = 1): OrderingObserverState {
+  const duplicateIds = current.ids.filter((id, index) => current.ids.indexOf(id) !== index);
+  let classification: PaginationClassification = duplicateIds.length > 0 ? "pagination_instability" : state.paginationClassification;
+  let boundaryOverlapCount = state.boundaryOverlapCount;
+  let crossPageUnsafe = false;
+  const previous = state.previous;
+  if (previous && current.page === previous.page + 1) {
+    const repeated = current.ids.filter((id) => previous.ids.includes(id));
+    const boundary = previous.lastSourceId !== null && current.firstSourceId === previous.lastSourceId && repeated.length === 1 ? 1 : 0;
+    const nonBoundary = repeated.length - boundary;
+    if (duplicateIds.length > 0 || nonBoundary > 0 || boundary > maxBoundaryOverlap) classification = "pagination_instability";
+    else if (boundary > 0) { boundaryOverlapCount += boundary; classification = "benign_boundary_overlap"; }
+    const before = previous.lastTimestamp ? Date.parse(previous.lastTimestamp) : NaN;
+    const after = current.firstTimestamp ? Date.parse(current.firstTimestamp) : NaN;
+    if (!Number.isFinite(before) || !Number.isFinite(after)) crossPageUnsafe = true;
+    else if (state.ordering === "newest_first" && after > before) crossPageUnsafe = true;
+    else if (state.ordering === "oldest_first" && after < before) crossPageUnsafe = true;
+  }
+  const direction = current.direction;
+  const firstPageUnknown = state.pagesObserved === 1 && state.ordering === "unknown";
+  if (crossPageUnsafe) classification = "pagination_instability";
+  const ordering = classification === "pagination_instability" || crossPageUnsafe || direction === "unstable" || firstPageUnknown
+    ? "unstable"
+    : state.pagesObserved === 0 ? direction
+      : state.ordering === "unknown" ? direction
+        : direction === "unknown" || state.ordering !== direction ? "unstable" : state.ordering;
+  return {
+    ordering,
+    pagesObserved: state.pagesObserved + 1,
+    boundaryOverlapCount,
+    paginationClassification: classification,
+    pageShiftDetected: state.pageShiftDetected || crossPageUnsafe,
+    previous: current,
+  };
+}
 
 type Json = Record<string, unknown>;
 const asObject=(value:unknown):Json|null=>value&&typeof value==="object"&&!Array.isArray(value)?value as Json:null;

@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import {
   advanceStability, attributionAvailability, candidateKey, classifySource, continuousStopDecision,
-  continuousRequestBounds, detectProviderOrdering, evaluateRateCandidate, firstContinuousPages, parseContinuousPage, rateLimitDelay,
+  continuousRequestBounds, detectProviderOrdering, evaluateRateCandidate, firstContinuousPages, initialOrderingObserver, observeOrderingPage, parseContinuousPage, rateLimitDelay,
   type StabilityState,
 } from "../lib/commerce/continuous-intelligence";
 import { dispatchEligibleSchedules, eligibleScheduledJobs } from "../lib/commerce/continuous-scheduler";
@@ -17,6 +17,39 @@ test("Commas ordering is measured rather than assumed",()=>{
   assert.equal(detectProviderOrdering(["2026-08-08T01:00:00Z","2026-08-08T02:00:00Z"]),"oldest_first");
   assert.equal(detectProviderOrdering(["2026-08-08T02:00:00Z","2026-08-08T01:00:00Z","2026-08-08T03:00:00Z"]),"unstable");
   assert.deepEqual(firstContinuousPages("oldest_first",745,3),[743,744,745]);
+});
+
+test("continuous ordering observer verifies adjacent newest-first pages and benign boundary overlap",()=>{
+  const page=(number:number,first:string,last:string,ids:string[])=>({page:number,direction:"newest_first" as const,firstTimestamp:first,lastTimestamp:last,firstSourceId:ids[0]||null,lastSourceId:ids.at(-1)||null,ids});
+  let state=observeOrderingPage(initialOrderingObserver(),page(1,"2026-08-10T00:00:00Z","2026-08-09T00:00:00Z",["a","b"]));
+  state=observeOrderingPage(state,page(2,"2026-08-09T00:00:00Z","2026-08-08T00:00:00Z",["b","c"]));
+  assert.equal(state.ordering,"newest_first");assert.equal(state.paginationClassification,"benign_boundary_overlap");assert.equal(state.boundaryOverlapCount,1);
+  state=observeOrderingPage(state,page(3,"2026-08-08T00:00:00Z","2026-08-07T00:00:00Z",["c","d"]));
+  assert.equal(state.ordering,"newest_first");assert.equal(state.paginationClassification,"benign_boundary_overlap");
+});
+
+test("continuous ordering observer verifies oldest-first boundaries",()=>{
+  const page=(number:number,first:string,last:string,ids:string[])=>({page, direction:"oldest_first" as const, firstTimestamp:first,lastTimestamp:last,firstSourceId:ids[0]||null,lastSourceId:ids.at(-1)||null,ids});
+  let state=observeOrderingPage(initialOrderingObserver(),page(1,"2026-08-01T00:00:00Z","2026-08-02T00:00:00Z",["a","b"]));
+  state=observeOrderingPage(state,page(2,"2026-08-02T00:00:00Z","2026-08-03T00:00:00Z",["c","d"]));
+  assert.equal(state.ordering,"oldest_first");assert.equal(state.paginationClassification,"none");
+});
+
+test("continuous ordering observer fails closed for unknown, mixed, reversed, and unsafe duplicate pages",()=>{
+  const page=(page:number,direction:any,first:string,last:string,ids:string[])=>({page,direction,firstTimestamp:first,lastTimestamp:last,firstSourceId:ids[0]||null,lastSourceId:ids.at(-1)||null,ids});
+  let state=observeOrderingPage(initialOrderingObserver(),page(1,"unknown", "2026-08-10T00:00:00Z","2026-08-10T00:00:00Z",["a","b"]));
+  assert.equal(state.ordering,"unknown");
+  state=observeOrderingPage(state,page(2,"newest_first","2026-08-09T00:00:00Z","2026-08-08T00:00:00Z",["c","d"]));assert.equal(state.ordering,"unstable");
+  state=observeOrderingPage(observeOrderingPage(initialOrderingObserver(),page(1,"newest_first","2026-08-10T00:00:00Z","2026-08-09T00:00:00Z",["a","b","c"])),page(2,"newest_first","2026-08-08T00:00:00Z","2026-08-07T00:00:00Z",["c","a","d"]));
+  assert.equal(state.paginationClassification,"pagination_instability");
+  state=observeOrderingPage(observeOrderingPage(initialOrderingObserver(),page(1,"newest_first","2026-08-10T00:00:00Z","2026-08-09T00:00:00Z",["a","b"])),page(2,"newest_first","2026-08-10T00:00:00Z","2026-08-09T00:00:00Z",["c","d"]));
+  assert.equal(state.ordering,"unstable");assert.equal(state.paginationClassification,"pagination_instability");
+  state=observeOrderingPage(initialOrderingObserver(),page(1,"newest_first","2026-08-10T00:00:00Z","2026-08-09T00:00:00Z",["a","a"]));assert.equal(state.ordering,"unstable");
+});
+
+test("middle-page recovery replay cannot claim global provider ordering",()=>{
+  const state=observeOrderingPage(initialOrderingObserver(),{page:4,direction:"unknown",firstTimestamp:"2026-08-08T00:00:00Z",lastTimestamp:"2026-08-07T00:00:00Z",firstSourceId:"a",lastSourceId:"b",ids:["a","b"]});
+  assert.equal(state.ordering,"unknown");assert.equal(state.pagesObserved,1);
 });
 
 test("continuous parser validates required identity before normalization",()=>{
