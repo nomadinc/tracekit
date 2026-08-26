@@ -74,6 +74,7 @@ create index everflow_conversion_events_api_conversion_idx
 create or replace function public.everflow_conversion_events_preserve_id()
 returns trigger
 language plpgsql
+set search_path = pg_catalog, public
 as $$
 begin
   new.id := old.id;
