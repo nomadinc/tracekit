@@ -15510,12 +15510,14 @@ async function router(req: Request, env: Env): Promise<Response> {
       if (!env.continuous_commerce) return json({ ok:false, error:"continuous_queue_unavailable" },503);
       const requestKey = crypto.randomUUID(), db = getSupabase(env);
       const { data, error } = await db.rpc("enqueue_commerce_ordering_verification", { p_request_key: requestKey });
-      if (error || !Array.isArray(data) || data.length !== 1) return json({ ok:false, error:"ordering_verification_reservation_rejected" },409);
+      if (error) return json({ ok:false, error:"ordering_reservation_rejected", code:"ordering_reservation_rejected" },409);
+      if (!Array.isArray(data) || data.length !== 1) return json({ ok:false, error:"ordering_reserved_run_invalid", code:"ordering_reserved_run_invalid" },409);
       const row = data[0] as Record<string,unknown>;
       const message: CommerceQueueMessage = { schema_version:1, job_type:"commerce_continuous", provider:"commas", account_id:String(row.account_id), organization_id:String(row.organization_id), connection_id:"ea1c2313-6120-4692-84c5-ec3562e7dcf6", provider_account_id:String(row.provider_account_id), resource:"transactions", requested_mode:"continuous", scheduler_identity:String(row.scheduler_identity), requested_at:new Date().toISOString(), operator_one_shot:true, ordering_verification:true, acceptance_cycle:true, max_pages:3, per_page:100, request_key:requestKey, reserved_run_id:String(row.run_id) };
       const repository=getContinuousCommerceAdapterRepository(env);
-      if (!await repository.operatorOneShotPermitted?.(message)) return json({ ok:false, error:"ordering_verification_gate_rejected" },409);
-      await env.continuous_commerce.send(message);
+      if (!await repository.operatorOneShotPermitted?.(message)) return json({ ok:false, error:"ordering_post_reservation_gate_rejected", code:"ordering_post_reservation_gate_rejected", run_id:String(row.run_id) },409);
+      try { await env.continuous_commerce.send(message); }
+      catch { return json({ ok:false, error:"ordering_queue_dispatch_failed", code:"ordering_queue_dispatch_failed", run_id:String(row.run_id) },503); }
       return json({ ok:true, status:"queued", run_id:String(row.run_id), dispatch_source:"operator_ordering_verification", ordering_verification:true, max_pages:3, per_page:100 },202);
     } catch (error:any) { return json({ ok:false, error:"ordering_verification_dispatch_failed", code:String(error?.code||"ordering_verification_dispatch_failed").replace(/[^a-zA-Z0-9_.-]/g,"_").slice(0,80) },500); }
   }
