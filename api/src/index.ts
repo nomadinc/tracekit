@@ -904,7 +904,7 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
           && String(((run as any).metadata || {}).dispatch_source || "") === "operator_ordering_verification"
           && ((run as any).metadata || {}).ordering_verification === true
           && ((run as any).metadata || {}).shadow_only === true
-          && ((run as any).metadata || {}).acceptance_cycle === true
+          && message.acceptance_cycle === true
           && Number(((run as any).metadata || {}).max_pages) === 3
           && Number(((run as any).metadata || {}).per_page) === 100
           && uuid.test(String(((run as any).metadata || {}).request_key || ""))
