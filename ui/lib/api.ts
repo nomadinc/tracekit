@@ -93,7 +93,7 @@ function apiError(status: number, pathAndQuery: string, summary?: string) {
 }
 
 function isProviderApplicationPath(pathAndQuery: string) {
-  return /^\/v1\/integrations\/[^/]+\/(?:connect|status|(?:affiliates|advertisers)(?:\/sync)?)(?:[?#]|$)/.test(pathAndQuery);
+  return /^\/v1\/integrations\/[^/]+\/(?:connect|status|(?:affiliates|advertisers|offers)(?:\/sync)?)(?:[?#]|$)/.test(pathAndQuery);
 }
 
 export async function apiGetJson<T>(
