@@ -68,6 +68,41 @@ const number=(value:unknown)=>{const parsed=Number(value);return Number.isFinite
 const sleep=(ms:number)=>new Promise((resolve)=>setTimeout(resolve,ms));
 const bytea=(value:unknown)=>decodeHex(String(value));
 
+export type ContinuousCheckpointProgress = {
+  pagesCompleted: number;
+  providerRequests: number;
+  recordsSeen: number;
+  recordsCreated: number;
+  recordsUpdated: number;
+  recordsUnchanged: number;
+  evidenceWrites: number;
+  evidenceReuses: number;
+};
+
+export function summarizeContinuousCheckpointProgress(rows: Row[]): ContinuousCheckpointProgress {
+  return rows.filter((row)=>String(row.state||"")==="completed").reduce<ContinuousCheckpointProgress>((total,row)=>{
+    const metadata=object(row.metadata)||{};
+    const created=number(metadata.new_records)??0;
+    const updated=number(metadata.updated_records)??0;
+    const unchanged=number(metadata.unchanged_records)??0;
+    return {
+      pagesCompleted: total.pagesCompleted+1,
+      providerRequests: total.providerRequests+(number(metadata.provider_attempts)??0),
+      recordsSeen: total.recordsSeen+created+updated+unchanged,
+      recordsCreated: total.recordsCreated+created,
+      recordsUpdated: total.recordsUpdated+updated,
+      recordsUnchanged: total.recordsUnchanged+unchanged,
+      evidenceWrites: total.evidenceWrites+(metadata.evidence_reused===true?0:1),
+      evidenceReuses: total.evidenceReuses+(metadata.evidence_reused===true?1:0),
+    };
+  },{pagesCompleted:0,providerRequests:0,recordsSeen:0,recordsCreated:0,recordsUpdated:0,recordsUnchanged:0,evidenceWrites:0,evidenceReuses:0});
+}
+
+export function firstRecoverableContinuousPage(rows: Row[]): number|null {
+  const pages=rows.filter((row)=>String(row.state||"")==="running").map((row)=>Number(row.page)).filter((page)=>Number.isInteger(page)&&page>0);
+  return pages.length?Math.min(...pages):null;
+}
+
 async function fetchProviderPage(secret:string,page:number,perPage:number,correlationId:string,maxAttempts=3) {
   let lastStatus=0;
   for(let attempt=1;attempt<=maxAttempts;attempt++) {
@@ -156,6 +191,21 @@ async function evidenceForPage(input:{organizationId:string;connectionId:string;
   return {evidenceId:String(rows[0].id),stored,reused:false};
 }
 
+async function replayEvidenceForPage(input:{organizationId:string;connectionId:string;providerAccountId:string;runId:string;page:number;perPage:number}) {
+  const sourceObjectId=`continuous:page:${input.page}:per_page:${input.perPage}`;
+  const rows=await db(`commerce_evidence_records?sync_run_id=eq.${encodeURIComponent(input.runId)}&source_object_type=eq.transaction_page&source_object_id=eq.${encodeURIComponent(sourceObjectId)}&select=id,payload_hash,storage_reference,content_type,byte_size&limit=1`);
+  const row=rows[0];
+  if(!row) return null;
+  const storageReference=String(row.storage_reference||"");
+  const payloadHash=String(row.payload_hash||"");
+  if(!storageReference||!payloadHash) throw new Error("Existing Commerce Evidence reference is incomplete.");
+  const store=new SupabaseCommerceEvidenceStore();
+  const payload=await store.getAuthorized({organizationId:input.organizationId,storageReference});
+  if(!payload) throw new Error("Existing Commerce Evidence could not be read for recovery.");
+  if(!(await store.verifyHash({organizationId:input.organizationId,storageReference,payloadHash}))) throw new Error("Existing Commerce Evidence hash verification failed.");
+  return {evidenceId:String(row.id),bytes:payload,reused:true,stored:{storageBackend:"protected_object_storage",storageReference,contentType:String(row.content_type||"application/json"),byteSize:Number(row.byte_size||payload.byteLength),payloadHash}};
+}
+
 function inFilter(values:string[]) { return `(${values.map((value)=>`"${value.replaceAll('"','')}"`).join(",")})`; }
 
 async function priorMappings(connectionId:string,providerAccountId:string,type:string,ids:string[]) {
@@ -215,16 +265,21 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
   let stability:StabilityState={consecutiveStableKnownPages:0,pagesScanned:0,unseenRecords:0,changedRecords:0,pageShiftDetected:false};
   const pageDurations:number[]=[],fingerprints:Record<string,unknown>={...priorFingerprints},recentIds:string[]=[],changedRows:ReturnType<typeof normalizeCommasTransaction>[]=[],changedProductIds=new Set<string>();
   try {
-    const queue:number[]=[1]; const queued=new Set(queue); let queueIndex=0;
+    const checkpointRows=await db(`commerce_sync_checkpoints?sync_run_id=eq.${runId}&resource=eq.transactions&select=page,state,metadata&order=page.asc`);
+    const recoveryPage=firstRecoverableContinuousPage(checkpointRows);
+    const queue:number[]=[recoveryPage??1]; const queued=new Set(queue); let queueIndex=0;
     while(queueIndex<queue.length&&pagesScanned<maxPages) {
       const page=queue[queueIndex++],pageStarted=Date.now();
       const checkpoint=await ensureCheckpoint({...scope,runId,page,perPage});
       try {
-        const fetched=await fetchProviderPage(scope.secret,page,perPage,owner,bootstrap?1:3); providerRequests++; retries+=fetched.attempts-1;
-        rateLimitStart??=fetched.rateLimit.remaining;rateLimitEnd=fetched.rateLimit.remaining;rateLimitReset=fetched.rateLimit.reset;
-        if(bootstrap)await db(`commerce_sync_runs?id=eq.${runId}`,{method:"PATCH",body:JSON.stringify({metadata:{account_id:scope.accountId,quota_bootstrap_attempted:true,quota_bootstrap_state:fetched.rateLimit.remaining===null?"unknown":"observed",rate_limit_start:rateLimitStart,rate_limit_end:rateLimitEnd,rate_limit_reset:rateLimitReset}})});
-        const evidence=await evidenceForPage({...scope,runId,page,perPage,bytes:fetched.bytes}); evidence.reused?evidenceReuses++:evidenceWrites++;
-        const parsed=parseContinuousPage(fetched.bytes); providerTotalStart??=parsed.totalItems;providerTotalEnd=parsed.totalItems;
+        const replayed=String(checkpoint.state||"")==="running"?await replayEvidenceForPage({...scope,runId,page,perPage}):null;
+        const fetched=replayed?null:await fetchProviderPage(scope.secret,page,perPage,owner,bootstrap?1:3);
+        if(fetched){ providerRequests++; retries+=fetched.attempts-1; rateLimitStart??=fetched.rateLimit.remaining;rateLimitEnd=fetched.rateLimit.remaining;rateLimitReset=fetched.rateLimit.reset; }
+        const pageBytes=replayed?.bytes||fetched!.bytes;
+        const pageRateLimit=replayed?{remaining:null as number|null,attempts:0}:{remaining:fetched!.rateLimit.remaining,attempts:fetched!.attempts};
+        if(bootstrap&&fetched)await db(`commerce_sync_runs?id=eq.${runId}`,{method:"PATCH",body:JSON.stringify({metadata:{account_id:scope.accountId,quota_bootstrap_attempted:true,quota_bootstrap_state:fetched.rateLimit.remaining===null?"unknown":"observed",rate_limit_start:rateLimitStart,rate_limit_end:rateLimitEnd,rate_limit_reset:rateLimitReset}})});
+        const evidence=replayed||await evidenceForPage({...scope,runId,page,perPage,bytes:pageBytes}); evidence.reused?evidenceReuses++:evidenceWrites++;
+        const parsed=parseContinuousPage(pageBytes); providerTotalStart??=parsed.totalItems;providerTotalEnd=parsed.totalItems;
         const timestamps=parsed.items.map((item)=>String(item.transaction_date));
         let metadataProbe=false;
         if(page===1) {
@@ -250,15 +305,17 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
         const fingerprint=contentFingerprint(parsed.items);fingerprints[String(page)]={content_hash:fingerprint,evidence_hash:evidence.stored.payloadHash,first_id:normalized[0]?.transaction_id??null,last_id:normalized.at(-1)?.transaction_id??null,observed_at:new Date().toISOString()};
         if(!metadataProbe)stability=advanceStability(stability,{page,totalPages:parsed.totalPages,totalItems:parsed.totalItems,ids:normalized.map((item)=>item.transaction_id),timestamps,fingerprint,knownIds,priorFingerprint:object(priorFingerprints[String(page)])?.content_hash?String(object(priorFingerprints[String(page)])!.content_hash):null},changes);
         pagesScanned++;pageDurations.push(Date.now()-pageStarted);
-        await db(`commerce_sync_checkpoints?id=eq.${checkpoint.id}`,{method:"PATCH",body:JSON.stringify({state:"completed",source_total_items:parsed.totalItems,source_total_pages:parsed.totalPages,page_fingerprint:fingerprint,first_source_id:normalized[0]?.transaction_id??null,last_source_id:normalized.at(-1)?.transaction_id??null,completed_at:new Date().toISOString(),metadata:{duration_ms:pageDurations.at(-1),provider_attempts:fetched.attempts,rate_limit_remaining:fetched.rateLimit.remaining,new_records:newCount,updated_records:updatedCount,unchanged_records:unchangedCount,evidence_reused:evidence.reused}})});
-        let decision=continuousStopDecision({state:stability,ordering,page,totalPages:parsed.totalPages,maxPages,rateLimitRemaining:fetched.rateLimit.remaining});
+        await db(`commerce_sync_checkpoints?id=eq.${checkpoint.id}`,{method:"PATCH",body:JSON.stringify({state:"completed",source_total_items:parsed.totalItems,source_total_pages:parsed.totalPages,page_fingerprint:fingerprint,first_source_id:normalized[0]?.transaction_id??null,last_source_id:normalized.at(-1)?.transaction_id??null,completed_at:new Date().toISOString(),metadata:{duration_ms:pageDurations.at(-1),provider_attempts:pageRateLimit.attempts,rate_limit_remaining:fetched?.rateLimit.remaining??null,new_records:newCount,updated_records:updatedCount,unchanged_records:unchangedCount,evidence_reused:evidence.reused}})});
+        const durableProgress=summarizeContinuousCheckpointProgress(await db(`commerce_sync_checkpoints?sync_run_id=eq.${runId}&resource=eq.transactions&state=eq.completed&select=state,metadata`));
+        await db(`commerce_sync_runs?id=eq.${runId}`,{method:"PATCH",body:JSON.stringify({pages_completed:durableProgress.pagesCompleted,records_seen:durableProgress.recordsSeen,records_created:durableProgress.recordsCreated,records_updated:durableProgress.recordsUpdated,records_unchanged:durableProgress.recordsUnchanged,provider_request_count:durableProgress.providerRequests,evidence_writes:durableProgress.evidenceWrites,evidence_reuses:durableProgress.evidenceReuses})});
+        let decision=continuousStopDecision({state:stability,ordering,page,totalPages:parsed.totalPages,maxPages,rateLimitRemaining:pageRateLimit.remaining});
         if(mode==="deep_reconciliation"&&decision.reason==="stable_known_boundary") {
           decision=page>=maxPages?{stop:true,reason:"bounded_deep_reconciliation_proof",deeperReconciliationRequired:true}:parsed.totalPages!==null&&page>=parsed.totalPages?{stop:true,reason:"provider_history_boundary",deeperReconciliationRequired:false}:{stop:false,reason:null,deeperReconciliationRequired:false};
         }
         if(decision.stop){stoppingReason=decision.reason!;deeperReconciliationRequired=decision.deeperReconciliationRequired;break;}
         const next=ordering==="oldest_first"?page+1:page+1;if(parsed.hasMore&&!queued.has(next)){queue.push(next);queued.add(next);}
         await db("rpc/heartbeat_commerce_sync_run",{method:"POST",body:JSON.stringify({p_run_id:runId,p_organization_id:scope.organizationId,p_connection_id:scope.connectionId,p_lease_owner:owner,p_lease_seconds:900})});
-        await sleep(fetched.rateLimit.remaining!==null&&fetched.rateLimit.remaining<100?5_000:paceMs);
+        await sleep(pageRateLimit.remaining!==null&&pageRateLimit.remaining<100?5_000:paceMs);
       } catch(error) {
         recordsFailed++;
         await db(`commerce_sync_checkpoints?id=eq.${checkpoint.id}`,{method:"PATCH",body:JSON.stringify({state:"failed",retry_count:Number(checkpoint.retry_count||0)+1,metadata:{error_code:"continuous_page_failed",retryable:true}})}).catch(()=>{});

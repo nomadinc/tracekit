@@ -7,6 +7,7 @@ import {
 } from "../lib/commerce/continuous-intelligence";
 import { dispatchEligibleSchedules, eligibleScheduledJobs } from "../lib/commerce/continuous-scheduler";
 import { investigationFreshness } from "../lib/investigations/freshness";
+import { firstRecoverableContinuousPage, summarizeContinuousCheckpointProgress } from "../lib/commerce/commas-continuous-worker";
 
 const initial=():StabilityState=>({consecutiveStableKnownPages:0,pagesScanned:0,unseenRecords:0,changedRecords:0,pageShiftDetected:false});
 const bytes=(value:unknown)=>new TextEncoder().encode(JSON.stringify(value));
@@ -58,6 +59,33 @@ test("unknown ordering and low quota fail conservatively",()=>{
 test("unknown-quota bootstrap is capped to one request and cannot traverse page two",()=>{
   assert.deepEqual(continuousRequestBounds({bootstrap:true,mode:"continuous",maxPages:99,perPage:100,overlapPages:3}),{perPage:1,maxPages:1,overlapPages:1});
   assert.throws(()=>continuousRequestBounds({bootstrap:true,mode:"deep_reconciliation"}),/continuous mode only/);
+});
+
+test("stranded running checkpoint is the resumable page and completed progress is durable",()=>{
+  const rows=[
+    {page:1,state:"completed",metadata:{provider_attempts:1,new_records:100,updated_records:0,unchanged_records:0,evidence_reused:false}},
+    {page:2,state:"completed",metadata:{provider_attempts:1,new_records:100,updated_records:0,unchanged_records:0,evidence_reused:false}},
+    {page:3,state:"completed",metadata:{provider_attempts:1,new_records:67,updated_records:33,unchanged_records:0,evidence_reused:false}},
+    {page:4,state:"running",metadata:{}},
+  ];
+  assert.equal(firstRecoverableContinuousPage(rows),4);
+  assert.deepEqual(summarizeContinuousCheckpointProgress(rows),{
+    pagesCompleted:3,providerRequests:3,recordsSeen:300,recordsCreated:267,recordsUpdated:33,recordsUnchanged:0,evidenceWrites:3,evidenceReuses:0,
+  });
+});
+
+test("replayed Evidence contributes no provider request and preserves idempotent progress accounting",()=>{
+  const rows=[
+    {page:1,state:"completed",metadata:{provider_attempts:1,new_records:100,updated_records:0,unchanged_records:0,evidence_reused:false}},
+    {page:2,state:"completed",metadata:{provider_attempts:1,new_records:100,updated_records:0,unchanged_records:0,evidence_reused:false}},
+    {page:3,state:"completed",metadata:{provider_attempts:1,new_records:67,updated_records:33,unchanged_records:0,evidence_reused:false}},
+    {page:4,state:"completed",metadata:{provider_attempts:0,new_records:0,updated_records:0,unchanged_records:100,evidence_reused:true}},
+  ];
+  const progress=summarizeContinuousCheckpointProgress(rows);
+  assert.equal(progress.pagesCompleted,4);
+  assert.equal(progress.providerRequests,3);
+  assert.equal(progress.evidenceReuses,1);
+  assert.equal(progress.recordsSeen,400);
 });
 
 test("absence of live attribution source is not failed attribution",()=>{
