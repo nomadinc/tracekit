@@ -891,10 +891,24 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
     async preReservedRunPermitted(message) {
       if ((!message.bootstrap && !message.operator_one_shot) || !message.reserved_run_id) return false;
       const recovery = message.operator_recovery === true;
+      const orderingVerification = message.ordering_verification === true;
       const { data: run, error } = await db.from("commerce_sync_runs").select("id,organization_id,connection_id,provider_account_id,sync_type,mode,status,scheduler_idempotency_key,lease_expires_at,metadata").eq("id", message.reserved_run_id).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("scheduler_idempotency_key", message.scheduler_identity).in("status", recovery ? ["queued", "running"] : ["queued"]).maybeSingle();
       if (error) { console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, lookup: "postgrest_error", status: Number(error.status || error.statusCode || 0) || null, code: String(error.code || "postgrest_error") }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); return false; }
       if (!run) { console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, lookup: "not_found", ...preReservedRunMatchDetails(null, message) }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); return false; }
-      const valid = message.operator_one_shot
+      const valid = orderingVerification
+        ? String((run as any).sync_type || "") === "transactions"
+          && String((run as any).mode || "") === "continuous"
+          && String((run as any).status || "") === "queued"
+          && String((run as any).scheduler_idempotency_key || "") === message.scheduler_identity
+          && String(((run as any).metadata || {}).account_id || "") === message.account_id
+          && String(((run as any).metadata || {}).dispatch_source || "") === "operator_ordering_verification"
+          && ((run as any).metadata || {}).ordering_verification === true
+          && ((run as any).metadata || {}).shadow_only === true
+          && ((run as any).metadata || {}).acceptance_cycle === true
+          && Number(((run as any).metadata || {}).max_pages) === 3
+          && Number(((run as any).metadata || {}).per_page) === 100
+          && uuid.test(String(((run as any).metadata || {}).request_key || ""))
+        : message.operator_one_shot
         ? String((run as any).sync_type || "") === message.resource
           && String((run as any).mode || "") === "continuous"
           && (recovery ? (String((run as any).status || "") === "running" && Date.parse(String((run as any).lease_expires_at || "")) < Date.now()) : String((run as any).status || "") === "queued")
