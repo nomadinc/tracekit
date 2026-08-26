@@ -163,13 +163,16 @@ export async function runCommasQuotaProbe(options: { connectionId: string; confi
   if (liveActivation.length) throw new Error("Quota probe is blocked by live repository activation.");
   const fetched = await fetchProviderPage(scope.secret, 1, 1, `commas-quota-probe-${randomUUID()}`, 1);
   const observedAt = new Date().toISOString();
+  const quotaSource: "operator_quota_probe_stranded_recovery" | "operator_quota_probe" = options.forStrandedRecovery
+    ? "operator_quota_probe_stranded_recovery"
+    : "operator_quota_probe";
   await persistCommasQuotaObservation({
     accountId:scope.accountId, organizationId:scope.organizationId, connectionId:scope.connectionId,
     providerAccountId:scope.providerAccountId, quotaLimit:fetched.rateLimit.limit,
     quotaRemaining:fetched.rateLimit.remaining, quotaReset:fetched.rateLimit.reset, observedAt,
-    quotaSource: options.forStrandedRecovery ? "operator_quota_probe_stranded_recovery" : "operator_quota_probe",
+    quotaSource,
   });
-  return { provider: "commas", connectionId: scope.connectionId, providerAccountId: scope.providerAccountId, providerRequests: 1, quotaLimit: fetched.rateLimit.limit, quotaRemaining: fetched.rateLimit.remaining, quotaReset: fetched.rateLimit.reset, observedAt, source: (options.forStrandedRecovery ? "operator_quota_probe_stranded_recovery" : "operator_quota_probe") as const };
+  return { provider: "commas", connectionId: scope.connectionId, providerAccountId: scope.providerAccountId, providerRequests: 1, quotaLimit: fetched.rateLimit.limit, quotaRemaining: fetched.rateLimit.remaining, quotaReset: fetched.rateLimit.reset, observedAt, source: quotaSource };
 }
 
 type QuotaObservation = {
