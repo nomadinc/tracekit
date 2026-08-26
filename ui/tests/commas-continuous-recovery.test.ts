@@ -23,6 +23,7 @@ test("completed checkpoint rollup makes interrupted progress visible without ter
   assert.deepEqual(progress,{pagesCompleted:2,providerRequests:1,recordsSeen:200,recordsCreated:100,recordsUpdated:0,recordsUnchanged:100,evidenceWrites:1,evidenceReuses:1});
   assert.match(worker,/pages_completed:durableProgress\.pagesCompleted/);
   assert.match(worker,/records_seen:durableProgress\.recordsSeen/);
+  assert.match(worker,/metadata:\{\.\.\.runMetadata/);
 });
 
 test("existing lease RPC safely reclaims only expired running runs",()=>{
