@@ -22,6 +22,25 @@ test("quota probe is one-request, state-only, and never enters normalization", (
   assert.doesNotMatch(probe, /normalizeCommasTransaction|evidenceForPage|commerce_sync_runs.*POST|enqueue_commerce/);
 });
 
+test("stranded recovery quota mode is explicit and fixed-scope",()=>{
+  const source=readFileSync(new URL("../lib/commerce/commas-continuous-worker.ts",import.meta.url),"utf8");
+  const probe=source.slice(source.indexOf("export async function runCommasQuotaProbe"),source.indexOf("async function scopedConnection"));
+  assert.match(probe,/forStrandedRecovery/);
+  assert.match(source,/STRANDED_RECOVERY_RUN_ID = "9c8731d7-1dae-4844-a7ce-0b6fccea170e"/);
+  assert.match(probe,/operator_recovery_dispatched/);
+  assert.match(probe,/continuous%3Apage%3A4%3Aper_page%3A100/);
+  assert.match(probe,/status=in\.\(queued,running,paused\).*id=neq\.\$\{STRANDED_RECOVERY_RUN_ID\}/);
+  assert.match(probe,/operator_quota_probe_stranded_recovery/);
+  assert.match(readFileSync(new URL("../scripts/probe-commas-quota.ts",import.meta.url),"utf8"),/--for-stranded-recovery/);
+  assert.doesNotMatch(probe,/commerce_sync_runs.*POST|normalizeCommasTransaction|evidenceForPage|enqueue_commerce/);
+});
+
+test("078 recovery RPC consumes the same fresh quota floor used by the probe",()=>{
+  const migration=readFileSync(new URL("../../supabase/migrations/078_requeue_stranded_operator_one_shot.sql",import.meta.url),"utf8");
+  assert.match(migration,/quota_observed_at is not null and quota_observed_at >= now\(\) - interval '15 minutes'/);
+  assert.match(migration,/v_quota - 8 < coalesce\(v_schedule\.quota_minimum_remaining,1000\)/);
+});
+
 test("quota observation updates the existing continuous state row without an upsert insert", async () => {
   const calls: Array<{path:string;init?:RequestInit}> = [];
   const result = await persistCommasQuotaObservation({accountId:"a",organizationId:"o",connectionId:"c",providerAccountId:"p",quotaLimit:10000,quotaRemaining:9980,quotaReset:"2026-08-24T13:00:00Z",observedAt:"2026-08-24T12:00:00Z"}, async (path,init) => {
