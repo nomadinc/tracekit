@@ -46,4 +46,6 @@ test("stranded-run recovery proxy is authenticated, confirmation-bound, and serv
   assert.match(recovery,/process\.env\.TK_SECRET_KEY/);
   assert.doesNotMatch(recovery,/NEXT_PUBLIC_TK_SECRET_KEY|localStorage|console\.(log|error)|request\.body\.run/);
   assert.match(recovery,/operator_recovery: payload\.operator_recovery === true/);
+  assert.match(recovery,/safeCode\(payload\.error \|\| payload\.code/);
+  assert.doesNotMatch(recovery,/NextResponse\.json\(payload/);
 });

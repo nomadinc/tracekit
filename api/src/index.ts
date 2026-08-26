@@ -15508,8 +15508,23 @@ async function router(req: Request, env: Env): Promise<Response> {
       if (env.TRACEKIT_COMMERCE_SCHEDULER_ENABLED !== "false" || env.TRACEKIT_COMMERCE_KILL_SWITCH !== "enabled") return json({ ok: false, error: "recovery_controls_blocked" }, 409);
       if (!env.continuous_commerce) return json({ ok: false, error: "continuous_queue_unavailable" }, 503);
       const db = getSupabase(env);
-      const { data, error } = await db.rpc("requeue_stranded_operator_one_shot_9c8731d7");
-      if (error || !Array.isArray(data) || data.length !== 1) return json({ ok: false, error: "recovery_preflight_rejected", code: "recovery_preflight_rejected" }, 409);
+      let data: unknown, error: any;
+      try { ({ data, error } = await db.rpc("requeue_stranded_operator_one_shot_9c8731d7")); }
+      catch (rpcError) {
+        const rpcCode = String((rpcError as any)?.code || "rpc_unavailable").replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 80) || "rpc_unavailable";
+        console.log("[TraceKit] stranded recovery RPC unavailable", { event: "commerce.stranded_recovery.rpc_unavailable", rpcCode });
+        return json({ ok: false, error: "rpc_unavailable", code: "rpc_unavailable" }, 503);
+      }
+      if (error) {
+        const status = Number((error as any).status || (error as any).statusCode || 0) || null;
+        const rpcCode = String((error as any).code || "rpc_error").replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 80) || "rpc_error";
+        console.log("[TraceKit] stranded recovery RPC rejected", { event: "commerce.stranded_recovery.rpc_rejected", status, rpcCode });
+        return json({ ok: false, error: "rpc_rejected", code: "rpc_rejected", status, rpc_code: rpcCode }, 409);
+      }
+      if (!Array.isArray(data) || data.length !== 1) {
+        console.log("[TraceKit] stranded recovery RPC result invalid", { event: "commerce.stranded_recovery.rpc_result_invalid", result: Array.isArray(data) ? "empty_or_multiple" : "non_array" });
+        return json({ ok: false, error: "rpc_result_invalid", code: "rpc_result_invalid" }, 409);
+      }
       const row = data[0] as Record<string, unknown>;
       const message: CommerceQueueMessage = {
         schema_version: 1, job_type: "commerce_continuous", provider: "commas",
@@ -15519,8 +15534,16 @@ async function router(req: Request, env: Env): Promise<Response> {
         request_key: String(row.request_key), reserved_run_id: String(row.run_id),
       };
       const repository = getContinuousCommerceAdapterRepository(env);
-      if (!await repository.operatorOneShotPermitted?.(message)) return json({ ok: false, error: "recovery_gate_rejected", code: "recovery_gate_rejected" }, 409);
-      await env.continuous_commerce.send(message);
+      if (!await repository.operatorOneShotPermitted?.(message)) {
+        console.log("[TraceKit] stranded recovery post-RPC validation rejected", { event: "commerce.stranded_recovery.post_rpc_validation_rejected", run_id: String(row.run_id) });
+        return json({ ok: false, error: "post_rpc_validation_rejected", code: "post_rpc_validation_rejected", run_id: String(row.run_id) }, 409);
+      }
+      try { await env.continuous_commerce.send(message); }
+      catch (error) {
+        const queueCode = String((error as any)?.code || "queue_dispatch_failed").replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 80) || "queue_dispatch_failed";
+        console.log("[TraceKit] stranded recovery queue dispatch failed", { event: "commerce.stranded_recovery.queue_dispatch_failed", code: queueCode, run_id: String(row.run_id) });
+        return json({ ok: false, error: "queue_dispatch_failed", code: "queue_dispatch_failed", run_id: String(row.run_id) }, 503);
+      }
       return json({ ok: true, status: "queued", run_id: String(row.run_id), operator_recovery: true, dispatch_source: "operator_one_shot", max_pages: 8, per_page: 100 }, 202);
     } catch (error: any) {
       return json({ ok: false, error: "recovery_dispatch_failed", code: String(error?.code || "recovery_dispatch_failed").replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 80) }, 500);
