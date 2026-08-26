@@ -49,6 +49,15 @@ export type OrderingObserverState = {
   previous: OrderingPageObservation | null;
 };
 
+export function classifyAdjacentPageOverlap(previousPageLastId: string | null, currentPageIds: string[], priorIds: Set<string>, maxBoundaryOverlap = 1) {
+  const repeated = currentPageIds.filter((id) => priorIds.has(id));
+  const boundary = previousPageLastId !== null && currentPageIds[0] === previousPageLastId ? 1 : 0;
+  const nonBoundary = repeated.length - boundary;
+  const withinPage = currentPageIds.length - new Set(currentPageIds).size;
+  const classification: PaginationClassification = withinPage > 0 || nonBoundary > 0 || boundary > maxBoundaryOverlap ? "pagination_instability" : boundary > 0 ? "benign_boundary_overlap" : "none";
+  return { repeatedCount: repeated.length, boundaryOverlapCount: boundary, nonBoundaryRepeatCount: nonBoundary, classification };
+}
+
 export function initialOrderingObserver(): OrderingObserverState {
   return { ordering: "unknown", pagesObserved: 0, boundaryOverlapCount: 0, paginationClassification: "none", pageShiftDetected: false, previous: null };
 }
@@ -60,10 +69,9 @@ export function observeOrderingPage(state: OrderingObserverState, current: Order
   let crossPageUnsafe = false;
   const previous = state.previous;
   if (previous && current.page === previous.page + 1) {
-    const repeated = current.ids.filter((id) => previous.ids.includes(id));
-    const boundary = previous.lastSourceId !== null && current.firstSourceId === previous.lastSourceId && repeated.length === 1 ? 1 : 0;
-    const nonBoundary = repeated.length - boundary;
-    if (duplicateIds.length > 0 || nonBoundary > 0 || boundary > maxBoundaryOverlap) classification = "pagination_instability";
+    const overlap = classifyAdjacentPageOverlap(previous.lastSourceId, current.ids, new Set(previous.ids), maxBoundaryOverlap);
+    const boundary = overlap.boundaryOverlapCount;
+    if (duplicateIds.length > 0 || overlap.classification === "pagination_instability") classification = "pagination_instability";
     else if (boundary > 0) { boundaryOverlapCount += boundary; classification = "benign_boundary_overlap"; }
     const before = previous.lastTimestamp ? Date.parse(previous.lastTimestamp) : NaN;
     const after = current.firstTimestamp ? Date.parse(current.firstTimestamp) : NaN;

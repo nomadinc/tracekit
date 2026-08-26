@@ -71,12 +71,7 @@ export function historicalQuotaObservationUsable(value: unknown, observedAt: unk
 }
 
 export function classifyHistoricalPageOverlap(previousPageLastId: string | null, currentPageIds: string[], priorIds: Set<string>, maxBoundaryOverlap = 1) {
-  const repeated = currentPageIds.filter((id) => priorIds.has(id));
-  const boundary = previousPageLastId !== null && currentPageIds[0] === previousPageLastId ? 1 : 0;
-  const nonBoundary = repeated.length - boundary;
-  const withinPage = currentPageIds.length - new Set(currentPageIds).size;
-  const classification: PaginationOverlapClassification = withinPage > 0 || nonBoundary > 0 || boundary > maxBoundaryOverlap ? "pagination_instability" : boundary > 0 ? "benign_boundary_overlap" : "none";
-  return { repeatedCount: repeated.length, boundaryOverlapCount: boundary, nonBoundaryRepeatCount: nonBoundary, classification };
+  return classifyAdjacentPageOverlap(previousPageLastId, currentPageIds, priorIds, maxBoundaryOverlap);
 }
 
 export function parseHistoricalBackfillArgs(argv: string[]): HistoricalBackfillArgs {
@@ -133,3 +128,4 @@ export function rangePassed(ordering: OrderingState, pageTimestamps: string[], f
   if (ordering === "oldest_first") return Boolean(pageTimestamps.length && pageTimestamps.every((value) => value.slice(0, 10) > toDate));
   return false;
 }
+import { classifyAdjacentPageOverlap } from "./continuous-intelligence";
