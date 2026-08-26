@@ -15518,8 +15518,25 @@ async function router(req: Request, env: Env): Promise<Response> {
       if (error) {
         const status = Number((error as any).status || (error as any).statusCode || 0) || null;
         const rpcCode = String((error as any).code || "rpc_error").replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 80) || "rpc_error";
-        console.log("[TraceKit] stranded recovery RPC rejected", { event: "commerce.stranded_recovery.rpc_rejected", status, rpcCode });
-        return json({ ok: false, error: "rpc_rejected", code: "rpc_rejected", status, rpc_code: rpcCode }, 409);
+        const rejectionCodeByMessage: Record<string, string> = {
+          "stranded run unavailable": "rpc_run_unavailable",
+          "stranded run is not reclaimable": "rpc_run_not_reclaimable",
+          "stranded run metadata is not eligible": "rpc_metadata_ineligible",
+          "stranded connection scope unavailable": "rpc_connection_scope_unavailable",
+          "stranded provider account unavailable": "rpc_provider_account_unavailable",
+          "stranded credential unavailable": "rpc_credential_unavailable",
+          "stranded schedule state invalid": "rpc_schedule_invalid",
+          "stranded connection paused": "rpc_connection_paused",
+          "stranded active run exists": "rpc_active_run_exists",
+          "stranded live activation exists": "rpc_live_activation_exists",
+          "stranded scheduler control enabled": "rpc_scheduler_control_enabled",
+          "stranded quota unavailable": "rpc_quota_unavailable",
+          "stranded checkpoint boundary invalid": "rpc_checkpoint_boundary_invalid",
+          "stranded page evidence unavailable": "rpc_page_evidence_unavailable",
+        };
+        const mappedCode = rejectionCodeByMessage[String((error as any).message || "")] || "rpc_rejected";
+        console.log("[TraceKit] stranded recovery RPC rejected", { event: "commerce.stranded_recovery.rpc_rejected", status, rpcCode, rejectionCode: mappedCode });
+        return json({ ok: false, error: mappedCode, code: mappedCode, status, rpc_code: rpcCode }, 409);
       }
       if (!Array.isArray(data) || data.length !== 1) {
         console.log("[TraceKit] stranded recovery RPC result invalid", { event: "commerce.stranded_recovery.rpc_result_invalid", result: Array.isArray(data) ? "empty_or_multiple" : "non_array" });
