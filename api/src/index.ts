@@ -14,7 +14,7 @@ import {
   maintenanceRequiresAdminAuthorization,
   maintenanceWriteAllowed,
 } from "./maintenance-write-gate";
-import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, runCommerceCron, validateCommerceQueueMessage, isQueueObservabilityTest, isRuntimeDispatchProbe, isPreReservedRunMatch, preReservedRunMatchDetails, orderingGateRead, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
+import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, runCommerceCron, validateCommerceQueueMessage, isQueueObservabilityTest, isRuntimeDispatchProbe, isPreReservedRunMatch, preReservedRunMatchDetails, orderingGateRead, orderingGateStage, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
 import { readQuotaBootstrapGate } from "./quota-bootstrap-gate";
 import { createSupabaseServerFetch } from "./supabase-server-fetch";
 import { deriveCommasDisputeLedgerEvents, normalizeCommasDisputeEvent, sha256HexBytes, verifyCommasWebhookSignature, webhookStoragePath } from "./commas-dispute-webhook";
@@ -15554,7 +15554,7 @@ async function router(req: Request, env: Env): Promise<Response> {
       let permitted: boolean | undefined;
       try { permitted = await repository.operatorOneShotPermitted?.(message); }
       catch (error: any) {
-        const stage = ["pre_reserved_validation","pre_reserved_run_read","pre_reserved_contract","connection","provider_accounts","credential","schedule","connection_pause","active_runs","live_activation","quota","scheduler_control"].includes(String(error?.stage)) ? String(error.stage) : "unknown";
+        const stage = orderingGateStage(error);
         console.log("[TraceKit] ordering verification gate error", { event:"commerce.ordering_verification.gate_error", stage, error_class:"gate_read_failed", reserved_run_id:String(row.run_id) });
         return json({ ok:false, error:"ordering_post_reservation_gate_error", code:"ordering_post_reservation_gate_error", run_id:String(row.run_id) },500);
       }
