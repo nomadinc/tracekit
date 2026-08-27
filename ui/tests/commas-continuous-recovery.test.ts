@@ -31,6 +31,9 @@ test("page completion rolls up from the in-memory checkpoint snapshot to reserve
   assert.match(loop,/checkpointRows\.findIndex/);
   assert.match(loop,/durableProgress=summarizeContinuousCheckpointProgress\(checkpointRows\)/);
   assert.doesNotMatch(loop,/summarizeContinuousCheckpointProgress\(await db\(/);
+  assert.match(loop,/ordering_state:orderingObserver\.ordering/);
+  assert.match(loop,/pagination_classification:orderingObserver\.paginationClassification/);
+  assert.match(loop,/ordering_pages_observed:orderingObserver\.pagesObserved/);
   const terminal=worker.slice(worker.indexOf("const now=new Date().toISOString()"),worker.indexOf("const transitioned=",worker.indexOf("const now=new Date().toISOString()")));
   assert.match(terminal,/pages_completed:durableProgress\.pagesCompleted/);
   assert.match(terminal,/provider_request_count:durableProgress\.providerRequests/);
