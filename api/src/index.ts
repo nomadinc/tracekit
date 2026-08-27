@@ -15560,6 +15560,28 @@ async function router(req: Request, env: Env): Promise<Response> {
       return json({ ok:true, status:"queued", run_id:String(row.run_id), evidence_only_recovery:true, provider_requests:0 },202);
     } catch { return json({ ok:false, error:"ordering_recovery_dispatch_failed", code:"ordering_recovery_dispatch_failed" },500); }
   }
+  if (path === "/internal/commerce/resume-ordering-evidence-only" && req.method === "POST") {
+    const auth = adminAuthError(req, env); if (auth) return auth;
+    try {
+      const body = await readJsonBody(req);
+      if (body.confirmation !== "resume-ordering-evidence-only") return json({ ok:false, error:"explicit_ordering_continuation_confirmation_required" },400);
+      if (env.TRACEKIT_COMMERCE_SCHEDULER_ENABLED !== "false" || env.TRACEKIT_COMMERCE_KILL_SWITCH !== "enabled") return json({ ok:false, error:"ordering_continuation_controls_blocked" },409);
+      if (!env.continuous_commerce) return json({ ok:false, error:"continuous_queue_unavailable" },503);
+      const db=getSupabase(env);
+      const { data, error }=await db.rpc("resume_ordering_evidence_only_fdf97cb1");
+      if (error) return json({ ok:false, error:"ordering_continuation_rpc_rejected", code:"ordering_continuation_rpc_rejected" },409);
+      if (!Array.isArray(data)||data.length!==1) return json({ ok:false, error:"ordering_continuation_rpc_result_invalid", code:"ordering_continuation_rpc_result_invalid" },409);
+      const row=data[0] as Record<string,unknown>;
+      const message: CommerceQueueMessage={schema_version:1,job_type:"commerce_continuous",provider:"commas",account_id:String(row.account_id),organization_id:String(row.organization_id),connection_id:String(row.connection_id),provider_account_id:String(row.provider_account_id),resource:"transactions",requested_mode:"continuous",scheduler_identity:String(row.scheduler_identity),requested_at:new Date().toISOString(),operator_one_shot:true,operator_recovery:true,ordering_verification:true,evidence_only_recovery:true,acceptance_cycle:true,max_pages:3,per_page:100,request_key:String(row.request_key),reserved_run_id:String(row.run_id)};
+      const repository=getContinuousCommerceAdapterRepository(env);
+      if (!await repository.operatorOneShotPermitted?.(message)) return json({ ok:false, error:"ordering_continuation_post_reservation_rejected", code:"ordering_continuation_post_reservation_rejected", run_id:String(row.run_id) },409);
+      try { await env.continuous_commerce.send(message); }
+      catch { return json({ ok:false, error:"ordering_continuation_queue_dispatch_failed", code:"ordering_continuation_queue_dispatch_failed", run_id:String(row.run_id) },503); }
+      const dispatchRecord=await db.rpc("mark_ordering_evidence_only_queue_dispatched_fdf97cb1");
+      if (dispatchRecord.error || dispatchRecord.data !== true) console.log("[TraceKit] ordering continuation dispatch record incomplete", { event:"commerce.ordering_continuation.dispatch_record_incomplete", run_id:String(row.run_id) });
+      return json({ ok:true, status:"queued", run_id:String(row.run_id), evidence_only_recovery:true, provider_requests:0 },202);
+    } catch { return json({ ok:false, error:"ordering_continuation_dispatch_failed", code:"ordering_continuation_dispatch_failed" },500); }
+  }
   if (path === "/internal/commerce/ordering-verification" && req.method === "POST") {
     const auth = adminAuthError(req, env); if (auth) return auth;
     try {
