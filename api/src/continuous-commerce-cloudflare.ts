@@ -1,4 +1,6 @@
 export const CONTINUOUS_COMMERCE_QUEUE_SCHEMA=1;
+export const ORDERING_DIAGNOSTIC_VERSION="pre-reserved-substage-v1" as const;
+export const ORDERING_DIAGNOSTIC_STAGES=["pre_reserved_run_read","pre_reserved_contract","connection","provider_accounts","credential","schedule","connection_pause","active_runs","live_activation","quota","scheduler_control"] as const;
 export type CommerceJobType="commerce_continuous"|"commerce_deep_reconciliation"|"investigation_candidate_evaluation"|"investigation_refresh";
 export type CommerceQueueMessage={schema_version:1;job_type:CommerceJobType;provider:"commas";account_id:string;organization_id:string;connection_id:string;provider_account_id:string;resource:string;requested_mode:"continuous"|"deep_reconciliation"|"candidate_evaluation"|"investigation_refresh";scheduler_identity:string;requested_at:string;bootstrap?:true;bootstrap_mode?:"quota-bootstrap";reserved_run_id?:string;manual?:true;operator_one_shot?:true;operator_recovery?:true;ordering_verification?:true;acceptance_cycle?:true;max_pages?:number;per_page?:number;request_key?:string};
 export const QUEUE_OBSERVABILITY_TEST_TYPE = "queue-observability-test" as const;

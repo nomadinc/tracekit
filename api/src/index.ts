@@ -14,7 +14,7 @@ import {
   maintenanceRequiresAdminAuthorization,
   maintenanceWriteAllowed,
 } from "./maintenance-write-gate";
-import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, runCommerceCron, validateCommerceQueueMessage, isQueueObservabilityTest, isRuntimeDispatchProbe, isPreReservedRunMatch, preReservedRunMatchDetails, orderingGateRead, orderingGateStage, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
+import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, runCommerceCron, validateCommerceQueueMessage, isQueueObservabilityTest, isRuntimeDispatchProbe, isPreReservedRunMatch, preReservedRunMatchDetails, orderingGateRead, orderingGateStage, ORDERING_DIAGNOSTIC_VERSION, ORDERING_DIAGNOSTIC_STAGES, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
 import { readQuotaBootstrapGate } from "./quota-bootstrap-gate";
 import { createSupabaseServerFetch } from "./supabase-server-fetch";
 import { deriveCommasDisputeLedgerEvents, normalizeCommasDisputeEvent, sha256HexBytes, verifyCommasWebhookSignature, webhookStoragePath } from "./commas-dispute-webhook";
@@ -15492,6 +15492,12 @@ async function router(req: Request, env: Env): Promise<Response> {
     if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405, { Allow: "POST" });
     try { return await handleCommasDisputeWebhook(req, env); }
     catch (error) { console.log("[TraceKit] Commas dispute webhook failed", { event: "commas.dispute_webhook.failed", code: String((error as any)?.code || "webhook_failed").replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 80) }); return json({ ok: false, error: "webhook_unavailable" }, 503); }
+  }
+  if (path === "/internal/diagnostics/commerce-build") {
+    if (req.method !== "GET") return json({ ok: false, error: "method_not_allowed" }, 405, { Allow: "GET" });
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    return json({ ok: true, ordering_diagnostic_version: ORDERING_DIAGNOSTIC_VERSION, supported_stages: [...ORDERING_DIAGNOSTIC_STAGES] }, 200);
   }
   if (path === "/internal/diagnostics/quota-bootstrap-reads" && req.method === "POST") {
     const auth = adminAuthError(req, env);
