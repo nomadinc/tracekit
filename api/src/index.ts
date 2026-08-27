@@ -14,7 +14,7 @@ import {
   maintenanceRequiresAdminAuthorization,
   maintenanceWriteAllowed,
 } from "./maintenance-write-gate";
-import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, runCommerceCron, validateCommerceQueueMessage, isQueueObservabilityTest, isRuntimeDispatchProbe, isPreReservedRunMatch, preReservedRunMatchDetails, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
+import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, runCommerceCron, validateCommerceQueueMessage, isQueueObservabilityTest, isRuntimeDispatchProbe, isPreReservedRunMatch, preReservedRunMatchDetails, orderingGateRead, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
 import { readQuotaBootstrapGate } from "./quota-bootstrap-gate";
 import { createSupabaseServerFetch } from "./supabase-server-fetch";
 import { deriveCommasDisputeLedgerEvents, normalizeCommasDisputeEvent, sha256HexBytes, verifyCommasWebhookSignature, webhookStoragePath } from "./commas-dispute-webhook";
@@ -953,18 +953,17 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
       const orderingVerification = message.ordering_verification === true;
       if (message.connection_id !== "ea1c2313-6120-4692-84c5-ec3562e7dcf6") return false;
       if (env.TRACEKIT_COMMERCE_KILL_SWITCH !== "enabled") return false;
-      if (!await this.preReservedRunPermitted!(message)) return false;
-      const gateRead = <T>(stage: string, operation: () => Promise<T>) => Promise.resolve().then(operation).catch(() => { throw Object.assign(new Error("ordering_gate_read_failed"), { stage }); });
+      if (!await orderingGateRead("pre_reserved_validation", () => this.preReservedRunPermitted!(message))) return false;
       const [{ data: connection, error: connectionError }, { data: accounts, error: accountError }, { data: credential, error: credentialError }, { data: schedule, error: scheduleError }, { data: pause, error: pauseError }, { data: activeRuns, error: activeError }, { count: liveActivation, error: activationError }, { data: latest, error: latestError }, { count: schedulerControl, error: controlError }] = await Promise.all([
-        gateRead("connection", () => db.from("commerce_provider_connections").select("organization_id,account_id,provider,status").eq("organization_id", message.organization_id).eq("id", message.connection_id).maybeSingle()),
-        gateRead("provider_accounts", () => db.from("commerce_provider_accounts").select("id").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("status", "active")),
-        gateRead("credential", () => db.from("commerce_provider_credentials").select("id").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).is("revoked_at", null).limit(1)),
-        gateRead("schedule", () => db.from("commerce_sync_schedules").select("sync_frequency,enabled,activation_state,quota_minimum_remaining").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1).maybeSingle()),
-        gateRead("connection_pause", () => db.from("commerce_connection_pauses").select("paused").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).limit(1).maybeSingle()),
-        gateRead("active_runs", () => db.from("commerce_sync_runs").select("id").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).neq("id", message.reserved_run_id).in("status", ["queued", "running", "paused"])),
-        gateRead("live_activation", () => db.from("commerce_repository_activation").select("organization_id", { count: "exact", head: true }).eq("organization_id", message.organization_id).in("mode", ["live", "live_beta"])),
-        gateRead("quota", () => db.from("commerce_continuous_sync_state").select("quota_remaining,quota_observed_at").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1).maybeSingle()),
-        gateRead("scheduler_control", () => db.from("tracekit_production_controls").select("id", { count: "exact", head: true }).eq("capability", "commerce_scheduler").eq("activation_state", "enabled")),
+        orderingGateRead("connection", () => db.from("commerce_provider_connections").select("organization_id,account_id,provider,status").eq("organization_id", message.organization_id).eq("id", message.connection_id).maybeSingle()),
+        orderingGateRead("provider_accounts", () => db.from("commerce_provider_accounts").select("id").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("status", "active")),
+        orderingGateRead("credential", () => db.from("commerce_provider_credentials").select("id").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).is("revoked_at", null).limit(1)),
+        orderingGateRead("schedule", () => db.from("commerce_sync_schedules").select("sync_frequency,enabled,activation_state,quota_minimum_remaining").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1).maybeSingle()),
+        orderingGateRead("connection_pause", () => db.from("commerce_connection_pauses").select("paused").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).limit(1).maybeSingle()),
+        orderingGateRead("active_runs", () => db.from("commerce_sync_runs").select("id").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).neq("id", message.reserved_run_id).in("status", ["queued", "running", "paused"])),
+        orderingGateRead("live_activation", () => db.from("commerce_repository_activation").select("organization_id", { count: "exact", head: true }).eq("organization_id", message.organization_id).in("mode", ["live", "live_beta"])),
+        orderingGateRead("quota", () => db.from("commerce_continuous_sync_state").select("quota_remaining,quota_observed_at").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1).maybeSingle()),
+        orderingGateRead("scheduler_control", () => db.from("tracekit_production_controls").select("id", { count: "exact", head: true }).eq("capability", "commerce_scheduler").eq("activation_state", "enabled")),
       ]);
       if (connectionError || accountError || credentialError || scheduleError || pauseError || activeError || activationError || latestError || controlError) return false;
       const quotaRemaining = Number(latest?.quota_remaining);
@@ -15553,7 +15552,7 @@ async function router(req: Request, env: Env): Promise<Response> {
       let permitted: boolean | undefined;
       try { permitted = await repository.operatorOneShotPermitted?.(message); }
       catch (error: any) {
-        const stage = ["connection","provider_accounts","credential","schedule","connection_pause","active_runs","live_activation","quota","scheduler_control"].includes(String(error?.stage)) ? String(error.stage) : "unknown";
+        const stage = ["pre_reserved_validation","connection","provider_accounts","credential","schedule","connection_pause","active_runs","live_activation","quota","scheduler_control"].includes(String(error?.stage)) ? String(error.stage) : "unknown";
         console.log("[TraceKit] ordering verification gate error", { event:"commerce.ordering_verification.gate_error", stage, error_class:"gate_read_failed", reserved_run_id:String(row.run_id) });
         return json({ ok:false, error:"ordering_post_reservation_gate_error", code:"ordering_post_reservation_gate_error", run_id:String(row.run_id) },500);
       }
