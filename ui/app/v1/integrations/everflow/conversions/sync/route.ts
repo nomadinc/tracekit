@@ -5,6 +5,7 @@ import { createCommerceControlPlane } from "@/lib/commerce/server-control-plane"
 import { MemoryCommerceEvidenceStore } from "@/lib/commerce/evidence-store";
 import { commercePersistenceCount, commercePersistenceRequest } from "@/lib/commerce/supabase-control-repository";
 import { syncEverflowConversions, validateEverflowConversionRange } from "@/lib/integrations/everflow-conversions";
+import { captureEverflowConversionBaseline, finalizeEverflowConversionRunMetrics } from "@/lib/integrations/everflow-conversion-run-metrics";
 import { EverflowHealthError } from "@/lib/integrations/everflow-client";
 
 const responseHeaders = (requestId: string) => ({ "x-tracekit-request-id": requestId });
@@ -25,7 +26,6 @@ async function persistSyncRunMetrics(input: {
   syncRunId: string;
   seen: number;
   pages: number;
-  created: number;
 }) {
   await commercePersistenceRequest(
     `commerce_sync_runs?id=eq.${encodeURIComponent(input.syncRunId)}&organization_id=eq.${encodeURIComponent(input.organizationId)}&connection_id=eq.${encodeURIComponent(input.connectionId)}`,
@@ -34,7 +34,6 @@ async function persistSyncRunMetrics(input: {
       body: JSON.stringify({
         pages_completed: input.pages,
         records_seen: input.seen,
-        records_created: input.created,
         provider_request_count: input.pages,
       }),
     },
@@ -67,6 +66,7 @@ export async function POST(request: Request) {
     }
     const organizationId = resolution.session.activeOrganization.id;
     const beforeCount = await apiEvidenceCount(connectionId);
+    const baseline = await captureEverflowConversionBaseline(connectionId);
     const plane = createCommerceControlPlane({ evidenceStore: new MemoryCommerceEvidenceStore() });
     const result = await syncEverflowConversions({
       plane,
@@ -77,9 +77,11 @@ export async function POST(request: Request) {
       to: range.to,
     });
     const afterCount = await apiEvidenceCount(connectionId);
-    const created = Math.max(0, afterCount - beforeCount);
-    await persistSyncRunMetrics({ organizationId, connectionId, syncRunId: result.syncRunId, seen: result.seen, pages: result.pages, created });
-    return NextResponse.json({ ok: true, ...result, created, requestId }, { headers: responseHeaders(requestId) });
+    const createdByCount = Math.max(0, afterCount - beforeCount);
+    await persistSyncRunMetrics({ organizationId, connectionId, syncRunId: result.syncRunId, seen: result.seen, pages: result.pages });
+    const changeMetrics = await finalizeEverflowConversionRunMetrics({ connectionId, syncRunId: result.syncRunId, baseline });
+    if (changeMetrics.created !== createdByCount) throw new Error("Everflow conversion change metrics were inconsistent.");
+    return NextResponse.json({ ok: true, ...result, ...changeMetrics, requestId }, { headers: responseHeaders(requestId) });
   } catch (error) {
     if (error instanceof EverflowHealthError) {
       return NextResponse.json({ ok: false, code: error.code, message: error.message, retryable: error.retryable, requestId }, { status: error.httpStatus, headers: responseHeaders(requestId) });
