@@ -892,10 +892,11 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
       if ((!message.bootstrap && !message.operator_one_shot) || !message.reserved_run_id) return false;
       const recovery = message.operator_recovery === true;
       const orderingVerification = message.ordering_verification === true;
-      const { data: run, error } = await db.from("commerce_sync_runs").select("id,organization_id,connection_id,provider_account_id,sync_type,mode,status,scheduler_idempotency_key,lease_expires_at,metadata").eq("id", message.reserved_run_id).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("scheduler_idempotency_key", message.scheduler_identity).in("status", recovery ? ["queued", "running"] : ["queued"]).maybeSingle();
+      const { data: run, error } = await orderingGateRead("pre_reserved_run_read", () => db.from("commerce_sync_runs").select("id,organization_id,connection_id,provider_account_id,sync_type,mode,status,scheduler_idempotency_key,lease_expires_at,metadata").eq("id", message.reserved_run_id).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("scheduler_idempotency_key", message.scheduler_identity).in("status", recovery ? ["queued", "running"] : ["queued"]).maybeSingle());
       if (error) { console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, lookup: "postgrest_error", status: Number(error.status || error.statusCode || 0) || null, code: String(error.code || "postgrest_error") }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); return false; }
       if (!run) { console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, lookup: "not_found", ...preReservedRunMatchDetails(null, message) }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); return false; }
-      const valid = orderingVerification
+      let valid: boolean;
+      try { valid = orderingVerification
         ? String((run as any).sync_type || "") === "transactions"
           && String((run as any).mode || "") === "continuous"
           && String((run as any).status || "") === "queued"
@@ -920,7 +921,8 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
           && Number(((run as any).metadata || {}).max_pages) === (message.ordering_verification ? 3 : 8)
           && Number(((run as any).metadata || {}).per_page) === 100
           && (!recovery || ((run as any).metadata || {}).operator_recovery_dispatched === true)
-        : isPreReservedRunMatch(run, message);
+        : isPreReservedRunMatch(run, message); }
+      catch { throw { code: "ordering_gate_read_failed", stage: "pre_reserved_contract" }; }
       if (!valid) { console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, ...preReservedRunMatchDetails(run, message) }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); }
       else { console.log("[TraceKit] commerce.queue.pre_reserved_accepted", { reserved_run_id: message.reserved_run_id }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_passed", run_id: message.reserved_run_id }); }
       return valid;
@@ -15552,7 +15554,7 @@ async function router(req: Request, env: Env): Promise<Response> {
       let permitted: boolean | undefined;
       try { permitted = await repository.operatorOneShotPermitted?.(message); }
       catch (error: any) {
-        const stage = ["pre_reserved_validation","connection","provider_accounts","credential","schedule","connection_pause","active_runs","live_activation","quota","scheduler_control"].includes(String(error?.stage)) ? String(error.stage) : "unknown";
+        const stage = ["pre_reserved_validation","pre_reserved_run_read","pre_reserved_contract","connection","provider_accounts","credential","schedule","connection_pause","active_runs","live_activation","quota","scheduler_control"].includes(String(error?.stage)) ? String(error.stage) : "unknown";
         console.log("[TraceKit] ordering verification gate error", { event:"commerce.ordering_verification.gate_error", stage, error_class:"gate_read_failed", reserved_run_id:String(row.run_id) });
         return json({ ok:false, error:"ordering_post_reservation_gate_error", code:"ordering_post_reservation_gate_error", run_id:String(row.run_id) },500);
       }
