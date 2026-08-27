@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { resolveApplicationSession } from "@/lib/identity/application-session";
 import { createCommerceControlPlane } from "@/lib/commerce/server-control-plane";
 import { MemoryCommerceEvidenceStore } from "@/lib/commerce/evidence-store";
+import { commercePersistenceCount, commercePersistenceRequest } from "@/lib/commerce/supabase-control-repository";
 import { syncEverflowConversions, validateEverflowConversionRange } from "@/lib/integrations/everflow-conversions";
 import { EverflowHealthError } from "@/lib/integrations/everflow-client";
 
@@ -12,6 +13,32 @@ function sameOrigin(request: Request) {
   const origin = request.headers.get("origin");
   const fetchSite = request.headers.get("sec-fetch-site");
   return (!origin || origin === new URL(request.url).origin) && (!fetchSite || fetchSite === "same-origin");
+}
+
+async function apiEvidenceCount(connectionId: string) {
+  return commercePersistenceCount(`everflow_conversion_events?connection_id=eq.${encodeURIComponent(connectionId)}&ingestion_method=eq.api&select=id`);
+}
+
+async function persistSyncRunMetrics(input: {
+  organizationId: string;
+  connectionId: string;
+  syncRunId: string;
+  seen: number;
+  pages: number;
+  created: number;
+}) {
+  await commercePersistenceRequest(
+    `commerce_sync_runs?id=eq.${encodeURIComponent(input.syncRunId)}&organization_id=eq.${encodeURIComponent(input.organizationId)}&connection_id=eq.${encodeURIComponent(input.connectionId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        pages_completed: input.pages,
+        records_seen: input.seen,
+        records_created: input.created,
+        provider_request_count: input.pages,
+      }),
+    },
+  );
 }
 
 export async function POST(request: Request) {
@@ -38,16 +65,21 @@ export async function POST(request: Request) {
       const message = error instanceof Error ? error.message : "Everflow conversion range is invalid.";
       return NextResponse.json({ ok: false, message, requestId }, { status: 400, headers: responseHeaders(requestId) });
     }
+    const organizationId = resolution.session.activeOrganization.id;
+    const beforeCount = await apiEvidenceCount(connectionId);
     const plane = createCommerceControlPlane({ evidenceStore: new MemoryCommerceEvidenceStore() });
     const result = await syncEverflowConversions({
       plane,
       session: resolution.session,
-      organizationId: resolution.session.activeOrganization.id,
+      organizationId,
       connectionId,
       from: range.from,
       to: range.to,
     });
-    return NextResponse.json({ ok: true, ...result, requestId }, { headers: responseHeaders(requestId) });
+    const afterCount = await apiEvidenceCount(connectionId);
+    const created = Math.max(0, afterCount - beforeCount);
+    await persistSyncRunMetrics({ organizationId, connectionId, syncRunId: result.syncRunId, seen: result.seen, pages: result.pages, created });
+    return NextResponse.json({ ok: true, ...result, created, requestId }, { headers: responseHeaders(requestId) });
   } catch (error) {
     if (error instanceof EverflowHealthError) {
       return NextResponse.json({ ok: false, code: error.code, message: error.message, retryable: error.retryable, requestId }, { status: error.httpStatus, headers: responseHeaders(requestId) });
