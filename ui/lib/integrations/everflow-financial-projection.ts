@@ -212,7 +212,7 @@ export async function projectEverflowFinancialEffects(input: {
   const states = latestRows.map(latestState);
   if (!states.length) return { eligible: 0, projected: 0, skippedUnmapped: 0, skippedZeroEffect: 0, alreadyProjected: 0 };
 
-  const providerAccountIds = [...new Set(states.map((state) => state.providerAccountId))];
+  const providerAccountIds = Array.from(new Set(states.map((state) => state.providerAccountId)));
   const mappingRows = await commercePersistenceRequest(
     `commerce_source_mappings?organization_id=eq.${encodeURIComponent(input.organizationId)}&connection_id=eq.${encodeURIComponent(input.connectionId)}&source_object_type=eq.everflow_conversion&canonical_object_type=eq.order&provider_account_id=in.(${providerAccountIds.map(encodeURIComponent).join(",")})&select=id,provider_account_id,source_object_id,canonical_object_id`,
   );
@@ -226,7 +226,7 @@ export async function projectEverflowFinancialEffects(input: {
   const skippedUnmapped = states.length - mappedStates.length;
   if (!mappedStates.length) return { eligible: 0, projected: 0, skippedUnmapped, skippedZeroEffect: 0, alreadyProjected: 0 };
 
-  const orderIds = [...new Set(mappedStates.map(({ mapping: item }) => item.canonicalOrderId))];
+  const orderIds = Array.from(new Set(mappedStates.map(({ mapping: item }) => item.canonicalOrderId)));
   const orderRows = await commercePersistenceRequest(
     `platform_orders?organization_id=eq.${encodeURIComponent(input.organizationId)}&canonical_order_id=in.(${orderIds.map(encodeURIComponent).join(",")})&select=canonical_order_id,workspace_id,order_id,platform_order_id,platform,currency`,
   );
