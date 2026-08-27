@@ -10,7 +10,7 @@ routes = [{ pattern = "journey.trace-kit.io", custom_domain = true }]
   TRACEKIT_AUTO_LINK_OUTBOUND = "true"
   TRACEKIT_COMMERCE_SCHEDULER_ENABLED = "false"
   TRACEKIT_MAINTENANCE_WRITE_GATE_ENABLED = "false"
-  TRACEKIT_COMMERCE_KILL_SWITCH = "disabled"
+  TRACEKIT_COMMERCE_KILL_SWITCH = "enabled"
   TRACEKIT_TKID_ERASURE_EXECUTOR_ENABLED = "false"
   TRACEKIT_TKID_RELAY_ENABLED = "false"
   TRACEKIT_TKID_RELAY_ORIGIN = "https://journey.trace-kit.io"

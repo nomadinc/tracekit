@@ -39,6 +39,12 @@ test("operator one-shot is allowed without scheduler enablement but remains kill
   assert.equal(blocked.status, 503);
 });
 
+test("runtime forwards the validated normal acceptance page ceiling to the ordinary worker",()=>{
+  const source=readFileSync(new URL("./index.ts",import.meta.url),"utf8");
+  assert.match(source,/maxPages: bootstrap \? 1 : operatorOneShot \? message\.max_pages : undefined/);
+  assert.match(source,/perPage: bootstrap \? 1 : operatorOneShot \? message\.per_page : undefined/);
+});
+
 test("evidence-only runtime recovery is bounded and cannot make provider requests", () => {
   const source = readFileSync(new URL("../../../ui/lib/commerce/commas-continuous-worker.ts", import.meta.url), "utf8");
   const start = source.indexOf("export async function runContinuousCommasSync");
