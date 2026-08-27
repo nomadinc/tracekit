@@ -14,7 +14,7 @@ import {
   maintenanceRequiresAdminAuthorization,
   maintenanceWriteAllowed,
 } from "./maintenance-write-gate";
-import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, runCommerceCron, validateCommerceQueueMessage, isQueueObservabilityTest, isRuntimeDispatchProbe, isPreReservedRunMatch, preReservedRunMatchDetails, orderingGateRead, orderingGateStage, ORDERING_DIAGNOSTIC_VERSION, ORDERING_DIAGNOSTIC_STAGES, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
+import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, runCommerceCron, validateCommerceQueueMessage, isQueueObservabilityTest, isRuntimeDispatchProbe, isPreReservedRunMatch, preReservedRunMatchDetails, orderingVerificationContractDetails, orderingGateRead, orderingGateStage, ORDERING_DIAGNOSTIC_VERSION, ORDERING_DIAGNOSTIC_STAGES, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
 import { readQuotaBootstrapGate } from "./quota-bootstrap-gate";
 import { createSupabaseServerFetch } from "./supabase-server-fetch";
 import { deriveCommasDisputeLedgerEvents, normalizeCommasDisputeEvent, sha256HexBytes, verifyCommasWebhookSignature, webhookStoragePath } from "./commas-dispute-webhook";
@@ -896,20 +896,12 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
       if (error) { console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, lookup: "postgrest_error", status: Number(error.status || error.statusCode || 0) || null, code: String(error.code || "postgrest_error") }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); return false; }
       if (!run) { console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, lookup: "not_found", ...preReservedRunMatchDetails(null, message) }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); return false; }
       let valid: boolean;
-      try { valid = orderingVerification
-        ? String((run as any).sync_type || "") === "transactions"
-          && String((run as any).mode || "") === "continuous"
-          && String((run as any).status || "") === "queued"
-          && String((run as any).scheduler_idempotency_key || "") === message.scheduler_identity
-          && String(((run as any).metadata || {}).account_id || "") === message.account_id
-          && String(((run as any).metadata || {}).dispatch_source || "") === "operator_ordering_verification"
-          && ((run as any).metadata || {}).ordering_verification === true
-          && ((run as any).metadata || {}).shadow_only === true
-          && message.acceptance_cycle === true
-          && Number(((run as any).metadata || {}).max_pages) === 3
-          && Number(((run as any).metadata || {}).per_page) === 100
-          && uuid.test(String(((run as any).metadata || {}).request_key || ""))
-        : message.operator_one_shot
+      if (orderingVerification) {
+        const details = orderingVerificationContractDetails(run, message);
+        valid = Object.values(details).every(Boolean);
+        if (!valid) console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, failed_predicates: Object.entries(details).filter(([, value]) => !value).map(([name]) => name) });
+      } else {
+        try { valid = message.operator_one_shot
         ? String((run as any).sync_type || "") === message.resource
           && String((run as any).mode || "") === "continuous"
           && (recovery ? (String((run as any).status || "") === "running" && Date.parse(String((run as any).lease_expires_at || "")) < Date.now()) : String((run as any).status || "") === "queued")
@@ -922,8 +914,9 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
           && Number(((run as any).metadata || {}).per_page) === 100
           && (!recovery || ((run as any).metadata || {}).operator_recovery_dispatched === true)
         : isPreReservedRunMatch(run, message); }
-      catch { throw { code: "ordering_gate_read_failed", stage: "pre_reserved_contract" }; }
-      if (!valid) { console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, ...preReservedRunMatchDetails(run, message) }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); }
+        catch { throw { code: "ordering_gate_read_failed", stage: "pre_reserved_contract" }; }
+      }
+      if (!valid) { if (!orderingVerification) console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, ...preReservedRunMatchDetails(run, message) }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); }
       else { console.log("[TraceKit] commerce.queue.pre_reserved_accepted", { reserved_run_id: message.reserved_run_id }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_passed", run_id: message.reserved_run_id }); }
       return valid;
     },
