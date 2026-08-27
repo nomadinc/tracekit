@@ -99,6 +99,19 @@ export function summarizeContinuousCheckpointProgress(rows: Row[]): ContinuousCh
   },{pagesCompleted:0,providerRequests:0,recordsSeen:0,recordsCreated:0,recordsUpdated:0,recordsUnchanged:0,evidenceWrites:0,evidenceReuses:0});
 }
 
+const lifetimeCheckpointFields = ["provider_attempts","new_records","updated_records","unchanged_records","evidence_reused"] as const;
+export function evidenceOnlyCheckpointMetadata(existingValue:unknown,replayValue:Row):Row {
+  const existing=object(existingValue)||{};
+  for(const field of lifetimeCheckpointFields)if(existing[field]===undefined)throw new Error(`Evidence-only recovery requires lifetime checkpoint ${field}.`);
+  return {...replayValue,...Object.fromEntries(lifetimeCheckpointFields.map((field)=>[field,existing[field]])),evidence_only_replay:{provider_attempts:number(replayValue.provider_attempts)??0,new_records:number(replayValue.new_records)??0,updated_records:number(replayValue.updated_records)??0,unchanged_records:number(replayValue.unchanged_records)??0,evidence_reused:replayValue.evidence_reused===true,completed_at:new Date().toISOString()}};
+}
+
+export function evidenceOnlyLifetimeProgress(runValue:unknown,checkpointProgress:ContinuousCheckpointProgress):ContinuousCheckpointProgress {
+  const run=object(runValue)||{};
+  const read=(field:string,fallback:number)=>number(run[field])??fallback;
+  return {pagesCompleted:read("pages_completed",checkpointProgress.pagesCompleted),providerRequests:read("provider_request_count",checkpointProgress.providerRequests),recordsSeen:read("records_seen",checkpointProgress.recordsSeen),recordsCreated:read("records_created",checkpointProgress.recordsCreated),recordsUpdated:read("records_updated",checkpointProgress.recordsUpdated),recordsUnchanged:read("records_unchanged",checkpointProgress.recordsUnchanged),evidenceWrites:read("evidence_writes",checkpointProgress.evidenceWrites),evidenceReuses:read("evidence_reuses",checkpointProgress.evidenceReuses)};
+}
+
 export function firstRecoverableContinuousPage(rows: Row[]): number|null {
   const pages=rows.filter((row)=>String(row.state||"")==="running").map((row)=>Number(row.page)).filter((page)=>Number.isInteger(page)&&page>0);
   return pages.length?Math.min(...pages):null;
@@ -301,7 +314,8 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
   const pageDurations:number[]=[],fingerprints:Record<string,unknown>={...priorFingerprints},recentIds:string[]=[],changedRows:ReturnType<typeof normalizeCommasTransaction>[]=[],changedProductIds=new Set<string>();
   try {
     let checkpointRows=await db(`commerce_sync_checkpoints?sync_run_id=eq.${runId}&resource=eq.transactions&select=page,state,metadata&order=page.asc`);
-    let durableProgress=summarizeContinuousCheckpointProgress(checkpointRows);
+    const lifetimeProgress=evidenceOnlyRecovery?evidenceOnlyLifetimeProgress(claimed[0],summarizeContinuousCheckpointProgress(checkpointRows)):null;
+    let durableProgress=lifetimeProgress||summarizeContinuousCheckpointProgress(checkpointRows);
     const recoveryPage=firstRecoverableContinuousPage(checkpointRows);
     const queue:number[]=[recoveryPage??1]; const queued=new Set(queue); let queueIndex=0;
     while(queueIndex<queue.length&&pagesScanned<maxPages) {
@@ -344,12 +358,13 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
         ordering=orderingObserver.ordering;
         if(!metadataProbe)stability=advanceStability(stability,{page,totalPages:parsed.totalPages,totalItems:parsed.totalItems,ids:normalized.map((item)=>item.transaction_id),timestamps,fingerprint,knownIds,priorFingerprint:object(priorFingerprints[String(page)])?.content_hash?String(object(priorFingerprints[String(page)])!.content_hash):null},changes);
         pagesScanned++;pageDurations.push(Date.now()-pageStarted);
-        const completedMetadata={duration_ms:pageDurations.at(-1),provider_attempts:pageRateLimit.attempts,rate_limit_remaining:fetched?.rateLimit.remaining??null,new_records:newCount,updated_records:updatedCount,unchanged_records:unchangedCount,evidence_reused:evidence.reused,ordering_state:orderingObserver.ordering,pagination_classification:orderingObserver.paginationClassification,boundary_overlap_count:orderingObserver.boundaryOverlapCount,ordering_pages_observed:orderingObserver.pagesObserved};
+        const replayMetadata={duration_ms:pageDurations.at(-1),provider_attempts:pageRateLimit.attempts,rate_limit_remaining:fetched?.rateLimit.remaining??null,new_records:newCount,updated_records:updatedCount,unchanged_records:unchangedCount,evidence_reused:evidence.reused,ordering_state:orderingObserver.ordering,pagination_classification:orderingObserver.paginationClassification,boundary_overlap_count:orderingObserver.boundaryOverlapCount,ordering_pages_observed:orderingObserver.pagesObserved};
+        const completedMetadata=evidenceOnlyRecovery?evidenceOnlyCheckpointMetadata(checkpoint.metadata,replayMetadata):replayMetadata;
         await db(`commerce_sync_checkpoints?id=eq.${checkpoint.id}`,{method:"PATCH",body:JSON.stringify({state:"completed",source_total_items:parsed.totalItems,source_total_pages:parsed.totalPages,page_fingerprint:fingerprint,first_source_id:normalized[0]?.transaction_id??null,last_source_id:normalized.at(-1)?.transaction_id??null,completed_at:new Date().toISOString(),metadata:completedMetadata})});
         const checkpointIndex=checkpointRows.findIndex((row)=>String(row.page)===String(page));
         const completedRow={...checkpoint,state:"completed",metadata:completedMetadata};
         if(checkpointIndex>=0)checkpointRows[checkpointIndex]=completedRow;else checkpointRows.push(completedRow);
-        durableProgress=summarizeContinuousCheckpointProgress(checkpointRows);
+        durableProgress=lifetimeProgress||summarizeContinuousCheckpointProgress(checkpointRows);
         let decision=continuousStopDecision({state:stability,ordering,page,totalPages:parsed.totalPages,maxPages,rateLimitRemaining:pageRateLimit.remaining});
         if(mode==="deep_reconciliation"&&decision.reason==="stable_known_boundary") {
           decision=page>=maxPages?{stop:true,reason:"bounded_deep_reconciliation_proof",deeperReconciliationRequired:true}:parsed.totalPages!==null&&page>=parsed.totalPages?{stop:true,reason:"provider_history_boundary",deeperReconciliationRequired:false}:{stop:false,reason:null,deeperReconciliationRequired:false};
@@ -378,7 +393,7 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
       for(const productId of Array.from(changedProductIds))await db("rpc/mark_investigation_new_evidence",{method:"POST",body:JSON.stringify({p_organization_id:scope.organizationId,p_resource_type:"transactions",p_entity_type:"provider_product",p_entity_id:productId,p_observed_at:newest,p_reason:"product_commerce_evidence_changed"})});
     }
     const warnings=deeperReconciliationRequired?1:0,status=warnings?"completed_with_warnings":"completed";
-    await db(`commerce_sync_runs?id=eq.${runId}`,{method:"PATCH",body:JSON.stringify({source_total_items:providerTotalEnd,pages_planned:null,pages_completed:durableProgress.pagesCompleted,records_seen:durableProgress.recordsSeen,records_created:durableProgress.recordsCreated,records_updated:durableProgress.recordsUpdated,records_unchanged:durableProgress.recordsUnchanged,records_failed:recordsFailed,warnings_count:warnings,provider_request_count:durableProgress.providerRequests,evidence_writes:durableProgress.evidenceWrites,evidence_reuses:durableProgress.evidenceReuses,provider_total_start:providerTotalStart,provider_total_end:providerTotalEnd,stopping_reason:stoppingReason,overlap_pages_scanned:pagesScanned,page_shift_detected:stability.pageShiftDetected,deeper_reconciliation_required:deeperReconciliationRequired,freshness_result:changedRows.length?"changed":"current",metadata:{...runMetadata,normalizer_version:CONTINUOUS_NORMALIZER_VERSION,evidence_contract_version:COMMERCE_EVIDENCE_CONTRACT_VERSION,retries,rate_limit_start:rateLimitStart,rate_limit_end:rateLimitEnd,rate_limit_reset:rateLimitReset,quota_bootstrap_attempted:bootstrap,quota_bootstrap_state:bootstrap?(rateLimitEnd===null?"unknown":"observed"):undefined,refunds_new:refundsNew,refunds_updated:refundsUpdated,ordering,ordering_state:orderingObserver.ordering,pagination_classification:orderingObserver.paginationClassification,boundary_overlap_count:orderingObserver.boundaryOverlapCount,ordering_pages_observed:orderingObserver.pagesObserved}})});
+    await db(`commerce_sync_runs?id=eq.${runId}`,{method:"PATCH",body:JSON.stringify({source_total_items:providerTotalEnd,pages_planned:null,pages_completed:durableProgress.pagesCompleted,records_seen:durableProgress.recordsSeen,records_created:durableProgress.recordsCreated,records_updated:durableProgress.recordsUpdated,records_unchanged:durableProgress.recordsUnchanged,records_failed:evidenceOnlyRecovery?(number(claimed[0].records_failed)??0):recordsFailed,warnings_count:warnings,provider_request_count:durableProgress.providerRequests,evidence_writes:durableProgress.evidenceWrites,evidence_reuses:durableProgress.evidenceReuses,provider_total_start:providerTotalStart,provider_total_end:providerTotalEnd,stopping_reason:stoppingReason,overlap_pages_scanned:pagesScanned,page_shift_detected:stability.pageShiftDetected,deeper_reconciliation_required:deeperReconciliationRequired,freshness_result:changedRows.length?"changed":"current",metadata:{...runMetadata,normalizer_version:CONTINUOUS_NORMALIZER_VERSION,evidence_contract_version:COMMERCE_EVIDENCE_CONTRACT_VERSION,retries,rate_limit_start:rateLimitStart,rate_limit_end:rateLimitEnd,rate_limit_reset:rateLimitReset,quota_bootstrap_attempted:bootstrap,quota_bootstrap_state:bootstrap?(rateLimitEnd===null?"unknown":"observed"):undefined,refunds_new:refundsNew,refunds_updated:refundsUpdated,ordering,ordering_state:orderingObserver.ordering,pagination_classification:orderingObserver.paginationClassification,boundary_overlap_count:orderingObserver.boundaryOverlapCount,ordering_pages_observed:orderingObserver.pagesObserved,evidence_only_recovery_invocation:evidenceOnlyRecovery?{provider_requests:providerRequests,pages_scanned:pagesScanned,records_seen:recordsObserved,records_created:recordsNew,records_updated:recordsUpdated,records_unchanged:recordsUnchanged,evidence_reuses:evidenceReuses}:undefined}})});
     const transitioned=await db("rpc/transition_commerce_sync_run",{method:"POST",body:JSON.stringify({p_run_id:runId,p_organization_id:scope.organizationId,p_connection_id:scope.connectionId,p_lease_owner:owner,p_transition:status,p_error_code:null,p_error_summary:null})});
     const transitionApplied = (transitioned as unknown as unknown[])[0] === true;
     console.log("[TraceKit] commerce run transition",{event:"commerce.run.transition",result:transitionApplied?"succeeded":"not_applied",status});
