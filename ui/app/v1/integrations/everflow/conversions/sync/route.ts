@@ -7,6 +7,7 @@ import { commercePersistenceCount, commercePersistenceRequest } from "@/lib/comm
 import { syncEverflowConversions, validateEverflowConversionRange } from "@/lib/integrations/everflow-conversions";
 import { captureEverflowConversionBaseline, finalizeEverflowConversionRunMetrics } from "@/lib/integrations/everflow-conversion-run-metrics";
 import { captureEverflowFinancialBaseline, persistEverflowEventReversalHistory } from "@/lib/integrations/everflow-event-reversals";
+import { projectEverflowFinancialEffects } from "@/lib/integrations/everflow-financial-projection";
 import { EverflowHealthError } from "@/lib/integrations/everflow-client";
 
 const responseHeaders = (requestId: string) => ({ "x-tracekit-request-id": requestId });
@@ -90,7 +91,12 @@ export async function POST(request: Request) {
       providerAccountId: result.providerAccountId,
       baseline: financialBaseline,
     });
-    return NextResponse.json({ ok: true, ...result, ...changeMetrics, eventEffects, requestId }, { headers: responseHeaders(requestId) });
+    const financialProjection = await projectEverflowFinancialEffects({
+      organizationId,
+      connectionId,
+      syncRunId: result.syncRunId,
+    });
+    return NextResponse.json({ ok: true, ...result, ...changeMetrics, eventEffects, financialProjection, requestId }, { headers: responseHeaders(requestId) });
   } catch (error) {
     if (error instanceof EverflowHealthError) {
       return NextResponse.json({ ok: false, code: error.code, message: error.message, retryable: error.retryable, requestId }, { status: error.httpStatus, headers: responseHeaders(requestId) });
