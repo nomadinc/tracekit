@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import handler, { validateRuntimeMessage, validateRuntimeScope } from "./index.ts";
 
@@ -36,6 +37,18 @@ test("operator one-shot is allowed without scheduler enablement but remains kill
   assert.notEqual(allowed.status, 503);
   const blocked = await handler.fetch(new Request("https://runtime/v1/commerce/sync", { method: "POST", headers: { "x-tracekit-runtime-secret": "test-only" }, body: JSON.stringify(operatorMessage) }), env);
   assert.equal(blocked.status, 503);
+});
+
+test("evidence-only runtime recovery is bounded and cannot make provider requests", () => {
+  const source = readFileSync(new URL("../../../ui/lib/commerce/commas-continuous-worker.ts", import.meta.url), "utf8");
+  const start = source.indexOf("export async function runContinuousCommasSync");
+  const recovery = source.slice(start);
+  assert.match(recovery, /evidenceOnlyRecovery&&\(mode!=="continuous"\|\|options\.maxPages!==3\|\|options\.perPage!==100\)/);
+  assert.match(recovery, /const replayed=evidenceOnlyRecovery\|\|String\(checkpoint\.state\|\|""\)==="running"\?await replayEvidenceForPage/);
+  assert.match(recovery, /const fetched=replayed\?null:await fetchProviderPage/);
+  assert.match(recovery, /if\(evidenceOnlyRecovery&&!replayed\)throw new Error/);
+  assert.match(recovery, /let providerRequests=0/);
+  assert.match(recovery, /if\(fetched\)\{ providerRequests\+\+/);
 });
 
 test("ordinary direct HTTP invocation cannot bypass the internal contract", async () => {

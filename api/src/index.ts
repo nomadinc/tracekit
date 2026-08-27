@@ -948,9 +948,13 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
     async operatorOneShotPermitted(message) {
       if (!message.operator_one_shot || !message.acceptance_cycle || !message.reserved_run_id) return false;
       const orderingVerification = message.ordering_verification === true;
+      const evidenceOnlyRecovery = message.evidence_only_recovery === true;
       if (message.connection_id !== "ea1c2313-6120-4692-84c5-ec3562e7dcf6") return false;
       if (env.TRACEKIT_COMMERCE_KILL_SWITCH !== "enabled") return false;
       if (!await orderingGateRead("pre_reserved_validation", () => this.preReservedRunPermitted!(message))) return false;
+      const quotaRead = evidenceOnlyRecovery
+        ? Promise.resolve({ data: null, error: null })
+        : orderingGateRead("quota", () => db.from("commerce_continuous_sync_state").select("quota_remaining,quota_observed_at").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1).maybeSingle());
       const [{ data: connection, error: connectionError }, { data: accounts, error: accountError }, { data: credential, error: credentialError }, { data: schedule, error: scheduleError }, { data: pause, error: pauseError }, { data: activeRuns, error: activeError }, { count: liveActivation, error: activationError }, { data: latest, error: latestError }, { count: schedulerControl, error: controlError }] = await Promise.all([
         orderingGateRead("connection", () => db.from("commerce_provider_connections").select("organization_id,account_id,provider,status").eq("organization_id", message.organization_id).eq("id", message.connection_id).maybeSingle()),
         orderingGateRead("provider_accounts", () => db.from("commerce_provider_accounts").select("id").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("status", "active")),
@@ -959,10 +963,10 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
         orderingGateRead("connection_pause", () => db.from("commerce_connection_pauses").select("paused").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).limit(1).maybeSingle()),
         orderingGateRead("active_runs", () => db.from("commerce_sync_runs").select("id").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).neq("id", message.reserved_run_id).in("status", ["queued", "running", "paused"])),
         orderingGateRead("live_activation", () => db.from("commerce_repository_activation").select("organization_id", { count: "exact", head: true }).eq("organization_id", message.organization_id).in("mode", ["live", "live_beta"])),
-        orderingGateRead("quota", () => db.from("commerce_continuous_sync_state").select("quota_remaining,quota_observed_at").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1).maybeSingle()),
+        quotaRead,
         orderingGateRead("scheduler_control", () => db.from("tracekit_production_controls").select("id", { count: "exact", head: true }).eq("capability", "commerce_scheduler").eq("activation_state", "enabled")),
       ]);
-      if (connectionError || accountError || credentialError || scheduleError || pauseError || activeError || activationError || latestError || controlError) return false;
+      if (connectionError || accountError || credentialError || scheduleError || pauseError || activeError || activationError || controlError || (!evidenceOnlyRecovery && latestError)) return false;
       const quotaRemaining = Number(latest?.quota_remaining);
       const observedAt = Date.parse(String(latest?.quota_observed_at || ""));
       const age = Date.now() - observedAt;
@@ -982,9 +986,9 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
         no_conflicting_active_run: (activeRuns || []).length === 0,
         no_live_activation: Number(liveActivation || 0) === 0,
         scheduler_control_disabled: Number(schedulerControl || 0) === 0,
-        quota_fresh: quotaFresh,
-        quota_known: Number.isFinite(quotaRemaining),
-        quota_capacity: Number.isFinite(quotaRemaining) && quotaRemaining - requestBudget >= Number(schedule?.quota_minimum_remaining || 1000),
+        quota_fresh: evidenceOnlyRecovery || quotaFresh,
+        quota_known: evidenceOnlyRecovery || Number.isFinite(quotaRemaining),
+        quota_capacity: evidenceOnlyRecovery || (Number.isFinite(quotaRemaining) && quotaRemaining - requestBudget >= Number(schedule?.quota_minimum_remaining || 1000)),
       };
       const permitted = Object.values(checks).every(Boolean);
       if (!permitted) console.log("[TraceKit] commerce ordering verification gate rejected", { event: "commerce.ordering_verification.gate_rejected", failed_checks: Object.entries(checks).filter(([, value]) => !value).map(([name]) => name), request_budget: requestBudget });
