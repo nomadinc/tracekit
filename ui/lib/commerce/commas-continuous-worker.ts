@@ -273,8 +273,9 @@ async function ensureReferenceInvestigationDependencies(scope:{accountId:string;
   }
 }
 
-export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_reconciliation";maxPages?:number;overlapPages?:number;perPage?:number;paceMs?:number;requestKey?:string;bootstrap?:boolean;expectedScope?:{organizationId:string;connectionId:string;providerAccountId:string}}={}):Promise<ContinuousSyncResult> {
-  const mode=options.mode??"continuous",bootstrap=options.bootstrap===true;
+export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_reconciliation";maxPages?:number;overlapPages?:number;perPage?:number;paceMs?:number;requestKey?:string;bootstrap?:boolean;evidenceOnlyRecovery?:boolean;expectedScope?:{organizationId:string;connectionId:string;providerAccountId:string}}={}):Promise<ContinuousSyncResult> {
+  const mode=options.mode??"continuous",bootstrap=options.bootstrap===true,evidenceOnlyRecovery=options.evidenceOnlyRecovery===true;
+  if(evidenceOnlyRecovery&&(mode!=="continuous"||options.maxPages!==3||options.perPage!==100))throw new Error("Evidence-only recovery bounds are invalid.");
   const bounds=continuousRequestBounds({bootstrap,mode,maxPages:options.maxPages,perPage:options.perPage,overlapPages:options.overlapPages});
   const {perPage,maxPages,overlapPages}=bounds,paceMs=options.paceMs??100;
   if(perPage<1||perPage>100||maxPages<1||overlapPages<1)throw new Error("Continuous sync bounds are invalid.");
@@ -307,7 +308,8 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
       const page=queue[queueIndex++],pageStarted=Date.now();
       const checkpoint=await ensureCheckpoint({...scope,runId,page,perPage});
       try {
-        const replayed=String(checkpoint.state||"")==="running"?await replayEvidenceForPage({...scope,runId,page,perPage}):null;
+        const replayed=evidenceOnlyRecovery||String(checkpoint.state||"")==="running"?await replayEvidenceForPage({...scope,runId,page,perPage}):null;
+        if(evidenceOnlyRecovery&&!replayed)throw new Error("Evidence-only recovery requires persisted page Evidence.");
         const fetched=replayed?null:await fetchProviderPage(scope.secret,page,perPage,owner,bootstrap?1:3);
         if(fetched){ providerRequests++; retries+=fetched.attempts-1; rateLimitStart??=fetched.rateLimit.remaining;rateLimitEnd=fetched.rateLimit.remaining;rateLimitReset=fetched.rateLimit.reset; }
         const pageBytes=replayed?.bytes||fetched!.bytes;

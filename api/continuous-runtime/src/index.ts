@@ -57,7 +57,8 @@ export default {
       installRuntimeEnvironment(env);
       const mode = message.requested_mode === "deep_reconciliation" ? "deep_reconciliation" : "continuous";
       const { runContinuousCommasSync } = await import("../../../ui/lib/commerce/commas-continuous-worker.ts");
-      const result = await runContinuousCommasSync({ mode, bootstrap, maxPages: bootstrap ? 1 : operatorOneShot ? 8 : undefined, perPage: bootstrap ? 1 : operatorOneShot ? 100 : undefined, overlapPages: bootstrap ? 1 : undefined, requestKey: message.request_key || message.scheduler_identity, expectedScope: { organizationId: String(scope.organizationId), connectionId: String(scope.connectionId), providerAccountId: String(scope.providerAccountId) } });
+      const evidenceOnlyRecovery = message.evidence_only_recovery === true;
+      const result = await runContinuousCommasSync({ mode, bootstrap, evidenceOnlyRecovery, maxPages: bootstrap ? 1 : evidenceOnlyRecovery ? 3 : operatorOneShot ? 8 : undefined, perPage: bootstrap ? 1 : operatorOneShot ? 100 : undefined, overlapPages: bootstrap ? 1 : undefined, requestKey: message.request_key || message.scheduler_identity, expectedScope: { organizationId: String(scope.organizationId), connectionId: String(scope.connectionId), providerAccountId: String(scope.providerAccountId) } });
       return json({ ok: true, status: result.status, providerRequests: result.providerRequests, pagesScanned: result.pagesScanned, rateLimitStart: result.rateLimitStart, rateLimitEnd: result.rateLimitEnd }, 200);
     } catch (error) { return json({ ok: false, error: error instanceof Error ? error.message : "continuous_runtime_failed" }, 400); }
   },

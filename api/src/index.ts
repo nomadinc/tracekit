@@ -14,7 +14,7 @@ import {
   maintenanceRequiresAdminAuthorization,
   maintenanceWriteAllowed,
 } from "./maintenance-write-gate";
-import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, runCommerceCron, validateCommerceQueueMessage, isQueueObservabilityTest, isRuntimeDispatchProbe, isPreReservedRunMatch, preReservedRunMatchDetails, orderingVerificationContractDetails, orderingGateRead, orderingGateStage, ORDERING_DIAGNOSTIC_VERSION, ORDERING_DIAGNOSTIC_STAGES, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
+import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, runCommerceCron, validateCommerceQueueMessage, isQueueObservabilityTest, isRuntimeDispatchProbe, isPreReservedRunMatch, preReservedRunMatchDetails, orderingVerificationContractDetails, evidenceOnlyOrderingRecoveryPermitted, orderingGateRead, orderingGateStage, ORDERING_DIAGNOSTIC_VERSION, ORDERING_DIAGNOSTIC_STAGES, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
 import { readQuotaBootstrapGate } from "./quota-bootstrap-gate";
 import { createSupabaseServerFetch } from "./supabase-server-fetch";
 import { deriveCommasDisputeLedgerEvents, normalizeCommasDisputeEvent, sha256HexBytes, verifyCommasWebhookSignature, webhookStoragePath } from "./commas-dispute-webhook";
@@ -896,7 +896,9 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
       if (error) { console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, lookup: "postgrest_error", status: Number(error.status || error.statusCode || 0) || null, code: String(error.code || "postgrest_error") }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); return false; }
       if (!run) { console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, lookup: "not_found", ...preReservedRunMatchDetails(null, message) }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); return false; }
       let valid: boolean;
-      if (orderingVerification) {
+      if (message.evidence_only_recovery === true) {
+        valid = evidenceOnlyOrderingRecoveryPermitted(run, message);
+      } else if (orderingVerification) {
         const details = orderingVerificationContractDetails(run, message);
         valid = Object.values(details).every(Boolean);
         if (!valid) console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, failed_predicates: Object.entries(details).filter(([, value]) => !value).map(([name]) => name) });
@@ -15535,6 +15537,24 @@ async function router(req: Request, env: Env): Promise<Response> {
     } catch (error: any) {
       return json({ ok: false, error: "one_shot_dispatch_failed", code: String(error?.code || "operator_one_shot_failed").replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 80) }, 500);
     }
+  }
+  if (path === "/internal/commerce/recover-ordering-evidence-only" && req.method === "POST") {
+    const auth = adminAuthError(req, env); if (auth) return auth;
+    try {
+      const body = await readJsonBody(req);
+      if (body.confirmation !== "recover-ordering-evidence-only") return json({ ok:false, error:"explicit_ordering_recovery_confirmation_required" },400);
+      if (env.TRACEKIT_COMMERCE_SCHEDULER_ENABLED !== "false" || env.TRACEKIT_COMMERCE_KILL_SWITCH !== "enabled") return json({ ok:false, error:"ordering_recovery_controls_blocked" },409);
+      if (!env.continuous_commerce) return json({ ok:false, error:"continuous_queue_unavailable" },503);
+      const db=getSupabase(env); const { data, error }=await db.rpc("requeue_ordering_evidence_only_fdf97cb1");
+      if (error) return json({ ok:false, error:"ordering_recovery_rpc_rejected", code:"ordering_recovery_rpc_rejected" },409);
+      if (!Array.isArray(data)||data.length!==1) return json({ ok:false, error:"ordering_recovery_rpc_result_invalid", code:"ordering_recovery_rpc_result_invalid" },409);
+      const row=data[0] as Record<string,unknown>;
+      const message: CommerceQueueMessage={schema_version:1,job_type:"commerce_continuous",provider:"commas",account_id:String(row.account_id),organization_id:String(row.organization_id),connection_id:String(row.connection_id),provider_account_id:String(row.provider_account_id),resource:"transactions",requested_mode:"continuous",scheduler_identity:String(row.scheduler_identity),requested_at:new Date().toISOString(),operator_one_shot:true,operator_recovery:true,ordering_verification:true,evidence_only_recovery:true,acceptance_cycle:true,max_pages:3,per_page:100,request_key:String(row.request_key),reserved_run_id:String(row.run_id)};
+      const repository=getContinuousCommerceAdapterRepository(env);
+      if (!await repository.operatorOneShotPermitted?.(message)) return json({ ok:false, error:"ordering_recovery_post_reservation_rejected", code:"ordering_recovery_post_reservation_rejected", run_id:String(row.run_id) },409);
+      try { await env.continuous_commerce.send(message); } catch { return json({ ok:false, error:"ordering_recovery_queue_dispatch_failed", code:"ordering_recovery_queue_dispatch_failed", run_id:String(row.run_id) },503); }
+      return json({ ok:true, status:"queued", run_id:String(row.run_id), evidence_only_recovery:true, provider_requests:0 },202);
+    } catch { return json({ ok:false, error:"ordering_recovery_dispatch_failed", code:"ordering_recovery_dispatch_failed" },500); }
   }
   if (path === "/internal/commerce/ordering-verification" && req.method === "POST") {
     const auth = adminAuthError(req, env); if (auth) return auth;
