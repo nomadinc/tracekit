@@ -26,6 +26,17 @@ test("completed checkpoint rollup makes interrupted progress visible without ter
   assert.match(worker,/metadata:\{\.\.\.runMetadata/);
 });
 
+test("page completion rolls up from the in-memory checkpoint snapshot to reserve terminalization capacity",()=>{
+  const loop=worker.slice(worker.indexOf("while(queueIndex<queue.length"),worker.indexOf("const now=new Date().toISOString()"));
+  assert.match(loop,/checkpointRows\.findIndex/);
+  assert.match(loop,/durableProgress=summarizeContinuousCheckpointProgress\(checkpointRows\)/);
+  assert.doesNotMatch(loop,/summarizeContinuousCheckpointProgress\(await db\(/);
+  const terminal=worker.slice(worker.indexOf("const now=new Date().toISOString()"),worker.indexOf("const transitioned=",worker.indexOf("const now=new Date().toISOString()")));
+  assert.match(terminal,/pages_completed:durableProgress\.pagesCompleted/);
+  assert.match(terminal,/provider_request_count:durableProgress\.providerRequests/);
+  assert.match(loop,/if\(!decision\.stop\) await db\(`commerce_sync_runs\?id=eq\.\$\{runId\}`/);
+});
+
 test("existing lease RPC safely reclaims only expired running runs",()=>{
   assert.match(claim,/r\.status='running' and r\.lease_expires_at<now\(\)/);
   assert.match(claim,/r\.cancelled_at is null/);
