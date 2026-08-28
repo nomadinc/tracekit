@@ -899,6 +899,11 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
         return { status: "completed" as const, providerRequests: 1 as const, quotaRemaining: Number.isFinite(Number(result.quotaRemaining)) ? Number(result.quotaRemaining) : null, observedAt: String(result.observedAt || now) };
       } catch { return { status: "failed" as const, reason: "runtime_request_failed" }; }
     },
+    async authoritativeScheduledQuota(job) {
+      const { data: quota } = await schedulerQuery("pre_dispatch_quota_read", db.from("commerce_continuous_sync_state").select("quota_remaining,quota_observed_at").eq("organization_id", job.organizationId).eq("connection_id", job.connectionId).eq("provider_account_id", job.providerAccountId).eq("resource", job.resource).limit(1).maybeSingle());
+      const raw = quota?.quota_remaining;
+      return { quotaRemaining: raw === null || raw === undefined || raw === "" || !Number.isFinite(Number(raw)) ? null : Number(raw), quotaObservedAt: typeof quota?.quota_observed_at === "string" ? quota.quota_observed_at : null, checkedAt: new Date().toISOString() };
+    },
     async markEnqueued(message, now) {
       await schedulerQuery("schedule_mark_enqueued_write", db.from("commerce_sync_schedules").update({ last_enqueued_at: now, updated_at: now }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource));
     },
