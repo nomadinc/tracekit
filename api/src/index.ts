@@ -14,7 +14,7 @@ import {
   maintenanceRequiresAdminAuthorization,
   maintenanceWriteAllowed,
 } from "./maintenance-write-gate";
-import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, scheduledQuotaMaxAgeMs, quotaDecision, runCommerceCron, validateCommerceQueueMessage, isQueueObservabilityTest, isRuntimeDispatchProbe, isPreReservedRunMatch, preReservedRunMatchDetails, orderingVerificationContractDetails, evidenceOnlyOrderingRecoveryPermitted, orderingGateRead, orderingGateStage, ORDERING_DIAGNOSTIC_VERSION, ORDERING_DIAGNOSTIC_STAGES, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
+import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, scheduledQuotaMaxAgeMs, schedulerGateFailedChecks, quotaDecision, runCommerceCron, validateCommerceQueueMessage, isQueueObservabilityTest, isRuntimeDispatchProbe, isPreReservedRunMatch, preReservedRunMatchDetails, orderingVerificationContractDetails, evidenceOnlyOrderingRecoveryPermitted, orderingGateRead, orderingGateStage, ORDERING_DIAGNOSTIC_VERSION, ORDERING_DIAGNOSTIC_STAGES, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
 import { readQuotaBootstrapGate } from "./quota-bootstrap-gate";
 import { createSupabaseServerFetch } from "./supabase-server-fetch";
 import { deriveCommasDisputeLedgerEvents, normalizeCommasDisputeEvent, sha256HexBytes, verifyCommasWebhookSignature, webhookStoragePath } from "./commas-dispute-webhook";
@@ -829,13 +829,17 @@ function getSupabase(env: Env) {
 
 function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterRepository {
   const db = getSupabase(env);
+  let schedulerFailedChecks: string[] = ["scheduler_not_evaluated"];
   return {
     async schedulerEnabled() {
-      if (env.TRACEKIT_COMMERCE_SCHEDULER_ENABLED !== "true" || env.TRACEKIT_COMMERCE_KILL_SWITCH !== "enabled") return false;
+      schedulerFailedChecks = schedulerGateFailedChecks({ schedulerFlag: env.TRACEKIT_COMMERCE_SCHEDULER_ENABLED, killSwitch: env.TRACEKIT_COMMERCE_KILL_SWITCH, enabledControlCount: 1 });
+      if (schedulerFailedChecks.length) return false;
       const { count, error } = await db.from("tracekit_production_controls").select("id", { count: "exact", head: true }).eq("capability", "commerce_scheduler").eq("activation_state", "enabled");
       if (error) throw error;
-      return (count || 0) > 0;
+      schedulerFailedChecks = schedulerGateFailedChecks({ schedulerFlag: env.TRACEKIT_COMMERCE_SCHEDULER_ENABLED, killSwitch: env.TRACEKIT_COMMERCE_KILL_SWITCH, enabledControlCount: count || 0 });
+      return schedulerFailedChecks.length === 0;
     },
+    async schedulerFailedChecks() { return [...schedulerFailedChecks]; },
     async eligibleJobs(now) {
       // Schedules have a composite FK to provider accounts, not a direct FK to
       // provider connections. Avoid PostgREST relationship embedding here: the
