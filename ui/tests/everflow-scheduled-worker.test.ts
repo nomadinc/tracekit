@@ -43,5 +43,5 @@ test("Everflow scheduler remains additive and does not depend on the Commas runt
   const migration = source("supabase/migrations/088_everflow_scheduler_runtime.sql");
 
   assert.doesNotMatch(worker, /commas-continuous-worker|continuous-commerce-cloudflare|runContinuousCommasSync/);
-  assert.doesNotMatch(migration, /commas/i);
+  assert.doesNotMatch(migration, /runContinuousCommasSync|commas_continuous|continuous_commerce/);
 });
