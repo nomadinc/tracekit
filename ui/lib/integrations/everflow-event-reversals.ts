@@ -111,7 +111,7 @@ export async function persistEverflowEventReversalHistory(input: {
     const batch = history.slice(offset, offset + HISTORY_BATCH_SIZE);
     await commercePersistenceRequest(
       "everflow_conversion_state_history?on_conflict=connection_id,provider_account_id,source_identity,payload_hash",
-      { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify(batch) },
+      { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify(batch) },
     );
   }
 
