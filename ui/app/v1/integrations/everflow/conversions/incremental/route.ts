@@ -9,126 +9,19 @@ import { captureEverflowConversionBaseline, finalizeEverflowConversionRunMetrics
 import { captureEverflowFinancialBaseline, persistEverflowEventReversalHistory } from "@/lib/integrations/everflow-event-reversals";
 import { projectEverflowFinancialEffects } from "@/lib/integrations/everflow-financial-projection";
 import { EverflowHealthError } from "@/lib/integrations/everflow-client";
-import {
-  everflowIncrementalWindow,
-  loadEverflowIncrementalState,
-  markEverflowIncrementalAttempt,
-  markEverflowIncrementalFailure,
-  markEverflowIncrementalSuccess,
-} from "@/lib/integrations/everflow-incremental";
-
-const responseHeaders = (requestId: string) => ({ "x-tracekit-request-id": requestId });
-
-function sameOrigin(request: Request) {
-  const origin = request.headers.get("origin");
-  const fetchSite = request.headers.get("sec-fetch-site");
-  return (!origin || origin === new URL(request.url).origin) && (!fetchSite || fetchSite === "same-origin");
-}
-
-async function apiEvidenceCount(connectionId: string) {
-  return commercePersistenceCount(`everflow_conversion_events?connection_id=eq.${encodeURIComponent(connectionId)}&ingestion_method=eq.api&select=id`);
-}
-
-async function persistSyncRunMetrics(input: { organizationId: string; connectionId: string; syncRunId: string; seen: number; pages: number }) {
-  await commercePersistenceRequest(
-    `commerce_sync_runs?id=eq.${encodeURIComponent(input.syncRunId)}&organization_id=eq.${encodeURIComponent(input.organizationId)}&connection_id=eq.${encodeURIComponent(input.connectionId)}`,
-    { method: "PATCH", body: JSON.stringify({ pages_completed: input.pages, records_seen: input.seen, provider_request_count: input.pages }) },
-  );
-}
-
-export async function POST(request: Request) {
-  const requestId = randomUUID();
-  let failureScope: { organizationId: string; connectionId: string; providerAccountId: string } | null = null;
-  try {
-    if (!sameOrigin(request)) {
-      return NextResponse.json({ ok: false, message: "Request verification failed.", requestId }, { status: 403, headers: responseHeaders(requestId) });
-    }
-    const resolution = await resolveApplicationSession();
-    if (resolution.kind !== "authenticated" || !resolution.session.activeOrganization) {
-      return NextResponse.json({ ok: false, message: "The requested resource is unavailable.", requestId }, { status: 404, headers: responseHeaders(requestId) });
-    }
-    const body = await request.json().catch(() => null) as Record<string, unknown> | null;
-    const connectionId = typeof body?.connectionId === "string" ? body.connectionId.trim() : "";
-    if (!/^[0-9a-f-]{36}$/i.test(connectionId)) {
-      return NextResponse.json({ ok: false, message: "A valid Everflow connection is required.", requestId }, { status: 400, headers: responseHeaders(requestId) });
-    }
-
-    const organizationId = resolution.session.activeOrganization.id;
-    const plane = createCommerceControlPlane({ evidenceStore: new MemoryCommerceEvidenceStore() });
-    const connection = await plane.getConnection(resolution.session, connectionId);
-    if (connection.provider !== "everflow" || connection.status !== "connected" || connection.organizationId !== organizationId) {
-      return NextResponse.json({ ok: false, message: "Everflow connection is unavailable.", requestId }, { status: 409, headers: responseHeaders(requestId) });
-    }
-    const accounts = await plane.listProviderAccounts(resolution.session, connectionId);
-    const providerAccount = accounts.find((candidate) => candidate.status === "active" && !candidate.provisional);
-    if (!providerAccount) {
-      return NextResponse.json({ ok: false, message: "Everflow provider account is unavailable.", requestId }, { status: 409, headers: responseHeaders(requestId) });
-    }
-    failureScope = { organizationId, connectionId, providerAccountId: providerAccount.id };
-
-    const now = new Date();
-    const state = await loadEverflowIncrementalState(failureScope);
-    const window = everflowIncrementalWindow({ now, lastSuccessfulAt: state.lastSuccessfulAt });
-    await markEverflowIncrementalAttempt({
-      accountId: connection.accountId,
-      ...failureScope,
-      attemptedAt: now.toISOString(),
-    });
-
-    const beforeCount = await apiEvidenceCount(connectionId);
-    const baseline = await captureEverflowConversionBaseline(connectionId);
-    const financialBaseline = await captureEverflowFinancialBaseline(connectionId);
-    const result = await syncEverflowConversions({
-      plane,
-      session: resolution.session,
-      organizationId,
-      connectionId,
-      from: window.from,
-      to: window.to,
-    });
-    const afterCount = await apiEvidenceCount(connectionId);
-    const createdByCount = Math.max(0, afterCount - beforeCount);
-    await persistSyncRunMetrics({ organizationId, connectionId, syncRunId: result.syncRunId, seen: result.seen, pages: result.pages });
-    const changeMetrics = await finalizeEverflowConversionRunMetrics({ connectionId, syncRunId: result.syncRunId, baseline });
-    if (changeMetrics.created !== createdByCount) throw new Error("Everflow conversion change metrics were inconsistent.");
-    const eventEffects = await persistEverflowEventReversalHistory({
-      organizationId,
-      connectionId,
-      syncRunId: result.syncRunId,
-      providerAccountId: result.providerAccountId,
-      baseline: financialBaseline,
-    });
-    const financialProjection = await projectEverflowFinancialEffects({ organizationId, connectionId, syncRunId: result.syncRunId });
-    const completedAt = new Date().toISOString();
-    await markEverflowIncrementalSuccess({
-      ...failureScope,
-      completedAt,
-      syncRunId: result.syncRunId,
-      from: window.from,
-      to: window.to,
-      overlapDays: window.overlapDays,
-      seen: result.seen,
-    });
-
-    return NextResponse.json({
-      ok: true,
-      mode: "incremental",
-      bootstrap: window.bootstrap,
-      window: { from: window.from, to: window.to, overlapDays: window.overlapDays },
-      ...result,
-      ...changeMetrics,
-      eventEffects,
-      financialProjection,
-      requestId,
-    }, { headers: responseHeaders(requestId) });
-  } catch (error) {
-    if (failureScope) {
-      const code = error instanceof EverflowHealthError ? error.code : "everflow_incremental_failed";
-      await markEverflowIncrementalFailure({ ...failureScope, failedAt: new Date().toISOString(), warningCode: code }).catch(() => undefined);
-    }
-    if (error instanceof EverflowHealthError) {
-      return NextResponse.json({ ok: false, code: error.code, message: error.message, retryable: error.retryable, requestId }, { status: error.httpStatus, headers: responseHeaders(requestId) });
-    }
-    return NextResponse.json({ ok: false, message: "TraceKit could not complete the Everflow incremental sync.", requestId }, { status: 500, headers: responseHeaders(requestId) });
-  }
-}
+import { everflowIncrementalWindow,loadEverflowIncrementalState,markEverflowIncrementalAttempt,markEverflowIncrementalChunkSuccess,markEverflowIncrementalFailure } from "@/lib/integrations/everflow-incremental";
+const responseHeaders=(requestId:string)=>({"x-tracekit-request-id":requestId});
+function sameOrigin(request:Request){const origin=request.headers.get("origin"),fetchSite=request.headers.get("sec-fetch-site");return(!origin||origin===new URL(request.url).origin)&&(!fetchSite||fetchSite==="same-origin");}
+async function apiEvidenceCount(connectionId:string){return commercePersistenceCount(`everflow_conversion_events?connection_id=eq.${encodeURIComponent(connectionId)}&ingestion_method=eq.api&select=id`);}
+async function persistSyncRunMetrics(input:{organizationId:string;connectionId:string;syncRunId:string;seen:number;pages:number}){await commercePersistenceRequest(`commerce_sync_runs?id=eq.${encodeURIComponent(input.syncRunId)}&organization_id=eq.${encodeURIComponent(input.organizationId)}&connection_id=eq.${encodeURIComponent(input.connectionId)}`,{method:"PATCH",body:JSON.stringify({pages_completed:input.pages,records_seen:input.seen,provider_request_count:input.pages})});}
+export async function POST(request:Request){const requestId=randomUUID();let failureScope:{organizationId:string;connectionId:string;providerAccountId:string}|null=null;try{
+ if(!sameOrigin(request))return NextResponse.json({ok:false,message:"Request verification failed.",requestId},{status:403,headers:responseHeaders(requestId)});
+ const resolution=await resolveApplicationSession();if(resolution.kind!=="authenticated"||!resolution.session.activeOrganization)return NextResponse.json({ok:false,message:"The requested resource is unavailable.",requestId},{status:404,headers:responseHeaders(requestId)});
+ const body=await request.json().catch(()=>null) as Record<string,unknown>|null,connectionId=typeof body?.connectionId==="string"?body.connectionId.trim():"";if(!/^[0-9a-f-]{36}$/i.test(connectionId))return NextResponse.json({ok:false,message:"A valid Everflow connection is required.",requestId},{status:400,headers:responseHeaders(requestId)});
+ const organizationId=resolution.session.activeOrganization.id,plane=createCommerceControlPlane({evidenceStore:new MemoryCommerceEvidenceStore()}),connection=await plane.getConnection(resolution.session,connectionId);if(connection.provider!=="everflow"||connection.status!=="connected"||connection.organizationId!==organizationId)return NextResponse.json({ok:false,message:"Everflow connection is unavailable.",requestId},{status:409,headers:responseHeaders(requestId)});
+ const accounts=await plane.listProviderAccounts(resolution.session,connectionId),providerAccount=accounts.find((candidate)=>candidate.status==="active"&&!candidate.provisional);if(!providerAccount)return NextResponse.json({ok:false,message:"Everflow provider account is unavailable.",requestId},{status:409,headers:responseHeaders(requestId)});failureScope={organizationId,connectionId,providerAccountId:providerAccount.id};
+ const now=new Date(),state=await loadEverflowIncrementalState(failureScope),window=everflowIncrementalWindow({now,lastSuccessfulAt:state.lastSuccessfulAt,boundary:state.boundary});await markEverflowIncrementalAttempt({accountId:connection.accountId,...failureScope,attemptedAt:now.toISOString(),window});
+ const beforeCount=await apiEvidenceCount(connectionId),baseline=await captureEverflowConversionBaseline(connectionId),financialBaseline=await captureEverflowFinancialBaseline(connectionId);const result=await syncEverflowConversions({plane,session:resolution.session,organizationId,connectionId,from:window.from,to:window.to});const afterCount=await apiEvidenceCount(connectionId),createdByCount=Math.max(0,afterCount-beforeCount);await persistSyncRunMetrics({organizationId,connectionId,syncRunId:result.syncRunId,seen:result.seen,pages:result.pages});const changeMetrics=await finalizeEverflowConversionRunMetrics({connectionId,syncRunId:result.syncRunId,baseline});if(changeMetrics.created!==createdByCount)throw new Error("Everflow conversion change metrics were inconsistent.");
+ const eventEffects=await persistEverflowEventReversalHistory({organizationId,connectionId,syncRunId:result.syncRunId,providerAccountId:result.providerAccountId,baseline:financialBaseline});const financialProjection=await projectEverflowFinancialEffects({organizationId,connectionId,syncRunId:result.syncRunId});const completedAt=new Date().toISOString();const progress=await markEverflowIncrementalChunkSuccess({...failureScope,completedAt,syncRunId:result.syncRunId,from:window.from,to:window.to,targetTo:window.targetTo,overlapDays:window.overlapDays,bootstrap:window.bootstrap,seen:result.seen});
+ return NextResponse.json({ok:true,mode:"incremental",bootstrap:window.bootstrap,resumed:window.resumed,window:{from:window.from,to:window.to,targetTo:window.targetTo,overlapDays:window.overlapDays},progress,...result,...changeMetrics,eventEffects,financialProjection,requestId},{headers:responseHeaders(requestId)});
+ }catch(error){if(failureScope){const code=error instanceof EverflowHealthError?error.code:"everflow_incremental_failed";await markEverflowIncrementalFailure({...failureScope,failedAt:new Date().toISOString(),warningCode:code}).catch(()=>undefined);}if(error instanceof EverflowHealthError)return NextResponse.json({ok:false,code:error.code,message:error.message,retryable:error.retryable,requestId},{status:error.httpStatus,headers:responseHeaders(requestId)});return NextResponse.json({ok:false,message:"TraceKit could not complete the Everflow incremental sync.",requestId},{status:500,headers:responseHeaders(requestId)});}}
