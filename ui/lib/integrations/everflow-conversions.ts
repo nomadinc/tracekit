@@ -69,6 +69,8 @@ export type EverflowConversion = {
   creativeId: string | null;
   creative: string | null;
   payloadHash: string;
+  rawPayload: Record<string, unknown>;
+  rawPayloadHash: string;
 };
 
 export type EverflowConversionPage = {
@@ -207,7 +209,12 @@ export async function normalizeEverflowConversion(value: unknown): Promise<Everf
     creative: cleanString(row.creative),
   };
 
-  return { ...normalizedWithoutHash, payloadHash: await evidenceHash(normalizedWithoutHash) };
+  return {
+    ...normalizedWithoutHash,
+    payloadHash: await evidenceHash(normalizedWithoutHash),
+    rawPayload: row,
+    rawPayloadHash: await evidenceHash(row),
+  };
 }
 
 function providerDateValue(value: string, field: string) {
@@ -294,6 +301,76 @@ export async function listEverflowConversionsPage(input: {
   }
 }
 
+async function persistRawEvidence(input: {
+  organizationId: string;
+  connectionId: string;
+  providerAccountId: string;
+  syncRunId: string;
+  conversion: EverflowConversion;
+  observedAt: string;
+}) {
+  const bytes = new TextEncoder().encode(JSON.stringify(input.conversion.rawPayload));
+  const evidenceId = randomUUID();
+  const storageReference = `managed://everflow/${input.organizationId}/${input.connectionId}/${input.providerAccountId}/${input.conversion.sourceIdentity}/${input.conversion.rawPayloadHash}`;
+  const evidenceRows = await commercePersistenceRequest(
+    "commerce_evidence_records?on_conflict=connection_id,provider_account_id,source_object_type,source_object_id,payload_hash",
+    {
+      method: "POST",
+      headers: { Prefer: "resolution=ignore-duplicates,return=representation" },
+      body: JSON.stringify({
+        id: evidenceId,
+        organization_id: input.organizationId,
+        connection_id: input.connectionId,
+        provider_account_id: input.providerAccountId,
+        sync_run_id: input.syncRunId,
+        source_object_type: "everflow_conversion",
+        source_object_id: input.conversion.sourceIdentity,
+        payload_hash: input.conversion.rawPayloadHash,
+        storage_backend: "managed_evidence_store",
+        storage_reference: storageReference,
+        content_type: "application/json",
+        byte_size: bytes.byteLength,
+        source_created_at: input.conversion.conversionAt,
+        source_updated_at: null,
+        observed_at: input.observedAt,
+        normalizer_version: "everflow-conversion-v1",
+        mapping_version: "everflow-conversion-v1",
+        pii_classification: "sensitive",
+        retention_policy: "commerce-provider-raw-v1",
+        metadata: {
+          immutable: true,
+          provider: "everflow",
+          ingestionMethod: "api",
+          normalizedPayloadHash: input.conversion.payloadHash,
+        },
+      }),
+    },
+  );
+
+  let resolvedEvidenceId = evidenceRows.length ? String(evidenceRows[0].id) : null;
+  if (!resolvedEvidenceId) {
+    const existing = await commercePersistenceRequest(
+      `commerce_evidence_records?connection_id=eq.${encodeURIComponent(input.connectionId)}&provider_account_id=eq.${encodeURIComponent(input.providerAccountId)}&source_object_type=eq.everflow_conversion&source_object_id=eq.${encodeURIComponent(input.conversion.sourceIdentity)}&payload_hash=eq.${encodeURIComponent(input.conversion.rawPayloadHash)}&select=id`,
+    );
+    resolvedEvidenceId = existing.length ? String(existing[0].id) : null;
+  }
+  if (!resolvedEvidenceId) throw new Error("Everflow raw evidence could not be resolved.");
+
+  await commercePersistenceRequest(
+    "commerce_managed_evidence_payloads?on_conflict=evidence_id",
+    {
+      method: "POST",
+      headers: { Prefer: "resolution=ignore-duplicates,return=minimal" },
+      body: JSON.stringify({
+        evidence_id: resolvedEvidenceId,
+        organization_id: input.organizationId,
+        payload: input.conversion.rawPayload,
+      }),
+    },
+  );
+  return resolvedEvidenceId;
+}
+
 export async function persistEverflowConversions(input: {
   accountId: string;
   organizationId: string;
@@ -304,6 +381,17 @@ export async function persistEverflowConversions(input: {
 }) {
   if (!input.conversions.length) return 0;
   const now = new Date().toISOString();
+  const evidenceIds = new Map<string, string>();
+  for (const conversion of input.conversions) {
+    evidenceIds.set(conversion.sourceIdentity, await persistRawEvidence({
+      organizationId: input.organizationId,
+      connectionId: input.connectionId,
+      providerAccountId: input.providerAccountId,
+      syncRunId: input.syncRunId,
+      conversion,
+      observedAt: now,
+    }));
+  }
   const rows = input.conversions.map((conversion) => ({
     id: randomUUID(),
     account_id: input.accountId,
@@ -314,6 +402,7 @@ export async function persistEverflowConversions(input: {
     import_id: null,
     source_row: null,
     ingestion_method: "api",
+    evidence_id: evidenceIds.get(conversion.sourceIdentity) || null,
     source_identity: conversion.sourceIdentity,
     conversion_id: conversion.conversionId,
     transaction_id: conversion.transactionId,
