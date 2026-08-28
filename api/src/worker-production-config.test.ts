@@ -47,7 +47,7 @@ test("production Worker configuration preserves route, cron, maintenance, and ke
   assert.deepEqual(config.triggers?.crons, ["*/5 * * * *"]);
   assert.equal(config.vars?.TRACEKIT_MAINTENANCE_WRITE_GATE_ENABLED, "false");
   assert.equal(config.vars?.TRACEKIT_COMMERCE_SCHEDULER_ENABLED, "false");
-  assert.equal(config.vars?.TRACEKIT_COMMERCE_KILL_SWITCH, "disabled");
+  assert.equal(config.vars?.TRACEKIT_COMMERCE_KILL_SWITCH, "enabled");
 
   const source = readFileSync(configUrl, "utf8");
   for (const binding of [

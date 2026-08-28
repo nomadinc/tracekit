@@ -14,7 +14,7 @@ const config = unstable_readConfig({ config: new URL("../continuous-runtime/wran
 
 test("runtime configuration is inert and has no scheduler or queue bindings", () => {
   assert.equal(config.vars?.TRACEKIT_COMMERCE_SCHEDULER_ENABLED, "false");
-  assert.equal(config.vars?.TRACEKIT_COMMERCE_KILL_SWITCH, "disabled");
+  assert.equal(config.vars?.TRACEKIT_COMMERCE_KILL_SWITCH, "enabled");
   assert.equal(config.triggers?.crons, undefined);
   assert.deepEqual(config.queues, { producers: [], consumers: [] });
 });

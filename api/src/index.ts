@@ -914,7 +914,7 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
           && ((run as any).metadata || {}).acceptance_cycle === true
           && ((run as any).metadata || {}).shadow_only === true
           && (normalAcceptance ? ((run as any).metadata || {}).normal_acceptance === true : ((run as any).metadata || {}).normal_acceptance !== true)
-          && Number(((run as any).metadata || {}).max_pages) === (message.ordering_verification || normalAcceptance ? 3 : 8)
+          && Number(((run as any).metadata || {}).max_pages) === (message.ordering_verification ? 3 : normalAcceptance ? 5 : 8)
           && Number(((run as any).metadata || {}).per_page) === 100
           && (!recovery || ((run as any).metadata || {}).operator_recovery_dispatched === true)
         : isPreReservedRunMatch(run, message); }
@@ -973,7 +973,7 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
       const observedAt = Date.parse(String(latest?.quota_observed_at || ""));
       const age = Date.now() - observedAt;
       const quotaFresh = Number.isFinite(observedAt) && age >= 0 && age <= 15 * 60 * 1000;
-      const requestBudget = orderingVerification || message.normal_acceptance === true ? 3 : 8;
+      const requestBudget = orderingVerification ? 3 : message.normal_acceptance === true ? 5 : 8;
       const checks = {
         connection_provider: String(connection?.provider || "") === "commas",
         connection_status: String(connection?.status || "") === "connected",
@@ -15527,11 +15527,11 @@ async function router(req: Request, env: Env): Promise<Response> {
       const row = Array.isArray(data) ? data[0] : data;
       if (!row?.run_id) return json({ ok:false, error:"normal_acceptance_reservation_unavailable" },409);
       if (row.created === false) return json({ ok:true, status:"duplicate", run_id:String(row.run_id) },200);
-      const message: CommerceQueueMessage = { schema_version:1, job_type:"commerce_continuous", provider:"commas", account_id:String(row.account_id), organization_id:String(row.organization_id), connection_id:"ea1c2313-6120-4692-84c5-ec3562e7dcf6", provider_account_id:String(row.provider_account_id), resource:"transactions", requested_mode:"continuous", scheduler_identity:String(row.scheduler_identity), requested_at:new Date().toISOString(), operator_one_shot:true, normal_acceptance:true, acceptance_cycle:true, max_pages:3, per_page:100, request_key:String(row.request_key), reserved_run_id:String(row.run_id) };
+      const message: CommerceQueueMessage = { schema_version:1, job_type:"commerce_continuous", provider:"commas", account_id:String(row.account_id), organization_id:String(row.organization_id), connection_id:"ea1c2313-6120-4692-84c5-ec3562e7dcf6", provider_account_id:String(row.provider_account_id), resource:"transactions", requested_mode:"continuous", scheduler_identity:String(row.scheduler_identity), requested_at:new Date().toISOString(), operator_one_shot:true, normal_acceptance:true, acceptance_cycle:true, max_pages:5, per_page:100, request_key:String(row.request_key), reserved_run_id:String(row.run_id) };
       const repository = getContinuousCommerceAdapterRepository(env);
       if (!await repository.operatorOneShotPermitted?.(message)) return json({ ok:false, error:"normal_acceptance_post_reservation_rejected", run_id:String(row.run_id) },409);
       await env.continuous_commerce.send(message);
-      return json({ ok:true, status:"queued", run_id:String(row.run_id), dispatch_source:"operator_one_shot", normal_acceptance:true, max_pages:3, per_page:100 },202);
+      return json({ ok:true, status:"queued", run_id:String(row.run_id), dispatch_source:"operator_one_shot", normal_acceptance:true, max_pages:5, per_page:100 },202);
     } catch {
       return json({ ok:false, error:"normal_acceptance_dispatch_failed" },500);
     }

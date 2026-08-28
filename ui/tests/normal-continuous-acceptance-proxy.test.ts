@@ -26,4 +26,5 @@ test("normal acceptance proxy keeps the secret server-side and sanitizes respons
   assert.doesNotMatch(route,/NEXT_PUBLIC_TK_SECRET_KEY|NextResponse\.json\(payload|console\.(log|error)/);
   assert.match(route,/code:"normal_acceptance_failed"/);
   assert.match(route,/runIdPattern/);
+  assert.match(route,/payload\.max_pages===5\?5:null/);
 });

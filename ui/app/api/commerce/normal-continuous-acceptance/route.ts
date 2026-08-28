@@ -24,7 +24,7 @@ export async function POST(request:Request){
     const payload=await upstream.json().catch(()=>({})) as Record<string,unknown>;
     const runId=typeof payload.run_id==="string"&&runIdPattern.test(payload.run_id)?payload.run_id:null;
     if(!upstream.ok)return response(requestId,{ok:false,status:upstream.status,code:"normal_acceptance_failed",run_id:runId},upstream.status>=500?502:409);
-    return response(requestId,{ok:true,status:upstream.status,run_id:runId,normal_acceptance:payload.normal_acceptance===true,max_pages:payload.max_pages===3?3:null,per_page:payload.per_page===100?100:null},upstream.status===200?200:202);
+    return response(requestId,{ok:true,status:upstream.status,run_id:runId,normal_acceptance:payload.normal_acceptance===true,max_pages:payload.max_pages===5?5:null,per_page:payload.per_page===100?100:null},upstream.status===200?200:202);
   } catch(error) {
     if(error instanceof AuthorizationDeniedError)return response(requestId,{ok:false,code:"resource_unavailable"},404);
     return response(requestId,{ok:false,code:"normal_acceptance_failed"},500);
