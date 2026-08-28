@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { COMMAS_QUOTA_OBSERVATION_MAX_AGE_MS, isFreshCommasQuotaObservation, persistCommasQuotaObservation, persistenceDiagnostic } from "../lib/commerce/commas-continuous-worker.ts";
+import { COMMAS_QUOTA_OBSERVATION_MAX_AGE_MS, FIXED_REDELIVERY_CONNECTION_ID, FIXED_REDELIVERY_PROVIDER_ACCOUNT_ID, FIXED_REDELIVERY_RUN_ID, fixedRedeliveryQuotaEligibility, isFreshCommasQuotaObservation, persistCommasQuotaObservation, persistenceDiagnostic } from "../lib/commerce/commas-continuous-worker.ts";
 
 test("quota observation freshness is explicit and fail-closed", () => {
   const now = Date.parse("2026-08-24T12:00:00.000Z");
@@ -33,6 +33,31 @@ test("stranded recovery quota mode is explicit and fixed-scope",()=>{
   assert.match(probe,/operator_quota_probe_stranded_recovery/);
   assert.match(readFileSync(new URL("../scripts/probe-commas-quota.ts",import.meta.url),"utf8"),/--for-stranded-recovery/);
   assert.doesNotMatch(probe,/commerce_sync_runs.*POST|normalizeCommasTransaction|evidenceForPage|enqueue_commerce/);
+});
+
+test("fixed redelivery quota refresh excludes only its pristine target and has no dispatch or run mutation",()=>{
+  const source=readFileSync(new URL("../lib/commerce/commas-continuous-worker.ts",import.meta.url),"utf8");
+  const fixed=source.slice(source.indexOf("export async function runFixedRedeliveryQuotaRefresh"),source.indexOf("export async function runCommasQuotaProbe"));
+  assert.match(fixed,/status=in\.\(queued,running,paused\)&id=neq\.\$\{FIXED_REDELIVERY_RUN_ID\}/);
+  assert.match(fixed,/commerce_normal_acceptance_redelivery_markers/);
+  assert.match(fixed,/fetchProviderPage\(scope\.secret,1,1,[\s\S]*,1\)/);
+  assert.match(fixed,/operator_quota_probe_fixed_redelivery/);
+  assert.match(fixed,/JSON\.stringify\(after\)!==runSnapshot/);
+  assert.equal(fixed.match(/fetchProviderPage\(/g)?.length,1);
+  assert.doesNotMatch(fixed,/continuous_commerce|\.send\(|normalizeCommasTransaction|evidenceForPage|commerce_sync_runs.*(?:POST|PATCH|DELETE)|claim_normal_acceptance_redelivery/);
+  const generic=source.slice(source.indexOf("export async function runCommasQuotaProbe"),source.indexOf("type QuotaObservation"));
+  assert.match(generic,/status=in\.\(queued,running,paused\)&select=id&limit=1/);
+  assert.match(generic,/Quota probe has a conflicting active run/);
+  assert.doesNotMatch(generic,/FIXED_REDELIVERY_RUN_ID/);
+});
+
+test("fixed redelivery quota eligibility rejects every unsafe production-state variant",()=>{
+  const scope={organizationId:"org",connectionId:FIXED_REDELIVERY_CONNECTION_ID,providerAccountId:FIXED_REDELIVERY_PROVIDER_ACCOUNT_ID};
+  const run={id:FIXED_REDELIVERY_RUN_ID,organization_id:"org",connection_id:FIXED_REDELIVERY_CONNECTION_ID,provider_account_id:FIXED_REDELIVERY_PROVIDER_ACCOUNT_ID,status:"queued",mode:"continuous",sync_type:"transactions",started_at:null,completed_at:null,lease_owner:null,lease_expires_at:null,pages_completed:0,provider_request_count:0,records_seen:0,scheduler_idempotency_key:"operator-normal-continuous-acceptance-5:key",metadata:{normal_acceptance:true,normal_acceptance_follow_up:"five_page",follow_up_of:"b1547be9-31aa-4487-9c08-796f6fc49005",shadow_only:true,acceptance_cycle:true,dispatch_source:"operator_one_shot",max_pages:5,per_page:100,request_key:"key"}};
+  const base={run,scope,checkpoints:[],conflictingRuns:[],markers:[],schedule:{enabled:false,sync_frequency:"hourly",activation_state:"disabled"},paused:[],liveActivation:[],schedulerControls:[]};
+  assert.equal(fixedRedeliveryQuotaEligibility(base),true);
+  for(const patch of [{status:"running"},{started_at:"now"},{lease_owner:"worker"},{lease_expires_at:"later"},{provider_request_count:1},{records_seen:1},{metadata:{...run.metadata,max_pages:3}},{metadata:{...run.metadata,normal_acceptance:false}}])assert.equal(fixedRedeliveryQuotaEligibility({...base,run:{...run,...patch}}),false);
+  for(const patch of [{checkpoints:[{}]},{conflictingRuns:[{}]},{markers:[{}]},{paused:[{}]},{liveActivation:[{}]},{schedulerControls:[{}]},{schedule:{...base.schedule,enabled:true}}])assert.equal(fixedRedeliveryQuotaEligibility({...base,...patch}),false);
 });
 
 test("078 recovery RPC consumes the same fresh quota floor used by the probe",()=>{

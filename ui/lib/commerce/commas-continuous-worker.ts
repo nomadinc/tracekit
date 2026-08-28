@@ -136,6 +136,57 @@ async function fetchProviderPage(secret:string,page:number,perPage:number,correl
 }
 
 export const STRANDED_RECOVERY_RUN_ID = "9c8731d7-1dae-4844-a7ce-0b6fccea170e";
+export const FIXED_REDELIVERY_RUN_ID = "1f01c739-f609-4cf8-aff1-b2a5891ddd8a";
+export const FIXED_REDELIVERY_CONNECTION_ID = "ea1c2313-6120-4692-84c5-ec3562e7dcf6";
+export const FIXED_REDELIVERY_PROVIDER_ACCOUNT_ID = "0369c701-717f-4c34-b230-8341bcdb7e65";
+
+export function fixedRedeliveryQuotaEligibility(input:{run:any;scope:{organizationId:string;connectionId:string;providerAccountId:string};checkpoints:any[];conflictingRuns:any[];markers:any[];schedule:any;paused:any[];liveActivation:any[];schedulerControls:any[]}){
+  const run=input.run||{},metadata=object(run.metadata)||{},schedule=input.schedule||{};
+  return run.id===FIXED_REDELIVERY_RUN_ID
+    && run.organization_id===input.scope.organizationId
+    && run.connection_id===FIXED_REDELIVERY_CONNECTION_ID
+    && run.connection_id===input.scope.connectionId
+    && run.provider_account_id===FIXED_REDELIVERY_PROVIDER_ACCOUNT_ID
+    && run.provider_account_id===input.scope.providerAccountId
+    && run.status==="queued" && run.mode==="continuous" && run.sync_type==="transactions"
+    && run.started_at==null && run.completed_at==null && run.lease_owner==null && run.lease_expires_at==null
+    && Number(run.pages_completed)===0 && Number(run.provider_request_count)===0 && Number(run.records_seen)===0
+    && metadata.normal_acceptance===true && metadata.normal_acceptance_follow_up==="five_page"
+    && metadata.follow_up_of==="b1547be9-31aa-4487-9c08-796f6fc49005"
+    && metadata.shadow_only===true && metadata.acceptance_cycle===true && metadata.dispatch_source==="operator_one_shot"
+    && Number(metadata.max_pages)===5 && Number(metadata.per_page)===100
+    && run.scheduler_idempotency_key===`operator-normal-continuous-acceptance-5:${String(metadata.request_key||"")}`
+    && input.checkpoints.length===0 && input.conflictingRuns.length===0 && input.markers.length===0
+    && schedule.enabled===false && schedule.sync_frequency==="hourly" && schedule.activation_state!=="paused"
+    && input.paused.length===0 && input.liveActivation.length===0 && input.schedulerControls.length===0;
+}
+
+export async function runFixedRedeliveryQuotaRefresh(options:{confirm:boolean}){
+  if(!options.confirm)throw new Error("Fixed redelivery quota refresh requires explicit confirmation.");
+  if(process.env.TRACEKIT_COMMERCE_KILL_SWITCH!=="enabled")throw new Error("Commerce kill switch blocks the fixed redelivery quota refresh.");
+  if(process.env.TRACEKIT_COMMERCE_SCHEDULER_ENABLED!=="false")throw new Error("Fixed redelivery quota refresh requires the scheduler to remain disabled.");
+  const scope=await scopedConnection();
+  if(scope.connectionId!==FIXED_REDELIVERY_CONNECTION_ID||scope.providerAccountId!==FIXED_REDELIVERY_PROVIDER_ACCOUNT_ID)throw new Error("Fixed redelivery quota scope mismatch.");
+  const [runs,checkpoints,conflictingRuns,markers,schedules,paused,liveActivation,schedulerControls]=await Promise.all([
+    db(`commerce_sync_runs?id=eq.${FIXED_REDELIVERY_RUN_ID}&organization_id=eq.${scope.organizationId}&connection_id=eq.${scope.connectionId}&select=*&limit=1`),
+    db(`commerce_sync_checkpoints?sync_run_id=eq.${FIXED_REDELIVERY_RUN_ID}&select=id&limit=1`),
+    db(`commerce_sync_runs?organization_id=eq.${scope.organizationId}&connection_id=eq.${scope.connectionId}&status=in.(queued,running,paused)&id=neq.${FIXED_REDELIVERY_RUN_ID}&select=id&limit=1`),
+    db(`commerce_normal_acceptance_redelivery_markers?run_id=eq.${FIXED_REDELIVERY_RUN_ID}&select=run_id,claimed_at,queue_dispatched_at&limit=1`),
+    db(`commerce_sync_schedules?organization_id=eq.${scope.organizationId}&connection_id=eq.${scope.connectionId}&provider_account_id=eq.${scope.providerAccountId}&resource=eq.transactions&select=enabled,activation_state,sync_frequency&limit=2`),
+    db(`commerce_connection_pauses?organization_id=eq.${scope.organizationId}&connection_id=eq.${scope.connectionId}&paused=eq.true&select=connection_id&limit=1`),
+    db(`commerce_repository_activation?organization_id=eq.${scope.organizationId}&mode=in.(live,live_beta)&select=organization_id&limit=1`),
+    db("tracekit_production_controls?capability=eq.commerce_scheduler&activation_state=eq.enabled&select=id&limit=1"),
+  ]);
+  const run=runs[0],runSnapshot=JSON.stringify(run);
+  if(runs.length!==1||schedules.length!==1||!fixedRedeliveryQuotaEligibility({run,scope,checkpoints,conflictingRuns,markers,schedule:schedules[0],paused,liveActivation,schedulerControls}))throw new Error("Fixed redelivery quota scope is not eligible.");
+  const fetched=await fetchProviderPage(scope.secret,1,1,`commas-fixed-redelivery-quota-${randomUUID()}`,1);
+  const observedAt=new Date().toISOString(),quotaSource="operator_quota_probe_fixed_redelivery";
+  await persistCommasQuotaObservation({accountId:scope.accountId,organizationId:scope.organizationId,connectionId:scope.connectionId,providerAccountId:scope.providerAccountId,quotaLimit:fetched.rateLimit.limit,quotaRemaining:fetched.rateLimit.remaining,quotaReset:fetched.rateLimit.reset,observedAt,quotaSource});
+  const after=(await db(`commerce_sync_runs?id=eq.${FIXED_REDELIVERY_RUN_ID}&select=*&limit=1`))[0];
+  if(JSON.stringify(after)!==runSnapshot)throw new Error("Fixed redelivery target changed during quota refresh.");
+  return {provider:"commas",connectionId:scope.connectionId,providerAccountId:scope.providerAccountId,runId:FIXED_REDELIVERY_RUN_ID,providerRequests:1,quotaLimit:fetched.rateLimit.limit,quotaRemaining:fetched.rateLimit.remaining,quotaReset:fetched.rateLimit.reset,observedAt,source:quotaSource};
+}
+
 export async function runCommasQuotaProbe(options: { connectionId: string; confirm: boolean; forStrandedRecovery?: boolean }) {
   const expectedConnectionId = "ea1c2313-6120-4692-84c5-ec3562e7dcf6";
   if (!options.confirm) throw new Error("Commas quota probe requires explicit confirmation.");
