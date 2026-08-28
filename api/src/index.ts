@@ -15539,6 +15539,30 @@ async function router(req: Request, env: Env): Promise<Response> {
       return json({ ok:false, error:"normal_acceptance_dispatch_failed" },500);
     }
   }
+  if (path === "/internal/commerce/redeliver-normal-continuous-acceptance" && req.method === "POST") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const body = await readJsonBody(req);
+      if (!body || Object.keys(body).length !== 1 || body.confirmation !== "redeliver-normal-continuous-acceptance") return json({ ok:false, code:"explicit_redelivery_confirmation_required" },400);
+      if (env.TRACEKIT_COMMERCE_SCHEDULER_ENABLED !== "false" || env.TRACEKIT_COMMERCE_KILL_SWITCH !== "enabled") return json({ ok:false, code:"normal_acceptance_redelivery_controls_blocked" },409);
+      if (!env.continuous_commerce) return json({ ok:false, code:"normal_acceptance_redelivery_queue_unavailable" },503);
+      const db = getSupabase(env);
+      const { data, error } = await db.rpc("claim_normal_acceptance_redelivery_1f01c739");
+      if (error) return json({ ok:false, code:"normal_acceptance_redelivery_claim_rejected" },409);
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row?.run_id) return json({ ok:false, code:"normal_acceptance_redelivery_claim_invalid" },409);
+      const message = validateCommerceQueueMessage({ schema_version:1, job_type:"commerce_continuous", provider:"commas", account_id:String(row.account_id), organization_id:String(row.organization_id), connection_id:String(row.connection_id), provider_account_id:String(row.provider_account_id), resource:"transactions", requested_mode:"continuous", scheduler_identity:String(row.scheduler_identity), requested_at:new Date().toISOString(), operator_one_shot:true, normal_acceptance:true, acceptance_cycle:true, max_pages:5, per_page:100, request_key:String(row.request_key), reserved_run_id:String(row.run_id) });
+      const repository = getContinuousCommerceAdapterRepository(env);
+      if (!await repository.operatorOneShotPermitted?.(message)) return json({ ok:false, code:"normal_acceptance_redelivery_post_claim_rejected", run_id:String(row.run_id) },409);
+      await env.continuous_commerce.send(message);
+      const { data: marked, error: markError } = await db.rpc("mark_normal_acceptance_redelivery_dispatched_1f01c739");
+      if (markError || marked !== true) return json({ ok:false, code:"normal_acceptance_redelivery_dispatch_ambiguous", run_id:String(row.run_id) },500);
+      return json({ ok:true, status:"queued", run_id:String(row.run_id), normal_acceptance:true, redelivery:true, max_pages:5, per_page:100 },202);
+    } catch {
+      return json({ ok:false, code:"normal_acceptance_redelivery_dispatch_ambiguous" },500);
+    }
+  }
   if (path === "/internal/commerce/one-shot-shadow" && req.method === "POST") {
     const auth = adminAuthError(req, env);
     if (auth) return auth;
