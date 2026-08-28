@@ -107,7 +107,7 @@ export async function persistEverflowEventReversalHistory(input: {
   });
   await commercePersistenceRequest(
     "everflow_conversion_state_history?on_conflict=connection_id,provider_account_id,source_identity,payload_hash",
-    { method: "POST", headers: { Prefer: "resolution=ignore-duplicates,return=representation" }, body: JSON.stringify(history) },
+    { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify(history) },
   );
   const changed = history.filter((row) => row.transition_type !== "unchanged");
   return {
