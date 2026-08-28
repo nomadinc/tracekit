@@ -3,6 +3,7 @@ import { commercePersistenceRequest } from "@/lib/commerce/supabase-control-repo
 
 type Row = Record<string, unknown>;
 const HISTORY_BATCH_SIZE = 50;
+const PAGE_SIZE = 1000;
 
 export type EverflowFinancialState = {
   sourceIdentity: string;
@@ -23,6 +24,17 @@ const text = (value: unknown) => value === null || value === undefined ? null : 
 const number = (value: unknown) => Number.isFinite(Number(value)) ? Number(value) : 0;
 const approved = (status: string | null) => String(status || "").toLowerCase() === "approved";
 
+async function loadAllRows(path: string) {
+  const rows: Row[] = [];
+  for (let offset = 0; ; offset += PAGE_SIZE) {
+    const separator = path.includes("?") ? "&" : "?";
+    const page = await commercePersistenceRequest(`${path}${separator}limit=${PAGE_SIZE}&offset=${offset}`);
+    rows.push(...page);
+    if (page.length < PAGE_SIZE) break;
+  }
+  return rows;
+}
+
 function state(row: Row): EverflowFinancialState {
   return {
     sourceIdentity: String(row.source_identity),
@@ -41,8 +53,8 @@ function state(row: Row): EverflowFinancialState {
 }
 
 export async function captureEverflowFinancialBaseline(connectionId: string) {
-  const rows = await commercePersistenceRequest(
-    `everflow_conversion_events?connection_id=eq.${encodeURIComponent(connectionId)}&ingestion_method=eq.api&select=source_identity,provider_account_id,evidence_id,payload_hash,status,revenue,payout,conversion_id,transaction_id,conversion_at,is_event,event_name`,
+  const rows = await loadAllRows(
+    `everflow_conversion_events?connection_id=eq.${encodeURIComponent(connectionId)}&ingestion_method=eq.api&select=source_identity,provider_account_id,evidence_id,payload_hash,status,revenue,payout,conversion_id,transaction_id,conversion_at,is_event,event_name&order=id.asc`,
   );
   return new Map(rows.map((row) => [String(row.source_identity), state(row)]));
 }
@@ -66,8 +78,8 @@ export async function persistEverflowEventReversalHistory(input: {
   providerAccountId: string;
   baseline: Map<string, EverflowFinancialState>;
 }) {
-  const rows = await commercePersistenceRequest(
-    `everflow_conversion_events?connection_id=eq.${encodeURIComponent(input.connectionId)}&provider_account_id=eq.${encodeURIComponent(input.providerAccountId)}&sync_run_id=eq.${encodeURIComponent(input.syncRunId)}&ingestion_method=eq.api&select=source_identity,provider_account_id,evidence_id,payload_hash,status,revenue,payout,conversion_id,transaction_id,conversion_at,is_event,event_name`,
+  const rows = await loadAllRows(
+    `everflow_conversion_events?connection_id=eq.${encodeURIComponent(input.connectionId)}&provider_account_id=eq.${encodeURIComponent(input.providerAccountId)}&sync_run_id=eq.${encodeURIComponent(input.syncRunId)}&ingestion_method=eq.api&select=source_identity,provider_account_id,evidence_id,payload_hash,status,revenue,payout,conversion_id,transaction_id,conversion_at,is_event,event_name&order=id.asc`,
   );
   const current = rows.map(state);
   if (!current.length) return { observations: 0, events: 0, reversals: 0, reinstatements: 0, revenueDelta: 0, payoutDelta: 0 };
