@@ -38,6 +38,17 @@ test("automatic Everflow selection excludes manual schedules and reuses the incr
   assert.match(worker, /markEverflowIncrementalChunkSuccess/);
 });
 
+test("Everflow run metrics distinguish immutable evidence writes from reuse", () => {
+  const metrics = source("ui/lib/integrations/everflow-conversion-run-metrics.ts");
+
+  assert.match(metrics, /select=provider_account_id,source_identity,payload_hash,evidence_id/);
+  assert.match(metrics, /commerce_evidence_records[\s\S]*select=id,sync_run_id/);
+  assert.match(metrics, /evidenceSyncRunId === input\.syncRunId/);
+  assert.match(metrics, /evidence_writes: evidenceWrites/);
+  assert.match(metrics, /evidence_reuses: evidenceReuses/);
+  assert.match(metrics, /evidenceWrites \+ evidenceReuses !== observed\.length/);
+});
+
 test("Everflow scheduler remains additive and does not depend on the Commas runtime", () => {
   const worker = source("ui/lib/integrations/everflow-scheduled-worker.ts");
   const migration = source("supabase/migrations/088_everflow_scheduler_runtime.sql");
