@@ -6,6 +6,7 @@ type Row = Record<string, unknown>;
 export type EverflowFinancialState = {
   sourceIdentity: string;
   providerAccountId: string;
+  evidenceId: string | null;
   payloadHash: string;
   status: string | null;
   revenue: number;
@@ -25,6 +26,7 @@ function state(row: Row): EverflowFinancialState {
   return {
     sourceIdentity: String(row.source_identity),
     providerAccountId: String(row.provider_account_id),
+    evidenceId: text(row.evidence_id),
     payloadHash: String(row.payload_hash),
     status: text(row.status),
     revenue: number(row.revenue),
@@ -39,7 +41,7 @@ function state(row: Row): EverflowFinancialState {
 
 export async function captureEverflowFinancialBaseline(connectionId: string) {
   const rows = await commercePersistenceRequest(
-    `everflow_conversion_events?connection_id=eq.${encodeURIComponent(connectionId)}&ingestion_method=eq.api&select=source_identity,provider_account_id,payload_hash,status,revenue,payout,conversion_id,transaction_id,conversion_at,is_event,event_name`,
+    `everflow_conversion_events?connection_id=eq.${encodeURIComponent(connectionId)}&ingestion_method=eq.api&select=source_identity,provider_account_id,evidence_id,payload_hash,status,revenue,payout,conversion_id,transaction_id,conversion_at,is_event,event_name`,
   );
   return new Map(rows.map((row) => [String(row.source_identity), state(row)]));
 }
@@ -64,7 +66,7 @@ export async function persistEverflowEventReversalHistory(input: {
   baseline: Map<string, EverflowFinancialState>;
 }) {
   const rows = await commercePersistenceRequest(
-    `everflow_conversion_events?connection_id=eq.${encodeURIComponent(input.connectionId)}&provider_account_id=eq.${encodeURIComponent(input.providerAccountId)}&sync_run_id=eq.${encodeURIComponent(input.syncRunId)}&ingestion_method=eq.api&select=source_identity,provider_account_id,payload_hash,status,revenue,payout,conversion_id,transaction_id,conversion_at,is_event,event_name`,
+    `everflow_conversion_events?connection_id=eq.${encodeURIComponent(input.connectionId)}&provider_account_id=eq.${encodeURIComponent(input.providerAccountId)}&sync_run_id=eq.${encodeURIComponent(input.syncRunId)}&ingestion_method=eq.api&select=source_identity,provider_account_id,evidence_id,payload_hash,status,revenue,payout,conversion_id,transaction_id,conversion_at,is_event,event_name`,
   );
   const current = rows.map(state);
   if (!current.length) return { observations: 0, events: 0, reversals: 0, reinstatements: 0, revenueDelta: 0, payoutDelta: 0 };
@@ -80,6 +82,7 @@ export async function persistEverflowEventReversalHistory(input: {
       connection_id: input.connectionId,
       provider_account_id: input.providerAccountId,
       sync_run_id: input.syncRunId,
+      evidence_id: item.evidenceId,
       source_identity: item.sourceIdentity,
       conversion_id: item.conversionId,
       transaction_id: item.transactionId,
