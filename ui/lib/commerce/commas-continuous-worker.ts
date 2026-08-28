@@ -6,7 +6,7 @@ import { normalizeCommasTransaction } from "./commas-shadow-normalizer";
 import { SupabaseCommerceEvidenceStore } from "./supabase-evidence-store-core";
 import {
   COMMERCE_EVIDENCE_CONTRACT_VERSION, CONTINUOUS_NORMALIZER_VERSION, DEFAULT_OVERLAP_PAGES,
-  advanceStability, classifySource, contentFingerprint, continuousRequestBounds, continuousStopDecision, detectProviderOrdering,
+  advanceStability, appendNewestFirstAlignmentIds, classifySource, contentFingerprint, continuousRequestBounds, continuousStopDecision, detectProviderOrdering,
   firstContinuousPages, initialOrderingObserver, isExpectedNewestFirstHeadInsertion, observeOrderingPage, parseContinuousPage, rateLimitDelay, type OrderingObserverState,
   type ProviderOrdering, type SourceChange, type StabilityState,
 } from "./continuous-intelligence";
@@ -363,7 +363,7 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
   let rateLimitLimit:number|null=null,rateLimitStart:number|null=null,rateLimitEnd:number|null=null,rateLimitReset:string|null=null,providerTotalStart:number|null=null,providerTotalEnd:number|null=null,ordering:ProviderOrdering="unknown",stoppingReason="bounded_scan_limit",deeperReconciliationRequired=false;
   let orderingObserver:OrderingObserverState=initialOrderingObserver();
   let stability:StabilityState={consecutiveStableKnownPages:0,pagesScanned:0,unseenRecords:0,changedRecords:0,pageShiftDetected:false};
-  const pageDurations:number[]=[],fingerprints:Record<string,unknown>={...priorFingerprints},recentIds:string[]=[],changedRows:ReturnType<typeof normalizeCommasTransaction>[]=[],changedProductIds=new Set<string>();
+  const pageDurations:number[]=[],fingerprints:Record<string,unknown>={...priorFingerprints},recentIds:string[]=[];let alignmentRecentIds:string[]=[];const changedRows:ReturnType<typeof normalizeCommasTransaction>[]=[],changedProductIds=new Set<string>();
   try {
     let checkpointRows=await db(`commerce_sync_checkpoints?sync_run_id=eq.${runId}&resource=eq.transactions&select=page,state,metadata&order=page.asc`);
     const lifetimeProgress=evidenceOnlyRecovery?evidenceOnlyLifetimeProgress(claimed[0],summarizeContinuousCheckpointProgress(checkpointRows)):null;
@@ -408,7 +408,8 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
         const fingerprint=contentFingerprint(parsed.items);fingerprints[String(page)]={content_hash:fingerprint,evidence_hash:evidence.stored.payloadHash,first_id:normalized[0]?.transaction_id??null,last_id:normalized.at(-1)?.transaction_id??null,observed_at:new Date().toISOString()};
         orderingObserver=observeOrderingPage(orderingObserver,{page,direction:page===1?ordering:(orderingObserver.pagesObserved===0?"unknown":detectProviderOrdering(timestamps)),firstTimestamp:timestamps[0]??null,lastTimestamp:timestamps.at(-1)??null,firstSourceId:normalized[0]?.transaction_id??null,lastSourceId:normalized.at(-1)?.transaction_id??null,ids:normalized.map((item)=>item.transaction_id),fingerprint});
         ordering=orderingObserver.ordering;
-        if(!metadataProbe)stability=advanceStability(stability,{page,totalPages:parsed.totalPages,totalItems:parsed.totalItems,ids:normalized.map((item)=>item.transaction_id),timestamps,fingerprint,knownIds,priorFingerprint:object(priorFingerprints[String(page)])?.content_hash?String(object(priorFingerprints[String(page)])!.content_hash):null,expectedNewestFirstHeadInsertion:ordering==="newest_first"&&isExpectedNewestFirstHeadInsertion(priorRecentIds,recentIds)},changes);
+        alignmentRecentIds=appendNewestFirstAlignmentIds(alignmentRecentIds,normalized.map((item)=>item.transaction_id),orderingObserver.paginationClassification);
+        if(!metadataProbe)stability=advanceStability(stability,{page,totalPages:parsed.totalPages,totalItems:parsed.totalItems,ids:normalized.map((item)=>item.transaction_id),timestamps,fingerprint,knownIds,priorFingerprint:object(priorFingerprints[String(page)])?.content_hash?String(object(priorFingerprints[String(page)])!.content_hash):null,expectedNewestFirstHeadInsertion:ordering==="newest_first"&&isExpectedNewestFirstHeadInsertion(priorRecentIds,alignmentRecentIds)},changes);
         pagesScanned++;pageDurations.push(Date.now()-pageStarted);
         const replayMetadata={duration_ms:pageDurations.at(-1),provider_attempts:pageRateLimit.attempts,rate_limit_remaining:fetched?.rateLimit.remaining??null,new_records:newCount,updated_records:updatedCount,unchanged_records:unchangedCount,evidence_reused:evidence.reused,ordering_state:orderingObserver.ordering,pagination_classification:orderingObserver.paginationClassification,boundary_overlap_count:orderingObserver.boundaryOverlapCount,ordering_pages_observed:orderingObserver.pagesObserved};
         const completedMetadata=evidenceOnlyRecovery?evidenceOnlyCheckpointMetadata(checkpoint.metadata,replayMetadata):replayMetadata;

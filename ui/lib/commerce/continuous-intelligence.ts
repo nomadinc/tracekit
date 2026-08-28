@@ -179,6 +179,11 @@ export function isExpectedNewestFirstHeadInsertion(priorIds:string[],currentIds:
   return aligned.length>0&&aligned.length===expected.length&&aligned.every((id,index)=>id===expected[index]);
 }
 
+export function appendNewestFirstAlignmentIds(currentIds:string[],pageIds:string[],classification:PaginationClassification){
+  const benignBoundaryRepeat=classification==="benign_boundary_overlap"&&currentIds.length>0&&pageIds.length>0&&currentIds.at(-1)===pageIds[0];
+  return [...currentIds,...(benignBoundaryRepeat?pageIds.slice(1):pageIds)];
+}
+
 export function continuousStopDecision(input: { state: StabilityState; ordering: ProviderOrdering; page: number; totalPages: number | null; maxPages: number; rateLimitRemaining: number | null }) {
   if (input.ordering === "unstable" || input.ordering === "unknown") return { stop:true, reason:"provider_ordering_unverified", deeperReconciliationRequired:true };
   if (input.rateLimitRemaining!==null && input.rateLimitRemaining<100) return { stop:true, reason:"rate_limit_safety_boundary", deeperReconciliationRequired:true };

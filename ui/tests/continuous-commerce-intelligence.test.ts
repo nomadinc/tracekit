@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
-  advanceStability, attributionAvailability, candidateKey, classifySource, continuousStopDecision,
+  advanceStability, appendNewestFirstAlignmentIds, attributionAvailability, candidateKey, classifySource, continuousStopDecision,
   continuousRequestBounds, detectProviderOrdering, evaluateRateCandidate, firstContinuousPages, initialOrderingObserver, isExpectedNewestFirstHeadInsertion, observeOrderingPage, parseContinuousPage, rateLimitDelay,
   type StabilityState,
 } from "../lib/commerce/continuous-intelligence";
@@ -94,6 +94,25 @@ test("five new newest-first head records safely shift known pages without reques
   }
   assert.equal(state.pageShiftDetected,false);assert.equal(state.consecutiveStableKnownPages,2);
   assert.deepEqual(continuousStopDecision({state,ordering:"newest_first",page:3,totalPages:10,maxPages:5,rateLimitRemaining:9000}),{stop:true,reason:"stable_known_boundary",deeperReconciliationRequired:false});
+});
+test("one new head plus a benign page-2/page-3 boundary repeat remains an aligned newest-first shift",()=>{
+  const prior=Array.from({length:300},(_,index)=>`prior-${index}`),knownIds=new Set(prior);
+  const pages=[["new-head",...prior.slice(0,99)],prior.slice(99,199),[prior[198],...prior.slice(199,298)]];
+  let state=initial(),alignmentIds:string[]=[];
+  for(const [index,ids] of pages.entries()){
+    const page=index+1,classification=page===3?"benign_boundary_overlap" as const:"none" as const;
+    alignmentIds=appendNewestFirstAlignmentIds(alignmentIds,ids,classification);
+    const changes=ids.map(id=>id==="new-head"?"new" as const:"source_identical" as const);
+    state=advanceStability(state,{page,totalPages:10,totalItems:301,ids,timestamps:[],fingerprint:`current-${page}`,knownIds,priorFingerprint:`prior-${page}`,expectedNewestFirstHeadInsertion:isExpectedNewestFirstHeadInsertion(prior,alignmentIds)},changes);
+  }
+  assert.equal(isExpectedNewestFirstHeadInsertion(prior,alignmentIds),true);
+  assert.equal(state.pageShiftDetected,false);
+  assert.equal(state.consecutiveStableKnownPages,2);
+});
+test("only an exact classified boundary repeat is removed from newest-first alignment",()=>{
+  assert.deepEqual(appendNewestFirstAlignmentIds(["a","b"],["b","c"],"benign_boundary_overlap"),["a","b","c"]);
+  assert.deepEqual(appendNewestFirstAlignmentIds(["a","b"],["x","b"],"benign_boundary_overlap"),["a","b","x","b"]);
+  assert.deepEqual(appendNewestFirstAlignmentIds(["a","b"],["b","c"],"pagination_instability"),["a","b","b","c"]);
 });
 
 test("newest-first alignment still rejects missing, reordered, duplicated, and mid-feed movement",()=>{
