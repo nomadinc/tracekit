@@ -360,7 +360,7 @@ async function persistRawEvidence(input: {
     "commerce_managed_evidence_payloads?on_conflict=evidence_id",
     {
       method: "POST",
-      headers: { Prefer: "resolution=ignore-duplicates,return=minimal" },
+      headers: { Prefer: "resolution=ignore-duplicates,return=representation" },
       body: JSON.stringify({
         evidence_id: resolvedEvidenceId,
         organization_id: input.organizationId,
