@@ -2,6 +2,7 @@ import "server-only";
 import { commercePersistenceRequest } from "@/lib/commerce/supabase-control-repository";
 
 type Row = Record<string, unknown>;
+const HISTORY_BATCH_SIZE = 200;
 
 export type EverflowFinancialState = {
   sourceIdentity: string;
@@ -105,10 +106,15 @@ export async function persistEverflowEventReversalHistory(input: {
       observation_count: 1,
     };
   });
-  await commercePersistenceRequest(
-    "everflow_conversion_state_history?on_conflict=connection_id,provider_account_id,source_identity,payload_hash",
-    { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify(history) },
-  );
+
+  for (let offset = 0; offset < history.length; offset += HISTORY_BATCH_SIZE) {
+    const batch = history.slice(offset, offset + HISTORY_BATCH_SIZE);
+    await commercePersistenceRequest(
+      "everflow_conversion_state_history?on_conflict=connection_id,provider_account_id,source_identity,payload_hash",
+      { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify(batch) },
+    );
+  }
+
   const changed = history.filter((row) => row.transition_type !== "unchanged");
   return {
     observations: history.length,
