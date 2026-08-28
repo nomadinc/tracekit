@@ -240,6 +240,27 @@ export async function runCommasQuotaProbe(options: { connectionId: string; confi
   return { provider: "commas", connectionId: scope.connectionId, providerAccountId: scope.providerAccountId, providerRequests: 1, quotaLimit: fetched.rateLimit.limit, quotaRemaining: fetched.rateLimit.remaining, quotaReset: fetched.rateLimit.reset, observedAt, source: quotaSource };
 }
 
+export async function runScheduledCommasQuotaBootstrap(input:{claimToken:string;organizationId:string;connectionId:string;providerAccountId:string}) {
+  const finish=async(success:boolean)=>{await db("rpc/finish_scheduled_commerce_quota_bootstrap",{method:"POST",body:JSON.stringify({p_claim_token:input.claimToken,p_success:success,p_now:new Date().toISOString()})})};
+  try {
+    const scope=await scopedConnection({organizationId:input.organizationId,connectionId:input.connectionId,providerAccountId:input.providerAccountId});
+    const [claims,schedules,pauses,activeRuns,liveActivation,controls]=await Promise.all([
+      db(`commerce_scheduled_quota_bootstrap_claims?claim_token=eq.${input.claimToken}&organization_id=eq.${input.organizationId}&connection_id=eq.${input.connectionId}&provider_account_id=eq.${input.providerAccountId}&resource=eq.transactions&status=eq.claimed&select=claim_token&limit=1`),
+      db(`commerce_sync_schedules?organization_id=eq.${input.organizationId}&connection_id=eq.${input.connectionId}&provider_account_id=eq.${input.providerAccountId}&resource=eq.transactions&enabled=eq.true&activation_state=eq.enabled&select=id&limit=1`),
+      db(`commerce_connection_pauses?organization_id=eq.${input.organizationId}&connection_id=eq.${input.connectionId}&paused=eq.true&select=connection_id&limit=1`),
+      db(`commerce_sync_runs?organization_id=eq.${input.organizationId}&connection_id=eq.${input.connectionId}&status=in.(queued,running,paused)&select=id&limit=1`),
+      db(`commerce_repository_activation?organization_id=eq.${input.organizationId}&mode=in.(live,live_beta)&select=organization_id&limit=1`),
+      db("tracekit_production_controls?capability=eq.commerce_scheduler&activation_state=eq.enabled&select=id&limit=1"),
+    ]);
+    if(claims.length!==1||schedules.length!==1||pauses.length||activeRuns.length||liveActivation.length||controls.length!==1)throw new Error("scheduled_quota_bootstrap_gate_rejected");
+    const fetched=await fetchProviderPage(scope.secret,1,1,`commas-scheduled-quota-${randomUUID()}`,1);
+    const observedAt=new Date().toISOString();
+    await persistCommasQuotaObservation({accountId:scope.accountId,organizationId:scope.organizationId,connectionId:scope.connectionId,providerAccountId:scope.providerAccountId,quotaLimit:fetched.rateLimit.limit,quotaRemaining:fetched.rateLimit.remaining,quotaReset:fetched.rateLimit.reset,observedAt,quotaSource:"scheduled_quota_bootstrap"});
+    await finish(true);
+    return{providerRequests:1,quotaRemaining:fetched.rateLimit.remaining,observedAt};
+  }catch(error){try{await finish(false)}catch{}throw error}
+}
+
 type QuotaObservation = {
   accountId:string; organizationId:string; connectionId:string; providerAccountId:string;
   quotaLimit:number|null; quotaRemaining:number|null; quotaReset:string|null; observedAt:string; quotaSource?:string;

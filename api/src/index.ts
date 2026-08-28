@@ -857,8 +857,8 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
         if (!overlapDue && !deepDue) continue;
         const mode = deepDue ? "deep_reconciliation" : "continuous";
         const { data: quotaState } = await schedulerQuery("quota_state_read", db.from("commerce_continuous_sync_state").select("quota_remaining,quota_observed_at").eq("organization_id", row.organization_id).eq("connection_id", row.connection_id).eq("provider_account_id", row.provider_account_id).eq("resource", row.resource).limit(1).maybeSingle());
-        const quotaRemaining = Number(quotaState?.quota_remaining);
-        const unknownQuota = !Number.isFinite(quotaRemaining);
+        const rawQuotaRemaining = quotaState?.quota_remaining;
+        const quotaRemaining = rawQuotaRemaining === null || rawQuotaRemaining === undefined || rawQuotaRemaining === "" ? Number.NaN : Number(rawQuotaRemaining);
         const bootstrap = false;
         const cadenceMinutes = syncFrequencyMinutes(row.sync_frequency);
         const cadenceWindow = cadenceMinutes ? Math.floor(Date.parse(now) / (cadenceMinutes * 60_000)) : "manual";
@@ -884,6 +884,20 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
       return schedule.enabled === true && schedule.activation_state === "enabled"
         && Number(activeRuns || 0) === 0 && Number(liveActivation || 0) === 0
         && quotaDecision({ quotaRemaining: Number.isFinite(Number(quota?.quota_remaining)) ? Number(quota?.quota_remaining) : null, quotaObservedAt: typeof quota?.quota_observed_at === "string" ? quota.quota_observed_at : null, quotaMaxAgeMs: scheduledQuotaMaxAgeMs(schedule.sync_frequency), requestBudget, quotaFloor: Number(schedule.quota_minimum_remaining || 1000) }).allowed;
+    },
+    async refreshScheduledQuota(job, now, onStarted) {
+      const { data } = await schedulerQuery("pre_dispatch_quota_read", db.rpc("claim_scheduled_commerce_quota_bootstrap", { p_organization_id: job.organizationId, p_connection_id: job.connectionId, p_provider_account_id: job.providerAccountId, p_resource: job.resource, p_now: now }));
+      const claim = Array.isArray(data) ? data[0] : data;
+      const reason = ["throttled","schedule_disabled","schedule_not_due","scheduler_control_disabled","connection_unavailable","provider_account_scope","connection_paused","live_activation","active_run","quota_fresh"].includes(String(claim?.reason)) ? String(claim.reason) : "claim_rejected";
+      if (claim?.claimed !== true || !claim?.claim_token) return { status: "throttled" as const, reason };
+      await onStarted();
+      if (!env.CONTINUOUS_COMMERCE_RUNTIME) return { status: "failed" as const, reason: "runtime_unavailable" };
+      try {
+        const response = await env.CONTINUOUS_COMMERCE_RUNTIME.fetch("https://continuous-runtime.internal/v1/commerce/scheduled-quota-bootstrap", { method: "POST", headers: { "content-type": "application/json", "x-tracekit-runtime-secret": String(env.CONTINUOUS_RUNTIME_SHARED_SECRET || "") }, body: JSON.stringify({ claim_token: claim.claim_token, organization_id: job.organizationId, connection_id: job.connectionId, provider_account_id: job.providerAccountId }) });
+        const result = await response.json() as any;
+        if (!response.ok || result?.ok !== true || result?.providerRequests !== 1) return { status: "failed" as const, reason: "provider_observation_failed" };
+        return { status: "completed" as const, providerRequests: 1 as const, quotaRemaining: Number.isFinite(Number(result.quotaRemaining)) ? Number(result.quotaRemaining) : null, observedAt: String(result.observedAt || now) };
+      } catch { return { status: "failed" as const, reason: "runtime_request_failed" }; }
     },
     async markEnqueued(message, now) {
       await schedulerQuery("schedule_mark_enqueued_write", db.from("commerce_sync_schedules").update({ last_enqueued_at: now, updated_at: now }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource));

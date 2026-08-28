@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import handler, { validateRuntimeMessage, validateRuntimeScope } from "./index.ts";
+import handler, { validateRuntimeMessage, validateRuntimeScope, validateScheduledQuotaBootstrap } from "./index.ts";
 
 const message = {
   schema_version: 1, job_type: "commerce_continuous", provider: "commas",
@@ -84,6 +84,7 @@ test("runtime requires connected Commas scope and explicit IDs", () => {
   assert.throws(() => validateRuntimeScope({ provider: "commas", status: "pending", connectionId: message.connection_id, organizationId: message.organization_id, providerAccountId: message.provider_account_id }), /provider_scope_invalid/);
   assert.throws(() => validateRuntimeScope(undefined), /scope_unavailable/);
 });
+test("scheduled quota bootstrap contract is fixed, internal and scheduler-gated",async()=>{const input={claim_token:"55555555-5555-4555-8555-555555555555",organization_id:message.organization_id,connection_id:message.connection_id,provider_account_id:message.provider_account_id};assert.equal(validateScheduledQuotaBootstrap(input).claimToken,input.claim_token);assert.throws(()=>validateScheduledQuotaBootstrap({...input,max_pages:1}),/invalid/);const denied=await handler.fetch(new Request("https://runtime/v1/commerce/scheduled-quota-bootstrap",{method:"POST",headers:{"x-tracekit-runtime-secret":"test-only"},body:JSON.stringify(input)}),env);assert.equal(denied.status,503);const source=readFileSync(new URL("../../../ui/lib/commerce/commas-continuous-worker.ts",import.meta.url),"utf8"),start=source.indexOf("export async function runScheduledCommasQuotaBootstrap"),end=source.indexOf("type QuotaObservation",start),bootstrap=source.slice(start,end);assert.equal(bootstrap.match(/fetchProviderPage\(/g)?.length,1);assert.match(bootstrap,/fetchProviderPage\(scope\.secret,1,1/);assert.doesNotMatch(bootstrap,/normalizeCommasTransaction|evidenceForPage|commerce_sync_runs.*(?:POST|PATCH)|continuous_commerce|\.send\(/)});
 
 test("bootstrap message is Commas-only and cannot become deep reconciliation", () => {
   assert.equal(validateRuntimeMessage(message).bootstrap, true);
