@@ -14,7 +14,7 @@ import {
   maintenanceRequiresAdminAuthorization,
   maintenanceWriteAllowed,
 } from "./maintenance-write-gate";
-import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, runCommerceCron, validateCommerceQueueMessage, isQueueObservabilityTest, isRuntimeDispatchProbe, isPreReservedRunMatch, preReservedRunMatchDetails, orderingVerificationContractDetails, evidenceOnlyOrderingRecoveryPermitted, orderingGateRead, orderingGateStage, ORDERING_DIAGNOSTIC_VERSION, ORDERING_DIAGNOSTIC_STAGES, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
+import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, scheduledQuotaMaxAgeMs, quotaDecision, runCommerceCron, validateCommerceQueueMessage, isQueueObservabilityTest, isRuntimeDispatchProbe, isPreReservedRunMatch, preReservedRunMatchDetails, orderingVerificationContractDetails, evidenceOnlyOrderingRecoveryPermitted, orderingGateRead, orderingGateStage, ORDERING_DIAGNOSTIC_VERSION, ORDERING_DIAGNOSTIC_STAGES, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
 import { readQuotaBootstrapGate } from "./quota-bootstrap-gate";
 import { createSupabaseServerFetch } from "./supabase-server-fetch";
 import { deriveCommasDisputeLedgerEvents, normalizeCommasDisputeEvent, sha256HexBytes, verifyCommasWebhookSignature, webhookStoragePath } from "./commas-dispute-webhook";
@@ -856,19 +856,14 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
         const deepDue = row.next_deep_reconciliation_at && Date.parse(row.next_deep_reconciliation_at) <= Date.parse(now);
         if (!overlapDue && !deepDue) continue;
         const mode = deepDue ? "deep_reconciliation" : "continuous";
-        // A later run (for example a bounded shadow validation) may not carry
-        // the provider's rate-limit observation. Select the newest run that
-        // actually has an observed quota instead of treating that unrelated
-        // run as an unknown-quota bootstrap candidate.
-        const { data: latest } = await db.from("commerce_sync_runs").select("metadata").eq("organization_id", row.organization_id).eq("connection_id", row.connection_id).not("metadata->>rate_limit_end", "is", "null").order("created_at", { ascending: false }).limit(1).maybeSingle();
-        const latestMetadata = (latest?.metadata && typeof latest.metadata === "object") ? latest.metadata as Record<string, unknown> : {};
-        const quotaRemaining = Number(latestMetadata.rate_limit_end);
+        const { data: quotaState, error: quotaError } = await db.from("commerce_continuous_sync_state").select("quota_remaining,quota_observed_at").eq("organization_id", row.organization_id).eq("connection_id", row.connection_id).eq("provider_account_id", row.provider_account_id).eq("resource", row.resource).limit(1).maybeSingle();
+        if (quotaError) throw quotaError;
+        const quotaRemaining = Number(quotaState?.quota_remaining);
         const unknownQuota = !Number.isFinite(quotaRemaining);
-        const bootstrapAttempted = latestMetadata.quota_bootstrap_attempted === true;
-        const bootstrap = mode === "continuous" && unknownQuota && !bootstrapAttempted;
+        const bootstrap = false;
         const cadenceMinutes = syncFrequencyMinutes(row.sync_frequency);
         const cadenceWindow = cadenceMinutes ? Math.floor(Date.parse(now) / (cadenceMinutes * 60_000)) : "manual";
-        jobs.push({ accountId: String(connection.account_id), organizationId: row.organization_id, connectionId: row.connection_id, providerAccountId: row.provider_account_id, resource: row.resource, mode, schedulerIdentity: bootstrap ? `${row.id}:quota-bootstrap` : `${row.id}:${mode}:${cadenceWindow}`, quotaRemaining: Number.isFinite(quotaRemaining) ? quotaRemaining : null, requestBudget: bootstrap ? 1 : mode === "deep_reconciliation" ? row.deep_request_budget : 8, quotaFloor: row.quota_minimum_remaining, ...(bootstrap ? { bootstrap: true as const } : {}) });
+        jobs.push({ accountId: String(connection.account_id), organizationId: row.organization_id, connectionId: row.connection_id, providerAccountId: row.provider_account_id, resource: row.resource, mode, schedulerIdentity: `${row.id}:${mode}:${cadenceWindow}`, quotaRemaining: Number.isFinite(quotaRemaining) ? quotaRemaining : null, quotaObservedAt: typeof quotaState?.quota_observed_at === "string" ? quotaState.quota_observed_at : null, quotaMaxAgeMs: scheduledQuotaMaxAgeMs(row.sync_frequency), requestBudget: mode === "deep_reconciliation" ? row.deep_request_budget : 8, quotaFloor: row.quota_minimum_remaining });
       }
       return jobs;
     },
@@ -878,6 +873,19 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
       const { data, error } = await db.rpc("commerce_schedule_permitted", { p_organization_id: connection.organization_id, p_connection_id: connectionId });
       if (error) throw error;
       return data === true;
+    },
+    async scheduledRunPermitted(message) {
+      const [{ data: schedule, error: scheduleError }, { data: quota, error: quotaError }, { count: activeRuns, error: activeError }, { count: liveActivation, error: activationError }] = await Promise.all([
+        db.from("commerce_sync_schedules").select("sync_frequency,enabled,activation_state,quota_minimum_remaining,deep_request_budget").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1).maybeSingle(),
+        db.from("commerce_continuous_sync_state").select("quota_remaining,quota_observed_at").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1).maybeSingle(),
+        db.from("commerce_sync_runs").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).in("status", ["queued", "running", "paused"]),
+        db.from("commerce_repository_activation").select("organization_id", { count: "exact", head: true }).eq("organization_id", message.organization_id).in("mode", ["live", "live_beta"]),
+      ]);
+      if (scheduleError || quotaError || activeError || activationError || !schedule) return false;
+      const requestBudget = message.requested_mode === "deep_reconciliation" ? Number(schedule.deep_request_budget || 0) : 8;
+      return schedule.enabled === true && schedule.activation_state === "enabled"
+        && Number(activeRuns || 0) === 0 && Number(liveActivation || 0) === 0
+        && quotaDecision({ quotaRemaining: Number.isFinite(Number(quota?.quota_remaining)) ? Number(quota?.quota_remaining) : null, quotaObservedAt: typeof quota?.quota_observed_at === "string" ? quota.quota_observed_at : null, quotaMaxAgeMs: scheduledQuotaMaxAgeMs(schedule.sync_frequency), requestBudget, quotaFloor: Number(schedule.quota_minimum_remaining || 1000) }).allowed;
     },
     async markEnqueued(message, now) {
       const { error } = await db.from("commerce_sync_schedules").update({ last_enqueued_at: now, updated_at: now }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource);

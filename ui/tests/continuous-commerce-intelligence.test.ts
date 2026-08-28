@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
   advanceStability, attributionAvailability, candidateKey, classifySource, continuousStopDecision,
@@ -10,6 +11,12 @@ import { investigationFreshness } from "../lib/investigations/freshness";
 import { firstRecoverableContinuousPage, summarizeContinuousCheckpointProgress } from "../lib/commerce/commas-continuous-worker";
 
 const initial=():StabilityState=>({consecutiveStableKnownPages:0,pagesScanned:0,unseenRecords:0,changedRecords:0,pageShiftDetected:false});
+test("ordinary provider pages persist authoritative quota without Evidence replay overwriting it",()=>{
+  const source=readFileSync(new URL("../lib/commerce/commas-continuous-worker.ts",import.meta.url),"utf8");
+  assert.match(source,/quota_source:"continuous_provider_response"/);
+  assert.match(source,/quota_observed_at:now/);
+  assert.match(source,/\.\.\.\(rateLimitEnd!==null\?/);
+});
 const bytes=(value:unknown)=>new TextEncoder().encode(JSON.stringify(value));
 
 test("Commas ordering is measured rather than assumed",()=>{
