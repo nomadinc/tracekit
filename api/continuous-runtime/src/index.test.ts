@@ -45,6 +45,14 @@ test("runtime forwards the validated normal acceptance page ceiling to the ordin
   assert.match(source,/perPage: bootstrap \? 1 : operatorOneShot \? message\.per_page : undefined/);
 });
 
+test("production five-page API message survives JSON service-binding and runtime validation",async()=>{
+  const productionMessage={...normalMessage,account_id:"44444444-4444-4444-8444-444444444444",organization_id:"22222222-2222-4222-8222-222222222222",connection_id:"ea1c2313-6120-4692-84c5-ec3562e7dcf6",provider_account_id:"0369c701-717f-4c34-b230-8341bcdb7e65",scheduler_identity:"operator-normal-continuous-acceptance-5:55555555-5555-4555-8555-555555555555",requested_at:"2026-08-28T00:00:00.000Z",operator_one_shot:true as const,normal_acceptance:true as const,acceptance_cycle:true as const,max_pages:5,per_page:100,request_key:"55555555-5555-4555-8555-555555555555",reserved_run_id:"1f01c739-f609-4cf8-aff1-b2a5891ddd8a"};
+  assert.equal(validateRuntimeMessage(JSON.parse(JSON.stringify(productionMessage))).max_pages,5);
+  const response=await handler.fetch(new Request("https://continuous-runtime.internal/v1/commerce/sync",{method:"POST",headers:{"content-type":"application/json","x-tracekit-runtime-secret":"test-only"},body:JSON.stringify(productionMessage)}),{...env,TRACEKIT_COMMERCE_KILL_SWITCH:"disabled"});
+  assert.equal(response.status,503);
+  assert.match(await response.text(),/continuous_runtime_disabled/);
+});
+
 test("evidence-only runtime recovery is bounded and cannot make provider requests", () => {
   const source = readFileSync(new URL("../../../ui/lib/commerce/commas-continuous-worker.ts", import.meta.url), "utf8");
   const start = source.indexOf("export async function runContinuousCommasSync");

@@ -13455,15 +13455,16 @@ async function runScheduledWowBoostImport(env: Env) {
         completed_at: new Date().toISOString(),
       }).catch(() => {});
     }
-    await supabase
-      .from("integrations_settings")
-      .update({
-        last_run_at: new Date().toISOString(),
-        last_error: lastError,
-        updated_at: new Date().toISOString(),
-      } as any)
-      .eq("platform", platform)
-      .catch(() => {});
+    try {
+      await supabase
+        .from("integrations_settings")
+        .update({
+          last_run_at: new Date().toISOString(),
+          last_error: lastError,
+          updated_at: new Date().toISOString(),
+        } as any)
+        .eq("platform", platform);
+    } catch {}
     console.error("[cron] wowboost commerce import scheduling failed", {
       platform,
       message: lastError,
@@ -14633,11 +14634,12 @@ async function runScheduledPaypalImport(env: Env) {
       });
     } catch (error: any) {
       const lastError = sanitizedIntegrationError(error);
-      await supabase
-        .from("integrations_settings")
-        .update({ last_run_at: nowIso, last_error: lastError, updated_at: new Date().toISOString() } as any)
-        .eq("platform", account.credential_platform)
-        .catch(() => {});
+      try {
+        await supabase
+          .from("integrations_settings")
+          .update({ last_run_at: nowIso, last_error: lastError, updated_at: new Date().toISOString() } as any)
+          .eq("platform", account.credential_platform);
+      } catch {}
 
       console.error("[cron] paypal transaction sync scheduling failed", {
         platform: account.credential_platform,
@@ -14723,11 +14725,12 @@ async function runScheduledGatewayTransactionSnapshotImport(env: Env) {
       });
     } catch (error: any) {
       const lastError = sanitizedIntegrationError(error);
-      await supabase
-        .from("integrations_settings")
-        .update({ last_run_at: nowIso, last_error: lastError, updated_at: new Date().toISOString() } as any)
-        .eq("platform", account.credential_platform)
-        .catch(() => {});
+      try {
+        await supabase
+          .from("integrations_settings")
+          .update({ last_run_at: nowIso, last_error: lastError, updated_at: new Date().toISOString() } as any)
+          .eq("platform", account.credential_platform);
+      } catch {}
       console.error("[cron] gateway transaction sync scheduling failed", {
         platform: account.platform,
         account_key: account.account_key,
@@ -23222,15 +23225,16 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 		      });
 
 		      if (continuationDecision.status === "completed" && importMode === "order_snapshot_import") {
-		        await getSupabase(env)
-		          .from("integrations_settings")
-		          .update({
-		            last_success_at: new Date().toISOString(),
-		            last_error: null,
-		            updated_at: new Date().toISOString(),
-		          } as any)
-		          .eq("platform", wowSuiteKey("wowboost"))
-		          .catch(() => {});
+		        try {
+		          await getSupabase(env)
+		            .from("integrations_settings")
+		            .update({
+		              last_success_at: new Date().toISOString(),
+		              last_error: null,
+		              updated_at: new Date().toISOString(),
+		            } as any)
+		            .eq("platform", wowSuiteKey("wowboost"));
+		        } catch {}
 		      }
 
 		      if (continuationDecision.status === "completed" && importMode === "order_snapshot_import" && nextUpserted > 0) {
@@ -23356,14 +23360,15 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 	          retries: 0,
 	          last_error_at: new Date().toISOString(),
 	        }).catch(() => {});
-	        await getSupabase(env)
-	          .from("integrations_settings")
-	          .update({
-	            last_error: sanitizedIntegrationError(`Page ${retryPage} failed after ${attempt} attempts: ${message}`),
-	            updated_at: new Date().toISOString(),
-	          } as any)
-	          .eq("platform", wowSuiteKey("wowboost"))
-	          .catch(() => {});
+	        try {
+	          await getSupabase(env)
+	            .from("integrations_settings")
+	            .update({
+	              last_error: sanitizedIntegrationError(`Page ${retryPage} failed after ${attempt} attempts: ${message}`),
+	              updated_at: new Date().toISOString(),
+	            } as any)
+	            .eq("platform", wowSuiteKey("wowboost"));
+	        } catch {}
 
         msg.ack();
         continue;
