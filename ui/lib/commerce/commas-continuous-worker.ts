@@ -470,7 +470,9 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
         if(!decision.stop) await db(`commerce_sync_runs?id=eq.${runId}`,{method:"PATCH",body:JSON.stringify({pages_completed:durableProgress.pagesCompleted,records_seen:durableProgress.recordsSeen,records_created:durableProgress.recordsCreated,records_updated:durableProgress.recordsUpdated,records_unchanged:durableProgress.recordsUnchanged,provider_request_count:durableProgress.providerRequests,evidence_writes:durableProgress.evidenceWrites,evidence_reuses:durableProgress.evidenceReuses})});
         if(decision.stop){stoppingReason=decision.reason!;deeperReconciliationRequired=decision.deeperReconciliationRequired;break;}
         const next=ordering==="oldest_first"?page+1:page+1;if(parsed.hasMore&&!queued.has(next)){queue.push(next);queued.add(next);}
-        await db("rpc/heartbeat_commerce_sync_run",{method:"POST",body:JSON.stringify({p_run_id:runId,p_organization_id:scope.organizationId,p_connection_id:scope.connectionId,p_lease_owner:owner,p_lease_seconds:900})});
+        failureStage="lease_heartbeat";
+        const heartbeat=await db("rpc/heartbeat_commerce_sync_run",{method:"POST",body:JSON.stringify({p_run_id:runId,p_organization_id:scope.organizationId,p_connection_id:scope.connectionId,p_lease_owner:owner,p_lease_seconds:900})});
+        if((heartbeat as unknown[])[0]!==true)throw new Error("lease_lost");
         await sleep(pageRateLimit.remaining!==null&&pageRateLimit.remaining<100?5_000:paceMs);
       } catch(error) {
         recordsFailed++;

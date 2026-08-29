@@ -27,3 +27,5 @@ test("expired lease recovery is advisory locked, fail closed, and service-role o
   const sql=readFileSync(new URL("../../supabase/migrations/20260829064137_commerce_failure_visibility_and_expired_lease_recovery.sql",import.meta.url),"utf8");
   for(const contract of ["pg_advisory_xact_lock","status='running'","lease_expires_at<p_now","status='failed'","stopping_reason='lease_expired'","lease_owner=null","lease_expires_at=null","service_role"])assert.match(sql,new RegExp(contract.replace(/[.*+?^${}()|[\]\\]/g,"\\$&"),"i"));
 });
+
+test("a rejected heartbeat stops before another provider page",()=>{const source=readFileSync(new URL("../lib/commerce/commas-continuous-worker.ts",import.meta.url),"utf8"),loop=source.slice(source.indexOf("while(queueIndex"),source.indexOf("} catch(error) {",source.indexOf("while(queueIndex")));assert.match(loop,/failureStage="lease_heartbeat"/);assert.match(loop,/if\(\(heartbeat as unknown\[\]\)\[0\]!==true\)throw new Error\("lease_lost"\)/);assert.ok(loop.lastIndexOf("heartbeat")>loop.lastIndexOf("fetchProviderPage"))});
