@@ -56,3 +56,17 @@ test("Everflow scheduler remains additive and does not depend on the Commas runt
   assert.doesNotMatch(worker, /commas-continuous-worker|continuous-commerce-cloudflare|runContinuousCommasSync/);
   assert.doesNotMatch(migration, /runContinuousCommasSync|commas_continuous|continuous_commerce/);
 });
+
+test("Everflow has an isolated authenticated five-minute Vercel cron trigger", () => {
+  const cron = source("ui/app/api/cron/everflow-scheduler/route.ts");
+  const vercel = source("ui/vercel.json");
+  const middleware = source("ui/middleware.ts");
+
+  assert.match(vercel, /"path": "\/api\/cron\/everflow-scheduler"/);
+  assert.match(vercel, /"schedule": "\*\/5 \* \* \* \*"/);
+  assert.match(cron, /process\.env\.CRON_SECRET/);
+  assert.match(cron, /authorization/);
+  assert.match(cron, /runDueEverflowSchedules\(\{ limit: 1 \}\)/);
+  assert.match(middleware, /"\/api\/cron\/:path\*"/);
+  assert.doesNotMatch(cron, /commas-continuous-worker|runContinuousCommasSync|continuous-commerce-cloudflare/);
+});
