@@ -1,20 +1,24 @@
 name = "tracekit-api"
 main = "src/index.ts"
 compatibility_date = "2024-06-20"
-routes = [{ pattern = "journey.trace-kit.io", custom_domain = true }]
+workers_dev = false
+preview_urls = false
+routes = [
+  { pattern = "api.trace-kit.io", custom_domain = true }
+]
 
 
 [vars]
   SUPABASE_URL = "https://uoeosoiegatlqtzemsfv.supabase.co"
   TRACEKIT_ROOT_DOMAIN = "buyecowatt.com"
   TRACEKIT_AUTO_LINK_OUTBOUND = "true"
-  TRACEKIT_COMMERCE_SCHEDULER_ENABLED = "false"
+  TRACEKIT_COMMERCE_SCHEDULER_ENABLED = "true"
   TRACEKIT_MAINTENANCE_WRITE_GATE_ENABLED = "false"
   TRACEKIT_COMMERCE_KILL_SWITCH = "enabled"
   TRACEKIT_TKID_ERASURE_EXECUTOR_ENABLED = "false"
   TRACEKIT_TKID_RELAY_ENABLED = "false"
   TRACEKIT_TKID_RELAY_ORIGIN = "https://journey.trace-kit.io"
-  
+
 [[queues.producers]]
 queue = "wowboost-imports"
 binding = "wowboost_imports"
@@ -64,7 +68,6 @@ crons = ["*/5 * * * *"] # cadence selection runs every five minutes; schedules d
 # Production must explicitly set INTEGRATIONS_ENC_WRITE_VERSION=2. The source
 # default remains 1 only for compatibility and is not a safe production fallback.
 # - TK_SECRET_KEY
-# - COMMAS_WEBHOOK_SECRET (secret_key returned by the Commas webhook subscription)
 # - TKID_HANDOFF_SIGNING_KEY_CURRENT (separate key; referenced by TKID handoff key metadata)
 # - TKID_HANDOFF_SIGNING_KEY_PREVIOUS (rotation window only)
 # - TRACEKIT_TKID_HANDOFF_SECRET (current v1 runtime binding; server-only, never a plain var)

@@ -49,3 +49,20 @@ test("stranded-run recovery proxy is authenticated, confirmation-bound, and serv
   assert.match(recovery,/safeCode\(payload\.error \|\| payload\.code/);
   assert.doesNotMatch(recovery,/NextResponse\.json\(payload/);
 });
+
+test("build fingerprint proxy is authenticated, fixed-path, and read-only",()=>{
+  const diagnostic=readFileSync(new URL("../app/api/commerce/diagnostics-build/route.ts",import.meta.url),"utf8");
+  assert.match(diagnostic,/export async function GET/);
+  assert.match(diagnostic,/sameOrigin\(request\)/);
+  assert.match(diagnostic,/resolveApplicationSession\(\)/);
+  assert.match(diagnostic,/activeOrganization/);
+  assert.match(diagnostic,/requirePermission\(resolution\.session, "connectors\.manage"\)/);
+  assert.match(diagnostic,/process\.env\.TK_SECRET_KEY/);
+  assert.match(diagnostic,/internal\/diagnostics\/commerce-build/);
+  assert.match(diagnostic,/method: "GET"/);
+  assert.match(diagnostic,/pre-reserved-substage-v1/);
+  assert.match(diagnostic,/supported_stages/);
+  assert.doesNotMatch(diagnostic,/commercePersistenceRequest|\.from\(|\.rpc\(|continuous_commerce|Commas|console\.(log|error)/i);
+  assert.doesNotMatch(diagnostic,/NextResponse\.json\(payload/);
+  assert.doesNotMatch(diagnostic,/NEXT_PUBLIC_TK_SECRET_KEY|return secret|console/);
+});

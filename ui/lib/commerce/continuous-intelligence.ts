@@ -19,6 +19,7 @@ export type PageObservation = {
   fingerprint: string;
   knownIds: Set<string>;
   priorFingerprint?: string | null;
+  expectedNewestFirstHeadInsertion?: boolean;
 };
 
 export type StabilityState = {
@@ -166,8 +167,21 @@ export function advanceStability(state: StabilityState, observation: PageObserva
     pagesScanned: state.pagesScanned+1,
     unseenRecords: state.unseenRecords+unseen,
     changedRecords: state.changedRecords+changed,
-    pageShiftDetected: state.pageShiftDetected || (fingerprintMoved && allKnown),
+    pageShiftDetected: state.pageShiftDetected || (fingerprintMoved && allKnown && observation.expectedNewestFirstHeadInsertion !== true),
   };
+}
+
+export function isExpectedNewestFirstHeadInsertion(priorIds:string[],currentIds:string[]){
+  if(!priorIds.length||!currentIds.length)return false;
+  const priorSet=new Set(priorIds),anchor=currentIds.indexOf(priorIds[0]);
+  if(anchor<0||currentIds.slice(0,anchor).some((id)=>priorSet.has(id)))return false;
+  const aligned=currentIds.slice(anchor),expected=priorIds.slice(0,aligned.length);
+  return aligned.length>0&&aligned.length===expected.length&&aligned.every((id,index)=>id===expected[index]);
+}
+
+export function appendNewestFirstAlignmentIds(currentIds:string[],pageIds:string[],classification:PaginationClassification){
+  const benignBoundaryRepeat=classification==="benign_boundary_overlap"&&currentIds.length>0&&pageIds.length>0&&currentIds.at(-1)===pageIds[0];
+  return [...currentIds,...(benignBoundaryRepeat?pageIds.slice(1):pageIds)];
 }
 
 export function continuousStopDecision(input: { state: StabilityState; ordering: ProviderOrdering; page: number; totalPages: number | null; maxPages: number; rateLimitRemaining: number | null }) {

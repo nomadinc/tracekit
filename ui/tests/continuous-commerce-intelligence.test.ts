@@ -1,8 +1,9 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import {
-  advanceStability, attributionAvailability, candidateKey, classifySource, continuousStopDecision,
-  continuousRequestBounds, detectProviderOrdering, evaluateRateCandidate, firstContinuousPages, initialOrderingObserver, observeOrderingPage, parseContinuousPage, rateLimitDelay,
+  advanceStability, appendNewestFirstAlignmentIds, attributionAvailability, candidateKey, classifySource, continuousStopDecision,
+  continuousRequestBounds, detectProviderOrdering, evaluateRateCandidate, firstContinuousPages, initialOrderingObserver, isExpectedNewestFirstHeadInsertion, observeOrderingPage, parseContinuousPage, rateLimitDelay,
   type StabilityState,
 } from "../lib/commerce/continuous-intelligence";
 import { dispatchEligibleSchedules, eligibleScheduledJobs } from "../lib/commerce/continuous-scheduler";
@@ -10,6 +11,12 @@ import { investigationFreshness } from "../lib/investigations/freshness";
 import { firstRecoverableContinuousPage, summarizeContinuousCheckpointProgress } from "../lib/commerce/commas-continuous-worker";
 
 const initial=():StabilityState=>({consecutiveStableKnownPages:0,pagesScanned:0,unseenRecords:0,changedRecords:0,pageShiftDetected:false});
+test("ordinary provider pages persist authoritative quota without Evidence replay overwriting it",()=>{
+  const source=readFileSync(new URL("../lib/commerce/commas-continuous-worker.ts",import.meta.url),"utf8");
+  assert.match(source,/quota_source:"continuous_provider_response"/);
+  assert.match(source,/quota_observed_at:now/);
+  assert.match(source,/\.\.\.\(rateLimitEnd!==null\?/);
+});
 const bytes=(value:unknown)=>new TextEncoder().encode(JSON.stringify(value));
 
 test("Commas ordering is measured rather than assumed",()=>{
@@ -76,6 +83,47 @@ test("two known unchanged pages form the stability boundary",()=>{
 test("page movement is diagnosed without treating known records as updates",()=>{
   const state=advanceStability(initial(),{page:1,totalPages:10,totalItems:1000,ids:["a"],timestamps:["2026-08-08T02:00:00Z"],fingerprint:"new-page",knownIds:new Set(["a"]),priorFingerprint:"old-page"},["source_identical"]);
   assert.equal(state.pageShiftDetected,true);assert.equal(state.changedRecords,0);
+});
+
+test("five new newest-first head records safely shift known pages without requesting reconciliation",()=>{
+  const prior=Array.from({length:300},(_,index)=>`known-${index}`),current=[...Array.from({length:5},(_,index)=>`new-${index}`),...prior.slice(0,295)];
+  let state=initial();
+  for(let page=1;page<=3;page++){
+    const ids=current.slice((page-1)*100,page*100),changes=ids.map((id)=>id.startsWith("new-")?"new" as const:"source_identical" as const),knownIds=new Set(ids.filter((id)=>!id.startsWith("new-")));
+    state=advanceStability(state,{page,totalPages:10,totalItems:1005,ids,timestamps:[],fingerprint:`next-${page}`,knownIds,priorFingerprint:`prior-${page}`,expectedNewestFirstHeadInsertion:isExpectedNewestFirstHeadInsertion(prior,current.slice(0,page*100))},changes);
+  }
+  assert.equal(state.pageShiftDetected,false);assert.equal(state.consecutiveStableKnownPages,2);
+  assert.deepEqual(continuousStopDecision({state,ordering:"newest_first",page:3,totalPages:10,maxPages:5,rateLimitRemaining:9000}),{stop:true,reason:"stable_known_boundary",deeperReconciliationRequired:false});
+});
+test("one new head plus a benign page-2/page-3 boundary repeat remains an aligned newest-first shift",()=>{
+  const prior=Array.from({length:300},(_,index)=>`prior-${index}`),knownIds=new Set(prior);
+  const pages=[["new-head",...prior.slice(0,99)],prior.slice(99,199),[prior[198],...prior.slice(199,298)]];
+  let state=initial(),alignmentIds:string[]=[];
+  for(const [index,ids] of pages.entries()){
+    const page=index+1,classification=page===3?"benign_boundary_overlap" as const:"none" as const;
+    alignmentIds=appendNewestFirstAlignmentIds(alignmentIds,ids,classification);
+    const changes=ids.map(id=>id==="new-head"?"new" as const:"source_identical" as const);
+    state=advanceStability(state,{page,totalPages:10,totalItems:301,ids,timestamps:[],fingerprint:`current-${page}`,knownIds,priorFingerprint:`prior-${page}`,expectedNewestFirstHeadInsertion:isExpectedNewestFirstHeadInsertion(prior,alignmentIds)},changes);
+  }
+  assert.equal(isExpectedNewestFirstHeadInsertion(prior,alignmentIds),true);
+  assert.equal(state.pageShiftDetected,false);
+  assert.equal(state.consecutiveStableKnownPages,2);
+});
+test("only an exact classified boundary repeat is removed from newest-first alignment",()=>{
+  assert.deepEqual(appendNewestFirstAlignmentIds(["a","b"],["b","c"],"benign_boundary_overlap"),["a","b","c"]);
+  assert.deepEqual(appendNewestFirstAlignmentIds(["a","b"],["x","b"],"benign_boundary_overlap"),["a","b","x","b"]);
+  assert.deepEqual(appendNewestFirstAlignmentIds(["a","b"],["b","c"],"pagination_instability"),["a","b","b","c"]);
+});
+
+test("newest-first alignment still rejects missing, reordered, duplicated, and mid-feed movement",()=>{
+  const prior=Array.from({length:300},(_,index)=>`known-${index}`),head=["new-0","new-1",...prior.slice(0,198)];
+  assert.equal(isExpectedNewestFirstHeadInsertion(prior,head),true);
+  assert.equal(isExpectedNewestFirstHeadInsertion(prior,["new-0",...prior.slice(1,200)]),false);
+  const reordered=[...head];[reordered[50],reordered[51]]=[reordered[51],reordered[50]];assert.equal(isExpectedNewestFirstHeadInsertion(prior,reordered),false);
+  assert.equal(isExpectedNewestFirstHeadInsertion(prior,["new-0",...prior.slice(0,50),prior[49],...prior.slice(50,198)]),false);
+  assert.equal(isExpectedNewestFirstHeadInsertion(prior,["new-0",...prior.slice(0,100),"new-middle",...prior.slice(100,198)]),false);
+  const shifted=advanceStability(initial(),{page:2,totalPages:10,totalItems:1000,ids:prior.slice(1,101),timestamps:[],fingerprint:"next",knownIds:new Set(prior),priorFingerprint:"prior",expectedNewestFirstHeadInsertion:false},Array(100).fill("source_identical"));
+  assert.equal(shifted.pageShiftDetected,true);
 });
 
 test("new and changed records reset a known stability boundary",()=>{

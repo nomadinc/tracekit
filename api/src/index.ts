@@ -14,7 +14,7 @@ import {
   maintenanceRequiresAdminAuthorization,
   maintenanceWriteAllowed,
 } from "./maintenance-write-gate";
-import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, runCommerceCron, validateCommerceQueueMessage, isQueueObservabilityTest, isRuntimeDispatchProbe, isPreReservedRunMatch, preReservedRunMatchDetails, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
+import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, scheduledQuotaMaxAgeMs, schedulerGateFailedChecks, schedulerFailureDiagnostic, schedulerOperation, schedulerQuery, quotaDecision, runCommerceCron, validateCommerceQueueMessage, isQueueObservabilityTest, isRuntimeDispatchProbe, isPreReservedRunMatch, preReservedRunMatchDetails, orderingVerificationContractDetails, evidenceOnlyOrderingRecoveryPermitted, orderingGateRead, orderingGateStage, ORDERING_DIAGNOSTIC_VERSION, ORDERING_DIAGNOSTIC_STAGES, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
 import { readQuotaBootstrapGate } from "./quota-bootstrap-gate";
 import { createSupabaseServerFetch } from "./supabase-server-fetch";
 import { deriveCommasDisputeLedgerEvents, normalizeCommasDisputeEvent, sha256HexBytes, verifyCommasWebhookSignature, webhookStoragePath } from "./commas-dispute-webhook";
@@ -829,59 +829,92 @@ function getSupabase(env: Env) {
 
 function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterRepository {
   const db = getSupabase(env);
+  let schedulerFailedChecks: string[] = ["scheduler_not_evaluated"];
   return {
     async schedulerEnabled() {
-      if (env.TRACEKIT_COMMERCE_SCHEDULER_ENABLED !== "true" || env.TRACEKIT_COMMERCE_KILL_SWITCH !== "enabled") return false;
-      const { count, error } = await db.from("tracekit_production_controls").select("id", { count: "exact", head: true }).eq("capability", "commerce_scheduler").eq("activation_state", "enabled");
-      if (error) throw error;
-      return (count || 0) > 0;
+      schedulerFailedChecks = schedulerGateFailedChecks({ schedulerFlag: env.TRACEKIT_COMMERCE_SCHEDULER_ENABLED, killSwitch: env.TRACEKIT_COMMERCE_KILL_SWITCH, enabledControlCount: 1 });
+      if (schedulerFailedChecks.length) return false;
+      const { count } = await schedulerQuery("scheduler_control_read", db.from("tracekit_production_controls").select("id", { count: "exact", head: true }).eq("capability", "commerce_scheduler").eq("activation_state", "enabled"));
+      schedulerFailedChecks = schedulerGateFailedChecks({ schedulerFlag: env.TRACEKIT_COMMERCE_SCHEDULER_ENABLED, killSwitch: env.TRACEKIT_COMMERCE_KILL_SWITCH, enabledControlCount: count || 0 });
+      return schedulerFailedChecks.length === 0;
     },
+    async schedulerFailedChecks() { return [...schedulerFailedChecks]; },
     async eligibleJobs(now) {
       // Schedules have a composite FK to provider accounts, not a direct FK to
       // provider connections. Avoid PostgREST relationship embedding here: the
       // relationship is not valid for this table and can fail on schema-cache
       // refreshes even when the underlying IDs are sound.
-      const { data, error } = await db.from("commerce_sync_schedules").select("id,organization_id,connection_id,provider_account_id,resource,sync_frequency,last_enqueued_at,next_overlap_at,next_deep_reconciliation_at,quota_minimum_remaining,deep_request_budget").eq("enabled", true).eq("activation_state", "enabled");
-      if (error) throw error;
+      const { data } = await schedulerQuery("schedule_eligibility_read", db.from("commerce_sync_schedules").select("id,organization_id,connection_id,provider_account_id,resource,sync_frequency,last_enqueued_at,next_overlap_at,next_deep_reconciliation_at,quota_minimum_remaining,deep_request_budget").eq("enabled", true).eq("activation_state", "enabled"));
       const jobs: any[] = [];
       for (const row of data || []) {
-        const { data: connection, error: connectionError } = await db.from("commerce_provider_connections").select("organization_id,account_id,provider,status").eq("organization_id", row.organization_id).eq("id", row.connection_id).maybeSingle();
-        if (connectionError) throw connectionError;
+        const { data: connection } = await schedulerQuery("connection_scope_read", db.from("commerce_provider_connections").select("organization_id,account_id,provider,status").eq("organization_id", row.organization_id).eq("id", row.connection_id).maybeSingle());
         if (!connection || !isConnectedCommasConnection(connection)) continue;
-        const { data: activeAccounts, error: accountError } = await db.from("commerce_provider_accounts").select("id,status").eq("organization_id", row.organization_id).eq("connection_id", row.connection_id).eq("status", "active");
-        if (accountError) throw accountError;
+        const { data: activeAccounts } = await schedulerQuery("provider_account_scope_read", db.from("commerce_provider_accounts").select("id,status").eq("organization_id", row.organization_id).eq("connection_id", row.connection_id).eq("status", "active"));
         if (!isEligibleCommasScheduleScope(connection, (activeAccounts || []).map((account: any) => account.id), row.provider_account_id)) continue;
         if (!isSyncScheduleDue({ frequency: row.sync_frequency, lastEnqueuedAt: row.last_enqueued_at, now })) continue;
         const overlapDue = !row.next_overlap_at || Date.parse(row.next_overlap_at) <= Date.parse(now);
         const deepDue = row.next_deep_reconciliation_at && Date.parse(row.next_deep_reconciliation_at) <= Date.parse(now);
         if (!overlapDue && !deepDue) continue;
         const mode = deepDue ? "deep_reconciliation" : "continuous";
-        // A later run (for example a bounded shadow validation) may not carry
-        // the provider's rate-limit observation. Select the newest run that
-        // actually has an observed quota instead of treating that unrelated
-        // run as an unknown-quota bootstrap candidate.
-        const { data: latest } = await db.from("commerce_sync_runs").select("metadata").eq("organization_id", row.organization_id).eq("connection_id", row.connection_id).not("metadata->>rate_limit_end", "is", "null").order("created_at", { ascending: false }).limit(1).maybeSingle();
-        const latestMetadata = (latest?.metadata && typeof latest.metadata === "object") ? latest.metadata as Record<string, unknown> : {};
-        const quotaRemaining = Number(latestMetadata.rate_limit_end);
-        const unknownQuota = !Number.isFinite(quotaRemaining);
-        const bootstrapAttempted = latestMetadata.quota_bootstrap_attempted === true;
-        const bootstrap = mode === "continuous" && unknownQuota && !bootstrapAttempted;
+        const { data: quotaState } = await schedulerQuery("quota_state_read", db.from("commerce_continuous_sync_state").select("quota_remaining,quota_observed_at").eq("organization_id", row.organization_id).eq("connection_id", row.connection_id).eq("provider_account_id", row.provider_account_id).eq("resource", row.resource).limit(1).maybeSingle());
+        const rawQuotaRemaining = quotaState?.quota_remaining;
+        const quotaRemaining = rawQuotaRemaining === null || rawQuotaRemaining === undefined || rawQuotaRemaining === "" ? Number.NaN : Number(rawQuotaRemaining);
+        const bootstrap = false;
         const cadenceMinutes = syncFrequencyMinutes(row.sync_frequency);
         const cadenceWindow = cadenceMinutes ? Math.floor(Date.parse(now) / (cadenceMinutes * 60_000)) : "manual";
-        jobs.push({ accountId: String(connection.account_id), organizationId: row.organization_id, connectionId: row.connection_id, providerAccountId: row.provider_account_id, resource: row.resource, mode, schedulerIdentity: bootstrap ? `${row.id}:quota-bootstrap` : `${row.id}:${mode}:${cadenceWindow}`, quotaRemaining: Number.isFinite(quotaRemaining) ? quotaRemaining : null, requestBudget: bootstrap ? 1 : mode === "deep_reconciliation" ? row.deep_request_budget : 8, quotaFloor: row.quota_minimum_remaining, ...(bootstrap ? { bootstrap: true as const } : {}) });
+        jobs.push({ accountId: String(connection.account_id), organizationId: row.organization_id, connectionId: row.connection_id, providerAccountId: row.provider_account_id, resource: row.resource, mode, schedulerIdentity: `${row.id}:${mode}:${cadenceWindow}`, quotaRemaining: Number.isFinite(quotaRemaining) ? quotaRemaining : null, quotaObservedAt: typeof quotaState?.quota_observed_at === "string" ? quotaState.quota_observed_at : null, quotaMaxAgeMs: scheduledQuotaMaxAgeMs(row.sync_frequency), requestBudget: mode === "deep_reconciliation" ? row.deep_request_budget : 8, quotaFloor: row.quota_minimum_remaining });
       }
       return jobs;
     },
     async connectionPermitted(connectionId) {
-      const { data: connection } = await db.from("commerce_provider_connections").select("organization_id,provider,status").eq("id", connectionId).maybeSingle();
+      const { data: connection } = await schedulerQuery("connection_permission_read", db.from("commerce_provider_connections").select("organization_id,provider,status").eq("id", connectionId).maybeSingle());
       if (!connection || !isConnectedCommasConnection(connection)) return false;
-      const { data, error } = await db.rpc("commerce_schedule_permitted", { p_organization_id: connection.organization_id, p_connection_id: connectionId });
-      if (error) throw error;
+      const { data } = await schedulerQuery("connection_permission_control_read", db.rpc("commerce_schedule_permitted", { p_organization_id: connection.organization_id, p_connection_id: connectionId }));
       return data === true;
     },
+    async connectionSuppressionReason(connectionId) {
+      const { data: connection } = await schedulerQuery("connection_permission_read", db.from("commerce_provider_connections").select("organization_id,provider,status").eq("id", connectionId).maybeSingle());
+      if (!connection || !isConnectedCommasConnection(connection)) return "connection_unavailable";
+      const [{ count: paused }, { count: controls }] = await Promise.all([
+        schedulerQuery("connection_permission_control_read", db.from("commerce_connection_pauses").select("connection_id", { count: "exact", head: true }).eq("organization_id", connection.organization_id).eq("connection_id", connectionId).eq("paused", true)),
+        schedulerQuery("scheduler_control_read", db.from("tracekit_production_controls").select("id", { count: "exact", head: true }).eq("organization_id", connection.organization_id).eq("capability", "commerce_scheduler").eq("activation_state", "enabled")),
+      ]);
+      return Number(paused || 0)>0 ? "paused" : Number(controls || 0)<1 ? "production_control" : "connection_unavailable";
+    },
+    async scheduledRunPermitted(message) {
+      const [{ data: schedule, error: scheduleError }, { data: quota, error: quotaError }, { count: activeRuns, error: activeError }, { count: liveActivation, error: activationError }] = await Promise.all([
+        schedulerQuery("pre_dispatch_schedule_read", db.from("commerce_sync_schedules").select("sync_frequency,enabled,activation_state,quota_minimum_remaining,deep_request_budget").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1).maybeSingle()),
+        schedulerQuery("pre_dispatch_quota_read", db.from("commerce_continuous_sync_state").select("quota_remaining,quota_observed_at").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1).maybeSingle()),
+        schedulerQuery("pre_dispatch_active_run_read", db.from("commerce_sync_runs").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).in("status", ["queued", "running", "paused"])),
+        schedulerQuery("pre_dispatch_live_activation_read", db.from("commerce_repository_activation").select("organization_id", { count: "exact", head: true }).eq("organization_id", message.organization_id).in("mode", ["live", "live_beta"])),
+      ]);
+      if (scheduleError || quotaError || activeError || activationError || !schedule) return false;
+      const requestBudget = message.requested_mode === "deep_reconciliation" ? Number(schedule.deep_request_budget || 0) : 8;
+      return schedule.enabled === true && schedule.activation_state === "enabled"
+        && Number(activeRuns || 0) === 0 && Number(liveActivation || 0) === 0
+        && quotaDecision({ quotaRemaining: Number.isFinite(Number(quota?.quota_remaining)) ? Number(quota?.quota_remaining) : null, quotaObservedAt: typeof quota?.quota_observed_at === "string" ? quota.quota_observed_at : null, quotaMaxAgeMs: scheduledQuotaMaxAgeMs(schedule.sync_frequency), requestBudget, quotaFloor: Number(schedule.quota_minimum_remaining || 1000) }).allowed;
+    },
+    async refreshScheduledQuota(job, now, onStarted) {
+      const { data } = await schedulerQuery("pre_dispatch_quota_read", db.rpc("claim_scheduled_commerce_quota_bootstrap", { p_organization_id: job.organizationId, p_connection_id: job.connectionId, p_provider_account_id: job.providerAccountId, p_resource: job.resource, p_now: now }));
+      const claim = Array.isArray(data) ? data[0] : data;
+      const reason = ["throttled","schedule_disabled","schedule_not_due","scheduler_control_disabled","connection_unavailable","provider_account_scope","connection_paused","live_activation","active_run","quota_fresh"].includes(String(claim?.reason)) ? String(claim.reason) : "claim_rejected";
+      if (claim?.claimed !== true || !claim?.claim_token) return { status: "throttled" as const, reason };
+      await onStarted();
+      if (!env.CONTINUOUS_COMMERCE_RUNTIME) return { status: "failed" as const, reason: "runtime_unavailable" };
+      try {
+        const response = await env.CONTINUOUS_COMMERCE_RUNTIME.fetch("https://continuous-runtime.internal/v1/commerce/scheduled-quota-bootstrap", { method: "POST", headers: { "content-type": "application/json", "x-tracekit-runtime-secret": String(env.CONTINUOUS_RUNTIME_SHARED_SECRET || "") }, body: JSON.stringify({ claim_token: claim.claim_token, organization_id: job.organizationId, connection_id: job.connectionId, provider_account_id: job.providerAccountId }) });
+        const result = await response.json() as any;
+        if (!response.ok || result?.ok !== true || result?.providerRequests !== 1) return { status: "failed" as const, reason: "provider_observation_failed" };
+        return { status: "completed" as const, providerRequests: 1 as const, quotaRemaining: Number.isFinite(Number(result.quotaRemaining)) ? Number(result.quotaRemaining) : null, observedAt: String(result.observedAt || now) };
+      } catch { return { status: "failed" as const, reason: "runtime_request_failed" }; }
+    },
+    async authoritativeScheduledQuota(job) {
+      const { data: quota } = await schedulerQuery("pre_dispatch_quota_read", db.from("commerce_continuous_sync_state").select("quota_remaining,quota_observed_at").eq("organization_id", job.organizationId).eq("connection_id", job.connectionId).eq("provider_account_id", job.providerAccountId).eq("resource", job.resource).limit(1).maybeSingle());
+      const raw = quota?.quota_remaining;
+      return { quotaRemaining: raw === null || raw === undefined || raw === "" || !Number.isFinite(Number(raw)) ? null : Number(raw), quotaObservedAt: typeof quota?.quota_observed_at === "string" ? quota.quota_observed_at : null, checkedAt: new Date().toISOString() };
+    },
     async markEnqueued(message, now) {
-      const { error } = await db.from("commerce_sync_schedules").update({ last_enqueued_at: now, updated_at: now }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource);
-      if (error) throw error;
+      await schedulerQuery("schedule_mark_enqueued_write", db.from("commerce_sync_schedules").update({ last_enqueued_at: now, updated_at: now }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource));
     },
     async bootstrapPermitted(message) {
       if (!message.bootstrap || message.bootstrap_mode !== "quota-bootstrap") return false;
@@ -892,23 +925,19 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
       if ((!message.bootstrap && !message.operator_one_shot) || !message.reserved_run_id) return false;
       const recovery = message.operator_recovery === true;
       const orderingVerification = message.ordering_verification === true;
-      const { data: run, error } = await db.from("commerce_sync_runs").select("id,organization_id,connection_id,provider_account_id,sync_type,mode,status,scheduler_idempotency_key,lease_expires_at,metadata").eq("id", message.reserved_run_id).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("scheduler_idempotency_key", message.scheduler_identity).in("status", recovery ? ["queued", "running"] : ["queued"]).maybeSingle();
+      const normalAcceptance = message.normal_acceptance === true;
+      const { data: run, error } = await orderingGateRead("pre_reserved_run_read", () => db.from("commerce_sync_runs").select("id,organization_id,connection_id,provider_account_id,sync_type,mode,status,scheduler_idempotency_key,lease_expires_at,metadata").eq("id", message.reserved_run_id).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("scheduler_idempotency_key", message.scheduler_identity).in("status", recovery ? ["queued", "running"] : ["queued"]).maybeSingle());
       if (error) { console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, lookup: "postgrest_error", status: Number(error.status || error.statusCode || 0) || null, code: String(error.code || "postgrest_error") }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); return false; }
       if (!run) { console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, lookup: "not_found", ...preReservedRunMatchDetails(null, message) }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); return false; }
-      const valid = orderingVerification
-        ? String((run as any).sync_type || "") === "transactions"
-          && String((run as any).mode || "") === "continuous"
-          && String((run as any).status || "") === "queued"
-          && String((run as any).scheduler_idempotency_key || "") === message.scheduler_identity
-          && String(((run as any).metadata || {}).account_id || "") === message.account_id
-          && String(((run as any).metadata || {}).dispatch_source || "") === "operator_ordering_verification"
-          && ((run as any).metadata || {}).ordering_verification === true
-          && ((run as any).metadata || {}).shadow_only === true
-          && message.acceptance_cycle === true
-          && Number(((run as any).metadata || {}).max_pages) === 3
-          && Number(((run as any).metadata || {}).per_page) === 100
-          && uuid.test(String(((run as any).metadata || {}).request_key || ""))
-        : message.operator_one_shot
+      let valid: boolean;
+      if (message.evidence_only_recovery === true) {
+        valid = evidenceOnlyOrderingRecoveryPermitted(run, message);
+      } else if (orderingVerification) {
+        const details = orderingVerificationContractDetails(run, message);
+        valid = Object.values(details).every(Boolean);
+        if (!valid) console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, failed_predicates: Object.entries(details).filter(([, value]) => !value).map(([name]) => name) });
+      } else {
+        try { valid = message.operator_one_shot
         ? String((run as any).sync_type || "") === message.resource
           && String((run as any).mode || "") === "continuous"
           && (recovery ? (String((run as any).status || "") === "running" && Date.parse(String((run as any).lease_expires_at || "")) < Date.now()) : String((run as any).status || "") === "queued")
@@ -917,11 +946,14 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
           && String(((run as any).metadata || {}).dispatch_source || "") === (message.ordering_verification ? "operator_ordering_verification" : "operator_one_shot")
           && ((run as any).metadata || {}).acceptance_cycle === true
           && ((run as any).metadata || {}).shadow_only === true
-          && Number(((run as any).metadata || {}).max_pages) === (message.ordering_verification ? 3 : 8)
+          && (normalAcceptance ? ((run as any).metadata || {}).normal_acceptance === true : ((run as any).metadata || {}).normal_acceptance !== true)
+          && Number(((run as any).metadata || {}).max_pages) === (message.ordering_verification ? 3 : normalAcceptance ? 5 : 8)
           && Number(((run as any).metadata || {}).per_page) === 100
           && (!recovery || ((run as any).metadata || {}).operator_recovery_dispatched === true)
-        : isPreReservedRunMatch(run, message);
-      if (!valid) { console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, ...preReservedRunMatchDetails(run, message) }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); }
+        : isPreReservedRunMatch(run, message); }
+        catch { throw { code: "ordering_gate_read_failed", stage: "pre_reserved_contract" }; }
+      }
+      if (!valid) { if (!orderingVerification) console.log("[TraceKit] commerce.queue.pre_reserved_rejected", { reserved_run_id: message.reserved_run_id, ...preReservedRunMatchDetails(run, message) }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_failed", run_id: message.reserved_run_id }); }
       else { console.log("[TraceKit] commerce.queue.pre_reserved_accepted", { reserved_run_id: message.reserved_run_id }); console.log("[TraceKit] commerce pre-reserved validation", { event: "commerce.pre_reserved.validation_passed", run_id: message.reserved_run_id }); }
       return valid;
     },
@@ -951,26 +983,30 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
     async operatorOneShotPermitted(message) {
       if (!message.operator_one_shot || !message.acceptance_cycle || !message.reserved_run_id) return false;
       const orderingVerification = message.ordering_verification === true;
+      const evidenceOnlyRecovery = message.evidence_only_recovery === true;
       if (message.connection_id !== "ea1c2313-6120-4692-84c5-ec3562e7dcf6") return false;
       if (env.TRACEKIT_COMMERCE_KILL_SWITCH !== "enabled") return false;
-      if (!await this.preReservedRunPermitted!(message)) return false;
+      if (!await orderingGateRead("pre_reserved_validation", () => this.preReservedRunPermitted!(message))) return false;
+      const quotaRead = evidenceOnlyRecovery
+        ? Promise.resolve({ data: null, error: null })
+        : orderingGateRead("quota", () => db.from("commerce_continuous_sync_state").select("quota_remaining,quota_observed_at").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1).maybeSingle());
       const [{ data: connection, error: connectionError }, { data: accounts, error: accountError }, { data: credential, error: credentialError }, { data: schedule, error: scheduleError }, { data: pause, error: pauseError }, { data: activeRuns, error: activeError }, { count: liveActivation, error: activationError }, { data: latest, error: latestError }, { count: schedulerControl, error: controlError }] = await Promise.all([
-        db.from("commerce_provider_connections").select("organization_id,account_id,provider,status").eq("organization_id", message.organization_id).eq("id", message.connection_id).maybeSingle(),
-        db.from("commerce_provider_accounts").select("id").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("status", "active"),
-        db.from("commerce_provider_credentials").select("id").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).is("revoked_at", null).limit(1),
-        db.from("commerce_sync_schedules").select("sync_frequency,enabled,activation_state,quota_minimum_remaining").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1).maybeSingle(),
-        db.from("commerce_connection_pauses").select("paused").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).limit(1).maybeSingle(),
-        db.from("commerce_sync_runs").select("id").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).neq("id", message.reserved_run_id).in("status", ["queued", "running", "paused"]),
-        db.from("commerce_repository_activation").select("organization_id", { count: "exact", head: true }).eq("organization_id", message.organization_id).in("mode", ["live", "live_beta"]),
-        db.from("commerce_continuous_sync_state").select("quota_remaining,quota_observed_at").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1).maybeSingle(),
-        db.from("tracekit_production_controls").select("id", { count: "exact", head: true }).eq("capability", "commerce_scheduler").eq("activation_state", "enabled"),
+        orderingGateRead("connection", () => db.from("commerce_provider_connections").select("organization_id,account_id,provider,status").eq("organization_id", message.organization_id).eq("id", message.connection_id).maybeSingle()),
+        orderingGateRead("provider_accounts", () => db.from("commerce_provider_accounts").select("id").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("status", "active")),
+        orderingGateRead("credential", () => db.from("commerce_provider_credentials").select("id").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).is("revoked_at", null).limit(1)),
+        orderingGateRead("schedule", () => db.from("commerce_sync_schedules").select("sync_frequency,enabled,activation_state,quota_minimum_remaining").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1).maybeSingle()),
+        orderingGateRead("connection_pause", () => db.from("commerce_connection_pauses").select("paused").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).limit(1).maybeSingle()),
+        orderingGateRead("active_runs", () => db.from("commerce_sync_runs").select("id").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).neq("id", message.reserved_run_id).in("status", ["queued", "running", "paused"])),
+        orderingGateRead("live_activation", () => db.from("commerce_repository_activation").select("organization_id", { count: "exact", head: true }).eq("organization_id", message.organization_id).in("mode", ["live", "live_beta"])),
+        quotaRead,
+        orderingGateRead("scheduler_control", () => db.from("tracekit_production_controls").select("id", { count: "exact", head: true }).eq("capability", "commerce_scheduler").eq("activation_state", "enabled")),
       ]);
-      if (connectionError || accountError || credentialError || scheduleError || pauseError || activeError || activationError || latestError || controlError) return false;
+      if (connectionError || accountError || credentialError || scheduleError || pauseError || activeError || activationError || controlError || (!evidenceOnlyRecovery && latestError)) return false;
       const quotaRemaining = Number(latest?.quota_remaining);
       const observedAt = Date.parse(String(latest?.quota_observed_at || ""));
       const age = Date.now() - observedAt;
       const quotaFresh = Number.isFinite(observedAt) && age >= 0 && age <= 15 * 60 * 1000;
-      const requestBudget = orderingVerification ? 3 : 8;
+      const requestBudget = orderingVerification ? 3 : message.normal_acceptance === true ? 5 : 8;
       const checks = {
         connection_provider: String(connection?.provider || "") === "commas",
         connection_status: String(connection?.status || "") === "connected",
@@ -985,9 +1021,9 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
         no_conflicting_active_run: (activeRuns || []).length === 0,
         no_live_activation: Number(liveActivation || 0) === 0,
         scheduler_control_disabled: Number(schedulerControl || 0) === 0,
-        quota_fresh: quotaFresh,
-        quota_known: Number.isFinite(quotaRemaining),
-        quota_capacity: Number.isFinite(quotaRemaining) && quotaRemaining - requestBudget >= Number(schedule?.quota_minimum_remaining || 1000),
+        quota_fresh: evidenceOnlyRecovery || quotaFresh,
+        quota_known: evidenceOnlyRecovery || Number.isFinite(quotaRemaining),
+        quota_capacity: evidenceOnlyRecovery || (Number.isFinite(quotaRemaining) && quotaRemaining - requestBudget >= Number(schedule?.quota_minimum_remaining || 1000)),
       };
       const permitted = Object.values(checks).every(Boolean);
       if (!permitted) console.log("[TraceKit] commerce ordering verification gate rejected", { event: "commerce.ordering_verification.gate_rejected", failed_checks: Object.entries(checks).filter(([, value]) => !value).map(([name]) => name), request_budget: requestBudget });
@@ -1000,8 +1036,7 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
         if (error) throw error;
         return "reserved";
       }
-      const { count, error } = await db.from("commerce_sync_runs").select("id", { count: "exact", head: true }).eq("connection_id", message.connection_id).eq("scheduler_idempotency_key", message.scheduler_identity);
-      if (error) throw error;
+      const { count } = await schedulerQuery("scheduler_reservation_read", db.from("commerce_sync_runs").select("id", { count: "exact", head: true }).eq("connection_id", message.connection_id).eq("scheduler_idempotency_key", message.scheduler_identity));
       return (count || 0) > 0 ? "duplicate" : "reserved";
     },
     async recordMetric(event, details) { console.log("[TraceKit] continuous commerce adapter", { event, ...details }); },
@@ -13452,15 +13487,16 @@ async function runScheduledWowBoostImport(env: Env) {
         completed_at: new Date().toISOString(),
       }).catch(() => {});
     }
-    await supabase
-      .from("integrations_settings")
-      .update({
-        last_run_at: new Date().toISOString(),
-        last_error: lastError,
-        updated_at: new Date().toISOString(),
-      } as any)
-      .eq("platform", platform)
-      .catch(() => {});
+    try {
+      await supabase
+        .from("integrations_settings")
+        .update({
+          last_run_at: new Date().toISOString(),
+          last_error: lastError,
+          updated_at: new Date().toISOString(),
+        } as any)
+        .eq("platform", platform);
+    } catch {}
     console.error("[cron] wowboost commerce import scheduling failed", {
       platform,
       message: lastError,
@@ -14630,11 +14666,12 @@ async function runScheduledPaypalImport(env: Env) {
       });
     } catch (error: any) {
       const lastError = sanitizedIntegrationError(error);
-      await supabase
-        .from("integrations_settings")
-        .update({ last_run_at: nowIso, last_error: lastError, updated_at: new Date().toISOString() } as any)
-        .eq("platform", account.credential_platform)
-        .catch(() => {});
+      try {
+        await supabase
+          .from("integrations_settings")
+          .update({ last_run_at: nowIso, last_error: lastError, updated_at: new Date().toISOString() } as any)
+          .eq("platform", account.credential_platform);
+      } catch {}
 
       console.error("[cron] paypal transaction sync scheduling failed", {
         platform: account.credential_platform,
@@ -14720,11 +14757,12 @@ async function runScheduledGatewayTransactionSnapshotImport(env: Env) {
       });
     } catch (error: any) {
       const lastError = sanitizedIntegrationError(error);
-      await supabase
-        .from("integrations_settings")
-        .update({ last_run_at: nowIso, last_error: lastError, updated_at: new Date().toISOString() } as any)
-        .eq("platform", account.credential_platform)
-        .catch(() => {});
+      try {
+        await supabase
+          .from("integrations_settings")
+          .update({ last_run_at: nowIso, last_error: lastError, updated_at: new Date().toISOString() } as any)
+          .eq("platform", account.credential_platform);
+      } catch {}
       console.error("[cron] gateway transaction sync scheduling failed", {
         platform: account.platform,
         account_key: account.account_key,
@@ -15491,6 +15529,12 @@ async function router(req: Request, env: Env): Promise<Response> {
     try { return await handleCommasDisputeWebhook(req, env); }
     catch (error) { console.log("[TraceKit] Commas dispute webhook failed", { event: "commas.dispute_webhook.failed", code: String((error as any)?.code || "webhook_failed").replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 80) }); return json({ ok: false, error: "webhook_unavailable" }, 503); }
   }
+  if (path === "/internal/diagnostics/commerce-build") {
+    if (req.method !== "GET") return json({ ok: false, error: "method_not_allowed" }, 405, { Allow: "GET" });
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    return json({ ok: true, ordering_diagnostic_version: ORDERING_DIAGNOSTIC_VERSION, supported_stages: [...ORDERING_DIAGNOSTIC_STAGES] }, 200);
+  }
   if (path === "/internal/diagnostics/quota-bootstrap-reads" && req.method === "POST") {
     const auth = adminAuthError(req, env);
     if (auth) return auth;
@@ -15501,6 +15545,54 @@ async function router(req: Request, env: Env): Promise<Response> {
       return json({ ok: true, reads: result.reads, rejection: result.rejection }, 200);
     } catch (error: any) {
       return json({ ok: false, error: "diagnostic_failed", code: String(error?.code || "invalid_request") }, 400);
+    }
+  }
+  if (path === "/internal/commerce/normal-continuous-acceptance" && req.method === "POST") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const body = await readJsonBody(req);
+      if (body.confirmation !== "normal-continuous-shadow-acceptance" || typeof body.request_key !== "string" || Object.keys(body).some(key => !["confirmation", "request_key"].includes(key))) return json({ ok:false, error:"explicit_normal_acceptance_confirmation_required" },400);
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(body.request_key)) return json({ ok:false, error:"request_key_required" },400);
+      if (env.TRACEKIT_COMMERCE_SCHEDULER_ENABLED !== "false" || env.TRACEKIT_COMMERCE_KILL_SWITCH !== "enabled") return json({ ok:false, error:"normal_acceptance_controls_blocked" },409);
+      if (!env.continuous_commerce) return json({ ok:false, error:"continuous_queue_unavailable" },503);
+      const db = getSupabase(env);
+      const { data, error } = await db.rpc("enqueue_commas_normal_continuous_acceptance", { p_request_key: body.request_key });
+      if (error) return json({ ok:false, error:"normal_acceptance_reservation_rejected" },409);
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row?.run_id) return json({ ok:false, error:"normal_acceptance_reservation_unavailable" },409);
+      if (row.created === false) return json({ ok:true, status:"duplicate", run_id:String(row.run_id) },200);
+      const message: CommerceQueueMessage = { schema_version:1, job_type:"commerce_continuous", provider:"commas", account_id:String(row.account_id), organization_id:String(row.organization_id), connection_id:"ea1c2313-6120-4692-84c5-ec3562e7dcf6", provider_account_id:String(row.provider_account_id), resource:"transactions", requested_mode:"continuous", scheduler_identity:String(row.scheduler_identity), requested_at:new Date().toISOString(), operator_one_shot:true, normal_acceptance:true, acceptance_cycle:true, max_pages:5, per_page:100, request_key:String(row.request_key), reserved_run_id:String(row.run_id) };
+      const repository = getContinuousCommerceAdapterRepository(env);
+      if (!await repository.operatorOneShotPermitted?.(message)) return json({ ok:false, error:"normal_acceptance_post_reservation_rejected", run_id:String(row.run_id) },409);
+      await env.continuous_commerce.send(message);
+      return json({ ok:true, status:"queued", run_id:String(row.run_id), dispatch_source:"operator_one_shot", normal_acceptance:true, max_pages:5, per_page:100 },202);
+    } catch {
+      return json({ ok:false, error:"normal_acceptance_dispatch_failed" },500);
+    }
+  }
+  if (path === "/internal/commerce/redeliver-normal-continuous-acceptance" && req.method === "POST") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const body = await readJsonBody(req);
+      if (!body || Object.keys(body).length !== 1 || body.confirmation !== "redeliver-normal-continuous-acceptance") return json({ ok:false, code:"explicit_redelivery_confirmation_required" },400);
+      if (env.TRACEKIT_COMMERCE_SCHEDULER_ENABLED !== "false" || env.TRACEKIT_COMMERCE_KILL_SWITCH !== "enabled") return json({ ok:false, code:"normal_acceptance_redelivery_controls_blocked" },409);
+      if (!env.continuous_commerce) return json({ ok:false, code:"normal_acceptance_redelivery_queue_unavailable" },503);
+      const db = getSupabase(env);
+      const { data, error } = await db.rpc("claim_normal_acceptance_redelivery_1f01c739");
+      if (error) return json({ ok:false, code:"normal_acceptance_redelivery_claim_rejected" },409);
+      const row = Array.isArray(data) ? data[0] : data;
+      if (!row?.run_id) return json({ ok:false, code:"normal_acceptance_redelivery_claim_invalid" },409);
+      const message = validateCommerceQueueMessage({ schema_version:1, job_type:"commerce_continuous", provider:"commas", account_id:String(row.account_id), organization_id:String(row.organization_id), connection_id:String(row.connection_id), provider_account_id:String(row.provider_account_id), resource:"transactions", requested_mode:"continuous", scheduler_identity:String(row.scheduler_identity), requested_at:new Date().toISOString(), operator_one_shot:true, normal_acceptance:true, acceptance_cycle:true, max_pages:5, per_page:100, request_key:String(row.request_key), reserved_run_id:String(row.run_id) });
+      const repository = getContinuousCommerceAdapterRepository(env);
+      if (!await repository.operatorOneShotPermitted?.(message)) return json({ ok:false, code:"normal_acceptance_redelivery_post_claim_rejected", run_id:String(row.run_id) },409);
+      await env.continuous_commerce.send(message);
+      const { data: marked, error: markError } = await db.rpc("mark_normal_acceptance_redelivery_dispatched_1f01c739");
+      if (markError || marked !== true) return json({ ok:false, code:"normal_acceptance_redelivery_dispatch_ambiguous", run_id:String(row.run_id) },500);
+      return json({ ok:true, status:"queued", run_id:String(row.run_id), normal_acceptance:true, redelivery:true, max_pages:5, per_page:100 },202);
+    } catch {
+      return json({ ok:false, code:"normal_acceptance_redelivery_dispatch_ambiguous" },500);
     }
   }
   if (path === "/internal/commerce/one-shot-shadow" && req.method === "POST") {
@@ -15535,6 +15627,46 @@ async function router(req: Request, env: Env): Promise<Response> {
       return json({ ok: false, error: "one_shot_dispatch_failed", code: String(error?.code || "operator_one_shot_failed").replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 80) }, 500);
     }
   }
+  if (path === "/internal/commerce/recover-ordering-evidence-only" && req.method === "POST") {
+    const auth = adminAuthError(req, env); if (auth) return auth;
+    try {
+      const body = await readJsonBody(req);
+      if (body.confirmation !== "recover-ordering-evidence-only") return json({ ok:false, error:"explicit_ordering_recovery_confirmation_required" },400);
+      if (env.TRACEKIT_COMMERCE_SCHEDULER_ENABLED !== "false" || env.TRACEKIT_COMMERCE_KILL_SWITCH !== "enabled") return json({ ok:false, error:"ordering_recovery_controls_blocked" },409);
+      if (!env.continuous_commerce) return json({ ok:false, error:"continuous_queue_unavailable" },503);
+      const db=getSupabase(env); const { data, error }=await db.rpc("requeue_ordering_evidence_only_fdf97cb1");
+      if (error) return json({ ok:false, error:"ordering_recovery_rpc_rejected", code:"ordering_recovery_rpc_rejected" },409);
+      if (!Array.isArray(data)||data.length!==1) return json({ ok:false, error:"ordering_recovery_rpc_result_invalid", code:"ordering_recovery_rpc_result_invalid" },409);
+      const row=data[0] as Record<string,unknown>;
+      const message: CommerceQueueMessage={schema_version:1,job_type:"commerce_continuous",provider:"commas",account_id:String(row.account_id),organization_id:String(row.organization_id),connection_id:String(row.connection_id),provider_account_id:String(row.provider_account_id),resource:"transactions",requested_mode:"continuous",scheduler_identity:String(row.scheduler_identity),requested_at:new Date().toISOString(),operator_one_shot:true,operator_recovery:true,ordering_verification:true,evidence_only_recovery:true,acceptance_cycle:true,max_pages:3,per_page:100,request_key:String(row.request_key),reserved_run_id:String(row.run_id)};
+      const repository=getContinuousCommerceAdapterRepository(env);
+      if (!await repository.operatorOneShotPermitted?.(message)) return json({ ok:false, error:"ordering_recovery_post_reservation_rejected", code:"ordering_recovery_post_reservation_rejected", run_id:String(row.run_id) },409);
+      try { await env.continuous_commerce.send(message); } catch { return json({ ok:false, error:"ordering_recovery_queue_dispatch_failed", code:"ordering_recovery_queue_dispatch_failed", run_id:String(row.run_id) },503); }
+      return json({ ok:true, status:"queued", run_id:String(row.run_id), evidence_only_recovery:true, provider_requests:0 },202);
+    } catch { return json({ ok:false, error:"ordering_recovery_dispatch_failed", code:"ordering_recovery_dispatch_failed" },500); }
+  }
+  if (path === "/internal/commerce/resume-ordering-evidence-only" && req.method === "POST") {
+    const auth = adminAuthError(req, env); if (auth) return auth;
+    try {
+      const body = await readJsonBody(req);
+      if (body.confirmation !== "resume-ordering-evidence-only") return json({ ok:false, error:"explicit_ordering_continuation_confirmation_required" },400);
+      if (env.TRACEKIT_COMMERCE_SCHEDULER_ENABLED !== "false" || env.TRACEKIT_COMMERCE_KILL_SWITCH !== "enabled") return json({ ok:false, error:"ordering_continuation_controls_blocked" },409);
+      if (!env.continuous_commerce) return json({ ok:false, error:"continuous_queue_unavailable" },503);
+      const db=getSupabase(env);
+      const { data, error }=await db.rpc("resume_ordering_evidence_only_fdf97cb1");
+      if (error) return json({ ok:false, error:"ordering_continuation_rpc_rejected", code:"ordering_continuation_rpc_rejected" },409);
+      if (!Array.isArray(data)||data.length!==1) return json({ ok:false, error:"ordering_continuation_rpc_result_invalid", code:"ordering_continuation_rpc_result_invalid" },409);
+      const row=data[0] as Record<string,unknown>;
+      const message: CommerceQueueMessage={schema_version:1,job_type:"commerce_continuous",provider:"commas",account_id:String(row.account_id),organization_id:String(row.organization_id),connection_id:String(row.connection_id),provider_account_id:String(row.provider_account_id),resource:"transactions",requested_mode:"continuous",scheduler_identity:String(row.scheduler_identity),requested_at:new Date().toISOString(),operator_one_shot:true,operator_recovery:true,ordering_verification:true,evidence_only_recovery:true,acceptance_cycle:true,max_pages:3,per_page:100,request_key:String(row.request_key),reserved_run_id:String(row.run_id)};
+      const repository=getContinuousCommerceAdapterRepository(env);
+      if (!await repository.operatorOneShotPermitted?.(message)) return json({ ok:false, error:"ordering_continuation_post_reservation_rejected", code:"ordering_continuation_post_reservation_rejected", run_id:String(row.run_id) },409);
+      try { await env.continuous_commerce.send(message); }
+      catch { return json({ ok:false, error:"ordering_continuation_queue_dispatch_failed", code:"ordering_continuation_queue_dispatch_failed", run_id:String(row.run_id) },503); }
+      const dispatchRecord=await db.rpc("mark_ordering_evidence_only_queue_dispatched_fdf97cb1");
+      if (dispatchRecord.error || dispatchRecord.data !== true) console.log("[TraceKit] ordering continuation dispatch record incomplete", { event:"commerce.ordering_continuation.dispatch_record_incomplete", run_id:String(row.run_id) });
+      return json({ ok:true, status:"queued", run_id:String(row.run_id), evidence_only_recovery:true, provider_requests:0 },202);
+    } catch { return json({ ok:false, error:"ordering_continuation_dispatch_failed", code:"ordering_continuation_dispatch_failed" },500); }
+  }
   if (path === "/internal/commerce/ordering-verification" && req.method === "POST") {
     const auth = adminAuthError(req, env); if (auth) return auth;
     try {
@@ -15549,7 +15681,14 @@ async function router(req: Request, env: Env): Promise<Response> {
       const row = data[0] as Record<string,unknown>;
       const message: CommerceQueueMessage = { schema_version:1, job_type:"commerce_continuous", provider:"commas", account_id:String(row.account_id), organization_id:String(row.organization_id), connection_id:"ea1c2313-6120-4692-84c5-ec3562e7dcf6", provider_account_id:String(row.provider_account_id), resource:"transactions", requested_mode:"continuous", scheduler_identity:String(row.scheduler_identity), requested_at:new Date().toISOString(), operator_one_shot:true, ordering_verification:true, acceptance_cycle:true, max_pages:3, per_page:100, request_key:requestKey, reserved_run_id:String(row.run_id) };
       const repository=getContinuousCommerceAdapterRepository(env);
-      if (!await repository.operatorOneShotPermitted?.(message)) return json({ ok:false, error:"ordering_post_reservation_gate_rejected", code:"ordering_post_reservation_gate_rejected", run_id:String(row.run_id) },409);
+      let permitted: boolean | undefined;
+      try { permitted = await repository.operatorOneShotPermitted?.(message); }
+      catch (error: any) {
+        const stage = orderingGateStage(error);
+        console.log("[TraceKit] ordering verification gate error", { event:"commerce.ordering_verification.gate_error", stage, error_class:"gate_read_failed", reserved_run_id:String(row.run_id) });
+        return json({ ok:false, error:"ordering_post_reservation_gate_error", code:"ordering_post_reservation_gate_error", run_id:String(row.run_id) },500);
+      }
+      if (!permitted) return json({ ok:false, error:"ordering_post_reservation_gate_rejected", code:"ordering_post_reservation_gate_rejected", run_id:String(row.run_id) },409);
       try { await env.continuous_commerce.send(message); }
       catch { return json({ ok:false, error:"ordering_queue_dispatch_failed", code:"ordering_queue_dispatch_failed", run_id:String(row.run_id) },503); }
       return json({ ok:true, status:"queued", run_id:String(row.run_id), dispatch_source:"operator_ordering_verification", ordering_verification:true, max_pages:3, per_page:100 },202);
@@ -22417,7 +22556,7 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 		            const errorCode = typeof result.error === "string" ? result.error.replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 80) : undefined;
 		            console.log("[TraceKit] commerce runtime dispatch response", { event: "commerce.runtime_dispatch.response", run_id: message.reserved_run_id || null, statusCode: response.status, ...(errorCode ? { errorCode } : {}) });
 		            if (!response.ok) throw Object.assign(new Error(`continuous_runtime_${response.status}`), { code: response.status === 429 ? "429" : response.status >= 500 ? "runtime_timeout" : "invalid_runtime_request" });
-		            return result as { status: "completed" | "completed_with_warnings"; providerRequests: number };
+		            return result as { status: "completed" | "completed_with_warnings" | "cancelled"; providerRequests: number };
 		          },
 		        },
 		      });
@@ -23142,15 +23281,16 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 		      });
 
 		      if (continuationDecision.status === "completed" && importMode === "order_snapshot_import") {
-		        await getSupabase(env)
-		          .from("integrations_settings")
-		          .update({
-		            last_success_at: new Date().toISOString(),
-		            last_error: null,
-		            updated_at: new Date().toISOString(),
-		          } as any)
-		          .eq("platform", wowSuiteKey("wowboost"))
-		          .catch(() => {});
+		        try {
+		          await getSupabase(env)
+		            .from("integrations_settings")
+		            .update({
+		              last_success_at: new Date().toISOString(),
+		              last_error: null,
+		              updated_at: new Date().toISOString(),
+		            } as any)
+		            .eq("platform", wowSuiteKey("wowboost"));
+		        } catch {}
 		      }
 
 		      if (continuationDecision.status === "completed" && importMode === "order_snapshot_import" && nextUpserted > 0) {
@@ -23276,14 +23416,15 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 	          retries: 0,
 	          last_error_at: new Date().toISOString(),
 	        }).catch(() => {});
-	        await getSupabase(env)
-	          .from("integrations_settings")
-	          .update({
-	            last_error: sanitizedIntegrationError(`Page ${retryPage} failed after ${attempt} attempts: ${message}`),
-	            updated_at: new Date().toISOString(),
-	          } as any)
-	          .eq("platform", wowSuiteKey("wowboost"))
-	          .catch(() => {});
+	        try {
+	          await getSupabase(env)
+	            .from("integrations_settings")
+	            .update({
+	              last_error: sanitizedIntegrationError(`Page ${retryPage} failed after ${attempt} attempts: ${message}`),
+	              updated_at: new Date().toISOString(),
+	            } as any)
+	            .eq("platform", wowSuiteKey("wowboost"));
+	        } catch {}
 
         msg.ack();
         continue;
@@ -23327,7 +23468,7 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
         now: new Date().toISOString(),
         repository: getContinuousCommerceAdapterRepository(env),
         queue: { send: async (message) => { await env.continuous_commerce!.send(message); } },
-      }).catch((error) => console.error("[TraceKit] continuous commerce cron failed", { code: "scheduler_failure", message: String(error?.message || error) })));
+      }).catch((error) => console.error("[TraceKit] continuous commerce cron failed", { code: "scheduler_failure", ...schedulerFailureDiagnostic(error) })));
     }
     ctx.waitUntil(runScheduledCheckoutChampImport(env));
     ctx.waitUntil(runScheduledShopifyImport(env));
