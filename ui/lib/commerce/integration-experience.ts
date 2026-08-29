@@ -23,8 +23,20 @@ export const COMMAS_CAPABILITIES: SafeCapability[] = [
   { name: "Attribution identifiers", state: "unavailable", reason: "Not observed in bounded Transaction samples." },
 ];
 
+export const EVERFLOW_CAPABILITIES: SafeCapability[] = [
+  { name: "Affiliates", state: "supported", reason: "Connection-scoped Network API ingestion implemented." },
+  { name: "Advertisers", state: "supported", reason: "Connection-scoped advertiser reference ingestion implemented." },
+  { name: "Offers", state: "supported", reason: "Offer ingestion preserves advertiser ownership and source identity." },
+  { name: "Conversions", state: "supported", reason: "Bounded incremental conversion ingestion and checkpoints implemented." },
+  { name: "Transaction IDs", state: "supported", reason: "Direct Everflow transaction identity can resolve to canonical orders." },
+  { name: "Email fallback", state: "limited", reason: "Fallback requires guarded time and amount evidence and remains lower confidence." },
+  { name: "Events / reversals", state: "limited", reason: "Conversion event evidence is ingested; full lifecycle handling remains later work." },
+  { name: "Clicks", state: "unavailable", reason: "Dedicated click ingestion is not implemented yet." },
+];
+
 export const PROVIDER_CATALOG = [
   { provider: "commas", name: "Commas", availability: "available" },
+  { provider: "everflow", name: "Everflow", availability: "available" },
   { provider: "shopify", name: "Shopify", availability: "coming_soon" },
   { provider: "checkout_champ", name: "Checkout Champ", availability: "coming_soon" },
   { provider: "woocommerce", name: "WooCommerce", availability: "coming_soon" },

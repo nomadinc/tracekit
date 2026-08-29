@@ -29,7 +29,10 @@ export default function middleware(request: NextRequest, event: NextFetchEvent) 
     request.nextUrl.pathname.startsWith("/concepts/")
   )
     return NextResponse.next();
+
+  const redirectUri = new URL("/auth/callback", request.nextUrl.origin).toString();
   return authkitMiddleware({
+    redirectUri,
     middlewareAuth: {
       enabled: true,
       unauthenticatedPaths: ["/auth/:path*", "/api/health"],

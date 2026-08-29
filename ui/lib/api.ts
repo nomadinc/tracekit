@@ -92,17 +92,22 @@ function apiError(status: number, pathAndQuery: string, summary?: string) {
   return new Error(`API request failed: ${status} ${requestPath(pathAndQuery)}${suffix}`);
 }
 
+function isProviderApplicationPath(pathAndQuery: string) {
+  return /^\/v1\/integrations\/[^/]+\/(?:connect|status|(?:affiliates|advertisers|offers)(?:\/sync)?)(?:[?#]|$)/.test(pathAndQuery);
+}
+
 export async function apiGetJson<T>(
   pathAndQuery: string,
   init?: RequestInit
 ): Promise<T> {
-  const base = getApiBaseUrl();
+  const base = isProviderApplicationPath(pathAndQuery) ? "" : getApiBaseUrl();
   const url = joinUrl(base, pathAndQuery);
 
   const res = await fetch(url, {
     ...init,
     method: "GET",
     cache: "no-store",
+    credentials: base ? undefined : "same-origin",
     headers: {
       ...(init?.headers || {}),
       Accept: "application/json",
@@ -204,13 +209,14 @@ export async function apiPostJson<TOut, TIn = any>(
   body: TIn,
   init?: RequestInit
 ): Promise<TOut> {
-  const base = getApiBaseUrl();
+  const base = isProviderApplicationPath(pathAndQuery) ? "" : getApiBaseUrl();
   const url = joinUrl(base, pathAndQuery);
 
   const res = await fetch(url, {
     ...init,
     method: "POST",
     cache: "no-store",
+    credentials: base ? undefined : "same-origin",
     headers: withTkSecretHeader(
       {
         "Content-Type": "application/json",
