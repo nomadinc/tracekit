@@ -17,9 +17,9 @@ export function isRuntimeDispatchProbe(value: unknown): value is { type: typeof 
 }
 export type EligibleCommerceJob={accountId:string;organizationId:string;connectionId:string;providerAccountId:string;resource:string;mode:"continuous"|"deep_reconciliation";schedulerIdentity:string;quotaRemaining:number|null;quotaObservedAt?:string|null;quotaMaxAgeMs?:number;requestBudget:number;quotaFloor:number;bootstrap?:true};
 export type ScheduledQuotaRefreshResult={status:"completed";providerRequests:1;quotaRemaining:number|null;observedAt:string}|{status:"throttled";reason:string}|{status:"failed";reason:string};
-export type CommerceAdapterRepository={schedulerEnabled():Promise<boolean>;schedulerFailedChecks?():Promise<string[]>;eligibleJobs(now:string):Promise<EligibleCommerceJob[]>;connectionPermitted(connectionId:string):Promise<boolean>;scheduledRunPermitted?(message:CommerceQueueMessage):Promise<boolean>;refreshScheduledQuota?(job:EligibleCommerceJob,now:string,onStarted:()=>Promise<void>):Promise<ScheduledQuotaRefreshResult>;authoritativeScheduledQuota?(job:EligibleCommerceJob):Promise<{quotaRemaining:number|null;quotaObservedAt:string|null;checkedAt:string}>;bootstrapPermitted?(message:CommerceQueueMessage):Promise<boolean>;manualPermitted?(message:CommerceQueueMessage):Promise<boolean>;operatorOneShotPermitted?(message:CommerceQueueMessage):Promise<boolean>;preReservedRunPermitted?(message:CommerceQueueMessage):Promise<boolean>;reservedRunId?(message:CommerceQueueMessage):Promise<string|null>;reserve(message:CommerceQueueMessage):Promise<"reserved"|"duplicate">;markEnqueued?(message:CommerceQueueMessage,now:string):Promise<void>;recordMetric(event:string,details:Record<string,unknown>):Promise<void>};
+export type CommerceAdapterRepository={schedulerEnabled():Promise<boolean>;schedulerFailedChecks?():Promise<string[]>;eligibleJobs(now:string):Promise<EligibleCommerceJob[]>;connectionPermitted(connectionId:string):Promise<boolean>;connectionSuppressionReason?(connectionId:string):Promise<"paused"|"production_control"|"connection_unavailable">;scheduledRunPermitted?(message:CommerceQueueMessage):Promise<boolean>;refreshScheduledQuota?(job:EligibleCommerceJob,now:string,onStarted:()=>Promise<void>):Promise<ScheduledQuotaRefreshResult>;authoritativeScheduledQuota?(job:EligibleCommerceJob):Promise<{quotaRemaining:number|null;quotaObservedAt:string|null;checkedAt:string}>;bootstrapPermitted?(message:CommerceQueueMessage):Promise<boolean>;manualPermitted?(message:CommerceQueueMessage):Promise<boolean>;operatorOneShotPermitted?(message:CommerceQueueMessage):Promise<boolean>;preReservedRunPermitted?(message:CommerceQueueMessage):Promise<boolean>;reservedRunId?(message:CommerceQueueMessage):Promise<string|null>;reserve(message:CommerceQueueMessage):Promise<"reserved"|"duplicate">;markEnqueued?(message:CommerceQueueMessage,now:string):Promise<void>;recordMetric(event:string,details:Record<string,unknown>):Promise<void>};
 export type CommerceQueue={send(message:CommerceQueueMessage):Promise<void>};
-export type CommerceRuntime={run(message:CommerceQueueMessage):Promise<{status:"completed"|"completed_with_warnings";providerRequests:number}>};
+export type CommerceRuntime={run(message:CommerceQueueMessage):Promise<{status:"completed"|"completed_with_warnings"|"cancelled";providerRequests:number}>};
 export type SyncFrequency="hourly"|"30_minutes"|"15_minutes"|"5_minutes"|"manual";
 const schedulerOperationNames=["scheduler_control_read","schedule_eligibility_read","connection_scope_read","provider_account_scope_read","quota_state_read","connection_permission_read","connection_permission_control_read","pre_dispatch_schedule_read","pre_dispatch_quota_read","pre_dispatch_active_run_read","pre_dispatch_live_activation_read","scheduler_reservation_read","scheduler_reservation_write","queue_dispatch","schedule_mark_enqueued_write"] as const;
 export type SchedulerOperation=typeof schedulerOperationNames[number];
@@ -72,7 +72,11 @@ export async function runCommerceCron(input:{now:string;repository:CommerceAdapt
   let eligible=0,enqueued=0,duplicates=0;
   for(const job of await schedulerOperation("schedule_eligibility_read",()=>input.repository.eligibleJobs(input.now))){
     eligible++;
-    if(!await schedulerOperation("connection_permission_read",()=>input.repository.connectionPermitted(job.connectionId)))continue;
+    if(!await schedulerOperation("connection_permission_read",()=>input.repository.connectionPermitted(job.connectionId))){
+      const reason=input.repository.connectionSuppressionReason?await input.repository.connectionSuppressionReason(job.connectionId):"connection_unavailable";
+      await input.repository.recordMetric("commerce.cron.connection_suppressed",{reason});
+      continue;
+    }
     if(job.bootstrap===true){await input.repository.recordMetric("commerce.cron.quota_suppressed",{connection_id:job.connectionId,mode:job.mode,reason:"explicit_bootstrap_required"});continue}
     let decision=quotaDecision({...job,now:input.now});
     if(!decision.allowed&&["stale_quota","unknown_quota"].includes(decision.reason)&&input.repository.refreshScheduledQuota){
@@ -90,9 +94,11 @@ export async function runCommerceCron(input:{now:string;repository:CommerceAdapt
     if(!decision.allowed){await input.repository.recordMetric("commerce.cron.quota_suppressed",{connection_id:job.connectionId,mode:job.mode,reason:decision.reason});continue}
     let message:CommerceQueueMessage={schema_version:1,job_type:job.mode==="continuous"?"commerce_continuous":"commerce_deep_reconciliation",provider:"commas",account_id:job.accountId,organization_id:job.organizationId,connection_id:job.connectionId,provider_account_id:job.providerAccountId,resource:job.resource,requested_mode:job.mode,scheduler_identity:job.schedulerIdentity,requested_at:input.now};
     if(input.repository.scheduledRunPermitted&&!await schedulerOperation("pre_dispatch_schedule_read",()=>input.repository.scheduledRunPermitted!(message)))continue;
+    if(!await schedulerOperation("connection_permission_read",()=>input.repository.connectionPermitted(job.connectionId)))continue;
     const reservation=await schedulerOperation("scheduler_reservation_read",()=>input.repository.reserve(message));
     if(reservation==="duplicate"){duplicates++;continue}
     if(job.bootstrap===true&&input.repository.reservedRunId){const reservedRunId=await input.repository.reservedRunId(message);if(!reservedRunId)throw new Error("reserved_run_missing");message={...message,reserved_run_id:reservedRunId}}
+    if(!await schedulerOperation("connection_permission_read",()=>input.repository.connectionPermitted(job.connectionId)))continue;
     await schedulerOperation("queue_dispatch",()=>input.queue.send(message));
     if(input.repository.markEnqueued)await schedulerOperation("schedule_mark_enqueued_write",()=>input.repository.markEnqueued!(message,input.now));
     enqueued++;

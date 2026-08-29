@@ -872,6 +872,15 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
       const { data } = await schedulerQuery("connection_permission_control_read", db.rpc("commerce_schedule_permitted", { p_organization_id: connection.organization_id, p_connection_id: connectionId }));
       return data === true;
     },
+    async connectionSuppressionReason(connectionId) {
+      const { data: connection } = await schedulerQuery("connection_permission_read", db.from("commerce_provider_connections").select("organization_id,provider,status").eq("id", connectionId).maybeSingle());
+      if (!connection || !isConnectedCommasConnection(connection)) return "connection_unavailable";
+      const [{ count: paused }, { count: controls }] = await Promise.all([
+        schedulerQuery("connection_permission_control_read", db.from("commerce_connection_pauses").select("connection_id", { count: "exact", head: true }).eq("organization_id", connection.organization_id).eq("connection_id", connectionId).eq("paused", true)),
+        schedulerQuery("scheduler_control_read", db.from("tracekit_production_controls").select("id", { count: "exact", head: true }).eq("organization_id", connection.organization_id).eq("capability", "commerce_scheduler").eq("activation_state", "enabled")),
+      ]);
+      return Number(paused || 0)>0 ? "paused" : Number(controls || 0)<1 ? "production_control" : "connection_unavailable";
+    },
     async scheduledRunPermitted(message) {
       const [{ data: schedule, error: scheduleError }, { data: quota, error: quotaError }, { count: activeRuns, error: activeError }, { count: liveActivation, error: activationError }] = await Promise.all([
         schedulerQuery("pre_dispatch_schedule_read", db.from("commerce_sync_schedules").select("sync_frequency,enabled,activation_state,quota_minimum_remaining,deep_request_budget").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1).maybeSingle()),
@@ -22547,7 +22556,7 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 		            const errorCode = typeof result.error === "string" ? result.error.replace(/[^a-zA-Z0-9_.-]/g, "_").slice(0, 80) : undefined;
 		            console.log("[TraceKit] commerce runtime dispatch response", { event: "commerce.runtime_dispatch.response", run_id: message.reserved_run_id || null, statusCode: response.status, ...(errorCode ? { errorCode } : {}) });
 		            if (!response.ok) throw Object.assign(new Error(`continuous_runtime_${response.status}`), { code: response.status === 429 ? "429" : response.status >= 500 ? "runtime_timeout" : "invalid_runtime_request" });
-		            return result as { status: "completed" | "completed_with_warnings"; providerRequests: number };
+		            return result as { status: "completed" | "completed_with_warnings" | "cancelled"; providerRequests: number };
 		          },
 		        },
 		      });
