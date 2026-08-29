@@ -117,22 +117,30 @@ export function firstRecoverableContinuousPage(rows: Row[]): number|null {
   return pages.length?Math.min(...pages):null;
 }
 
-async function fetchProviderPage(secret:string,page:number,perPage:number,correlationId:string,maxAttempts=3) {
-  let lastStatus=0;
+export class CommasProviderRequestError extends Error {
+  constructor(public readonly errorCode:string,public readonly attempts:number,public readonly status:number|null,public readonly retryable:boolean){super(errorCode);this.name="CommasProviderRequestError"}
+}
+
+export async function fetchProviderPage(secret:string,page:number,perPage:number,correlationId:string,maxAttempts=3,deps:{request?:typeof fetch;wait?:(ms:number)=>Promise<unknown>}={}) {
+  const request=deps.request??fetch,wait=deps.wait??sleep;
   for(let attempt=1;attempt<=maxAttempts;attempt++) {
+    let response:Response;
     try {
-      const response=await fetch(`https://www.fanbasis.com/public-api/checkout-sessions/transactions?page=${page}&per_page=${perPage}`,{headers:{"x-api-key":secret,Accept:"application/json","x-correlation-id":correlationId},signal:AbortSignal.timeout(30_000)});
-      lastStatus=response.status;
-      const rateLimit:RateLimit={limit:number(response.headers.get("x-ratelimit-limit")),remaining:number(response.headers.get("x-ratelimit-remaining")),reset:response.headers.get("x-ratelimit-reset")};
-      if(response.ok)return {bytes:new Uint8Array(await response.arrayBuffer()),rateLimit,attempts:attempt};
-      if(![429,500,502,503,504].includes(response.status)) throw new Error("Commas rejected the continuous sync request.");
-      await sleep(rateLimitDelay({status:response.status,retryAfterSeconds:number(response.headers.get("retry-after")),remaining:rateLimit.remaining,attempt}));
+      response=await request(`https://www.fanbasis.com/public-api/checkout-sessions/transactions?page=${page}&per_page=${perPage}`,{headers:{"x-api-key":secret,Accept:"application/json","x-correlation-id":correlationId},signal:AbortSignal.timeout(30_000)});
     } catch(error) {
-      if(attempt===maxAttempts)throw error;
-      await sleep(rateLimitDelay({status:lastStatus,retryAfterSeconds:null,remaining:null,attempt}));
+      const code=(error as Error)?.name==="TimeoutError"||((error as Error)?.message||"").toLowerCase().includes("timeout")?"provider_timeout":"provider_network_failure";
+      if(attempt===maxAttempts)throw new CommasProviderRequestError(code,attempt,null,true);
+      await wait(rateLimitDelay({status:0,retryAfterSeconds:null,remaining:null,attempt}));
+      continue;
     }
+    const rateLimit:RateLimit={limit:number(response.headers.get("x-ratelimit-limit")),remaining:number(response.headers.get("x-ratelimit-remaining")),reset:response.headers.get("x-ratelimit-reset")};
+    if(response.ok)return {bytes:new Uint8Array(await response.arrayBuffer()),rateLimit,attempts:attempt};
+    const errorCode=response.status===401?"provider_authentication_failed":response.status===403?"provider_authorization_failed":response.status===429?"provider_rate_limited":response.status>=500?"provider_http_5xx":"provider_http_4xx";
+    const retryable=response.status===429||[500,502,503,504].includes(response.status);
+    if(!retryable||attempt===maxAttempts)throw new CommasProviderRequestError(errorCode,attempt,response.status,retryable);
+    await wait(rateLimitDelay({status:response.status,retryAfterSeconds:number(response.headers.get("retry-after")),remaining:rateLimit.remaining,attempt}));
   }
-  throw new Error(`Commas continuous sync exhausted retries (${lastStatus||"network"}).`);
+  throw new CommasProviderRequestError("provider_retry_exhausted",maxAttempts,null,true);
 }
 
 export const STRANDED_RECOVERY_RUN_ID = "9c8731d7-1dae-4844-a7ce-0b6fccea170e";
@@ -387,6 +395,7 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
   const priorRecentIds=Array.isArray(priorState?.recent_source_ids)?priorState.recent_source_ids.map(String):[];
   let providerRequests=0,pagesScanned=0,recordsObserved=0,recordsNew=0,recordsUpdated=0,recordsUnchanged=0,recordsFailed=0,refundsNew=0,refundsUpdated=0,evidenceWrites=0,evidenceReuses=0,retries=0;
   let rateLimitLimit:number|null=null,rateLimitStart:number|null=null,rateLimitEnd:number|null=null,rateLimitReset:string|null=null,providerTotalStart:number|null=null,providerTotalEnd:number|null=null,ordering:ProviderOrdering="unknown",stoppingReason="bounded_scan_limit",deeperReconciliationRequired=false,pausedDuringRun=false;
+  let failureStage="run_initialization";
   let orderingObserver:OrderingObserverState=initialOrderingObserver();
   let stability:StabilityState={consecutiveStableKnownPages:0,pagesScanned:0,unseenRecords:0,changedRecords:0,pageShiftDetected:false};
   const pageDurations:number[]=[],fingerprints:Record<string,unknown>={...priorFingerprints},recentIds:string[]=[];let alignmentRecentIds:string[]=[];const changedRows:ReturnType<typeof normalizeCommasTransaction>[]=[],changedProductIds=new Set<string>();
@@ -400,15 +409,19 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
       if(await commerceConnectionPaused(scope)){pausedDuringRun=true;stoppingReason="connection_paused";break}
       const page=queue[queueIndex++],pageStarted=Date.now();
       const checkpoint=await ensureCheckpoint({...scope,runId,page,perPage});
+      let pageProviderAttempts=0;
       try {
         const replayed=evidenceOnlyRecovery||String(checkpoint.state||"")==="running"?await replayEvidenceForPage({...scope,runId,page,perPage}):null;
         if(evidenceOnlyRecovery&&!replayed)throw new Error("Evidence-only recovery requires persisted page Evidence.");
+        failureStage="provider_request";
         const fetched=replayed?null:await fetchProviderPage(scope.secret,page,perPage,owner,bootstrap?1:3);
-        if(fetched){ providerRequests++; retries+=fetched.attempts-1; rateLimitLimit=fetched.rateLimit.limit;rateLimitStart??=fetched.rateLimit.remaining;rateLimitEnd=fetched.rateLimit.remaining;rateLimitReset=fetched.rateLimit.reset; }
+        if(fetched){ pageProviderAttempts=fetched.attempts;providerRequests+=fetched.attempts; retries+=fetched.attempts-1; rateLimitLimit=fetched.rateLimit.limit;rateLimitStart??=fetched.rateLimit.remaining;rateLimitEnd=fetched.rateLimit.remaining;rateLimitReset=fetched.rateLimit.reset; }
         const pageBytes=replayed?.bytes||fetched!.bytes;
         const pageRateLimit=replayed?{remaining:null as number|null,attempts:0}:{remaining:fetched!.rateLimit.remaining,attempts:fetched!.attempts};
         if(bootstrap&&fetched)await db(`commerce_sync_runs?id=eq.${runId}`,{method:"PATCH",body:JSON.stringify({metadata:{account_id:scope.accountId,quota_bootstrap_attempted:true,quota_bootstrap_state:fetched.rateLimit.remaining===null?"unknown":"observed",rate_limit_start:rateLimitStart,rate_limit_end:rateLimitEnd,rate_limit_reset:rateLimitReset}})});
+        failureStage="evidence_persistence";
         const evidence=replayed||await evidenceForPage({...scope,runId,page,perPage,bytes:pageBytes}); evidence.reused?evidenceReuses++:evidenceWrites++;
+        failureStage="normalization";
         const parsed=parseContinuousPage(pageBytes); providerTotalStart??=parsed.totalItems;providerTotalEnd=parsed.totalItems;
         const timestamps=parsed.items.map((item)=>String(item.transaction_date));
         let metadataProbe=false;
@@ -440,6 +453,7 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
         pagesScanned++;pageDurations.push(Date.now()-pageStarted);
         const replayMetadata={duration_ms:pageDurations.at(-1),provider_attempts:pageRateLimit.attempts,rate_limit_remaining:fetched?.rateLimit.remaining??null,new_records:newCount,updated_records:updatedCount,unchanged_records:unchangedCount,evidence_reused:evidence.reused,ordering_state:orderingObserver.ordering,pagination_classification:orderingObserver.paginationClassification,boundary_overlap_count:orderingObserver.boundaryOverlapCount,ordering_pages_observed:orderingObserver.pagesObserved};
         const completedMetadata=evidenceOnlyRecovery?evidenceOnlyCheckpointMetadata(checkpoint.metadata,replayMetadata):replayMetadata;
+        failureStage="checkpoint_persistence";
         await db(`commerce_sync_checkpoints?id=eq.${checkpoint.id}`,{method:"PATCH",body:JSON.stringify({state:"completed",source_total_items:parsed.totalItems,source_total_pages:parsed.totalPages,page_fingerprint:fingerprint,first_source_id:normalized[0]?.transaction_id??null,last_source_id:normalized.at(-1)?.transaction_id??null,completed_at:new Date().toISOString(),metadata:completedMetadata})});
         const checkpointIndex=checkpointRows.findIndex((row)=>String(row.page)===String(page));
         const completedRow={...checkpoint,state:"completed",metadata:completedMetadata};
@@ -460,7 +474,9 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
         await sleep(pageRateLimit.remaining!==null&&pageRateLimit.remaining<100?5_000:paceMs);
       } catch(error) {
         recordsFailed++;
-        await db(`commerce_sync_checkpoints?id=eq.${checkpoint.id}`,{method:"PATCH",body:JSON.stringify({state:"failed",retry_count:Number(checkpoint.retry_count||0)+1,metadata:{error_code:"continuous_page_failed",retryable:true}})}).catch(()=>{});
+        if(error instanceof CommasProviderRequestError){pageProviderAttempts=error.attempts;providerRequests+=error.attempts;retries+=Math.max(0,error.attempts-1)}
+        const failureCode=error instanceof CommasProviderRequestError?error.errorCode:`${failureStage}_failed`;
+        await db(`commerce_sync_checkpoints?id=eq.${checkpoint.id}`,{method:"PATCH",body:JSON.stringify({state:"failed",retry_count:Number(checkpoint.retry_count||0)+1,metadata:{error_code:failureCode,failure_stage:failureStage,provider_attempts:pageProviderAttempts,retryable:error instanceof CommasProviderRequestError?error.retryable:true}})}).catch(()=>{});
         throw error;
       }
     }
@@ -480,8 +496,14 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
     await audit(scope,mode==="deep_reconciliation"?"commerce.deep_reconciliation_completed":"commerce.continuous_sync_completed",runId,"success",{resource:"transactions",mode,pages_scanned:pagesScanned,records_new:recordsNew,records_updated:recordsUpdated,records_unchanged:recordsUnchanged,stopping_reason:stoppingReason}).catch(()=>{});
     return {runId,status,providerRequests,pagesScanned,recordsObserved,recordsNew,recordsUpdated,recordsUnchanged,recordsFailed,refundsNew,refundsUpdated,evidenceWrites,evidenceReuses,durationMs:Date.now()-started,averagePageDurationMs:pageDurations.length?Math.round(pageDurations.reduce((a,b)=>a+b,0)/pageDurations.length):0,retries,rateLimitStart,rateLimitEnd,stoppingReason,pageShiftDetected:stability.pageShiftDetected,deeperReconciliationRequired,ordering};
   } catch(error) {
-    await db(`commerce_continuous_sync_state?on_conflict=connection_id,provider_account_id,resource`,{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=representation"},body:JSON.stringify({account_id:scope.accountId,organization_id:scope.organizationId,connection_id:scope.connectionId,provider_account_id:scope.providerAccountId,resource:"transactions",last_attempted_at:new Date().toISOString(),normalizer_version:CONTINUOUS_NORMALIZER_VERSION,evidence_contract_version:COMMERCE_EVIDENCE_CONTRACT_VERSION,status:"failed",attribution_source_state:"unavailable",warnings:[{code:"continuous_sync_failed"}],updated_at:new Date().toISOString()})}).catch(()=>{});
-    await db("rpc/transition_commerce_sync_run",{method:"POST",body:JSON.stringify({p_run_id:runId,p_organization_id:scope.organizationId,p_connection_id:scope.connectionId,p_lease_owner:owner,p_transition:"failed",p_error_code:"continuous_sync_failed",p_error_summary:"Continuous Commerce sync stopped safely."})}).then((transitioned)=>{const transitionApplied=(transitioned as unknown as unknown[])[0]===true;console.log("[TraceKit] commerce run transition",{event:"commerce.run.transition",result:transitionApplied?"succeeded":"not_applied",status:"failed"});}).catch((error)=>console.log("[TraceKit] commerce run transition failed",{event:"commerce.run.transition_failed",errorCode:String((error as Error)?.message||"transition_error").replace(/[^a-zA-Z0-9_.-]/g,"_").slice(0,80)}));
+    const failureCode=error instanceof CommasProviderRequestError?error.errorCode:`${failureStage}_failed`;
+    try {
+      const rows=await db(`commerce_sync_checkpoints?sync_run_id=eq.${runId}&resource=eq.transactions&select=state,metadata`),progress=summarizeContinuousCheckpointProgress(rows);
+      const failedAttempts=rows.filter((row)=>String(row.state)==="failed").reduce((sum,row)=>sum+(number(object(row.metadata)?.provider_attempts)??0),0);
+      await db(`commerce_sync_runs?id=eq.${runId}`,{method:"PATCH",body:JSON.stringify({pages_completed:progress.pagesCompleted,records_seen:progress.recordsSeen,records_created:progress.recordsCreated,records_updated:progress.recordsUpdated,records_unchanged:progress.recordsUnchanged,records_failed:recordsFailed,provider_request_count:Math.max(providerRequests,progress.providerRequests+failedAttempts),evidence_writes:evidenceWrites,evidence_reuses:evidenceReuses,stopping_reason:failureCode,metadata:{...runMetadata,failure_stage:failureStage,automatic_recovery:"next_scheduled_cycle"}})});
+    } catch {}
+    await db(`commerce_continuous_sync_state?on_conflict=connection_id,provider_account_id,resource`,{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=representation"},body:JSON.stringify({account_id:scope.accountId,organization_id:scope.organizationId,connection_id:scope.connectionId,provider_account_id:scope.providerAccountId,resource:"transactions",last_attempted_at:new Date().toISOString(),normalizer_version:CONTINUOUS_NORMALIZER_VERSION,evidence_contract_version:COMMERCE_EVIDENCE_CONTRACT_VERSION,status:"failed",attribution_source_state:"unavailable",warnings:[{code:failureCode,stage:failureStage}],updated_at:new Date().toISOString()})}).catch(()=>{});
+    await db("rpc/transition_commerce_sync_run",{method:"POST",body:JSON.stringify({p_run_id:runId,p_organization_id:scope.organizationId,p_connection_id:scope.connectionId,p_lease_owner:owner,p_transition:"failed",p_error_code:failureCode,p_error_summary:`Continuous Commerce stopped safely at ${failureStage}.`})}).then((transitioned)=>{const transitionApplied=(transitioned as unknown as unknown[])[0]===true;console.log("[TraceKit] commerce run transition",{event:"commerce.run.transition",result:transitionApplied?"succeeded":"not_applied",status:"failed",failure_stage:failureStage,error_code:failureCode});}).catch((error)=>console.log("[TraceKit] commerce run transition failed",{event:"commerce.run.transition_failed",errorCode:String((error as Error)?.message||"transition_error").replace(/[^a-zA-Z0-9_.-]/g,"_").slice(0,80)}));
     await audit(scope,mode==="deep_reconciliation"?"commerce.deep_reconciliation_failed":"commerce.continuous_sync_failed",runId,"failure",{resource:"transactions",mode,error_code:"continuous_sync_failed"}).catch(()=>{});
     throw error;
   }

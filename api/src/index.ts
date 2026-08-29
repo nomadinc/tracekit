@@ -882,6 +882,7 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
       return Number(paused || 0)>0 ? "paused" : Number(controls || 0)<1 ? "production_control" : "connection_unavailable";
     },
     async scheduledRunPermitted(message) {
+      await schedulerQuery("pre_dispatch_active_run_recovery_write", db.rpc("fail_expired_commerce_sync_runs", { p_organization_id: message.organization_id, p_connection_id: message.connection_id, p_provider_account_id: message.provider_account_id, p_resource: message.resource, p_now: new Date().toISOString() }));
       const [{ data: schedule, error: scheduleError }, { data: quota, error: quotaError }, { count: activeRuns, error: activeError }, { count: liveActivation, error: activationError }] = await Promise.all([
         schedulerQuery("pre_dispatch_schedule_read", db.from("commerce_sync_schedules").select("sync_frequency,enabled,activation_state,quota_minimum_remaining,deep_request_budget").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1).maybeSingle()),
         schedulerQuery("pre_dispatch_quota_read", db.from("commerce_continuous_sync_state").select("quota_remaining,quota_observed_at").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1).maybeSingle()),
