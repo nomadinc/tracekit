@@ -3,8 +3,12 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const route = readFileSync(new URL("../app/api/commerce/product-mappings/route.ts", import.meta.url), "utf8");
+const bulkRoute = readFileSync(new URL("../app/api/commerce/product-mappings/bulk/route.ts", import.meta.url), "utf8");
 const component = readFileSync(new URL("../components/offers/commerce-product-mapping-review.tsx", import.meta.url), "utf8");
+const intelligence = readFileSync(new URL("../lib/commerce/product-mapping-intelligence.ts", import.meta.url), "utf8");
+const intelligenceRepository = readFileSync(new URL("../lib/commerce/product-mapping-intelligence-repository.ts", import.meta.url), "utf8");
 const migration = readFileSync(new URL("../../supabase/migrations/20260830053413_commerce_product_mapping_review_workflow.sql", import.meta.url), "utf8");
+const bulkMigration = readFileSync(new URL("../../supabase/migrations/20260830193000_atomic_bulk_product_mapping_decisions.sql", import.meta.url), "utf8");
 const ingestion = readFileSync(new URL("../../supabase/migrations/043_commerce_shadow_ingestion_v1.sql", import.meta.url), "utf8");
 const alerts = readFileSync(new URL("../../api/src/commerce-operational-alerts.ts", import.meta.url), "utf8");
 
@@ -19,12 +23,26 @@ test("mapping review route is WorkOS authenticated, offers.manage protected, sam
   assert.doesNotMatch(route, /error\.message|String\(e\)/);
 });
 
-test("ten authorized products receive bounded presets while arbitrary products receive none", () => {
-  for (const id of ["o2GYY", "Jz71g", "4KV26", "xz1kz", "v2Pg8", "yPV86", "ADvn9", "BBwgQ", "ERzlW", "G6BZK"]) assert.match(route, new RegExp(`${id}:?\"`));
-  assert.equal((route.match(/8110e951-8ca6-406a-8817-55575fe647ba/g) || []).length, 4);
-  assert.match(route, /authorizedPreset:presets\[String\(row\.provider_product_id\)\]\?/);
+test("review recommendations come from persisted intelligence rather than hard-coded product presets", () => {
+  assert.match(route, /loadProductMappingRecommendations/);
+  assert.match(route, /recommendations\(productRows\)/);
+  assert.match(route, /recommendationTarget\(recommendation\)/);
+  assert.match(intelligenceRepository, /commerce_product_mapping_rules/);
+  assert.match(intelligenceRepository, /commerce_product_mapping_rule_prices/);
+  assert.match(intelligenceRepository, /commerce_product_mapping_policies/);
+  assert.doesNotMatch(route, /const\s+presets\s*:/);
+  assert.doesNotMatch(route, /presets\[String\(row\.provider_product_id\)\]/);
+  assert.match(component, /TraceKit recommendation/);
   assert.match(component, /Explicit confirmation is still required/);
-  assert.doesNotMatch(component, /bulk approve|approve all/i);
+});
+
+test("recommendation reads are advisory only and never append mapping decisions or auto-map from GET", () => {
+  const getBody = route.match(/export async function GET[\s\S]*?export async function POST/)?.[0] || "";
+  assert.match(getBody, /loadProductMappingRecommendations|recommendations\(productRows\)/);
+  assert.doesNotMatch(getBody, /decideProductMapping\(/);
+  assert.doesNotMatch(getBody, /commerce_product_mapping_decisions/);
+  assert.doesNotMatch(getBody, /rpc\/decide_commerce_product_mapping/);
+  assert.doesNotMatch(getBody, /auto_map_enabled|execution_mode\s*=\s*["']auto_map["']/);
 });
 
 test("server validates the complete tenant-scoped hierarchy and rejection carries no target", () => {
@@ -38,9 +56,13 @@ test("server validates the complete tenant-scoped hierarchy and rejection carrie
   assert.match(migration, /rejected product mapping cannot retain a target/);
 });
 
-test("mapping decisions are version guarded, append-only, audited, and sanitized", () => {
+test("single-product approval remains explicit, version guarded, append-only, audited, and sanitized", () => {
+  assert.match(route, /body\.confirmation!=="confirm-product-mapping-decision"/);
+  assert.match(route, /reason=String\(body\.reason\|\|""\)\.trim\(\)/);
   assert.match(route, /expectedMappingVersion/);
+  assert.match(route, /current\.mapping_version!==expected/);
   assert.match(route, /mappingVersion=`operator:\$\{new Date\(\)\.toISOString\(\)\}:\$\{randomUUID\(\)\}`/);
+  assert.match(route, /repo\.decideProductMapping/);
   assert.match(route, /databaseCode==="40001"/);
   assert.match(route, /stale_mapping_version/);
   assert.match(migration, /for update/);
@@ -52,6 +74,14 @@ test("mapping decisions are version guarded, append-only, audited, and sanitized
   assert.match(migration, /errcode='40001'/);
 });
 
+test("recommendation confidence cannot bypass mapping-version concurrency", () => {
+  const postBody = route.match(/export async function POST[\s\S]*/)?.[0] || "";
+  assert.match(postBody, /current\.mapping_version!==expected/);
+  assert.match(postBody, /stale_mapping_version/);
+  assert.match(postBody, /decideProductMapping/);
+  assert.doesNotMatch(postBody, /recommendation\.confidence[\s\S]*decideProductMapping/);
+});
+
 test("review projection supplies ranked impact, refund, alert, and work-item state without PII", () => {
   for (const field of ["order_count", "gross_revenue", "refund_count", "refund_amount", "first_seen_at", "last_seen_at", "alert_open", "work_item_open"]) assert.match(migration, new RegExp(field));
   assert.match(route, /order=gross_revenue\.desc,order_count\.desc/);
@@ -60,7 +90,8 @@ test("review projection supplies ranked impact, refund, alert, and work-item sta
   assert.doesNotMatch(route, /customer|email|phone|raw_payload/i);
 });
 
-test("UI requires reason and confirmation, handles stale state, and displays append-only history", () => {
+test("UI preserves manual review fallback and explicit single-product reason/confirmation", () => {
+  assert.match(component, /Manual review/);
   assert.match(component, /Operator reason/);
   assert.match(component, /confirm-product-mapping-decision/);
   assert.match(component, /Confirm decision/);
@@ -70,10 +101,43 @@ test("UI requires reason and confirmation, handles stale state, and displays app
   assert.match(component, /alert and Operations work-item resolution is pending/i);
 });
 
-test("four checkout identities remain distinct, may share Front End, and import preserves approval", () => {
+test("bulk approval is server-guarded, recommendation-revalidated, and uses one atomic RPC", () => {
+  assert.match(bulkRoute, /requirePermission\(resolved\.session, "offers\.manage"\)/);
+  assert.match(bulkRoute, /sameOrigin\(request\)/);
+  assert.match(bulkRoute, /confirm-bulk-product-mapping-decisions/);
+  assert.match(bulkRoute, /const reason = String\(body\.reason \|\| ""\)\.trim\(\)/);
+  assert.match(bulkRoute, /expectedMappingVersion/);
+  assert.match(bulkRoute, /stale_mapping_version/);
+  assert.match(bulkRoute, /loadProductMappingRecommendations/);
+  assert.match(bulkRoute, /bulk_recommendation_changed/);
+  assert.match(bulkRoute, /rpc\/decide_commerce_product_mapping_bulk/);
+  assert.doesNotMatch(component, /Promise\.all\([^)]*\/api\/commerce\/product-mappings["']/s);
+  assert.match(bulkMigration, /decide_commerce_product_mapping_bulk/);
+  assert.match(bulkMigration, /decide_commerce_product_mapping\(/);
+  assert.match(bulkMigration, /jsonb_array_length\(p_items\).*50/s);
+  assert.match(bulkMigration, /p_expected_mapping_version|expected_mapping_version/);
+});
+
+test("bulk UI requires one operator reason and explicit confirmation for the selected group", () => {
+  assert.match(component, /confirm-bulk-product-mapping-decisions/);
+  assert.match(component, /Operator reason/);
+  assert.match(component, /Confirm bulk mapping/);
+  assert.match(component, /stale_mapping_version|bulk_recommendation_changed/);
+  assert.match(component, /selected/);
+});
+
+test("price evidence corroborates identity but cannot independently establish it", () => {
+  assert.match(intelligence, /Price is corroboration only/);
+  assert.match(intelligence, /identityMatches/);
+  assert.match(intelligence, /priceEvidence/);
+  const noIdentityPromotion = intelligence.match(/const matched = rules[\s\S]*?const best = matched\[0\]/)?.[0] || "";
+  assert.match(noIdentityPromotion, /identityMatches\(row\.rule, candidate\)/);
+  assert.doesNotMatch(noIdentityPromotion, /price\.weight[^\n]*filter/);
+});
+
+test("checkout identities remain distinct, may share Front End via registry, and import preserves approval", () => {
   const ids = ["o2GYY", "Jz71g", "4KV26", "xz1kz"];
   assert.equal(new Set(ids).size, 4);
-  assert.equal((route.match(/8110e951-8ca6-406a-8817-55575fe647ba/g) || []).length, 4);
   assert.doesNotMatch(route, /insert into public\.platform_orders|update public\.platform_orders|offer_variants.*insert/i);
   const productUpsert = ingestion.match(/insert into public\.commerce_provider_products[\s\S]*?;\n/)?.[0] || "";
   assert.doesNotMatch(productUpsert, /mapping_status\s*=/);
@@ -84,7 +148,10 @@ test("four checkout identities remain distinct, may share Front End, and import 
 test("product-health evaluator remains the sole owner of alert and work-item resolution", () => {
   assert.doesNotMatch(route, /(insert into|update|delete from).*tracekit_operational_alerts/i);
   assert.doesNotMatch(route, /(insert into|update|delete from).*work_items/i);
+  assert.doesNotMatch(bulkRoute, /(insert into|update|delete from).*tracekit_operational_alerts/i);
+  assert.doesNotMatch(bulkRoute, /(insert into|update|delete from).*work_items/i);
   assert.match(route, /alertReconciliation:"pending_evaluator"/);
+  assert.match(bulkRoute, /alertReconciliation: "pending_evaluator"/);
   assert.match(alerts, /product_unmapped/);
   assert.match(alerts, /resolve/);
 });
