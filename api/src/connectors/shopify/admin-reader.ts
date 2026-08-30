@@ -84,9 +84,7 @@ function queryFor(resource: ShopifyResource) {
   return CUSTOMERS_QUERY;
 }
 
-const MONEY_FIELDS = `
-  shopMoney { amount currencyCode }
-`;
+const MONEY_FIELDS = `shopMoney { amount currencyCode }`;
 
 const ORDERS_QUERY = `#graphql
 query TraceKitShopifyOrders($first: Int!, $after: String, $query: String) {
@@ -107,10 +105,13 @@ query TraceKitShopifyOrders($first: Int!, $after: String, $query: String) {
       currentTotalPriceSet { ${MONEY_FIELDS} }
       totalPriceSet { ${MONEY_FIELDS} }
       currentSubtotalPriceSet { ${MONEY_FIELDS} }
-      currentTotalShippingPriceSet { ${MONEY_FIELDS} }
+      totalShippingPriceSet { ${MONEY_FIELDS} }
       currentTotalTaxSet { ${MONEY_FIELDS} }
-      transactions(first: 25) {
-        nodes { id kind status amountSet { ${MONEY_FIELDS} } }
+      transactions {
+        id
+        kind
+        status
+        amountSet { ${MONEY_FIELDS} }
       }
       lineItems(first: 250) {
         nodes {
@@ -124,14 +125,16 @@ query TraceKitShopifyOrders($first: Int!, $after: String, $query: String) {
           originalTotalSet { ${MONEY_FIELDS} }
         }
       }
-      refunds(first: 100) {
-        nodes {
+      refunds {
+        id
+        createdAt
+        processedAt
+        updatedAt
+        totalRefundedSet { ${MONEY_FIELDS} }
+        transactions {
           id
-          createdAt
-          totalRefundedSet { ${MONEY_FIELDS} }
-          transactions(first: 25) {
-            nodes { id status amountSet { ${MONEY_FIELDS} } }
-          }
+          status
+          amountSet { ${MONEY_FIELDS} }
         }
       }
     }
