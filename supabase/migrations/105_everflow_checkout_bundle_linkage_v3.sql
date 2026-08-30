@@ -120,6 +120,18 @@ begin
         and coalesce(strict_email.candidate_count,0)=0
         and (coalesce(e.revenue,0) <> 0 or coalesce(e.sale_amount,0) <> 0)
         and upper(coalesce(e.event_name,'')) in ('PUSH BUTTON SYSTEM','FAST TRACK SUPPORT','REVENUE BOOSTER ROADMAP')
+        and (
+          upper(coalesce(e.event_name,''))='PUSH BUTTON SYSTEM'
+          or exists (
+            select 1
+            from public.everflow_conversion_events main_event
+            where main_event.connection_id=e.connection_id
+              and main_event.provider_account_id=e.provider_account_id
+              and lower(btrim(main_event.email_normalized))=lower(btrim(e.email_normalized))
+              and upper(coalesce(main_event.event_name,''))='PUSH BUTTON SYSTEM'
+              and main_event.conversion_at between e.conversion_at-interval '10 seconds' and e.conversion_at+interval '10 seconds'
+          )
+        )
         and e.email_normalized is not null
         and po.organization_id=e.organization_id
         and po.canonical_order_id is not null
@@ -195,6 +207,7 @@ begin
         'event_class',case when is_commerce then 'commerce_value' else 'upper_funnel' end,
         'event_name',event_name,
         'checkout_bundle_event',upper(coalesce(event_name,'')) in ('PUSH BUTTON SYSTEM','FAST TRACK SUPPORT','REVENUE BOOSTER ROADMAP'),
+        'checkout_bundle_requires_main_event',true,
         'checkout_bundle_window_seconds',10,
         'tight_window_minutes',30,
         'amount_tolerance',0.01
