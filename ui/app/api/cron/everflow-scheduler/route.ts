@@ -11,6 +11,10 @@ function authorizedCron(request: Request) {
   return Boolean(secret) && request.headers.get("authorization") === `Bearer ${secret}`;
 }
 
+function errorSummary(error: unknown) {
+  return error instanceof Error ? error.message.slice(0, 300) : "unknown_error";
+}
+
 export async function GET(request: Request) {
   const requestId = randomUUID();
   if (!authorizedCron(request)) {
@@ -21,17 +25,26 @@ export async function GET(request: Request) {
   let backfill: unknown = null;
   let schedulerFailed = false;
   let backfillFailed = false;
+  let schedulerError: string | null = null;
+  let backfillError: string | null = null;
 
+  // Reconciliation is intentionally first. A due Everflow ingestion can take several
+  // minutes, so running the bounded database batch first guarantees historical/new
+  // linkage continues to make progress on every five-minute cron wake.
   try {
-    scheduler = await runDueEverflowSchedules({ limit: 1 });
-  } catch {
-    schedulerFailed = true;
+    backfill = await runEverflowOrderBackfillBatches({ batchSize: 250 });
+  } catch (error) {
+    backfillFailed = true;
+    backfillError = errorSummary(error);
+    console.error("everflow_backfill_failed", { requestId, error: backfillError });
   }
 
   try {
-    backfill = await runEverflowOrderBackfillBatches({ batchSize: 250 });
-  } catch {
-    backfillFailed = true;
+    scheduler = await runDueEverflowSchedules({ limit: 1 });
+  } catch (error) {
+    schedulerFailed = true;
+    schedulerError = errorSummary(error);
+    console.error("everflow_scheduler_failed", { requestId, error: schedulerError });
   }
 
   if (schedulerFailed && backfillFailed) {
@@ -49,6 +62,10 @@ export async function GET(request: Request) {
       ...(schedulerFailed ? ["scheduler_failed"] : []),
       ...(backfillFailed ? ["backfill_failed"] : []),
     ],
+    errors: {
+      scheduler: schedulerError,
+      backfill: backfillError,
+    },
     requestId,
   });
 }
