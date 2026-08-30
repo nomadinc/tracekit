@@ -9,7 +9,8 @@ const AMOUNT_TOLERANCE = 0.01;
 const EMAIL_WINDOW_WITH_AMOUNT_MS = 72 * 60 * 60 * 1000;
 const CHECKOUT_BUNDLE_WINDOW_MS = 10 * 1000;
 const TIGHT_EMAIL_WINDOW_MS = 30 * 60 * 1000;
-const CHECKOUT_BUNDLE_EVENTS = new Set(["PUSH BUTTON SYSTEM", "FAST TRACK SUPPORT", "REVENUE BOOSTER ROADMAP"]);
+const MAIN_CHECKOUT_EVENT = "PUSH BUTTON SYSTEM";
+const CHECKOUT_BUNDLE_EVENTS = new Set([MAIN_CHECKOUT_EVENT, "FAST TRACK SUPPORT", "REVENUE BOOSTER ROADMAP"]);
 const ORDER_SELECT = "canonical_order_id,platform_order_id,everflow_transaction_id,transaction_id,email,order_ts,gross_amount,receipt_total";
 
 type OrderCandidate = {
@@ -125,6 +126,27 @@ async function checkoutBundleEventName(connectionId: string, sourceRecordId: str
   return CHECKOUT_BUNDLE_EVENTS.has(eventName) ? eventName : null;
 }
 
+async function hasMainCheckoutEvent(input: {
+  connectionId: string;
+  providerAccountId: string;
+  email: string;
+  occurredAt: string;
+}) {
+  const occurredMs = Date.parse(input.occurredAt);
+  if (!Number.isFinite(occurredMs)) return false;
+  const from = new Date(occurredMs - CHECKOUT_BUNDLE_WINDOW_MS).toISOString();
+  const to = new Date(occurredMs + CHECKOUT_BUNDLE_WINDOW_MS).toISOString();
+  const rows = await commercePersistenceRequest(
+    `everflow_conversion_events?connection_id=eq.${encodeURIComponent(input.connectionId)}` +
+    `&provider_account_id=eq.${encodeURIComponent(input.providerAccountId)}` +
+    `&email_normalized=eq.${encodeURIComponent(input.email)}` +
+    `&event_name=eq.${encodeURIComponent(MAIN_CHECKOUT_EVENT)}` +
+    `&conversion_at=gte.${encodeURIComponent(from)}&conversion_at=lte.${encodeURIComponent(to)}` +
+    `&select=id&limit=1`,
+  );
+  return rows.length === 1;
+}
+
 async function sha256(value: unknown) {
   const bytes = new TextEncoder().encode(JSON.stringify(value));
   const digest = await crypto.subtle.digest("SHA-256", bytes);
@@ -186,9 +208,6 @@ export async function resolveAndMapEverflowOrder(input: {
   let method: EverflowOrderLinkResult["matchMethod"] = null;
   let confidence = 0;
 
-  // deterministic_order_v2 intentionally does not attach upper-funnel / zero-value
-  // events to canonical orders. Report them explicitly as non-order instead of
-  // mixing them into true unmatched commerce conversions.
   if (!isCommerceValue) {
     return { status: "non_order", canonicalOrderId: null, matchMethod: null, confidence: 0, mappingObserved: false };
   }
@@ -221,12 +240,18 @@ export async function resolveAndMapEverflowOrder(input: {
   }
 
   // Push Button checkout bumps are line items on the main checkout order, not
-  // independent downstream orders. For this known funnel family, use a unique
-  // same-email order in the observed checkout burst (±10 seconds) before the
-  // generic ±30-minute fallback can confuse later upsells with the main order.
+  // independent downstream orders. Bumps only inherit this rule when the main
+  // PUSH BUTTON SYSTEM event is present in the same customer checkout burst.
   if (!method && email && input.link.occurredAt) {
     const bundleEventName = await checkoutBundleEventName(input.link.connectionId, sourceRecordId);
-    if (bundleEventName) {
+    const hasMainEvent = bundleEventName === MAIN_CHECKOUT_EVENT
+      || (bundleEventName !== null && await hasMainCheckoutEvent({
+        connectionId: input.link.connectionId,
+        providerAccountId: account.id,
+        email,
+        occurredAt: input.link.occurredAt,
+      }));
+    if (bundleEventName && hasMainEvent) {
       candidates = await emailCandidates({
         organizationId: input.link.organizationId,
         email,
