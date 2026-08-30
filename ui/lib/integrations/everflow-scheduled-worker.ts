@@ -4,7 +4,7 @@ import type { TraceKitSessionContext } from "@/lib/identity/persistent-types";
 import { SupabaseCommerceControlRepository, commercePersistenceRequest } from "@/lib/commerce/supabase-control-repository";
 import { decodeCommerceCredentialKey, decryptCommerceCredential } from "@/lib/commerce/credential-crypto";
 import { syncEverflowConversions } from "./everflow-conversions";
-import { captureEverflowConversionBaseline, finalizeEverflowConversionRunMetrics } from "./everflow-conversion-run-metrics";
+import { captureEverflowConversionBaseline, finalizeEverflowConversionRunMetrics, mergeEverflowSyncRunMetadata } from "./everflow-conversion-run-metrics";
 import { captureEverflowFinancialBaseline, persistEverflowEventReversalHistory } from "./everflow-event-reversals";
 import { projectEverflowFinancialEffects } from "./everflow-financial-projection";
 import { everflowIncrementalWindow, loadEverflowIncrementalState, markEverflowIncrementalAttempt, markEverflowIncrementalChunkSuccess, markEverflowIncrementalFailure } from "./everflow-incremental";
@@ -110,6 +110,8 @@ export async function runEverflowScheduledChunk(scope: SchedulerScope) {
     const eventEffects = await persistEverflowEventReversalHistory({ organizationId: scope.organizationId, connectionId: scope.connectionId, syncRunId: result.syncRunId, providerAccountId: result.providerAccountId, baseline: financialBaseline });
     stage = "financial_projection";
     const financialProjection = await projectEverflowFinancialEffects({ organizationId: scope.organizationId, connectionId: scope.connectionId, syncRunId: result.syncRunId });
+    stage = "classification_metadata";
+    await mergeEverflowSyncRunMetadata({ connectionId: scope.connectionId, syncRunId: result.syncRunId, values: { linkage: result.linkage, financialProjection } });
     stage = "cursor_commit";
     const completedAt = new Date().toISOString();
     const progress = await markEverflowIncrementalChunkSuccess({ ...scope, completedAt, syncRunId: result.syncRunId, from: window.from, to: window.to, targetTo: window.targetTo, overlapDays: window.overlapDays, bootstrap: window.bootstrap, seen: result.seen });
@@ -170,7 +172,15 @@ export async function runDueEverflowSchedules(input: { now?: Date; limit?: numbe
       const result = await runEverflowScheduledChunk({ accountId: schedule.account_id, organizationId: schedule.organization_id, connectionId: schedule.connection_id, providerAccountId: schedule.provider_account_id, now });
       const outcome = result.progress.windowComplete ? "completed" : "incomplete";
       if (!await finishSchedule(schedule.id, claim.leaseOwner, outcome)) throw new Error("Everflow schedule lease could not be released.");
-      results.push({ scheduleId: schedule.id, status: "completed", windowComplete: result.progress.windowComplete, syncRunId: result.result.syncRunId, seen: result.result.seen });
+      results.push({
+        scheduleId: schedule.id,
+        status: "completed",
+        windowComplete: result.progress.windowComplete,
+        syncRunId: result.result.syncRunId,
+        seen: result.result.seen,
+        linkage: result.result.linkage,
+        financialProjection: result.financialProjection,
+      });
     } catch (error) {
       await finishSchedule(schedule.id, claim.leaseOwner, "failed").catch(() => undefined);
       results.push({ scheduleId: schedule.id, status: "failed", error: error instanceof Error ? error.message : "everflow_scheduled_failed" });
