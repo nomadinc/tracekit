@@ -95,7 +95,7 @@ function priceEvidence(rule: MappingRule, prices: MappingRulePrice[], candidate:
     .filter((row) => row.ruleId === rule.id && row.currency === currency && observed.has(Number(row.amount.toFixed(2))))
     .sort((a, b) => b.evidenceWeight - a.evidenceWeight);
   return {
-    matches: Array.from(new Set(matches.map((row) => row.amount))),
+    matches: [...new Set(matches.map((row) => row.amount))],
     weight: matches.reduce((sum, row) => sum + row.evidenceWeight, 0),
   };
 }

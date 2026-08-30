@@ -3,7 +3,6 @@
 import * as React from "react";
 import { AlertTriangle, CheckCircle2, RefreshCw, ShieldCheck } from "lucide-react";
 import { AccessBoundary } from "@/components/identity/access-control";
-import { useShellDrawer } from "@/components/layout/shell-drawer";
 
 type Target = { businessContextId: string; canonicalOfferId: string; offerStepId: string; offerVariantId: string | null };
 type Recommendation = Target & {
@@ -49,52 +48,45 @@ function bulkGroups(products: Product[], steps: CatalogRow[]): BulkGroup[] {
     const group = groups.get(key) || { key, target, label, products: [], revenue: 0 };
     group.products.push(product); group.revenue += product.grossRevenue; groups.set(key, group);
   }
-  return Array.from(groups.values()).sort((a, b) => b.revenue - a.revenue);
+  return [...groups.values()].sort((a, b) => b.revenue - a.revenue);
 }
 
 export function CommerceProductMappingReview() { return <AccessBoundary permission="offers.manage" variants={["client", "agency"]}><ReviewContent /></AccessBoundary>; }
 
 function ReviewContent() {
-  const drawer = useShellDrawer();
   const [data, setData] = React.useState<Payload | null>(null);
+  const [selectedId, setSelectedId] = React.useState<string | null>(null);
+  const [detail, setDetail] = React.useState<Payload | null>(null);
+  const [bulkKey, setBulkKey] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [detailLoading, setDetailLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   const loadList = React.useCallback(async () => { setLoading(true); setError(null); try { setData(await readReview()); } catch { setError("Product mapping review is temporarily unavailable."); } finally { setLoading(false); } }, []);
   React.useEffect(() => { void loadList(); }, [loadList]);
+  React.useEffect(() => {
+    if (!selectedId) { setDetail(null); setDetailLoading(false); return; }
+    let current = true; setDetail(null); setError(null); setDetailLoading(true);
+    readReview(selectedId).then((value) => { if (current) setDetail(value); }).catch((loadError: unknown) => {
+      if (!current) return;
+      if (loadError instanceof ReviewLoadError) setError(`The selected product could not be loaded. (${loadError.code}${loadError.requestId ? ` · request ${loadError.requestId}` : ""})`);
+      else setError("The selected product could not be loaded. (unexpected_client_error)");
+    }).finally(() => { if (current) setDetailLoading(false); });
+    return () => { current = false; };
+  }, [selectedId]);
 
   const groups = data ? bulkGroups(data.products, data.targets.steps) : [];
-  function openProductReview(providerProductId: string) {
-    drawer.openDrawer(<ProductDecisionDrawer providerProductId={providerProductId} onChanged={loadList} />, "Product mapping review");
-  }
-  function openBulkReview(group: BulkGroup) {
-    drawer.openDrawer(<BulkDecisionPanel group={group} onCancel={drawer.closeDrawer} onChanged={async () => { drawer.closeDrawer(); await loadList(); }} />, `Bulk mapping · ${group.label}`);
-  }
+  const activeBulk = bulkKey ? groups.find((group) => group.key === bulkKey) || null : null;
+  const selectedDetail = selectedId && detail?.products[0]?.providerProductId === selectedId ? detail : null;
 
   return <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-white/[.035]" aria-labelledby="commerce-product-review-title">
     <div className="flex flex-wrap items-start justify-between gap-3"><div><div className="text-xs font-semibold uppercase tracking-[0.16em] text-teal-700 dark:text-teal-300">Commerce catalog operations</div><h2 id="commerce-product-review-title" className="mt-1 text-2xl font-semibold">Commas product mapping review</h2><p className="mt-1 max-w-3xl text-sm text-slate-500">High-confidence products can be approved as a group. Bulk approval is atomic: any stale item aborts the entire batch, while every successful product still receives its own audited decision.</p></div><button type="button" onClick={() => void loadList()} className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm"><RefreshCw className="h-4 w-4" />Refresh</button></div>
     {loading ? <p className="text-sm text-slate-500">Loading product intelligence…</p> : null}
     {error ? <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}</div> : null}
-    {data ? <RecommendationSummary products={data.products} groups={groups} onReviewGroup={(key) => { const group = groups.find((candidate) => candidate.key === key); if (group) openBulkReview(group); }} /> : null}
-    {data ? <ProductList products={data.products} steps={data.targets.steps} onSelect={openProductReview} /> : null}
+    {data ? <RecommendationSummary products={data.products} groups={groups} onReviewGroup={(key) => { setBulkKey(key); setSelectedId(null); }} /> : null}
+    {data && activeBulk ? <BulkDecisionPanel group={activeBulk} onCancel={() => setBulkKey(null)} onChanged={async () => { setBulkKey(null); await loadList(); }} /> : null}
+    {data ? <div className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,.75fr)]"><ProductList products={data.products} steps={data.targets.steps} selectedId={selectedId} onSelect={(id) => { setBulkKey(null); setSelectedId(id); }} />{selectedDetail ? <DecisionPanel payload={selectedDetail} onChanged={async () => { const next = await readReview(selectedId!); setDetail(next); await loadList(); }} /> : <div className="rounded-xl border border-dashed p-6 text-sm text-slate-500">{detailLoading && selectedId ? `Loading ${selectedId} review…` : "Select one product for individual review, or use a bulk review group above."}</div>}</div> : null}
   </section>;
-}
-
-function ProductDecisionDrawer({ providerProductId, onChanged }: { providerProductId: string; onChanged: () => Promise<void> }) {
-  const [payload, setPayload] = React.useState<Payload | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
-  const load = React.useCallback(async () => {
-    setError(null);
-    try { setPayload(await readReview(providerProductId)); }
-    catch (loadError: unknown) {
-      if (loadError instanceof ReviewLoadError) setError(`The selected product could not be loaded. (${loadError.code}${loadError.requestId ? ` · request ${loadError.requestId}` : ""})`);
-      else setError("The selected product could not be loaded. (unexpected_client_error)");
-    }
-  }, [providerProductId]);
-  React.useEffect(() => { void load(); }, [load]);
-  if (error) return <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}</div>;
-  if (!payload) return <p className="text-sm text-slate-500">Loading {providerProductId} review…</p>;
-  return <DecisionPanel payload={payload} onChanged={async () => { await load(); await onChanged(); }} />;
 }
 
 function RecommendationSummary({ products, groups, onReviewGroup }: { products: Product[]; groups: BulkGroup[]; onReviewGroup: (key: string) => void }) {
@@ -113,7 +105,6 @@ function BulkDecisionPanel({ group, onCancel, onChanged }: { group: BulkGroup; o
   const [notice, setNotice] = React.useState<string | null>(null);
   React.useEffect(() => { setSelected(new Set(group.products.map((product) => product.providerProductId))); setReason(""); setConfirming(false); setNotice(null); }, [group.key]);
   const chosen = group.products.filter((product) => selected.has(product.providerProductId));
-  const chosenOrders = chosen.reduce((sum, product) => sum + product.orderCount, 0);
   const chosenRevenue = chosen.reduce((sum, product) => sum + product.grossRevenue, 0);
   function toggle(id: string) { setSelected((current) => { const next = new Set(current); if (next.has(id)) next.delete(id); else next.add(id); return next; }); setConfirming(false); }
   async function submit() {
@@ -130,11 +121,11 @@ function BulkDecisionPanel({ group, onCancel, onChanged }: { group: BulkGroup; o
     } catch { setNotice("The bulk mapping decision was not saved."); }
     finally { setSubmitting(false); }
   }
-  return <div className="space-y-4"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="text-xs font-semibold uppercase tracking-wide text-teal-700 dark:text-teal-300">Bulk decision</div><h3 className="mt-1 text-lg font-semibold">{group.label}</h3><p className="text-sm text-slate-500">{chosen.length} of {group.products.length} products · {number.format(chosenOrders)} orders · {money.format(chosenRevenue)} revenue</p></div><button type="button" onClick={onCancel} className="rounded-lg border px-3 py-1.5 text-xs">Close</button></div><div className="max-h-[50vh] overflow-auto rounded-lg border bg-white dark:bg-transparent">{group.products.map((product) => <label key={product.providerProductId} className="flex items-start gap-3 border-b px-3 py-3 text-sm last:border-b-0"><input type="checkbox" className="mt-1" checked={selected.has(product.providerProductId)} onChange={() => toggle(product.providerProductId)} /><span className="min-w-0 flex-1"><strong className="block break-words">{product.title}</strong><span className="block font-mono text-xs text-slate-500">{product.providerProductId}</span><span className="mt-1 block text-xs text-slate-500">{product.recommendation?.confidence}% confidence · {product.recommendation?.evidence.identityMatch.replaceAll("_", " ")} · {product.recommendation?.evidence.scope.replaceAll("_", " ")}</span><span className="mt-1 block break-all font-mono text-[10px] text-slate-400">Version {product.mappingVersion}</span><span className="mt-1 block text-xs tabular-nums text-slate-500">{number.format(product.orderCount)} orders · {money.format(product.grossRevenue)}</span></span></label>)}</div><label className="block text-sm">Operator reason<textarea value={reason} onChange={(event) => { setReason(event.target.value); setConfirming(false); }} maxLength={500} className="mt-1 min-h-20 w-full rounded-lg border bg-white p-2 dark:bg-transparent" placeholder="Why is this group approval authorized?" /></label>{!confirming ? <button type="button" disabled={!chosen.length || !reason.trim()} onClick={() => setConfirming(true)} className="w-full rounded-lg bg-slate-950 px-4 py-2 text-sm font-medium text-white disabled:opacity-40 dark:bg-white dark:text-slate-950">Review {chosen.length} decisions</button> : <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm dark:bg-amber-400/10"><strong>Confirm atomic bulk approval</strong><p className="mt-1">TraceKit will append one audited decision per selected product. If any mapping version or recommendation changed, the entire batch fails and rolls back.</p><div className="mt-2 flex gap-2"><button type="button" disabled={submitting} onClick={() => void submit()} className="rounded-lg bg-amber-900 px-3 py-2 text-white disabled:opacity-50">{submitting ? "Submitting…" : `Confirm ${chosen.length} decisions`}</button><button type="button" disabled={submitting} onClick={() => setConfirming(false)} className="rounded-lg border px-3 py-2">Cancel</button></div></div>}{notice ? <p role="status" className="rounded-lg border p-3 text-sm">{notice}</p> : null}</div>;
+  return <div className="rounded-xl border border-teal-200 bg-teal-50/50 p-4 dark:border-teal-400/30 dark:bg-teal-400/5"><div className="flex flex-wrap items-start justify-between gap-3"><div><div className="text-xs font-semibold uppercase tracking-wide text-teal-700 dark:text-teal-300">Bulk decision</div><h3 className="mt-1 text-lg font-semibold">{group.label}</h3><p className="text-sm text-slate-500">{chosen.length} selected products · {money.format(chosenRevenue)} observed gross revenue</p></div><button type="button" onClick={onCancel} className="rounded-lg border px-3 py-1.5 text-xs">Close</button></div><div className="mt-3 max-h-64 overflow-auto rounded-lg border bg-white dark:bg-transparent">{group.products.map((product) => <label key={product.providerProductId} className="flex items-center gap-3 border-b px-3 py-2 text-sm last:border-b-0"><input type="checkbox" checked={selected.has(product.providerProductId)} onChange={() => toggle(product.providerProductId)} /><span className="min-w-0 flex-1"><strong className="block truncate">{product.title}</strong><span className="font-mono text-xs text-slate-500">{product.providerProductId} · {product.recommendation?.confidence}% confidence</span></span><span className="text-xs tabular-nums text-slate-500">{number.format(product.orderCount)} orders · {money.format(product.grossRevenue)}</span></label>)}</div><label className="mt-3 block text-sm">Operator reason<textarea value={reason} onChange={(event) => { setReason(event.target.value); setConfirming(false); }} maxLength={500} className="mt-1 min-h-20 w-full rounded-lg border bg-white p-2 dark:bg-transparent" placeholder="Why is this group approval authorized?" /></label>{!confirming ? <button type="button" disabled={!chosen.length || !reason.trim()} onClick={() => setConfirming(true)} className="mt-3 w-full rounded-lg bg-slate-950 px-4 py-2 text-sm font-medium text-white disabled:opacity-40 dark:bg-white dark:text-slate-950">Review {chosen.length} decisions</button> : <div className="mt-3 rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm dark:bg-amber-400/10"><strong>Confirm atomic bulk approval</strong><p className="mt-1">TraceKit will append one audited decision per selected product. If any mapping version or recommendation changed, the entire batch fails and rolls back.</p><div className="mt-2 flex gap-2"><button type="button" disabled={submitting} onClick={() => void submit()} className="rounded-lg bg-amber-900 px-3 py-2 text-white disabled:opacity-50">{submitting ? "Submitting…" : `Confirm ${chosen.length} decisions`}</button><button type="button" disabled={submitting} onClick={() => setConfirming(false)} className="rounded-lg border px-3 py-2">Cancel</button></div></div>}{notice ? <p role="status" className="mt-3 rounded-lg border p-3 text-sm">{notice}</p> : null}</div>;
 }
 
-function ProductList({ products, steps, onSelect }: { products: Product[]; steps: CatalogRow[]; onSelect: (id: string) => void }) {
-  return <div className="overflow-hidden rounded-xl border"><div className="border-b bg-slate-50 px-4 py-3 text-sm font-medium dark:bg-white/5">Provider products · ranked by gross revenue</div><div className="max-h-[640px] overflow-auto"><table className="w-full min-w-[820px] text-left text-sm"><thead className="sticky top-0 bg-white text-xs uppercase tracking-wide text-slate-500 dark:bg-ink"><tr><th className="px-3 py-2">Product</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Recommendation</th><th className="px-3 py-2 text-right">Orders</th><th className="px-3 py-2 text-right">Revenue</th><th className="px-3 py-2">Review</th></tr></thead><tbody className="divide-y">{products.map((product) => { const rec = product.recommendation; const stepLabel = rec ? steps.find((row) => row.id === rec.offerStepId)?.label || rec.offerStepId : null; return <tr key={product.providerProductId}><td className="px-3 py-3"><span className="block font-medium">{product.title}</span><span className="font-mono text-xs text-slate-500">{product.providerProductId}</span></td><td className="px-3 py-3"><span className="rounded-full border px-2 py-1 text-xs">{product.mappingStatus.replaceAll("_", " ")}</span></td><td className="px-3 py-3">{rec ? <div><span className="block font-medium">{stepLabel}</span><span className="text-xs text-slate-500">{rec.confidence}% · {rec.disposition.replaceAll("_", " ")}</span></div> : <span className="text-xs text-slate-400">Manual review</span>}</td><td className="px-3 py-3 text-right tabular-nums">{number.format(product.orderCount)}</td><td className="px-3 py-3 text-right tabular-nums">{money.format(product.grossRevenue)}</td><td className="px-3 py-3"><button type="button" onClick={() => onSelect(product.providerProductId)} className="rounded-lg bg-slate-950 px-3 py-1.5 text-xs font-medium text-white dark:bg-white dark:text-slate-950">Review</button></td></tr>; })}</tbody></table></div></div>;
+function ProductList({ products, steps, selectedId, onSelect }: { products: Product[]; steps: CatalogRow[]; selectedId: string | null; onSelect: (id: string) => void }) {
+  return <div className="overflow-hidden rounded-xl border"><div className="border-b bg-slate-50 px-4 py-3 text-sm font-medium dark:bg-white/5">Provider products · ranked by gross revenue</div><div className="max-h-[640px] overflow-auto"><table className="w-full min-w-[820px] text-left text-sm"><thead className="sticky top-0 bg-white text-xs uppercase tracking-wide text-slate-500 dark:bg-ink"><tr><th className="px-3 py-2">Product</th><th className="px-3 py-2">Status</th><th className="px-3 py-2">Recommendation</th><th className="px-3 py-2 text-right">Orders</th><th className="px-3 py-2 text-right">Revenue</th><th className="px-3 py-2">Review</th></tr></thead><tbody className="divide-y">{products.map((product) => { const rec = product.recommendation; const stepLabel = rec ? steps.find((row) => row.id === rec.offerStepId)?.label || rec.offerStepId : null; return <tr key={product.providerProductId} className={selectedId === product.providerProductId ? "bg-teal-50/70 dark:bg-teal-400/10" : ""}><td className="px-3 py-3"><span className="block font-medium">{product.title}</span><span className="font-mono text-xs text-slate-500">{product.providerProductId}</span></td><td className="px-3 py-3"><span className="rounded-full border px-2 py-1 text-xs">{product.mappingStatus.replaceAll("_", " ")}</span></td><td className="px-3 py-3">{rec ? <div><span className="block font-medium">{stepLabel}</span><span className="text-xs text-slate-500">{rec.confidence}% · {rec.disposition.replaceAll("_", " ")}</span></div> : <span className="text-xs text-slate-400">Manual review</span>}</td><td className="px-3 py-3 text-right tabular-nums">{number.format(product.orderCount)}</td><td className="px-3 py-3 text-right tabular-nums">{money.format(product.grossRevenue)}</td><td className="px-3 py-3"><button type="button" onClick={() => onSelect(product.providerProductId)} className="rounded-lg bg-slate-950 px-3 py-1.5 text-xs font-medium text-white dark:bg-white dark:text-slate-950">Review</button></td></tr>; })}</tbody></table></div></div>;
 }
 
 function DecisionPanel({ payload, onChanged }: { payload: Payload; onChanged: () => Promise<void> }) {
