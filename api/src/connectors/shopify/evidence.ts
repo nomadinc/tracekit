@@ -49,11 +49,11 @@ export function createShopifyEvidenceStore(config: EvidenceConfig) {
       `${baseUrl}/storage/v1/object/commerce-evidence/${objectPath}`,
       {
         method: "POST",
-        headers: { "Content-Type": "application/json", "x-upsert": "false" },
+        headers: { "Content-Type": "application/json", "x-upsert": "true" },
         body: payloadText,
       },
     );
-    if (!uploadResponse.ok && uploadResponse.status !== 409) {
+    if (!uploadResponse.ok) {
       throw new Error(`Shopify evidence upload failed (${uploadResponse.status}): ${(await uploadResponse.text()).slice(0, 500)}`);
     }
 
