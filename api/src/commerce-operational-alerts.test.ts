@@ -139,6 +139,18 @@ test("mapping health migration is read-only, security-invoker, scoped, and never
   assert.doesNotMatch(migration, /insert into|update public|delete from/i);
   assert.match(migration, /revoke all.*anon, authenticated/);
 });
+test("mapping health performance migration pre-aggregates orders once and provides a scoped covering index", () => {
+  const migration = readFileSync(new URL("../../supabase/migrations/20260830041026_optimize_commerce_product_mapping_health.sql", import.meta.url), "utf8");
+  assert.match(migration, /platform_orders_commas_product_health_idx[\s\S]*organization_id,[\s\S]*connection_id,[\s\S]*provider_account_id,[\s\S]*provider_product_id/);
+  assert.match(migration, /include \(canonical_order_id, gross_amount\)/);
+  assert.match(migration, /where platform = 'commas' and provider_product_id is not null/);
+  assert.match(migration, /with order_health as \([\s\S]*group by[\s\S]*o\.provider_product_id[\s\S]*left join order_health h/);
+  assert.equal((migration.match(/from public\.platform_orders/g) || []).length, 1);
+  assert.doesNotMatch(migration, /commerce_product_mapping_decisions/);
+  assert.match(migration, /coalesce\(h\.order_count, 0\)/);
+  assert.match(migration, /with \(security_invoker = true\)/);
+  assert.match(migration, /grant select.*service_role/);
+});
 test("Commerce persistence keeps immutable identities, approved mappings, lines, and Refund links scoped", () => {
   const persistence = readFileSync(new URL("../../supabase/migrations/039_commerce_persistence_v1.sql", import.meta.url), "utf8");
   const control = readFileSync(new URL("../../supabase/migrations/040_commerce_control_plane_v1.sql", import.meta.url), "utf8");
