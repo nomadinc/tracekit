@@ -91,3 +91,26 @@ test("non-exact identity cannot auto-map when exact-id policy is required", () =
   });
   assert.equal(result?.disposition, "bulk_review");
 });
+
+test("corrected Growth Partner exact identities recommend only independently authorized products", () => {
+  const growthStep = "growth-partner";
+  const downsellStep = "growth-partner-downsell";
+  const confirmedRules = [
+    ["GwlZL", growthStep],
+    ["1EJBm", growthStep],
+    ["Kz0GM", growthStep],
+    ["q6zw2", downsellStep],
+    ["pLWqN", downsellStep],
+  ].map(([providerProductId, offerStepId], index) => rule({ id: `growth-${index}`, ruleKind: "provider_product_id", matchValue: providerProductId, normalizedMatchValue: providerProductId, offerStepId, confidence: 100, priority: 10 }));
+  const inactiveAmbiguousRules = ["ZvpxR", "JEoZJ"].map((providerProductId, index) => rule({ id: `ambiguous-${index}`, ruleKind: "provider_product_id", matchValue: providerProductId, normalizedMatchValue: providerProductId, offerStepId: growthStep, confidence: 100, status: "inactive", priority: 10 }));
+  const rules = [...confirmedRules, ...inactiveAmbiguousRules];
+  const recommend = (providerProductId: string, title: string, observedPrices: number[]) => recommendProductMapping({ candidate: { ...candidate, providerProductId, title, observedPrices }, rules, policy });
+
+  assert.equal(recommend("GwlZL", "GROWTH PARTNER", [249])?.offerStepId, growthStep);
+  assert.equal(recommend("1EJBm", "Growth Partner - NU2", [106, 249])?.offerStepId, growthStep);
+  assert.equal(recommend("Kz0GM", "Growth Partner 1", [249])?.offerStepId, growthStep);
+  assert.equal(recommend("q6zw2", "Growth Partner Discounted - NU2", [75])?.offerStepId, downsellStep);
+  assert.equal(recommend("pLWqN", "Growth Partner Discounted", [75])?.offerStepId, downsellStep);
+  assert.equal(recommend("ZvpxR", "GROWTH PARTNER Discounted", [199]), null);
+  assert.equal(recommend("JEoZJ", "GROWTH PARTNER Discounted", [177]), null);
+});
