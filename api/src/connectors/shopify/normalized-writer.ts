@@ -96,26 +96,28 @@ async function writeOrders(request: PostgrestRequest, context: ConnectionContext
 
 async function writeProducts(request: PostgrestRequest, context: ConnectionContext, records: ShopifyPersistedRecord[]) {
   const now = new Date().toISOString();
-  const rows = records.map((record) => {
+  const rows: Record<string, unknown>[] = [];
+  for (const record of records) {
     const product = normalizeShopifyProductRecord(record);
-    const prices = product.variants.map((variant) => variant.price).filter((price): price is number => price !== null);
-    return {
+    const existing = await request<Array<{ first_seen_at?: string | null }>>(
+      `commerce_provider_products?organization_id=eq.${q(context.organizationId)}&connection_id=eq.${q(context.connectionId)}&provider_account_id=eq.${q(context.providerAccountId)}&provider_product_id=eq.${q(product.provider_product_id)}&select=first_seen_at&limit=1`,
+    );
+    const seenAt = record.providerUpdatedAt || now;
+    rows.push({
       organization_id: context.organizationId,
       connection_id: context.connectionId,
       provider_account_id: context.providerAccountId,
       provider_product_id: product.provider_product_id,
       title: product.title,
       description: product.description,
-      first_observed_price: prices.length ? Math.min(...prices) : null,
-      latest_observed_price: prices.length ? Math.min(...prices) : null,
-      first_seen_at: record.providerUpdatedAt || now,
-      last_seen_at: record.providerUpdatedAt || now,
+      first_seen_at: existing[0]?.first_seen_at || seenAt,
+      last_seen_at: seenAt,
       mapping_status: "observed",
       mapping_version: "shopify-product-v1",
       metadata: { shopify_variants: product.variants },
       updated_at: now,
-    };
-  });
+    });
+  }
 
   await request("commerce_provider_products?on_conflict=connection_id,provider_account_id,provider_product_id", {
     method: "POST",
