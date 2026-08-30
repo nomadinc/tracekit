@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import { evaluateCommerceAlerts, evaluateCommerceProductMappingAlert, MISSED_SYNC_CRITICAL_MS, MISSED_SYNC_WARNING_MS, type CommerceHealthSnapshot } from "./commerce-operational-alerts.ts";
+import { evaluateCommerceAlerts, evaluateCommerceProductMappingAlert, loadCommerceProductMappingHealth, MISSED_SYNC_CRITICAL_MS, MISSED_SYNC_WARNING_MS, type CommerceHealthSnapshot } from "./commerce-operational-alerts.ts";
 
 const now = "2026-08-29T20:00:00.000Z";
 const ago = (ms: number) => new Date(Date.parse(now) - ms).toISOString();
@@ -103,6 +103,33 @@ test("product alert identity is provider-product scoped and projects to Operatio
   assert.match(source, /`\$\{type\}:\$\{product\.providerProductId\}`/);
   assert.match(source, /commerce_product_mapping_health_v1/);
   assert.match(source, /provider_product_id: product\.providerProductId/);
+});
+test("product mapping health loader executes the deployed view contract and returns its shape", async () => {
+  const calls: Array<[string, string]> = [];
+  const expected = [{ provider_product_id: "provider-product", mapping_status: "review_required", integrity_status: "unmapped", order_count: 2, gross_revenue: 30, first_seen_at: now, last_seen_at: now }];
+  const query: any = {
+    select(columns: string) { calls.push(["select", columns]); return this; },
+    eq(column: string, value: string) { calls.push([column, value]); return this; },
+    then(resolve: (value: unknown) => unknown) { return Promise.resolve(resolve({ data: expected, error: null })); },
+  };
+  const db = { from(table: string) { calls.push(["from", table]); return query; } };
+  const result = await loadCommerceProductMappingHealth(db, snapshot());
+  assert.deepEqual(result, expected);
+  assert.deepEqual(calls, [
+    ["from", "commerce_product_mapping_health_v1"],
+    ["select", "provider_product_id,mapping_status,integrity_status,order_count,gross_revenue,first_seen_at,last_seen_at"],
+    ["organization_id", "org"], ["connection_id", "connection"], ["provider_account_id", "provider-account"],
+  ]);
+});
+test("product mapping health failures preserve only sanitized PostgREST diagnostics", async () => {
+  const query: any = { select() { return this; }, eq() { return this; }, then(resolve: (value: unknown) => unknown) { return Promise.resolve(resolve({ data: null, error: { code: "PGRST205", message: "raw details must not be logged" } })); } };
+  await assert.rejects(() => loadCommerceProductMappingHealth({ from: () => query }, snapshot()), (error: any) => {
+    assert.equal(error.operation, "product_mapping_health_read");
+    assert.equal(error.errorCode, "PGRST205");
+    assert.equal(error.errorMessage, "relation_not_in_schema_cache");
+    assert.doesNotMatch(JSON.stringify(error), /raw details/);
+    return true;
+  });
 });
 test("mapping health migration is read-only, security-invoker, scoped, and never infers a target", () => {
   const migration = readFileSync(new URL("../../supabase/migrations/20260830033844_commerce_product_mapping_health.sql", import.meta.url), "utf8");

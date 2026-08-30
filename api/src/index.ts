@@ -23485,7 +23485,12 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
     ctx.waitUntil(runCommerceOperationalAlertEvaluation(getSupabase(env)).then((result) => {
       console.log("[TraceKit] commerce operational alert evaluation completed", { event: "commerce.alerts.evaluated", evaluated: result.evaluated, products_evaluated: result.products_evaluated });
     }).catch((error) => {
-      console.error("[TraceKit] commerce operational alert evaluation failed", { event: "commerce.alerts.failed", failed_operation: String(error?.operation || "unknown").replace(/[^a-z0-9_]/gi, "_").slice(0, 80) });
+      console.error("[TraceKit] commerce operational alert evaluation failed", {
+        event: "commerce.alerts.failed",
+        failed_operation: String(error?.operation || "unknown").replace(/[^a-z0-9_]/gi, "_").slice(0, 80),
+        error_code: String(error?.errorCode || "operational_failure").replace(/[^a-z0-9_.-]/gi, "_").slice(0, 80),
+        error_message: String(error?.errorMessage || "database_read_failed").replace(/[^a-z0-9_]/gi, "_").slice(0, 80),
+      });
     }));
     ctx.waitUntil(runScheduledCheckoutChampImport(env));
     ctx.waitUntil(runScheduledShopifyImport(env));

@@ -169,8 +169,20 @@ export async function reconcileCommerceAlerts(db: any, snapshot: CommerceHealthS
 
 async function rows(query: any, operation: string) {
   const { data, error } = await query;
-  if (error) throw Object.assign(new Error("commerce_alert_evaluation_failed"), { operation });
+  if (error) {
+    const errorCode = String(error.code || "database_read_failed").replace(/[^a-z0-9_.-]/gi, "_").slice(0, 80);
+    const errorMessage = errorCode === "PGRST205" ? "relation_not_in_schema_cache"
+      : errorCode === "PGRST204" || errorCode === "42703" ? "column_contract_mismatch"
+      : errorCode === "42501" ? "database_permission_denied"
+      : errorCode === "57014" ? "database_statement_timeout"
+      : "database_read_failed";
+    throw Object.assign(new Error("commerce_alert_evaluation_failed"), { operation, errorCode, errorMessage });
+  }
   return data || [];
+}
+
+export async function loadCommerceProductMappingHealth(db: any, snapshot: Pick<CommerceHealthSnapshot, "organizationId" | "connectionId" | "providerAccountId">) {
+  return rows(db.from("commerce_product_mapping_health_v1").select("provider_product_id,mapping_status,integrity_status,order_count,gross_revenue,first_seen_at,last_seen_at").eq("organization_id", snapshot.organizationId).eq("connection_id", snapshot.connectionId).eq("provider_account_id", snapshot.providerAccountId), "product_mapping_health_read");
 }
 
 export async function loadCommerceHealthSnapshots(db: any, now = new Date().toISOString()): Promise<CommerceHealthSnapshot[]> {
@@ -214,7 +226,7 @@ export async function runCommerceOperationalAlertEvaluation(db: any, now = new D
 }
 
 export async function reconcileCommerceProductMappingAlerts(db: any, snapshot: CommerceHealthSnapshot) {
-  const products = await rows(db.from("commerce_product_mapping_health_v1").select("provider_product_id,mapping_status,integrity_status,order_count,gross_revenue,first_seen_at,last_seen_at").eq("organization_id", snapshot.organizationId).eq("connection_id", snapshot.connectionId).eq("provider_account_id", snapshot.providerAccountId), "product_mapping_health_read");
+  const products = await loadCommerceProductMappingHealth(db, snapshot);
   for (const row of products) {
     const product: CommerceProductMappingHealth = { providerProductId: String(row.provider_product_id), mappingStatus: String(row.mapping_status), integrityStatus: String(row.integrity_status) as CommerceProductMappingHealth["integrityStatus"], orderCount: Number(row.order_count || 0), grossRevenue: Number(row.gross_revenue || 0), firstSeenAt: String(row.first_seen_at), lastSeenAt: String(row.last_seen_at) };
     const evaluated = evaluateCommerceProductMappingAlert(product);
