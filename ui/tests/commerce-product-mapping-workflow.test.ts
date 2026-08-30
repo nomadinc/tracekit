@@ -10,6 +10,7 @@ const intelligence = readFileSync(new URL("../lib/commerce/product-mapping-intel
 const intelligenceRepository = readFileSync(new URL("../lib/commerce/product-mapping-intelligence-repository.ts", import.meta.url), "utf8");
 const migration = readFileSync(new URL("../../supabase/migrations/20260830053413_commerce_product_mapping_review_workflow.sql", import.meta.url), "utf8");
 const bulkMigration = readFileSync(new URL("../../supabase/migrations/20260830193000_atomic_bulk_product_mapping_decisions.sql", import.meta.url), "utf8");
+const priceSafetyMigration = readFileSync(new URL("../../supabase/migrations/20260830215136_add_product_mapping_price_evidence_and_correct_growth_partner.sql", import.meta.url), "utf8");
 const ingestion = readFileSync(new URL("../../supabase/migrations/043_commerce_shadow_ingestion_v1.sql", import.meta.url), "utf8");
 const alerts = readFileSync(new URL("../../api/src/commerce-operational-alerts.ts", import.meta.url), "utf8");
 
@@ -159,6 +160,28 @@ test("bulk drawer shows target, totals, evidence, mapping versions, and selectab
   assert.match(component, /product\.recommendation\?\.evidence\.scope/);
   assert.match(component, /Version \{product\.mappingVersion\}/);
   assert.match(component, /type="checkbox"/);
+});
+
+test("review projection returns distinct sorted source prices and both drawers render all price states", () => {
+  assert.match(priceSafetyMigration, /array_agg\(distinct o\.gross_amount order by o\.gross_amount\)/);
+  assert.match(priceSafetyMigration, /coalesce\(pr\.observed_prices, '\{\}'::numeric\[\]\) as observed_prices/);
+  assert.match(route, /observed_prices/);
+  assert.match(route, /observedPrices:Array\.isArray\(row\.observed_prices\)/);
+  assert.match(component, /Observed prices:/);
+  assert.match(component, /Product price:/);
+  assert.match(component, /Product price: unavailable/);
+  assert.equal((component.match(/priceEvidenceLabel\(product\.observedPrices\)/g) || []).length, 2);
+  assert.doesNotMatch(component, /grossRevenue\s*\/\s*product\.orderCount|gross_revenue\s*\/\s*order_count/);
+});
+
+test("Growth Partner correction removes ambiguous exact IDs without changing decisions or approved projections", () => {
+  assert.match(priceSafetyMigration, /match_value in \('ZvpxR', 'JEoZJ'\)/);
+  assert.match(priceSafetyMigration, /status = 'inactive'/);
+  assert.match(priceSafetyMigration, /discounted_price_does_not_establish_funnel_identity/);
+  assert.doesNotMatch(priceSafetyMigration, /update public\.commerce_provider_products|insert into public\.commerce_product_mapping_decisions|update public\.commerce_product_mapping_decisions/);
+  assert.doesNotMatch(priceSafetyMigration, /GwlZL|Kz0GM|q6zw2|pLWqN|1EJBm/);
+  const seededAliases = readFileSync(new URL("../../supabase/migrations/20260830173500_expand_pbs_catalog_and_seed_mapping_intelligence.sql", import.meta.url), "utf8").match(/with aliases[\s\S]*?insert into public\.commerce_product_mapping_rules/)?.[0] || "";
+  assert.doesNotMatch(seededAliases, /growth partner/i);
 });
 
 test("price evidence corroborates identity but cannot independently establish it", () => {
