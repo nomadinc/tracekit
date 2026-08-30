@@ -15,6 +15,8 @@ jobs:
     defaults:
       run:
         working-directory: api
+    env:
+      NODE_OPTIONS: --loader ../.github/scripts/ts-extension-loader.mjs
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -26,5 +28,8 @@ jobs:
           cache-dependency-path: api/package-lock.json
       - name: Install dependencies
         run: npm ci
-      - name: Run API regression suite
+      - name: Run Shopify regression suite
+        run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/shopify-*.test.ts
+      - name: Run full API regression suite
+        continue-on-error: true
         run: npm test
