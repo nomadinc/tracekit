@@ -65,9 +65,9 @@ export function evaluateCommerceAlerts(snapshot: CommerceHealthSnapshot): Commer
   const base = safeScope(snapshot);
   return [
     {
-      code: "continuous_failed", active: snapshot.continuousStatus === "failed", severity: operatorRequired(code) ? "critical" : "warning",
-      title: "Commas continuous synchronization failed", summary: operatorRequired(code) ? "Provider authorization or configuration requires operator action." : "The failed cycle is durable and a later eligible cycle may recover automatically.",
-      automaticRecoveryExpected: !operatorRequired(code), context: { ...base, error_code: code || null },
+      code: "continuous_failed", active: snapshot.continuousStatus === "failed" && !operatorRequired(code), severity: "warning",
+      title: "Commas continuous synchronization failed", summary: "The failed cycle is durable and a later eligible cycle may recover automatically.",
+      automaticRecoveryExpected: true, context: { ...base, error_code: code || null },
     },
     {
       code: "provider_access", active: operatorRequired(code) && snapshot.continuousStatus === "failed", severity: "critical",
@@ -75,7 +75,7 @@ export function evaluateCommerceAlerts(snapshot: CommerceHealthSnapshot): Commer
       automaticRecoveryExpected: false, context: { ...base, error_code: code || "provider_access_failure" },
     },
     {
-      code: "continuous_degraded", active: snapshot.continuousStatus === "degraded", severity: degradedRuns >= 2 ? "critical" : "warning",
+      code: "continuous_degraded", active: snapshot.continuousStatus === "degraded" && deepRuns === 0, severity: degradedRuns >= 2 ? "critical" : "warning",
       title: "Commas continuous synchronization is degraded", summary: degradedRuns >= 2 ? "Degradation persisted across consecutive cycles." : "A conservative warning is being observed for automatic recovery on the next cycle.",
       automaticRecoveryExpected: true, context: { ...base, consecutive_degraded_cycles: degradedRuns, warning_codes: snapshot.warnings.map((warning) => String(warning.code || "").replace(/[^a-z0-9_.-]/gi, "_").slice(0, 80)).filter(Boolean) },
     },

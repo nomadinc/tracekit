@@ -35,6 +35,7 @@ test("401 403 and credential failures are immediately critical", () => {
   for (const last_error_code of ["provider_401", "provider_403", "credential_decryption_failed", "invalid_configuration"]) {
     const result = find(snapshot({ continuousStatus: "failed", recentRuns: [{ status: "failed", created_at: now, last_error_code }] }), "provider_access");
     assert.equal(result.active, true); assert.equal(result.severity, "critical"); assert.equal(result.automaticRecoveryExpected, false);
+    assert.equal(find(snapshot({ continuousStatus: "failed", recentRuns: [{ status: "failed", created_at: now, last_error_code }] }), "continuous_failed").active, false);
   }
 });
 test("single degraded cycle warns and self-recovery clears it", () => {
@@ -62,6 +63,7 @@ test("expired lease recovery warns once and escalates when repeated", () => {
 test("single page-shift/deep scan is not critical", () => {
   const recentRuns = [{ status: "completed_with_warnings", created_at: now, page_shift_detected: true, deeper_reconciliation_required: true }];
   assert.equal(find(snapshot({ continuousStatus: "degraded", recentRuns }), "deep_reconciliation").severity, "warning");
+  assert.equal(find(snapshot({ continuousStatus: "degraded", recentRuns }), "continuous_degraded").active, false);
 });
 test("repeated deep reconciliation escalates while a recovered current state clears", () => {
   const recentRuns = [1, 2].map((n) => ({ status: "completed_with_warnings", created_at: ago(n * 60_000), stopping_reason: "bounded_scan_limit", deeper_reconciliation_required: true }));
