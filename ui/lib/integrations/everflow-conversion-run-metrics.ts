@@ -24,6 +24,38 @@ async function loadAllEvidenceRows(path: string) {
   return rows;
 }
 
+export async function mergeEverflowSyncRunMetadata(input: {
+  connectionId: string;
+  syncRunId: string;
+  values: Record<string, unknown>;
+}) {
+  const rows = await commercePersistenceRequest(
+    `commerce_sync_runs?id=eq.${encodeURIComponent(input.syncRunId)}&connection_id=eq.${encodeURIComponent(input.connectionId)}&select=metadata&limit=1`,
+  ) as Array<{ metadata?: unknown }>;
+  const metadata = rows[0]?.metadata && typeof rows[0].metadata === "object" && !Array.isArray(rows[0].metadata)
+    ? rows[0].metadata as Record<string, unknown>
+    : {};
+  const currentEverflow = metadata.everflow && typeof metadata.everflow === "object" && !Array.isArray(metadata.everflow)
+    ? metadata.everflow as Record<string, unknown>
+    : {};
+
+  await commercePersistenceRequest(
+    `commerce_sync_runs?id=eq.${encodeURIComponent(input.syncRunId)}&connection_id=eq.${encodeURIComponent(input.connectionId)}`,
+    {
+      method: "PATCH",
+      body: JSON.stringify({
+        metadata: {
+          ...metadata,
+          everflow: {
+            ...currentEverflow,
+            ...input.values,
+          },
+        },
+      }),
+    },
+  );
+}
+
 export async function captureEverflowConversionBaseline(connectionId: string) {
   const rows = await loadAllEvidenceRows(
     `everflow_conversion_events?connection_id=eq.${encodeURIComponent(connectionId)}&ingestion_method=eq.api&select=provider_account_id,source_identity,payload_hash&order=id.asc`,
