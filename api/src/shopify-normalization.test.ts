@@ -3,6 +3,7 @@ import test from "node:test";
 import { normalizeShopifyCustomerRecord, normalizeShopifyOrderRecord, normalizeShopifyProductRecord } from "./connectors/shopify/normalize";
 import { createShopifyNormalizedWriter } from "./connectors/shopify/normalized-writer";
 import type { ShopifyPersistedRecord } from "./connectors/shopify/persistence";
+import type { ShopifySyncPage } from "./connectors/shopify/resources";
 
 const scope = { organizationId: "org-1", connectionId: "conn-1", providerAccountId: "acct-1" };
 
@@ -13,6 +14,18 @@ function record(resource: "orders" | "products" | "customers", payload: Record<s
     providerObjectId: String(payload.id),
     providerUpdatedAt: "2026-08-30T20:00:00.000Z",
     payload: payload as any,
+  };
+}
+
+function provenance(resource: "orders" | "products" | "customers") {
+  return {
+    syncRunId: "run-1",
+    page: {
+      resource,
+      nodes: [],
+      checkpoint: { cursor: null, updatedAt: null, page: 1 },
+      hasNextPage: false,
+    } as ShopifySyncPage,
   };
 }
 
@@ -58,7 +71,7 @@ test("Shopify product and customer normalization preserve durable provider ident
   assert.equal(customer.display_name, "Ada Lovelace");
 });
 
-test("normalized writer validates Shopify scope and emits tenant-scoped idempotent order upsert", async () => {
+test("normalized writer emits evidence-backed tenant-scoped idempotent order upsert", async () => {
   const calls: Array<{ url: string; init?: RequestInit }> = [];
   const fetchImpl: typeof fetch = async (input, init) => {
     const url = String(input);
@@ -75,7 +88,15 @@ test("normalized writer validates Shopify scope and emits tenant-scoped idempote
     createdAt: "2026-08-30T19:00:00Z",
     displayFinancialStatus: "PAID",
     currentTotalPriceSet: { shopMoney: { amount: "99.50", currencyCode: "USD" } },
-  })]);
+  })], provenance("orders"));
+
+  assert.ok(calls.some((call) => call.url.includes("/storage/v1/object/commerce-evidence/")));
+  const evidenceWrite = calls.find((call) => call.url.endsWith("/rest/v1/commerce_evidence_records") && call.init?.method === "POST");
+  assert.ok(evidenceWrite);
+  const evidenceBody = JSON.parse(String(evidenceWrite?.init?.body));
+  assert.equal(evidenceBody.sync_run_id, "run-1");
+  assert.equal(evidenceBody.source_object_type, "shopify_order");
+  assert.equal(evidenceBody.organization_id, scope.organizationId);
 
   const orderWrite = calls.find((call) => call.url.includes("platform_orders?on_conflict=platform_order_id"));
   assert.ok(orderWrite);
@@ -87,9 +108,10 @@ test("normalized writer validates Shopify scope and emits tenant-scoped idempote
   assert.equal(body[0].account_id, "account-1");
   assert.equal(body[0].platform_order_id, "shopify:store-one.myshopify.com:gid://shopify/Order/123");
   assert.equal(body[0].provider_order_id, "gid://shopify/Order/123");
+  assert.ok(body[0].evidence_id);
 });
 
-test("normalized writer refuses a non-Shopify connection before canonical writes", async () => {
+test("normalized writer refuses a non-Shopify connection before evidence or canonical writes", async () => {
   const calls: string[] = [];
   const fetchImpl: typeof fetch = async (input) => {
     const url = String(input); calls.push(url);
@@ -97,7 +119,8 @@ test("normalized writer refuses a non-Shopify connection before canonical writes
     return new Response(null, { status: 204 });
   };
   const writer = createShopifyNormalizedWriter({ url: "https://example.supabase.co", serviceRoleKey: "service-role", fetchImpl });
-  await assert.rejects(() => writer([record("orders", { id: "gid://shopify/Order/123", createdAt: "2026-08-30T19:00:00Z" })]), /scoped Shopify connection/);
+  await assert.rejects(() => writer([record("orders", { id: "gid://shopify/Order/123", createdAt: "2026-08-30T19:00:00Z" })], provenance("orders")), /scoped Shopify connection/);
+  assert.ok(!calls.some((url) => url.includes("commerce-evidence")));
   assert.ok(!calls.some((url) => url.includes("platform_orders")));
 });
 
@@ -111,10 +134,12 @@ test("customer writer updates an existing provider identity instead of relying o
     return new Response(null, { status: 204 });
   };
   const writer = createShopifyNormalizedWriter({ url: "https://example.supabase.co", serviceRoleKey: "service-role", fetchImpl });
-  await writer([record("customers", { id: "gid://shopify/Customer/20", firstName: "Ada", email: "ada@example.com" })]);
+  await writer([record("customers", { id: "gid://shopify/Customer/20", firstName: "Ada", email: "ada@example.com" })], provenance("customers"));
 
   const identityWrite = calls.find((call) => call.url.includes("person_source_identities?id=eq.identity-1"));
   assert.equal(identityWrite?.init?.method, "PATCH");
+  const identityBody = JSON.parse(String(identityWrite?.init?.body));
+  assert.ok(identityBody.evidence_id);
   assert.ok(!calls.some((call) => call.url.includes("person_source_identities?on_conflict=")));
 });
 
