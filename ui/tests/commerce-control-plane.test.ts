@@ -202,7 +202,7 @@ test("development state cannot substitute for a persistent authorized session", 
 });
 
 test("product mapping decisions are append-only, tenant-scoped, and expected-version guarded", () => {
-  const migration = readFileSync(new URL("../../supabase/migrations/20260830044726_guard_commerce_product_mapping_decisions.sql", import.meta.url), "utf8");
+  const migration = readFileSync(new URL("../../supabase/migrations/20260830053413_commerce_product_mapping_review_workflow.sql", import.meta.url), "utf8");
   const original = readFileSync(new URL("../../supabase/migrations/040_commerce_control_plane_v1.sql", import.meta.url), "utf8");
   const repository = readFileSync(new URL("../lib/commerce/supabase-control-repository.ts", import.meta.url), "utf8");
 
@@ -210,14 +210,15 @@ test("product mapping decisions are append-only, tenant-scoped, and expected-ver
   assert.match(migration, /for update/);
   assert.match(migration, /v_current_mapping_version is distinct from p_expected_mapping_version/);
   assert.match(migration, /mapping_version is not distinct from p_expected_mapping_version/);
-  assert.match(migration, /stale product mapping version'.*errcode = '40001'/s);
-  assert.match(migration, /organization_id = p_organization_id[\s\S]*connection_id = p_connection_id[\s\S]*provider_account_id = p_provider_account_id/);
+  assert.match(migration, /stale product mapping version'.*errcode\s*=\s*'40001'/s);
+  assert.match(migration, /organization_id\s*=\s*p_organization_id[\s\S]*connection_id\s*=\s*p_connection_id[\s\S]*provider_account_id\s*=\s*p_provider_account_id/);
   assert.match(migration, /approved product mapping target incomplete/);
   assert.match(migration, /rejected product mapping cannot retain a target/);
   assert.match(migration, /p_offer_variant_id uuid/);
   assert.match(migration, /insert into public\.commerce_product_mapping_decisions/);
   assert.match(original, /commerce_product_mapping_decision_immutable_guard_trigger[\s\S]*before update or delete/);
   assert.match(repository, /p_expected_mapping_version: input\.expectedMappingVersion/);
+  assert.match(repository, /p_correlation_id: input\.correlationId/);
 });
 
 test("normal imports preserve an explicit product mapping and historical order identity", () => {
