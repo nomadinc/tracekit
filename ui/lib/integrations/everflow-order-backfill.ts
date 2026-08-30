@@ -31,7 +31,7 @@ export async function runEverflowOrderBackfillBatches(options: {
   for (const connection of connections) {
     const connectionId = String(connection.id || "").trim();
     if (!connectionId) continue;
-    const rows = await commercePersistenceRequest("rpc/run_everflow_order_reconciliation_batch_v1", {
+    const rows = await commercePersistenceRequest("rpc/run_everflow_order_reconciliation_batch_v2", {
       method: "POST",
       body: JSON.stringify({ p_connection_id: connectionId, p_limit: batchSize }),
     }) as Row[];
