@@ -56,7 +56,7 @@ export async function POST(request: Request) {
 
     const ids = items.map((item) => String(item.providerProductId || "").trim());
     const versions = new Map(items.map((item) => [String(item.providerProductId || "").trim(), String(item.expectedMappingVersion || "")]));
-    if (ids.some((value) => !value) || new Set(ids).size !== ids.length || [...versions.values()].some((value) => !value)) {
+    if (ids.some((value) => !value) || new Set(ids).size !== ids.length || Array.from(versions.values()).some((value) => !value)) {
       return response(id, { ok: false, code: "validation_failed" }, 400);
     }
 
