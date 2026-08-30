@@ -151,6 +151,17 @@ test("mapping health performance migration pre-aggregates orders once and provid
   assert.match(migration, /with \(security_invoker = true\)/);
   assert.match(migration, /grant select.*service_role/);
 });
+test("mapping health planner migration models correlated scope and matches the partial index predicate", () => {
+  const migration = readFileSync(new URL("../../supabase/migrations/20260830042825_improve_commerce_product_health_statistics.sql", import.meta.url), "utf8");
+  assert.match(migration, /create statistics if not exists platform_orders_commerce_scope_stats\s+\(dependencies, mcv\)/);
+  for (const column of ["platform", "organization_id", "connection_id", "provider_account_id", "provider_product_id"]) assert.match(migration, new RegExp(`\\b${column}\\b`));
+  assert.match(migration, /alter statistics public\.platform_orders_commerce_scope_stats\s+set statistics 500/);
+  assert.match(migration, /analyze public\.platform_orders/);
+  assert.match(migration, /where o\.platform = 'commas'\s+and o\.provider_product_id is not null/);
+  assert.doesNotMatch(migration, /create index/i);
+  assert.match(migration, /with \(security_invoker = true\)/);
+  assert.match(migration, /grant select.*service_role/);
+});
 test("Commerce persistence keeps immutable identities, approved mappings, lines, and Refund links scoped", () => {
   const persistence = readFileSync(new URL("../../supabase/migrations/039_commerce_persistence_v1.sql", import.meta.url), "utf8");
   const control = readFileSync(new URL("../../supabase/migrations/040_commerce_control_plane_v1.sql", import.meta.url), "utf8");
