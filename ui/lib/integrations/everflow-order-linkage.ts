@@ -33,6 +33,7 @@ export type EverflowOrderLinkInput = {
   email?: string | null;
   occurredAt?: string | null;
   amount?: number | string | null;
+  isCommerceValue?: boolean;
 };
 
 export type EverflowOrderLinkResult = {
@@ -168,7 +169,7 @@ export async function resolveAndMapEverflowOrder(input: {
   const transactionId = normalizeEverflowTransactionId(input.link.transactionId);
   const email = normalizeEverflowEmail(input.link.email);
   const amount = numericAmount(input.link.amount);
-  const isCommerceValue = amount !== null && amount !== 0;
+  const isCommerceValue = input.link.isCommerceValue ?? (amount !== null && amount !== 0);
   let candidates: OrderCandidate[] = [];
   let method: EverflowOrderLinkResult["matchMethod"] = null;
   let confidence = 0;
@@ -229,7 +230,7 @@ export async function resolveAndMapEverflowOrder(input: {
 
   const canonicalOrderId = canonicalId(candidates[0]);
   if (!canonicalOrderId) return { status: "unmatched", canonicalOrderId: null, matchMethod: null, confidence: 0, mappingObserved: false };
-  const payloadHash = await sha256({ sourceRecordId, transactionId, email, occurredAt: input.link.occurredAt || null, amount, canonicalOrderId, method });
+  const payloadHash = await sha256({ sourceRecordId, transactionId, email, occurredAt: input.link.occurredAt || null, amount, isCommerceValue, canonicalOrderId, method });
 
   const sourceObserved = await observeMapping({
     plane: input.plane,
