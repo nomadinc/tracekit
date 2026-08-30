@@ -41,7 +41,7 @@ export interface CommerceControlRepository {
   sourceMapping(connectionId: string, providerAccountId: string, sourceObjectType: string, sourceObjectId: string): Promise<SourceMapping | null>;
   upsertSourceMapping(input: Omit<SourceMapping, "id">): Promise<SourceMapping>;
   canonicalTargetExists(organizationId: string, type: string, id: string): Promise<boolean>;
-  decideProductMapping(input: { organizationId: string; connectionId: string; providerAccountId: string; providerProductId: string; resultingState: "approved" | "rejected"; businessContextId?: string; canonicalOfferId?: string; offerStepId?: string; offerVariantId?: string; mappingVersion: string; actorUserId: string; reason: string }): Promise<void>;
+  decideProductMapping(input: { organizationId: string; connectionId: string; providerAccountId: string; providerProductId: string; resultingState: "approved" | "rejected"; businessContextId?: string; canonicalOfferId?: string; offerStepId?: string; offerVariantId?: string; expectedMappingVersion: string; mappingVersion: string; actorUserId: string; reason: string }): Promise<void>;
   activation(organizationId: string, workspace: Workspace): Promise<Activation | null>;
   setActivation(input: Activation & { actorUserId: string }): Promise<Activation>;
   evidenceByReference(reference: string): Promise<{ organizationId: string; storageReference: string } | null>;
@@ -293,7 +293,7 @@ export class CommerceControlPlane {
     return this.repository.upsertSourceMapping({ ...input, organizationId: scope.organizationId, connectionId });
   }
 
-  async decideProductMapping(session: TraceKitSessionContext, connectionId: string, input: { providerAccountId: string; providerProductId: string; resultingState: "approved" | "rejected"; businessContextId?: string; canonicalOfferId?: string; offerStepId?: string; offerVariantId?: string; mappingVersion: string; reason: string }) {
+  async decideProductMapping(session: TraceKitSessionContext, connectionId: string, input: { providerAccountId: string; providerProductId: string; resultingState: "approved" | "rejected"; businessContextId?: string; canonicalOfferId?: string; offerStepId?: string; offerVariantId?: string; expectedMappingVersion: string; mappingVersion: string; reason: string }) {
     const { scope } = await authorizeCommerceConnectionAccess(this.repository, session, connectionId, "offers.manage");
     await this.repository.decideProductMapping({ ...input, organizationId: scope.organizationId, connectionId, actorUserId: scope.actorUserId });
     await this.audit(scope, input.resultingState === "approved" ? "product_mapping.approved" : "product_mapping.rejected", "commerce_provider_product", input.providerProductId, { mappingVersion: input.mappingVersion });

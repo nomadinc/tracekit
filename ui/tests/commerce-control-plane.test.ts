@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 import { CommerceControlPlane, type Activation, type CommerceConnection, type CommerceControlRepository, type CredentialVersion, type ProviderAccount, type SourceMapping, type SyncCheckpoint, type SyncRun } from "../lib/commerce/control-plane";
 import { CommerceCredentialResolutionError, decryptCommerceCredential, encryptCommerceCredential } from "../lib/commerce/credential-crypto";
@@ -198,4 +199,39 @@ test("repository activation defaults to mock, requires readiness, and rolls back
 test("development state cannot substitute for a persistent authorized session", async () => {
   const { control } = setup();
   await assert.rejects(() => control.createConnection(null as unknown as TraceKitSessionContext, ORG_A, { provider: "commas", displayName: "Blocked", environment: "production" }), /unavailable|resource/i);
+});
+
+test("product mapping decisions are append-only, tenant-scoped, and expected-version guarded", () => {
+  const migration = readFileSync(new URL("../../supabase/migrations/20260830044726_guard_commerce_product_mapping_decisions.sql", import.meta.url), "utf8");
+  const original = readFileSync(new URL("../../supabase/migrations/040_commerce_control_plane_v1.sql", import.meta.url), "utf8");
+  const repository = readFileSync(new URL("../lib/commerce/supabase-control-repository.ts", import.meta.url), "utf8");
+
+  assert.match(migration, /p_expected_mapping_version text/);
+  assert.match(migration, /for update/);
+  assert.match(migration, /v_current_mapping_version is distinct from p_expected_mapping_version/);
+  assert.match(migration, /mapping_version is not distinct from p_expected_mapping_version/);
+  assert.match(migration, /stale product mapping version'.*errcode = '40001'/s);
+  assert.match(migration, /organization_id = p_organization_id[\s\S]*connection_id = p_connection_id[\s\S]*provider_account_id = p_provider_account_id/);
+  assert.match(migration, /approved product mapping target incomplete/);
+  assert.match(migration, /rejected product mapping cannot retain a target/);
+  assert.match(migration, /p_offer_variant_id uuid/);
+  assert.match(migration, /insert into public\.commerce_product_mapping_decisions/);
+  assert.match(original, /commerce_product_mapping_decision_immutable_guard_trigger[\s\S]*before update or delete/);
+  assert.match(repository, /p_expected_mapping_version: input\.expectedMappingVersion/);
+});
+
+test("normal imports preserve an explicit product mapping and historical order identity", () => {
+  const ingestion = readFileSync(new URL("../../supabase/migrations/043_commerce_shadow_ingestion_v1.sql", import.meta.url), "utf8");
+  const decision = readFileSync(new URL("../../supabase/migrations/20260830044726_guard_commerce_product_mapping_decisions.sql", import.meta.url), "utf8");
+  const providerUpsert = ingestion.match(/insert into public\.commerce_provider_products[\s\S]*?;\n/)?.[0] || "";
+
+  assert.match(providerUpsert, /on conflict \(connection_id,provider_account_id,provider_product_id\) do update/);
+  assert.doesNotMatch(providerUpsert, /mapping_status\s*=/);
+  assert.doesNotMatch(providerUpsert, /mapping_version\s*=/);
+  assert.doesNotMatch(providerUpsert, /canonical_offer_id\s*=/);
+  assert.doesNotMatch(providerUpsert, /offer_step_id\s*=/);
+  assert.doesNotMatch(providerUpsert, /offer_variant_id\s*=/);
+  assert.doesNotMatch(decision, /update public\.platform_orders/);
+  assert.match(ingestion, /provider_product_id uuid references public\.commerce_provider_products/);
+  assert.match(ingestion, /unique \(connection_id, provider_account_id, canonical_order_id, source_line_key\)/);
 });
