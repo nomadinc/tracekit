@@ -1,0 +1,93 @@
+import assert from "node:assert/strict";
+import test from "node:test";
+import { normalizeProductTitle, recommendProductMapping, type MappingPolicy, type MappingRule } from "../lib/commerce/product-mapping-intelligence";
+
+const candidate = {
+  organizationId: "org-1",
+  connectionId: "conn-1",
+  providerAccountId: "acct-1",
+  provider: "commas",
+  providerProductId: "ABC123",
+  title: "Gold - NU2",
+  observedPrices: [297],
+  currency: "USD",
+};
+const policy: MappingPolicy = {
+  autoMapEnabled: false,
+  autoMapMinConfidence: 100,
+  bulkReviewMinConfidence: 90,
+  requireExactIdForAutoMap: true,
+};
+function rule(overrides: Partial<MappingRule> = {}): MappingRule {
+  return {
+    id: "rule-1",
+    organizationId: "org-1",
+    connectionId: null,
+    providerAccountId: null,
+    provider: "commas",
+    ruleKind: "normalized_title",
+    matchValue: "Gold - NU2",
+    normalizedMatchValue: "gold nu2",
+    businessContextId: "context-1",
+    canonicalOfferId: "offer-1",
+    offerStepId: "step-1",
+    offerVariantId: null,
+    confidence: 95,
+    executionMode: "suggest",
+    status: "active",
+    priority: 100,
+    ...overrides,
+  };
+}
+
+test("normalizes punctuation and whitespace deterministically", () => {
+  assert.equal(normalizeProductTitle("  Gold — NU2!! "), "gold nu2");
+});
+
+test("routes high-confidence title identity to bulk review by default", () => {
+  const result = recommendProductMapping({ candidate, rules: [rule()], policy });
+  assert.equal(result?.disposition, "bulk_review");
+  assert.equal(result?.offerStepId, "step-1");
+});
+
+test("price evidence corroborates but cannot create identity", () => {
+  const result = recommendProductMapping({
+    candidate: { ...candidate, title: "Diamond" },
+    rules: [rule()],
+    prices: [{ ruleId: "rule-1", amount: 297, currency: "USD", evidenceWeight: 50, priceRole: "expected" }],
+    policy,
+  });
+  assert.equal(result, null);
+});
+
+test("provider-account scope wins over broader organization rule", () => {
+  const broad = rule({ id: "broad", offerStepId: "step-broad", priority: 999 });
+  const narrow = rule({ id: "narrow", connectionId: "conn-1", providerAccountId: "acct-1", offerStepId: "step-narrow", priority: 1 });
+  const result = recommendProductMapping({ candidate, rules: [broad, narrow], policy });
+  assert.equal(result?.ruleId, "narrow");
+  assert.equal(result?.evidence.scope, "provider_account");
+});
+
+test("auto-map requires policy, rule mode, threshold, and exact-id when configured", () => {
+  const exact = rule({
+    ruleKind: "provider_product_id",
+    normalizedMatchValue: "ABC123",
+    confidence: 100,
+    executionMode: "auto_map",
+  });
+  const result = recommendProductMapping({
+    candidate,
+    rules: [exact],
+    policy: { ...policy, autoMapEnabled: true },
+  });
+  assert.equal(result?.disposition, "auto_map");
+});
+
+test("non-exact identity cannot auto-map when exact-id policy is required", () => {
+  const result = recommendProductMapping({
+    candidate,
+    rules: [rule({ confidence: 100, executionMode: "auto_map" })],
+    policy: { ...policy, autoMapEnabled: true },
+  });
+  assert.equal(result?.disposition, "bulk_review");
+});
