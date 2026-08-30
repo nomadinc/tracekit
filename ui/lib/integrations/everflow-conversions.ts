@@ -564,6 +564,7 @@ export async function syncEverflowConversions(input: {
               email: conversion.emailNormalized,
               occurredAt: conversion.conversionAt,
               amount: conversion.saleAmount ?? conversion.revenue,
+              isCommerceValue: (conversion.saleAmount ?? 0) !== 0 || (conversion.revenue ?? 0) !== 0,
             },
           });
           linkage[decision.status] += 1;

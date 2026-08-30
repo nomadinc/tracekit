@@ -7,7 +7,7 @@ const DIRECT_SOURCE_TYPE = "everflow_transaction";
 const CONVERSION_SOURCE_TYPE = "everflow_conversion";
 const AMOUNT_TOLERANCE = 0.01;
 const EMAIL_WINDOW_WITH_AMOUNT_MS = 72 * 60 * 60 * 1000;
-const EMAIL_WINDOW_WITHOUT_AMOUNT_MS = 6 * 60 * 60 * 1000;
+const TIGHT_EMAIL_WINDOW_MS = 30 * 60 * 1000;
 const ORDER_SELECT = "canonical_order_id,platform_order_id,everflow_transaction_id,transaction_id,email,order_ts,gross_amount,receipt_total";
 
 type OrderCandidate = {
@@ -33,12 +33,13 @@ export type EverflowOrderLinkInput = {
   email?: string | null;
   occurredAt?: string | null;
   amount?: number | string | null;
+  isCommerceValue?: boolean;
 };
 
 export type EverflowOrderLinkResult = {
   status: "matched" | "unmatched" | "ambiguous" | "conflict";
   canonicalOrderId: string | null;
-  matchMethod: "transaction_id" | "email_time_amount" | "email_time" | null;
+  matchMethod: "transaction_id" | "email_time_amount" | "email_time_30m" | null;
   confidence: number;
   mappingObserved: boolean;
 };
@@ -84,12 +85,18 @@ async function directCandidates(organizationId: string, transactionId: string) {
   return dedupeOrders([...(everflowRows as OrderCandidate[]), ...(transactionRows as OrderCandidate[])]);
 }
 
-async function emailCandidates(input: { organizationId: string; email: string; occurredAt: string; amount: number | null }) {
+async function emailCandidates(input: {
+  organizationId: string;
+  email: string;
+  occurredAt: string;
+  amount: number | null;
+  windowMs: number;
+  requireAmount: boolean;
+}) {
   const occurredMs = Date.parse(input.occurredAt);
   if (!Number.isFinite(occurredMs)) return [];
-  const windowMs = input.amount === null ? EMAIL_WINDOW_WITHOUT_AMOUNT_MS : EMAIL_WINDOW_WITH_AMOUNT_MS;
-  const from = new Date(occurredMs - windowMs).toISOString();
-  const to = new Date(occurredMs + windowMs).toISOString();
+  const from = new Date(occurredMs - input.windowMs).toISOString();
+  const to = new Date(occurredMs + input.windowMs).toISOString();
   const rows = await commercePersistenceRequest(
     `platform_orders?organization_id=eq.${encodeURIComponent(input.organizationId)}` +
     `&email=ilike.${encodeURIComponent(input.email)}` +
@@ -99,7 +106,8 @@ async function emailCandidates(input: { organizationId: string; email: string; o
 
   return dedupeOrders(rows).filter((row) => {
     if (normalizeEverflowEmail(row.email) !== input.email) return false;
-    if (input.amount === null) return true;
+    if (!input.requireAmount) return true;
+    if (input.amount === null) return false;
     const orderAmount = numericAmount(row.receipt_total ?? row.gross_amount);
     return orderAmount !== null && Math.abs(orderAmount - input.amount) <= AMOUNT_TOLERANCE;
   });
@@ -161,9 +169,16 @@ export async function resolveAndMapEverflowOrder(input: {
   const transactionId = normalizeEverflowTransactionId(input.link.transactionId);
   const email = normalizeEverflowEmail(input.link.email);
   const amount = numericAmount(input.link.amount);
+  const isCommerceValue = input.link.isCommerceValue ?? (amount !== null && amount !== 0);
   let candidates: OrderCandidate[] = [];
   let method: EverflowOrderLinkResult["matchMethod"] = null;
   let confidence = 0;
+
+  // deterministic_order_v2 intentionally does not attach upper-funnel / zero-value
+  // events to canonical orders, even when they carry a transaction ID or customer email.
+  if (!isCommerceValue) {
+    return { status: "unmatched", canonicalOrderId: null, matchMethod: null, confidence: 0, mappingObserved: false };
+  }
 
   if (transactionId) {
     candidates = await directCandidates(input.link.organizationId, transactionId);
@@ -176,12 +191,36 @@ export async function resolveAndMapEverflowOrder(input: {
   }
 
   if (!method && email && input.link.occurredAt) {
-    candidates = await emailCandidates({ organizationId: input.link.organizationId, email, occurredAt: input.link.occurredAt, amount });
+    candidates = await emailCandidates({
+      organizationId: input.link.organizationId,
+      email,
+      occurredAt: input.link.occurredAt,
+      amount,
+      windowMs: EMAIL_WINDOW_WITH_AMOUNT_MS,
+      requireAmount: true,
+    });
     if (candidates.length === 1) {
-      method = amount === null ? "email_time" : "email_time_amount";
-      confidence = amount === null ? 0.65 : 0.85;
+      method = "email_time_amount";
+      confidence = 0.85;
     } else if (candidates.length > 1) {
-      return { status: "ambiguous", canonicalOrderId: null, matchMethod: amount === null ? "email_time" : "email_time_amount", confidence: 0, mappingObserved: false };
+      return { status: "ambiguous", canonicalOrderId: null, matchMethod: "email_time_amount", confidence: 0, mappingObserved: false };
+    }
+  }
+
+  if (!method && email && input.link.occurredAt) {
+    candidates = await emailCandidates({
+      organizationId: input.link.organizationId,
+      email,
+      occurredAt: input.link.occurredAt,
+      amount,
+      windowMs: TIGHT_EMAIL_WINDOW_MS,
+      requireAmount: false,
+    });
+    if (candidates.length === 1) {
+      method = "email_time_30m";
+      confidence = 0.8;
+    } else if (candidates.length > 1) {
+      return { status: "ambiguous", canonicalOrderId: null, matchMethod: "email_time_30m", confidence: 0, mappingObserved: false };
     }
   }
 
@@ -191,7 +230,7 @@ export async function resolveAndMapEverflowOrder(input: {
 
   const canonicalOrderId = canonicalId(candidates[0]);
   if (!canonicalOrderId) return { status: "unmatched", canonicalOrderId: null, matchMethod: null, confidence: 0, mappingObserved: false };
-  const payloadHash = await sha256({ sourceRecordId, transactionId, email, occurredAt: input.link.occurredAt || null, amount, canonicalOrderId, method });
+  const payloadHash = await sha256({ sourceRecordId, transactionId, email, occurredAt: input.link.occurredAt || null, amount, isCommerceValue, canonicalOrderId, method });
 
   const sourceObserved = await observeMapping({
     plane: input.plane,
