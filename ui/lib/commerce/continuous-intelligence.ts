@@ -175,8 +175,8 @@ export function isExpectedNewestFirstHeadInsertion(priorIds:string[],currentIds:
   if(!priorIds.length||!currentIds.length)return false;
   const priorSet=new Set(priorIds),anchor=currentIds.indexOf(priorIds[0]);
   if(anchor<0||currentIds.slice(0,anchor).some((id)=>priorSet.has(id)))return false;
-  const aligned=currentIds.slice(anchor),expected=priorIds.slice(0,aligned.length);
-  return aligned.length>0&&aligned.length===expected.length&&aligned.every((id,index)=>id===expected[index]);
+  const aligned=currentIds.slice(anchor),comparableLength=Math.min(aligned.length,priorIds.length);
+  return comparableLength>0&&aligned.slice(0,comparableLength).every((id,index)=>id===priorIds[index]);
 }
 
 export function appendNewestFirstAlignmentIds(currentIds:string[],pageIds:string[],classification:PaginationClassification){

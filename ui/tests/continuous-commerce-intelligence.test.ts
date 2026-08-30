@@ -109,6 +109,14 @@ test("one new head plus a benign page-2/page-3 boundary repeat remains an aligne
   assert.equal(state.pageShiftDetected,false);
   assert.equal(state.consecutiveStableKnownPages,2);
 });
+
+test("27 new head records plus an exhausted 300-ID proof window does not become a false page shift on page four",()=>{
+  const prior=Array.from({length:300},(_,index)=>`prior-${index}`),head=Array.from({length:27},(_,index)=>`new-${index}`),older=Array.from({length:73},(_,index)=>`older-${index}`),current=[...head,...prior,...older];
+  assert.equal(isExpectedNewestFirstHeadInsertion(prior,current),true);
+  const state=advanceStability({consecutiveStableKnownPages:0,pagesScanned:3,unseenRecords:27,changedRecords:5,pageShiftDetected:false},{page:4,totalPages:800,totalItems:79955,ids:current.slice(327),timestamps:current.slice(327).map((_,index)=>new Date(Date.UTC(2026,7,29,0,0,73-index)).toISOString()),fingerprint:"page-4-new",knownIds:new Set(current.slice(327)),priorFingerprint:"page-4-old",expectedNewestFirstHeadInsertion:isExpectedNewestFirstHeadInsertion(prior,current)},Array(73).fill("source_identical"));
+  assert.equal(state.pageShiftDetected,false);
+  for(const unsafe of [[...head,...prior.slice(0,120),"mid-stream",...prior.slice(120)],[...head,...prior.slice(0,120),...prior.slice(121)],[...head,...prior.slice(0,120),prior[121],prior[120],...prior.slice(122)]])assert.equal(isExpectedNewestFirstHeadInsertion(prior,unsafe),false);
+});
 test("only an exact classified boundary repeat is removed from newest-first alignment",()=>{
   assert.deepEqual(appendNewestFirstAlignmentIds(["a","b"],["b","c"],"benign_boundary_overlap"),["a","b","c"]);
   assert.deepEqual(appendNewestFirstAlignmentIds(["a","b"],["x","b"],"benign_boundary_overlap"),["a","b","x","b"]);
