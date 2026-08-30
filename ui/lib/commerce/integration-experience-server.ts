@@ -8,6 +8,8 @@ import { canManageTkidOrigins } from "@/lib/tkid/origin-authorization";
 type Row = Record<string, unknown>;
 const text = (value: unknown) => value == null ? null : String(value);
 const number = (value: unknown) => Number(value || 0);
+const object = (value: unknown): Row => value && typeof value === "object" && !Array.isArray(value) ? value as Row : {};
+const nullableNumber = (row: Row, key: string) => Object.prototype.hasOwnProperty.call(row, key) ? number(row[key]) : null;
 const frequencyMinutes = (value: unknown) => ({ hourly: 60, "30_minutes": 30, "15_minutes": 15, "5_minutes": 5 } as Record<string, number>)[String(value)] || 60;
 async function optionalRows(path:string){try{return await commercePersistenceRequest(path) as Row[]}catch{return [] as Row[]}}
 
@@ -53,7 +55,20 @@ async function loadConnectionExperienceRow(organizationName: string, row: Row, c
   const tkidOrigins=originRows.map(origin=>({id:String(origin.id),sourceId:String(origin.source_id),origin:String(origin.canonical_origin),role:String(origin.role) as ConnectionExperience["tkidOrigins"]["origins"][number]["role"],status:String(origin.lifecycle_status) as ConnectionExperience["tkidOrigins"]["origins"][number]["status"],verificationState:String(origin.verification_state),verifiedAt:text(origin.verified_at),retiredAt:text(origin.retired_at),lastObservedAt:text(origin.last_observed_at),acceptedEvents:number(origin.accepted_event_count),rejectedEvents:number(origin.rejected_event_count)}));
   const originBlockers=tkidOrigins.some(origin=>origin.status==="active")?[]:tkidOrigins.some(origin=>origin.status==="verified")?["ORIGIN_PENDING_ACTIVATION"]:tkidOrigins.length?["ORIGIN_VERIFICATION_REQUIRED"]:["NO_ACTIVE_ORIGIN"];
   const activeCredential = credentials.find((credential) => !credential.revoked_at);
-  const syncRuns = runs.map((run): SafeSyncRun => ({ id: String(run.id), connectionId: id, connectionName: String(row.display_name), provider: String(row.provider), mode: String(run.mode), resource: String(run.sync_type), status: String(run.status), startedAt: text(run.started_at), completedAt: text(run.completed_at), pagesCompleted: number(run.pages_completed), recordsSeen: number(run.records_seen), recordsCreated: number(run.records_created), recordsUpdated: number(run.records_updated), recordsUnchanged:number(run.records_unchanged), recordsFailed: number(run.records_failed), warnings: number(run.warnings_count), providerRequests:number(run.provider_request_count), stoppingReason:text(run.stopping_reason),freshnessResult:text(run.freshness_result), leaseActive: Boolean(run.lease_owner && run.lease_expires_at && new Date(String(run.lease_expires_at)) > new Date()), heartbeatAt: text(run.heartbeat_at), errorSummary: text(run.last_error_summary) }));
+  const syncRuns = runs.map((run): SafeSyncRun => {
+    const metadata = object(run.metadata);
+    const everflow = object(metadata.everflow);
+    const linkage = object(everflow.linkage);
+    const isEverflow = String(row.provider) === "everflow";
+    return {
+      id: String(run.id), connectionId: id, connectionName: String(row.display_name), provider: String(row.provider), mode: String(run.mode), resource: String(run.sync_type), status: String(run.status), startedAt: text(run.started_at), completedAt: text(run.completed_at), pagesCompleted: number(run.pages_completed), recordsSeen: number(run.records_seen), recordsCreated: number(run.records_created), recordsUpdated: number(run.records_updated), recordsUnchanged:number(run.records_unchanged), recordsFailed: number(run.records_failed), warnings: number(run.warnings_count), providerRequests:number(run.provider_request_count), stoppingReason:text(run.stopping_reason),freshnessResult:text(run.freshness_result), leaseActive: Boolean(run.lease_owner && run.lease_expires_at && new Date(String(run.lease_expires_at)) > new Date()), heartbeatAt: text(run.heartbeat_at), errorSummary: text(run.last_error_summary),
+      nonOrderEvents: isEverflow ? nullableNumber(linkage, "non_order") : null,
+      unmatchedCommerce: isEverflow ? nullableNumber(linkage, "unmatched") : null,
+      matchedCommerce: isEverflow ? nullableNumber(linkage, "matched") : null,
+      ambiguousCommerce: isEverflow ? nullableNumber(linkage, "ambiguous") : null,
+      conflictCommerce: isEverflow ? nullableNumber(linkage, "conflict") : null,
+    };
+  });
   const readinessRecord = activation.find((item) => item.workspace === "orders");
   const evidenceMap = (readinessRecord?.readiness_evidence || {}) as Record<string, { passed?: boolean; evidence?: string; at?: string }>;
   const latestContinuous=syncRuns.find((run)=>run.mode==="continuous"&&run.status==="completed");
