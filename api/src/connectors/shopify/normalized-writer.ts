@@ -1,5 +1,7 @@
+import { createShopifyEvidenceStore, type ShopifyEvidence } from "./evidence";
 import { normalizeShopifyCustomerRecord, normalizeShopifyOrderRecord, normalizeShopifyProductRecord } from "./normalize";
 import type { ShopifyPersistedRecord } from "./persistence";
+import type { ShopifySyncPage } from "./resources";
 
 type Scope = { organizationId: string; connectionId: string; providerAccountId: string };
 
@@ -14,13 +16,21 @@ type ConnectionContext = Scope & {
   shopDomain: string;
 };
 
+type EvidenceMap = Map<string, ShopifyEvidence>;
+
 export function createShopifyNormalizedWriter(config: WriterConfig) {
   const request = createPostgrestRequest(config);
+  const ensureEvidence = createShopifyEvidenceStore(config);
 
-  return async function writeShopifyRecords(records: ShopifyPersistedRecord[]): Promise<void> {
+  return async function writeShopifyRecords(
+    records: ShopifyPersistedRecord[],
+    provenance: { syncRunId: string; page: ShopifySyncPage },
+  ): Promise<void> {
     if (!records.length) return;
     const scope = commonScope(records);
     const context = await loadShopifyContext(request, scope);
+    const evidence: EvidenceMap = new Map();
+    for (const record of records) evidence.set(recordKey(record), await ensureEvidence(record, provenance.syncRunId));
 
     const byResource = new Map<string, ShopifyPersistedRecord[]>();
     for (const record of records) {
@@ -29,9 +39,9 @@ export function createShopifyNormalizedWriter(config: WriterConfig) {
       byResource.set(record.resource, list);
     }
 
-    if (byResource.has("orders")) await writeOrders(request, context, byResource.get("orders")!);
-    if (byResource.has("products")) await writeProducts(request, context, byResource.get("products")!);
-    if (byResource.has("customers")) await writeCustomers(request, context, byResource.get("customers")!);
+    if (byResource.has("orders")) await writeOrders(request, context, byResource.get("orders")!, evidence);
+    if (byResource.has("products")) await writeProducts(request, context, byResource.get("products")!, evidence);
+    if (byResource.has("customers")) await writeCustomers(request, context, byResource.get("customers")!, evidence);
   };
 }
 
@@ -54,7 +64,7 @@ async function loadShopifyContext(request: PostgrestRequest, scope: Scope): Prom
   return { ...scope, accountId: connection.account_id, shopDomain };
 }
 
-async function writeOrders(request: PostgrestRequest, context: ConnectionContext, records: ShopifyPersistedRecord[]) {
+async function writeOrders(request: PostgrestRequest, context: ConnectionContext, records: ShopifyPersistedRecord[], evidence: EvidenceMap) {
   const rows = records.map((record) => {
     const order = normalizeShopifyOrderRecord(record, context.shopDomain);
     return {
@@ -81,6 +91,7 @@ async function writeOrders(request: PostgrestRequest, context: ConnectionContext
       organization_id: context.organizationId,
       connection_id: context.connectionId,
       provider_account_id: context.providerAccountId,
+      evidence_id: requiredEvidence(evidence, record).id,
       reconciliation_state: "observed",
       data_quality_state: "observed",
       updated_at: new Date().toISOString(),
@@ -94,7 +105,7 @@ async function writeOrders(request: PostgrestRequest, context: ConnectionContext
   });
 }
 
-async function writeProducts(request: PostgrestRequest, context: ConnectionContext, records: ShopifyPersistedRecord[]) {
+async function writeProducts(request: PostgrestRequest, context: ConnectionContext, records: ShopifyPersistedRecord[], evidence: EvidenceMap) {
   const now = new Date().toISOString();
   const rows: Record<string, unknown>[] = [];
   for (const record of records) {
@@ -110,6 +121,7 @@ async function writeProducts(request: PostgrestRequest, context: ConnectionConte
       provider_product_id: product.provider_product_id,
       title: product.title,
       description: product.description,
+      evidence_id: requiredEvidence(evidence, record).id,
       first_seen_at: existing[0]?.first_seen_at || seenAt,
       last_seen_at: seenAt,
       mapping_status: "observed",
@@ -126,7 +138,7 @@ async function writeProducts(request: PostgrestRequest, context: ConnectionConte
   });
 }
 
-async function writeCustomers(request: PostgrestRequest, context: ConnectionContext, records: ShopifyPersistedRecord[]) {
+async function writeCustomers(request: PostgrestRequest, context: ConnectionContext, records: ShopifyPersistedRecord[], evidence: EvidenceMap) {
   for (const record of records) {
     const customer = normalizeShopifyCustomerRecord(record);
     const seenAt = customer.updated_at || new Date().toISOString();
@@ -135,6 +147,7 @@ async function writeCustomers(request: PostgrestRequest, context: ConnectionCont
     );
     const identity = existing[0] || null;
     const personId = identity?.person_id || crypto.randomUUID();
+    const evidenceId = requiredEvidence(evidence, record).id;
 
     await request("people?on_conflict=id", {
       method: "POST",
@@ -165,6 +178,7 @@ async function writeCustomers(request: PostgrestRequest, context: ConnectionCont
       status: "verified",
       first_seen_at: identity?.first_seen_at || seenAt,
       last_seen_at: seenAt,
+      evidence_id: evidenceId,
       metadata: {},
       updated_at: new Date().toISOString(),
     };
@@ -183,6 +197,16 @@ async function writeCustomers(request: PostgrestRequest, context: ConnectionCont
       });
     }
   }
+}
+
+function requiredEvidence(evidence: EvidenceMap, record: ShopifyPersistedRecord) {
+  const value = evidence.get(recordKey(record));
+  if (!value) throw new Error(`Shopify ${record.resource} evidence is unavailable for ${record.providerObjectId}.`);
+  return value;
+}
+
+function recordKey(record: ShopifyPersistedRecord) {
+  return `${record.resource}:${record.providerObjectId}`;
 }
 
 function commonScope(records: ShopifyPersistedRecord[]): Scope {
