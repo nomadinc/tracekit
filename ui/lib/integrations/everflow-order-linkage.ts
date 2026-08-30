@@ -7,7 +7,9 @@ const DIRECT_SOURCE_TYPE = "everflow_transaction";
 const CONVERSION_SOURCE_TYPE = "everflow_conversion";
 const AMOUNT_TOLERANCE = 0.01;
 const EMAIL_WINDOW_WITH_AMOUNT_MS = 72 * 60 * 60 * 1000;
+const CHECKOUT_BUNDLE_WINDOW_MS = 10 * 1000;
 const TIGHT_EMAIL_WINDOW_MS = 30 * 60 * 1000;
+const CHECKOUT_BUNDLE_EVENTS = new Set(["PUSH BUTTON SYSTEM", "FAST TRACK SUPPORT", "REVENUE BOOSTER ROADMAP"]);
 const ORDER_SELECT = "canonical_order_id,platform_order_id,everflow_transaction_id,transaction_id,email,order_ts,gross_amount,receipt_total";
 
 type OrderCandidate = {
@@ -39,7 +41,7 @@ export type EverflowOrderLinkInput = {
 export type EverflowOrderLinkResult = {
   status: "matched" | "unmatched" | "non_order" | "ambiguous" | "conflict";
   canonicalOrderId: string | null;
-  matchMethod: "transaction_id" | "email_time_amount" | "email_time_30m" | null;
+  matchMethod: "transaction_id" | "email_time_amount" | "checkout_bundle_10s" | "email_time_30m" | null;
   confidence: number;
   mappingObserved: boolean;
 };
@@ -111,6 +113,16 @@ async function emailCandidates(input: {
     const orderAmount = numericAmount(row.receipt_total ?? row.gross_amount);
     return orderAmount !== null && Math.abs(orderAmount - input.amount) <= AMOUNT_TOLERANCE;
   });
+}
+
+async function checkoutBundleEventName(connectionId: string, sourceRecordId: string) {
+  const rows = await commercePersistenceRequest(
+    `everflow_conversion_events?connection_id=eq.${encodeURIComponent(connectionId)}` +
+    `&source_identity=eq.${encodeURIComponent(sourceRecordId)}` +
+    `&select=event_name&order=last_seen_at.desc&limit=1`,
+  ) as Array<{ event_name?: unknown }>;
+  const eventName = text(rows[0]?.event_name).toUpperCase();
+  return CHECKOUT_BUNDLE_EVENTS.has(eventName) ? eventName : null;
 }
 
 async function sha256(value: unknown) {
@@ -205,6 +217,30 @@ export async function resolveAndMapEverflowOrder(input: {
       confidence = 0.85;
     } else if (candidates.length > 1) {
       return { status: "ambiguous", canonicalOrderId: null, matchMethod: "email_time_amount", confidence: 0, mappingObserved: false };
+    }
+  }
+
+  // Push Button checkout bumps are line items on the main checkout order, not
+  // independent downstream orders. For this known funnel family, use a unique
+  // same-email order in the observed checkout burst (±10 seconds) before the
+  // generic ±30-minute fallback can confuse later upsells with the main order.
+  if (!method && email && input.link.occurredAt) {
+    const bundleEventName = await checkoutBundleEventName(input.link.connectionId, sourceRecordId);
+    if (bundleEventName) {
+      candidates = await emailCandidates({
+        organizationId: input.link.organizationId,
+        email,
+        occurredAt: input.link.occurredAt,
+        amount,
+        windowMs: CHECKOUT_BUNDLE_WINDOW_MS,
+        requireAmount: false,
+      });
+      if (candidates.length === 1) {
+        method = "checkout_bundle_10s";
+        confidence = 0.95;
+      } else if (candidates.length > 1) {
+        return { status: "ambiguous", canonicalOrderId: null, matchMethod: "checkout_bundle_10s", confidence: 0, mappingObserved: false };
+      }
     }
   }
 
