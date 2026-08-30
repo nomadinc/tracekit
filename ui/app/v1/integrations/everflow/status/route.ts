@@ -49,7 +49,7 @@ export async function GET() {
         fees: false,
         disputes: false,
         webhooks: false,
-        warnings: ["Everflow data sync and webhook ingestion are not enabled yet."],
+        warnings: ["Dedicated Everflow click ingestion is not enabled yet."],
       },
       requestId,
     }, { headers: responseHeaders(requestId) });
