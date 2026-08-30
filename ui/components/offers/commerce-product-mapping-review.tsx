@@ -107,16 +107,24 @@ function ProductList({ products, selectedId, onSelect }: { products: Product[]; 
 function DecisionPanel({ payload, onChanged }: { payload: Payload; onChanged: () => Promise<void> }) {
   const product = payload.products[0];
   const preset = product.authorizedPreset;
+  const hasPersistedTarget = product.mappingStatus === "approved" && Boolean(product.businessContextId && product.canonicalOfferId && product.offerStepId);
+  const initialContextId = hasPersistedTarget ? product.businessContextId || "" : preset?.businessContextId || product.businessContextId || "";
+  const initialOfferId = hasPersistedTarget ? product.canonicalOfferId || "" : preset?.canonicalOfferId || product.canonicalOfferId || "";
+  const initialStepId = hasPersistedTarget ? product.offerStepId || "" : preset?.offerStepId || product.offerStepId || "";
+  const initialVariantId = hasPersistedTarget ? product.offerVariantId || "" : preset?.offerVariantId || product.offerVariantId || "";
+  const persistedStepLabel = product.offerStepId ? payload.targets.steps.find((row) => row.id === product.offerStepId)?.label || product.offerStepId : "None";
+  const presetStepLabel = preset?.offerStepId ? payload.targets.steps.find((row) => row.id === preset.offerStepId)?.label || preset.offerStepId : null;
+  const presetDiffers = Boolean(hasPersistedTarget && preset && (product.businessContextId !== preset.businessContextId || product.canonicalOfferId !== preset.canonicalOfferId || product.offerStepId !== preset.offerStepId || (product.offerVariantId || null) !== (preset.offerVariantId || null)));
   const [result, setResult] = React.useState<"approved" | "rejected">("approved");
-  const [contextId, setContextId] = React.useState(preset?.businessContextId || product.businessContextId || "");
-  const [offerId, setOfferId] = React.useState(preset?.canonicalOfferId || product.canonicalOfferId || "");
-  const [stepId, setStepId] = React.useState(preset?.offerStepId || product.offerStepId || "");
-  const [variantId, setVariantId] = React.useState(preset?.offerVariantId || product.offerVariantId || "");
+  const [contextId, setContextId] = React.useState(initialContextId);
+  const [offerId, setOfferId] = React.useState(initialOfferId);
+  const [stepId, setStepId] = React.useState(initialStepId);
+  const [variantId, setVariantId] = React.useState(initialVariantId);
   const [reason, setReason] = React.useState("");
   const [confirming, setConfirming] = React.useState(false);
   const [submitting, setSubmitting] = React.useState(false);
   const [notice, setNotice] = React.useState<string | null>(null);
-  React.useEffect(() => { setResult("approved"); setContextId(preset?.businessContextId || product.businessContextId || ""); setOfferId(preset?.canonicalOfferId || product.canonicalOfferId || ""); setStepId(preset?.offerStepId || product.offerStepId || ""); setVariantId(preset?.offerVariantId || product.offerVariantId || ""); setReason(""); setConfirming(false); setNotice(null); }, [product.providerProductId, product.mappingVersion, product.businessContextId, product.canonicalOfferId, product.offerStepId, product.offerVariantId, preset?.businessContextId, preset?.canonicalOfferId, preset?.offerStepId, preset?.offerVariantId]);
+  React.useEffect(() => { setResult("approved"); setContextId(initialContextId); setOfferId(initialOfferId); setStepId(initialStepId); setVariantId(initialVariantId); setReason(""); setConfirming(false); setNotice(null); }, [product.providerProductId, product.mappingVersion, initialContextId, initialOfferId, initialStepId, initialVariantId]);
   const offers = payload.targets.offers.filter((row) => row.business_context_id === contextId);
   const steps = payload.targets.steps.filter((row) => row.canonical_offer_id === offerId);
   const variants = payload.targets.variants.filter((row) => row.offer_step_id === stepId);
@@ -140,7 +148,8 @@ function DecisionPanel({ payload, onChanged }: { payload: Payload; onChanged: ()
   return <div className="space-y-4 rounded-xl border p-4"><div><h3 className="font-semibold">{product.title}</h3><div className="font-mono text-xs text-slate-500">{product.providerProductId}</div></div>
     <dl className="grid grid-cols-2 gap-3 text-sm"><Metric label="Orders" value={number.format(product.orderCount)} /><Metric label="Gross revenue" value={money.format(product.grossRevenue)} /><Metric label="Refunds" value={`${number.format(product.refundCount)} · ${money.format(product.refundAmount)}`} /><Metric label="Observed" value={`${date(product.firstSeenAt)} – ${date(product.lastSeenAt)}`} /><Metric label="Mapping status" value={product.mappingStatus.replaceAll("_", " ")} /><Metric label="Mapping version" value={product.mappingVersion} mono /></dl>
     <div className="rounded-lg bg-slate-50 p-3 text-xs dark:bg-white/5">{product.alertOpen || product.workItemOpen ? <span className="inline-flex items-center gap-1.5"><AlertTriangle className="h-3.5 w-3.5" />Open unmapped-product alert/work item</span> : <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5" />No open unmapped-product condition</span>}</div>
-    {preset ? <div className="rounded-lg border border-teal-200 bg-teal-50 p-3 text-xs text-teal-900 dark:border-teal-400/30 dark:bg-teal-400/10 dark:text-teal-100"><ShieldCheck className="mr-1 inline h-4 w-4" />Operator-authorized Push Button System target preselected. Explicit confirmation is still required.</div> : null}
+    {preset ? <div className="rounded-lg border border-teal-200 bg-teal-50 p-3 text-xs text-teal-900 dark:border-teal-400/30 dark:bg-teal-400/10 dark:text-teal-100"><ShieldCheck className="mr-1 inline h-4 w-4" />{hasPersistedTarget ? <>Authorized target: {presetStepLabel || "catalog target"}. Current persisted mapping remains selected in the form.</> : <>Operator-authorized Push Button System target preselected. Explicit confirmation is still required.</>}</div> : null}
+    {presetDiffers ? <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs text-amber-950 dark:bg-amber-400/10 dark:text-amber-100"><AlertTriangle className="mr-1 inline h-4 w-4" /><strong>Mapping mismatch:</strong> current persisted step is <strong>{persistedStepLabel}</strong>; authorized target is <strong>{presetStepLabel}</strong>. Change the form only if you intend to append a corrective decision.</div> : null}
     <fieldset className="space-y-3"><legend className="text-sm font-semibold">Decision</legend><div className="flex gap-4 text-sm"><label><input type="radio" checked={result === "approved"} onChange={() => setResult("approved")} /> Approve</label><label><input type="radio" checked={result === "rejected"} onChange={() => setResult("rejected")} /> Reject</label></div>
       {result === "approved" ? <div className="grid gap-2"><Select label="Business context" value={contextId} onChange={(v) => { setContextId(v); setOfferId(""); setStepId(""); setVariantId(""); }} rows={payload.targets.contexts} /><Select label="Canonical offer" value={offerId} onChange={(v) => { setOfferId(v); setStepId(""); setVariantId(""); }} rows={offers} /><Select label="Offer step" value={stepId} onChange={(v) => { setStepId(v); setVariantId(""); }} rows={steps} /><Select label="Variant (optional)" value={variantId} onChange={setVariantId} rows={variants} optional /></div> : <p className="text-xs text-slate-500">Rejection records no canonical target.</p>}
       <label className="block text-sm">Operator reason<textarea value={reason} onChange={(event) => setReason(event.target.value)} maxLength={500} required className="mt-1 min-h-20 w-full rounded-lg border bg-transparent p-2" placeholder="Why is this decision authorized?" /></label>
