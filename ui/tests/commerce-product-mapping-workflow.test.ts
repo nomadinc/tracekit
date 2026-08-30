@@ -5,6 +5,7 @@ import test from "node:test";
 const route = readFileSync(new URL("../app/api/commerce/product-mappings/route.ts", import.meta.url), "utf8");
 const bulkRoute = readFileSync(new URL("../app/api/commerce/product-mappings/bulk/route.ts", import.meta.url), "utf8");
 const component = readFileSync(new URL("../components/offers/commerce-product-mapping-review.tsx", import.meta.url), "utf8");
+const shellDrawer = readFileSync(new URL("../components/layout/shell-drawer.tsx", import.meta.url), "utf8");
 const intelligence = readFileSync(new URL("../lib/commerce/product-mapping-intelligence.ts", import.meta.url), "utf8");
 const intelligenceRepository = readFileSync(new URL("../lib/commerce/product-mapping-intelligence-repository.ts", import.meta.url), "utf8");
 const migration = readFileSync(new URL("../../supabase/migrations/20260830053413_commerce_product_mapping_review_workflow.sql", import.meta.url), "utf8");
@@ -133,6 +134,33 @@ test("bulk UI requires one operator reason and explicit confirmation for the sel
   assert.match(component, /selected/);
 });
 
+test("individual and bulk review actions open the established right-side shell drawer", () => {
+  assert.match(component, /useShellDrawer/);
+  assert.match(component, /drawer\.openDrawer\(<ProductDecisionDrawer/);
+  assert.match(component, /drawer\.openDrawer\(<BulkDecisionPanel/);
+  assert.match(component, /drawer\.closeDrawer/);
+  assert.match(shellDrawer, /absolute inset-y-0 right-0/);
+  assert.match(shellDrawer, /event\.key === "Escape"/);
+  assert.match(shellDrawer, /aria-label="Close Drawer"/);
+});
+
+test("review content lives only in the drawer and is not appended below the product list", () => {
+  const reviewContent = component.match(/function ReviewContent\(\)[\s\S]*?(?=function ProductDecisionDrawer)/)?.[0] || "";
+  const mainPageMarkup = reviewContent.slice(reviewContent.indexOf("return <section"));
+  assert.match(reviewContent, /<ProductList[\s\S]*onSelect=\{openProductReview\}/);
+  assert.doesNotMatch(mainPageMarkup, /<DecisionPanel|<BulkDecisionPanel/);
+  assert.doesNotMatch(mainPageMarkup, /selectedDetail|activeBulk|detailLoading/);
+});
+
+test("bulk drawer shows target, totals, evidence, mapping versions, and selectable products", () => {
+  assert.match(component, /chosenOrders/);
+  assert.match(component, /group\.label/);
+  assert.match(component, /product\.recommendation\?\.evidence\.identityMatch/);
+  assert.match(component, /product\.recommendation\?\.evidence\.scope/);
+  assert.match(component, /Version \{product\.mappingVersion\}/);
+  assert.match(component, /type="checkbox"/);
+});
+
 test("price evidence corroborates identity but cannot independently establish it", () => {
   assert.match(intelligence, /Price is corroboration only/);
   assert.match(intelligence, /identityMatches/);
@@ -172,7 +200,7 @@ test("bulk decisions fail atomically on a stale item while manual single-product
   assert.match(bulkMigration, /any stale item rolls back the full batch/);
   assert.match(bulkRoute, /stale_mapping_version/);
   assert.match(component, /Nothing was saved/);
-  assert.match(component, /Select one product for individual review/);
+  assert.match(component, /Manual review/);
   assert.match(component, /Review<\/button>/);
 });
 
