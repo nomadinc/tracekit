@@ -56,7 +56,10 @@ export async function GET(request: Request) {
 
   await patchTelemetry(requestId, { backfill_started_at: new Date().toISOString(), backfill_status: "running" });
   try {
-    backfill = await runEverflowOrderBackfillBatches({ batchSize: 250 });
+    // Keep the PostgREST RPC comfortably below the authenticator role's 8-second
+    // statement timeout. The reconciliation function is resumable and lock-safe,
+    // so smaller batches preserve correctness while allowing every cron wake to progress.
+    backfill = await runEverflowOrderBackfillBatches({ batchSize: 100 });
     const summary = (backfill && typeof backfill === "object") ? backfill as Record<string, unknown> : {};
     await patchTelemetry(requestId, {
       backfill_completed_at: new Date().toISOString(),
