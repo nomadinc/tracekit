@@ -37,7 +37,7 @@ export type EverflowOrderLinkInput = {
 };
 
 export type EverflowOrderLinkResult = {
-  status: "matched" | "unmatched" | "ambiguous" | "conflict";
+  status: "matched" | "unmatched" | "non_order" | "ambiguous" | "conflict";
   canonicalOrderId: string | null;
   matchMethod: "transaction_id" | "email_time_amount" | "email_time_30m" | null;
   confidence: number;
@@ -175,9 +175,10 @@ export async function resolveAndMapEverflowOrder(input: {
   let confidence = 0;
 
   // deterministic_order_v2 intentionally does not attach upper-funnel / zero-value
-  // events to canonical orders, even when they carry a transaction ID or customer email.
+  // events to canonical orders. Report them explicitly as non-order instead of
+  // mixing them into true unmatched commerce conversions.
   if (!isCommerceValue) {
-    return { status: "unmatched", canonicalOrderId: null, matchMethod: null, confidence: 0, mappingObserved: false };
+    return { status: "non_order", canonicalOrderId: null, matchMethod: null, confidence: 0, mappingObserved: false };
   }
 
   if (transactionId) {

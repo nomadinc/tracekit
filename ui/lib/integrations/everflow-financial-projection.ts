@@ -15,6 +15,8 @@ type LatestEverflowState = {
   isEvent: boolean;
   eventName: string | null;
   status: string | null;
+  revenue: number;
+  saleAmount: number;
   payout: number;
   currency: string | null;
   payloadHash: string;
@@ -64,10 +66,16 @@ function latestState(row: Row): LatestEverflowState {
     isEvent: bool(row.is_event),
     eventName: text(row.event_name),
     status: text(row.status)?.toLowerCase() || null,
+    revenue: number(row.revenue),
+    saleAmount: number(row.sale_amount),
     payout: number(row.payout),
     currency: text(row.currency)?.toUpperCase() || null,
     payloadHash: String(row.payload_hash),
   };
+}
+
+function isCommerceValue(state: LatestEverflowState) {
+  return state.revenue !== 0 || state.saleAmount !== 0;
 }
 
 function mapping(row: Row): OrderMapping {
@@ -207,10 +215,18 @@ export async function projectEverflowFinancialEffects(input: {
   syncRunId: string;
 }) {
   const latestRows = await commercePersistenceRequest(
-    `everflow_conversion_events?organization_id=eq.${encodeURIComponent(input.organizationId)}&connection_id=eq.${encodeURIComponent(input.connectionId)}&sync_run_id=eq.${encodeURIComponent(input.syncRunId)}&ingestion_method=eq.api&select=organization_id,connection_id,provider_account_id,source_identity,conversion_id,transaction_id,conversion_at,is_event,event_name,status,payout,currency,payload_hash`,
+    `everflow_conversion_events?organization_id=eq.${encodeURIComponent(input.organizationId)}&connection_id=eq.${encodeURIComponent(input.connectionId)}&sync_run_id=eq.${encodeURIComponent(input.syncRunId)}&ingestion_method=eq.api&select=organization_id,connection_id,provider_account_id,source_identity,conversion_id,transaction_id,conversion_at,is_event,event_name,status,revenue,sale_amount,payout,currency,payload_hash`,
   );
   const states = latestRows.map(latestState);
-  if (!states.length) return { eligible: 0, projected: 0, skippedUnmapped: 0, skippedZeroEffect: 0, alreadyProjected: 0 };
+  if (!states.length) return {
+    eligible: 0,
+    projected: 0,
+    skippedUnmapped: 0,
+    skippedNonOrder: 0,
+    skippedUnmatchedCommerce: 0,
+    skippedZeroEffect: 0,
+    alreadyProjected: 0,
+  };
 
   const providerAccountIds = Array.from(new Set(states.map((state) => state.providerAccountId)));
   const mappingRows = await commercePersistenceRequest(
@@ -223,8 +239,19 @@ export async function projectEverflowFinancialEffects(input: {
     const found = mappingBySource.get(`${state.providerAccountId}:${state.conversionId}`);
     return found ? [{ state, mapping: found }] : [];
   });
-  const skippedUnmapped = states.length - mappedStates.length;
-  if (!mappedStates.length) return { eligible: 0, projected: 0, skippedUnmapped, skippedZeroEffect: 0, alreadyProjected: 0 };
+  const unmappedStates = states.filter((state) => !mappingBySource.has(`${state.providerAccountId}:${state.conversionId}`));
+  const skippedNonOrder = unmappedStates.filter((state) => !isCommerceValue(state)).length;
+  const skippedUnmatchedCommerce = unmappedStates.length - skippedNonOrder;
+  const skippedUnmapped = unmappedStates.length;
+  if (!mappedStates.length) return {
+    eligible: 0,
+    projected: 0,
+    skippedUnmapped,
+    skippedNonOrder,
+    skippedUnmatchedCommerce,
+    skippedZeroEffect: 0,
+    alreadyProjected: 0,
+  };
 
   const orderIds = Array.from(new Set(mappedStates.map(({ mapping: item }) => item.canonicalOrderId)));
   const orderRows = await commercePersistenceRequest(
@@ -323,5 +350,13 @@ export async function projectEverflowFinancialEffects(input: {
     }
   }
 
-  return { eligible, projected, skippedUnmapped, skippedZeroEffect, alreadyProjected };
+  return {
+    eligible,
+    projected,
+    skippedUnmapped,
+    skippedNonOrder,
+    skippedUnmatchedCommerce,
+    skippedZeroEffect,
+    alreadyProjected,
+  };
 }

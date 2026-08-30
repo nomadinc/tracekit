@@ -5,7 +5,7 @@ import { createCommerceControlPlane } from "@/lib/commerce/server-control-plane"
 import { MemoryCommerceEvidenceStore } from "@/lib/commerce/evidence-store";
 import { commercePersistenceCount, commercePersistenceRequest } from "@/lib/commerce/supabase-control-repository";
 import { syncEverflowConversions, validateEverflowConversionRange } from "@/lib/integrations/everflow-conversions";
-import { captureEverflowConversionBaseline, finalizeEverflowConversionRunMetrics } from "@/lib/integrations/everflow-conversion-run-metrics";
+import { captureEverflowConversionBaseline, finalizeEverflowConversionRunMetrics, mergeEverflowSyncRunMetadata } from "@/lib/integrations/everflow-conversion-run-metrics";
 import { captureEverflowFinancialBaseline, persistEverflowEventReversalHistory } from "@/lib/integrations/everflow-event-reversals";
 import { projectEverflowFinancialEffects } from "@/lib/integrations/everflow-financial-projection";
 import { EverflowHealthError } from "@/lib/integrations/everflow-client";
@@ -95,6 +95,11 @@ export async function POST(request: Request) {
       organizationId,
       connectionId,
       syncRunId: result.syncRunId,
+    });
+    await mergeEverflowSyncRunMetadata({
+      connectionId,
+      syncRunId: result.syncRunId,
+      values: { linkage: result.linkage, financialProjection },
     });
     return NextResponse.json({ ok: true, ...result, ...changeMetrics, eventEffects, financialProjection, requestId }, { headers: responseHeaders(requestId) });
   } catch (error) {

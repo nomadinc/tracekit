@@ -523,7 +523,7 @@ export async function syncEverflowConversions(input: {
   let seen = 0;
   let persisted = 0;
   let totalCount = 0;
-  const linkage = { matched: 0, unmatched: 0, ambiguous: 0, conflict: 0 };
+  const linkage = { matched: 0, unmatched: 0, non_order: 0, ambiguous: 0, conflict: 0 };
   try {
     while (page <= maxPages) {
       const checkpoint = await input.plane.beginCheckpoint(input.session, input.connectionId, {
