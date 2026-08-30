@@ -3,6 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const migration = readFileSync(new URL("../../supabase/migrations/20260830222807_complete_commas_canonical_catalog.sql", import.meta.url), "utf8");
+const millionaireMigration = readFileSync(new URL("../../supabase/migrations/20260830224531_add_millionaire_interview_order_bump.sql", import.meta.url), "utf8");
 const route = readFileSync(new URL("../app/api/commerce/product-mappings/route.ts", import.meta.url), "utf8");
 
 const GOLD = "8d1b5be3-c60c-45ec-baa6-a2e1b6b610d5";
@@ -65,4 +66,23 @@ test("migration stays suggestion-only and preserves immutable commerce facts", (
   assert.doesNotMatch(migration, /(insert into|update|delete from) public\.(platform_orders|commerce_product_mapping_decisions)/);
   assert.doesNotMatch(migration, /rule_kind.*(normalized_title|title_prefix)/);
   assert.doesNotMatch(migration, /execution_mode\s*=\s*'auto_map'/);
+});
+
+test("Millionaire Interview Series adds one exact, suggest-only order bump without changing existing bumps", () => {
+  const stepId = "efc6b70d-296c-4f28-8c50-3851dd0c467e";
+  assert.match(millionaireMigration, new RegExp(`'${stepId}'.*'order_bump'.*'Order Bump — Millionaire Interview Series'`, "s"));
+  assert.match(millionaireMigration, /"catalog_key":"order-bump-millionaire-interview-series"/);
+  assert.match(millionaireMigration, /"parent_step_key":"front-end"/);
+  assert.match(millionaireMigration, /"accepted_prices":\[94\]/);
+  assert.match(millionaireMigration, new RegExp(`'provider_product_id', 'vREZg', 'vREZg'[\\s\\S]*'${stepId}'[\\s\\S]*100, 'suggest', 'active'`));
+  assert.match(millionaireMigration, /select id, 94, 'USD', 10, 'supporting'/);
+  for (const existingOrderBump of [
+    "a5d6d601-790d-4b7c-97f3-a9f833465ef5",
+    "2fa222b9-1325-4cd5-b712-03313f093057",
+    "95afea56-9792-4fda-960d-7256251f3523",
+  ]) assert.doesNotMatch(millionaireMigration, new RegExp(existingOrderBump));
+  assert.doesNotMatch(millionaireMigration, /rule_kind.*(normalized_title|title_prefix)/);
+  assert.doesNotMatch(millionaireMigration, /(insert into|update|delete from) public\.(platform_orders|commerce_product_mapping_decisions)/);
+  assert.match(millionaireMigration, /set auto_map_enabled = false/);
+  assert.doesNotMatch(millionaireMigration, /execution_mode\s*=\s*'auto_map'/);
 });

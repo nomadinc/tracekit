@@ -123,6 +123,7 @@ test("final catalog exact identities remain suggest-only and price cannot substi
   const growthDownsell2 = "growth-downsell-2";
   const frontEnd = "front-end";
   const mysteryDownsell1 = "mystery-downsell-1";
+  const millionaireOrderBump = "millionaire-order-bump";
   const identities = [
     ["N7v9D", silver],
     ["OJwyY", bronze],
@@ -134,6 +135,7 @@ test("final catalog exact identities remain suggest-only and price cannot substi
     ["pLWqN", growthDownsell2],
     ["N7Jr6", frontEnd],
     ["9GOV4", mysteryDownsell1],
+    ["vREZg", millionaireOrderBump],
   ] as const;
   const rules = identities.map(([providerProductId, offerStepId], index) => rule({
     id: `final-${index}`,
@@ -160,6 +162,7 @@ test("final catalog exact identities remain suggest-only and price cannot substi
   assert.equal(recommend("pLWqN", [75])?.offerStepId, growthDownsell2);
   assert.equal(recommend("N7Jr6", [1, 2, 47, 282])?.offerStepId, frontEnd);
   assert.equal(recommend("9GOV4", [148])?.offerStepId, mysteryDownsell1);
+  assert.equal(recommend("vREZg", [94])?.offerStepId, millionaireOrderBump);
   assert.equal(recommend("unknown", [70, 75, 95, 148, 195, 199]), null);
   assert.equal(rules.every((item) => item.executionMode === "suggest"), true);
 });
