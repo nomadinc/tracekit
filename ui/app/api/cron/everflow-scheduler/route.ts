@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { commercePersistenceRequest } from "@/lib/commerce/supabase-control-repository";
-import { runEverflowOrderBackfillBatches } from "@/lib/integrations/everflow-order-backfill";
 import { runDueEverflowSchedules } from "@/lib/integrations/everflow-scheduled-worker";
 
 export const dynamic = "force-dynamic";
@@ -14,11 +13,6 @@ function authorizedCron(request: Request) {
 
 function errorSummary(error: unknown) {
   return error instanceof Error ? error.message.slice(0, 300) : "unknown_error";
-}
-
-function asCount(value: unknown) {
-  const parsed = Number(value);
-  return Number.isFinite(parsed) ? Math.trunc(parsed) : null;
 }
 
 async function patchTelemetry(requestId: string, patch: Record<string, unknown>) {
@@ -47,39 +41,19 @@ export async function GET(request: Request) {
     console.error("everflow_cron_telemetry_insert_failed", { requestId, error: errorSummary(error) });
   }
 
-  let scheduler: unknown = null;
-  let backfill: unknown = null;
-  let schedulerFailed = false;
-  let backfillFailed = false;
-  let schedulerError: string | null = null;
-  let backfillError: string | null = null;
+  // Reconciliation is intentionally delegated to Supabase pg_cron. The v2 reconciliation
+  // function can exceed PostgREST's 8-second authenticator timeout even when database-side
+  // execution succeeds, so the database scheduler runs it directly without the HTTP ceiling.
+  await patchTelemetry(requestId, {
+    backfill_started_at: new Date().toISOString(),
+    backfill_completed_at: new Date().toISOString(),
+    backfill_status: "delegated_pg_cron",
+    backfill_error: null,
+  });
 
-  await patchTelemetry(requestId, { backfill_started_at: new Date().toISOString(), backfill_status: "running" });
-  try {
-    // The indexed reconciliation path measures about 7.2s for 100 events in Production.
-    // Use 50 to preserve comfortable headroom under PostgREST's 8-second authenticator timeout.
-    // The function is resumable and advisory-lock protected, so smaller batches do not change correctness.
-    backfill = await runEverflowOrderBackfillBatches({ batchSize: 50 });
-    const summary = (backfill && typeof backfill === "object") ? backfill as Record<string, unknown> : {};
-    await patchTelemetry(requestId, {
-      backfill_completed_at: new Date().toISOString(),
-      backfill_status: "completed",
-      backfill_processed: asCount(summary.processed),
-      backfill_matched: asCount(summary.matched),
-      backfill_ambiguous: asCount(summary.ambiguous),
-      backfill_unmatched: asCount(summary.unmatched),
-      backfill_remaining: asCount(summary.remaining),
-    });
-  } catch (error) {
-    backfillFailed = true;
-    backfillError = errorSummary(error);
-    console.error("everflow_backfill_failed", { requestId, error: backfillError });
-    await patchTelemetry(requestId, {
-      backfill_completed_at: new Date().toISOString(),
-      backfill_status: "failed",
-      backfill_error: backfillError,
-    });
-  }
+  let scheduler: unknown = null;
+  let schedulerFailed = false;
+  let schedulerError: string | null = null;
 
   await patchTelemetry(requestId, { scheduler_started_at: new Date().toISOString(), scheduler_status: "running" });
   try {
@@ -99,7 +73,7 @@ export async function GET(request: Request) {
     });
   }
 
-  const responseStatus = schedulerFailed && backfillFailed ? 500 : 200;
+  const responseStatus = schedulerFailed ? 500 : 200;
   await patchTelemetry(requestId, { completed_at: new Date().toISOString(), response_status: responseStatus });
 
   if (responseStatus === 500) {
@@ -112,14 +86,11 @@ export async function GET(request: Request) {
   return NextResponse.json({
     ok: true,
     scheduler,
-    backfill,
-    warnings: [
-      ...(schedulerFailed ? ["scheduler_failed"] : []),
-      ...(backfillFailed ? ["backfill_failed"] : []),
-    ],
+    backfill: { delegated: "pg_cron" },
+    warnings: [],
     errors: {
       scheduler: schedulerError,
-      backfill: backfillError,
+      backfill: null,
     },
     requestId,
   });
