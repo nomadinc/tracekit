@@ -33,7 +33,8 @@ test("review recommendations come from persisted intelligence rather than hard-c
   assert.doesNotMatch(route, /const\s+presets\s*:/);
   assert.doesNotMatch(route, /presets\[String\(row\.provider_product_id\)\]/);
   assert.match(component, /TraceKit recommendation/);
-  assert.match(component, /Explicit confirmation is still required/);
+  assert.match(component, /confirm-product-mapping-decision/);
+  assert.match(component, /Review decision/);
 });
 
 test("recommendation reads are advisory only and never append mapping decisions or auto-map from GET", () => {
@@ -72,6 +73,9 @@ test("single-product approval remains explicit, version guarded, append-only, au
   assert.match(migration, /p_correlation_id/);
   assert.match(migration, /permission_evaluated[\s\S]*'offers\.manage'/);
   assert.match(migration, /errcode='40001'/);
+  assert.match(route, /repo\.decideProductMapping\([\s\S]*expectedMappingVersion:expected/);
+  const postHandler = route.match(/export async function POST[\s\S]*/)?.[0] || "";
+  assert.ok(postHandler.indexOf("current.mapping_version!==expected") < postHandler.indexOf("repo.decideProductMapping"));
 });
 
 test("recommendation confidence cannot bypass mapping-version concurrency", () => {
@@ -98,7 +102,9 @@ test("UI preserves manual review fallback and explicit single-product reason/con
   assert.match(component, /stale_mapping_version/);
   assert.match(component, /changed while it was under review/);
   assert.match(component, /Decision history/);
-  assert.match(component, /alert and Operations work-item resolution is pending/i);
+  assert.match(component, /Evaluator reconciliation is pending/);
+  assert.match(component, /Decision history/);
+  assert.match(component, /fetch\("\/api\/commerce\/product-mappings"/);
 });
 
 test("bulk approval is server-guarded, recommendation-revalidated, and uses one atomic RPC", () => {
@@ -121,7 +127,8 @@ test("bulk approval is server-guarded, recommendation-revalidated, and uses one 
 test("bulk UI requires one operator reason and explicit confirmation for the selected group", () => {
   assert.match(component, /confirm-bulk-product-mapping-decisions/);
   assert.match(component, /Operator reason/);
-  assert.match(component, /Confirm bulk mapping/);
+  assert.match(component, /Confirm atomic bulk approval/);
+  assert.match(component, /Confirm \$\{chosen\.length\} decisions/);
   assert.match(component, /stale_mapping_version|bulk_recommendation_changed/);
   assert.match(component, /selected/);
 });
@@ -143,6 +150,30 @@ test("checkout identities remain distinct, may share Front End via registry, and
   assert.doesNotMatch(productUpsert, /mapping_status\s*=/);
   assert.doesNotMatch(productUpsert, /mapping_version\s*=/);
   assert.doesNotMatch(productUpsert, /canonical_offer_id\s*=/);
+});
+
+test("bulk review revalidates current versions and recommendations before one atomic guarded RPC", () => {
+  assert.match(bulkRoute, /requirePermission\(resolved\.session, "offers\.manage"\)/);
+  assert.match(bulkRoute, /sameOrigin\(request\)/);
+  assert.match(bulkRoute, /confirm-bulk-product-mapping-decisions/);
+  assert.match(bulkRoute, /const reason = String\(body\.reason \|\| ""\)\.trim\(\)/);
+  assert.match(bulkRoute, /commerce_product_mapping_review_v1\?/);
+  assert.match(bulkRoute, /String\(row\.mapping_version\) !== versions\.get/);
+  assert.match(bulkRoute, /loadProductMappingRecommendations/);
+  assert.match(bulkRoute, /bulk_recommendation_changed/);
+  assert.match(bulkRoute, /rpc\/decide_commerce_product_mapping_bulk/);
+  assert.doesNotMatch(bulkRoute, /decideProductMapping\s*\(/);
+  assert.equal((component.match(/fetch\("\/api\/commerce\/product-mappings\/bulk"/g) || []).length, 1);
+  assert.equal((component.match(/fetch\("\/api\/commerce\/product-mappings",/g) || []).length, 1);
+});
+
+test("bulk decisions fail atomically on a stale item while manual single-product review remains available", () => {
+  assert.match(bulkMigration, /p_expected_mapping_version\s*=>\s*v_expected_mapping_version/);
+  assert.match(bulkMigration, /any stale item rolls back the full batch/);
+  assert.match(bulkRoute, /stale_mapping_version/);
+  assert.match(component, /Nothing was saved/);
+  assert.match(component, /Select one product for individual review/);
+  assert.match(component, /Review<\/button>/);
 });
 
 test("product-health evaluator remains the sole owner of alert and work-item resolution", () => {
