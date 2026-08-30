@@ -12,6 +12,26 @@ test("Transaction normalization is deterministic and preserves verified financia
   assert.notEqual(first.payment_link_hash,transaction.product.payment_link); assert.equal(deterministicUuid("same"),deterministicUuid("same"));
 });
 
+test("provider Product identity is immutable across renames and shared across distinct Transactions",()=>{
+  const scope={connectionId:"00000000-0000-0000-0000-000000000001",providerAccountId:"00000000-0000-0000-0000-000000000002"};
+  const first=normalizeCommasTransaction(transaction,scope);
+  const renamed=normalizeCommasTransaction({...transaction,product:{...transaction.product,title:"Renamed description"}},scope);
+  const upsell=normalizeCommasTransaction({...transaction,id:"tx-upsell"},scope);
+  assert.equal(first.product_uuid,renamed.product_uuid);
+  assert.notEqual(first.payload_hash,renamed.payload_hash);
+  assert.equal(first.product_uuid,upsell.product_uuid);
+  assert.notEqual(first.canonical_order_id,upsell.canonical_order_id);
+  assert.notEqual(first.order_line_id,upsell.order_line_id);
+});
+
+test("unknown Product IDs remain distinct and missing immutable Product identity fails closed",()=>{
+  const scope={connectionId:"00000000-0000-0000-0000-000000000001",providerAccountId:"00000000-0000-0000-0000-000000000002"};
+  const first=normalizeCommasTransaction(transaction,scope);
+  const unknown=normalizeCommasTransaction({...transaction,product:{...transaction.product,id:"new-provider-product",title:"Synthetic Product"}},scope);
+  assert.notEqual(first.product_uuid,unknown.product_uuid);
+  assert.throws(()=>normalizeCommasTransaction({...transaction,product:{title:"Same name",price:"99"}},scope),/identity is incomplete/);
+});
+
 test("Customer contact signals normalize without becoming merge keys",()=>{ assert.equal(normalizeEmail(" A@Example.COM "),"a@example.com"); assert.equal(normalizePhone("+1 (555) 111-2222"),"+15551112222"); assert.equal(normalizePhone("12"),null); });
 test("Refund discovery reports field names and types only",()=>{ assert.deepEqual(refundSchemaObservations([{...transaction,refunds:[{id:"hidden",amount:10,status:null}]}]),{amount:"number",id:"string",status:"null"}); assert.equal(refundSchemaObservations([transaction]),null); });
 test("verified embedded Refunds normalize deterministically and unknown fields fail closed",()=>{const source={...transaction,refunds:[{id:1,payment_id:2,amount:10,amount_gross:10,fee:1,refund_cost:1,created_at:"2026-01-03T00:00:00Z"}]};const scope={connectionId:"00000000-0000-0000-0000-000000000001",providerAccountId:"00000000-0000-0000-0000-000000000002"};assert.deepEqual(normalizeRefunds(source,scope),normalizeRefunds(source,scope));assert.equal(normalizeRefunds(source,scope)[0].amount,"10");assert.throws(()=>normalizeRefunds({...source,refunds:[{...source.refunds[0],unexpected:"x"}]},scope),/schema changed/);});
