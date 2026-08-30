@@ -128,10 +128,11 @@ async function writeCustomers(request: PostgrestRequest, context: ConnectionCont
   for (const record of records) {
     const customer = normalizeShopifyCustomerRecord(record);
     const seenAt = customer.updated_at || new Date().toISOString();
-    const existing = await request<Array<{ person_id: string }>>(
-      `person_source_identities?organization_id=eq.${q(context.organizationId)}&connection_id=eq.${q(context.connectionId)}&provider_account_id=eq.${q(context.providerAccountId)}&source_type=eq.provider_customer_id&source_id=eq.${q(customer.provider_customer_id)}&select=person_id&limit=1`,
+    const existing = await request<Array<{ id: string; person_id: string; first_seen_at?: string | null }>>(
+      `person_source_identities?organization_id=eq.${q(context.organizationId)}&connection_id=eq.${q(context.connectionId)}&provider_account_id=eq.${q(context.providerAccountId)}&source_type=eq.provider_customer_id&source_id=eq.${q(customer.provider_customer_id)}&select=id,person_id,first_seen_at&limit=1`,
     );
-    const personId = existing[0]?.person_id || crypto.randomUUID();
+    const identity = existing[0] || null;
+    const personId = identity?.person_id || crypto.randomUUID();
 
     await request("people?on_conflict=id", {
       method: "POST",
@@ -144,31 +145,41 @@ async function writeCustomers(request: PostgrestRequest, context: ConnectionCont
         display_name: customer.display_name,
         primary_email: customer.email,
         primary_phone: customer.phone,
-        first_seen_at: seenAt,
+        first_seen_at: identity?.first_seen_at || seenAt,
         last_seen_at: seenAt,
         metadata: {},
         updated_at: new Date().toISOString(),
       }),
     });
 
-    await request("person_source_identities?on_conflict=connection_id,provider_account_id,source_type,source_id", {
-      method: "POST",
-      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
-      body: JSON.stringify({
-        organization_id: context.organizationId,
-        person_id: personId,
-        connection_id: context.connectionId,
-        provider_account_id: context.providerAccountId,
-        source_type: "provider_customer_id",
-        source_id: customer.provider_customer_id,
-        confidence: 1,
-        status: "verified",
-        first_seen_at: seenAt,
-        last_seen_at: seenAt,
-        metadata: {},
-        updated_at: new Date().toISOString(),
-      }),
-    });
+    const identityBody = {
+      organization_id: context.organizationId,
+      person_id: personId,
+      connection_id: context.connectionId,
+      provider_account_id: context.providerAccountId,
+      source_type: "provider_customer_id",
+      source_id: customer.provider_customer_id,
+      confidence: 1,
+      status: "verified",
+      first_seen_at: identity?.first_seen_at || seenAt,
+      last_seen_at: seenAt,
+      metadata: {},
+      updated_at: new Date().toISOString(),
+    };
+
+    if (identity) {
+      await request(`person_source_identities?id=eq.${q(identity.id)}&organization_id=eq.${q(context.organizationId)}`, {
+        method: "PATCH",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify(identityBody),
+      });
+    } else {
+      await request("person_source_identities", {
+        method: "POST",
+        headers: { Prefer: "return=minimal" },
+        body: JSON.stringify(identityBody),
+      });
+    }
   }
 }
 
