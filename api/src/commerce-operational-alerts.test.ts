@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import { evaluateCommerceAlerts, MISSED_SYNC_CRITICAL_MS, MISSED_SYNC_WARNING_MS, type CommerceHealthSnapshot } from "./commerce-operational-alerts.ts";
+import { evaluateCommerceAlerts, evaluateCommerceProductMappingAlert, MISSED_SYNC_CRITICAL_MS, MISSED_SYNC_WARNING_MS, type CommerceHealthSnapshot } from "./commerce-operational-alerts.ts";
 
 const now = "2026-08-29T20:00:00.000Z";
 const ago = (ms: number) => new Date(Date.parse(now) - ms).toISOString();
@@ -88,4 +88,41 @@ test("scheduler and queue/runtime failures reconcile independently without block
   assert.match(index, /reconcileCommerceSchedulerSignals\(getSupabase\(env\), false/);
   assert.match(index, /code: "queue_runtime_failure"/);
   assert.match(index, /ctx\.waitUntil\(reconcileCommerceExecutionSignal/);
+});
+test("unmapped provider Product is a review warning and material revenue raises priority without guessing", () => {
+  const result = evaluateCommerceProductMappingAlert({ providerProductId: "provider-product", mappingStatus: "review_required", integrityStatus: "unmapped", orderCount: 10, grossRevenue: 500, firstSeenAt: now, lastSeenAt: now });
+  assert.equal(result.active, true); assert.equal(result.severity, "warning"); assert.equal(result.priority, "high"); assert.match(result.summary, /not assigned/);
+});
+test("mapping conflict is critical and resolved mapping closes its incident", () => {
+  const conflict = evaluateCommerceProductMappingAlert({ providerProductId: "provider-product", mappingStatus: "approved", integrityStatus: "conflict", orderCount: 1, grossRevenue: 1, firstSeenAt: now, lastSeenAt: now });
+  const resolved = evaluateCommerceProductMappingAlert({ providerProductId: "provider-product", mappingStatus: "approved", integrityStatus: "resolved", orderCount: 1, grossRevenue: 1, firstSeenAt: now, lastSeenAt: now });
+  assert.equal(conflict.severity, "critical"); assert.equal(conflict.priority, "urgent"); assert.equal(resolved.active, false);
+});
+test("product alert identity is provider-product scoped and projects to Operations", () => {
+  const source = readFileSync(new URL("./commerce-operational-alerts.ts", import.meta.url), "utf8");
+  assert.match(source, /`\$\{type\}:\$\{product\.providerProductId\}`/);
+  assert.match(source, /commerce_product_mapping_health_v1/);
+  assert.match(source, /provider_product_id: product\.providerProductId/);
+});
+test("mapping health migration is read-only, security-invoker, scoped, and never infers a target", () => {
+  const migration = readFileSync(new URL("../../supabase/migrations/20260830033844_commerce_product_mapping_health.sql", import.meta.url), "utf8");
+  assert.match(migration, /with \(security_invoker = true\)/);
+  assert.match(migration, /p\.organization_id/); assert.match(migration, /p\.connection_id/); assert.match(migration, /p\.provider_account_id/);
+  assert.match(migration, /mapping_status in \('observed', 'proposed', 'review_required'\)/);
+  assert.doesNotMatch(migration, /insert into|update public|delete from/i);
+  assert.match(migration, /revoke all.*anon, authenticated/);
+});
+test("Commerce persistence keeps immutable identities, approved mappings, lines, and Refund links scoped", () => {
+  const persistence = readFileSync(new URL("../../supabase/migrations/039_commerce_persistence_v1.sql", import.meta.url), "utf8");
+  const control = readFileSync(new URL("../../supabase/migrations/040_commerce_control_plane_v1.sql", import.meta.url), "utf8");
+  const ingestion = readFileSync(new URL("../../supabase/migrations/043_commerce_shadow_ingestion_v1.sql", import.meta.url), "utf8");
+  const refunds = readFileSync(new URL("../../supabase/migrations/044_commerce_refund_normalization_v1.sql", import.meta.url), "utf8");
+  assert.match(persistence, /unique \(connection_id, provider_account_id, provider_product_id\)/);
+  assert.match(control, /platform_orders_provider_source_uidx[\s\S]*connection_id, provider_account_id, provider_order_id/);
+  assert.match(control, /commerce_product_mapping_decision_immutable_guard/);
+  const productUpsert = ingestion.slice(ingestion.indexOf("insert into public.commerce_provider_products"), ingestion.indexOf("insert into public.commerce_source_mappings"));
+  assert.doesNotMatch(productUpsert, /mapping_status=excluded|canonical_offer_id=excluded|offer_step_id=excluded|offer_variant_id=excluded/);
+  assert.match(ingestion, /unique \(connection_id, provider_account_id, canonical_order_id, source_line_key\)/);
+  assert.match(refunds, /foreign key \(organization_id,canonical_order_id\) references public\.platform_orders/);
+  assert.match(refunds, /unique\(connection_id,provider_account_id,provider_refund_id\)/);
 });

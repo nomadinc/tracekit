@@ -39,6 +39,29 @@ export type CommerceHealthSnapshot = {
   expiredLeaseRecoveries: number;
 };
 
+export type CommerceProductMappingHealth = {
+  providerProductId: string;
+  mappingStatus: string;
+  integrityStatus: "unmapped" | "conflict" | "resolved";
+  orderCount: number;
+  grossRevenue: number;
+  firstSeenAt: string;
+  lastSeenAt: string;
+};
+
+export function evaluateCommerceProductMappingAlert(product: CommerceProductMappingHealth) {
+  const conflict = product.integrityStatus === "conflict";
+  const unmapped = product.integrityStatus === "unmapped";
+  return {
+    code: conflict ? "product_mapping_conflict" : "product_unmapped",
+    active: conflict || unmapped,
+    severity: (conflict ? "critical" : "warning") as Severity,
+    priority: conflict ? "urgent" as const : product.grossRevenue > 0 ? "high" as const : "normal" as const,
+    title: conflict ? "Commas product mapping conflict" : "Commas product requires mapping review",
+    summary: conflict ? "The current mapping projection is internally inconsistent and reporting must fail closed." : "Revenue remains attached to the provider product and is not assigned to a canonical offer until reviewed.",
+  };
+}
+
 const failureCode = (snapshot: CommerceHealthSnapshot) => String(snapshot.recentRuns.find((run) => run.status === "failed")?.last_error_code || snapshot.warnings[0]?.code || "").toLowerCase();
 const operatorRequired = (code: string) => /(^|_)(401|403|auth|authentication|authorization|credential|decrypt|configuration)(_|$)/.test(code);
 const consecutive = (runs: CommerceHealthSnapshot["recentRuns"], predicate: (run: CommerceHealthSnapshot["recentRuns"][number]) => boolean) => {
@@ -182,8 +205,41 @@ export async function loadCommerceHealthSnapshots(db: any, now = new Date().toIS
 
 export async function runCommerceOperationalAlertEvaluation(db: any, now = new Date().toISOString()) {
   const snapshots = await loadCommerceHealthSnapshots(db, now);
-  for (const snapshot of snapshots) await reconcileCommerceAlerts(db, snapshot);
-  return { evaluated: snapshots.length };
+  let productsEvaluated = 0;
+  for (const snapshot of snapshots) {
+    await reconcileCommerceAlerts(db, snapshot);
+    productsEvaluated += await reconcileCommerceProductMappingAlerts(db, snapshot);
+  }
+  return { evaluated: snapshots.length, products_evaluated: productsEvaluated };
+}
+
+export async function reconcileCommerceProductMappingAlerts(db: any, snapshot: CommerceHealthSnapshot) {
+  const products = await rows(db.from("commerce_product_mapping_health_v1").select("provider_product_id,mapping_status,integrity_status,order_count,gross_revenue,first_seen_at,last_seen_at").eq("organization_id", snapshot.organizationId).eq("connection_id", snapshot.connectionId).eq("provider_account_id", snapshot.providerAccountId), "product_mapping_health_read");
+  for (const row of products) {
+    const product: CommerceProductMappingHealth = { providerProductId: String(row.provider_product_id), mappingStatus: String(row.mapping_status), integrityStatus: String(row.integrity_status) as CommerceProductMappingHealth["integrityStatus"], orderCount: Number(row.order_count || 0), grossRevenue: Number(row.gross_revenue || 0), firstSeenAt: String(row.first_seen_at), lastSeenAt: String(row.last_seen_at) };
+    const evaluated = evaluateCommerceProductMappingAlert(product);
+    for (const type of ["product_unmapped", "product_mapping_conflict"] as const) {
+      const active = evaluated.active && evaluated.code === type;
+      const scopedCode = `${type}:${product.providerProductId}`;
+      const code = alertCode(snapshot, scopedCode);
+      const current = await existingOpenAlert(db, snapshot, scopedCode);
+      const context = { provider: "commas", resource: snapshot.resource, connection_id: snapshot.connectionId, provider_account_id: snapshot.providerAccountId, provider_product_id: product.providerProductId, mapping_status: product.mappingStatus, integrity_status: product.integrityStatus, order_count: product.orderCount, gross_revenue: product.grossRevenue, first_seen_at: product.firstSeenAt, last_seen_at: product.lastSeenAt };
+      let alertId = current?.id || null;
+      if (active && current) {
+        const { error } = await db.from("tracekit_operational_alerts").update({ severity: evaluated.severity, last_observed_at: snapshot.now, occurrence_count: Number(current.occurrence_count || 0) + 1, safe_context: context, updated_at: snapshot.now }).eq("id", current.id);
+        if (error) throw new Error("commerce_product_alert_update_failed");
+      } else if (active) {
+        const { data, error } = await db.from("tracekit_operational_alerts").insert({ organization_id: snapshot.organizationId, capability: "commerce", alert_code: code, status: "open", severity: evaluated.severity, first_observed_at: snapshot.now, last_observed_at: snapshot.now, occurrence_count: 1, safe_context: context, delivery_state: "pending_destination" }).select("id").maybeSingle();
+        if (error) throw new Error("commerce_product_alert_insert_failed");
+        alertId = data?.id || null;
+      } else if (current) {
+        const { error } = await db.from("tracekit_operational_alerts").update({ status: "resolved", last_observed_at: snapshot.now, updated_at: snapshot.now, safe_context: { ...context, recovered_at: snapshot.now } }).eq("id", current.id);
+        if (error) throw new Error("commerce_product_alert_resolution_failed");
+      }
+      if (active || current) await upsertWorkItemCandidate(db, { workspace_id: snapshot.organizationId, type: `commerce_${type}`, category: "integrations", source: "commerce", source_key: code, title: evaluated.title, summary: active ? evaluated.summary : "The provider product mapping condition was resolved.", severity: active ? evaluated.severity : "healthy", priority: evaluated.priority, lifecycle_state: active ? (evaluated.severity === "critical" ? "failing" : "degraded") : "resolved", related_connector_id: snapshot.connectionId, deep_link: `/operations?source=commerce&source_key=${encodeURIComponent(code)}`, evidence: context, metadata: { alert_id: alertId, provider_product_id: product.providerProductId, engine_version: COMMERCE_ALERT_ENGINE_VERSION }, detected_at: snapshot.now }, undefined, snapshot.now);
+    }
+  }
+  return products.length;
 }
 
 export async function reconcileCommerceExecutionSignal(db: any, args: {
