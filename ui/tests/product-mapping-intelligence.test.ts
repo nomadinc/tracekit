@@ -114,3 +114,52 @@ test("corrected Growth Partner exact identities recommend only independently aut
   assert.equal(recommend("ZvpxR", "GROWTH PARTNER Discounted", [199]), null);
   assert.equal(recommend("JEoZJ", "GROWTH PARTNER Discounted", [177]), null);
 });
+
+test("final catalog exact identities remain suggest-only and price cannot substitute for identity", () => {
+  const silver = "silver";
+  const bronze = "bronze";
+  const bronzeDiscounted = "bronze-discounted";
+  const growthDownsell1 = "growth-downsell-1";
+  const growthDownsell2 = "growth-downsell-2";
+  const frontEnd = "front-end";
+  const mysteryDownsell1 = "mystery-downsell-1";
+  const identities = [
+    ["N7v9D", silver],
+    ["OJwyY", bronze],
+    ["QAy00", bronzeDiscounted],
+    ["lXDqJ", bronzeDiscounted],
+    ["ZvpxR", growthDownsell1],
+    ["JEoZJ", growthDownsell1],
+    ["q6zw2", growthDownsell2],
+    ["pLWqN", growthDownsell2],
+    ["N7Jr6", frontEnd],
+    ["9GOV4", mysteryDownsell1],
+  ] as const;
+  const rules = identities.map(([providerProductId, offerStepId], index) => rule({
+    id: `final-${index}`,
+    ruleKind: "provider_product_id",
+    matchValue: providerProductId,
+    normalizedMatchValue: providerProductId,
+    offerStepId,
+    confidence: 100,
+    executionMode: "suggest",
+  }));
+  const recommend = (providerProductId: string, observedPrices: number[]) => recommendProductMapping({
+    candidate: { ...candidate, providerProductId, title: "unrelated title", observedPrices },
+    rules,
+    policy,
+  });
+
+  assert.equal(recommend("N7v9D", [195])?.offerStepId, silver);
+  assert.equal(recommend("OJwyY", [95])?.offerStepId, bronze);
+  assert.equal(recommend("QAy00", [79])?.offerStepId, bronzeDiscounted);
+  assert.equal(recommend("lXDqJ", [70])?.offerStepId, bronzeDiscounted);
+  assert.equal(recommend("ZvpxR", [199])?.offerStepId, growthDownsell1);
+  assert.equal(recommend("JEoZJ", [177])?.offerStepId, growthDownsell1);
+  assert.equal(recommend("q6zw2", [75])?.offerStepId, growthDownsell2);
+  assert.equal(recommend("pLWqN", [75])?.offerStepId, growthDownsell2);
+  assert.equal(recommend("N7Jr6", [1, 2, 47, 282])?.offerStepId, frontEnd);
+  assert.equal(recommend("9GOV4", [148])?.offerStepId, mysteryDownsell1);
+  assert.equal(recommend("unknown", [70, 75, 95, 148, 195, 199]), null);
+  assert.equal(rules.every((item) => item.executionMode === "suggest"), true);
+});
