@@ -10,7 +10,10 @@ export type CommerceRepositoryClient = {
   failShopifyRun(args: Scope & { syncRunId: string; resource: ShopifyResource; checkpoint: ShopifyCheckpoint; pagesCompleted: number; recordsSeen: number; error: string }): Promise<void>;
 };
 
-export type ShopifyRecordWriter = (records: ShopifyPersistedRecord[]) => Promise<void>;
+export type ShopifyRecordWriter = (
+  records: ShopifyPersistedRecord[],
+  context: { syncRunId: string; page: ShopifySyncPage },
+) => Promise<void>;
 
 type Scope = { organizationId: string; connectionId: string; providerAccountId: string };
 type ActiveRun = { syncRunId: string; pagesCompleted: number; recordsSeen: number };
@@ -47,7 +50,7 @@ export function createShopifyPersistenceRepository(args: {
       const scope = requireScope(input);
       const run = requireActive(active, scope, input.page.resource);
       const records = recordsForShopifyPage({ ...scope, page: input.page });
-      await args.writeRecords(records);
+      await args.writeRecords(records, { syncRunId: run.syncRunId, page: input.page });
       await args.client.appendShopifyCheckpoint({ ...scope, syncRunId: run.syncRunId, page: input.page });
       run.pagesCompleted += 1;
       run.recordsSeen += records.length;
