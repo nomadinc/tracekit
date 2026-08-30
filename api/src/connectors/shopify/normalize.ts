@@ -24,6 +24,8 @@ export function normalizeShopifyOrderRecord(record: ShopifyPersistedRecord, shop
   if (record.resource !== "orders") throw new Error("Shopify order normalization only accepts order records.");
   const order = record.payload as Record<string, any>;
   const providerOrderId = required(order.id, "Shopify order id");
+  const storeId = clean(shopDomain);
+  if (!storeId) throw new Error("Shopify order normalization requires a shop domain for multi-store identity.");
   const createdAt = iso(order.createdAt || order.processedAt || order.updatedAt, "Shopify order timestamp");
   const status = String(order.displayFinancialStatus || order.financialStatus || order.status || "UNKNOWN").toUpperCase();
   const cancelled = Boolean(order.cancelledAt);
@@ -38,8 +40,8 @@ export function normalizeShopifyOrderRecord(record: ShopifyPersistedRecord, shop
 
   return {
     platform: "shopify",
-    platform_order_id: providerOrderId,
-    platform_store_id: clean(shopDomain) || null,
+    platform_order_id: `shopify:${storeId}:${providerOrderId}`,
+    platform_store_id: storeId,
     provider_order_id: providerOrderId,
     order_id: clean(order.name) || clean(order.legacyResourceId) || gidTail(providerOrderId),
     order_ts: createdAt,
