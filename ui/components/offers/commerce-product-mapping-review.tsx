@@ -27,7 +27,11 @@ type Product = {
 type Target = { businessContextId: string; canonicalOfferId: string; offerStepId: string; offerVariantId: string | null };
 type CatalogRow = { id: string; name?: string; label?: string; role?: string; business_context_id?: string; canonical_offer_id?: string; offer_step_id?: string };
 type History = { id: string; resulting_state: string; mapping_version: string; decided_by_user_id: string; reason: string; decided_at: string; offer_step_id: string | null };
-type Payload = { ok: boolean; code?: string; products: Product[]; targets: { contexts: CatalogRow[]; offers: CatalogRow[]; steps: CatalogRow[]; variants: CatalogRow[] }; history: History[] };
+type Payload = { ok: boolean; code?: string; requestId?: string; products: Product[]; targets: { contexts: CatalogRow[]; offers: CatalogRow[]; steps: CatalogRow[]; variants: CatalogRow[] }; history: History[] };
+
+class ReviewLoadError extends Error {
+  constructor(readonly code: string, readonly requestId?: string) { super(code); }
+}
 
 const money = new Intl.NumberFormat("en-US", { style: "currency", currency: "USD" });
 const number = new Intl.NumberFormat("en-US");
@@ -37,7 +41,7 @@ async function readReview(providerProductId?: string): Promise<Payload> {
   const query = providerProductId ? `?providerProductId=${encodeURIComponent(providerProductId)}` : "";
   const response = await fetch(`/api/commerce/product-mappings${query}`, { cache: "no-store" });
   const payload = await response.json() as Payload;
-  if (!response.ok || !payload.ok) throw new Error(payload.code || "mapping_review_unavailable");
+  if (!response.ok || !payload.ok) throw new ReviewLoadError(payload.code || "mapping_review_unavailable", payload.requestId || response.headers.get("x-tracekit-request-id") || undefined);
   return payload;
 }
 
@@ -50,6 +54,7 @@ function ReviewContent() {
   const [selectedId, setSelectedId] = React.useState<string | null>(null);
   const [detail, setDetail] = React.useState<Payload | null>(null);
   const [loading, setLoading] = React.useState(true);
+  const [detailLoading, setDetailLoading] = React.useState(false);
   const [error, setError] = React.useState<string | null>(null);
 
   const loadList = React.useCallback(async () => {
@@ -59,11 +64,27 @@ function ReviewContent() {
   }, []);
   React.useEffect(() => { void loadList(); }, [loadList]);
   React.useEffect(() => {
-    if (!selectedId) { setDetail(null); return; }
+    if (!selectedId) { setDetail(null); setDetailLoading(false); return; }
     let current = true;
-    readReview(selectedId).then((value) => { if (current) setDetail(value); }).catch(() => { if (current) setError("The selected product could not be loaded."); });
+    setDetail(null);
+    setError(null);
+    setDetailLoading(true);
+    readReview(selectedId)
+      .then((value) => { if (current) setDetail(value); })
+      .catch((loadError: unknown) => {
+        if (!current) return;
+        if (loadError instanceof ReviewLoadError) {
+          const diagnostic = loadError.requestId ? `${loadError.code} · request ${loadError.requestId}` : loadError.code;
+          setError(`The selected product could not be loaded. (${diagnostic})`);
+        } else {
+          setError("The selected product could not be loaded. (unexpected_client_error)");
+        }
+      })
+      .finally(() => { if (current) setDetailLoading(false); });
     return () => { current = false; };
   }, [selectedId]);
+
+  const selectedDetail = selectedId && detail?.products[0]?.providerProductId === selectedId ? detail : null;
 
   return <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-white/[.035]" aria-labelledby="commerce-product-review-title">
     <div className="flex flex-wrap items-start justify-between gap-3">
@@ -74,7 +95,7 @@ function ReviewContent() {
     {error ? <div role="alert" className="rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800">{error}</div> : null}
     {data ? <div className="grid gap-5 xl:grid-cols-[minmax(0,1.25fr)_minmax(360px,.75fr)]">
       <ProductList products={data.products} selectedId={selectedId} onSelect={setSelectedId} />
-      {selectedId && detail?.products[0] ? <DecisionPanel payload={detail} onChanged={async () => { const next = await readReview(selectedId); setDetail(next); await loadList(); }} /> : <div className="rounded-xl border border-dashed p-6 text-sm text-slate-500">Select a product to review its financial impact, authorized target, and decision history.</div>}
+      {selectedDetail ? <DecisionPanel payload={selectedDetail} onChanged={async () => { const next = await readReview(selectedId!); setDetail(next); await loadList(); }} /> : <div className="rounded-xl border border-dashed p-6 text-sm text-slate-500">{detailLoading && selectedId ? `Loading ${selectedId} review…` : "Select a product to review its financial impact, authorized target, and decision history."}</div>}
     </div> : null}
   </section>;
 }
