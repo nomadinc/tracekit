@@ -48,7 +48,7 @@ function bulkGroups(products: Product[], steps: CatalogRow[]): BulkGroup[] {
     const group = groups.get(key) || { key, target, label, products: [], revenue: 0 };
     group.products.push(product); group.revenue += product.grossRevenue; groups.set(key, group);
   }
-  return [...groups.values()].sort((a, b) => b.revenue - a.revenue);
+  return Array.from(groups.values()).sort((a, b) => b.revenue - a.revenue);
 }
 
 export function CommerceProductMappingReview() { return <AccessBoundary permission="offers.manage" variants={["client", "agency"]}><ReviewContent /></AccessBoundary>; }
