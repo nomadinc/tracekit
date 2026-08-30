@@ -16,6 +16,7 @@ import {
 } from "./maintenance-write-gate";
 import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasScheduleScope, isSyncScheduleDue, syncFrequencyMinutes, scheduledQuotaMaxAgeMs, schedulerGateFailedChecks, schedulerFailureDiagnostic, schedulerOperation, schedulerQuery, quotaDecision, runCommerceCron, validateCommerceQueueMessage, isQueueObservabilityTest, isRuntimeDispatchProbe, isPreReservedRunMatch, preReservedRunMatchDetails, orderingVerificationContractDetails, evidenceOnlyOrderingRecoveryPermitted, orderingGateRead, orderingGateStage, ORDERING_DIAGNOSTIC_VERSION, ORDERING_DIAGNOSTIC_STAGES, type CommerceAdapterRepository, type CommerceQueueMessage } from "./continuous-commerce-cloudflare";
 import { readQuotaBootstrapGate } from "./quota-bootstrap-gate";
+import { reconcileCommerceExecutionSignal, reconcileCommerceSchedulerSignals, runCommerceOperationalAlertEvaluation } from "./commerce-operational-alerts";
 import { createSupabaseServerFetch } from "./supabase-server-fetch";
 import { deriveCommasDisputeLedgerEvents, normalizeCommasDisputeEvent, sha256HexBytes, verifyCommasWebhookSignature, webhookStoragePath } from "./commas-dispute-webhook";
 import { enforceTkidRate, ephemeralTransportDimension, TkidRateLimitError, type DistributedCounterStore, type TkidAbuseClass } from "./tkid-distributed-abuse";
@@ -22560,6 +22561,10 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 		          },
 		        },
 		      });
+		      if (outcome.status === "failed" || outcome.status === "completed" || outcome.status === "completed_with_warnings") ctx.waitUntil(reconcileCommerceExecutionSignal(getSupabase(env), {
+		        organizationId: String(body.organization_id), connectionId: String(body.connection_id), providerAccountId: String(body.provider_account_id), resource: String(body.resource || "transactions"),
+		        code: "queue_runtime_failure", active: outcome.status === "failed", diagnostic: { failed_operation: "queue_runtime_dispatch", error_code: outcome.status },
+		      }).catch((error) => console.error("[TraceKit] commerce queue alert reconciliation failed", { event: "commerce.alerts.failed", failed_operation: String(error?.message || "queue_signal").slice(0, 80) })));
 		      if (outcome.retry) msg.retry(); else msg.ack();
 		      continue;
 		    }
@@ -23468,8 +23473,20 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
         now: new Date().toISOString(),
         repository: getContinuousCommerceAdapterRepository(env),
         queue: { send: async (message) => { await env.continuous_commerce!.send(message); } },
-      }).catch((error) => console.error("[TraceKit] continuous commerce cron failed", { code: "scheduler_failure", ...schedulerFailureDiagnostic(error) })));
+      }).then(async (result) => {
+        await reconcileCommerceSchedulerSignals(getSupabase(env), false);
+        return result;
+      }).catch(async (error) => {
+        const diagnostic = schedulerFailureDiagnostic(error);
+        console.error("[TraceKit] continuous commerce cron failed", { code: "scheduler_failure", ...diagnostic });
+        await reconcileCommerceSchedulerSignals(getSupabase(env), true, { failed_operation: diagnostic.failed_operation, error_code: diagnostic.error_code }).catch(() => {});
+      }));
     }
+    ctx.waitUntil(runCommerceOperationalAlertEvaluation(getSupabase(env)).then((result) => {
+      console.log("[TraceKit] commerce operational alert evaluation completed", { event: "commerce.alerts.evaluated", evaluated: result.evaluated });
+    }).catch((error) => {
+      console.error("[TraceKit] commerce operational alert evaluation failed", { event: "commerce.alerts.failed", failed_operation: String(error?.operation || "unknown").replace(/[^a-z0-9_]/gi, "_").slice(0, 80) });
+    }));
     ctx.waitUntil(runScheduledCheckoutChampImport(env));
     ctx.waitUntil(runScheduledShopifyImport(env));
     ctx.waitUntil(runScheduledPaypalImport(env));

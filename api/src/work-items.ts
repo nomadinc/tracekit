@@ -20,7 +20,7 @@ export const WORK_ITEM_CATEGORIES = ["identity", "attribution", "commissions", "
 export type WorkItemStatus = (typeof WORK_ITEM_STATUSES)[number];
 export type WorkItemPriority = (typeof WORK_ITEM_PRIORITIES)[number];
 export type WorkItemCategory = (typeof WORK_ITEM_CATEGORIES)[number];
-export type WorkItemSource = "health" | "identity" | "attribution" | "commission" | "order" | "connector" | "manual";
+export type WorkItemSource = "health" | "identity" | "attribution" | "commission" | "order" | "connector" | "commerce" | "manual";
 
 export type WorkItemRouteMatch =
   | { kind: "list_work_items" }
