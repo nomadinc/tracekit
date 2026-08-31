@@ -111,7 +111,7 @@ begin
       d.conversion_at,null,'affiliate_payout',null,d.platform,d.workspace_id,
       'Everflow affiliate payout reconciled after order linkage',null,d.conversion_at,clock_timestamp(),
       'affiliate_payout',null,'everflow','reconciliation',d.connection_id,null,d.source_identity,null,
-      d.payout,'cost','{}'::jsonb,d.idempotency_key,'reconciled','verified'
+      d.payout,'cost',ARRAY[]::text[],d.idempotency_key,'reconciled','verified'
     from desired d
     where not exists (
       select 1
@@ -200,7 +200,7 @@ begin
       'Everflow affiliate payout neutralized after order linkage changed',null,clock_timestamp(),
       clock_timestamp(),'affiliate_payout',null,'everflow','reconciliation',s.connection_id,null,
       'linkage-neutralization:' || s.source_identity || ':' || s.canonical_order_id::text,null,
-      s.net_amount,'cost','{}'::jsonb,
+      s.net_amount,'cost',ARRAY[]::text[],
       'everflow:affiliate_payout:linkage_neutralization:' || s.source_identity || ':' || s.canonical_order_id::text || ':' || replace(round(s.net_amount::numeric,4)::text,'.','_'),
       'reconciled','verified'
     from stale s
