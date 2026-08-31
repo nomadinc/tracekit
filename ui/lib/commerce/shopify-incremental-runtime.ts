@@ -1,9 +1,9 @@
 import "server-only";
 
-import { createShopifyAdminPageReader } from "../../../api/src/connectors/shopify/admin-reader";
-import { createShopifyPersistenceRuntime } from "../../../api/src/connectors/shopify/runtime";
-import { runShopifyReadSync } from "../../../api/src/connectors/shopify/sync";
-import type { ShopifyResource } from "../../../api/src/connectors/shopify/resources";
+import { createShopifyAdminPageReader } from "./shopify-core/admin-reader";
+import { createShopifyPersistenceRuntime } from "./shopify-core/runtime";
+import { runShopifyReadSync } from "./shopify-core/sync";
+import type { ShopifyResource } from "./shopify-core/resources";
 
 export async function runShopifyIncrementalResource(args: {
   organizationId: string;
