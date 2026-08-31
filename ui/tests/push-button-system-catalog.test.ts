@@ -7,6 +7,7 @@ const mappingGuard = readFileSync(new URL("../../supabase/migrations/20260830044
 const ingestion = readFileSync(new URL("../../supabase/migrations/043_commerce_shadow_ingestion_v1.sql", import.meta.url), "utf8");
 const persistence = readFileSync(new URL("../../supabase/migrations/039_commerce_persistence_v1.sql", import.meta.url), "utf8");
 const route = readFileSync(new URL("../app/api/commerce/create-push-button-system-catalog/route.ts", import.meta.url), "utf8");
+const platinumRecommendation = readFileSync(new URL("../../supabase/migrations/20260831031900_recommend_5m6yv_oto2_platinum.sql", import.meta.url), "utf8");
 
 test("Push Button System bootstrap creates one context, one offer, seven stable steps, and no variants", () => {
   assert.match(catalog, /'push-button-system-5f1de64a'/);
@@ -70,4 +71,18 @@ test("catalog creation route is WorkOS scoped, same-origin, fixed-purpose, and s
   assert.match(route, /p_correlation_id: requestId/);
   assert.doesNotMatch(route, /provider_product_id|decide_commerce_product_mapping|commerce_provider_products/);
   assert.doesNotMatch(route, /error\.message|String\(error\)/);
+});
+
+test("5M6yv recommendation reuses Platinum and preserves all financial and mapping state", () => {
+  assert.match(platinumRecommendation, /'5M6yv', '5M6yv'/);
+  assert.match(platinumRecommendation, /'a4992adc-57e8-4bb1-9360-f421d2d9322c'/);
+  assert.match(platinumRecommendation, /100, 'suggest', 'active'/);
+  assert.match(platinumRecommendation, /"identity_basis":"operator_authorized"/);
+  assert.match(platinumRecommendation, /select id, 299, 'USD', 10, 'supporting'/);
+  assert.match(platinumRecommendation, /auto_map_enabled = false/);
+  assert.doesNotMatch(platinumRecommendation, /insert into public\.offer_steps/);
+  assert.doesNotMatch(platinumRecommendation, /'normalized_title'|'title_prefix'|'auto_map'/);
+  assert.doesNotMatch(platinumRecommendation, /(insert into|update|delete from) public\.(commerce_product_mapping_decisions|platform_orders|commerce_order_lines|commerce_order_economic_lines|commerce_refund_events|commerce_provider_disputes|commerce_historical_disputes|commerce_evidence_records)/);
+  assert.match(platinumRecommendation, /expected unresolved 5M6yv provider product/);
+  assert.match(platinumRecommendation, /recommendation must not map 5M6yv/);
 });

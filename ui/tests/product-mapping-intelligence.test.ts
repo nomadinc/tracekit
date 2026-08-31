@@ -166,3 +166,37 @@ test("final catalog exact identities remain suggest-only and price cannot substi
   assert.equal(recommend("unknown", [70, 75, 95, 148, 195, 199]), null);
   assert.equal(rules.every((item) => item.executionMode === "suggest"), true);
 });
+
+test("operator-authorized 5M6yv exact identity recommends existing Platinum without price identity", () => {
+  const platinumStep = "a4992adc-57e8-4bb1-9360-f421d2d9322c";
+  const platinumRule = rule({
+    id: "5m6yv-platinum",
+    connectionId: "conn-1",
+    providerAccountId: "acct-1",
+    ruleKind: "provider_product_id",
+    matchValue: "5M6yv",
+    normalizedMatchValue: "5M6yv",
+    offerStepId: platinumStep,
+    confidence: 100,
+    executionMode: "suggest",
+    priority: 10,
+  });
+  const recommendation = recommendProductMapping({
+    candidate: { ...candidate, providerProductId: "5M6yv", title: "unrelated", observedPrices: [299] },
+    rules: [platinumRule],
+    prices: [{ ruleId: platinumRule.id, amount: 299, currency: "USD", evidenceWeight: 10, priceRole: "supporting" }],
+    policy,
+  });
+
+  assert.equal(recommendation?.offerStepId, platinumStep);
+  assert.equal(recommendation?.disposition, "bulk_review");
+  assert.equal(recommendation?.evidence.identityMatch, "provider_product_id");
+  assert.equal(platinumRule.executionMode, "suggest");
+  assert.equal(policy.autoMapEnabled, false);
+  assert.equal(recommendProductMapping({
+    candidate: { ...candidate, providerProductId: "unknown-platinum", title: "Platinum", observedPrices: [299] },
+    rules: [platinumRule],
+    prices: [{ ruleId: platinumRule.id, amount: 299, currency: "USD", evidenceWeight: 100, priceRole: "expected" }],
+    policy,
+  }), null);
+});
