@@ -61,7 +61,7 @@ export function createShopifyCommerceRepositoryClient(config: SupabaseConfig): C
           page: Math.max(1, args.page.checkpoint.page),
           per_page: Math.max(1, args.page.nodes.length),
           first_source_id: ids[0] || null,
-          last_source_id: ids.at(-1) || null,
+          last_source_id: ids.length ? ids[ids.length - 1] : null,
           completed_at: new Date().toISOString(),
           state: "completed",
           metadata: checkpointMetadata(checkpoint),
