@@ -118,7 +118,8 @@ function currencyCode(value: any, fallback: string) {
 }
 
 function gidTail(value: string) {
-  return value.split("/").filter(Boolean).at(-1) || value;
+  const parts = value.split("/").filter(Boolean);
+  return parts.length ? parts[parts.length - 1] : value;
 }
 
 function clean(value: unknown) {
