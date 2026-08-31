@@ -21,6 +21,7 @@ export async function POST(request: Request) {
   if (!connectionId) return NextResponse.json({ ok: false, error: "connection_required" }, { status: 400 });
 
   const plane = createCommerceControlPlane({ evidenceStore: new MemoryCommerceEvidenceStore(), verifier: new CommerceProviderConnectionVerifier() });
+  let syncRunId = "";
   try {
     const connection = await plane.getConnection(resolution.session, connectionId);
     if (connection.provider !== "shopify") return NextResponse.json({ ok: false, error: "not_shopify" }, { status: 400 });
@@ -43,19 +44,21 @@ export async function POST(request: Request) {
       method: "POST",
       body: JSON.stringify({ organization_id: connection.organizationId, connection_id: connection.id, provider_account_id: providerAccount.id, sync_type: "shopify_products_bounded", mode: "shadow", metadata: { bounded_smoke: true } }),
     });
-    const syncRunId = String(runRows[0]?.id || "");
+    syncRunId = String(runRows[0]?.id || "");
     if (!syncRunId) throw new Error("sync_run_create_failed");
 
     const first = await persistPass(products, connection, providerAccount.id, syncRunId);
     const second = await persistPass(products, connection, providerAccount.id, syncRunId);
     await commercePersistenceRequest(`commerce_sync_runs?id=eq.${encodeURIComponent(syncRunId)}`, {
       method: "PATCH",
-      body: JSON.stringify({ status: "completed", completed_at: new Date().toISOString(), records_seen: products.length, records_created: first.productsCreated, records_updated: second.productsReused, evidence_writes: first.evidenceCreated, evidence_reuses: second.evidenceReused, updated_at: new Date().toISOString() }),
+      body: JSON.stringify({ status: "completed", completed_at: new Date().toISOString(), records_seen: products.length, records_created: first.productsCreated, records_updated: 0, records_unchanged: second.productsReused, evidence_writes: first.evidenceCreated, evidence_reuses: second.evidenceReused, updated_at: new Date().toISOString() }),
     });
-    console.info("shopify_bounded_ingest", { connectionId, syncRunId, products: products.length, first, second });
-    return NextResponse.json({ ok: true, syncRunId, products: products.length, firstPass: first, secondPass: second, idempotent: second.evidenceCreated === 0 && second.evidenceReused === products.length });
+    return NextResponse.json({ ok: true, syncRunId, products: products.length, firstPass: first, secondPass: second, idempotent: second.evidenceCreated === 0 && second.evidenceReused === products.length && second.productsCreated === 0 && second.productsReused === products.length });
   } catch (error) {
-    console.error("shopify_bounded_ingest_failed", { connectionId, message: error instanceof Error ? error.message : String(error) });
+    const message = error instanceof Error ? error.message : String(error);
+    if (syncRunId) {
+      await commercePersistenceRequest(`commerce_sync_runs?id=eq.${encodeURIComponent(syncRunId)}`, { method: "PATCH", body: JSON.stringify({ status: "failed", completed_at: new Date().toISOString(), records_failed: 1, last_error_code: "shopify_bounded_ingest_failed", last_error_summary: message.slice(0, 500), updated_at: new Date().toISOString() }) }).catch(() => undefined);
+    }
     return NextResponse.json({ ok: false, error: "shopify_ingest_failed" }, { status: 500 });
   }
 }
@@ -70,7 +73,7 @@ async function persistPass(products: any[], connection: any, providerAccountId: 
     let evidenceId = evidence[0]?.id ? String(evidence[0].id) : "";
     if (!evidenceId) {
       evidenceId = crypto.randomUUID();
-      await commercePersistenceRequest("commerce_evidence_records", { method: "POST", body: JSON.stringify({ id: evidenceId, organization_id: connection.organizationId, connection_id: connection.id, provider_account_id: providerAccountId, sync_run_id: syncRunId, source_object_type: "shopify_product", source_object_id: sourceObjectId, payload_hash: payloadHash, storage_backend: "database_inline", storage_reference: `shopify-bounded:${sourceObjectId}:${payloadHash}`, content_type: "application/json", byte_size: Buffer.byteLength(payloadText), source_created_at: product.createdAt || null, source_updated_at: product.updatedAt || null, observed_at: new Date().toISOString(), normalizer_version: "shopify-v1", pii_classification: "none", retention_policy: "commerce_default", metadata: { provider: "shopify", resource: "products", bounded_smoke: true, payload: product } }) });
+      await commercePersistenceRequest("commerce_evidence_records", { method: "POST", body: JSON.stringify({ id: evidenceId, organization_id: connection.organizationId, connection_id: connection.id, provider_account_id: providerAccountId, sync_run_id: syncRunId, source_object_type: "shopify_product", source_object_id: sourceObjectId, payload_hash: payloadHash, storage_backend: "managed_evidence_store", storage_reference: `shopify-bounded:${connection.id}:${providerAccountId}:${sourceObjectId}:${payloadHash}`, content_type: "application/json", byte_size: Buffer.byteLength(payloadText), source_created_at: product.createdAt || null, source_updated_at: product.updatedAt || null, observed_at: new Date().toISOString(), normalizer_version: "shopify-v1", pii_classification: "none", retention_policy: "commerce_default", metadata: { provider: "shopify", resource: "products", bounded_smoke: true, normalizedPayloadHash: payloadHash } }) });
       evidenceCreated++;
     } else evidenceReused++;
 
