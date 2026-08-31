@@ -41,7 +41,7 @@ export async function POST(request: Request) {
 
     const runRows = await commercePersistenceRequest("commerce_sync_runs", {
       method: "POST",
-      body: JSON.stringify({ organization_id: connection.organizationId, connection_id: connection.id, provider_account_id: providerAccount.id, sync_type: "shopify_products_bounded", mode: "manual_smoke" }),
+      body: JSON.stringify({ organization_id: connection.organizationId, connection_id: connection.id, provider_account_id: providerAccount.id, sync_type: "shopify_products_bounded", mode: "shadow", metadata: { bounded_smoke: true } }),
     });
     const syncRunId = String(runRows[0]?.id || "");
     if (!syncRunId) throw new Error("sync_run_create_failed");
