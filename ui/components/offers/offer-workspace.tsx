@@ -106,8 +106,119 @@ function IntelligenceNote({
 export function OfferWorkspace() {
   return (
     <AccessBoundary permission="offers.view" variants={["client", "agency"]}>
-      <OfferWorkspaceContent />
+      <OfferWorkspaceSource />
     </AccessBoundary>
+  );
+}
+
+type CanonicalOffer = {
+  id: string;
+  organizationId: string;
+  businessContextId: string;
+  name: string;
+  status: string;
+};
+
+function OfferWorkspaceSource() {
+  const { session } = useIdentity();
+  return session.developmentOnly ? (
+    <OfferWorkspaceContent />
+  ) : (
+    <PersistentOfferCatalog />
+  );
+}
+
+function PersistentOfferCatalog() {
+  const [offers, setOffers] = React.useState<CanonicalOffer[]>([]);
+  const [loading, setLoading] = React.useState(true);
+  const [error, setError] = React.useState(false);
+
+  React.useEffect(() => {
+    let active = true;
+    setLoading(true);
+    setError(false);
+    fetch("/api/offers", {
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: { Accept: "application/json" },
+    })
+      .then(async (response) => {
+        const payload = (await response.json()) as {
+          ok?: boolean;
+          offers?: CanonicalOffer[];
+        };
+        if (!response.ok || !payload.ok || !Array.isArray(payload.offers))
+          throw new Error("offers_unavailable");
+        if (active) setOffers(payload.offers);
+      })
+      .catch(() => {
+        if (active) setError(true);
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, []);
+
+  if (loading)
+    return (
+      <div className="rounded-xl border bg-white p-8 text-sm text-slate-500 dark:border-white/10 dark:bg-ink">
+        Loading Offers…
+      </div>
+    );
+  if (error)
+    return (
+      <div role="alert" className="rounded-xl border border-red-300 bg-red-50 p-6">
+        <h2 className="font-semibold">Offers unavailable</h2>
+        <p className="mt-2 text-sm">The canonical Offer catalog could not be loaded.</p>
+      </div>
+    );
+  if (!offers.length)
+    return (
+      <div className="rounded-xl border bg-white p-8 dark:border-white/10 dark:bg-ink">
+        <h2 className="font-semibold">No canonical Offers</h2>
+        <p className="mt-2 text-sm text-slate-500">
+          The active Organization does not currently own an active canonical Offer.
+        </p>
+      </div>
+    );
+
+  return (
+    <section className="rounded-xl border bg-white shadow-sm dark:border-white/10 dark:bg-ink">
+      <div className="border-b p-4 dark:border-white/10">
+        <div className="text-[9px] font-semibold uppercase tracking-[.14em] text-slate-400">
+          Canonical Offers
+        </div>
+        <h2 className="mt-1 text-sm font-semibold">Active Organization catalog</h2>
+      </div>
+      <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-3">
+        {offers.map((offer) => (
+          <article key={offer.id} className="rounded-xl border p-4 dark:border-white/10">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <h3 className="font-semibold">{offer.name}</h3>
+                <p className="mt-1 text-xs text-slate-500">Canonical Offer</p>
+              </div>
+              <span className="rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
+                {offer.status}
+              </span>
+            </div>
+            <dl className="mt-4 space-y-2 text-xs">
+              <div>
+                <dt className="text-slate-500">Business context</dt>
+                <dd className="break-all font-mono">{offer.businessContextId}</dd>
+              </div>
+              <div>
+                <dt className="text-slate-500">Offer ID</dt>
+                <dd className="break-all font-mono">{offer.id}</dd>
+              </div>
+            </dl>
+          </article>
+        ))}
+      </div>
+    </section>
   );
 }
 
