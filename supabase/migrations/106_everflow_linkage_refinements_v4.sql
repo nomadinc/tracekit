@@ -114,6 +114,34 @@ begin
     matched_canonical_order_id=excluded.matched_canonical_order_id,evidence_factors=excluded.evidence_factors,
     reconciled_at=excluded.reconciled_at;
 
+  insert into public.commerce_source_mappings(
+    organization_id,connection_id,provider_account_id,source_object_type,source_object_id,
+    canonical_object_type,canonical_object_id,first_seen_at,last_seen_at,source_created_at,
+    payload_hash,mapping_version,state,metadata
+  )
+  select
+    e.organization_id,e.connection_id,e.provider_account_id,'everflow_conversion',e.source_identity,
+    'order',r.matched_canonical_order_id,e.conversion_at,v_now,e.conversion_at,e.payload_hash,
+    'everflow-order-linkage-v4','active',jsonb_build_object(
+      'algorithm_version','deterministic_order_v4',
+      'match_method',coalesce(r.evidence_factors->>'v4_match_method',r.evidence_factors->>'match_method')
+    )
+  from public.everflow_order_reconciliations r
+  join public.everflow_conversion_events e on e.id=r.event_id and e.organization_id=r.organization_id
+  where r.connection_id=p_connection_id
+    and r.algorithm_version='deterministic_order_v4'
+    and r.reconciled_at=v_now
+    and r.matched_canonical_order_id is not null
+  on conflict(connection_id,provider_account_id,source_object_type,source_object_id)
+  do update set
+    last_seen_at=greatest(public.commerce_source_mappings.last_seen_at,excluded.last_seen_at),
+    payload_hash=excluded.payload_hash,
+    mapping_version=excluded.mapping_version,
+    metadata=excluded.metadata,
+    updated_at=v_now
+  where public.commerce_source_mappings.canonical_object_type='order'
+    and public.commerce_source_mappings.canonical_object_id=excluded.canonical_object_id;
+
   return query
   select count(*)::integer,
          count(*) filter(where matched_canonical_order_id is not null)::integer,
