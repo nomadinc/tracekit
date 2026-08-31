@@ -34,10 +34,19 @@ export const EVERFLOW_CAPABILITIES: SafeCapability[] = [
   { name: "Clicks", state: "unavailable", reason: "Dedicated click ingestion is not implemented yet." },
 ];
 
+export const SHOPIFY_CAPABILITIES: SafeCapability[] = [
+  { name: "Shop identity", state: "supported", reason: "Bounded Admin GraphQL verification is implemented." },
+  { name: "Products / variants", state: "supported", reason: "Incremental read and canonical normalization are implemented." },
+  { name: "Customers", state: "supported", reason: "Incremental customer reads preserve Shopify provider identity." },
+  { name: "Orders / line items", state: "supported", reason: "Incremental order reads and evidence-backed line normalization are implemented." },
+  { name: "Refunds", state: "supported", reason: "Refund evidence and append-only financial events are implemented." },
+  { name: "Scheduled sync", state: "unavailable", reason: "M4 live smoke remains bounded and manual; broad scheduling is not enabled yet." },
+];
+
 export const PROVIDER_CATALOG = [
   { provider: "commas", name: "Commas", availability: "available" },
   { provider: "everflow", name: "Everflow", availability: "available" },
-  { provider: "shopify", name: "Shopify", availability: "coming_soon" },
+  { provider: "shopify", name: "Shopify", availability: "available" },
   { provider: "checkout_champ", name: "Checkout Champ", availability: "coming_soon" },
   { provider: "woocommerce", name: "WooCommerce", availability: "coming_soon" },
   { provider: "next29", name: "Next29", availability: "coming_soon" },
