@@ -1,0 +1,56 @@
+name: Shopify Workstream Verify
+
+on:
+  push:
+    branches:
+      - workstream/shopify
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  api-regression:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: api/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Run Shopify regression suite
+        env:
+          NODE_OPTIONS: --loader ../.github/scripts/ts-extension-loader.mjs
+        run: node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/shopify-*.test.ts
+      - name: Run full API regression suite
+        continue-on-error: true
+        env:
+          NODE_OPTIONS: --loader ../.github/scripts/ts-extension-loader.mjs
+        run: npm test
+
+  ui-regression:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ui
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Run Shopify connection provisioning tests
+        run: npx tsx --test tests/shopify-connection-provisioning.test.ts
