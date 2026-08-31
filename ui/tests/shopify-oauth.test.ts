@@ -37,7 +37,7 @@ test("Shopify OAuth callback HMAC must match the client secret", () => {
     state: "state-123",
     timestamp: "1788130000",
   });
-  const message = [...params.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => `${key}=${value}`).join("&");
+  const message = Array.from(params.entries()).sort(([a], [b]) => a.localeCompare(b)).map(([key, value]) => `${key}=${value}`).join("&");
   params.set("hmac", createHmac("sha256", "shared-secret").update(message).digest("hex"));
   assert.equal(verifyShopifyOAuthCallback(params, "shared-secret"), true);
   assert.equal(verifyShopifyOAuthCallback(params, "wrong-secret"), false);
