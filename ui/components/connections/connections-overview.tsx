@@ -23,16 +23,6 @@ const pill: Record<string, string> = {
   missing: "border-rose-400/25 bg-rose-400/10 text-rose-200",
 };
 
-function Status({ status }: { status: string }) {
-  const s =
-    status === "connected"
-      ? { label: "Connected", cls: "bg-emerald-50 text-emerald-700" }
-      : status === "syncing"
-        ? { label: "Syncing", cls: "bg-amber-50 text-amber-800" }
-        : { label: "Not connected", cls: "bg-gray-100 text-gray-700" };
-  return <span className={["inline-flex items-center rounded-full px-2 py-0.5", "text-xs font-medium", s.cls].join(" ")}>{s.label}</span>;
-}
-
 function ProviderStatus({ value, label }: { value: string; label?: string }) {
   return <span className={`inline-flex rounded-full border px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[.12em] ${pill[value] || pill.unavailable}`}>{label || value.replaceAll("_", " ")}</span>;
 }
@@ -98,7 +88,7 @@ export function ConnectionsOverview({ connections }: { connections: ConnectionEx
                       <div className="mt-auto flex flex-wrap items-center gap-4 pt-5">
                         <Link href={`/connections/commerce/${first.id}`} className="tk-brand-link inline-flex items-center gap-2 rounded-md text-xs font-semibold">View Connection <ArrowRight className="h-3.5 w-3.5" /></Link>
                         {provider.provider === "everflow" ? <button type="button" onClick={() => setConnectProvider("everflow")} className="text-xs font-semibold text-slate-400 hover:text-slate-200">Add Network</button> : null}
-                        {provider.provider === "shopify" ? <button type="button" onClick={() => setConnectProvider("shopify")} className="text-xs font-semibold text-slate-400 hover:text-slate-200">Add Store</button> : null}
+                        {provider.provider === "shopify" ? <button type="button" onClick={() => setConnectProvider("shopify")} className="text-xs font-semibold text-slate-400 hover:text-slate-200">Reconnect / Add Store</button> : null}
                       </div>
                     </>
                   ) : (
@@ -134,9 +124,17 @@ function ConnectDialog({ provider, close }: { provider: ConnectProvider; close: 
     setMessage(null);
     const target = event.currentTarget;
     const form = new FormData(target);
-    setupRequestId.current ||= crypto.randomUUID();
 
     try {
+      if (isShopify) {
+        const shop = String(form.get("shopDomain") || "").trim();
+        const displayName = String(form.get("displayName") || "Shopify Store").trim();
+        const params = new URLSearchParams({ shop, displayName });
+        window.location.assign(`/api/shopify/oauth/start?${params.toString()}`);
+        return;
+      }
+
+      setupRequestId.current ||= crypto.randomUUID();
       if (isEverflow) {
         const response = await fetch("/v1/integrations/everflow/connect", {
           method: "POST",
@@ -148,13 +146,10 @@ function ConnectDialog({ provider, close }: { provider: ConnectProvider; close: 
         target.reset(); setupRequestId.current = null; router.push(`/connections/commerce/${result.connectionId}`); router.refresh(); return;
       }
 
-      const payload = isShopify
-        ? { provider: "shopify", displayName: form.get("displayName"), shopDomain: form.get("shopDomain"), adminAccessToken: form.get("adminAccessToken"), apiVersion: "2026-07" }
-        : { provider: "commas", displayName: form.get("displayName"), environment: form.get("environment"), apiKey: form.get("apiKey") };
       const response = await fetch("/api/commerce/connections", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": setupRequestId.current },
-        body: JSON.stringify(payload),
+        body: JSON.stringify({ provider: "commas", displayName: form.get("displayName"), environment: form.get("environment"), apiKey: form.get("apiKey") }),
       });
       const result = await readCommerceActionResponse(response);
       if (!result.ok || !result.connectionId) { setMessage(result.ok ? "TraceKit returned an incomplete response." : result.message); return; }
@@ -171,12 +166,12 @@ function ConnectDialog({ provider, close }: { provider: ConnectProvider; close: 
         {!isEverflow && !isShopify ? <Field label="Environment"><select name="environment" className="input"><option value="production">Production</option><option value="sandbox">Sandbox</option></select></Field> : null}
         {isEverflow ? <Field label="Network ID (optional)"><input name="networkId" inputMode="numeric" pattern="[0-9]*" autoComplete="off" className="input" placeholder="Leave blank to discover from Everflow" /></Field> : null}
         {isShopify ? <Field label="Shop domain"><input required name="shopDomain" autoComplete="off" className="input" placeholder="your-store.myshopify.com" /></Field> : null}
-        {isShopify ? <Field label="Admin API access token"><input required minLength={8} name="adminAccessToken" type="password" autoComplete="new-password" className="input" placeholder="shpat_… · stored encrypted" /></Field> : <Field label="API key"><input required minLength={8} name="apiKey" type="password" autoComplete="new-password" className="input" placeholder="Stored encrypted; never shown again" /></Field>}
-        <p className="text-[11px] leading-5 text-slate-500">Organization scope is derived from your authenticated TraceKit session. {isShopify ? "The Admin API token is encrypted at rest and used only for server-side read-only Shopify requests." : "The API key is sent only to the authorized server operation and is never returned to the browser."}</p>
-        {isShopify ? <p className="rounded-xl border border-white/10 bg-white/[.03] px-3 py-2 text-[11px] leading-5 text-slate-400">M4 verifies the shop and enables bounded read-only smoke testing. Scheduled or broad historical synchronization is not enabled by this connection step.</p> : null}
-        {busy ? <div aria-live="polite" className="rounded-xl border border-cyan/20 bg-cyan/5 px-3 py-3 text-xs text-cyan-100"><strong>Connecting {providerName}…</strong><div className="mt-1 text-[11px] text-slate-400">Securing credential · Verifying account identity</div></div> : null}
+        {!isShopify ? <Field label="API key"><input required minLength={8} name="apiKey" type="password" autoComplete="new-password" className="input" placeholder="Stored encrypted; never shown again" /></Field> : null}
+        <p className="text-[11px] leading-5 text-slate-500">Organization scope is derived from your authenticated TraceKit session. {isShopify ? "You will be redirected to Shopify to authorize TraceKit. Shopify returns a store-specific Admin API token directly to TraceKit; you never paste that token into this form." : "The API key is sent only to the authorized server operation and is never returned to the browser."}</p>
+        {isShopify ? <p className="rounded-xl border border-white/10 bg-white/[.03] px-3 py-2 text-[11px] leading-5 text-slate-400">TraceKit requests read access for products, customers, orders, and historical orders. M4 remains bounded and read-only; scheduled or broad historical synchronization is not enabled by this step.</p> : null}
+        {busy ? <div aria-live="polite" className="rounded-xl border border-cyan/20 bg-cyan/5 px-3 py-3 text-xs text-cyan-100"><strong>{isShopify ? "Opening Shopify…" : `Connecting ${providerName}…`}</strong><div className="mt-1 text-[11px] text-slate-400">{isShopify ? "Authorize the store in Shopify to continue" : "Securing credential · Verifying account identity"}</div></div> : null}
         {message ? <p role="alert" className="rounded-xl border border-rose-400/20 bg-rose-400/5 px-3 py-2 text-xs text-rose-300">{message}</p> : null}
-        <button disabled={busy} className="w-full rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-950 disabled:opacity-50">{busy ? "Connecting…" : "Create Connection"}</button>
+        <button disabled={busy} className="w-full rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-950 disabled:opacity-50">{busy ? (isShopify ? "Opening Shopify…" : "Connecting…") : (isShopify ? "Continue to Shopify" : "Create Connection")}</button>
       </form>
     </Dialog>
   );
