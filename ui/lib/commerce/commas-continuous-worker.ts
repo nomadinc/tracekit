@@ -4,6 +4,7 @@ import { decodeHex } from "./web-encoding.ts";
 import { decodeCommerceCredentialKey, decryptCommerceCredential } from "./credential-crypto";
 import { normalizeCommasTransaction } from "./commas-shadow-normalizer";
 import { SupabaseCommerceEvidenceStore } from "./supabase-evidence-store-core";
+import { scheduledDeepAttemptAllowance, scheduledDeepProviderRequestLimit } from "./scheduled-deep-contract";
 import {
   COMMERCE_EVIDENCE_CONTRACT_VERSION, CONTINUOUS_NORMALIZER_VERSION, DEFAULT_OVERLAP_PAGES,
   advanceStability, appendNewestFirstAlignmentIds, classifySource, contentFingerprint, continuousRequestBounds, continuousStopDecision, detectProviderOrdering,
@@ -117,10 +118,11 @@ export function firstRecoverableContinuousPage(rows: Row[]): number|null {
   return pages.length?Math.min(...pages):null;
 }
 
-async function fetchProviderPage(secret:string,page:number,perPage:number,correlationId:string,maxAttempts=3) {
+async function fetchProviderPage(secret:string,page:number,perPage:number,correlationId:string,maxAttempts=3,onAttempt?:()=>void) {
   let lastStatus=0;
   for(let attempt=1;attempt<=maxAttempts;attempt++) {
     try {
+      onAttempt?.();
       const response=await fetch(`https://www.fanbasis.com/public-api/checkout-sessions/transactions?page=${page}&per_page=${perPage}`,{headers:{"x-api-key":secret,Accept:"application/json","x-correlation-id":correlationId},signal:AbortSignal.timeout(30_000)});
       lastStatus=response.status;
       const rateLimit:RateLimit={limit:number(response.headers.get("x-ratelimit-limit")),remaining:number(response.headers.get("x-ratelimit-remaining")),reset:response.headers.get("x-ratelimit-reset")};
@@ -362,11 +364,12 @@ async function ensureReferenceInvestigationDependencies(scope:{accountId:string;
   }
 }
 
-export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_reconciliation";maxPages?:number;overlapPages?:number;perPage?:number;paceMs?:number;requestKey?:string;bootstrap?:boolean;evidenceOnlyRecovery?:boolean;expectedScope?:{organizationId:string;connectionId:string;providerAccountId:string}}={}):Promise<ContinuousSyncResult> {
+export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_reconciliation";maxPages?:number;maxProviderRequests?:number;overlapPages?:number;perPage?:number;paceMs?:number;requestKey?:string;bootstrap?:boolean;evidenceOnlyRecovery?:boolean;expectedScope?:{organizationId:string;connectionId:string;providerAccountId:string}}={}):Promise<ContinuousSyncResult> {
   const mode=options.mode??"continuous",bootstrap=options.bootstrap===true,evidenceOnlyRecovery=options.evidenceOnlyRecovery===true;
+  const scheduledDeepRequestLimit=mode==="deep_reconciliation"?scheduledDeepProviderRequestLimit(options.maxProviderRequests):null;
   if(evidenceOnlyRecovery&&(mode!=="continuous"||options.maxPages!==3||options.perPage!==100))throw new Error("Evidence-only recovery bounds are invalid.");
   const bounds=continuousRequestBounds({bootstrap,mode,maxPages:options.maxPages,perPage:options.perPage,overlapPages:options.overlapPages});
-  const {perPage,maxPages,overlapPages}=bounds,paceMs=options.paceMs??100;
+  const {perPage,overlapPages}=bounds,maxPages=scheduledDeepRequestLimit??bounds.maxPages,paceMs=options.paceMs??100;
   if(perPage<1||perPage>100||maxPages<1||overlapPages<1)throw new Error("Continuous sync bounds are invalid.");
   const scope=await scopedConnection(options.expectedScope),owner=`commas-continuous-${randomUUID()}`,started=Date.now();
   if(await commerceConnectionPaused(scope))throw new Error("Continuous Commerce connection is paused.");
@@ -385,7 +388,7 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
   const priorState=(await db(`commerce_continuous_sync_state?connection_id=eq.${scope.connectionId}&provider_account_id=eq.${scope.providerAccountId}&resource=eq.transactions&select=*&limit=1`))[0];
   const priorFingerprints=(object(priorState?.page_fingerprints)||{});
   const priorRecentIds=Array.isArray(priorState?.recent_source_ids)?priorState.recent_source_ids.map(String):[];
-  let providerRequests=0,pagesScanned=0,recordsObserved=0,recordsNew=0,recordsUpdated=0,recordsUnchanged=0,recordsFailed=0,refundsNew=0,refundsUpdated=0,evidenceWrites=0,evidenceReuses=0,retries=0;
+  let providerRequests=scheduledDeepRequestLimit===null?0:(number(claimed[0].provider_request_count)??0),pagesScanned=0,recordsObserved=0,recordsNew=0,recordsUpdated=0,recordsUnchanged=0,recordsFailed=0,refundsNew=0,refundsUpdated=0,evidenceWrites=0,evidenceReuses=0,retries=0;
   let rateLimitLimit:number|null=null,rateLimitStart:number|null=null,rateLimitEnd:number|null=null,rateLimitReset:string|null=null,providerTotalStart:number|null=null,providerTotalEnd:number|null=null,ordering:ProviderOrdering="unknown",stoppingReason="bounded_scan_limit",deeperReconciliationRequired=false,pausedDuringRun=false;
   let orderingObserver:OrderingObserverState=initialOrderingObserver();
   let stability:StabilityState={consecutiveStableKnownPages:0,pagesScanned:0,unseenRecords:0,changedRecords:0,pageShiftDetected:false};
@@ -397,14 +400,17 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
     const recoveryPage=firstRecoverableContinuousPage(checkpointRows);
     const queue:number[]=[recoveryPage??1]; const queued=new Set(queue); let queueIndex=0;
     while(queueIndex<queue.length&&pagesScanned<maxPages) {
+      if(scheduledDeepRequestLimit!==null&&providerRequests>=scheduledDeepRequestLimit){stoppingReason="bounded_deep_reconciliation_proof";deeperReconciliationRequired=true;break;}
       if(await commerceConnectionPaused(scope)){pausedDuringRun=true;stoppingReason="connection_paused";break}
       const page=queue[queueIndex++],pageStarted=Date.now();
+      const providerRequestsBeforePage=providerRequests;
       const checkpoint=await ensureCheckpoint({...scope,runId,page,perPage});
       try {
         const replayed=evidenceOnlyRecovery||String(checkpoint.state||"")==="running"?await replayEvidenceForPage({...scope,runId,page,perPage}):null;
         if(evidenceOnlyRecovery&&!replayed)throw new Error("Evidence-only recovery requires persisted page Evidence.");
-        const fetched=replayed?null:await fetchProviderPage(scope.secret,page,perPage,owner,bootstrap?1:3);
-        if(fetched){ providerRequests++; retries+=fetched.attempts-1; rateLimitLimit=fetched.rateLimit.limit;rateLimitStart??=fetched.rateLimit.remaining;rateLimitEnd=fetched.rateLimit.remaining;rateLimitReset=fetched.rateLimit.reset; }
+        const attemptAllowance=scheduledDeepRequestLimit===null?bootstrap?1:3:scheduledDeepAttemptAllowance(scheduledDeepRequestLimit,providerRequests);
+        const fetched=replayed?null:await fetchProviderPage(scope.secret,page,perPage,owner,attemptAllowance,scheduledDeepRequestLimit===null?undefined:()=>{providerRequests++;});
+        if(fetched){ if(scheduledDeepRequestLimit===null)providerRequests++; retries+=fetched.attempts-1; rateLimitLimit=fetched.rateLimit.limit;rateLimitStart??=fetched.rateLimit.remaining;rateLimitEnd=fetched.rateLimit.remaining;rateLimitReset=fetched.rateLimit.reset; }
         const pageBytes=replayed?.bytes||fetched!.bytes;
         const pageRateLimit=replayed?{remaining:null as number|null,attempts:0}:{remaining:fetched!.rateLimit.remaining,attempts:fetched!.attempts};
         if(bootstrap&&fetched)await db(`commerce_sync_runs?id=eq.${runId}`,{method:"PATCH",body:JSON.stringify({metadata:{account_id:scope.accountId,quota_bootstrap_attempted:true,quota_bootstrap_state:fetched.rateLimit.remaining===null?"unknown":"observed",rate_limit_start:rateLimitStart,rate_limit_end:rateLimitEnd,rate_limit_reset:rateLimitReset}})});
@@ -454,6 +460,7 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
         if(mode==="deep_reconciliation"&&decision.reason==="stable_known_boundary") {
           decision=page>=maxPages?{stop:true,reason:"bounded_deep_reconciliation_proof",deeperReconciliationRequired:true}:parsed.totalPages!==null&&page>=parsed.totalPages?{stop:true,reason:"provider_history_boundary",deeperReconciliationRequired:false}:{stop:false,reason:null,deeperReconciliationRequired:false};
         }
+        if(mode==="deep_reconciliation"&&scheduledDeepRequestLimit!==null&&providerRequests>=scheduledDeepRequestLimit&&decision.reason!=="provider_history_boundary")decision={stop:true,reason:"bounded_deep_reconciliation_proof",deeperReconciliationRequired:true};
         if(orderingObserver.paginationClassification === "pagination_instability") decision={stop:true,reason:"provider_ordering_unverified",deeperReconciliationRequired:true};
         // The terminal patch below carries the same durable counters plus the
         // final state. Avoid spending one more subrequest on a duplicate
@@ -465,6 +472,7 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
         await sleep(pageRateLimit.remaining!==null&&pageRateLimit.remaining<100?5_000:paceMs);
       } catch(error) {
         recordsFailed++;
+        if(scheduledDeepRequestLimit!==null&&providerRequests>providerRequestsBeforePage)await db(`commerce_sync_runs?id=eq.${runId}`,{method:"PATCH",body:JSON.stringify({provider_request_count:providerRequests})}).catch(()=>{});
         await db(`commerce_sync_checkpoints?id=eq.${checkpoint.id}`,{method:"PATCH",body:JSON.stringify({state:"failed",retry_count:Number(checkpoint.retry_count||0)+1,metadata:{error_code:"continuous_page_failed",retryable:true}})}).catch(()=>{});
         throw error;
       }

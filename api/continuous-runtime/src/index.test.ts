@@ -61,8 +61,8 @@ test("evidence-only runtime recovery is bounded and cannot make provider request
   assert.match(recovery, /const replayed=evidenceOnlyRecovery\|\|String\(checkpoint\.state\|\|""\)==="running"\?await replayEvidenceForPage/);
   assert.match(recovery, /const fetched=replayed\?null:await fetchProviderPage/);
   assert.match(recovery, /if\(evidenceOnlyRecovery&&!replayed\)throw new Error/);
-  assert.match(recovery, /let providerRequests=0/);
-  assert.match(recovery, /if\(fetched\)\{ providerRequests\+\+/);
+  assert.match(recovery, /let providerRequests=scheduledDeepRequestLimit===null\?0:/);
+  assert.match(recovery, /if\(fetched\)\{ if\(scheduledDeepRequestLimit===null\)providerRequests\+\+/);
 });
 
 test("ordinary direct HTTP invocation cannot bypass the internal contract", async () => {
