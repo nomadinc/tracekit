@@ -259,18 +259,6 @@ export async function resolveAndMapEverflowOrder(input: {
   }
 
   const eventName = !method ? await conversionEventName(input.link.connectionId, sourceRecordId) : null;
-  if (!method && transactionId && eventName && input.link.occurredAt && await hasMappedPriorDuplicate({
-    plane: input.plane,
-    session: input.session,
-    connectionId: input.link.connectionId,
-    providerAccountId: account.id,
-    sourceRecordId,
-    transactionId,
-    eventName,
-    occurredAt: input.link.occurredAt,
-  })) {
-    return { status: "duplicate", canonicalOrderId: null, matchMethod: "duplicate_event", confidence: 1, mappingObserved: false };
-  }
 
   if (!method && email && input.link.occurredAt) {
     candidates = await emailCandidates({
@@ -332,6 +320,22 @@ export async function resolveAndMapEverflowOrder(input: {
         return { status: "ambiguous", canonicalOrderId: null, matchMethod: "checkout_bundle_15s", confidence: 0, mappingObserved: false };
       }
     }
+  }
+
+  // Duplicate classification is only allowed after deterministic evidence for a
+  // new order has failed. This prevents legitimate repeat purchases from being
+  // collapsed merely because Everflow reused the same transaction/event pair.
+  if (!method && transactionId && eventName && input.link.occurredAt && await hasMappedPriorDuplicate({
+    plane: input.plane,
+    session: input.session,
+    connectionId: input.link.connectionId,
+    providerAccountId: account.id,
+    sourceRecordId,
+    transactionId,
+    eventName,
+    occurredAt: input.link.occurredAt,
+  })) {
+    return { status: "duplicate", canonicalOrderId: null, matchMethod: "duplicate_event", confidence: 1, mappingObserved: false };
   }
 
   if (!method && broadAmountAmbiguous) {
