@@ -443,6 +443,11 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
           await db("rpc/normalize_commerce_transaction_page_v2",{method:"POST",body:JSON.stringify({p_organization_id:scope.organizationId,p_account_id:scope.accountId,p_connection_id:scope.connectionId,p_provider_account_id:scope.providerAccountId,p_evidence_id:evidence.evidenceId,p_records:toNormalize})});
           changedRows.push(...toNormalize);toNormalize.forEach((item)=>changedProductIds.add(item.product_id));
         }
+        try {
+          await db("rpc/reconcile_commas_order_economic_allocation_batch_v1",{method:"POST",body:JSON.stringify({p_organization_id:scope.organizationId,p_connection_id:scope.connectionId,p_provider_account_id:scope.providerAccountId,p_canonical_order_ids:normalized.map((item)=>item.canonical_order_id)})});
+        } catch {
+          console.error("[TraceKit] Commas economic allocation failed",{event:"commerce.economic_allocation.failed",orders:normalized.length,retryable:true});
+        }
         const newCount=changes.filter((change)=>change==="new").length,updatedCount=changes.filter((change)=>change==="source_changed"||change==="normalizer_changed").length,unchangedCount=changes.filter((change)=>change==="source_identical").length;
         recordsObserved+=normalized.length;recordsNew+=newCount;recordsUpdated+=updatedCount;recordsUnchanged+=unchangedCount;recentIds.push(...normalized.map((item)=>item.transaction_id));
         const fingerprint=contentFingerprint(parsed.items);fingerprints[String(page)]={content_hash:fingerprint,evidence_hash:evidence.stored.payloadHash,first_id:normalized[0]?.transaction_id??null,last_id:normalized.at(-1)?.transaction_id??null,observed_at:new Date().toISOString()};
