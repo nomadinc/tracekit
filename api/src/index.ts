@@ -845,7 +845,7 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
       // provider connections. Avoid PostgREST relationship embedding here: the
       // relationship is not valid for this table and can fail on schema-cache
       // refreshes even when the underlying IDs are sound.
-      const { data } = await schedulerQuery("schedule_eligibility_read", db.from("commerce_sync_schedules").select("id,organization_id,connection_id,provider_account_id,resource,sync_frequency,last_enqueued_at,next_overlap_at,next_deep_reconciliation_at,quota_minimum_remaining,deep_request_budget").eq("enabled", true).eq("activation_state", "enabled"));
+      const { data } = await schedulerQuery("schedule_eligibility_read", db.from("commerce_sync_schedules").select("id,organization_id,connection_id,provider_account_id,resource,sync_frequency,last_enqueued_at,next_overlap_at,next_deep_reconciliation_at,quota_minimum_remaining,deep_request_budget,schedule_version").eq("enabled", true).eq("activation_state", "enabled"));
       const jobs: any[] = [];
       for (const row of data || []) {
         const { data: connection } = await schedulerQuery("connection_scope_read", db.from("commerce_provider_connections").select("organization_id,account_id,provider,status").eq("organization_id", row.organization_id).eq("id", row.connection_id).maybeSingle());
@@ -866,7 +866,9 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
         const scheduledDeepRequestLimit = mode === "deep_reconciliation"
           ? scheduledDeepProviderRequestLimit(row.deep_request_budget)
           : undefined;
-        jobs.push({ accountId: String(connection.account_id), organizationId: row.organization_id, connectionId: row.connection_id, providerAccountId: row.provider_account_id, resource: row.resource, mode, schedulerIdentity: `${row.id}:${mode}:${cadenceWindow}`, quotaRemaining: Number.isFinite(quotaRemaining) ? quotaRemaining : null, quotaObservedAt: typeof quotaState?.quota_observed_at === "string" ? quotaState.quota_observed_at : null, quotaMaxAgeMs: scheduledQuotaMaxAgeMs(row.sync_frequency), requestBudget: scheduledDeepRequestLimit ?? 8, quotaFloor: row.quota_minimum_remaining, scheduleId: String(row.id), scheduledDeepRequestLimit });
+        const scheduleVersion=Number(row.schedule_version);
+        const schedulerIdentity=mode==="deep_reconciliation"?`${row.id}:v${scheduleVersion}:${mode}:${cadenceWindow}`:`${row.id}:${mode}:${cadenceWindow}`;
+        jobs.push({ accountId: String(connection.account_id), organizationId: row.organization_id, connectionId: row.connection_id, providerAccountId: row.provider_account_id, resource: row.resource, mode, schedulerIdentity, quotaRemaining: Number.isFinite(quotaRemaining) ? quotaRemaining : null, quotaObservedAt: typeof quotaState?.quota_observed_at === "string" ? quotaState.quota_observed_at : null, quotaMaxAgeMs: scheduledQuotaMaxAgeMs(row.sync_frequency), requestBudget: scheduledDeepRequestLimit ?? 8, quotaFloor: row.quota_minimum_remaining, scheduleId: String(row.id), scheduleVersion, scheduledDeepRequestLimit });
       }
       return jobs;
     },
@@ -887,7 +889,7 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
     },
     async scheduledRunPermitted(message) {
       const [{ data: schedule, error: scheduleError }, { data: quota, error: quotaError }, { count: activeRuns, error: activeError }, { count: liveActivation, error: activationError }, { count: activeAccounts, error: accountError }, { count: pauses, error: pauseError }] = await Promise.all([
-        schedulerQuery("pre_dispatch_schedule_read", db.from("commerce_sync_schedules").select("id,sync_frequency,enabled,activation_state,quota_minimum_remaining,deep_request_budget").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1).maybeSingle()),
+        schedulerQuery("pre_dispatch_schedule_read", db.from("commerce_sync_schedules").select("id,sync_frequency,enabled,activation_state,quota_minimum_remaining,deep_request_budget,schedule_version").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1).maybeSingle()),
         schedulerQuery("pre_dispatch_quota_read", db.from("commerce_continuous_sync_state").select("quota_remaining,quota_observed_at").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1).maybeSingle()),
         schedulerQuery("pre_dispatch_active_run_read", db.from("commerce_sync_runs").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).in("status", ["queued", "running", "paused"])),
         schedulerQuery("pre_dispatch_live_activation_read", db.from("commerce_repository_activation").select("organization_id", { count: "exact", head: true }).eq("organization_id", message.organization_id).in("mode", ["live", "live_beta"])),
@@ -899,7 +901,7 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
       if (message.requested_mode === "deep_reconciliation") {
         let currentLimit:number;
         try { currentLimit=scheduledDeepProviderRequestLimit(schedule.deep_request_budget); } catch { return false; }
-        if(message.scheduled_deep!==true||String(schedule.id)!==message.schedule_id||currentLimit!==message.max_provider_requests)return false;
+        if(message.scheduled_deep!==true||String(schedule.id)!==message.schedule_id||Number(schedule.schedule_version)!==message.schedule_version||currentLimit!==message.max_provider_requests)return false;
         requestBudget=currentLimit;
       }
       return schedule.enabled === true && schedule.activation_state === "enabled"
@@ -926,7 +928,10 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
       return { quotaRemaining: raw === null || raw === undefined || raw === "" || !Number.isFinite(Number(raw)) ? null : Number(raw), quotaObservedAt: typeof quota?.quota_observed_at === "string" ? quota.quota_observed_at : null, checkedAt: new Date().toISOString() };
     },
     async markEnqueued(message, now) {
-      await schedulerQuery("schedule_mark_enqueued_write", db.from("commerce_sync_schedules").update({ last_enqueued_at: now, updated_at: now }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource));
+      let query=db.from("commerce_sync_schedules").update({ last_enqueued_at: now, updated_at: now }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource);
+      if(message.scheduled_deep===true)query=query.eq("id",message.schedule_id).eq("schedule_version",message.schedule_version);
+      const {data}=await schedulerQuery("schedule_mark_enqueued_write", query.select("id"));
+      if(message.scheduled_deep===true&&(data||[]).length!==1)throw new Error("stale_scheduled_deep_message");
     },
     async bootstrapPermitted(message) {
       if (!message.bootstrap || message.bootstrap_mode !== "quota-bootstrap") return false;
