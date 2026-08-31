@@ -53,4 +53,6 @@ jobs:
       - name: Install dependencies
         run: npm ci
       - name: Run Shopify connection provisioning tests
-        run: npx tsx --test tests/shopify-connection-provisioning.test.ts
+        run: npx tsx --test tests/shopify-connection-provisioning.test.ts tests/shopify-oauth.test.ts
+      - name: Typecheck Shopify UI and OAuth routes
+        run: npx tsc --noEmit
