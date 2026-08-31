@@ -39,7 +39,7 @@ export function buildShopifyAuthorizationUrl(input: {
 export function verifyShopifyOAuthCallback(searchParams: URLSearchParams, clientSecret: string) {
   const hmac = searchParams.get("hmac") || "";
   if (!/^[a-f0-9]{64}$/i.test(hmac)) return false;
-  const entries = [...searchParams.entries()]
+  const entries = Array.from(searchParams.entries())
     .filter(([key]) => key !== "hmac")
     .sort(([a], [b]) => a.localeCompare(b));
   const message = entries.map(([key, value]) => `${key}=${value}`).join("&");
