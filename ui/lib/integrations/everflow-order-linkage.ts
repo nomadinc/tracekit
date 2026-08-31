@@ -7,7 +7,8 @@ const DIRECT_SOURCE_TYPE = "everflow_transaction";
 const CONVERSION_SOURCE_TYPE = "everflow_conversion";
 const AMOUNT_TOLERANCE = 0.01;
 const EMAIL_WINDOW_WITH_AMOUNT_MS = 72 * 60 * 60 * 1000;
-const CHECKOUT_BUNDLE_WINDOW_MS = 10 * 1000;
+const EXACT_AMOUNT_WINDOW_MS = 10 * 1000;
+const CHECKOUT_BUNDLE_WINDOW_MS = 15 * 1000;
 const TIGHT_EMAIL_WINDOW_MS = 30 * 60 * 1000;
 const MAIN_CHECKOUT_EVENT = "PUSH BUTTON SYSTEM";
 const CHECKOUT_BUNDLE_EVENTS = new Set([MAIN_CHECKOUT_EVENT, "FAST TRACK SUPPORT", "REVENUE BOOSTER ROADMAP"]);
@@ -40,9 +41,9 @@ export type EverflowOrderLinkInput = {
 };
 
 export type EverflowOrderLinkResult = {
-  status: "matched" | "unmatched" | "non_order" | "ambiguous" | "conflict";
+  status: "matched" | "unmatched" | "non_order" | "duplicate" | "ambiguous" | "conflict";
   canonicalOrderId: string | null;
-  matchMethod: "transaction_id" | "email_time_amount" | "checkout_bundle_10s" | "email_time_30m" | null;
+  matchMethod: "transaction_id" | "email_amount_10s" | "email_time_amount" | "checkout_bundle_15s" | "email_time_30m" | "duplicate_event" | null;
   confidence: number;
   mappingObserved: boolean;
 };
@@ -116,14 +117,13 @@ async function emailCandidates(input: {
   });
 }
 
-async function checkoutBundleEventName(connectionId: string, sourceRecordId: string) {
+async function conversionEventName(connectionId: string, sourceRecordId: string) {
   const rows = await commercePersistenceRequest(
     `everflow_conversion_events?connection_id=eq.${encodeURIComponent(connectionId)}` +
     `&source_identity=eq.${encodeURIComponent(sourceRecordId)}` +
     `&select=event_name&order=last_seen_at.desc&limit=1`,
   ) as Array<{ event_name?: unknown }>;
-  const eventName = text(rows[0]?.event_name).toUpperCase();
-  return CHECKOUT_BUNDLE_EVENTS.has(eventName) ? eventName : null;
+  return text(rows[0]?.event_name).toUpperCase() || null;
 }
 
 async function hasMainCheckoutEvent(input: {
@@ -145,6 +145,41 @@ async function hasMainCheckoutEvent(input: {
     `&select=id&limit=1`,
   );
   return rows.length === 1;
+}
+
+async function hasMappedPriorDuplicate(input: {
+  plane: LinkagePlane;
+  session: TraceKitSessionContext;
+  connectionId: string;
+  providerAccountId: string;
+  sourceRecordId: string;
+  transactionId: string;
+  eventName: string;
+  occurredAt: string;
+}) {
+  const rows = await commercePersistenceRequest(
+    `everflow_conversion_events?connection_id=eq.${encodeURIComponent(input.connectionId)}` +
+    `&provider_account_id=eq.${encodeURIComponent(input.providerAccountId)}` +
+    `&transaction_id=eq.${encodeURIComponent(input.transactionId)}` +
+    `&conversion_at=lt.${encodeURIComponent(input.occurredAt)}` +
+    `&source_identity=neq.${encodeURIComponent(input.sourceRecordId)}` +
+    `&select=source_identity,event_name,conversion_at&order=conversion_at.desc&limit=20`,
+  ) as Array<{ source_identity?: unknown; event_name?: unknown }>;
+
+  for (const row of rows) {
+    if (text(row.event_name).toUpperCase() !== input.eventName) continue;
+    const priorSourceIdentity = text(row.source_identity);
+    if (!priorSourceIdentity) continue;
+    const mapping = await input.plane.resolveSourceMapping(
+      input.session,
+      input.connectionId,
+      input.providerAccountId,
+      CONVERSION_SOURCE_TYPE,
+      priorSourceIdentity,
+    );
+    if (mapping?.canonicalObjectType === "order" && mapping.canonicalObjectId) return true;
+  }
+  return false;
 }
 
 async function sha256(value: unknown) {
@@ -207,6 +242,7 @@ export async function resolveAndMapEverflowOrder(input: {
   let candidates: OrderCandidate[] = [];
   let method: EverflowOrderLinkResult["matchMethod"] = null;
   let confidence = 0;
+  let broadAmountAmbiguous = false;
 
   if (!isCommerceValue) {
     return { status: "non_order", canonicalOrderId: null, matchMethod: null, confidence: 0, mappingObserved: false };
@@ -219,6 +255,23 @@ export async function resolveAndMapEverflowOrder(input: {
       confidence = 1;
     } else if (candidates.length > 1) {
       return { status: "ambiguous", canonicalOrderId: null, matchMethod: "transaction_id", confidence: 0, mappingObserved: false };
+    }
+  }
+
+  const eventName = !method ? await conversionEventName(input.link.connectionId, sourceRecordId) : null;
+
+  if (!method && email && input.link.occurredAt) {
+    candidates = await emailCandidates({
+      organizationId: input.link.organizationId,
+      email,
+      occurredAt: input.link.occurredAt,
+      amount,
+      windowMs: EXACT_AMOUNT_WINDOW_MS,
+      requireAmount: true,
+    });
+    if (candidates.length === 1) {
+      method = "email_amount_10s";
+      confidence = 0.95;
     }
   }
 
@@ -235,15 +288,15 @@ export async function resolveAndMapEverflowOrder(input: {
       method = "email_time_amount";
       confidence = 0.85;
     } else if (candidates.length > 1) {
-      return { status: "ambiguous", canonicalOrderId: null, matchMethod: "email_time_amount", confidence: 0, mappingObserved: false };
+      broadAmountAmbiguous = true;
     }
   }
 
   // Push Button checkout bumps are line items on the main checkout order, not
   // independent downstream orders. Bumps only inherit this rule when the main
   // PUSH BUTTON SYSTEM event is present in the same customer checkout burst.
-  if (!method && email && input.link.occurredAt) {
-    const bundleEventName = await checkoutBundleEventName(input.link.connectionId, sourceRecordId);
+  if (!method && email && input.link.occurredAt && eventName) {
+    const bundleEventName = CHECKOUT_BUNDLE_EVENTS.has(eventName) ? eventName : null;
     const hasMainEvent = bundleEventName === MAIN_CHECKOUT_EVENT
       || (bundleEventName !== null && await hasMainCheckoutEvent({
         connectionId: input.link.connectionId,
@@ -261,12 +314,32 @@ export async function resolveAndMapEverflowOrder(input: {
         requireAmount: false,
       });
       if (candidates.length === 1) {
-        method = "checkout_bundle_10s";
+        method = "checkout_bundle_15s";
         confidence = 0.95;
       } else if (candidates.length > 1) {
-        return { status: "ambiguous", canonicalOrderId: null, matchMethod: "checkout_bundle_10s", confidence: 0, mappingObserved: false };
+        return { status: "ambiguous", canonicalOrderId: null, matchMethod: "checkout_bundle_15s", confidence: 0, mappingObserved: false };
       }
     }
+  }
+
+  // Duplicate classification is only allowed after deterministic evidence for a
+  // new order has failed. This prevents legitimate repeat purchases from being
+  // collapsed merely because Everflow reused the same transaction/event pair.
+  if (!method && transactionId && eventName && input.link.occurredAt && await hasMappedPriorDuplicate({
+    plane: input.plane,
+    session: input.session,
+    connectionId: input.link.connectionId,
+    providerAccountId: account.id,
+    sourceRecordId,
+    transactionId,
+    eventName,
+    occurredAt: input.link.occurredAt,
+  })) {
+    return { status: "duplicate", canonicalOrderId: null, matchMethod: "duplicate_event", confidence: 1, mappingObserved: false };
+  }
+
+  if (!method && broadAmountAmbiguous) {
+    return { status: "ambiguous", canonicalOrderId: null, matchMethod: "email_time_amount", confidence: 0, mappingObserved: false };
   }
 
   if (!method && email && input.link.occurredAt) {
