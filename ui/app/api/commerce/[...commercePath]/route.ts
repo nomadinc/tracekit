@@ -3,7 +3,8 @@ import { NextResponse } from "next/server";
 import { resolveApplicationSession } from "@/lib/identity/application-session";
 import { createCommerceControlPlane } from "@/lib/commerce/server-control-plane";
 import { MemoryCommerceEvidenceStore } from "@/lib/commerce/evidence-store";
-import { BoundedCommasConnectionVerifier } from "@/lib/commerce/commas-verifier";
+import { CommerceProviderConnectionVerifier } from "@/lib/commerce/provider-verifier";
+import { normalizeShopifyConnectionDomain, serializeShopifyConnectionCredential } from "@/lib/commerce/shopify-verifier";
 import { commercePersistenceRequest } from "@/lib/commerce/supabase-control-repository";
 
 const attempts = new Map<string, { count: number; reset: number }>();
@@ -39,31 +40,79 @@ export async function POST(request: Request, context: { params: Promise<{ commer
     const body = await request.json().catch(() => null) as Record<string, unknown> | null;
     if (!body) return failure(requestId, 400, "invalid_request", "Check the connection details and try again.");
     const path = (await context.params).commercePath;
-    const plane = createCommerceControlPlane({ evidenceStore: new MemoryCommerceEvidenceStore(), verifier: new BoundedCommasConnectionVerifier() });
+    const plane = createCommerceControlPlane({ evidenceStore: new MemoryCommerceEvidenceStore(), verifier: new CommerceProviderConnectionVerifier() });
 
     if (path.join("/") === "connections") {
       const setupRequestId = idempotencyKey(request);
-      if (!setupRequestId || typeof body.displayName !== "string" || !body.displayName.trim() || !["production", "sandbox"].includes(String(body.environment)) || typeof body.apiKey !== "string" || body.apiKey.length < 8) {
+      const provider = body.provider === "shopify" ? "shopify" : body.provider === "commas" || body.provider == null ? "commas" : null;
+      if (!setupRequestId || !provider || typeof body.displayName !== "string" || !body.displayName.trim()) {
         return failure(requestId, 400, "invalid_request", "Check the connection details and try again.");
       }
-      const connection = await plane.createConnection(resolution.session, resolution.session.activeOrganization.id, { provider: "commas", displayName: body.displayName.trim().slice(0, 100), environment: String(body.environment), setupRequestId });
-      await plane.upsertProviderAccount(resolution.session, connection.id, {});
+
+      let environment = "production";
+      let providerAccountExternalId: string | undefined;
+      let credentialSecret: string;
+
+      if (provider === "shopify") {
+        const shopDomain = normalizeShopifyConnectionDomain(body.shopDomain);
+        if (!shopDomain) return failure(requestId, 400, "invalid_request", "Enter a valid Shopify myshopify.com domain.");
+        try {
+          credentialSecret = serializeShopifyConnectionCredential({
+            shopDomain,
+            adminAccessToken: body.adminAccessToken,
+            apiVersion: body.apiVersion,
+          });
+        } catch (error) {
+          return failure(requestId, 400, "invalid_request", error instanceof Error ? error.message : "Check the Shopify connection details and try again.");
+        }
+        providerAccountExternalId = shopDomain;
+      } else {
+        environment = String(body.environment || "production");
+        if (!["production", "sandbox"].includes(environment) || typeof body.apiKey !== "string" || body.apiKey.length < 8) {
+          return failure(requestId, 400, "invalid_request", "Check the connection details and try again.");
+        }
+        credentialSecret = body.apiKey;
+      }
+
+      const connection = await plane.createConnection(resolution.session, resolution.session.activeOrganization.id, {
+        provider,
+        displayName: body.displayName.trim().slice(0, 100),
+        environment,
+        setupRequestId,
+      });
+      await plane.upsertProviderAccount(resolution.session, connection.id, providerAccountExternalId ? { externalId: providerAccountExternalId } : {});
       const credential = await plane.credentialStatus(resolution.session, connection.id);
       if (credential.status === "missing") {
-        try { await plane.createCredential(resolution.session, connection.id, body.apiKey); }
+        try { await plane.createCredential(resolution.session, connection.id, credentialSecret); }
         catch (error) { if ((await plane.credentialStatus(resolution.session, connection.id)).status === "missing") throw error; }
       }
       try {
         await plane.verifyConnection(resolution.session, connection.id);
-        return success(requestId, { connectionId: connection.id, verified: true, status: "connected", message: "Commas connected successfully." }, 201);
+        return success(requestId, {
+          connectionId: connection.id,
+          verified: true,
+          status: "connected",
+          provider,
+          message: provider === "shopify" ? "Shopify connected and verified successfully." : "Commas connected successfully.",
+        }, 201);
       } catch {
-        return success(requestId, { connectionId: connection.id, verified: false, status: "degraded", message: "Connection saved, but verification did not succeed." }, 201);
+        return success(requestId, {
+          connectionId: connection.id,
+          verified: false,
+          status: "degraded",
+          provider,
+          message: provider === "shopify" ? "Shopify credentials were saved securely, but store verification did not succeed." : "Connection saved, but verification did not succeed.",
+        }, 201);
       }
     }
 
     const connectionId = path[1];
     if (!connectionId || path[0] !== "connections") return failure(requestId, 404, "resource_unavailable", "The requested resource is unavailable.");
     if (path[2] === "sync-now") {
+      const connection = await plane.getConnection(resolution.session, connectionId);
+      if (connection.provider === "shopify") {
+        return failure(requestId, 409, "manual_sync_not_permitted", "Shopify live smoke is not enabled from this control yet.");
+      }
       const apiBase = process.env.TRACEKIT_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL;
       const secret = process.env.TK_SECRET_KEY;
       if (!apiBase || !secret) return failure(requestId, 503, "manual_sync_unavailable", "Manual synchronization is unavailable.");
@@ -82,13 +131,30 @@ export async function POST(request: Request, context: { params: Promise<{ commer
       }
     }
     if (path[2] === "rotate") {
-      if (typeof body.apiKey !== "string" || body.apiKey.length < 8) return failure(requestId, 400, "invalid_request", "Enter a valid credential and try again.");
-      await plane.rotateCredential(resolution.session, connectionId, body.apiKey);
-      return success(requestId, { status: "active", message: "Credential rotated securely." });
+      const connection = await plane.getConnection(resolution.session, connectionId);
+      let secret: string;
+      if (connection.provider === "shopify") {
+        try {
+          secret = serializeShopifyConnectionCredential({ shopDomain: body.shopDomain, adminAccessToken: body.adminAccessToken, apiVersion: body.apiVersion });
+        } catch (error) {
+          return failure(requestId, 400, "invalid_request", error instanceof Error ? error.message : "Enter valid Shopify credentials and try again.");
+        }
+      } else {
+        if (typeof body.apiKey !== "string" || body.apiKey.length < 8) return failure(requestId, 400, "invalid_request", "Enter a valid credential and try again.");
+        secret = body.apiKey;
+      }
+      await plane.rotateCredential(resolution.session, connectionId, secret);
+      try {
+        await plane.verifyConnection(resolution.session, connectionId);
+        return success(requestId, { status: "active", verified: true, message: "Credential rotated and verified securely." });
+      } catch {
+        return success(requestId, { status: "active", verified: false, message: "Credential rotated securely, but verification did not succeed." });
+      }
     }
     if (path[2] === "disable") {
+      await plane.revokeCredential(resolution.session, connectionId);
       await plane.disableConnection(resolution.session, connectionId);
-      return success(requestId, { status: "disabled", message: "Connection disabled." });
+      return success(requestId, { status: "disabled", message: "Connection disabled and its active credential revoked." });
     }
     return failure(requestId, 404, "resource_unavailable", "The requested resource is unavailable.");
   } catch {
