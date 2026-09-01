@@ -1,5 +1,5 @@
 -- Provider-neutral webhook receipt/idempotency ledger for commerce connectors.
--- Additive only: no webhook registration, scheduler activation, or browser grants.
+-- Additive only: stores inbound delivery state; does not register or invoke outbound delivery.
 
 create table if not exists public.commerce_webhook_receipts (
   id uuid primary key default gen_random_uuid(),
