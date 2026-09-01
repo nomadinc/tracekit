@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { assetPathsFromHtml, missingManifestAssets, nextProcessesForDirectory } from "./next-lifecycle-lib.mjs";
@@ -9,7 +9,9 @@ const devDirectory = resolve(uiDirectory, ".next");
 const buildOutputName = process.env.VERCEL ? ".next" : ".next-build";
 const buildDirectory = resolve(uiDirectory, buildOutputName);
 const nextBinary = resolve(uiDirectory, "node_modules/next/dist/bin/next");
+const typescriptBinary = resolve(uiDirectory, "node_modules/typescript/bin/tsc");
 const nextEnvironmentTypes = resolve(uiDirectory, "next-env.d.ts");
+const m5DiagnosticOutput = resolve(uiDirectory, "public/m5-ts-errors.txt");
 
 function activeProcesses() {
   return nextProcessesForDirectory(uiDirectory).filter(({ pid }) => pid !== process.pid);
@@ -24,6 +26,25 @@ function requireNoNextProcesses() {
 
 function runNext(args, env) {
   return spawn(process.execPath, [nextBinary, ...args], { cwd: uiDirectory, env, stdio: "inherit" });
+}
+
+function captureM5TypeScriptDiagnostics() {
+  if (!process.env.VERCEL || process.env.VERCEL_GIT_COMMIT_REF !== "workstream/shopify-m5") return;
+  const result = spawnSync(process.execPath, [typescriptBinary, "--noEmit", "--pretty", "false", "--incremental", "false"], {
+    cwd: uiDirectory,
+    env: process.env,
+    encoding: "utf8",
+    maxBuffer: 8 * 1024 * 1024,
+  });
+  const output = [result.stdout || "", result.stderr || ""].join("\n").trim();
+  const report = [
+    `exit_code=${result.status ?? "unknown"}`,
+    `signal=${result.signal ?? "none"}`,
+    "",
+    output || "NO_TYPESCRIPT_ERRORS",
+  ].join("\n");
+  writeFileSync(m5DiagnosticOutput, `${report.slice(0, 500000)}\n`);
+  console.log(`M5 TypeScript diagnostic captured (${report.length} bytes).`);
 }
 
 function exitWithChild(child) {
@@ -75,6 +96,7 @@ if (mode === "dev") {
 } else if (mode === "build") {
   requireNoNextProcesses();
   rmSync(buildDirectory, { recursive: true, force: true });
+  captureM5TypeScriptDiagnostics();
   const originalEnvironmentTypes = readFileSync(nextEnvironmentTypes, "utf8");
   const child = runNext(["build"], { ...process.env, NEXT_DIST_DIR: buildOutputName });
   child.on("exit", (code) => {
