@@ -8,6 +8,8 @@ import { captureEverflowConversionBaseline, finalizeEverflowConversionRunMetrics
 import { captureEverflowFinancialBaseline, persistEverflowEventReversalHistory } from "./everflow-event-reversals";
 import { projectEverflowFinancialEffects } from "./everflow-financial-projection";
 import { everflowIncrementalWindow, loadEverflowIncrementalState, markEverflowIncrementalAttempt, markEverflowIncrementalChunkSuccess, markEverflowIncrementalFailure } from "./everflow-incremental";
+import { fetchEverflowClickStream, persistEverflowClicks } from "./everflow-clicks";
+import { everflowClickIncrementalWindow, loadEverflowClickIncrementalState, markEverflowClickIncrementalAttempt, markEverflowClickIncrementalChunkSuccess, markEverflowClickIncrementalFailure } from "./everflow-click-incremental";
 
 type ScheduleRow = {
   id: string;
@@ -26,7 +28,19 @@ type ScheduleRow = {
   lease_expires_at?: string | null;
   lease_heartbeat_at?: string | null;
 };
-type SchedulerScope = { accountId: string; organizationId: string; connectionId: string; providerAccountId: string; now?: Date };
+
+type SchedulerScope = {
+  accountId: string;
+  organizationId: string;
+  connectionId: string;
+  providerAccountId: string;
+  now?: Date;
+};
+
+type EverflowNetworkMetadata = {
+  timezoneId?: number | null;
+};
+
 const schedulerSession = {} as TraceKitSessionContext;
 const repo = new SupabaseCommerceControlRepository();
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
@@ -88,6 +102,41 @@ async function persistedCount(connectionId: string) {
   }
 }
 
+async function everflowClickExecutionContext(scope: SchedulerScope) {
+  const connection = await repo.connectionById(scope.connectionId);
+  if (!connection || connection.organizationId !== scope.organizationId || connection.provider !== "everflow" || connection.status !== "connected") {
+    throw new Error("Everflow connection is unavailable.");
+  }
+  const metadata = (connection.capabilities?.everflowNetwork || {}) as EverflowNetworkMetadata;
+  const timezoneId = Number(metadata.timezoneId);
+  if (!Number.isInteger(timezoneId) || timezoneId <= 0) throw new Error("Everflow network timezone is unavailable.");
+  const credential = await repo.activeCredential(scope.connectionId, scope.organizationId);
+  if (!credential?.encrypted || credential.revokedAt) throw new Error("The commerce credential is unavailable.");
+  return {
+    apiKey: await decryptCommerceCredential(credential.encrypted, credentialKey().bytes),
+    timezoneId,
+  };
+}
+
+export async function runEverflowScheduledClickChunk(scope: SchedulerScope) {
+  if (![scope.accountId, scope.organizationId, scope.connectionId, scope.providerAccountId].every((value) => uuid.test(value))) throw new Error("Everflow click scheduler scope is invalid.");
+  const now = scope.now || new Date();
+  const state = await loadEverflowClickIncrementalState(scope);
+  const window = everflowClickIncrementalWindow({ now, lastSuccessfulAt: state.lastSuccessfulAt, boundary: state.boundary });
+  await markEverflowClickIncrementalAttempt({ ...scope, attemptedAt: now.toISOString(), window });
+  try {
+    const execution = await everflowClickExecutionContext(scope);
+    const clicks = await fetchEverflowClickStream({ apiKey: execution.apiKey, from: window.from, to: window.to, timezoneId: execution.timezoneId });
+    const persisted = await persistEverflowClicks({ ...scope, clicks, observedAt: new Date().toISOString() });
+    const completedAt = new Date().toISOString();
+    const progress = await markEverflowClickIncrementalChunkSuccess({ ...scope, completedAt, from: window.from, to: window.to, targetTo: window.targetTo, overlapDays: window.overlapDays, bootstrap: window.bootstrap, seen: persisted.seen });
+    return { ok: true, window, progress, seen: persisted.seen, persisted: persisted.persisted, timezoneId: execution.timezoneId };
+  } catch (error) {
+    await markEverflowClickIncrementalFailure({ ...scope, failedAt: new Date().toISOString(), warningCode: "everflow_scheduled_click_sync_failed" }).catch(() => undefined);
+    throw error;
+  }
+}
+
 export async function runEverflowScheduledChunk(scope: SchedulerScope) {
   if (![scope.accountId, scope.organizationId, scope.connectionId, scope.providerAccountId].every((value) => uuid.test(value))) throw new Error("Everflow scheduler scope is invalid.");
   const now = scope.now || new Date();
@@ -110,12 +159,31 @@ export async function runEverflowScheduledChunk(scope: SchedulerScope) {
     const eventEffects = await persistEverflowEventReversalHistory({ organizationId: scope.organizationId, connectionId: scope.connectionId, syncRunId: result.syncRunId, providerAccountId: result.providerAccountId, baseline: financialBaseline });
     stage = "financial_projection";
     const financialProjection = await projectEverflowFinancialEffects({ organizationId: scope.organizationId, connectionId: scope.connectionId, syncRunId: result.syncRunId });
+
+    let clickSync: Awaited<ReturnType<typeof runEverflowScheduledClickChunk>> | null = null;
+    let clickSyncFailed = false;
+    try {
+      clickSync = await runEverflowScheduledClickChunk(scope);
+    } catch {
+      clickSyncFailed = true;
+    }
+
     stage = "classification_metadata";
-    await mergeEverflowSyncRunMetadata({ connectionId: scope.connectionId, syncRunId: result.syncRunId, values: { linkage: result.linkage, financialProjection } });
+    await mergeEverflowSyncRunMetadata({
+      connectionId: scope.connectionId,
+      syncRunId: result.syncRunId,
+      values: {
+        linkage: result.linkage,
+        financialProjection,
+        clickSync: clickSync
+          ? { status: "completed", seen: clickSync.seen, persisted: clickSync.persisted, window: clickSync.window, windowComplete: clickSync.progress.windowComplete, timezoneId: clickSync.timezoneId }
+          : { status: "failed", warningCode: "everflow_scheduled_click_sync_failed" },
+      },
+    });
     stage = "cursor_commit";
     const completedAt = new Date().toISOString();
     const progress = await markEverflowIncrementalChunkSuccess({ ...scope, completedAt, syncRunId: result.syncRunId, from: window.from, to: window.to, targetTo: window.targetTo, overlapDays: window.overlapDays, bootstrap: window.bootstrap, seen: result.seen });
-    return { ok: true, window, progress, result, changeMetrics, eventEffects, financialProjection };
+    return { ok: true, window, progress, result, changeMetrics, eventEffects, financialProjection, clickSync, clickSyncFailed };
   } catch (error) {
     await markEverflowIncrementalFailure({ ...scope, failedAt: new Date().toISOString(), warningCode: `everflow_scheduled_${stage}_failed` }).catch(() => undefined);
     throw error;
@@ -176,8 +244,12 @@ export async function runDueEverflowSchedules(input: { now?: Date; limit?: numbe
         scheduleId: schedule.id,
         status: "completed",
         windowComplete: result.progress.windowComplete,
+        clickStatus: result.clickSyncFailed ? "failed" : "completed",
+        clickWindowComplete: result.clickSync?.progress.windowComplete ?? false,
         syncRunId: result.result.syncRunId,
         seen: result.result.seen,
+        clicksSeen: result.clickSync?.seen ?? 0,
+        clicksPersisted: result.clickSync?.persisted ?? 0,
         linkage: result.result.linkage,
         financialProjection: result.financialProjection,
       });
