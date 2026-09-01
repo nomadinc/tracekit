@@ -72,7 +72,29 @@ export type Next29Order = Next29OrderSummary & {
   shipping_address?: Record<string, unknown> | null;
 };
 
-export type Next29EvidenceResource = "orders" | "order";
+export type Next29SubscriptionSummary = {
+  id: string | number;
+  status?: string | null;
+  date_created?: string | null;
+  next_renewal_date?: string | null;
+  currency?: string | null;
+  total?: string | number | null;
+  user?: Record<string, unknown> | null;
+  [key: string]: unknown;
+};
+
+export type Next29Subscription = Next29SubscriptionSummary & {
+  interval?: string | null;
+  interval_count?: number | string | null;
+  cancel_reason?: string | null;
+  is_test?: boolean | null;
+  payment_method?: string | null;
+  lines?: unknown[];
+  orders?: unknown[];
+  attribution?: Next29Attribution | null;
+};
+
+export type Next29EvidenceResource = "orders" | "order" | "subscriptions" | "subscription";
 
 export type Next29EvidenceEnvelope = {
   provider: "next29";
