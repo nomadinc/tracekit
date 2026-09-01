@@ -1,4 +1,4 @@
-import { normalizeShopifyCheckpoint, type ShopifyCheckpoint, type ShopifyResource, type ShopifySyncPage } from "./resources";
+import { normalizeShopifyCheckpoint, type ShopifyCheckpoint, type ShopifyResource, type ShopifyResourceNode, type ShopifySyncPage } from "./resources";
 
 export type ShopifyAdminReaderConfig = {
   shopDomain: string;
@@ -59,7 +59,7 @@ export function createShopifyAdminPageReader(config: ShopifyAdminReaderConfig) {
       throw new Error(`Shopify Admin GraphQL ${args.resource} response is missing connection data.`);
     }
 
-    const nodes = connection.nodes.filter(Boolean);
+    const nodes = connection.nodes.filter((node: unknown): node is ShopifyResourceNode => Boolean(node) && typeof node === "object" && typeof (node as { id?: unknown }).id === "string");
     const highWater = maxUpdatedAt(checkpoint.updatedAt, nodes);
     const hasNextPage = Boolean(connection.pageInfo.hasNextPage);
     const nextCursor = hasNextPage ? clean(connection.pageInfo.endCursor) || null : null;
@@ -90,15 +90,7 @@ const ORDERS_QUERY = `#graphql
 query TraceKitShopifyOrders($first: Int!, $after: String, $query: String) {
   orders(first: $first, after: $after, sortKey: UPDATED_AT, query: $query) {
     nodes {
-      id
-      name
-      createdAt
-      processedAt
-      updatedAt
-      displayFinancialStatus
-      cancelledAt
-      email
-      phone
+      id name createdAt processedAt updatedAt displayFinancialStatus cancelledAt email phone
       customer { id email phone }
       shippingAddress { phone }
       billingAddress { phone }
@@ -107,36 +99,9 @@ query TraceKitShopifyOrders($first: Int!, $after: String, $query: String) {
       currentSubtotalPriceSet { ${MONEY_FIELDS} }
       totalShippingPriceSet { ${MONEY_FIELDS} }
       currentTotalTaxSet { ${MONEY_FIELDS} }
-      transactions {
-        id
-        kind
-        status
-        amountSet { ${MONEY_FIELDS} }
-      }
-      lineItems(first: 250) {
-        nodes {
-          id
-          quantity
-          title
-          sku
-          product { id }
-          variant { id }
-          discountedTotalSet { ${MONEY_FIELDS} }
-          originalTotalSet { ${MONEY_FIELDS} }
-        }
-      }
-      refunds {
-        id
-        createdAt
-        processedAt
-        updatedAt
-        totalRefundedSet { ${MONEY_FIELDS} }
-        transactions {
-          id
-          status
-          amountSet { ${MONEY_FIELDS} }
-        }
-      }
+      transactions { id kind status amountSet { ${MONEY_FIELDS} } }
+      lineItems(first: 250) { nodes { id quantity title sku product { id } variant { id } discountedTotalSet { ${MONEY_FIELDS} } originalTotalSet { ${MONEY_FIELDS} } } }
+      refunds { id createdAt processedAt updatedAt totalRefundedSet { ${MONEY_FIELDS} } transactions { id status amountSet { ${MONEY_FIELDS} } } }
     }
     pageInfo { hasNextPage endCursor }
   }
@@ -145,15 +110,7 @@ query TraceKitShopifyOrders($first: Int!, $after: String, $query: String) {
 const PRODUCTS_QUERY = `#graphql
 query TraceKitShopifyProducts($first: Int!, $after: String, $query: String) {
   products(first: $first, after: $after, sortKey: UPDATED_AT, query: $query) {
-    nodes {
-      id
-      title
-      description
-      updatedAt
-      variants(first: 250) {
-        nodes { id title sku price }
-      }
-    }
+    nodes { id title description updatedAt variants(first: 250) { nodes { id title sku price } } }
     pageInfo { hasNextPage endCursor }
   }
 }`;
@@ -161,23 +118,15 @@ query TraceKitShopifyProducts($first: Int!, $after: String, $query: String) {
 const CUSTOMERS_QUERY = `#graphql
 query TraceKitShopifyCustomers($first: Int!, $after: String, $query: String) {
   customers(first: $first, after: $after, sortKey: UPDATED_AT, query: $query) {
-    nodes {
-      id
-      firstName
-      lastName
-      displayName
-      email
-      phone
-      updatedAt
-    }
+    nodes { id firstName lastName displayName email phone updatedAt }
     pageInfo { hasNextPage endCursor }
   }
 }`;
 
-function maxUpdatedAt(current: string | null, nodes: any[]) {
+function maxUpdatedAt(current: string | null, nodes: ShopifyResourceNode[]) {
   let latest = current ? new Date(current) : null;
   for (const node of nodes) {
-    const candidate = new Date(String(node?.updatedAt || node?.createdAt || ""));
+    const candidate = new Date(String(node.updatedAt || node.createdAt || ""));
     if (Number.isNaN(candidate.getTime())) continue;
     if (!latest || candidate > latest) latest = candidate;
   }
