@@ -7,6 +7,12 @@ export type Next29CommerceSourceMapping = {
   canonicalObjectId: string;
 };
 
+type ExpansionWriteInput = Next29HistoricalScope & {
+  canonicalOrderId: string;
+  evidenceId: string;
+  expansion: Next29CanonicalExpansion;
+};
+
 export type Next29CommerceRepositoryClient = {
   createHistoricalRun(input: Next29HistoricalScope & { resource: "orders"; checkpoint: Next29HistoricalCheckpoint }): Promise<{ id: string }>;
   appendHistoricalCheckpoint(input: Next29HistoricalScope & { syncRunId: string; checkpoint: Next29HistoricalCheckpoint; recordsSeen: number }): Promise<void>;
@@ -34,31 +40,11 @@ export type Next29CommerceRepositoryClient = {
     evidenceId: string;
     rawOrder: unknown;
   }): Promise<void>;
-  upsertProducts(input: Next29HistoricalScope & {
-    canonicalOrderId: string;
-    evidenceId: string;
-    expansion: Next29CanonicalExpansion;
-  }): Promise<void>;
-  upsertOrderLines(input: Next29HistoricalScope & {
-    canonicalOrderId: string;
-    evidenceId: string;
-    expansion: Next29CanonicalExpansion;
-  }): Promise<void>;
-  upsertCustomerIdentity(input: Next29HistoricalScope & {
-    canonicalOrderId: string;
-    evidenceId: string;
-    expansion: Next29CanonicalExpansion;
-  }): Promise<void>;
-  upsertTransactions(input: Next29HistoricalScope & {
-    canonicalOrderId: string;
-    evidenceId: string;
-    expansion: Next29CanonicalExpansion;
-  }): Promise<void>;
-  upsertRefunds(input: Next29HistoricalScope & {
-    canonicalOrderId: string;
-    evidenceId: string;
-    expansion: Next29CanonicalExpansion;
-  }): Promise<void>;
+  upsertProducts?(input: ExpansionWriteInput): Promise<void>;
+  upsertOrderLines(input: ExpansionWriteInput): Promise<void>;
+  upsertCustomerIdentity(input: ExpansionWriteInput): Promise<void>;
+  upsertTransactions(input: ExpansionWriteInput): Promise<void>;
+  upsertRefunds(input: ExpansionWriteInput): Promise<void>;
 };
 
 export function createNext29HistoricalPersistence(client: Next29CommerceRepositoryClient): Next29HistoricalPersistence {
@@ -102,7 +88,7 @@ export function createNext29HistoricalPersistence(client: Next29CommerceReposito
       });
 
       const expansion = expandNext29Order(input.rawOrder);
-      const expansionInput = {
+      const expansionInput: ExpansionWriteInput = {
         organizationId: input.organizationId,
         connectionId: input.connectionId,
         providerAccountId: input.providerAccountId,
@@ -110,7 +96,7 @@ export function createNext29HistoricalPersistence(client: Next29CommerceReposito
         evidenceId: evidence.evidenceId,
         expansion,
       };
-      await client.upsertProducts(expansionInput);
+      if (client.upsertProducts) await client.upsertProducts(expansionInput);
       await client.upsertOrderLines(expansionInput);
       await client.upsertCustomerIdentity(expansionInput);
       await client.upsertTransactions(expansionInput);
