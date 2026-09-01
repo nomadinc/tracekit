@@ -113,7 +113,7 @@ async function everflowClickExecutionContext(scope: SchedulerScope) {
   const credential = await repo.activeCredential(scope.connectionId, scope.organizationId);
   if (!credential?.encrypted || credential.revokedAt) throw new Error("The commerce credential is unavailable.");
   return {
-    apiKey: decryptCommerceCredential(credential.encrypted, credentialKey().bytes),
+    apiKey: await decryptCommerceCredential(credential.encrypted, credentialKey().bytes),
     timezoneId,
   };
 }
