@@ -39,6 +39,10 @@ export function next29SubscriptionEvidence(args: { apiVersion: string; subscript
   return { provider: "next29", apiVersion: args.apiVersion, resource: "subscription", sourceObjectId: args.subscriptionId, observedAt: args.observedAt ?? new Date().toISOString(), payload: args.payload };
 }
 
+export function next29DisputeEvidence(args: { apiVersion: string; disputeId: string; observedAt?: string; payload: unknown }): Next29EvidenceEnvelope {
+  return { provider: "next29", apiVersion: args.apiVersion, resource: "dispute", sourceObjectId: args.disputeId, observedAt: args.observedAt ?? new Date().toISOString(), payload: args.payload };
+}
+
 function validateScope(scope: Next29EvidenceScope) {
   for (const [name, value] of Object.entries(scope)) {
     if (!String(value ?? "").trim()) throw new Error(`29Next evidence ${name} is required.`);
