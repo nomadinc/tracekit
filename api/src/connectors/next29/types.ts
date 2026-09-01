@@ -94,7 +94,29 @@ export type Next29Subscription = Next29SubscriptionSummary & {
   attribution?: Next29Attribution | null;
 };
 
-export type Next29EvidenceResource = "orders" | "order" | "subscriptions" | "subscription";
+export type Next29DisputeSummary = {
+  id: string | number;
+  type?: "alert" | "chargeback" | string | null;
+  status?: "new" | "open" | "resolved" | string | null;
+  amount?: string | number | null;
+  currency?: string | null;
+  report_amount?: string | number | null;
+  report_currency?: string | null;
+  arn?: string | null;
+  case_number?: string | null;
+  date_created?: string | null;
+  happened_at?: string | null;
+  order?: string | number | null;
+  transaction?: string | number | null;
+  resolution?: string | null;
+  resolution_other_message?: string | null;
+  metadata?: unknown;
+  [key: string]: unknown;
+};
+
+export type Next29Dispute = Next29DisputeSummary;
+
+export type Next29EvidenceResource = "orders" | "order" | "subscriptions" | "subscription" | "disputes" | "dispute";
 
 export type Next29EvidenceEnvelope = {
   provider: "next29";
