@@ -12,6 +12,14 @@ export type Next29CanonicalOrderLine = {
   isUpsell: boolean;
 };
 
+export type Next29CanonicalProductObservation = {
+  providerProductId: string;
+  providerVariantId: string | null;
+  sku: string | null;
+  title: string | null;
+  unitCost: number | null;
+};
+
 export type Next29CanonicalCustomer = {
   providerCustomerId: string;
   email: string | null;
@@ -47,6 +55,7 @@ export type Next29CanonicalRefund = {
 
 export type Next29CanonicalExpansion = {
   lines: Next29CanonicalOrderLine[];
+  products: Next29CanonicalProductObservation[];
   customer: Next29CanonicalCustomer | null;
   transactions: Next29CanonicalTransaction[];
   refunds: Next29CanonicalRefund[];
@@ -55,13 +64,31 @@ export type Next29CanonicalExpansion = {
 
 export function expandNext29Order(rawOrder: unknown): Next29CanonicalExpansion {
   const order = object(rawOrder);
+  const lines = array(order.lines).map(normalizeLine).filter((value): value is Next29CanonicalOrderLine => value !== null);
   return {
-    lines: array(order.lines).map(normalizeLine).filter((value): value is Next29CanonicalOrderLine => value !== null),
+    lines,
+    products: productObservations(lines),
     customer: normalizeCustomer(order.user),
     transactions: array(order.transactions).map(normalizeTransaction).filter((value): value is Next29CanonicalTransaction => value !== null),
     refunds: array(order.refunds).map(normalizeRefund).filter((value): value is Next29CanonicalRefund => value !== null),
     attribution: safeAttribution(order.attribution),
   };
+}
+
+function productObservations(lines: Next29CanonicalOrderLine[]): Next29CanonicalProductObservation[] {
+  const rows = new Map<string, Next29CanonicalProductObservation>();
+  for (const line of lines) {
+    if (!line.providerProductId) continue;
+    const key = `${line.providerProductId}:${line.providerVariantId ?? ""}`;
+    if (!rows.has(key)) rows.set(key, {
+      providerProductId: line.providerProductId,
+      providerVariantId: line.providerVariantId,
+      sku: line.sku,
+      title: line.title,
+      unitCost: line.unitCost,
+    });
+  }
+  return [...rows.values()];
 }
 
 function normalizeLine(value: unknown): Next29CanonicalOrderLine | null {
