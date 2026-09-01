@@ -11,7 +11,6 @@ const buildDirectory = resolve(uiDirectory, buildOutputName);
 const nextBinary = resolve(uiDirectory, "node_modules/next/dist/bin/next");
 const typescriptBinary = resolve(uiDirectory, "node_modules/typescript/bin/tsc");
 const nextEnvironmentTypes = resolve(uiDirectory, "next-env.d.ts");
-const m5DiagnosticOutput = resolve(uiDirectory, "public/m5-ts-errors.txt");
 
 function activeProcesses() {
   return nextProcessesForDirectory(uiDirectory).filter(({ pid }) => pid !== process.pid);
@@ -28,26 +27,22 @@ function runNext(args, env) {
   return spawn(process.execPath, [nextBinary, ...args], { cwd: uiDirectory, env, stdio: "inherit" });
 }
 
-function captureM5TypeScriptDiagnostics() {
-  if (!process.env.VERCEL || process.env.VERCEL_GIT_COMMIT_REF !== "workstream/shopify-m5") return;
-  const result = spawnSync(process.execPath, [typescriptBinary, "--noEmit", "--pretty", "false", "--incremental", "false"], {
+function runM5TypecheckGate() {
+  if (process.env.VERCEL_GIT_COMMIT_REF !== "workstream/shopify-m5") return;
+  const result = spawnSync(process.execPath, [typescriptBinary, "-p", "tsconfig.m5.json", "--pretty", "false"], {
     cwd: uiDirectory,
     env: process.env,
     encoding: "utf8",
     maxBuffer: 8 * 1024 * 1024,
   });
   const output = [result.stdout || "", result.stderr || ""].join("\n").trim();
-  const report = [
-    `exit_code=${result.status ?? "unknown"}`,
-    `signal=${result.signal ?? "none"}`,
-    "",
-    output || "NO_TYPESCRIPT_ERRORS",
-  ].join("\n");
-  const boundedReport = report.slice(0, 500000);
-  writeFileSync(m5DiagnosticOutput, `${boundedReport}\n`);
-  console.log("TRACEKIT_M5_TYPESCRIPT_DIAGNOSTICS_BEGIN");
-  console.log(boundedReport);
-  console.log("TRACEKIT_M5_TYPESCRIPT_DIAGNOSTICS_END");
+  console.log("TRACEKIT_M5_TYPECHECK_BEGIN");
+  console.log(output || "NO_TYPESCRIPT_ERRORS");
+  console.log("TRACEKIT_M5_TYPECHECK_END");
+  if (result.status !== 0) {
+    throw new Error(`Shopify M5 dedicated typecheck failed with exit code ${result.status ?? "unknown"}.`);
+  }
+  console.log("Shopify M5 dedicated typecheck passed.");
 }
 
 function exitWithChild(child) {
@@ -99,7 +94,7 @@ if (mode === "dev") {
 } else if (mode === "build") {
   requireNoNextProcesses();
   rmSync(buildDirectory, { recursive: true, force: true });
-  captureM5TypeScriptDiagnostics();
+  runM5TypecheckGate();
   const originalEnvironmentTypes = readFileSync(nextEnvironmentTypes, "utf8");
   const child = runNext(["build"], { ...process.env, NEXT_DIST_DIR: buildOutputName });
   child.on("exit", (code) => {
