@@ -28,9 +28,19 @@ test("29Next dispute ingestion fails closed on list detail identity mismatch", a
   assert.equal(repo.calls.filter(([k])=>k==="fail").length,1);
 });
 
-test("29Next dispute persistence resolves direct provider identifiers before lifecycle append", async () => {
+test("29Next dispute persistence stores API observation before direct reconciliation and lifecycle append", async () => {
   const calls:string[]=[];
-  const p=createNext29DisputePersistence({async createHistoricalRun(){return{id:"run-1"}},async appendHistoricalCheckpoint(){},async finishHistoricalRun(){},async failHistoricalRun(){},async ensureDisputeEvidence(){calls.push("evidence");return{evidenceId:"ev"}},async resolveCanonicalOrder(input){calls.push("resolve");assert.equal(input.providerTransactionId,"5001");return{canonicalOrderId:"order-1",state:"matched" as const,matchedBy:"transaction" as const}},async upsertProviderDispute(input){calls.push("dispute");assert.equal(input.canonicalOrderId,"order-1");return{disputeId:"d-1",lifecycleChanged:true}},async appendDisputeLifecycle(){calls.push("lifecycle")}});
+  const p=createNext29DisputePersistence({
+    async createHistoricalRun(){return{id:"run-1"}},
+    async appendHistoricalCheckpoint(){},
+    async finishHistoricalRun(){},
+    async failHistoricalRun(){},
+    async ensureDisputeEvidence(){calls.push("evidence");return{evidenceId:"ev"}},
+    async ensureDisputeObservation(input){calls.push("observation");assert.equal(input.sourceKind,"api");assert.equal(input.providerDisputeId,"77");return{observationId:"obs-1"}},
+    async resolveCanonicalOrder(input){calls.push("resolve");assert.equal(input.providerTransactionId,"5001");return{canonicalOrderId:"order-1",state:"matched" as const,matchedBy:"transaction" as const}},
+    async upsertProviderDispute(input){calls.push("dispute");assert.equal(input.canonicalOrderId,"order-1");assert.equal(input.observationId,"obs-1");return{disputeId:"d-1",lifecycleChanged:true}},
+    async appendDisputeLifecycle(input){calls.push("lifecycle");assert.equal(input.observationId,"obs-1")},
+  });
   await p.persistDispute({organizationId:"org",connectionId:"conn",providerAccountId:"acct",syncRunId:"run-1",normalized:{providerDisputeId:"77",type:"chargeback",status:"open",resolution:null,resolutionOtherMessage:null,amount:67,currency:"USD",reportAmount:null,reportCurrency:null,arn:null,caseNumber:null,providerOrderId:"1001",providerTransactionId:"5001",sourceCreatedAt:null,happenedAt:"2026-08-02T00:00:00.000Z",metadata:{}},evidence:{storageReference:"mem",payloadHash:"hash",byteSize:1},rawDispute:raw("77")});
-  assert.deepEqual(calls,["evidence","resolve","dispute","lifecycle"]);
+  assert.deepEqual(calls,["evidence","observation","resolve","dispute","lifecycle"]);
 });
