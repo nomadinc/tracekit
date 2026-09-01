@@ -1,4 +1,5 @@
 import type { Next29HistoricalCheckpoint, Next29HistoricalPersistence, Next29HistoricalScope } from "./historical-sync.ts";
+import { expandNext29Order, type Next29CanonicalExpansion } from "./expansion.ts";
 import type { NormalizedNext29Order } from "./normalize.ts";
 
 export type Next29CommerceSourceMapping = {
@@ -32,6 +33,26 @@ export type Next29CommerceRepositoryClient = {
     sourceMappingId: string;
     evidenceId: string;
     rawOrder: unknown;
+  }): Promise<void>;
+  upsertOrderLines(input: Next29HistoricalScope & {
+    canonicalOrderId: string;
+    evidenceId: string;
+    expansion: Next29CanonicalExpansion;
+  }): Promise<void>;
+  upsertCustomerIdentity(input: Next29HistoricalScope & {
+    canonicalOrderId: string;
+    evidenceId: string;
+    expansion: Next29CanonicalExpansion;
+  }): Promise<void>;
+  upsertTransactions(input: Next29HistoricalScope & {
+    canonicalOrderId: string;
+    evidenceId: string;
+    expansion: Next29CanonicalExpansion;
+  }): Promise<void>;
+  upsertRefunds(input: Next29HistoricalScope & {
+    canonicalOrderId: string;
+    evidenceId: string;
+    expansion: Next29CanonicalExpansion;
   }): Promise<void>;
 };
 
@@ -74,6 +95,20 @@ export function createNext29HistoricalPersistence(client: Next29CommerceReposito
         evidenceId: evidence.evidenceId,
         rawOrder: input.rawOrder,
       });
+
+      const expansion = expandNext29Order(input.rawOrder);
+      const expansionInput = {
+        organizationId: input.organizationId,
+        connectionId: input.connectionId,
+        providerAccountId: input.providerAccountId,
+        canonicalOrderId: mapping.canonicalObjectId,
+        evidenceId: evidence.evidenceId,
+        expansion,
+      };
+      await client.upsertOrderLines(expansionInput);
+      await client.upsertCustomerIdentity(expansionInput);
+      await client.upsertTransactions(expansionInput);
+      await client.upsertRefunds(expansionInput);
     },
 
     async appendCheckpoint(input) {
