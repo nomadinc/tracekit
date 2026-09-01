@@ -43,8 +43,11 @@ function captureM5TypeScriptDiagnostics() {
     "",
     output || "NO_TYPESCRIPT_ERRORS",
   ].join("\n");
-  writeFileSync(m5DiagnosticOutput, `${report.slice(0, 500000)}\n`);
-  console.log(`M5 TypeScript diagnostic captured (${report.length} bytes).`);
+  const boundedReport = report.slice(0, 500000);
+  writeFileSync(m5DiagnosticOutput, `${boundedReport}\n`);
+  console.log("TRACEKIT_M5_TYPESCRIPT_DIAGNOSTICS_BEGIN");
+  console.log(boundedReport);
+  console.log("TRACEKIT_M5_TYPESCRIPT_DIAGNOSTICS_END");
 }
 
 function exitWithChild(child) {
