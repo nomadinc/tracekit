@@ -1,0 +1,19 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "incremental": false
+  },
+  "include": [
+    "app/api/shopify/incremental/route.ts",
+    "lib/commerce/shopify-incremental-runtime.ts",
+    "lib/commerce/shopify-core/**/*.ts",
+    "next-env.d.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    ".next",
+    ".next-build",
+    "tests"
+  ]
+}
