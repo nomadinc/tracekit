@@ -1,6 +1,8 @@
 import { next29ConfigurationError, next29ErrorForStatus, Next29ProviderError, redactNext29Text } from "./errors.ts";
 import type {
   Next29ClientConfig,
+  Next29Dispute,
+  Next29DisputeSummary,
   Next29Order,
   Next29OrderSummary,
   Next29Page,
@@ -98,12 +100,27 @@ export class Next29Client {
     return { item: response.body as Next29Subscription, providerRequestId: response.providerRequestId, correlationId: response.correlationId };
   }
 
+  async listDisputes(options: ListOptions = {}, context: Next29RequestContext = {}): Promise<Next29Page<Next29DisputeSummary>> {
+    return this.listResource<Next29DisputeSummary>("disputes", "disputes/", options, context);
+  }
+
+  async getDispute(id: string | number, context: Next29RequestContext = {}): Promise<{ item: Next29Dispute; providerRequestId: string | null; correlationId: string }> {
+    const disputeId = requiredId(id, "dispute id");
+    const response = await this.request("dispute", `disputes/${encodeURIComponent(disputeId)}/`, new URLSearchParams(), context);
+    if (!isObject(response.body)) throw next29ConfigurationError("29Next dispute response was not an object.");
+    return { item: response.body as Next29Dispute, providerRequestId: response.providerRequestId, correlationId: response.correlationId };
+  }
+
   async *iterateOrders(options: { maxPages?: number; query?: ListOptions["query"] } = {}, context: Next29RequestContext = {}) {
     yield* this.iterateResource<Next29OrderSummary>("orders", "orders/", options, context);
   }
 
   async *iterateSubscriptions(options: { maxPages?: number; query?: ListOptions["query"] } = {}, context: Next29RequestContext = {}) {
     yield* this.iterateResource<Next29SubscriptionSummary>("subscriptions", "subscriptions/", options, context);
+  }
+
+  async *iterateDisputes(options: { maxPages?: number; query?: ListOptions["query"] } = {}, context: Next29RequestContext = {}) {
+    yield* this.iterateResource<Next29DisputeSummary>("disputes", "disputes/", options, context);
   }
 
   private async listResource<T>(resource: string, path: string, options: ListOptions, context: Next29RequestContext): Promise<Next29Page<T>> {
