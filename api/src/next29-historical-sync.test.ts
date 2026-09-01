@@ -139,7 +139,7 @@ test("29Next historical ingestion rejects unsafe bounds before provider reads", 
   assert.equal(reads, 0);
 });
 
-test("29Next commerce persistence writes Evidence and source mapping before the platform order", async () => {
+test("29Next commerce persistence writes Evidence and source mapping before canonical expansion", async () => {
   const calls: string[] = [];
   const repository = createNext29HistoricalPersistence({
     async createHistoricalRun() { calls.push("run"); return { id: "run-1" }; },
@@ -157,11 +157,15 @@ test("29Next commerce persistence writes Evidence and source mapping before the 
       assert.equal(row.evidence_id, "ev-1");
       assert.equal((row.metadata as any).attribution.subaffiliate1, "ef-tid");
     },
+    async upsertOrderLines() { calls.push("lines"); },
+    async upsertCustomerIdentity() { calls.push("customer"); },
+    async upsertTransactions() { calls.push("transactions"); },
+    async upsertRefunds() { calls.push("refunds"); },
   });
   const normalized = {
     sourceObjectId: "1001", providerUpdatedAt: "2026-08-01T12:05:00.000Z", platformOrderId: "next29:1001", orderId: "1001", orderTs: "2026-08-01T12:00:00.000Z", status: "completed", statusNorm: "completed", currency: "USD", grossAmount: 39.99, productSubtotal: 36.99, taxAmount: 3, discountAmount: 5, isTest: false, attribution: { subaffiliate1: "ef-tid" },
   };
   await repository.beginRun({ organizationId: "org", connectionId: "conn", providerAccountId: "acct", resource: "orders", checkpoint: { page: 1, next: null, lastSourceObjectId: null } });
   await repository.persistOrder({ organizationId: "org", connectionId: "conn", providerAccountId: "acct", syncRunId: "run-1", normalized, evidence: { storageReference: "obj://1", payloadHash: "hash", byteSize: 12 }, rawOrder: order("1001") });
-  assert.deepEqual(calls, ["run", "evidence", "mapping", "order"]);
+  assert.deepEqual(calls, ["run", "evidence", "mapping", "order", "lines", "customer", "transactions", "refunds"]);
 });
