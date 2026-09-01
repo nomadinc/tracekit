@@ -33,6 +33,7 @@ export type Next29HistoricalPersistence = {
     checkpoint: Next29HistoricalCheckpoint;
     pagesCompleted: number;
     recordsSeen: number;
+    hasMore: boolean;
   }): Promise<void>;
   failRun(input: Next29HistoricalScope & {
     syncRunId: string;
@@ -49,6 +50,7 @@ export type RunNext29HistoricalOrdersArgs = Next29HistoricalScope & {
   persistence: Next29HistoricalPersistence;
   maxPages?: number;
   maxOrders?: number;
+  startCursor?: string | null;
   query?: Record<string, string | number | boolean | null | undefined>;
   observedAt?: () => string;
 };
@@ -58,6 +60,8 @@ export type Next29HistoricalOrdersResult = {
   pages: number;
   records: number;
   checkpoint: Next29HistoricalCheckpoint;
+  hasMore: boolean;
+  resumeCursor: string | null;
   bounded: true;
 };
 
@@ -66,20 +70,22 @@ export async function runNext29HistoricalOrders(args: RunNext29HistoricalOrdersA
   const maxPages = boundedPositiveInteger(args.maxPages, 3, 25, "maxPages");
   const maxOrders = boundedPositiveInteger(args.maxOrders, 100, 500, "maxOrders");
   const observedAt = args.observedAt ?? (() => new Date().toISOString());
-  let checkpoint: Next29HistoricalCheckpoint = { page: 1, next: null, lastSourceObjectId: null };
+  let nextCursor = optionalCursor(args.startCursor);
+  let checkpoint: Next29HistoricalCheckpoint = { page: 1, next: nextCursor, lastSourceObjectId: null };
   const run = await args.persistence.beginRun({ ...scope, resource: "orders", checkpoint });
   const syncRunId = requiredText(run.syncRunId, "syncRunId");
   let pages = 0;
   let records = 0;
-  let nextCursor: string | null = null;
+  let finalNextUrl: string | null = null;
 
   try {
     while (pages < maxPages && records < maxOrders) {
       const page = await args.client.listOrders({
         cursor: nextCursor,
-        query: pages === 0 ? args.query : undefined,
+        query: pages === 0 && nextCursor === null ? args.query : undefined,
       });
       pages += 1;
+      finalNextUrl = page.next;
 
       for (const summary of page.results) {
         if (records >= maxOrders) break;
@@ -107,11 +113,7 @@ export async function runNext29HistoricalOrders(args: RunNext29HistoricalOrdersA
           rawOrder: detail.item,
         });
         records += 1;
-        checkpoint = {
-          page: pages,
-          next: page.next,
-          lastSourceObjectId: sourceObjectId,
-        };
+        checkpoint = { page: pages, next: page.next, lastSourceObjectId: sourceObjectId };
       }
 
       await args.persistence.appendCheckpoint({ ...scope, syncRunId, checkpoint, recordsSeen: records });
@@ -119,8 +121,10 @@ export async function runNext29HistoricalOrders(args: RunNext29HistoricalOrdersA
       nextCursor = cursorFromNextUrl(page.next);
     }
 
-    await args.persistence.completeRun({ ...scope, syncRunId, checkpoint, pagesCompleted: pages, recordsSeen: records });
-    return { syncRunId, pages, records, checkpoint, bounded: true };
+    const hasMore = Boolean(finalNextUrl) && (pages >= maxPages || records >= maxOrders);
+    const resumeCursor = hasMore && finalNextUrl ? cursorFromNextUrl(finalNextUrl) : null;
+    await args.persistence.completeRun({ ...scope, syncRunId, checkpoint, pagesCompleted: pages, recordsSeen: records, hasMore });
+    return { syncRunId, pages, records, checkpoint, hasMore, resumeCursor, bounded: true };
   } catch (error) {
     await args.persistence.failRun({
       ...scope,
@@ -143,6 +147,13 @@ export function cursorFromNextUrl(value: string) {
   }
   const cursor = url.searchParams.get("cursor");
   if (!cursor) throw new Error("29Next historical pagination next URL did not contain a cursor.");
+  return cursor;
+}
+
+function optionalCursor(value: unknown) {
+  if (value === null || value === undefined || value === "") return null;
+  const cursor = String(value).trim();
+  if (!cursor || cursor.length > 2_000) throw new Error("29Next historical startCursor is invalid.");
   return cursor;
 }
 
