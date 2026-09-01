@@ -159,14 +159,31 @@ export async function runEverflowScheduledChunk(scope: SchedulerScope) {
     const eventEffects = await persistEverflowEventReversalHistory({ organizationId: scope.organizationId, connectionId: scope.connectionId, syncRunId: result.syncRunId, providerAccountId: result.providerAccountId, baseline: financialBaseline });
     stage = "financial_projection";
     const financialProjection = await projectEverflowFinancialEffects({ organizationId: scope.organizationId, connectionId: scope.connectionId, syncRunId: result.syncRunId });
-    stage = "click_sync";
-    const clickSync = await runEverflowScheduledClickChunk(scope);
+
+    let clickSync: Awaited<ReturnType<typeof runEverflowScheduledClickChunk>> | null = null;
+    let clickSyncFailed = false;
+    try {
+      clickSync = await runEverflowScheduledClickChunk(scope);
+    } catch {
+      clickSyncFailed = true;
+    }
+
     stage = "classification_metadata";
-    await mergeEverflowSyncRunMetadata({ connectionId: scope.connectionId, syncRunId: result.syncRunId, values: { linkage: result.linkage, financialProjection, clickSync: { seen: clickSync.seen, persisted: clickSync.persisted, window: clickSync.window, windowComplete: clickSync.progress.windowComplete, timezoneId: clickSync.timezoneId } } });
+    await mergeEverflowSyncRunMetadata({
+      connectionId: scope.connectionId,
+      syncRunId: result.syncRunId,
+      values: {
+        linkage: result.linkage,
+        financialProjection,
+        clickSync: clickSync
+          ? { status: "completed", seen: clickSync.seen, persisted: clickSync.persisted, window: clickSync.window, windowComplete: clickSync.progress.windowComplete, timezoneId: clickSync.timezoneId }
+          : { status: "failed", warningCode: "everflow_scheduled_click_sync_failed" },
+      },
+    });
     stage = "cursor_commit";
     const completedAt = new Date().toISOString();
     const progress = await markEverflowIncrementalChunkSuccess({ ...scope, completedAt, syncRunId: result.syncRunId, from: window.from, to: window.to, targetTo: window.targetTo, overlapDays: window.overlapDays, bootstrap: window.bootstrap, seen: result.seen });
-    return { ok: true, window, progress, result, changeMetrics, eventEffects, financialProjection, clickSync };
+    return { ok: true, window, progress, result, changeMetrics, eventEffects, financialProjection, clickSync, clickSyncFailed };
   } catch (error) {
     await markEverflowIncrementalFailure({ ...scope, failedAt: new Date().toISOString(), warningCode: `everflow_scheduled_${stage}_failed` }).catch(() => undefined);
     throw error;
@@ -221,17 +238,18 @@ export async function runDueEverflowSchedules(input: { now?: Date; limit?: numbe
     const schedule = claim.schedule;
     try {
       const result = await runEverflowScheduledChunk({ accountId: schedule.account_id, organizationId: schedule.organization_id, connectionId: schedule.connection_id, providerAccountId: schedule.provider_account_id, now });
-      const outcome = result.progress.windowComplete && result.clickSync.progress.windowComplete ? "completed" : "incomplete";
+      const outcome = result.progress.windowComplete ? "completed" : "incomplete";
       if (!await finishSchedule(schedule.id, claim.leaseOwner, outcome)) throw new Error("Everflow schedule lease could not be released.");
       results.push({
         scheduleId: schedule.id,
         status: "completed",
         windowComplete: result.progress.windowComplete,
-        clickWindowComplete: result.clickSync.progress.windowComplete,
+        clickStatus: result.clickSyncFailed ? "failed" : "completed",
+        clickWindowComplete: result.clickSync?.progress.windowComplete ?? false,
         syncRunId: result.result.syncRunId,
         seen: result.result.seen,
-        clicksSeen: result.clickSync.seen,
-        clicksPersisted: result.clickSync.persisted,
+        clicksSeen: result.clickSync?.seen ?? 0,
+        clicksPersisted: result.clickSync?.persisted ?? 0,
         linkage: result.result.linkage,
         financialProjection: result.financialProjection,
       });
