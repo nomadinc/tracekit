@@ -31,20 +31,12 @@ export async function persistNext29Evidence(
   });
 }
 
-export function next29OrderEvidence(args: {
-  apiVersion: string;
-  orderNumber: string;
-  observedAt?: string;
-  payload: unknown;
-}): Next29EvidenceEnvelope {
-  return {
-    provider: "next29",
-    apiVersion: args.apiVersion,
-    resource: "order",
-    sourceObjectId: args.orderNumber,
-    observedAt: args.observedAt ?? new Date().toISOString(),
-    payload: args.payload,
-  };
+export function next29OrderEvidence(args: { apiVersion: string; orderNumber: string; observedAt?: string; payload: unknown }): Next29EvidenceEnvelope {
+  return { provider: "next29", apiVersion: args.apiVersion, resource: "order", sourceObjectId: args.orderNumber, observedAt: args.observedAt ?? new Date().toISOString(), payload: args.payload };
+}
+
+export function next29SubscriptionEvidence(args: { apiVersion: string; subscriptionId: string; observedAt?: string; payload: unknown }): Next29EvidenceEnvelope {
+  return { provider: "next29", apiVersion: args.apiVersion, resource: "subscription", sourceObjectId: args.subscriptionId, observedAt: args.observedAt ?? new Date().toISOString(), payload: args.payload };
 }
 
 function validateScope(scope: Next29EvidenceScope) {
