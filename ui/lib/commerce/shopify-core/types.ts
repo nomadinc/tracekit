@@ -1,4 +1,10 @@
-import type { CommerceProviderCapability } from "../types";
+export type CommerceProviderCapability = {
+  resource: string;
+  list: boolean;
+  get: boolean;
+  incrementalFilters: readonly string[];
+  notes?: string;
+};
 
 export type ShopifyConnectionContext = {
   organizationId: string;
