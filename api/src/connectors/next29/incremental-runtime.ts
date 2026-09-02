@@ -14,6 +14,7 @@ export type Next29IncrementalResourceState = {
 
 export type Next29IncrementalControl = {
   claim(input: Next29RuntimeScope & { resource: Next29RuntimeResource; now: string; leaseOwner: string; leaseSeconds: number }): Promise<Next29IncrementalResourceState>;
+  heartbeat(input: Next29RuntimeScope & { scheduleId: string; resource: Next29RuntimeResource; leaseOwner: string; now: string; leaseSeconds: number }): Promise<boolean>;
   finish(input: Next29RuntimeScope & { scheduleId: string; resource: Next29RuntimeResource; leaseOwner: string; now: string; outcome: "completed" | "incomplete"; successfulThrough: string | null; activeWindowStart: string | null; activeWindowEnd: string | null; resumeCursor: string | null }): Promise<void>;
   fail(input: Next29RuntimeScope & { scheduleId: string; resource: Next29RuntimeResource; leaseOwner: string; now: string; errorCode: string }): Promise<void>;
 };
@@ -66,6 +67,10 @@ export async function runNext29IncrementalCycle(args: Next29IncrementalRequest):
       continue;
     }
 
+    const scheduleId = required(state.scheduleId, "scheduleId");
+    const heartbeatOk = await args.control.heartbeat({ ...scope, scheduleId, resource, leaseOwner, now, leaseSeconds });
+    if (!heartbeatOk) throw new Error("29Next incremental schedule lease heartbeat failed before provider read.");
+
     try {
       const window = state.activeWindowStart && state.activeWindowEnd
         ? { start: validIso(state.activeWindowStart, "activeWindowStart"), end: validIso(state.activeWindowEnd, "activeWindowEnd") }
@@ -86,7 +91,7 @@ export async function runNext29IncrementalCycle(args: Next29IncrementalRequest):
       const outcome = result.hasMore ? "incomplete" : "completed";
       await args.control.finish({
         ...scope,
-        scheduleId: required(state.scheduleId, "scheduleId"),
+        scheduleId,
         resource,
         leaseOwner,
         now,
@@ -98,7 +103,7 @@ export async function runNext29IncrementalCycle(args: Next29IncrementalRequest):
       });
       output.resources[resource] = { status: outcome, records: result.records, resumeCursor: result.resumeCursor, windowStart: window.start, windowEnd: window.end };
     } catch (error) {
-      await args.control.fail({ ...scope, scheduleId: required(state.scheduleId, "scheduleId"), resource, leaseOwner, now, errorCode: safeErrorCode(error) });
+      await args.control.fail({ ...scope, scheduleId, resource, leaseOwner, now, errorCode: safeErrorCode(error) });
       throw error;
     }
   }
