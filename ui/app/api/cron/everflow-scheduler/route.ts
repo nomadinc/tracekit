@@ -5,6 +5,7 @@ import { runDueEverflowSchedules } from "@/lib/integrations/everflow-scheduled-w
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
+const EVERFLOW_SCHEDULER_VERSION = "bounded-page-v1";
 
 function authorizedCron(request: Request) {
   const secret = String(process.env.CRON_SECRET || "").trim();
@@ -35,16 +36,14 @@ export async function GET(request: Request) {
   try {
     await commercePersistenceRequest("everflow_cron_runs", {
       method: "POST",
-      body: JSON.stringify({ request_id: requestId, started_at: new Date().toISOString() }),
+      body: JSON.stringify({ request_id: requestId, started_at: new Date().toISOString(), scheduler_version: EVERFLOW_SCHEDULER_VERSION }),
     });
   } catch (error) {
     console.error("everflow_cron_telemetry_insert_failed", { requestId, error: errorSummary(error) });
   }
 
-  // Reconciliation is intentionally delegated to Supabase pg_cron. The v2 reconciliation
-  // function can exceed PostgREST's 8-second authenticator timeout even when database-side
-  // execution succeeds, so the database scheduler runs it directly without the HTTP ceiling.
   await patchTelemetry(requestId, {
+    scheduler_version: EVERFLOW_SCHEDULER_VERSION,
     backfill_started_at: new Date().toISOString(),
     backfill_completed_at: new Date().toISOString(),
     backfill_status: "delegated_pg_cron",
@@ -55,36 +54,39 @@ export async function GET(request: Request) {
   let schedulerFailed = false;
   let schedulerError: string | null = null;
 
-  await patchTelemetry(requestId, { scheduler_started_at: new Date().toISOString(), scheduler_status: "running" });
+  await patchTelemetry(requestId, { scheduler_started_at: new Date().toISOString(), scheduler_status: "running", scheduler_version: EVERFLOW_SCHEDULER_VERSION });
   try {
     scheduler = await runDueEverflowSchedules({ limit: 1 });
     await patchTelemetry(requestId, {
       scheduler_completed_at: new Date().toISOString(),
       scheduler_status: "completed",
+      scheduler_version: EVERFLOW_SCHEDULER_VERSION,
     });
   } catch (error) {
     schedulerFailed = true;
     schedulerError = errorSummary(error);
-    console.error("everflow_scheduler_failed", { requestId, error: schedulerError });
+    console.error("everflow_scheduler_failed", { requestId, error: schedulerError, schedulerVersion: EVERFLOW_SCHEDULER_VERSION });
     await patchTelemetry(requestId, {
       scheduler_completed_at: new Date().toISOString(),
       scheduler_status: "failed",
       scheduler_error: schedulerError,
+      scheduler_version: EVERFLOW_SCHEDULER_VERSION,
     });
   }
 
   const responseStatus = schedulerFailed ? 500 : 200;
-  await patchTelemetry(requestId, { completed_at: new Date().toISOString(), response_status: responseStatus });
+  await patchTelemetry(requestId, { completed_at: new Date().toISOString(), response_status: responseStatus, scheduler_version: EVERFLOW_SCHEDULER_VERSION });
 
   if (responseStatus === 500) {
     return NextResponse.json(
-      { ok: false, message: "TraceKit could not complete the Everflow scheduled work.", requestId },
+      { ok: false, message: "TraceKit could not complete the Everflow scheduled work.", schedulerVersion: EVERFLOW_SCHEDULER_VERSION, requestId },
       { status: 500 },
     );
   }
 
   return NextResponse.json({
     ok: true,
+    schedulerVersion: EVERFLOW_SCHEDULER_VERSION,
     scheduler,
     backfill: { delegated: "pg_cron" },
     warnings: [],
