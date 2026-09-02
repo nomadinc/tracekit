@@ -4,7 +4,7 @@ import { verifyNext29WebhookSignature } from "./webhook.ts";
 export const NEXT29_REQUIRED_MIGRATIONS = [
   "097_commerce_subscriptions_v1.sql",
   "098_commerce_webhook_receipts_v1.sql",
-  "099_commerce_dispute_observations_v1.sql",
+  "20260901060000_generalize_commerce_dispute_observations.sql",
   "20260902030000_next29_incremental_scheduler_foundation.sql",
   "20260902043000_next29_scheduler_dispatch_runtime.sql",
 ] as const;
@@ -104,8 +104,8 @@ export async function characterizeNext29WebhookSignature(input: {
 
   try {
     const parsed = JSON.parse(new TextDecoder().decode(input.rawBody));
-    const canonical = new TextEncoder().encode(JSON.stringify(parsed));
-    const reserialized = await verifyNext29WebhookSignature({ ...input, rawBody: canonical });
+    const reserializedBody = new TextEncoder().encode(JSON.stringify(parsed));
+    const reserialized = await verifyNext29WebhookSignature({ ...input, rawBody: reserializedBody });
     if (reserialized) return { verified: true, serialization: "json_reserialized" };
   } catch {
     // Invalid JSON cannot satisfy the documented webhook contract.
