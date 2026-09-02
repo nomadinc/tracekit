@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import type { TraceKitSessionContext } from "@/lib/identity/persistent-types";
 import { SupabaseCommerceControlRepository, commercePersistenceRequest } from "@/lib/commerce/supabase-control-repository";
 import { decodeCommerceCredentialKey, decryptCommerceCredential } from "@/lib/commerce/credential-crypto";
-import { syncEverflowConversions } from "./everflow-conversions";
+import { syncEverflowScheduledConversionPage } from "./everflow-scheduled-conversion-page";
 import { captureEverflowConversionBaseline, finalizeEverflowConversionRunMetrics, mergeEverflowSyncRunMetadata } from "./everflow-conversion-run-metrics";
 import { captureEverflowFinancialBaseline, persistEverflowEventReversalHistory } from "./everflow-event-reversals";
 import { projectEverflowFinancialEffects } from "./everflow-financial-projection";
@@ -149,10 +149,18 @@ export async function runEverflowScheduledChunk(scope: SchedulerScope) {
     const baseline = await captureEverflowConversionBaseline(scope.connectionId);
     const financialBaseline = await captureEverflowFinancialBaseline(scope.connectionId);
     stage = "provider_sync";
-    const result = await syncEverflowConversions({ plane: servicePlane(scope) as never, session: schedulerSession, organizationId: scope.organizationId, connectionId: scope.connectionId, from: window.from, to: window.to });
+    const result = await syncEverflowScheduledConversionPage({
+      plane: servicePlane(scope) as never,
+      session: schedulerSession,
+      organizationId: scope.organizationId,
+      connectionId: scope.connectionId,
+      from: window.from,
+      to: window.to,
+      page: window.page,
+    });
     stage = "run_metrics";
     const afterCount = await persistedCount(scope.connectionId);
-    await commercePersistenceRequest(`commerce_sync_runs?id=eq.${encodeURIComponent(result.syncRunId)}&organization_id=eq.${encodeURIComponent(scope.organizationId)}&connection_id=eq.${encodeURIComponent(scope.connectionId)}`, { method: "PATCH", body: JSON.stringify({ pages_completed: result.pages, records_seen: result.seen, provider_request_count: result.pages }) });
+    await commercePersistenceRequest(`commerce_sync_runs?id=eq.${encodeURIComponent(result.syncRunId)}&organization_id=eq.${encodeURIComponent(scope.organizationId)}&connection_id=eq.${encodeURIComponent(scope.connectionId)}`, { method: "PATCH", body: JSON.stringify({ pages_completed: 1, records_seen: result.seen, provider_request_count: 1, stopping_reason: result.sourceComplete ? "source_window_complete" : "page_chunk_complete" }) });
     const changeMetrics = await finalizeEverflowConversionRunMetrics({ connectionId: scope.connectionId, syncRunId: result.syncRunId, baseline });
     if (changeMetrics.created !== Math.max(0, afterCount - beforeCount)) throw new Error("Everflow conversion change metrics were inconsistent.");
     stage = "state_history";
@@ -162,10 +170,13 @@ export async function runEverflowScheduledChunk(scope: SchedulerScope) {
 
     let clickSync: Awaited<ReturnType<typeof runEverflowScheduledClickChunk>> | null = null;
     let clickSyncFailed = false;
-    try {
-      clickSync = await runEverflowScheduledClickChunk(scope);
-    } catch {
-      clickSyncFailed = true;
+    const clickSyncDeferred = !result.sourceComplete;
+    if (!clickSyncDeferred) {
+      try {
+        clickSync = await runEverflowScheduledClickChunk(scope);
+      } catch {
+        clickSyncFailed = true;
+      }
     }
 
     stage = "classification_metadata";
@@ -175,15 +186,30 @@ export async function runEverflowScheduledChunk(scope: SchedulerScope) {
       values: {
         linkage: result.linkage,
         financialProjection,
+        boundedScheduler: { page: result.page, nextPage: result.nextPage, sourceComplete: result.sourceComplete },
         clickSync: clickSync
           ? { status: "completed", seen: clickSync.seen, persisted: clickSync.persisted, window: clickSync.window, windowComplete: clickSync.progress.windowComplete, timezoneId: clickSync.timezoneId }
-          : { status: "failed", warningCode: "everflow_scheduled_click_sync_failed" },
+          : clickSyncDeferred
+            ? { status: "deferred", reason: "conversion_page_remaining" }
+            : { status: "failed", warningCode: "everflow_scheduled_click_sync_failed" },
       },
     });
     stage = "cursor_commit";
     const completedAt = new Date().toISOString();
-    const progress = await markEverflowIncrementalChunkSuccess({ ...scope, completedAt, syncRunId: result.syncRunId, from: window.from, to: window.to, targetTo: window.targetTo, overlapDays: window.overlapDays, bootstrap: window.bootstrap, seen: result.seen });
-    return { ok: true, window, progress, result, changeMetrics, eventEffects, financialProjection, clickSync, clickSyncFailed };
+    const progress = await markEverflowIncrementalChunkSuccess({
+      ...scope,
+      completedAt,
+      syncRunId: result.syncRunId,
+      from: window.from,
+      to: window.to,
+      targetTo: window.targetTo,
+      overlapDays: window.overlapDays,
+      bootstrap: window.bootstrap,
+      seen: result.seen,
+      sourceComplete: result.sourceComplete,
+      nextPage: result.nextPage,
+    });
+    return { ok: true, window, progress, result, changeMetrics, eventEffects, financialProjection, clickSync, clickSyncFailed, clickSyncDeferred };
   } catch (error) {
     await markEverflowIncrementalFailure({ ...scope, failedAt: new Date().toISOString(), warningCode: `everflow_scheduled_${stage}_failed` }).catch(() => undefined);
     throw error;
@@ -244,7 +270,10 @@ export async function runDueEverflowSchedules(input: { now?: Date; limit?: numbe
         scheduleId: schedule.id,
         status: "completed",
         windowComplete: result.progress.windowComplete,
-        clickStatus: result.clickSyncFailed ? "failed" : "completed",
+        sourceComplete: result.result.sourceComplete,
+        page: result.result.page,
+        nextPage: result.result.nextPage,
+        clickStatus: result.clickSyncDeferred ? "deferred" : result.clickSyncFailed ? "failed" : "completed",
         clickWindowComplete: result.clickSync?.progress.windowComplete ?? false,
         syncRunId: result.result.syncRunId,
         seen: result.result.seen,
