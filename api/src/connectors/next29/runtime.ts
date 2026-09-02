@@ -6,9 +6,9 @@ import { runNext29HistoricalDisputes, type Next29DisputePersistence } from "./di
 import type { Next29EvidenceSink } from "./types.ts";
 
 export const NEXT29_RUNTIME_CAPABILITIES: readonly CommerceProviderCapability[] = [
-  { resource: "orders", list: true, get: true, incrementalFilters: ["date_placed", "created_at", "updated_at"], notes: "Canonical orders, lines, customers, transactions, refunds, attribution, and product observations." },
-  { resource: "subscriptions", list: true, get: true, incrementalFilters: ["date_created", "next_renewal_date", "status"], notes: "Canonical subscription lifecycle, lines, and rebill-order lineage." },
-  { resource: "disputes", list: true, get: true, incrementalFilters: ["created_at", "happened_at", "status", "type"], notes: "Canonical dispute lifecycle with deterministic transaction/order reconciliation." },
+  { resource: "orders", list: true, get: true, incrementalFilters: ["date_placed_from", "date_placed_to"], notes: "Canonical orders, lines, customers, transactions, refunds, attribution, and product observations. Stable API date filters discover placed orders; webhooks carry later lifecycle changes." },
+  { resource: "subscriptions", list: true, get: true, incrementalFilters: ["date_from", "date_to", "next_renewal_date_from", "next_renewal_date_to", "cancel_date_from", "cancel_date_to", "status"], notes: "Canonical subscription lifecycle, lines, and rebill-order lineage. Incremental creation windows are supplemented by signed lifecycle webhooks." },
+  { resource: "disputes", list: true, get: true, incrementalFilters: ["dispute_date_from", "dispute_date_to"], notes: "Canonical dispute lifecycle with deterministic transaction/order reconciliation. Date windows discover disputes; signed dispute webhooks carry lifecycle updates." },
   { resource: "webhooks", list: false, get: false, incrementalFilters: [], notes: "Signed inbound order, transaction, subscription, and dispute events; registration is not activated by this runtime." },
 ] as const;
 
@@ -42,6 +42,7 @@ export type Next29BoundedBackfillRequest = Next29RuntimeScope & {
     maxRecordsPerResource?: number;
   };
   cursors?: Partial<Record<Next29RuntimeResource, string | null>>;
+  queries?: Partial<Record<Next29RuntimeResource, Record<string, string | number | boolean | null | undefined>>>;
   observedAt?: () => string;
 };
 
@@ -82,6 +83,7 @@ export async function runNext29BoundedBackfill(args: Next29BoundedBackfillReques
         maxPages,
         maxOrders: maxRecords,
         startCursor: args.cursors?.orders,
+        query: args.queries?.orders,
         observedAt: args.observedAt,
       });
       results.orders = summarize(result);
@@ -99,6 +101,7 @@ export async function runNext29BoundedBackfill(args: Next29BoundedBackfillReques
         maxPages,
         maxSubscriptions: maxRecords,
         startCursor: args.cursors?.subscriptions,
+        query: args.queries?.subscriptions,
         observedAt: args.observedAt,
       });
       results.subscriptions = summarize(result);
@@ -115,6 +118,7 @@ export async function runNext29BoundedBackfill(args: Next29BoundedBackfillReques
       maxPages,
       maxDisputes: maxRecords,
       startCursor: args.cursors?.disputes,
+      query: args.queries?.disputes,
       observedAt: args.observedAt,
     });
     results.disputes = summarize(result);
