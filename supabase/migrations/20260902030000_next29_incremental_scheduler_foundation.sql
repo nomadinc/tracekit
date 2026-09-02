@@ -153,7 +153,10 @@ begin
     or (p_error_code is not null and p_error_code !~ '^[A-Za-z0-9_.-]{1,80}$')
     or ((p_active_window_start_at is null) <> (p_active_window_end_at is null))
     or (p_active_window_start_at is not null and p_active_window_end_at<p_active_window_start_at)
-    or (p_resume_cursor is not null and p_active_window_start_at is null) then
+    or (p_resume_cursor is not null and p_active_window_start_at is null)
+    or (p_outcome='completed' and (p_successful_through_at is null or p_active_window_start_at is not null or p_resume_cursor is not null))
+    or (p_outcome='incomplete' and (p_active_window_start_at is null or p_active_window_end_at is null or nullif(btrim(p_resume_cursor),'') is null))
+    or (p_outcome='failed' and nullif(btrim(p_error_code),'') is null) then
     raise exception 'invalid 29Next schedule completion request' using errcode='22023';
   end if;
 
