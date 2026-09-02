@@ -13,6 +13,7 @@ export type Next29ScheduleRow = {
 
 export type Next29ScheduleRepositoryClient = {
   claimSchedule(input: Next29RuntimeScope & { resource: string; now: string; leaseOwner: string; leaseSeconds: number }): Promise<Next29ScheduleRow | null>;
+  heartbeatSchedule(input: Next29RuntimeScope & { scheduleId: string; resource: string; now: string; leaseOwner: string; leaseSeconds: number }): Promise<boolean>;
   finishSchedule(input: Next29RuntimeScope & { scheduleId: string; resource: string; leaseOwner: string; now: string; outcome: "completed" | "incomplete"; successfulThrough: string | null; activeWindowStart: string | null; activeWindowEnd: string | null; resumeCursor: string | null; errorCode: null }): Promise<void>;
   failSchedule(input: Next29RuntimeScope & { scheduleId: string; resource: string; leaseOwner: string; now: string; outcome: "failed"; successfulThrough: null; activeWindowStart: null; activeWindowEnd: null; resumeCursor: null; errorCode: string }): Promise<void>;
 };
@@ -33,6 +34,9 @@ export function createNext29IncrementalControl(client: Next29ScheduleRepositoryC
         activeWindowEnd: nullable(row.active_window_end_at),
         resumeCursor: nullable(row.resume_cursor),
       };
+    },
+    async heartbeat(input) {
+      return client.heartbeatSchedule({ ...scope(input), scheduleId: input.scheduleId, resource: providerScheduleResource(input.resource), now: input.now, leaseOwner: input.leaseOwner, leaseSeconds: input.leaseSeconds });
     },
     async finish(input) {
       await client.finishSchedule({ ...scope(input), scheduleId: input.scheduleId, resource: providerScheduleResource(input.resource), leaseOwner: input.leaseOwner, now: input.now, outcome: input.outcome, successfulThrough: input.successfulThrough, activeWindowStart: input.activeWindowStart, activeWindowEnd: input.activeWindowEnd, resumeCursor: input.resumeCursor, errorCode: null });
