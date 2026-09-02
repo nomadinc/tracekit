@@ -115,7 +115,8 @@ async function json<T>(response: Response): Promise<T> {
 }
 
 async function sha256Hex(bytes: Uint8Array) {
-  const digest = await crypto.subtle.digest("SHA-256", bytes);
+  const input = bytes.slice().buffer;
+  const digest = await crypto.subtle.digest("SHA-256", input);
   return Array.from(new Uint8Array(digest)).map((value) => value.toString(16).padStart(2, "0")).join("");
 }
 
