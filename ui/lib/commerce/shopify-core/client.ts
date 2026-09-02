@@ -1,8 +1,3 @@
-import {
-  normalizeShopifyApiVersion,
-  normalizeShopifyShopDomain,
-  shopifyAdminGraphqlUrl,
-} from "../../shopify";
 import type {
   ShopifyAdminCredentials,
   ShopifyConnectionContext,
@@ -10,6 +5,9 @@ import type {
   ShopifyGraphqlEnvelope,
   ShopifyShopIdentity,
 } from "./types";
+
+const DEFAULT_SHOPIFY_API_VERSION = "2026-07";
+const SHOPIFY_API_VERSION_RE = /^\d{4}-\d{2}$/;
 
 const SHOP_IDENTITY_QUERY = `#graphql
   query TraceKitShopIdentity {
@@ -151,4 +149,31 @@ export class ShopifyAdminClient {
       shop,
     };
   }
+}
+
+function normalizeShopifyApiVersion(value: unknown) {
+  const raw = String(value ?? "").trim();
+  return SHOPIFY_API_VERSION_RE.test(raw) ? raw : DEFAULT_SHOPIFY_API_VERSION;
+}
+
+function normalizeShopifyShopDomain(value: unknown) {
+  let raw = String(value ?? "").trim().toLowerCase();
+  if (!raw) return "";
+  if (!/^https?:\/\//i.test(raw)) raw = `https://${raw}`;
+
+  let host = "";
+  try {
+    host = new URL(raw).hostname;
+  } catch {
+    return "";
+  }
+
+  host = host.replace(/^admin\./, "").replace(/\/+$/, "");
+  if (/^[a-z0-9][a-z0-9-]*$/.test(host)) host = `${host}.myshopify.com`;
+  if (!/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(host)) return "";
+  return host;
+}
+
+function shopifyAdminGraphqlUrl(shopDomain: string, apiVersion: string) {
+  return `https://${shopDomain}/admin/api/${normalizeShopifyApiVersion(apiVersion)}/graphql.json`;
 }
