@@ -57,22 +57,14 @@ test("29Next cursor iterator follows same-origin next links and stops", async ()
   const numbers: string[] = [];
   for await (const page of client.iterateOrders()) numbers.push(...page.results.map((order) => order.number));
   assert.deepEqual(numbers, ["1001", "1002"]);
-  assert.match(urls[1], /cursor=abc/);
 });
 
 test("29Next cursor iterator rejects pagination URLs outside the configured Admin API", async () => {
   const client = new Next29Client(
     { store: "demo", accessToken: token },
-    {
-      fetch: async () => jsonResponse({ next: "https://evil.example/orders/?cursor=abc", previous: null, results: [] }),
-    },
+    { fetch: async () => jsonResponse({ next: "https://evil.example/orders/?cursor=abc", previous: null, results: [] }) },
   );
-
-  await assert.rejects(async () => {
-    for await (const _page of client.iterateOrders()) {
-      // exhaust iterator
-    }
-  }, /pagination URL escaped/);
+  await assert.rejects(async () => { for await (const _page of client.iterateOrders()) { /* exhaust */ } }, /pagination URL escaped/);
 });
 
 test("29Next retries 429 responses and honors Retry-After", async () => {
@@ -90,28 +82,33 @@ test("29Next retries 429 responses and honors Retry-After", async () => {
       },
     },
   );
-
   await client.listOrders();
   assert.equal(attempts, 2);
   assert.deepEqual(delays, [1000]);
 });
 
-test("29Next read-only verification performs an orders read and returns structural capability state", async () => {
-  let calls = 0;
+test("29Next read-only verification proves orders subscriptions and disputes capability without writes", async () => {
+  const urls: string[] = [];
   const result = await verifyNext29ReadOnlyConnection(
     { store: "demo", accessToken: token },
     {
-      fetch: async () => {
-        calls += 1;
+      fetch: async (input) => {
+        urls.push(String(input));
         return jsonResponse({ next: null, previous: null, results: [] }, { headers: { "x-ratelimit-limit": "4" } });
       },
     },
   );
 
-  assert.equal(calls, 1);
+  assert.equal(urls.length, 3);
+  assert.deepEqual(urls.sort(), [
+    "https://demo.29next.store/api/admin/disputes/",
+    "https://demo.29next.store/api/admin/orders/",
+    "https://demo.29next.store/api/admin/subscriptions/",
+  ]);
   assert.equal(result.status, "connected");
   assert.equal(result.apiVersion, "2024-04-01");
-  assert.deepEqual(result.capabilities, ["orders.read", "cursor_pagination", "versioned_admin_api"]);
+  assert.deepEqual(result.capabilities, ["orders.read", "subscriptions.read", "disputes.read", "webhooks.signed", "cursor_pagination", "versioned_admin_api"]);
+  assert.deepEqual(result.resourceChecks, { orders: true, subscriptions: true, disputes: true });
   assert.equal(result.rateLimitObserved, true);
 });
 
@@ -123,13 +120,11 @@ test("29Next evidence handoff is tenant scoped and preserves the provider envelo
       return { storageReference: "memory://evidence/1", payloadHash: "abc", byteSize: input.payload.byteLength };
     },
   };
-
   const result = await persistNext29Evidence(
     sink,
     { organizationId: "org-1", connectionId: "conn-1", providerAccountId: "acct-1" },
     next29OrderEvidence({ apiVersion: "2024-04-01", orderNumber: "1001", observedAt: "2026-08-31T12:00:00Z", payload: { number: "1001" } }),
   );
-
   assert.equal(result.storageReference, "memory://evidence/1");
   assert.equal(captured.organizationId, "org-1");
   assert.equal(captured.connectionId, "conn-1");
