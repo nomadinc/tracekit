@@ -1,6 +1,10 @@
 # WS-008 M11 — 29Next Runtime Execution / Scheduler Dispatch
 
-Status: REVIEW pending dedicated local regression gate.
+Status: PASS — locked after dedicated local regression gate.
+
+Locked checkpoint: `a2861c0ecc15f62e71c9d316961841baa43e8235`
+
+Local acceptance proof: 84 tests / 84 pass / 0 fail / 0 skipped / 0 cancelled.
 
 ## Mission
 
@@ -53,9 +57,9 @@ M11 does not:
 
 The deployment/runtime host that calls the worker tick remains a later activation step.
 
-## Acceptance gate
+## Acceptance gate — PASS
 
-The M2–M11 dedicated gate must prove all prior 73 tests remain green plus:
+The M2–M11 dedicated gate proved all prior tests remain green plus:
 
 - lease heartbeat loss stops before provider reads,
 - scheduled repository maps only 29Next resource identities,
@@ -69,4 +73,4 @@ The M2–M11 dedicated gate must prove all prior 73 tests remain green plus:
 - dispatch RPCs remain service-role-only,
 - no timer, webhook registration, or provider-write activation is introduced.
 
-Expected dedicated total after M11: 84 tests.
+Final dedicated total: 84 tests / 84 PASS.
