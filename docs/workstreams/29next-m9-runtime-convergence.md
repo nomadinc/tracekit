@@ -1,6 +1,9 @@
 # WS-008 M9 — 29Next Runtime Convergence
 
-Status: REVIEW pending dedicated local regression gate.
+Status: PASS — locked after dedicated local regression gate.
+
+Verified local gate: 61 tests / 61 passed / 0 failed.
+Functional checkpoint: `b4bc19d0d8809ef9a8b42cedffa777456cfda1b5`.
 
 ## Mission
 
@@ -10,7 +13,7 @@ M9 does not add new provider data models. It makes M2–M8 operate as one bounde
 
 ## Capability manifest
 
-The runtime now publishes one provider capability manifest for:
+The runtime publishes one provider capability manifest for:
 
 - orders — list/get, canonical order expansion, refunds, transactions, attribution, product observations
 - subscriptions — list/get, lifecycle, lines, rebill linkage
@@ -21,7 +24,7 @@ The shared provider identifier remains `next29`.
 
 ## Connection verification
 
-Connection verification now performs bounded read-only list requests against:
+Connection verification performs bounded read-only list requests against:
 
 1. orders
 2. subscriptions
@@ -52,7 +55,7 @@ M9 deliberately does not create a parallel scheduler or persistence architecture
 
 Still out of scope:
 
-- cron / scheduler activation
+- automatic schedule activation
 - queue dispatch
 - live webhook registration
 - production credentials
@@ -60,11 +63,11 @@ Still out of scope:
 - automatic dispute/subscription/payment mutations
 - changes to Shopify, Everflow, or Commas runtimes
 
-## Acceptance gate
+## Acceptance result
 
-The M2–M9 dedicated gate must prove:
+PASS. The M2–M9 dedicated local gate proved:
 
-- prior 56 M2–M8 tests remain green
+- prior M2–M8 tests remained green
 - full connection verification checks orders, subscriptions, and disputes
 - capability manifest is explicit and provider-scoped
 - unified bounded runtime runs all three historical resource engines
@@ -72,4 +75,4 @@ The M2–M9 dedicated gate must prove:
 - unsafe shared bounds fail before provider reads
 - duplicate requested resources execute once
 
-Expected dedicated total after M9: 61 tests.
+Verified dedicated total: 61 tests.
