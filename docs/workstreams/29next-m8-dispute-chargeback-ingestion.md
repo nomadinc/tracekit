@@ -1,6 +1,8 @@
 # WS-008 M8 — 29Next Disputes & Chargebacks Canonical Ingestion
 
-Status: REVIEW pending dedicated local regression gate.
+Status: PASS — locked after dedicated local regression gate: 56 tests, 56 passed, 0 failed.
+
+Locked checkpoint: `fe48231fe48a68a27f824cc6929f379e69de743d`
 
 ## Scope
 
@@ -76,7 +78,7 @@ M7 already routes dispute webhook events. M8 adds the dispute-specific adapter: 
 
 ## Acceptance gate
 
-Dedicated tests cover:
+PASS. Dedicated M2–M8 gate completed locally with 56 tests, 56 passing, 0 failures. Coverage included:
 
 - dispute API paths and filters
 - documented normalization
