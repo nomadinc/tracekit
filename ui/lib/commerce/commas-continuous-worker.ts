@@ -441,6 +441,12 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
           changedRows.push(...toNormalize);toNormalize.forEach((item)=>changedProductIds.add(item.product_id));
         }
         try {
+          await db("rpc/upsert_commas_public_transaction_mappings_v1",{method:"POST",body:JSON.stringify({p_organization_id:scope.organizationId,p_connection_id:scope.connectionId,p_provider_account_id:scope.providerAccountId,p_evidence_id:evidence.evidenceId,p_records:normalized.map((item)=>({transaction_id:item.transaction_id,public_transaction_id:item.public_transaction_id,transaction_at:item.transaction_at,payload_hash:item.payload_hash})),p_dry_run:false})});
+        } catch {
+          // This shadow identity projection is retryable from immutable page Evidence and must not roll back ingestion.
+          console.error("[TraceKit] Commas public transaction identity projection failed",{event:"commerce.provider_attribution.ord_projection_failed",records:normalized.length,retryable:true});
+        }
+        try {
           await db("rpc/reconcile_commas_order_economic_allocation_batch_v1",{method:"POST",body:JSON.stringify({p_organization_id:scope.organizationId,p_connection_id:scope.connectionId,p_provider_account_id:scope.providerAccountId,p_canonical_order_ids:normalized.map((item)=>item.canonical_order_id)})});
         } catch {
           console.error("[TraceKit] Commas economic allocation failed",{event:"commerce.economic_allocation.failed",orders:normalized.length,retryable:true});

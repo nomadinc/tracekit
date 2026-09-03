@@ -24,7 +24,7 @@ test("test delivery uses the exact endpoint, API-key header, and event body", as
 test("unsupported events and missing IDs are rejected before fetch", async () => {
   let calls = 0;
   const fetchImpl = async () => { calls += 1; return new Response("{}", { status: 200 }); };
-  await assert.rejects(() => sendCommasWebhookTestDelivery({ apiKey: "x", subscriptionId: "24848", eventType: "payment.succeeded", fetchImpl }), /dispute\.created or dispute\.updated/);
+  await assert.rejects(() => sendCommasWebhookTestDelivery({ apiKey: "x", subscriptionId: "24848", eventType: "payment.succeeded", fetchImpl }), /configured Commas webhook event/);
   await assert.rejects(() => sendCommasWebhookTestDelivery({ apiKey: "x", subscriptionId: "", eventType: "dispute.created", fetchImpl }), /subscription ID/);
   assert.equal(calls, 0);
 });

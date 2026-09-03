@@ -1,9 +1,9 @@
-export const COMMAS_DISPUTE_WEBHOOK_EVENTS = ["dispute.created", "dispute.updated"] as const;
+export const COMMAS_DISPUTE_WEBHOOK_EVENTS = ["dispute.created", "dispute.updated", "product.purchased", "subscription.created"] as const;
 export type CommasDisputeWebhookEvent = typeof COMMAS_DISPUTE_WEBHOOK_EVENTS[number];
 
 export function assertDisputeWebhookEvent(value: string): asserts value is CommasDisputeWebhookEvent {
   if (!COMMAS_DISPUTE_WEBHOOK_EVENTS.includes(value as CommasDisputeWebhookEvent)) {
-    throw new Error("Event type must be dispute.created or dispute.updated.");
+    throw new Error("Event type must be a configured Commas webhook event.");
   }
 }
 

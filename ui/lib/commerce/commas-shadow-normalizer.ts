@@ -60,6 +60,7 @@ export function normalizeCommasTransaction(input: Json, scope: { connectionId: s
   const fundReleased = typeof payment?.fund_released === "boolean" ? String(payment.fund_released) : null;
   return {
     transaction_id: transactionId,
+    public_transaction_id: text(input.public_transaction_id),
     platform_order_id: `commas:${scope.connectionId}:${scope.providerAccountId}:${transactionId}`,
     canonical_order_id: canonicalOrderId,
     order_mapping_id: deterministicUuid(`${root}:mapping:transaction:${transactionId}`),

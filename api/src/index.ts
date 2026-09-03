@@ -19,6 +19,7 @@ import { readQuotaBootstrapGate } from "./quota-bootstrap-gate";
 import { reconcileCommerceExecutionSignal, reconcileCommerceSchedulerSignals, runCommerceOperationalAlertEvaluation } from "./commerce-operational-alerts";
 import { createSupabaseServerFetch } from "./supabase-server-fetch";
 import { deriveCommasDisputeLedgerEvents, normalizeCommasDisputeEvent, sha256HexBytes, verifyCommasWebhookSignature, webhookStoragePath } from "./commas-dispute-webhook";
+import { COMMAS_ATTRIBUTION_EVENT_TYPES, attributionWebhookStoragePath, compareCommasAttributionToEverflow, normalizeCommasAttributionEvent } from "./commas-provider-attribution";
 import { enforceTkidRate, ephemeralTransportDimension, TkidRateLimitError, type DistributedCounterStore, type TkidAbuseClass } from "./tkid-distributed-abuse";
 import {
   DEFAULT_SHOPIFY_API_VERSION,
@@ -726,6 +727,9 @@ async function handleCommasDisputeWebhook(req: Request, env: Env): Promise<Respo
   console.log("[TraceKit] Commas dispute webhook received", { event: "commas.dispute_webhook.received" });
   let payload: unknown;
   try { payload = JSON.parse(new TextDecoder().decode(raw)); } catch { return json({ ok: false, error: "malformed_json" }, 400); }
+  const attributionEnvelope=payload&&typeof payload==="object"&&!Array.isArray(payload)?payload as Record<string,unknown>:{};
+  const attributionEventType=String(attributionEnvelope.type||attributionEnvelope.event_type||"").trim();
+  if(COMMAS_ATTRIBUTION_EVENT_TYPES.includes(attributionEventType as any))return handleCommasAttributionWebhookPayload(raw,payload,attributionEventType as any,env);
   const normalized = normalizeCommasDisputeEvent(payload);
   if (!normalized) return json({ ok: false, error: "unsupported_event" }, 400);
   const db = getSupabase(env);
@@ -789,6 +793,57 @@ async function handleCommasDisputeWebhook(req: Request, env: Env): Promise<Respo
   console.log("[TraceKit] Commas dispute webhook reconciliation", { event: "commas.dispute_webhook.reconciliation", result: reconciliationResult });
   console.log("[TraceKit] Commas dispute webhook ledger", { event: "commas.dispute_webhook.ledger", result: ledgerEvents.length ? "emitted" : "skipped_no_proven_financial_effect" });
   return json({ ok: true, duplicate: false, status: "accepted" }, 200);
+}
+
+async function handleCommasAttributionWebhookPayload(raw: Uint8Array, payload: unknown, eventType: (typeof COMMAS_ATTRIBUTION_EVENT_TYPES)[number], env: Env): Promise<Response> {
+  const envelope=payload&&typeof payload==="object"&&!Array.isArray(payload)?payload as Record<string,unknown>:{};
+  const providerEventId=String(envelope.id||envelope.event_id||"").trim();
+  if(!providerEventId||providerEventId.length>256)return json({ok:false,error:"invalid_provider_event_identity"},400);
+  const db = getSupabase(env);
+  const { data: connections, error: connectionError } = await db.from("commerce_provider_connections").select("id,organization_id,account_id").eq("provider", "commas").eq("status", "connected").limit(2);
+  if (connectionError || !connections || connections.length !== 1) return json({ ok:false,error:"scope_unavailable" },409);
+  const connection=connections[0] as any;
+  const { data: providerAccounts, error: accountError } = await db.from("commerce_provider_accounts").select("id").eq("organization_id",connection.organization_id).eq("connection_id",connection.id).eq("status","active").limit(2);
+  if(accountError||!providerAccounts||providerAccounts.length!==1)return json({ok:false,error:"scope_unavailable"},409);
+  const providerAccountId=String(providerAccounts[0].id),payloadHash=await sha256HexBytes(raw),now=new Date().toISOString();
+  const {data:priorEvidence,error:priorEvidenceError}=await db.from("commerce_evidence_records").select("id").eq("organization_id",connection.organization_id).eq("connection_id",connection.id).eq("provider_account_id",providerAccountId).eq("source_object_type","commas_attribution_webhook").eq("source_object_id",providerEventId).eq("payload_hash",payloadHash).maybeSingle();
+  if(priorEvidenceError)return json({ok:false,error:"evidence_lookup_failed"},503);
+  let evidenceId=String(priorEvidence?.id||"");
+  if(!evidenceId){
+    const storageReference=`commerce-evidence/${attributionWebhookStoragePath(String(connection.organization_id),String(connection.id),providerAccountId,eventType,payloadHash)}`;
+    const storagePath=storageReference.slice("commerce-evidence/".length),supabaseUrl=String(env.SUPABASE_URL||"").replace(/\/$/,"");
+    const storageHeaders:Record<string,string>={apikey:env.SUPABASE_SERVICE_ROLE_KEY,"content-type":"application/json","x-upsert":"false"};
+    if(!env.SUPABASE_SERVICE_ROLE_KEY.startsWith("sb_secret_"))storageHeaders.Authorization=`Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`;
+    const stored=await fetch(`${supabaseUrl}/storage/v1/object/commerce-evidence/${storagePath.split("/").map(encodeURIComponent).join("/")}`,{method:"POST",headers:storageHeaders,body:raw.buffer.slice(raw.byteOffset,raw.byteOffset+raw.byteLength) as ArrayBuffer});
+    if(!stored.ok&&stored.status!==409)return json({ok:false,error:"evidence_persistence_failed"},503);
+    const runId=crypto.randomUUID();
+    const {error:runError}=await db.from("commerce_sync_runs").insert({id:runId,organization_id:connection.organization_id,connection_id:connection.id,provider_account_id:providerAccountId,sync_type:"attribution_webhook",mode:"shadow",status:"completed",scheduler_idempotency_key:`commas-attribution:${providerEventId}:${payloadHash}`,started_at:now,completed_at:now,records_seen:1,records_created:1,metadata:{source:"commas_webhook",provider_event_id:providerEventId,event_type:eventType}});
+    if(runError)return json({ok:false,error:"evidence_persistence_failed"},503);
+    evidenceId=crypto.randomUUID();
+    const {error:evidenceError}=await db.from("commerce_evidence_records").insert({id:evidenceId,organization_id:connection.organization_id,connection_id:connection.id,provider_account_id:providerAccountId,sync_run_id:runId,source_object_type:"commas_attribution_webhook",source_object_id:providerEventId,payload_hash:payloadHash,storage_backend:"object_storage",storage_reference:storageReference,content_type:"application/json",byte_size:raw.byteLength,observed_at:now,normalizer_version:"commas-provider-attribution-v1",mapping_version:"commas-ord-exact-v1",pii_classification:"restricted",retention_policy:"commerce-provider-raw-v1",metadata:{immutable:true,event_type:eventType,contains_restricted_additional_params:true}});
+    if(evidenceError)return json({ok:false,error:"evidence_persistence_failed"},503);
+  }
+  // Derived normalization intentionally occurs only after the verified raw payload is durably evidenced.
+  const normalized=normalizeCommasAttributionEvent(payload);
+  if(!normalized)return json({ok:false,error:"invalid_attribution_payload"},400);
+  const p=normalized.parameters;
+  const unambiguousTid=p.aliasState==="conflict"?null:p.efTransactionId||p.transactionId||p.tid||p.c1;
+  let comparison:ReturnType<typeof compareCommasAttributionToEverflow>={state:"no_commas_tid",matched_fields:[],conflicting_fields:[]};
+  if(unambiguousTid){
+    const [{data:conversions,error:conversionError},{data:clicks,error:clickError}]=await Promise.all([
+      db.from("everflow_conversion_events").select("transaction_id,affiliate_id,sub1,sub4").eq("organization_id",connection.organization_id).eq("transaction_id",unambiguousTid).limit(2),
+      db.from("everflow_click_events").select("transaction_id,affiliate_id,sub1,sub4").eq("organization_id",connection.organization_id).eq("transaction_id",unambiguousTid).limit(2),
+    ]);
+    if(conversionError||clickError)return json({ok:false,error:"shadow_comparison_failed"},503);
+    const everflow=[...new Map([...(clicks||[]),...(conversions||[])].map((row:any)=>[JSON.stringify([row.transaction_id,row.affiliate_id,row.sub1,row.sub4]),row])).values()];
+    comparison=everflow.length>1?{state:"conflict",matched_fields:[],conflicting_fields:["ambiguous_everflow_identity"]}:compareCommasAttributionToEverflow(p,everflow[0]?{transactionId:everflow[0].transaction_id,affiliateId:everflow[0].affiliate_id,sub1:everflow[0].sub1,sub4:everflow[0].sub4}:null);
+  }
+  const parameters={affiliate_id:p.affiliateId,sub1:p.sub1,sub4:p.sub4,ef_transaction_id:p.efTransactionId,transaction_id:p.transactionId,tid:p.tid,c1:p.c1,alias_state:p.aliasState,restricted_metadata:p.restrictedMetadata};
+  const {data:recorded,error:recordError}=await db.rpc("record_commas_provider_attribution_observation_v1",{p_organization_id:connection.organization_id,p_connection_id:connection.id,p_provider_account_id:providerAccountId,p_evidence_id:evidenceId,p_provider_event_id:normalized.providerEventId,p_provider_event_type:normalized.eventType,p_payload_hash:payloadHash,p_provider_created_at:normalized.providerCreatedAt,p_payment_public_transaction_id:normalized.paymentPublicTransactionId,p_payment_identity_state:normalized.paymentIdentityState,p_subscription_provider_id:normalized.subscriptionProviderId,p_parameters:parameters,p_everflow_comparison:comparison});
+  if(recordError)return json({ok:false,error:"attribution_projection_failed"},503);
+  const result=Array.isArray(recorded)?recorded[0]:recorded;
+  console.log("[TraceKit] Commas provider attribution observed",{event:"commerce.provider_attribution.observed",event_type:normalized.eventType,match_state:result?.match_state||"unknown",alias_state:p.aliasState,payload_conflict:Boolean(result?.payload_conflict)});
+  return json({ok:true,status:"accepted",duplicate:Boolean(result?.replayed),payload_conflict:Boolean(result?.payload_conflict),match_state:result?.match_state||"unknown",shadow:true},200);
 }
 
 function parseYmd(v: string | null): Date | null {

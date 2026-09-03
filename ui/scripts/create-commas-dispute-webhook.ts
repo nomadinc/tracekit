@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process";
-import { createCommasDisputeWebhook, DISPUTE_EVENT_TYPES } from "../lib/commerce/commas-webhook-creator";
+import { createCommasDisputeWebhook, COMMAS_WEBHOOK_EVENT_TYPES } from "../lib/commerce/commas-webhook-creator";
 import { listCommasWebhookSubscriptions, resolveCommasApiKey, TARGET_URL } from "./inspect-commas-webhooks";
 
 const baseUrl = () => (process.env.COMMAS_BASE_URL || "https://www.fanbasis.com").replace(/\/$/, "");
@@ -50,5 +50,5 @@ void main().catch((error) => {
   process.exitCode = 1;
 });
 
-void DISPUTE_EVENT_TYPES;
+void COMMAS_WEBHOOK_EVENT_TYPES;
 void TARGET_URL;

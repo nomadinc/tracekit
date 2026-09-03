@@ -1,6 +1,7 @@
 import { exactTargetMatch, type WebhookSubscriptionSummary } from "./commas-webhook-inspector";
 
 export const DISPUTE_EVENT_TYPES = ["dispute.created", "dispute.updated"] as const;
+export const COMMAS_WEBHOOK_EVENT_TYPES = [...DISPUTE_EVENT_TYPES, "product.purchased", "subscription.created"] as const;
 
 export type CreatorDependencies = {
   listSubscriptions: () => Promise<WebhookSubscriptionSummary[]>;
@@ -10,6 +11,8 @@ export type CreatorDependencies = {
 
 export type CreatorResult = {
   created: boolean;
+  updated: boolean;
+  updateRequired: boolean;
   subscriptionId: string | null;
   webhookUrl: string;
   eventTypes: string[];
@@ -21,10 +24,12 @@ export async function createCommasDisputeWebhook(confirmation: boolean, dependen
   const existing = await dependencies.listSubscriptions();
   if (exactTargetMatch(existing, "https://webhooks.trace-kit.io/v1/connectors/commas/webhooks")) {
     const match = existing.find((subscription) => subscription.webhookUrl === "https://webhooks.trace-kit.io/v1/connectors/commas/webhooks");
-    return { created: false, subscriptionId: match?.id || null, webhookUrl: match?.webhookUrl || "https://webhooks.trace-kit.io/v1/connectors/commas/webhooks", eventTypes: match?.eventTypes || [], cloudflareSecretUpdated: false };
+    const configured = COMMAS_WEBHOOK_EVENT_TYPES.every((event) => match?.eventTypes.includes(event));
+    if (configured) return { created: false, updated:false, updateRequired:false, subscriptionId: match?.id || null, webhookUrl: match?.webhookUrl || "https://webhooks.trace-kit.io/v1/connectors/commas/webhooks", eventTypes: match?.eventTypes || [], cloudflareSecretUpdated: false };
+    return { created:false,updated:false,updateRequired:true,subscriptionId:match?.id||null,webhookUrl:match?.webhookUrl||"https://webhooks.trace-kit.io/v1/connectors/commas/webhooks",eventTypes:match?.eventTypes||[],cloudflareSecretUpdated:false };
   }
-  const created = await dependencies.createSubscription({ webhook_url: "https://webhooks.trace-kit.io/v1/connectors/commas/webhooks", event_types: DISPUTE_EVENT_TYPES });
+  const created = await dependencies.createSubscription({ webhook_url: "https://webhooks.trace-kit.io/v1/connectors/commas/webhooks", event_types: COMMAS_WEBHOOK_EVENT_TYPES });
   if (!created.secretKey) throw new Error(`Subscription ${created.id} was created without a returned secret_key; do not create another subscription.`);
   const cloudflareSecretUpdated = await dependencies.updateCloudflareSecret(created.secretKey);
-  return { created: true, subscriptionId: created.id, webhookUrl: created.webhookUrl, eventTypes: created.eventTypes, cloudflareSecretUpdated };
+  return { created: true,updated:false,updateRequired:false, subscriptionId: created.id, webhookUrl: created.webhookUrl, eventTypes: created.eventTypes, cloudflareSecretUpdated };
 }

@@ -2,12 +2,13 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { deterministicUuid, normalizeCommasTransaction, normalizeEmail, normalizePhone, normalizeRefunds, refundSchemaObservations } from "../lib/commerce/commas-shadow-normalizer";
 
-const transaction = { id:"tx-synthetic",transaction_date:"2026-01-02T03:04:05Z",fan:{id:"fan-synthetic",name:"Synthetic Person",email:" TEST@EXAMPLE.COM ",phone:"(555) 010-2222"},product:{id:"product-synthetic",title:"Synthetic Product",price:"99.00",payment_link:"https://example.invalid/synthetic"},servicePayment:{id:"payment-synthetic",payment_type:"card",fund_release_on:"2026-01-04T00:00:00Z",fund_released:false},amount:"99",fee_amount:"3",net_amount:"96",refunds:[] };
+const transaction = { id:"tx-synthetic",public_transaction_id:"ORD-synthetic",transaction_date:"2026-01-02T03:04:05Z",fan:{id:"fan-synthetic",name:"Synthetic Person",email:" TEST@EXAMPLE.COM ",phone:"(555) 010-2222"},product:{id:"product-synthetic",title:"Synthetic Product",price:"99.00",payment_link:"https://example.invalid/synthetic"},servicePayment:{id:"payment-synthetic",payment_type:"card",fund_release_on:"2026-01-04T00:00:00Z",fund_released:false},amount:"99",fee_amount:"3",net_amount:"96",refunds:[] };
 
 test("Transaction normalization is deterministic and preserves verified financial vocabulary",()=>{
   const scope={connectionId:"00000000-0000-0000-0000-000000000001",providerAccountId:"00000000-0000-0000-0000-000000000002"};
   const first=normalizeCommasTransaction(transaction,scope); const second=normalizeCommasTransaction(transaction,scope);
   assert.deepEqual(first,second); assert.equal(first.gross_amount,"99"); assert.equal(first.provider_fee,"3"); assert.equal(first.provider_net,"96"); assert.equal(first.currency,null);
+  assert.equal(first.public_transaction_id,"ORD-synthetic");
   assert.match(first.platform_order_id,/^commas:/); assert.equal(first.customer_email,"test@example.com"); assert.equal(first.customer_phone,"+5550102222");
   assert.notEqual(first.payment_link_hash,transaction.product.payment_link); assert.equal(deterministicUuid("same"),deterministicUuid("same"));
 });
