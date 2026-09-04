@@ -5,6 +5,15 @@ import { runDueEverflowSchedules } from "@/lib/integrations/everflow-scheduled-w
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
+const EVERFLOW_SCHEDULER_VERSION = "bounded-page-v1";
+
+function deploymentProvenance() {
+  return {
+    scheduler_version: EVERFLOW_SCHEDULER_VERSION,
+    deployment_commit_sha: String(process.env.VERCEL_GIT_COMMIT_SHA || "").trim() || null,
+    deployment_git_ref: String(process.env.VERCEL_GIT_COMMIT_REF || "").trim() || null,
+  };
+}
 
 function authorizedCron(request: Request) {
   const secret = String(process.env.CRON_SECRET || "").trim();
@@ -19,7 +28,7 @@ async function patchTelemetry(requestId: string, patch: Record<string, unknown>)
   try {
     await commercePersistenceRequest(
       `everflow_cron_runs?request_id=eq.${encodeURIComponent(requestId)}`,
-      { method: "PATCH", body: JSON.stringify({ ...patch, updated_at: new Date().toISOString() }) },
+      { method: "PATCH", body: JSON.stringify({ ...deploymentProvenance(), ...patch, updated_at: new Date().toISOString() }) },
     );
   } catch (error) {
     console.error("everflow_cron_telemetry_patch_failed", { requestId, error: errorSummary(error) });
@@ -28,6 +37,7 @@ async function patchTelemetry(requestId: string, patch: Record<string, unknown>)
 
 export async function GET(request: Request) {
   const requestId = randomUUID();
+  const provenance = deploymentProvenance();
   if (!authorizedCron(request)) {
     return NextResponse.json({ ok: false, message: "Unauthorized.", requestId }, { status: 401 });
   }
@@ -35,15 +45,12 @@ export async function GET(request: Request) {
   try {
     await commercePersistenceRequest("everflow_cron_runs", {
       method: "POST",
-      body: JSON.stringify({ request_id: requestId, started_at: new Date().toISOString() }),
+      body: JSON.stringify({ request_id: requestId, started_at: new Date().toISOString(), ...provenance }),
     });
   } catch (error) {
-    console.error("everflow_cron_telemetry_insert_failed", { requestId, error: errorSummary(error) });
+    console.error("everflow_cron_telemetry_insert_failed", { requestId, error: errorSummary(error), ...provenance });
   }
 
-  // Reconciliation is intentionally delegated to Supabase pg_cron. The v2 reconciliation
-  // function can exceed PostgREST's 8-second authenticator timeout even when database-side
-  // execution succeeds, so the database scheduler runs it directly without the HTTP ceiling.
   await patchTelemetry(requestId, {
     backfill_started_at: new Date().toISOString(),
     backfill_completed_at: new Date().toISOString(),
@@ -65,7 +72,7 @@ export async function GET(request: Request) {
   } catch (error) {
     schedulerFailed = true;
     schedulerError = errorSummary(error);
-    console.error("everflow_scheduler_failed", { requestId, error: schedulerError });
+    console.error("everflow_scheduler_failed", { requestId, error: schedulerError, ...provenance });
     await patchTelemetry(requestId, {
       scheduler_completed_at: new Date().toISOString(),
       scheduler_status: "failed",
@@ -78,13 +85,16 @@ export async function GET(request: Request) {
 
   if (responseStatus === 500) {
     return NextResponse.json(
-      { ok: false, message: "TraceKit could not complete the Everflow scheduled work.", requestId },
+      { ok: false, message: "TraceKit could not complete the Everflow scheduled work.", schedulerVersion: EVERFLOW_SCHEDULER_VERSION, deploymentCommitSha: provenance.deployment_commit_sha, deploymentGitRef: provenance.deployment_git_ref, requestId },
       { status: 500 },
     );
   }
 
   return NextResponse.json({
     ok: true,
+    schedulerVersion: EVERFLOW_SCHEDULER_VERSION,
+    deploymentCommitSha: provenance.deployment_commit_sha,
+    deploymentGitRef: provenance.deployment_git_ref,
     scheduler,
     backfill: { delegated: "pg_cron" },
     warnings: [],
