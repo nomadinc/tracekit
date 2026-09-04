@@ -4,9 +4,9 @@ import { EVERFLOW_API_BASE, EverflowHealthError } from "./everflow-client";
 
 export const EVERFLOW_CLICKS_STREAM_PATH = "/v1/networks/reporting/clicks/stream";
 export const EVERFLOW_CLICKS_STREAM_URL = `${EVERFLOW_API_BASE}${EVERFLOW_CLICKS_STREAM_PATH}`;
-export const EVERFLOW_CLICK_TIMEOUT_MS = 10_000;
+export const EVERFLOW_CLICK_TIMEOUT_MS = 30_000;
 export const EVERFLOW_CLICK_MAX_RANGE_DAYS = 14;
-export const EVERFLOW_CLICK_MAX_ROWS = 5_000;
+export const EVERFLOW_CLICK_MAX_ROWS = 10_000;
 
 type Row = Record<string, unknown>;
 
@@ -138,8 +138,8 @@ export async function fetchEverflowClickStream(input: { apiKey: string; from: st
     if (response.status === 429) throw new EverflowHealthError("everflow_rate_limited", "Everflow rate limited click ingestion.", 429, true);
     if (!response.ok) throw new EverflowHealthError("everflow_unavailable", "Everflow could not complete click ingestion.", 502, response.status >= 500);
     const payload = record(await response.json());
-    const rows = Array.isArray(payload.table) ? payload.table : [];
-    if (rows.length >= EVERFLOW_CLICK_MAX_ROWS) throw new EverflowHealthError("everflow_invalid_response", "Everflow click window reached the 5,000-row stream limit and must be narrowed.", 409, true);
+    const rows = Array.isArray(payload.clicks) ? payload.clicks : Array.isArray(payload.table) ? payload.table : [];
+    if (rows.length >= EVERFLOW_CLICK_MAX_ROWS) throw new EverflowHealthError("everflow_invalid_response", "Everflow click window reached the 10,000-row stream limit and must be narrowed.", 409, true);
     return await Promise.all(rows.map(normalizeEverflowClick));
   } finally {
     clearTimeout(timeout);
