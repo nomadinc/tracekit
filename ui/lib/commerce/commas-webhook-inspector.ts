@@ -16,9 +16,9 @@ export function sanitizeWebhookUrl(value: unknown) {
     const parsed = new URL(String(value ?? ""));
     parsed.hash = "";
     const sanitized = new URLSearchParams();
-    for (const [key] of parsed.searchParams) {
+    parsed.searchParams.forEach((_value, key) => {
       sanitized.append(CREDENTIAL_QUERY_KEY.test(key) ? "[redacted-key]" : key, "[redacted]");
-    }
+    });
     parsed.search = sanitized.toString();
     return parsed.toString();
   } catch {
