@@ -12,7 +12,16 @@ const component = read("components/connections/integration-experience.tsx");
 const route = read("app/api/commerce/[...commercePath]/route.ts");
 const originRoute = read("app/api/tkid/origins/[...originPath]/route.ts");
 
-test("Connections overview preserves the approved commerce provider roadmap", () => { assert.deepEqual(PROVIDER_CATALOG.map((provider) => provider.name), ["Commas", "Shopify", "Checkout Champ", "WooCommerce", "Next29", "Sticky.io"]); assert.equal(PROVIDER_CATALOG.filter((provider) => provider.availability === "available").length, 1); });
+test("Connections overview preserves the approved commerce provider roadmap", () => {
+  assert.deepEqual(
+    PROVIDER_CATALOG.map((provider) => provider.name),
+    ["Commas", "Everflow", "Shopify", "29Next", "Checkout Champ", "WooCommerce", "Sticky.io"],
+  );
+  assert.deepEqual(
+    PROVIDER_CATALOG.filter((provider) => provider.availability === "available").map((provider) => provider.provider),
+    ["commas", "everflow", "shopify", "next29"],
+  );
+});
 test("Commas capability presentation preserves verified limitations", () => { assert.equal(COMMAS_CAPABILITIES.find((item) => item.name === "Products")?.state, "limited"); assert.equal(COMMAS_CAPABILITIES.find((item) => item.name === "Refunds")?.state, "embedded"); assert.equal(COMMAS_CAPABILITIES.find((item) => item.name === "Chargebacks / Disputes")?.state, "webhook_only"); assert.equal(COMMAS_CAPABILITIES.find((item) => item.name === "Attribution identifiers")?.state, "unavailable"); });
 test("Connection experience never renders credential or evidence secrets", () => { for (const forbidden of ["secret_ciphertext", "secret_iv", "storage_reference", "COMMAS_API_KEY", "SUPABASE_SERVICE_ROLE_KEY"]) assert.equal(component.includes(forbidden), false); assert.match(component, /type="password"/); });
 test("credential flow never echoes the submitted API key", () => { assert.doesNotMatch(component, /setNotice\([^)]*apiKey/); assert.match(component, /target\.reset\(\)/); });
