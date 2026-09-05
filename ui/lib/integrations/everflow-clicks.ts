@@ -1,6 +1,7 @@
 import "server-only";
 import { commercePersistenceRequest } from "@/lib/commerce/supabase-control-repository";
 import { EVERFLOW_API_BASE, EverflowHealthError } from "./everflow-client";
+import { everflowClickRowCountIsSaturated } from "./everflow-click-window";
 
 export const EVERFLOW_CLICKS_STREAM_PATH = "/v1/networks/reporting/clicks/stream";
 export const EVERFLOW_CLICKS_STREAM_URL = `${EVERFLOW_API_BASE}${EVERFLOW_CLICKS_STREAM_PATH}`;
@@ -59,6 +60,8 @@ export type EverflowClick = {
   rawPayload: Row;
   rawPayloadHash: string;
 };
+
+export type EverflowClickStreamResult = { rows: EverflowClick[]; saturated: boolean };
 
 const record = (value: unknown): Row => value && typeof value === "object" && !Array.isArray(value) ? value as Row : {};
 const cleanString = (value: unknown) => {
@@ -123,7 +126,7 @@ export async function normalizeEverflowClick(value: unknown): Promise<EverflowCl
   return { ...normalized, payloadHash, rawPayload: row, rawPayloadHash: await sha256Text(JSON.stringify(row)) };
 }
 
-export async function fetchEverflowClickStream(input: { apiKey: string; from: string; to: string; timezoneId: number; fetchImpl?: typeof fetch }) {
+export async function fetchEverflowClickStream(input: { apiKey: string; from: string; to: string; timezoneId: number; fetchImpl?: typeof fetch }): Promise<EverflowClickStreamResult> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), EVERFLOW_CLICK_TIMEOUT_MS);
   try {
@@ -139,8 +142,8 @@ export async function fetchEverflowClickStream(input: { apiKey: string; from: st
     if (!response.ok) throw new EverflowHealthError("everflow_unavailable", "Everflow could not complete click ingestion.", 502, response.status >= 500);
     const payload = record(await response.json());
     const rows = Array.isArray(payload.clicks) ? payload.clicks : Array.isArray(payload.table) ? payload.table : [];
-    if (rows.length >= EVERFLOW_CLICK_MAX_ROWS) throw new EverflowHealthError("everflow_invalid_response", "Everflow click window reached the 10,000-row stream limit and must be narrowed.", 409, true);
-    return await Promise.all(rows.map(normalizeEverflowClick));
+    if (everflowClickRowCountIsSaturated(rows.length, EVERFLOW_CLICK_MAX_ROWS)) return { rows: [], saturated: true };
+    return { rows: await Promise.all(rows.map(normalizeEverflowClick)), saturated: false };
   } finally {
     clearTimeout(timeout);
   }
