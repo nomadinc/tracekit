@@ -70,3 +70,11 @@ test("Everflow has an isolated authenticated five-minute Vercel cron trigger", (
   assert.match(middleware, /"\/api\/cron\/:path\*"/);
   assert.doesNotMatch(cron, /commas-continuous-worker|runContinuousCommasSync|continuous-commerce-cloudflare/);
 });
+
+test("Everflow click sync runs independently on every scheduled conversion chunk", () => {
+  const worker = source("ui/lib/integrations/everflow-scheduled-worker.ts");
+
+  assert.match(worker, /try \{\s*clickSync = await runEverflowScheduledClickChunk\(scope\);/);
+  assert.doesNotMatch(worker, /clickSyncDeferred|conversion_page_remaining/);
+  assert.match(worker, /clickStatus: result\.clickSyncFailed \? "failed" : "completed"/);
+});
