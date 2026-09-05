@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { analyzeOrdFrozenCohort, evidenceRangeQuery, evidenceRowsWithinWindow, mergeOrdBackfillSummary, nextOrdBackfillCursor, normalizeOrdBackfillBatchSize, ordFrozenBaselineFingerprint, publicTransactionMappingRecordsFromPage, validateOrdBackfillWindow, type ExistingSourceMapping, type OrdMappingRecord } from "../lib/commerce/commas-public-transaction-backfill";
+import { analyzeOrdFrozenCohort, evidenceRangeQuery, evidenceRowsWithinWindow, mergeOrdBackfillSummary, nextOrdBackfillCursor, normalizeOrdBackfillBatchSize, ordFrozenBaselineFingerprint, ordFrozenBaselineMaterial, publicTransactionMappingRecordsFromPage, validateOrdBackfillWindow, type ExistingSourceMapping, type OrdEvidenceRow, type OrdMappingRecord } from "../lib/commerce/commas-public-transaction-backfill";
 
 const scope={connectionId:"00000000-0000-0000-0000-000000000001",providerAccountId:"00000000-0000-0000-0000-000000000002"};
 const transaction={id:"123",public_transaction_id:"ORD-abc",transaction_date:"2026-01-01T00:00:00Z",amount:10,fee_amount:1,net_amount:9,fan:{id:"fan"},product:{id:"product",title:"Product"},servicePayment:{id:"pay"},refunds:[]};
@@ -103,6 +103,8 @@ test("global preflight deduplicates repeated pairs and detects cross-batch direc
   assert.equal(orderCollision.ord_to_multiple_canonical_orders,1);assert.equal(orderCollision.acceptance_safe,false);
   const existingConflict=analyzeOrdFrozenCohort({records:[record("ORD-A","1")],numericMappings:[mapping("1",ids[0])],ordMappings:[mapping("ORD-A",ids[1])],evidenceHashChecked:1,evidenceHashFailures:0});
   assert.equal(existingConflict.existing_conflicting_commas_public_transaction_mappings,1);assert.equal(existingConflict.acceptance_safe,false);
+  const inactiveConflict=analyzeOrdFrozenCohort({records:[record("ORD-A","1")],numericMappings:[mapping("1",ids[0])],ordMappings:[{...mapping("ORD-A",ids[0]),state:"retired"}],evidenceHashChecked:1,evidenceHashFailures:0});
+  assert.equal(inactiveConflict.existing_conflicting_commas_public_transaction_mappings,1);assert.equal(inactiveConflict.acceptance_safe,false);
 });
 
 test("missing ORD values are not malformed and remain outside the identity cohort",()=>{
@@ -110,13 +112,36 @@ test("missing ORD values are not malformed and remain outside the identity cohor
   assert.equal(result.ord_observations,1);assert.equal(result.malformed_ord_identities,0);assert.equal(result.unique_ord_identities,1);assert.equal(result.unmatched_ord_identities,1);assert.equal(result.acceptance_safe,true);
 });
 
-test("frozen write planning is idempotent and post-horizon rows do not alter its baseline",()=>{
-  const numeric=[mapping("1",ids[0])],records=[record("ORD-A","1")];
-  const first=analyzeOrdFrozenCohort({records,numericMappings:numeric,ordMappings:[],evidenceHashChecked:1,evidenceHashFailures:0});
-  const second=analyzeOrdFrozenCohort({records,numericMappings:numeric,ordMappings:[mapping("ORD-A",ids[0])],evidenceHashChecked:1,evidenceHashFailures:0});
-  assert.equal(first.would_write_mappings,1);assert.equal(second.would_write_mappings,0);assert.equal(second.already_existing_idempotent_mappings,1);
-  const material={window:{through:{observedAt:"2026-09-04T03:00:00Z",evidenceId:ids[2]}},records};
-  assert.equal(ordFrozenBaselineFingerprint(material),ordFrozenBaselineFingerprint(material));
+const frozenScope={organizationId:ids[3],connectionId:scope.connectionId,providerAccountId:scope.providerAccountId};
+const frozenWindow=validateOrdBackfillWindow({throughObservedAt:"2026-09-04T03:00:00Z",throughEvidenceId:ids[2]});
+const frozenEvidence:OrdEvidenceRow[]=[{id:ids[0],observed_at:"2026-09-04T01:00:00Z",payload_hash:"1".repeat(64)},{id:ids[1],observed_at:"2026-09-04T02:00:00Z",payload_hash:"2".repeat(64)}];
+function frozenFingerprint(input:{scope?:typeof frozenScope;evidence?:OrdEvidenceRow[];records?:OrdMappingRecord[];numeric?:ExistingSourceMapping[];ord?:ExistingSourceMapping[]}={}){
+  const records=input.records||[record("ORD-A","1"),record("ORD-B","2")],numericMappings=input.numeric||[mapping("1",ids[0]),mapping("2",ids[1])],ordMappings=input.ord||[];
+  const metrics=analyzeOrdFrozenCohort({records,numericMappings,ordMappings,evidenceHashChecked:(input.evidence||frozenEvidence).length,evidenceHashFailures:0});
+  return {sha:ordFrozenBaselineFingerprint(ordFrozenBaselineMaterial({scope:input.scope||frozenScope,window:frozenWindow,evidence:input.evidence||frozenEvidence,records,numericMappings,ordMappings,metrics})),metrics};
+}
+
+test("frozen baseline ignores unrelated live ingestion and normalizes first-write idempotency",()=>{
+  const first=frozenFingerprint(),postWrite=frozenFingerprint({ord:[mapping("ORD-A",ids[0]),mapping("ORD-B",ids[1])]});
+  const withLiveNumeric=frozenFingerprint({numeric:[mapping("1",ids[0]),mapping("2",ids[1]),mapping("3",ids[2]),mapping("4",ids[3])]});
+  const liveEvidence=[...frozenEvidence,{id:ids[4],observed_at:"2026-09-04T04:00:00Z",payload_hash:"3".repeat(64)}];
+  const withLiveEvidence=frozenFingerprint({evidence:evidenceRowsWithinWindow(liveEvidence,frozenWindow)});
+  const unrelatedOrders=[{transaction_id:"3",canonical_order_id:ids[2]}];
+  assert.equal(first.metrics.would_write_mappings,2);assert.equal(postWrite.metrics.would_write_mappings,0);assert.equal(postWrite.metrics.already_existing_idempotent_mappings,2);
+  assert.equal(first.sha,postWrite.sha);assert.equal(first.sha,withLiveNumeric.sha);assert.equal(first.sha,withLiveEvidence.sha);assert.equal(unrelatedOrders.length,1);assert.equal(first.sha,frozenFingerprint().sha);
+});
+
+test("frozen baseline changes for every frozen identity, authority, integrity, collision, conflict, and scope change",()=>{
+  const baseline=frozenFingerprint().sha;
+  const changedEvidenceHash=frozenEvidence.map(row=>({...row}));changedEvidenceHash[0].payload_hash="f".repeat(64);
+  assert.notEqual(baseline,frozenFingerprint({evidence:changedEvidenceHash}).sha);
+  assert.notEqual(baseline,frozenFingerprint({evidence:frozenEvidence.slice(1)}).sha);
+  assert.notEqual(baseline,frozenFingerprint({records:[record("ORD-CHANGED","1"),record("ORD-B","2")]}).sha);
+  assert.notEqual(baseline,frozenFingerprint({records:[record("ORD-A","9"),record("ORD-B","2")]}).sha);
+  assert.notEqual(baseline,frozenFingerprint({numeric:[mapping("1",ids[2]),mapping("2",ids[1])]}).sha);
+  assert.notEqual(baseline,frozenFingerprint({records:[record("ORD-A","1"),record("ORD-A","2"),record("ORD-B","2")]}).sha);
+  assert.notEqual(baseline,frozenFingerprint({ord:[mapping("ORD-A",ids[2])]}).sha);
+  assert.notEqual(baseline,frozenFingerprint({scope:{...frozenScope,organizationId:ids[4]}}).sha);
 });
 
 test("hash failures and malformed ORD identities fail closed before writes",()=>{
