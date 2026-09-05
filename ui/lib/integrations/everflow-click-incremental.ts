@@ -43,6 +43,6 @@ export async function markEverflowClickIncrementalChunkSuccess(input:{organizati
   return {windowComplete:finalDay,nextFrom:finalDay?null:nextDay(input.from)};
 }
 
-export async function markEverflowClickIncrementalFailure(input:{organizationId:string;connectionId:string;providerAccountId:string;failedAt:string;warningCode:string}) {
-  await commercePersistenceRequest(`commerce_continuous_sync_state?organization_id=eq.${encodeURIComponent(input.organizationId)}&connection_id=eq.${encodeURIComponent(input.connectionId)}&provider_account_id=eq.${encodeURIComponent(input.providerAccountId)}&resource=eq.${RESOURCE}`,{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify({status:"failed",last_stopping_reason:"sync_failed",warnings:[{code:input.warningCode}],updated_at:input.failedAt})});
+export async function markEverflowClickIncrementalFailure(input:{organizationId:string;connectionId:string;providerAccountId:string;failedAt:string;warningCode:string;stage:string;errorCode:string;httpStatus:number|null;retryable:boolean|null;summary:string}) {
+  await commercePersistenceRequest(`commerce_continuous_sync_state?organization_id=eq.${encodeURIComponent(input.organizationId)}&connection_id=eq.${encodeURIComponent(input.connectionId)}&provider_account_id=eq.${encodeURIComponent(input.providerAccountId)}&resource=eq.${RESOURCE}`,{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify({status:"failed",last_stopping_reason:"sync_failed",warnings:[{code:input.warningCode,stage:input.stage,errorCode:input.errorCode,httpStatus:input.httpStatus,retryable:input.retryable,summary:input.summary}],updated_at:input.failedAt})});
 }
