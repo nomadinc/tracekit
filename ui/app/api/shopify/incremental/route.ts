@@ -5,6 +5,7 @@ import { MemoryCommerceEvidenceStore } from "@/lib/commerce/evidence-store";
 import { CommerceProviderConnectionVerifier } from "@/lib/commerce/provider-verifier";
 import { parseShopifyConnectionCredential } from "@/lib/commerce/shopify-verifier";
 import { runShopifyIncrementalResource } from "@/lib/commerce/shopify-incremental-runtime";
+import { ShopifySyncStageError } from "@/lib/commerce/shopify-core/sync";
 
 const RESOURCES = new Set(["products", "customers", "orders"]);
 
@@ -52,12 +53,20 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true, result });
   } catch (error) {
+    const staged = error instanceof ShopifySyncStageError ? error : null;
     console.error("shopify_incremental_failed", {
       connectionId,
       resource,
-      message: error instanceof Error ? error.message : String(error),
+      stage: staged?.stage || "request",
+      code: staged?.code || "shopify_incremental_failed",
+      message: staged?.diagnosticMessage || (error instanceof Error ? error.message : String(error)),
     });
-    return NextResponse.json({ ok: false, error: "shopify_incremental_failed" }, { status: 500 });
+    return NextResponse.json({
+      ok: false,
+      error: "shopify_incremental_failed",
+      stage: staged?.stage || "request",
+      code: staged?.code || "shopify_incremental_failed",
+    }, { status: 500 });
   }
 }
 
