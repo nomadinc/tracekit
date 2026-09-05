@@ -99,9 +99,12 @@ query TraceKitShopifyOrders($first: Int!, $after: String, $query: String) {
       currentSubtotalPriceSet { ${MONEY_FIELDS} }
       totalShippingPriceSet { ${MONEY_FIELDS} }
       currentTotalTaxSet { ${MONEY_FIELDS} }
-      transactions { id kind status amountSet { ${MONEY_FIELDS} } }
+      transactions(first: 250) { id kind status amountSet { ${MONEY_FIELDS} } }
       lineItems(first: 250) { nodes { id quantity title sku product { id } variant { id } discountedTotalSet { ${MONEY_FIELDS} } originalTotalSet { ${MONEY_FIELDS} } } }
-      refunds { id createdAt processedAt updatedAt totalRefundedSet { ${MONEY_FIELDS} } transactions { id status amountSet { ${MONEY_FIELDS} } } }
+      refunds {
+        id createdAt processedAt updatedAt totalRefundedSet { ${MONEY_FIELDS} }
+        transactions(first: 250) { nodes { id status amountSet { ${MONEY_FIELDS} } } }
+      }
     }
     pageInfo { hasNextPage endCursor }
   }
