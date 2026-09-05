@@ -24,6 +24,18 @@ test("ORD dry-run summaries aggregate every reconciliation class",()=>{
 const ids=[1,2,3,4,5].map(value=>`00000000-0000-4000-8000-${String(value).padStart(12,"0")}`);
 const at=(observed_at:string,id:string)=>({observed_at,id});
 
+test("PostgREST Evidence range query preserves exact grouping for every bound form",()=>{
+  const lower={observedAt:"2026-09-04T01:00:00.000Z",evidenceId:ids[0]};
+  const upper={observedAt:"2026-09-04T03:00:00.000Z",evidenceId:ids[2]};
+  const lowerGroup=`observed_at.gt.${lower.observedAt},and(observed_at.eq.${lower.observedAt},id.gt.${lower.evidenceId})`;
+  const upperGroup=`observed_at.lt.${upper.observedAt},and(observed_at.eq.${upper.observedAt},id.lte.${upper.evidenceId})`;
+  assert.equal(evidenceRangeQuery({after:null,through:null}),"");
+  assert.equal(evidenceRangeQuery({after:lower,through:null}),`&or=${encodeURIComponent(`(${lowerGroup})`)}`);
+  assert.equal(evidenceRangeQuery({after:null,through:upper}),`&or=${encodeURIComponent(`(${upperGroup})`)}`);
+  assert.equal(evidenceRangeQuery({after:lower,through:upper}),`&and=${encodeURIComponent(`(or(${lowerGroup}),or(${upperGroup}))`)}`);
+  assert.equal(new URL(`https://example.test/evidence?select=id${evidenceRangeQuery({after:null,through:upper})}`).searchParams.get("or"),`(${upperGroup})`);
+});
+
 test("frozen horizon excludes live Evidence arriving after terminal completion",()=>{
   const window=validateOrdBackfillWindow({throughObservedAt:"2026-09-04T03:00:00Z",throughEvidenceId:ids[2]});
   const initial=[at("2026-09-04T01:00:00Z",ids[0]),at("2026-09-04T02:00:00Z",ids[1]),at("2026-09-04T03:00:00Z",ids[2])];
@@ -38,6 +50,27 @@ test("inclusive same-timestamp horizon uses Evidence UUID as deterministic tie b
   const window=validateOrdBackfillWindow({throughObservedAt:"2026-09-04T03:00:00Z",throughEvidenceId:ids[2]});
   assert.deepEqual(evidenceRowsWithinWindow(rows,window).map(row=>row.id),ids.slice(0,3));
   assert.match(decodeURIComponent(evidenceRangeQuery(window)),/id\.lte\./);
+  const bounded=validateOrdBackfillWindow({afterObservedAt:"2026-09-04T03:00:00Z",afterEvidenceId:ids[0],throughObservedAt:"2026-09-04T03:00:00Z",throughEvidenceId:ids[2]});
+  assert.deepEqual(evidenceRowsWithinWindow(rows,bounded).map(row=>row.id),ids.slice(1,3));
+});
+
+test("upper-only complete run keeps the frozen horizon through every batch",()=>{
+  const rows=[
+    at("2026-09-04T01:00:00Z",ids[0]),at("2026-09-04T02:00:00Z",ids[1]),
+    at("2026-09-04T03:00:00Z",ids[2]),at("2026-09-04T04:00:00Z",ids[3]),
+    at("2026-09-04T05:00:00Z",ids[4]),
+  ];
+  const through={observedAt:"2026-09-04T03:00:00.000Z",evidenceId:ids[2]};
+  let after=validateOrdBackfillWindow({}).after;const processed:typeof rows=[];const queries:string[]=[];
+  while(true){
+    const window={after,through};queries.push(decodeURIComponent(evidenceRangeQuery(window)));
+    const batch=evidenceRowsWithinWindow(rows,window).slice(0,2);processed.push(...batch);
+    if(!batch.length||nextOrdBackfillCursor(batch,through)===null)break;
+    after=nextOrdBackfillCursor(batch,through);
+  }
+  assert.deepEqual(processed.map(row=>row.id),ids.slice(0,3));
+  assert.match(queries[0],/^&or=\(/);assert.match(queries[1],/^&and=\(/);
+  assert.equal(nextOrdBackfillCursor(processed,through),null);
 });
 
 test("lower cursor is exclusive and upper horizon is inclusive",()=>{

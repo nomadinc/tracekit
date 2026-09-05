@@ -54,10 +54,10 @@ export function evidenceRowsWithinWindow(rows:OrdEvidenceRow[],window:OrdBackfil
 }
 
 export function evidenceRangeQuery(window:OrdBackfillWindow){
-  const lower=window.after?`or(observed_at.gt.${window.after.observedAt},and(observed_at.eq.${window.after.observedAt},id.gt.${window.after.evidenceId}))`:null;
-  const upper=window.through?`or(observed_at.lt.${window.through.observedAt},and(observed_at.eq.${window.through.observedAt},id.lte.${window.through.evidenceId}))`:null;
-  if(lower&&upper)return `&and=${encodeURIComponent(`(${lower},${upper})`)}`;
-  const only=lower||upper;return only?`&or=${encodeURIComponent(only!.slice(3,-1))}`:"";
+  const lower=window.after?`observed_at.gt.${window.after.observedAt},and(observed_at.eq.${window.after.observedAt},id.gt.${window.after.evidenceId})`:null;
+  const upper=window.through?`observed_at.lt.${window.through.observedAt},and(observed_at.eq.${window.through.observedAt},id.lte.${window.through.evidenceId})`:null;
+  if(lower&&upper)return `&and=${encodeURIComponent(`(or(${lower}),or(${upper}))`)}`;
+  const only=lower||upper;return only?`&or=${encodeURIComponent(`(${only})`)}`:"";
 }
 
 export function publicTransactionMappingRecordsFromPage(payload: unknown, scope:{connectionId:string;providerAccountId:string}) {
