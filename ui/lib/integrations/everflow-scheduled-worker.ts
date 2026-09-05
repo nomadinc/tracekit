@@ -8,6 +8,7 @@ import { captureEverflowConversionBaseline, finalizeEverflowConversionRunMetrics
 import { captureEverflowFinancialBaseline, persistEverflowEventReversalHistory } from "./everflow-event-reversals";
 import { projectEverflowFinancialEffects } from "./everflow-financial-projection";
 import { everflowIncrementalWindow, loadEverflowIncrementalState, markEverflowIncrementalAttempt, markEverflowIncrementalChunkSuccess, markEverflowIncrementalFailure } from "./everflow-incremental";
+import { EverflowHealthError } from "./everflow-client";
 import { fetchEverflowClickStream, persistEverflowClicks } from "./everflow-clicks";
 import { everflowClickIncrementalWindow, loadEverflowClickIncrementalState, markEverflowClickIncrementalAttempt, markEverflowClickIncrementalChunkSuccess, markEverflowClickIncrementalFailure } from "./everflow-click-incremental";
 
@@ -41,9 +42,27 @@ type EverflowNetworkMetadata = {
   timezoneId?: number | null;
 };
 
+type ClickFailureDiagnostic = {
+  stage: string;
+  errorCode: string;
+  httpStatus: number | null;
+  retryable: boolean | null;
+  summary: string;
+};
+
 const schedulerSession = {} as TraceKitSessionContext;
 const repo = new SupabaseCommerceControlRepository();
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function classifyClickFailure(error: unknown, stage: string): ClickFailureDiagnostic {
+  if (error instanceof EverflowHealthError) {
+    return { stage, errorCode: error.code, httpStatus: error.httpStatus, retryable: error.retryable, summary: error.message };
+  }
+  if (error instanceof Error && error.name === "AbortError") {
+    return { stage, errorCode: "everflow_timeout", httpStatus: 504, retryable: true, summary: "Everflow click ingestion exceeded the request timeout." };
+  }
+  return { stage, errorCode: `everflow_click_${stage}_failed`, httpStatus: null, retryable: null, summary: `Everflow click ingestion failed during ${stage}.` };
+}
 
 function credentialKey() {
   const id = process.env.COMMERCE_CREDENTIALS_KEY_ID;
@@ -124,15 +143,20 @@ export async function runEverflowScheduledClickChunk(scope: SchedulerScope) {
   const state = await loadEverflowClickIncrementalState(scope);
   const window = everflowClickIncrementalWindow({ now, lastSuccessfulAt: state.lastSuccessfulAt, boundary: state.boundary });
   await markEverflowClickIncrementalAttempt({ ...scope, attemptedAt: now.toISOString(), window });
+  let stage = "execution_context";
   try {
     const execution = await everflowClickExecutionContext(scope);
+    stage = "provider_fetch";
     const clicks = await fetchEverflowClickStream({ apiKey: execution.apiKey, from: window.from, to: window.to, timezoneId: execution.timezoneId });
+    stage = "persistence";
     const persisted = await persistEverflowClicks({ ...scope, clicks, observedAt: new Date().toISOString() });
     const completedAt = new Date().toISOString();
+    stage = "state_commit";
     const progress = await markEverflowClickIncrementalChunkSuccess({ ...scope, completedAt, from: window.from, to: window.to, targetTo: window.targetTo, overlapDays: window.overlapDays, bootstrap: window.bootstrap, seen: persisted.seen });
     return { ok: true, window, progress, seen: persisted.seen, persisted: persisted.persisted, timezoneId: execution.timezoneId };
   } catch (error) {
-    await markEverflowClickIncrementalFailure({ ...scope, failedAt: new Date().toISOString(), warningCode: "everflow_scheduled_click_sync_failed" }).catch(() => undefined);
+    const diagnostic = classifyClickFailure(error, stage);
+    await markEverflowClickIncrementalFailure({ ...scope, failedAt: new Date().toISOString(), warningCode: "everflow_scheduled_click_sync_failed", ...diagnostic }).catch(() => undefined);
     throw error;
   }
 }
