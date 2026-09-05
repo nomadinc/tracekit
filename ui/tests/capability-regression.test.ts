@@ -23,10 +23,33 @@ test("capability manifest records established and planned capabilities", () => {
     "Commas credential encryption", "bounded Commas validator", "Evidence ingestion",
     "canonical orders", "order lines", "refunds", "provider products", "commerce ledger events",
     "continuous-shadow runtime", "continuous-commerce", "TKID", "Evidence", "identity resolution",
-    "reconciliation", "Team Management", "29Next",
+    "reconciliation", "Team Management", "29Next connection UI", "29Next encrypted credential storage",
   ]) assert.match(manifest, new RegExp(capability.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")), capability);
   assert.match(manifest, /Planned \/ rebuild-required:\*\* Team Management/);
-  assert.match(manifest, /Not implemented:\*\* 29Next/);
+  assert.match(manifest, /Implemented:\*\* 29Next/);
+});
+
+test("29Next connection UI remains available and read-only activation stays gated", () => {
+  const catalog = source("ui/lib/commerce/integration-experience.ts");
+  const overview = source("ui/components/connections/connections-overview.tsx");
+  const verifier = source("ui/lib/commerce/next29-verifier.ts");
+  const providerVerifier = source("ui/lib/commerce/provider-verifier.ts");
+  const connectRoute = source("ui/app/api/next29/connect/route.ts");
+  const detail = source("ui/components/connections/next29-connection-detail.tsx");
+
+  assert.match(catalog, /provider: "next29", name: "29Next", availability: "available"/);
+  assert.match(overview, /type ConnectProvider = "commas" \| "everflow" \| "shopify" \| "next29"/);
+  assert.match(overview, /\/api\/next29\/connect/);
+  assert.match(overview, /Scheduled sync or live webhook registration|scheduled sync or register a live webhook/i);
+  assert.match(verifier, /orders\//);
+  assert.match(verifier, /subscriptions\//);
+  assert.match(verifier, /disputes\//);
+  assert.match(verifier, /X-29Next-Api-Version/);
+  assert.match(providerVerifier, /input\.provider === "next29"/);
+  assert.match(connectRoute, /provider: "next29"/);
+  assert.match(connectRoute, /environment: "production"/);
+  assert.match(detail, /Scheduled sync", "Disabled"/);
+  assert.match(detail, /live webhook registration and automatic production execution remain disabled/i);
 });
 
 test("UI convergence remains deferred and Legacy Dashboard is explicitly transitional", () => {
