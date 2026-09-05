@@ -170,13 +170,10 @@ export async function runEverflowScheduledChunk(scope: SchedulerScope) {
 
     let clickSync: Awaited<ReturnType<typeof runEverflowScheduledClickChunk>> | null = null;
     let clickSyncFailed = false;
-    const clickSyncDeferred = !result.sourceComplete;
-    if (!clickSyncDeferred) {
-      try {
-        clickSync = await runEverflowScheduledClickChunk(scope);
-      } catch {
-        clickSyncFailed = true;
-      }
+    try {
+      clickSync = await runEverflowScheduledClickChunk(scope);
+    } catch {
+      clickSyncFailed = true;
     }
 
     stage = "classification_metadata";
@@ -189,9 +186,7 @@ export async function runEverflowScheduledChunk(scope: SchedulerScope) {
         boundedScheduler: { page: result.page, nextPage: result.nextPage, sourceComplete: result.sourceComplete },
         clickSync: clickSync
           ? { status: "completed", seen: clickSync.seen, persisted: clickSync.persisted, window: clickSync.window, windowComplete: clickSync.progress.windowComplete, timezoneId: clickSync.timezoneId }
-          : clickSyncDeferred
-            ? { status: "deferred", reason: "conversion_page_remaining" }
-            : { status: "failed", warningCode: "everflow_scheduled_click_sync_failed" },
+          : { status: "failed", warningCode: "everflow_scheduled_click_sync_failed" },
       },
     });
     stage = "cursor_commit";
@@ -209,7 +204,7 @@ export async function runEverflowScheduledChunk(scope: SchedulerScope) {
       sourceComplete: result.sourceComplete,
       nextPage: result.nextPage,
     });
-    return { ok: true, window, progress, result, changeMetrics, eventEffects, financialProjection, clickSync, clickSyncFailed, clickSyncDeferred };
+    return { ok: true, window, progress, result, changeMetrics, eventEffects, financialProjection, clickSync, clickSyncFailed };
   } catch (error) {
     await markEverflowIncrementalFailure({ ...scope, failedAt: new Date().toISOString(), warningCode: `everflow_scheduled_${stage}_failed` }).catch(() => undefined);
     throw error;
@@ -273,7 +268,7 @@ export async function runDueEverflowSchedules(input: { now?: Date; limit?: numbe
         sourceComplete: result.result.sourceComplete,
         page: result.result.page,
         nextPage: result.result.nextPage,
-        clickStatus: result.clickSyncDeferred ? "deferred" : result.clickSyncFailed ? "failed" : "completed",
+        clickStatus: result.clickSyncFailed ? "failed" : "completed",
         clickWindowComplete: result.clickSync?.progress.windowComplete ?? false,
         syncRunId: result.result.syncRunId,
         seen: result.result.seen,
