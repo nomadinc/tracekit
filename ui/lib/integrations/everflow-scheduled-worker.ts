@@ -10,7 +10,8 @@ import { projectEverflowFinancialEffects } from "./everflow-financial-projection
 import { everflowIncrementalWindow, loadEverflowIncrementalState, markEverflowIncrementalAttempt, markEverflowIncrementalChunkSuccess, markEverflowIncrementalFailure } from "./everflow-incremental";
 import { EverflowHealthError } from "./everflow-client";
 import { fetchEverflowClickStream, persistEverflowClicks } from "./everflow-clicks";
-import { everflowClickIncrementalWindow, loadEverflowClickIncrementalState, markEverflowClickIncrementalAttempt, markEverflowClickIncrementalChunkSuccess, markEverflowClickIncrementalFailure } from "./everflow-click-incremental";
+import { ingestEverflowClickWindow, EverflowClickAdaptiveError, type EverflowClickSplitTelemetry } from "./everflow-click-window";
+import { everflowClickIncrementalWindow, loadEverflowClickIncrementalState, markEverflowClickIncrementalAttempt, markEverflowClickIncrementalChunkSuccess, markEverflowClickIncrementalFailure, markEverflowClickSubwindowSuccess } from "./everflow-click-incremental";
 
 type ScheduleRow = {
   id: string;
@@ -48,6 +49,12 @@ type ClickFailureDiagnostic = {
   httpStatus: number | null;
   retryable: boolean | null;
   summary: string;
+  splitCount?: number;
+  providerRequestCount?: number;
+  smallestIntervalSeconds?: number;
+  stoppingReason?: string;
+  resumeFrom?: string;
+  resumeTo?: string;
 };
 
 const schedulerSession = {} as TraceKitSessionContext;
@@ -55,13 +62,19 @@ const repo = new SupabaseCommerceControlRepository();
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function classifyClickFailure(error: unknown, stage: string): ClickFailureDiagnostic {
+  const split = error && typeof error === "object" && "telemetry" in error ? (error as { telemetry?: EverflowClickSplitTelemetry }).telemetry : undefined;
+  const resume = error && typeof error === "object" && "resumeInterval" in error ? (error as { resumeInterval?: { from: string; to: string } }).resumeInterval : undefined;
+  const extra = { ...(split ? { splitCount: split.splitCount, providerRequestCount: split.providerRequestCount, smallestIntervalSeconds: split.smallestIntervalSeconds, stoppingReason: split.stoppingReason } : {}), ...(resume ? { resumeFrom: resume.from, resumeTo: resume.to } : {}) };
+  if (error instanceof EverflowClickAdaptiveError) {
+    return { stage, errorCode: error.code, httpStatus: error.httpStatus, retryable: error.retryable, summary: error.message, ...extra };
+  }
   if (error instanceof EverflowHealthError) {
-    return { stage, errorCode: error.code, httpStatus: error.httpStatus, retryable: error.retryable, summary: error.message };
+    return { stage, errorCode: error.code, httpStatus: error.httpStatus, retryable: error.retryable, summary: error.message, ...extra };
   }
   if (error instanceof Error && error.name === "AbortError") {
-    return { stage, errorCode: "everflow_timeout", httpStatus: 504, retryable: true, summary: "Everflow click ingestion exceeded the request timeout." };
+    return { stage, errorCode: "everflow_timeout", httpStatus: 504, retryable: true, summary: "Everflow click ingestion exceeded the request timeout.", ...extra };
   }
-  return { stage, errorCode: `everflow_click_${stage}_failed`, httpStatus: null, retryable: null, summary: `Everflow click ingestion failed during ${stage}.` };
+  return { stage, errorCode: `everflow_click_${stage}_failed`, httpStatus: null, retryable: null, summary: `Everflow click ingestion failed during ${stage}.`, ...extra };
 }
 
 function credentialKey() {
@@ -147,16 +160,27 @@ export async function runEverflowScheduledClickChunk(scope: SchedulerScope) {
   try {
     const execution = await everflowClickExecutionContext(scope);
     stage = "provider_fetch";
-    const clicks = await fetchEverflowClickStream({ apiKey: execution.apiKey, from: window.from, to: window.to, timezoneId: execution.timezoneId });
-    stage = "persistence";
-    const persisted = await persistEverflowClicks({ ...scope, clicks, observedAt: new Date().toISOString() });
+    let persistedCount = 0, acceptedCount = 0;
+    const ingestion = await ingestEverflowClickWindow({
+      interval: { from: window.from, to: window.to },
+      fetchInterval: (interval) => fetchEverflowClickStream({ apiKey: execution.apiKey, ...interval, timezoneId: execution.timezoneId }),
+      persistCompleteInterval: async (interval, clicks, splitTelemetry) => {
+        stage = "persistence";
+        const persisted = await persistEverflowClicks({ ...scope, clicks, observedAt: new Date().toISOString() });
+        persistedCount += persisted.persisted;
+        acceptedCount += clicks.length;
+        stage = "state_commit";
+        await markEverflowClickSubwindowSuccess({ ...scope, completedAt: new Date().toISOString(), to: interval.to, parentTo: window.to, targetTo: window.targetTo, overlapDays: window.overlapDays, bootstrap: window.bootstrap, seen: acceptedCount, splitCount: splitTelemetry.splitCount, providerRequestCount: splitTelemetry.providerRequestCount, smallestIntervalSeconds: splitTelemetry.smallestIntervalSeconds });
+        stage = "provider_fetch";
+      },
+    });
     const completedAt = new Date().toISOString();
     stage = "state_commit";
-    const progress = await markEverflowClickIncrementalChunkSuccess({ ...scope, completedAt, from: window.from, to: window.to, targetTo: window.targetTo, overlapDays: window.overlapDays, bootstrap: window.bootstrap, seen: persisted.seen });
-    return { ok: true, window, progress, seen: persisted.seen, persisted: persisted.persisted, timezoneId: execution.timezoneId };
+    const progress = await markEverflowClickIncrementalChunkSuccess({ ...scope, completedAt, from: window.from, to: window.to, targetTo: window.targetTo, overlapDays: window.overlapDays, bootstrap: window.bootstrap, seen: ingestion.seen, splitCount: ingestion.telemetry.splitCount, providerRequestCount: ingestion.telemetry.providerRequestCount, smallestIntervalSeconds: ingestion.telemetry.smallestIntervalSeconds });
+    return { ok: true, window, progress, seen: ingestion.seen, persisted: persistedCount, timezoneId: execution.timezoneId, adaptiveSplit: ingestion.telemetry };
   } catch (error) {
     const diagnostic = classifyClickFailure(error, stage);
-    await markEverflowClickIncrementalFailure({ ...scope, failedAt: new Date().toISOString(), warningCode: "everflow_scheduled_click_sync_failed", ...diagnostic }).catch(() => undefined);
+    await markEverflowClickIncrementalFailure({ ...scope, failedAt: new Date().toISOString(), warningCode: "everflow_scheduled_click_sync_failed", targetTo: window.targetTo, overlapDays: window.overlapDays, bootstrap: window.bootstrap, ...diagnostic }).catch(() => undefined);
     throw error;
   }
 }
@@ -209,7 +233,7 @@ export async function runEverflowScheduledChunk(scope: SchedulerScope) {
         financialProjection,
         boundedScheduler: { page: result.page, nextPage: result.nextPage, sourceComplete: result.sourceComplete },
         clickSync: clickSync
-          ? { status: "completed", seen: clickSync.seen, persisted: clickSync.persisted, window: clickSync.window, windowComplete: clickSync.progress.windowComplete, timezoneId: clickSync.timezoneId }
+          ? { status: "completed", seen: clickSync.seen, persisted: clickSync.persisted, window: clickSync.window, windowComplete: clickSync.progress.windowComplete, timezoneId: clickSync.timezoneId, adaptiveSplit: clickSync.adaptiveSplit }
           : { status: "failed", warningCode: "everflow_scheduled_click_sync_failed" },
       },
     });
