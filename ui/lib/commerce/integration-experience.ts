@@ -43,12 +43,21 @@ export const SHOPIFY_CAPABILITIES: SafeCapability[] = [
   { name: "Scheduled sync", state: "unavailable", reason: "M4 live smoke remains bounded and manual; broad scheduling is not enabled yet." },
 ];
 
+export const NEXT29_CAPABILITIES: SafeCapability[] = [
+  { name: "Orders", state: "supported", reason: "Bounded Admin API list and detail ingestion is implemented." },
+  { name: "Subscriptions / rebills", state: "supported", reason: "Subscription lifecycle and renewal-order reconciliation are implemented." },
+  { name: "Disputes / chargebacks", state: "supported", reason: "Historical API ingestion and webhook lifecycle updates are implemented." },
+  { name: "Signed webhooks", state: "supported", reason: "HMAC verification and durable idempotent receipt handling are implemented." },
+  { name: "Incremental sync", state: "supported", reason: "Date-window checkpoints, leases, and bounded scheduled dispatch are implemented." },
+  { name: "Production activation", state: "limited", reason: "M12 live validation is required before schedules or live webhook registration are enabled." },
+];
+
 export const PROVIDER_CATALOG = [
   { provider: "commas", name: "Commas", availability: "available" },
   { provider: "everflow", name: "Everflow", availability: "available" },
   { provider: "shopify", name: "Shopify", availability: "available" },
+  { provider: "next29", name: "29Next", availability: "available" },
   { provider: "checkout_champ", name: "Checkout Champ", availability: "coming_soon" },
   { provider: "woocommerce", name: "WooCommerce", availability: "coming_soon" },
-  { provider: "next29", name: "Next29", availability: "coming_soon" },
   { provider: "sticky_io", name: "Sticky.io", availability: "coming_soon" },
 ] as const;
