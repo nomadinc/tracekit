@@ -8,6 +8,24 @@ export type WebhookSubscriptionSummary = {
   status?: string;
 };
 
+const CREDENTIAL_QUERY_KEY = /(?:token|key|secret|password|passcode|auth|signature|credential)/i;
+
+/** Preserve routing identity without emitting query credentials or fragments. */
+export function sanitizeWebhookUrl(value: unknown) {
+  try {
+    const parsed = new URL(String(value ?? ""));
+    parsed.hash = "";
+    const sanitized = new URLSearchParams();
+    for (const [key] of parsed.searchParams) {
+      sanitized.append(CREDENTIAL_QUERY_KEY.test(key) ? "[redacted-key]" : key, "[redacted]");
+    }
+    parsed.search = sanitized.toString();
+    return parsed.toString();
+  } catch {
+    return "[invalid-url]";
+  }
+}
+
 /** Return only the non-sensitive fields needed for subscription inspection. */
 export function summarizeWebhookSubscription(row: WebhookSubscriptionRow): WebhookSubscriptionSummary {
   const eventTypes = Array.isArray(row.event_types)
@@ -15,7 +33,7 @@ export function summarizeWebhookSubscription(row: WebhookSubscriptionRow): Webho
     : [];
   const summary: WebhookSubscriptionSummary = {
     id: String(row.id ?? ""),
-    webhookUrl: String(row.webhook_url ?? ""),
+    webhookUrl: sanitizeWebhookUrl(row.webhook_url),
     eventTypes,
   };
   if (typeof row.is_active === "boolean") summary.active = row.is_active;
