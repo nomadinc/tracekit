@@ -64,9 +64,7 @@ export class BoundedNext29ConnectionVerifier implements CommerceConnectionVerifi
       let providerStatus = 200;
 
       for (const resource of resources) {
-        const url = new URL(resource, base);
-        url.searchParams.set("limit", "1");
-        const response = await fetch(url.toString(), {
+        const response = await fetch(new URL(resource, base).toString(), {
           method: "GET",
           cache: "no-store",
           signal: controller.signal,
