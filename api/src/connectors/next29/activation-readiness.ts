@@ -2,8 +2,8 @@ import type { Next29VerificationResult } from "./verification.ts";
 import { verifyNext29WebhookSignature } from "./webhook.ts";
 
 export const NEXT29_REQUIRED_MIGRATIONS = [
-  "097_commerce_subscriptions_v1.sql",
-  "098_commerce_webhook_receipts_v1.sql",
+  "20260901040000_commerce_subscriptions_v1.sql",
+  "20260901050000_commerce_webhook_receipts_v1.sql",
   "20260901060000_generalize_commerce_dispute_observations.sql",
   "20260902030000_next29_incremental_scheduler_foundation.sql",
   "20260902043000_next29_scheduler_dispatch_runtime.sql",
