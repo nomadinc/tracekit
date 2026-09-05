@@ -8,13 +8,14 @@ import {
   COMMAS_CAPABILITIES,
   EVERFLOW_CAPABILITIES,
   SHOPIFY_CAPABILITIES,
+  NEXT29_CAPABILITIES,
   PROVIDER_CATALOG,
   type ConnectionExperience,
   type SafeCapability,
 } from "@/lib/commerce/integration-experience";
 import { readCommerceActionResponse } from "@/lib/commerce/action-response";
 
-type ConnectProvider = "commas" | "everflow" | "shopify";
+type ConnectProvider = "commas" | "everflow" | "shopify" | "next29";
 
 const pill: Record<string, string> = {
   connected: "border-emerald-400/25 bg-emerald-400/10 text-emerald-300",
@@ -32,6 +33,7 @@ function capabilitiesFor(connection: ConnectionExperience): SafeCapability[] {
   if (connection.provider === "everflow") return EVERFLOW_CAPABILITIES;
   if (connection.provider === "commas") return COMMAS_CAPABILITIES;
   if (connection.provider === "shopify") return SHOPIFY_CAPABILITIES;
+  if (connection.provider === "next29") return NEXT29_CAPABILITIES;
   return [];
 }
 
@@ -73,7 +75,7 @@ export function ConnectionsOverview({ connections }: { connections: ConnectionEx
             {PROVIDER_CATALOG.map((provider) => {
               const providerConnections = connections.filter((item) => item.provider === provider.provider);
               const first = providerConnections[0];
-              const connectable = provider.provider === "commas" || provider.provider === "everflow" || provider.provider === "shopify";
+              const connectable = provider.provider === "commas" || provider.provider === "everflow" || provider.provider === "shopify" || provider.provider === "next29";
               return (
                 <article key={provider.provider} className="group flex min-h-64 flex-col rounded-2xl border border-white/10 bg-gradient-to-b from-white/[.055] to-white/[.025] p-5 shadow-2xl shadow-black/20 transition hover:border-white/20">
                   <div className="flex items-start justify-between"><div className="flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-white/[.06]"><Plug className="h-5 w-5" /></div>{first ? <ProviderStatus value={first.status} /> : <ProviderStatus value="unavailable" label={provider.availability === "available" ? "Not Connected" : "Coming Soon"} />}</div>
@@ -89,6 +91,7 @@ export function ConnectionsOverview({ connections }: { connections: ConnectionEx
                         <Link href={`/connections/commerce/${first.id}`} className="tk-brand-link inline-flex items-center gap-2 rounded-md text-xs font-semibold">View Connection <ArrowRight className="h-3.5 w-3.5" /></Link>
                         {provider.provider === "everflow" ? <button type="button" onClick={() => setConnectProvider("everflow")} className="text-xs font-semibold text-slate-400 hover:text-slate-200">Add Network</button> : null}
                         {provider.provider === "shopify" ? <button type="button" onClick={() => setConnectProvider("shopify")} className="text-xs font-semibold text-slate-400 hover:text-slate-200">Reconnect / Add Store</button> : null}
+                        {provider.provider === "next29" ? <button type="button" onClick={() => setConnectProvider("next29")} className="text-xs font-semibold text-slate-400 hover:text-slate-200">Reconnect / Add Store</button> : null}
                       </div>
                     </>
                   ) : (
@@ -115,7 +118,8 @@ function ConnectDialog({ provider, close }: { provider: ConnectProvider; close: 
   const setupRequestId = useRef<string | null>(null);
   const isEverflow = provider === "everflow";
   const isShopify = provider === "shopify";
-  const providerName = isEverflow ? "Everflow" : isShopify ? "Shopify" : "Commas";
+  const isNext29 = provider === "next29";
+  const providerName = isEverflow ? "Everflow" : isShopify ? "Shopify" : isNext29 ? "29Next" : "Commas";
 
   async function submit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -146,6 +150,17 @@ function ConnectDialog({ provider, close }: { provider: ConnectProvider; close: 
         target.reset(); setupRequestId.current = null; router.push(`/connections/commerce/${result.connectionId}`); router.refresh(); return;
       }
 
+      if (isNext29) {
+        const response = await fetch("/api/next29/connect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "Idempotency-Key": setupRequestId.current },
+          body: JSON.stringify({ displayName: form.get("displayName"), store: form.get("store"), accessToken: form.get("accessToken") }),
+        });
+        const result = await response.json().catch(() => null) as { ok?: boolean; message?: string; connectionId?: string } | null;
+        if (!response.ok || !result?.ok || !result.connectionId) { setMessage(result?.message || "TraceKit could not verify the 29Next connection."); return; }
+        target.reset(); setupRequestId.current = null; router.push(`/connections/commerce/${result.connectionId}`); router.refresh(); return;
+      }
+
       const response = await fetch("/api/commerce/connections", {
         method: "POST",
         headers: { "Content-Type": "application/json", "Idempotency-Key": setupRequestId.current },
@@ -162,14 +177,17 @@ function ConnectDialog({ provider, close }: { provider: ConnectProvider; close: 
   return (
     <Dialog title={`Connect ${providerName}`} close={close}>
       <form onSubmit={submit} className="space-y-4">
-        <Field label="Display name"><input required name="displayName" autoComplete="off" className="input" placeholder={isEverflow ? "Accufy Everflow" : isShopify ? "Main Shopify Store" : "Push Button Systems"} /></Field>
-        {!isEverflow && !isShopify ? <Field label="Environment"><select name="environment" className="input"><option value="production">Production</option><option value="sandbox">Sandbox</option></select></Field> : null}
+        <Field label="Display name"><input required name="displayName" autoComplete="off" className="input" placeholder={isEverflow ? "Accufy Everflow" : isShopify ? "Main Shopify Store" : isNext29 ? "Main 29Next Store" : "Push Button Systems"} /></Field>
+        {!isEverflow && !isShopify && !isNext29 ? <Field label="Environment"><select name="environment" className="input"><option value="production">Production</option><option value="sandbox">Sandbox</option></select></Field> : null}
         {isEverflow ? <Field label="Network ID (optional)"><input name="networkId" inputMode="numeric" pattern="[0-9]*" autoComplete="off" className="input" placeholder="Leave blank to discover from Everflow" /></Field> : null}
         {isShopify ? <Field label="Shop domain"><input required name="shopDomain" autoComplete="off" className="input" placeholder="your-store.myshopify.com" /></Field> : null}
-        {!isShopify ? <Field label="API key"><input required minLength={8} name="apiKey" type="password" autoComplete="new-password" className="input" placeholder="Stored encrypted; never shown again" /></Field> : null}
-        <p className="text-[11px] leading-5 text-slate-500">Organization scope is derived from your authenticated TraceKit session. {isShopify ? "You will be redirected to Shopify to authorize TraceKit. Shopify returns a store-specific Admin API token directly to TraceKit; you never paste that token into this form." : "The API key is sent only to the authorized server operation and is never returned to the browser."}</p>
+        {isNext29 ? <Field label="29Next store"><input required name="store" autoComplete="off" className="input" placeholder="your-store or your-store.29next.store" /></Field> : null}
+        {isNext29 ? <Field label="Admin API access token"><input required minLength={8} name="accessToken" type="password" autoComplete="new-password" className="input" placeholder="Stored encrypted; never shown again" /></Field> : null}
+        {!isShopify && !isNext29 ? <Field label="API key"><input required minLength={8} name="apiKey" type="password" autoComplete="new-password" className="input" placeholder="Stored encrypted; never shown again" /></Field> : null}
+        <p className="text-[11px] leading-5 text-slate-500">Organization scope is derived from your authenticated TraceKit session. {isShopify ? "You will be redirected to Shopify to authorize TraceKit. Shopify returns a store-specific Admin API token directly to TraceKit; you never paste that token into this form." : isNext29 ? "The 29Next Admin API token is sent only to the authorized server operation, stored encrypted, and never returned to the browser." : "The API key is sent only to the authorized server operation and is never returned to the browser."}</p>
         {isShopify ? <p className="rounded-xl border border-white/10 bg-white/[.03] px-3 py-2 text-[11px] leading-5 text-slate-400">TraceKit requests read access for products, customers, orders, and historical orders. M4 remains bounded and read-only; scheduled or broad historical synchronization is not enabled by this step.</p> : null}
-        {busy ? <div aria-live="polite" className="rounded-xl border border-cyan/20 bg-cyan/5 px-3 py-3 text-xs text-cyan-100"><strong>{isShopify ? "Opening Shopify…" : `Connecting ${providerName}…`}</strong><div className="mt-1 text-[11px] text-slate-400">{isShopify ? "Authorize the store in Shopify to continue" : "Securing credential · Verifying account identity"}</div></div> : null}
+        {isNext29 ? <p className="rounded-xl border border-white/10 bg-white/[.03] px-3 py-2 text-[11px] leading-5 text-slate-400">TraceKit verifies read access to orders, subscriptions, and disputes. Connecting does not enable scheduled sync or register a live webhook; M12 validation remains bounded and operator-controlled.</p> : null}
+        {busy ? <div aria-live="polite" className="rounded-xl border border-cyan/20 bg-cyan/5 px-3 py-3 text-xs text-cyan-100"><strong>{isShopify ? "Opening Shopify…" : `Connecting ${providerName}…`}</strong><div className="mt-1 text-[11px] text-slate-400">{isShopify ? "Authorize the store in Shopify to continue" : isNext29 ? "Securing credential · Verifying orders, subscriptions, and disputes" : "Securing credential · Verifying account identity"}</div></div> : null}
         {message ? <p role="alert" className="rounded-xl border border-rose-400/20 bg-rose-400/5 px-3 py-2 text-xs text-rose-300">{message}</p> : null}
         <button disabled={busy} className="w-full rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-950 disabled:opacity-50">{busy ? (isShopify ? "Opening Shopify…" : "Connecting…") : (isShopify ? "Continue to Shopify" : "Create Connection")}</button>
       </form>
