@@ -41,12 +41,10 @@ type IncrementalResult = {
 export function ShopifySmokeTest({ connectionId }: { connectionId: string }) {
   const [busy, setBusy] = useState(false);
   const [ingesting, setIngesting] = useState(false);
-  const [syncingProducts, setSyncingProducts] = useState(false);
-  const [syncingCustomers, setSyncingCustomers] = useState(false);
+  const [syncingResource, setSyncingResource] = useState<IncrementalResource | null>(null);
   const [result, setResult] = useState<SmokeResult | null>(null);
   const [ingestResult, setIngestResult] = useState<IngestResult | null>(null);
-  const [incrementalProductResult, setIncrementalProductResult] = useState<IncrementalResult | null>(null);
-  const [incrementalCustomerResult, setIncrementalCustomerResult] = useState<IncrementalResult | null>(null);
+  const [incrementalResults, setIncrementalResults] = useState<Partial<Record<IncrementalResource, IncrementalResult>>>({});
 
   async function run() {
     if (busy) return;
@@ -86,13 +84,10 @@ export function ShopifySmokeTest({ connectionId }: { connectionId: string }) {
     }
   }
 
-  async function runIncremental(resource: "products" | "customers") {
-    const syncing = resource === "products" ? syncingProducts : syncingCustomers;
-    if (syncing) return;
-    const setSyncing = resource === "products" ? setSyncingProducts : setSyncingCustomers;
-    const setIncrementalResult = resource === "products" ? setIncrementalProductResult : setIncrementalCustomerResult;
-    setSyncing(true);
-    setIncrementalResult(null);
+  async function runIncremental(resource: IncrementalResource) {
+    if (syncingResource) return;
+    setSyncingResource(resource);
+    setIncrementalResults((current) => ({ ...current, [resource]: undefined }));
     try {
       const response = await fetch("/api/shopify/incremental", {
         method: "POST",
@@ -100,15 +95,15 @@ export function ShopifySmokeTest({ connectionId }: { connectionId: string }) {
         body: JSON.stringify({ connectionId, resource, maxPages: 1, pageSize: 50 }),
       });
       const payload = await response.json().catch(() => null) as IncrementalResult | null;
-      setIncrementalResult(payload || { ok: false, error: "invalid_response" });
+      setIncrementalResults((current) => ({ ...current, [resource]: payload || { ok: false, error: "invalid_response" } }));
     } catch {
-      setIncrementalResult({ ok: false, error: "request_failed" });
+      setIncrementalResults((current) => ({ ...current, [resource]: { ok: false, error: "request_failed" } }));
     } finally {
-      setSyncing(false);
+      setSyncingResource(null);
     }
   }
 
-  function incrementalStatus(label: string, value: IncrementalResult | null) {
+  function incrementalStatus(label: string, value: IncrementalResult | undefined) {
     if (value?.ok && value.result) {
       return (
         <div className="mt-4 rounded-xl border border-emerald-400/20 bg-emerald-400/5 p-4 text-xs text-emerald-200">
@@ -121,6 +116,24 @@ export function ShopifySmokeTest({ connectionId }: { connectionId: string }) {
       return <div className="mt-4 rounded-xl border border-rose-400/20 bg-rose-400/5 p-4 text-xs text-rose-300">Incremental {label} sync failed: {value.error || "unknown_error"}</div>;
     }
     return null;
+  }
+
+  function incrementalControl(resource: IncrementalResource, label: string, description: string) {
+    const syncing = syncingResource === resource;
+    return (
+      <>
+        <div className="mt-5 flex flex-col gap-4 border-t border-white/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="text-sm font-semibold">Incremental {label} sync</p>
+            <p className="mt-1 text-xs leading-5 text-slate-500">{description}</p>
+          </div>
+          <button type="button" onClick={() => runIncremental(resource)} disabled={Boolean(syncingResource)} className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-950 disabled:opacity-50">
+            {syncing ? "Syncing…" : `Run Incremental ${label[0].toUpperCase()}${label.slice(1)} Sync`}
+          </button>
+        </div>
+        {incrementalStatus(label, incrementalResults[resource])}
+      </>
+    );
   }
 
   return (
@@ -160,27 +173,9 @@ export function ShopifySmokeTest({ connectionId }: { connectionId: string }) {
         ) : null}
         {ingestResult && !ingestResult.ok ? <div className="mt-4 rounded-xl border border-rose-400/20 bg-rose-400/5 p-4 text-xs text-rose-300">Ingestion failed: {ingestResult.error || "unknown_error"}</div> : null}
 
-        <div className="mt-5 flex flex-col gap-4 border-t border-white/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold">Incremental products sync</p>
-            <p className="mt-1 text-xs leading-5 text-slate-500">Runs the M5 incremental path for one product page, capped at 50 records. Checkpoint, evidence, and normalized product persistence are enabled; scheduler and historical backfill remain off.</p>
-          </div>
-          <button type="button" onClick={() => runIncremental("products")} disabled={syncingProducts} className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-950 disabled:opacity-50">
-            {syncingProducts ? "Syncing…" : "Run Incremental Products Sync"}
-          </button>
-        </div>
-        {incrementalStatus("products", incrementalProductResult)}
-
-        <div className="mt-5 flex flex-col gap-4 border-t border-white/10 pt-5 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="text-sm font-semibold">Incremental customers sync</p>
-            <p className="mt-1 text-xs leading-5 text-slate-500">Runs the M5 incremental path for one customer page, capped at 50 records. Checkpoint and evidence persistence are enabled; scheduler and historical backfill remain off.</p>
-          </div>
-          <button type="button" onClick={() => runIncremental("customers")} disabled={syncingCustomers} className="rounded-xl bg-white px-4 py-2.5 text-sm font-semibold text-slate-950 disabled:opacity-50">
-            {syncingCustomers ? "Syncing…" : "Run Incremental Customers Sync"}
-          </button>
-        </div>
-        {incrementalStatus("customers", incrementalCustomerResult)}
+        {incrementalControl("products", "products", "Runs the M5 incremental path for one product page, capped at 50 records. Checkpoint, evidence, and normalized product persistence are enabled; scheduler and historical backfill remain off.")}
+        {incrementalControl("customers", "customers", "Runs the M5 incremental path for one customer page, capped at 50 records. Checkpoint and evidence persistence are enabled; scheduler and historical backfill remain off.")}
+        {incrementalControl("orders", "orders", "Runs the M5 incremental path for one order page, capped at 50 records. Order evidence, normalized order/line-item/refund persistence, and checkpointing are enabled; scheduler and historical backfill remain off.")}
       </div>
     </section>
   );
