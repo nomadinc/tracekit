@@ -23,45 +23,114 @@ export type ShopifyReadSyncResult = {
   checkpoint: ShopifyCheckpoint;
 };
 
+export type ShopifySyncFailureStage =
+  | "state_load"
+  | "run_begin"
+  | "source_read"
+  | "page_validate"
+  | "page_persist"
+  | "run_complete"
+  | "run_fail";
+
+export class ShopifySyncStageError extends Error {
+  readonly stage: ShopifySyncFailureStage;
+  readonly code: string;
+  readonly diagnosticMessage: string;
+
+  constructor(stage: ShopifySyncFailureStage, code: string, error: unknown) {
+    super(code);
+    this.name = "ShopifySyncStageError";
+    this.stage = stage;
+    this.code = code;
+    this.diagnosticMessage = error instanceof Error ? error.message : String(error);
+  }
+}
+
 export async function runShopifyReadSync(args: RunShopifyReadSyncArgs): Promise<ShopifyReadSyncResult> {
   const scope = requireScope(args);
-  const existing = await args.persistence.loadState({ ...scope, resource: args.resource });
+  let existing: Awaited<ReturnType<ShopifyPersistence["loadState"]>>;
+  try {
+    existing = await args.persistence.loadState({ ...scope, resource: args.resource });
+  } catch (error) {
+    throw asStageError("state_load", "shopify_state_load_failed", error);
+  }
+
   let checkpoint = normalizeShopifyCheckpoint(existing?.checkpoint || initialShopifyCheckpoint());
   const maxPages = Number.isInteger(args.maxPages) && Number(args.maxPages) > 0 ? Number(args.maxPages) : 1000;
 
-  await args.persistence.begin({ ...scope, resource: args.resource, checkpoint });
+  try {
+    await args.persistence.begin({ ...scope, resource: args.resource, checkpoint });
+  } catch (error) {
+    throw asStageError("run_begin", "shopify_run_begin_failed", error);
+  }
 
   let pages = 0;
   let records = 0;
   try {
     while (pages < maxPages) {
-      const page = await args.readPage({ resource: args.resource, checkpoint });
-      if (page.resource !== args.resource) throw new Error("Shopify page resource does not match requested sync resource.");
-      if (normalizeShopifyCheckpoint(page.checkpoint).page !== checkpoint.page || normalizeShopifyCheckpoint(page.checkpoint).cursor !== checkpoint.cursor) {
-        throw new Error("Shopify page checkpoint does not match requested checkpoint.");
+      let page: ShopifySyncPage;
+      try {
+        page = await args.readPage({ resource: args.resource, checkpoint });
+      } catch (error) {
+        throw asStageError("source_read", "shopify_source_read_failed", error);
       }
 
-      await args.persistence.persistPage({ ...scope, page });
+      try {
+        if (page.resource !== args.resource) throw new Error("Shopify page resource does not match requested sync resource.");
+        const normalizedPageCheckpoint = normalizeShopifyCheckpoint(page.checkpoint);
+        if (normalizedPageCheckpoint.page !== checkpoint.page || normalizedPageCheckpoint.cursor !== checkpoint.cursor) {
+          throw new Error("Shopify page checkpoint does not match requested checkpoint.");
+        }
+      } catch (error) {
+        throw asStageError("page_validate", "shopify_page_validation_failed", error);
+      }
+
+      try {
+        await args.persistence.persistPage({ ...scope, page });
+      } catch (error) {
+        throw asStageError("page_persist", "shopify_page_persist_failed", error);
+      }
+
       pages += 1;
       records += page.nodes.length;
       checkpoint = normalizeShopifyCheckpoint(page.nextCheckpoint);
 
       if (!page.hasNextPage) {
-        await args.persistence.complete({ ...scope, resource: args.resource, checkpoint });
+        try {
+          await args.persistence.complete({ ...scope, resource: args.resource, checkpoint });
+        } catch (error) {
+          throw asStageError("run_complete", "shopify_run_complete_failed", error);
+        }
         return { resource: args.resource, pages, records, checkpoint };
       }
     }
 
-    throw new Error(`Shopify sync exceeded maxPages=${maxPages}.`);
+    throw asStageError("page_validate", "shopify_max_pages_exceeded", new Error(`Shopify sync exceeded maxPages=${maxPages}.`));
   } catch (error) {
-    await args.persistence.fail({
-      ...scope,
-      resource: args.resource,
-      checkpoint,
-      error: error instanceof Error ? error.message : String(error),
-    });
-    throw error;
+    const staged = error instanceof ShopifySyncStageError
+      ? error
+      : asStageError("page_validate", "shopify_sync_unclassified_failed", error);
+
+    try {
+      await args.persistence.fail({
+        ...scope,
+        resource: args.resource,
+        checkpoint,
+        error: `${staged.code}: ${staged.diagnosticMessage}`,
+      });
+    } catch (failError) {
+      throw new ShopifySyncStageError(
+        "run_fail",
+        "shopify_run_fail_record_failed",
+        `${staged.code}; fail_record=${failError instanceof Error ? failError.message : String(failError)}`,
+      );
+    }
+    throw staged;
   }
+}
+
+function asStageError(stage: ShopifySyncFailureStage, code: string, error: unknown) {
+  return error instanceof ShopifySyncStageError ? error : new ShopifySyncStageError(stage, code, error);
 }
 
 function requireScope(args: Pick<RunShopifyReadSyncArgs, "organizationId" | "connectionId" | "providerAccountId">) {

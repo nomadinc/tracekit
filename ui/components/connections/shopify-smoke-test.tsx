@@ -30,6 +30,8 @@ type IncrementalResource = "products" | "customers" | "orders";
 type IncrementalResult = {
   ok: boolean;
   error?: string;
+  stage?: string;
+  code?: string;
   result?: {
     resource: IncrementalResource;
     pages: number;
@@ -113,7 +115,8 @@ export function ShopifySmokeTest({ connectionId }: { connectionId: string }) {
       );
     }
     if (value && !value.ok) {
-      return <div className="mt-4 rounded-xl border border-rose-400/20 bg-rose-400/5 p-4 text-xs text-rose-300">Incremental {label} sync failed: {value.error || "unknown_error"}</div>;
+      const diagnostic = value.code && value.stage ? `${value.code} · stage ${value.stage}` : value.error || "unknown_error";
+      return <div className="mt-4 rounded-xl border border-rose-400/20 bg-rose-400/5 p-4 text-xs text-rose-300">Incremental {label} sync failed: {diagnostic}</div>;
     }
     return null;
   }
