@@ -78,3 +78,16 @@ test("Everflow click sync runs independently on every scheduled conversion chunk
   assert.doesNotMatch(worker, /clickSyncDeferred|conversion_page_remaining/);
   assert.match(worker, /clickStatus: result\.clickSyncFailed \? "failed" : "completed"/);
 });
+
+test("Everflow click failures persist safe stage and error diagnostics", () => {
+  const worker = source("ui/lib/integrations/everflow-scheduled-worker.ts");
+  const incremental = source("ui/lib/integrations/everflow-click-incremental.ts");
+
+  assert.match(worker, /stage = "provider_fetch"/);
+  assert.match(worker, /stage = "persistence"/);
+  assert.match(worker, /stage = "state_commit"/);
+  assert.match(worker, /classifyClickFailure\(error, stage\)/);
+  assert.match(incremental, /errorCode:input\.errorCode/);
+  assert.match(incremental, /stage:input\.stage/);
+  assert.match(incremental, /retryable:input\.retryable/);
+});
