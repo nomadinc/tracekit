@@ -1,4 +1,5 @@
 import { cleanText } from "./identity-normalization.ts";
+import { aggregateJourneyAttributionEvidence, JOURNEY_EVIDENCE_MAX_EVENTS, type JourneyEvidenceEvent } from "./journey-attribution-evidence.ts";
 import {
   compactJourneyEvent,
   decodeJourneyTimelineCursor,
@@ -178,6 +179,7 @@ export interface JourneyRepository {
   getJourneyById(workspaceId: string, journeyId: string): Promise<JourneyRow | null>;
   queryPersonJourneys(params: PersonJourneysParams & { limit: number }): Promise<JourneyRow[]>;
   queryJourneyEvents(params: JourneyDetailParams & { limit: number }): Promise<JourneyEventWithJourney[]>;
+  queryJourneyEvidenceEvents?(workspaceId: string, journeyId: string, limit: number): Promise<JourneyEvidenceEvent[]>;
 }
 
 export class JourneyValidationError extends Error {
@@ -585,11 +587,14 @@ export async function getJourneyDetail(repo: JourneyRepository, params: JourneyD
   const journey = await repo.getJourneyById(params.workspace_id, params.journey_id);
   if (!journey) throw new JourneyNotFoundError("Journey not found.");
   const rows = await repo.queryJourneyEvents({ ...params, limit: params.limit + 1 });
+  const evidenceRows = repo.queryJourneyEvidenceEvents
+    ? await repo.queryJourneyEvidenceEvents(params.workspace_id, params.journey_id, JOURNEY_EVIDENCE_MAX_EVENTS + 1)
+    : rows;
   const page = rows.slice(0, params.limit);
   const last = page[page.length - 1];
   return {
     ok: true,
-    journey: compactJourney(journey),
+    journey: { ...compactJourney(journey), attribution_evidence_v1: aggregateJourneyAttributionEvidence(evidenceRows.slice(0, JOURNEY_EVIDENCE_MAX_EVENTS), { source_truncated: evidenceRows.length > JOURNEY_EVIDENCE_MAX_EVENTS }) },
     events: page.map(compactJourneyEvent),
     next_cursor: rows.length > params.limit && last
       ? encodeJourneyTimelineCursor({ event_time: normalizeJourneyTimestamp(last.event_time), id: last.id })
@@ -718,6 +723,11 @@ export function createSupabaseJourneyRepository(supabase: any): JourneyRepositor
       const { data, error } = await query;
       if (error) throw new Error(`Journey events lookup failed: ${error.message}`);
       return (data || []) as JourneyEventWithJourney[];
+    },
+    async queryJourneyEvidenceEvents(workspaceId, journeyId, limit) {
+      const { data, error } = await supabase.from("journey_events").select("id,event_time,metadata").eq("workspace_id", workspaceId).eq("journey_id", journeyId).order("event_time", { ascending: true }).order("id", { ascending: true }).limit(limit);
+      if (error) throw new Error(`Journey evidence lookup failed: ${error.message}`);
+      return (data || []) as JourneyEvidenceEvent[];
     },
   };
 }
