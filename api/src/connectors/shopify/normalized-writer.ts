@@ -203,34 +203,43 @@ async function writeRefunds(
       const existing = await request<Array<{ id: string }>>(
         `conversions?organization_id=eq.${q(context.organizationId)}&connection_id=eq.${q(context.connectionId)}&provider_account_id=eq.${q(context.providerAccountId)}&idempotency_key=eq.${q(idempotencyKey)}&select=id&limit=1`,
       );
-      if (!existing[0]) {
+      const ledgerBody = {
+        status: "observed",
+        amount: -Math.abs(refund.amount),
+        currency: refund.currency,
+        ledger_type: "refund",
+        platform: "shopify",
+        workspace_id: context.organizationId,
+        occurred_at: refund.occurredAt,
+        event_source: "shopify",
+        ingestion_method: "shadow_sync",
+        connector_id: "shopify",
+        account_id: context.accountId,
+        organization_id: context.organizationId,
+        connection_id: context.connectionId,
+        provider_account_id: context.providerAccountId,
+        source_mapping_id: mapping.id,
+        evidence_id: proof.id,
+        canonical_order_id: canonicalOrderId,
+        idempotency_key: idempotencyKey,
+        reconciliation_state: "observed",
+        data_quality_state: "observed",
+        transaction_id: refund.providerPaymentId,
+        order_id: orderId,
+      };
+      if (existing[0]) {
+        await request(`conversions?id=eq.${q(existing[0].id)}&organization_id=eq.${q(context.organizationId)}&connection_id=eq.${q(context.connectionId)}&provider_account_id=eq.${q(context.providerAccountId)}`, {
+          method: "PATCH",
+          headers: { Prefer: "return=minimal" },
+          body: JSON.stringify(ledgerBody),
+        });
+      } else {
         await request("conversions", {
           method: "POST",
           headers: { Prefer: "return=minimal" },
           body: JSON.stringify({
             id: await deterministicUuid(`shopify:refund-event:${context.organizationId}:${context.connectionId}:${context.providerAccountId}:${refund.providerRefundId}`),
-            status: "observed",
-            amount: -Math.abs(refund.amount),
-            currency: refund.currency,
-            ledger_type: "refund",
-            platform: "shopify",
-            workspace_id: context.organizationId,
-            occurred_at: refund.occurredAt,
-            event_source: "shopify",
-            ingestion_method: "shadow_sync",
-            connector_id: "shopify",
-            account_id: context.accountId,
-            organization_id: context.organizationId,
-            connection_id: context.connectionId,
-            provider_account_id: context.providerAccountId,
-            source_mapping_id: mapping.id,
-            evidence_id: proof.id,
-            canonical_order_id: canonicalOrderId,
-            idempotency_key: idempotencyKey,
-            reconciliation_state: "observed",
-            data_quality_state: "observed",
-            transaction_id: refund.providerPaymentId,
-            order_id: orderId,
+            ...ledgerBody,
           }),
         });
       }
