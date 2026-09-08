@@ -541,6 +541,7 @@ type Env = {
   TRACEKIT_BUILD_LABEL?: string;
   TRACEKIT_BUILD_VERSION?: string;
   TRACEKIT_GIT_COMMIT?: string;
+  TRACEKIT_GIT_REF?: string;
   TRACEKIT_DEPLOYED_AT?: string;
   TRACEKIT_ENVIRONMENT?: string;
   CF_PAGES_BRANCH?: string;
@@ -2460,6 +2461,7 @@ function identityWorkspace(value: unknown) {
 
 function buildFingerprint(env: Env) {
   const gitCommit = String(env.TRACEKIT_GIT_COMMIT || "").trim();
+  const gitRef = String(env.TRACEKIT_GIT_REF || "").trim();
   const deployedAt = String(env.TRACEKIT_DEPLOYED_AT || "").trim();
   const environment = String(env.TRACEKIT_ENVIRONMENT || env.CF_PAGES_BRANCH || "").trim();
   return {
@@ -2467,6 +2469,7 @@ function buildFingerprint(env: Env) {
     build_label: String(env.TRACEKIT_BUILD_LABEL || TRACEKIT_BUILD_LABEL).trim() || TRACEKIT_BUILD_LABEL,
     build_version: String(env.TRACEKIT_BUILD_VERSION || TRACEKIT_BUILD_VERSION).trim() || TRACEKIT_BUILD_VERSION,
     git_commit: gitCommit || null,
+    git_ref: gitRef || null,
     environment: environment || null,
     deployed_at: deployedAt || null,
     identity_service_v1: true,
