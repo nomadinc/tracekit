@@ -292,10 +292,12 @@ test("journey detail returns chronological events with pagination", async () => 
   const repo = new MemoryJourneyRepository();
   repo.journeys.push({ id: "journey-1", workspace_id: "default", person_id: "person-1", started_at: "2026-01-01T00:00:00.000Z", ended_at: "2026-01-02T00:00:00.000Z", status: "active", entry_event_id: "event-1", conversion_event_id: null, conversion_count: 0, purchase_count: 0, total_revenue: "0", event_count: 2, is_active: true, boundary_version: "v1_inactivity_timeout", boundary_timeout_seconds: 60, attribution_window_config: {}, metadata: {} });
   repo.addEvent({ id: "event-2", person_id: "person-1", journey_id: "journey-1", event_time: "2026-01-02T00:00:00.000Z" });
-  repo.addEvent({ id: "event-1", person_id: "person-1", journey_id: "journey-1", event_time: "2026-01-01T00:00:00.000Z" });
+  repo.addEvent({ id: "event-1", person_id: "person-1", journey_id: "journey-1", event_time: "2026-01-01T00:00:00.000Z", metadata: { attribution_evidence_v1: { schema_version: 1, identifiers: [{ raw_param: "_ef_transaction_id", value: "EF_TEST", provider: "everflow", category: "affiliate_network", identifier_type: "transaction_id", source_location: "page_url" }], marketing_params: [], referrer: { client: null, origin: null, domain: null, missing: true }, flags: ["referrer_missing"] } } });
 
   const first = await getJourneyDetail(repo, normalizeJourneyDetailParams({ workspace_id: "default", journey_id: "journey-1", limit: 1 }));
   assert.deepEqual(first.events.map((event) => event.id), ["event-1"]);
+  assert.equal(first.journey.attribution_evidence_v1.schema_version, 1);
+  assert.equal(first.journey.attribution_evidence_v1.providers[0].provider, "everflow");
   const second = await getJourneyDetail(repo, normalizeJourneyDetailParams({ workspace_id: "default", journey_id: "journey-1", limit: 1, cursor: first.next_cursor }));
   assert.deepEqual(second.events.map((event) => event.id), ["event-2"]);
   await assert.rejects(() => getJourneyDetail(repo, normalizeJourneyDetailParams({ workspace_id: "other", journey_id: "journey-1" })), /Journey not found/);
