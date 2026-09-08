@@ -173,7 +173,7 @@ function mergeNodes(primary: ShopifyResourceNode[], reconciliation: ShopifyResou
   const merged = new Map<string, ShopifyResourceNode>();
   for (const node of primary) merged.set(node.id, node);
   for (const node of reconciliation) merged.set(node.id, node);
-  return [...merged.values()];
+  return Array.from(merged.values());
 }
 
 function maxUpdatedAt(current: string | null, nodes: ShopifyResourceNode[]) {
