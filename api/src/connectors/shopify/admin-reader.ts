@@ -60,7 +60,7 @@ export function createShopifyAdminPageReader(config: ShopifyAdminReaderConfig) {
     const incrementalVariables: Record<string, unknown> = {
       first: pageSize,
       after: checkpoint.cursor,
-      query: checkpoint.updatedAt ? `updated_at:>=${checkpoint.updatedAt}` : null,
+      query: checkpoint.updatedAt ? `updated_at:>='${checkpoint.updatedAt}'` : null,
     };
 
     const incrementalPayload = await requestGraphql(queryFor(args.resource), incrementalVariables);
