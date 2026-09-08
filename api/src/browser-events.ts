@@ -163,6 +163,126 @@ const PARAM_TO_FIELD: Array<[string, string]> = [
   ["sub10", "sub10"],
 ];
 
+export const ATTRIBUTION_EVIDENCE_SCHEMA_VERSION = 1;
+export const ATTRIBUTION_EVIDENCE_MAX_ENTRIES = 100;
+export const ATTRIBUTION_EVIDENCE_MAX_VALUE_LENGTH = 512;
+
+type AttributionEvidenceCategory = "affiliate_network" | "paid_media" | "tracker" | "marketing_metadata";
+type AttributionEvidenceKind = "identifier" | "marketing_param";
+type AttributionEvidenceRegistryEntry = { provider: string; category: AttributionEvidenceCategory; identifier_type: string; kind: AttributionEvidenceKind; conflict_group?: string };
+
+// Kept separate from PARAM_TO_FIELD so evidence capture cannot change existing
+// normalized acquisition-field precedence.
+export const ATTRIBUTION_EVIDENCE_REGISTRY: Readonly<Record<string, AttributionEvidenceRegistryEntry>> = {
+  _ef_transaction_id: { provider: "everflow", category: "affiliate_network", identifier_type: "transaction_id", kind: "identifier", conflict_group: "transaction_id" },
+  ef_transaction_id: { provider: "everflow", category: "affiliate_network", identifier_type: "transaction_id", kind: "identifier", conflict_group: "transaction_id" },
+  transaction_id: { provider: "unknown", category: "tracker", identifier_type: "transaction_id", kind: "identifier", conflict_group: "transaction_id" },
+  affiliate_id: { provider: "unknown", category: "affiliate_network", identifier_type: "affiliate_id", kind: "identifier", conflict_group: "affiliate_id" },
+  affid: { provider: "unknown", category: "affiliate_network", identifier_type: "affiliate_id", kind: "identifier", conflict_group: "affiliate_id" },
+  aff_id: { provider: "unknown", category: "affiliate_network", identifier_type: "affiliate_id", kind: "identifier", conflict_group: "affiliate_id" },
+  aff_click_id: { provider: "tune", category: "affiliate_network", identifier_type: "click_id", kind: "identifier", conflict_group: "tune_click_id" },
+  aff_sub: { provider: "tune", category: "affiliate_network", identifier_type: "affiliate_sub", kind: "identifier" },
+  aff_sub2: { provider: "tune", category: "affiliate_network", identifier_type: "affiliate_sub2", kind: "identifier" },
+  aff_sub3: { provider: "tune", category: "affiliate_network", identifier_type: "affiliate_sub3", kind: "identifier" },
+  aff_sub4: { provider: "tune", category: "affiliate_network", identifier_type: "affiliate_sub4", kind: "identifier" },
+  aff_sub5: { provider: "tune", category: "affiliate_network", identifier_type: "affiliate_sub5", kind: "identifier" },
+  irclickid: { provider: "impact", category: "affiliate_network", identifier_type: "click_id", kind: "identifier", conflict_group: "impact_click_id" },
+  gclid: { provider: "google", category: "paid_media", identifier_type: "click_id", kind: "identifier", conflict_group: "google_click_id" },
+  gbraid: { provider: "google", category: "paid_media", identifier_type: "click_id", kind: "identifier", conflict_group: "google_click_id" },
+  wbraid: { provider: "google", category: "paid_media", identifier_type: "click_id", kind: "identifier", conflict_group: "google_click_id" },
+  fbclid: { provider: "meta", category: "paid_media", identifier_type: "click_id", kind: "identifier", conflict_group: "meta_click_id" },
+  ttclid: { provider: "tiktok", category: "paid_media", identifier_type: "click_id", kind: "identifier", conflict_group: "tiktok_click_id" },
+  msclkid: { provider: "microsoft", category: "paid_media", identifier_type: "click_id", kind: "identifier", conflict_group: "microsoft_click_id" },
+  click_id: { provider: "unknown", category: "tracker", identifier_type: "click_id", kind: "identifier", conflict_group: "generic_click_id" },
+  utm_source: { provider: "unknown", category: "marketing_metadata", identifier_type: "utm_source", kind: "marketing_param" },
+  utm_medium: { provider: "unknown", category: "marketing_metadata", identifier_type: "utm_medium", kind: "marketing_param" },
+  utm_campaign: { provider: "unknown", category: "marketing_metadata", identifier_type: "utm_campaign", kind: "marketing_param" },
+  utm_content: { provider: "unknown", category: "marketing_metadata", identifier_type: "utm_content", kind: "marketing_param" },
+  utm_term: { provider: "unknown", category: "marketing_metadata", identifier_type: "utm_term", kind: "marketing_param" },
+  offer_id: { provider: "unknown", category: "marketing_metadata", identifier_type: "offer_id", kind: "marketing_param" },
+  oid: { provider: "unknown", category: "marketing_metadata", identifier_type: "offer_id", kind: "marketing_param" },
+  c1: { provider: "unknown", category: "marketing_metadata", identifier_type: "sub1", kind: "marketing_param" },
+  ...Object.fromEntries(Array.from({ length: 10 }, (_, index) => [`sub${index + 1}`, { provider: "unknown", category: "marketing_metadata", identifier_type: `sub${index + 1}`, kind: "marketing_param" }])),
+  ...Object.fromEntries(Array.from({ length: 5 }, (_, index) => [`s${index + 1}`, { provider: "unknown", category: "marketing_metadata", identifier_type: `sub${index + 1}`, kind: "marketing_param" }])),
+};
+
+export type BrowserAttributionEvidenceObservation = { raw_param: string; value: string; provider: string; category: AttributionEvidenceCategory; identifier_type: string; source_location: string };
+
+function attributionEvidenceReferrer(payload: Record<string, any>) {
+  const rawClient = firstText(payload.referrer, payload.first_touch?.referrer, payload.context?.first_touch?.referrer);
+  if (!rawClient) return { client: null, origin: null, domain: null, missing: true };
+  const client = safeUrlForDiagnostics(rawClient);
+  try {
+    const parsed = new URL(rawClient);
+    return { client, origin: parsed.origin, domain: parsed.hostname || null, missing: false };
+  } catch {
+    return { client, origin: null, domain: null, missing: false };
+  }
+}
+
+export function extractBrowserAttributionEvidence(payload: Record<string, any>) {
+  try {
+    const observations: Array<BrowserAttributionEvidenceObservation & { kind: AttributionEvidenceKind; conflict_group?: string }> = [];
+    const seen = new Set<string>();
+    const add = (rawParam: string, rawValue: unknown, sourceLocation: string) => {
+      if (observations.length >= ATTRIBUTION_EVIDENCE_MAX_ENTRIES) return;
+      const registry = ATTRIBUTION_EVIDENCE_REGISTRY[rawParam];
+      if (!registry) return;
+      const value = cleanText(rawValue);
+      if (!value) return;
+      const limitedValue = value.slice(0, ATTRIBUTION_EVIDENCE_MAX_VALUE_LENGTH);
+      // Location is part of the key: repeats within one stage are noise, while
+      // the same observation at meaningfully different stages remains evidence.
+      const key = `${rawParam}\u0000${limitedValue}\u0000${sourceLocation}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      observations.push({ raw_param: rawParam, value: limitedValue, provider: registry.provider, category: registry.category, identifier_type: registry.identifier_type, source_location: sourceLocation, kind: registry.kind, conflict_group: registry.conflict_group });
+    };
+    const addObject = (value: unknown, location: string) => {
+      if (!value || typeof value !== "object" || Array.isArray(value)) return;
+      for (const rawParam of Object.keys(ATTRIBUTION_EVIDENCE_REGISTRY)) add(rawParam, (value as any)[rawParam], location);
+    };
+    const addUrl = (value: unknown, location: string) => {
+      const params = urlSearchParamsFrom(value);
+      if (!params) return;
+      for (const rawParam of Object.keys(ATTRIBUTION_EVIDENCE_REGISTRY)) for (const item of params.getAll(rawParam)) add(rawParam, item, location);
+    };
+
+    addObject(payload, "top_level");
+    addUrl(firstText(payload.page_url, payload.pageUrl, payload.url), "page_url");
+    addUrl(firstText(payload.landing_url, payload.landingUrl), "landing_url");
+    const context = payload.context && typeof payload.context === "object" ? payload.context : {};
+    const firstTouch = payload.first_touch && typeof payload.first_touch === "object" ? payload.first_touch : context.first_touch;
+    const currentTouch = payload.current_touch && typeof payload.current_touch === "object" ? payload.current_touch : context.current_touch;
+    addObject(firstTouch?.params, "first_touch.params");
+    addObject(currentTouch, "current_touch");
+    addObject(currentTouch?.params, "current_touch.params");
+
+    const identifiers = observations.filter((item) => item.kind === "identifier").map(({ kind: _kind, conflict_group: _group, ...item }) => item);
+    const marketingParams = observations.filter((item) => item.kind === "marketing_param").map(({ kind: _kind, conflict_group: _group, ...item }) => item);
+    const flags = new Set<string>();
+    const referrer = attributionEvidenceReferrer(payload);
+    if (referrer.missing) flags.add("referrer_missing");
+    const affiliate = identifiers.filter((item) => item.category === "affiliate_network");
+    const trackers = identifiers.filter((item) => item.category === "tracker");
+    const paid = identifiers.filter((item) => item.category === "paid_media");
+    if (new Set(affiliate.map((item) => `${item.raw_param}\u0000${item.value}`)).size > 1) flags.add("multiple_affiliate_network_identifiers");
+    if (new Set(trackers.map((item) => `${item.raw_param}\u0000${item.value}`)).size > 1) flags.add("multiple_tracker_identifiers");
+    if (paid.length && affiliate.length) flags.add("paid_media_plus_affiliate_network");
+    const groups = new Map<string, Set<string>>();
+    for (const item of observations) {
+      if (!item.conflict_group) continue;
+      const values = groups.get(item.conflict_group) || new Set<string>();
+      values.add(item.value);
+      groups.set(item.conflict_group, values);
+    }
+    if ([...groups.values()].some((values) => values.size > 1)) flags.add("identifier_value_conflict");
+    return { schema_version: ATTRIBUTION_EVIDENCE_SCHEMA_VERSION, identifiers, marketing_params: marketingParams, referrer, flags: [...flags].sort() };
+  } catch {
+    return { schema_version: ATTRIBUTION_EVIDENCE_SCHEMA_VERSION, identifiers: [], marketing_params: [], referrer: { client: null, origin: null, domain: null, missing: true }, flags: ["referrer_missing"] };
+  }
+}
+
 export function normalizeBrowserEventType(value: unknown): BrowserEventType | null {
   const raw = cleanText(value).toLowerCase();
   if (!raw) return null;
@@ -334,8 +454,7 @@ export function normalizeBrowserMarketingFields(payload: Record<string, any>) {
       ? context.current_touch
       : {};
 
-  return {
-    current: {
+  const normalizedCurrent: Record<string, string | null> = {
       ...current,
       source: firstText(payload.source, payload.utm_source, current.source, current.utm_source),
       medium: firstText(payload.medium, payload.utm_medium, current.medium, current.utm_medium),
@@ -343,7 +462,10 @@ export function normalizeBrowserMarketingFields(payload: Record<string, any>) {
       affiliate_id: firstText(payload.affiliate_id, payload.affid, payload.aff_id, current.affiliate_id),
       offer_id: firstText(payload.offer_id, payload.oid, current.offer_id),
       transaction_id: firstText(payload.transaction_id, payload._ef_transaction_id, payload.ef_transaction_id, current.transaction_id),
-    },
+  };
+
+  return {
+    current: normalizedCurrent,
     first_touch: firstTouch,
     current_touch: currentTouch,
     original_param_names,
@@ -518,6 +640,7 @@ export function buildBrowserJourneyEventInput(raw: BrowserRawEventRow, args: { p
       locale: firstText(payload.locale),
       timezone: firstText(payload.timezone),
       request_context: raw.request_context || {},
+      attribution_evidence_v1: extractBrowserAttributionEvidence(payload),
     },
   };
 }

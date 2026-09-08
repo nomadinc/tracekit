@@ -330,7 +330,16 @@ test("browser page_view linked by identify can receive credit for a later commer
       medium: "cpc",
       campaign_id: "browser-smoke-test",
       affiliate_id: "123",
-      metadata: { tkid: "tkid_smoke_001" },
+      metadata: {
+        tkid: "tkid_smoke_001",
+        attribution_evidence_v1: {
+          schema_version: 1,
+          identifiers: [{ raw_param: "fbclid", value: "META1", provider: "meta", category: "paid_media", identifier_type: "click_id", source_location: "page_url" }],
+          marketing_params: [],
+          referrer: { client: null, origin: null, domain: null, missing: true },
+          flags: ["referrer_missing"],
+        },
+      },
     }),
     makeEvent({
       id: "browser-identify",

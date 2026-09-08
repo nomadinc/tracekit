@@ -21,6 +21,9 @@ import {
   browserEventPersonAttributes,
   applyBrowserTkidIdentityToBatch,
   buildBrowserJourneyEventInput,
+  ATTRIBUTION_EVIDENCE_MAX_ENTRIES,
+  ATTRIBUTION_EVIDENCE_MAX_VALUE_LENGTH,
+  extractBrowserAttributionEvidence,
   isBrowserAttributionEligible,
   matchBrowserEventRoute,
   normalizeBrowserEventForRawStorage,
@@ -206,6 +209,81 @@ test("marketing parameters preserve current and first-touch values", () => {
   assert.equal(fields.current.sub6, "six");
   assert.deepEqual(fields.first_touch, { utm_source: "original" });
   assert.deepEqual(fields.current_touch, { utm_source: "search" });
+});
+
+test("attribution evidence preserves providers, aliases, conflicts, and compatibility", () => {
+  const payload = {
+    page_url: "https://example.com/?fbclid=META1&gclid=G1&_ef_transaction_id=EF1&transaction_id=OTHER1&aff_click_id=T1&aff_sub=A&aff_sub2=B&irclickid=I1&gbraid=GB1&wbraid=WB1",
+    referrer: "https://publisher.example/path?token=not-copied",
+  };
+  const before = normalizeBrowserMarketingFields(payload);
+  const evidence = extractBrowserAttributionEvidence(payload);
+  const after = normalizeBrowserMarketingFields(payload);
+
+  assert.deepEqual(after, before);
+  assert.equal(after.current.transaction_id, "EF1");
+  assert.deepEqual(evidence.identifiers.map((item) => [item.raw_param, item.value, item.provider, item.category]), [
+    ["_ef_transaction_id", "EF1", "everflow", "affiliate_network"],
+    ["transaction_id", "OTHER1", "unknown", "tracker"],
+    ["aff_click_id", "T1", "tune", "affiliate_network"],
+    ["aff_sub", "A", "tune", "affiliate_network"],
+    ["aff_sub2", "B", "tune", "affiliate_network"],
+    ["irclickid", "I1", "impact", "affiliate_network"],
+    ["gclid", "G1", "google", "paid_media"],
+    ["gbraid", "GB1", "google", "paid_media"],
+    ["wbraid", "WB1", "google", "paid_media"],
+    ["fbclid", "META1", "meta", "paid_media"],
+  ]);
+  assert.deepEqual(evidence.referrer, { client: "https://publisher.example/path", origin: "https://publisher.example", domain: "publisher.example", missing: false });
+  assert.ok(evidence.flags.includes("identifier_value_conflict"));
+  assert.ok(evidence.flags.includes("paid_media_plus_affiliate_network"));
+  assert.ok(!evidence.flags.some((flag) => /fraud|suspicious/.test(flag)));
+});
+
+test("attribution evidence retains locations and distinct values deterministically", () => {
+  const evidence = extractBrowserAttributionEvidence({
+    fbclid: "SAME",
+    page_url: "https://example.com/?fbclid=SAME&fbclid=DIFFERENT&_ef_transaction_id=EF1",
+    landing_url: "https://example.com/start?_ef_transaction_id=EF1",
+    first_touch: { params: { _ef_transaction_id: "EF1" } },
+    current_touch: { params: { fbclid: "SAME" } },
+  });
+  assert.deepEqual(evidence.identifiers.filter((item) => item.raw_param === "fbclid").map((item) => [item.value, item.source_location]), [
+    ["SAME", "top_level"], ["SAME", "page_url"], ["DIFFERENT", "page_url"], ["SAME", "current_touch.params"],
+  ]);
+  assert.deepEqual(evidence.identifiers.filter((item) => item.raw_param === "_ef_transaction_id").map((item) => item.source_location), [
+    "page_url", "landing_url", "first_touch.params",
+  ]);
+  assert.ok(evidence.flags.includes("identifier_value_conflict"));
+});
+
+test("attribution evidence is allowlisted, bounded, conservative, and fail-open", () => {
+  const oversized = "x".repeat(ATTRIBUTION_EVIDENCE_MAX_VALUE_LENGTH + 50);
+  const evidence = extractBrowserAttributionEvidence({
+    page_url: `https://example.com/?gclid=${oversized}&password=p&token=t&access_token=a&email=buyer%40example.com&s1=cake-ambiguous`,
+  });
+  assert.equal(evidence.identifiers[0].value.length, ATTRIBUTION_EVIDENCE_MAX_VALUE_LENGTH);
+  assert.deepEqual(evidence.marketing_params.map((item) => [item.raw_param, item.provider, item.category]), [["s1", "unknown", "marketing_metadata"]]);
+  assert.doesNotMatch(JSON.stringify(evidence), /password|access_token|buyer@example\.com/);
+  assert.deepEqual(evidence.referrer, { client: null, origin: null, domain: null, missing: true });
+  assert.ok(evidence.flags.includes("referrer_missing"));
+  assert.ok(evidence.identifiers.length + evidence.marketing_params.length <= ATTRIBUTION_EVIDENCE_MAX_ENTRIES);
+
+  const broken = new Proxy({}, { get() { throw new Error("broken payload getter"); } });
+  assert.doesNotThrow(() => extractBrowserAttributionEvidence(broken));
+  assert.deepEqual(extractBrowserAttributionEvidence(broken).identifiers, []);
+});
+
+test("journey metadata receives evidence without changing normalized output", () => {
+  const raw: any = {
+    event_id: "evidence-1", workspace_id: "default", received_at: "2026-07-22T10:00:01.000Z", event_time: "2026-07-22T10:00:00.000Z",
+    event_type: "page_view", normalized_event_type: "page_view", tkid: "tkid_evidence", session_id: "tks_evidence", source: "browser_sdk", schema_version: 1,
+    raw_payload: { page_url: "https://example.com/?gclid=G1&_ef_transaction_id=EF1", referrer: "" }, request_context: {}, normalization_status: "pending",
+  };
+  const input = buildBrowserJourneyEventInput(raw)!;
+  assert.equal(input.transaction_id, "EF1");
+  assert.equal(input.metadata.tkid, "tkid_evidence");
+  assert.deepEqual(input.metadata.attribution_evidence_v1.identifiers.map((item: any) => item.raw_param), ["_ef_transaction_id", "gclid"]);
 });
 
 test("browser journey event mapping uses existing journey event schema", () => {
@@ -636,6 +714,7 @@ test("browser SDK exposes required API and avoids blanket click capture", () => 
   assert.match(source, /document\.cookie =/);
   assert.match(source, /FIRST_TOUCH_KEY/);
   assert.match(source, /current_touch: paramsFromLocation\(\)/);
+  for (const parameter of ["gbraid", "wbraid", "aff_click_id", "aff_sub5", "s1", "s5"]) assert.ok(source.includes(`"${parameter}"`), parameter);
   assert.match(source, /history\.pushState/);
   assert.match(source, /data-tracekit-track/);
   assert.doesNotMatch(source, /document\.addEventListener\("click", function \(_event\)/);
