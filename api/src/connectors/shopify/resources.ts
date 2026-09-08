@@ -4,8 +4,12 @@ export type ShopifyCheckpoint = {
   cursor: string | null;
   updatedAt: string | null;
   page: number;
-  /** Durable cursor for the independent refunded-order reconciliation traversal. Optional for legacy checkpoints. */
+  /** Legacy combined financial reconciliation cursor; retained for backward compatibility. */
   financialCursor?: string | null;
+  /** Durable cursor for fully-refunded order reconciliation. */
+  refundedCursor?: string | null;
+  /** Durable cursor for partially-refunded order reconciliation. */
+  partiallyRefundedCursor?: string | null;
 };
 
 export type ShopifyResourceNode = {
@@ -23,15 +27,25 @@ export type ShopifySyncPage = {
 };
 
 export function initialShopifyCheckpoint(): ShopifyCheckpoint {
-  return { cursor: null, updatedAt: null, page: 1, financialCursor: null };
+  return {
+    cursor: null,
+    updatedAt: null,
+    page: 1,
+    financialCursor: null,
+    refundedCursor: null,
+    partiallyRefundedCursor: null,
+  };
 }
 
 export function normalizeShopifyCheckpoint(value: Partial<ShopifyCheckpoint> | null | undefined): ShopifyCheckpoint {
+  const legacyFinancialCursor = normalizeCursor(value?.financialCursor);
   return {
     cursor: normalizeCursor(value?.cursor),
     updatedAt: normalizeIso(value?.updatedAt),
     page: Number.isInteger(value?.page) && Number(value?.page) > 0 ? Number(value?.page) : 1,
-    financialCursor: normalizeCursor(value?.financialCursor),
+    financialCursor: legacyFinancialCursor,
+    refundedCursor: normalizeCursor(value?.refundedCursor) || legacyFinancialCursor,
+    partiallyRefundedCursor: normalizeCursor(value?.partiallyRefundedCursor),
   };
 }
 
