@@ -4,6 +4,10 @@
     {
       "path": "/api/cron/everflow-scheduler",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/shopify-scheduler",
+      "schedule": "*/5 * * * *"
     }
   ]
 }
