@@ -8,6 +8,11 @@ export type ShopifyAdminReaderConfig = {
   fetchImpl?: typeof fetch;
 };
 
+type GraphqlConnection = {
+  nodes?: unknown[];
+  pageInfo?: { hasNextPage?: boolean; endCursor?: unknown };
+};
+
 type GraphqlResponse = {
   data?: Record<string, any>;
   errors?: Array<{ message?: string }>;
@@ -15,6 +20,7 @@ type GraphqlResponse = {
 
 const DEFAULT_API_VERSION = "2026-07";
 const DEFAULT_PAGE_SIZE = 100;
+const FINANCIAL_RECONCILIATION_QUERY = "financial_status:refunded OR financial_status:partially_refunded";
 
 export function createShopifyAdminPageReader(config: ShopifyAdminReaderConfig) {
   const shopDomain = normalizeShopDomain(config.shopDomain);
@@ -30,11 +36,15 @@ export function createShopifyAdminPageReader(config: ShopifyAdminReaderConfig) {
   }): Promise<ShopifySyncPage> {
     const checkpoint = normalizeShopifyCheckpoint(args.checkpoint);
     const query = queryFor(args.resource);
-    const variables = {
+    const variables: Record<string, unknown> = {
       first: pageSize,
       after: checkpoint.cursor,
       query: checkpoint.updatedAt ? `updated_at:>=${checkpoint.updatedAt}` : null,
     };
+    if (args.resource === "orders") {
+      variables.financialAfter = checkpoint.financialCursor;
+      variables.financialQuery = FINANCIAL_RECONCILIATION_QUERY;
+    }
 
     const response = await fetchImpl(endpoint, {
       method: "POST",
@@ -54,15 +64,22 @@ export function createShopifyAdminPageReader(config: ShopifyAdminReaderConfig) {
       throw new Error(`Shopify Admin GraphQL error: ${payload.errors.map((error) => error.message || "unknown error").join("; ")}`);
     }
 
-    const connection = payload.data?.[args.resource];
-    if (!connection || !Array.isArray(connection.nodes) || !connection.pageInfo) {
-      throw new Error(`Shopify Admin GraphQL ${args.resource} response is missing connection data.`);
-    }
+    const connection = requireConnection(payload.data?.[args.resource], args.resource);
+    const incrementalNodes = validNodes(connection.nodes);
+    const highWater = maxUpdatedAt(checkpoint.updatedAt, incrementalNodes);
+    const hasNextPage = Boolean(connection.pageInfo?.hasNextPage);
+    const nextCursor = hasNextPage ? clean(connection.pageInfo?.endCursor) || null : null;
 
-    const nodes = connection.nodes.filter((node: unknown): node is ShopifyResourceNode => Boolean(node) && typeof node === "object" && typeof (node as { id?: unknown }).id === "string");
-    const highWater = maxUpdatedAt(checkpoint.updatedAt, nodes);
-    const hasNextPage = Boolean(connection.pageInfo.hasNextPage);
-    const nextCursor = hasNextPage ? clean(connection.pageInfo.endCursor) || null : null;
+    let nodes = incrementalNodes;
+    let financialCursor = checkpoint.financialCursor;
+    if (args.resource === "orders") {
+      const financialConnection = requireConnection(payload.data?.financialOrders, "financialOrders");
+      const financialNodes = validNodes(financialConnection.nodes);
+      nodes = mergeNodes(incrementalNodes, financialNodes);
+      financialCursor = financialConnection.pageInfo?.hasNextPage
+        ? clean(financialConnection.pageInfo?.endCursor) || null
+        : null;
+    }
 
     return {
       resource: args.resource,
@@ -73,6 +90,7 @@ export function createShopifyAdminPageReader(config: ShopifyAdminReaderConfig) {
         cursor: nextCursor,
         updatedAt: highWater,
         page: checkpoint.page + 1,
+        financialCursor,
       },
     };
   };
@@ -85,27 +103,38 @@ function queryFor(resource: ShopifyResource) {
 }
 
 const MONEY_FIELDS = `shopMoney { amount currencyCode }`;
+const ORDER_FIELDS = `
+  id name createdAt processedAt updatedAt displayFinancialStatus cancelledAt email phone
+  customer { id email phone }
+  shippingAddress { phone }
+  billingAddress { phone }
+  currentTotalPriceSet { ${MONEY_FIELDS} }
+  totalPriceSet { ${MONEY_FIELDS} }
+  currentSubtotalPriceSet { ${MONEY_FIELDS} }
+  totalShippingPriceSet { ${MONEY_FIELDS} }
+  currentTotalTaxSet { ${MONEY_FIELDS} }
+  transactions(first: 250) { id kind status amountSet { ${MONEY_FIELDS} } }
+  lineItems(first: 250) { nodes { id quantity title sku product { id } variant { id } discountedTotalSet { ${MONEY_FIELDS} } originalTotalSet { ${MONEY_FIELDS} } } }
+  refunds {
+    id createdAt processedAt updatedAt totalRefundedSet { ${MONEY_FIELDS} }
+    transactions(first: 250) { nodes { id status amountSet { ${MONEY_FIELDS} } } }
+  }
+`;
 
 const ORDERS_QUERY = `#graphql
-query TraceKitShopifyOrders($first: Int!, $after: String, $query: String) {
+query TraceKitShopifyOrders(
+  $first: Int!
+  $after: String
+  $query: String
+  $financialAfter: String
+  $financialQuery: String!
+) {
   orders(first: $first, after: $after, sortKey: UPDATED_AT, query: $query) {
-    nodes {
-      id name createdAt processedAt updatedAt displayFinancialStatus cancelledAt email phone
-      customer { id email phone }
-      shippingAddress { phone }
-      billingAddress { phone }
-      currentTotalPriceSet { ${MONEY_FIELDS} }
-      totalPriceSet { ${MONEY_FIELDS} }
-      currentSubtotalPriceSet { ${MONEY_FIELDS} }
-      totalShippingPriceSet { ${MONEY_FIELDS} }
-      currentTotalTaxSet { ${MONEY_FIELDS} }
-      transactions(first: 250) { id kind status amountSet { ${MONEY_FIELDS} } }
-      lineItems(first: 250) { nodes { id quantity title sku product { id } variant { id } discountedTotalSet { ${MONEY_FIELDS} } originalTotalSet { ${MONEY_FIELDS} } } }
-      refunds {
-        id createdAt processedAt updatedAt totalRefundedSet { ${MONEY_FIELDS} }
-        transactions(first: 250) { nodes { id status amountSet { ${MONEY_FIELDS} } } }
-      }
-    }
+    nodes { ${ORDER_FIELDS} }
+    pageInfo { hasNextPage endCursor }
+  }
+  financialOrders: orders(first: $first, after: $financialAfter, sortKey: ID, query: $financialQuery) {
+    nodes { ${ORDER_FIELDS} }
     pageInfo { hasNextPage endCursor }
   }
 }`;
@@ -125,6 +154,27 @@ query TraceKitShopifyCustomers($first: Int!, $after: String, $query: String) {
     pageInfo { hasNextPage endCursor }
   }
 }`;
+
+function requireConnection(value: unknown, label: string): GraphqlConnection {
+  const connection = value && typeof value === "object" ? value as GraphqlConnection : null;
+  if (!connection || !Array.isArray(connection.nodes) || !connection.pageInfo) {
+    throw new Error(`Shopify Admin GraphQL ${label} response is missing connection data.`);
+  }
+  return connection;
+}
+
+function validNodes(nodes: unknown[] | undefined): ShopifyResourceNode[] {
+  return (nodes || []).filter((node: unknown): node is ShopifyResourceNode =>
+    Boolean(node) && typeof node === "object" && typeof (node as { id?: unknown }).id === "string",
+  );
+}
+
+function mergeNodes(primary: ShopifyResourceNode[], reconciliation: ShopifyResourceNode[]): ShopifyResourceNode[] {
+  const merged = new Map<string, ShopifyResourceNode>();
+  for (const node of primary) merged.set(node.id, node);
+  for (const node of reconciliation) merged.set(node.id, node);
+  return Array.from(merged.values());
+}
 
 function maxUpdatedAt(current: string | null, nodes: ShopifyResourceNode[]) {
   let latest = current ? new Date(current) : null;
