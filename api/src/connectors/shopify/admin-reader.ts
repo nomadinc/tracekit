@@ -31,24 +31,7 @@ export function createShopifyAdminPageReader(config: ShopifyAdminReaderConfig) {
   const fetchImpl = config.fetchImpl || fetch;
   const endpoint = `https://${shopDomain}/admin/api/${apiVersion}/graphql.json`;
 
-  return async function readShopifyPage(args: {
-    resource: ShopifyResource;
-    checkpoint: ShopifyCheckpoint;
-  }): Promise<ShopifySyncPage> {
-    const checkpoint = normalizeShopifyCheckpoint(args.checkpoint);
-    const query = queryFor(args.resource);
-    const variables: Record<string, unknown> = {
-      first: pageSize,
-      after: checkpoint.cursor,
-      query: checkpoint.updatedAt ? `updated_at:>=${checkpoint.updatedAt}` : null,
-    };
-    if (args.resource === "orders") {
-      variables.refundedAfter = checkpoint.refundedCursor;
-      variables.partiallyRefundedAfter = checkpoint.partiallyRefundedCursor;
-      variables.refundedQuery = REFUNDED_QUERY;
-      variables.partiallyRefundedQuery = PARTIALLY_REFUNDED_QUERY;
-    }
-
+  async function requestGraphql(query: string, variables: Record<string, unknown>): Promise<GraphqlResponse> {
     const response = await fetchImpl(endpoint, {
       method: "POST",
       headers: {
@@ -66,8 +49,22 @@ export function createShopifyAdminPageReader(config: ShopifyAdminReaderConfig) {
     if (payload.errors?.length) {
       throw new Error(`Shopify Admin GraphQL error: ${payload.errors.map((error) => error.message || "unknown error").join("; ")}`);
     }
+    return payload;
+  }
 
-    const connection = requireConnection(payload.data?.[args.resource], args.resource);
+  return async function readShopifyPage(args: {
+    resource: ShopifyResource;
+    checkpoint: ShopifyCheckpoint;
+  }): Promise<ShopifySyncPage> {
+    const checkpoint = normalizeShopifyCheckpoint(args.checkpoint);
+    const incrementalVariables: Record<string, unknown> = {
+      first: pageSize,
+      after: checkpoint.cursor,
+      query: checkpoint.updatedAt ? `updated_at:>=${checkpoint.updatedAt}` : null,
+    };
+
+    const incrementalPayload = await requestGraphql(queryFor(args.resource), incrementalVariables);
+    const connection = requireConnection(incrementalPayload.data?.[args.resource], args.resource);
     const incrementalNodes = validNodes(connection.nodes);
     const highWater = maxUpdatedAt(checkpoint.updatedAt, incrementalNodes);
     const hasNextPage = Boolean(connection.pageInfo?.hasNextPage);
@@ -76,9 +73,22 @@ export function createShopifyAdminPageReader(config: ShopifyAdminReaderConfig) {
     let nodes = incrementalNodes;
     let refundedCursor = checkpoint.refundedCursor;
     let partiallyRefundedCursor = checkpoint.partiallyRefundedCursor;
+
     if (args.resource === "orders") {
-      const refundedConnection = requireConnection(payload.data?.refundedOrders, "refundedOrders");
-      const partiallyRefundedConnection = requireConnection(payload.data?.partiallyRefundedOrders, "partiallyRefundedOrders");
+      const refundedPayload = await requestGraphql(FINANCIAL_ORDERS_QUERY, {
+        first: pageSize,
+        after: checkpoint.refundedCursor,
+        query: REFUNDED_QUERY,
+      });
+      const refundedConnection = requireConnection(refundedPayload.data?.orders, "refundedOrders");
+
+      const partiallyRefundedPayload = await requestGraphql(FINANCIAL_ORDERS_QUERY, {
+        first: pageSize,
+        after: checkpoint.partiallyRefundedCursor,
+        query: PARTIALLY_REFUNDED_QUERY,
+      });
+      const partiallyRefundedConnection = requireConnection(partiallyRefundedPayload.data?.orders, "partiallyRefundedOrders");
+
       nodes = mergeNodes(
         mergeNodes(incrementalNodes, validNodes(refundedConnection.nodes)),
         validNodes(partiallyRefundedConnection.nodes),
@@ -134,24 +144,16 @@ const ORDER_FIELDS = `
 `;
 
 const ORDERS_QUERY = `#graphql
-query TraceKitShopifyOrders(
-  $first: Int!
-  $after: String
-  $query: String
-  $refundedAfter: String
-  $partiallyRefundedAfter: String
-  $refundedQuery: String!
-  $partiallyRefundedQuery: String!
-) {
+query TraceKitShopifyOrders($first: Int!, $after: String, $query: String) {
   orders(first: $first, after: $after, sortKey: UPDATED_AT, query: $query) {
     nodes { ${ORDER_FIELDS} }
     pageInfo { hasNextPage endCursor }
   }
-  refundedOrders: orders(first: $first, after: $refundedAfter, sortKey: ID, query: $refundedQuery) {
-    nodes { ${ORDER_FIELDS} }
-    pageInfo { hasNextPage endCursor }
-  }
-  partiallyRefundedOrders: orders(first: $first, after: $partiallyRefundedAfter, sortKey: ID, query: $partiallyRefundedQuery) {
+}`;
+
+const FINANCIAL_ORDERS_QUERY = `#graphql
+query TraceKitShopifyFinancialOrders($first: Int!, $after: String, $query: String!) {
+  orders(first: $first, after: $after, sortKey: ID, query: $query) {
     nodes { ${ORDER_FIELDS} }
     pageInfo { hasNextPage endCursor }
   }
