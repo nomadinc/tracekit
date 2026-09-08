@@ -18,14 +18,18 @@ test("order reads reconcile refunded orders independently of Order.updatedAt", a
             nodes: [],
             pageInfo: { hasNextPage: false, endCursor: null },
           },
-          financialOrders: {
+          refundedOrders: {
             nodes: [{
               id: "gid://shopify/Order/1",
               updatedAt: "2026-09-08T00:13:54.000Z",
               displayFinancialStatus: "REFUNDED",
               refunds: [{ id: "gid://shopify/Refund/1", updatedAt: "2026-09-08T00:20:00.000Z" }],
             }],
-            pageInfo: { hasNextPage: true, endCursor: "financial-next" },
+            pageInfo: { hasNextPage: true, endCursor: "refunded-next" },
+          },
+          partiallyRefundedOrders: {
+            nodes: [],
+            pageInfo: { hasNextPage: false, endCursor: null },
           },
         },
       }), { status: 200, headers: { "Content-Type": "application/json" } });
@@ -38,7 +42,8 @@ test("order reads reconcile refunded orders independently of Order.updatedAt", a
       cursor: null,
       updatedAt: "2026-09-08T00:13:54.000Z",
       page: 4,
-      financialCursor: null,
+      refundedCursor: null,
+      partiallyRefundedCursor: null,
     }),
   });
 
@@ -46,19 +51,23 @@ test("order reads reconcile refunded orders independently of Order.updatedAt", a
   assert.equal(page.nodes[0]?.id, "gid://shopify/Order/1");
   assert.equal(page.hasNextPage, false, "financial traversal must not force an unbounded incremental run");
   assert.equal(page.nextCheckpoint.updatedAt, "2026-09-08T00:13:54.000Z", "financial reconciliation must not move the order watermark");
-  assert.equal(page.nextCheckpoint.financialCursor, "financial-next");
+  assert.equal(page.nextCheckpoint.refundedCursor, "refunded-next");
+  assert.equal(page.nextCheckpoint.partiallyRefundedCursor, null);
   assert.equal(requestBody?.variables?.query, "updated_at:>=2026-09-08T00:13:54.000Z");
-  assert.equal(requestBody?.variables?.financialQuery, "financial_status:refunded OR financial_status:partially_refunded");
+  assert.equal(requestBody?.variables?.refundedQuery, "financial_status:refunded");
+  assert.equal(requestBody?.variables?.partiallyRefundedQuery, "financial_status:partially_refunded");
 });
 
-test("financial reconciliation cursor survives checkpoint normalization", () => {
+test("legacy financial cursor migrates to the refunded traversal", () => {
   const checkpoint = normalizeShopifyCheckpoint({
     cursor: "orders-cursor",
     updatedAt: "2026-09-08T00:13:54Z",
     page: 7,
-    financialCursor: "refund-cursor",
+    financialCursor: "legacy-refund-cursor",
   });
   assert.equal(checkpoint.cursor, "orders-cursor");
-  assert.equal(checkpoint.financialCursor, "refund-cursor");
+  assert.equal(checkpoint.financialCursor, "legacy-refund-cursor");
+  assert.equal(checkpoint.refundedCursor, "legacy-refund-cursor");
+  assert.equal(checkpoint.partiallyRefundedCursor, null);
   assert.equal(checkpoint.page, 7);
 });
