@@ -20,7 +20,8 @@ type GraphqlResponse = {
 
 const DEFAULT_API_VERSION = "2026-07";
 const DEFAULT_PAGE_SIZE = 100;
-const FINANCIAL_RECONCILIATION_QUERY = "financial_status:refunded OR financial_status:partially_refunded";
+const REFUNDED_QUERY = "financial_status:refunded";
+const PARTIALLY_REFUNDED_QUERY = "financial_status:partially_refunded";
 
 export function createShopifyAdminPageReader(config: ShopifyAdminReaderConfig) {
   const shopDomain = normalizeShopDomain(config.shopDomain);
@@ -42,8 +43,10 @@ export function createShopifyAdminPageReader(config: ShopifyAdminReaderConfig) {
       query: checkpoint.updatedAt ? `updated_at:>=${checkpoint.updatedAt}` : null,
     };
     if (args.resource === "orders") {
-      variables.financialAfter = checkpoint.financialCursor;
-      variables.financialQuery = FINANCIAL_RECONCILIATION_QUERY;
+      variables.refundedAfter = checkpoint.refundedCursor;
+      variables.partiallyRefundedAfter = checkpoint.partiallyRefundedCursor;
+      variables.refundedQuery = REFUNDED_QUERY;
+      variables.partiallyRefundedQuery = PARTIALLY_REFUNDED_QUERY;
     }
 
     const response = await fetchImpl(endpoint, {
@@ -71,13 +74,20 @@ export function createShopifyAdminPageReader(config: ShopifyAdminReaderConfig) {
     const nextCursor = hasNextPage ? clean(connection.pageInfo?.endCursor) || null : null;
 
     let nodes = incrementalNodes;
-    let financialCursor = checkpoint.financialCursor;
+    let refundedCursor = checkpoint.refundedCursor;
+    let partiallyRefundedCursor = checkpoint.partiallyRefundedCursor;
     if (args.resource === "orders") {
-      const financialConnection = requireConnection(payload.data?.financialOrders, "financialOrders");
-      const financialNodes = validNodes(financialConnection.nodes);
-      nodes = mergeNodes(incrementalNodes, financialNodes);
-      financialCursor = financialConnection.pageInfo?.hasNextPage
-        ? clean(financialConnection.pageInfo?.endCursor) || null
+      const refundedConnection = requireConnection(payload.data?.refundedOrders, "refundedOrders");
+      const partiallyRefundedConnection = requireConnection(payload.data?.partiallyRefundedOrders, "partiallyRefundedOrders");
+      nodes = mergeNodes(
+        mergeNodes(incrementalNodes, validNodes(refundedConnection.nodes)),
+        validNodes(partiallyRefundedConnection.nodes),
+      );
+      refundedCursor = refundedConnection.pageInfo?.hasNextPage
+        ? clean(refundedConnection.pageInfo?.endCursor) || null
+        : null;
+      partiallyRefundedCursor = partiallyRefundedConnection.pageInfo?.hasNextPage
+        ? clean(partiallyRefundedConnection.pageInfo?.endCursor) || null
         : null;
     }
 
@@ -90,7 +100,9 @@ export function createShopifyAdminPageReader(config: ShopifyAdminReaderConfig) {
         cursor: nextCursor,
         updatedAt: highWater,
         page: checkpoint.page + 1,
-        financialCursor,
+        financialCursor: null,
+        refundedCursor,
+        partiallyRefundedCursor,
       },
     };
   };
@@ -126,14 +138,20 @@ query TraceKitShopifyOrders(
   $first: Int!
   $after: String
   $query: String
-  $financialAfter: String
-  $financialQuery: String!
+  $refundedAfter: String
+  $partiallyRefundedAfter: String
+  $refundedQuery: String!
+  $partiallyRefundedQuery: String!
 ) {
   orders(first: $first, after: $after, sortKey: UPDATED_AT, query: $query) {
     nodes { ${ORDER_FIELDS} }
     pageInfo { hasNextPage endCursor }
   }
-  financialOrders: orders(first: $first, after: $financialAfter, sortKey: ID, query: $financialQuery) {
+  refundedOrders: orders(first: $first, after: $refundedAfter, sortKey: ID, query: $refundedQuery) {
+    nodes { ${ORDER_FIELDS} }
+    pageInfo { hasNextPage endCursor }
+  }
+  partiallyRefundedOrders: orders(first: $first, after: $partiallyRefundedAfter, sortKey: ID, query: $partiallyRefundedQuery) {
     nodes { ${ORDER_FIELDS} }
     pageInfo { hasNextPage endCursor }
   }
