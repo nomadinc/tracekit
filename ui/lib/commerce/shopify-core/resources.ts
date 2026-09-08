@@ -11,8 +11,9 @@ export type ShopifyCheckpoint = {
    * reliably advance Order.updatedAt. Orders therefore need a second durable
    * traversal over refunded / partially-refunded orders so financial changes
    * cannot disappear behind the normal order updatedAt watermark.
+   * Optional for backward compatibility with checkpoints written before M5.
    */
-  financialCursor: string | null;
+  financialCursor?: string | null;
 };
 
 export type ShopifyResourceNode = {
