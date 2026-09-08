@@ -4,8 +4,8 @@ export type ShopifyCheckpoint = {
   cursor: string | null;
   updatedAt: string | null;
   page: number;
-  /** Durable cursor for the independent refunded-order reconciliation traversal. */
-  financialCursor: string | null;
+  /** Durable cursor for the independent refunded-order reconciliation traversal. Optional for legacy checkpoints. */
+  financialCursor?: string | null;
 };
 
 export type ShopifyResourceNode = {
