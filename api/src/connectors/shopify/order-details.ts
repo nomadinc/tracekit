@@ -52,12 +52,18 @@ export function shopifyRefunds(order: Record<string, any>, fallbackCurrency: str
       if (amount === null) return sum;
       return (sum ?? 0) + amount;
     }, null);
+    const amount = directAmount !== null && directAmount > 0
+      ? directAmount
+      : transactionAmount ?? directAmount;
+    const currencySource = amount === directAmount
+      ? refund.totalRefundedSet
+      : transaction?.amountSet;
     return [{
       providerRefundId,
       providerPaymentId: clean(transaction?.id) || null,
       occurredAt,
-      amount: directAmount ?? transactionAmount,
-      currency: currencyCode(refund.totalRefundedSet ?? transaction?.amountSet, fallbackCurrency),
+      amount,
+      currency: currencyCode(currencySource, fallbackCurrency),
     }];
   });
 }
