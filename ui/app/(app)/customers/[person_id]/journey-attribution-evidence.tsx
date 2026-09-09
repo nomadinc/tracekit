@@ -11,6 +11,7 @@ import {
   truncationLabels,
   type JourneyAttributionEvidence,
 } from "@/lib/journey-attribution-evidence";
+import { identifierEvidenceDomId } from "@/lib/journey-risk-signals";
 import { Badge, Section } from "./narrative-components";
 
 function Field({ label, value, mono = false }: { label: string; value: string | number | null | undefined; mono?: boolean }) {
@@ -35,6 +36,7 @@ export function JourneyAttributionEvidenceSection({ evidence }: { evidence?: Jou
   const hasEvidence = Boolean(evidence && (evidence.evidence_event_count || evidence.providers.length || evidence.identifiers.length || evidence.flags.length || evidence.referrers.missing_observed || evidence.referrers.first_observed_client_referrer));
   const capped = evidence?.truncation.truncated ? truncationLabels(evidence.truncation) : [];
   return (
+    <div id="journey-attribution-evidence" tabIndex={-1} className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400">
     <Section title="Attribution Evidence" icon={RadioTower}>
       <p className="mb-4 text-sm leading-6 text-slate-600 dark:text-slate-300">Observed acquisition signals across this journey. This is observed attribution evidence, not a fraud determination.</p>
       {!evidence || !hasEvidence ? <EvidenceEmptyState /> : (
@@ -66,13 +68,14 @@ export function JourneyAttributionEvidenceSection({ evidence }: { evidence?: Jou
             {evidence.identifiers.length ? (
               <div className="mt-3 grid gap-3">
                 {evidence.identifiers.map((identifier) => (
-                  <article key={`${identifier.raw_param}:${identifier.provider}:${identifier.category}:${identifier.identifier_type}`} className="min-w-0 rounded-lg border p-4 dark:border-white/10">
+                  <article id={identifierEvidenceDomId(identifier)} tabIndex={-1} key={`${identifier.raw_param}:${identifier.provider}:${identifier.category}:${identifier.identifier_type}`} className="group min-w-0 rounded-lg border p-4 transition data-[supporting-evidence=true]:ring-2 data-[supporting-evidence=true]:ring-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 dark:border-white/10">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
                         <h4 className="break-all font-mono text-sm font-semibold">{identifier.raw_param}</h4>
                         <p className="mt-1 text-xs text-slate-500">{providerLabel(identifier.provider)} · {categoryLabel(identifier.category)} · {identifier.identifier_type.replace(/_/g, " ")}</p>
                       </div>
                       <Badge tone={identifier.value_changed ? "warn" : "neutral"}>{identifier.value_changed ? "Changed" : "Stable"}</Badge>
+                      <span className="hidden rounded-full border border-slate-300 bg-white px-2 py-0.5 text-xs font-medium group-data-[supporting-evidence=true]:inline-flex dark:border-white/20 dark:bg-ink">Supporting evidence</span>
                     </div>
                     <dl className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
                       <Field label="First value" value={identifier.first_value} mono />
@@ -117,5 +120,6 @@ export function JourneyAttributionEvidenceSection({ evidence }: { evidence?: Jou
         </div>
       )}
     </Section>
+    </div>
   );
 }
