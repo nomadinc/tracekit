@@ -13,6 +13,7 @@ import { EntityHeader } from "@/components/shared/entity-header";
 import { customerStatusTone, formatCustomerDateRange, formatCustomerMoney } from "@/lib/customers";
 import type { EntityStatus } from "@/lib/entities";
 import type { JourneyAttributionEvidence } from "@/lib/journey-attribution-evidence";
+import type { JourneyRiskSignalsV1 } from "@/lib/journey-risk-signals";
 import { LIVE_WORKSPACE_UPDATE_EVENT, type WorkspaceUpdate } from "@/lib/live";
 import {
   ActivityFilterBar,
@@ -44,6 +45,7 @@ import {
   RefundRiskCard,
 } from "./customer-360-components";
 import { JourneyAttributionEvidenceSection } from "./journey-attribution-evidence";
+import { JourneyRiskSignalsSection } from "./journey-risk-signals";
 
 type CustomerDetail = {
   ok: boolean;
@@ -71,6 +73,7 @@ type JourneyDetail = {
     started_at?: string | null;
     ended_at?: string | null;
     attribution_evidence_v1?: JourneyAttributionEvidence | null;
+    risk_signals_v1?: JourneyRiskSignalsV1 | null;
     [key: string]: unknown;
   };
   events: any[];
@@ -406,6 +409,7 @@ export default function CustomerDetailClient({ personId }: { personId: string })
             ) : journey ? (
               <div className="space-y-5">
                 <JourneyStoryHeader journey={journey.journey} summary={journey.activity_summary} />
+                <JourneyRiskSignalsSection evaluation={journey.journey.risk_signals_v1} />
                 <JourneyAttributionEvidenceSection evidence={journey.journey.attribution_evidence_v1} />
                 <ActivityFilterBar value={activityFilter} mode={viewMode} onChange={changeActivityFilter} onModeChange={changeViewMode} />
                 <NarrativeTimeline activities={journey.activity || journey.events || []} filter={activityFilter} mode={viewMode} highlightedOrderId={requestedOrderId} />
