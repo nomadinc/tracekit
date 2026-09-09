@@ -7,6 +7,7 @@ type ShopifyPersistenceRuntimeConfig = {
   url: string;
   serviceRoleKey: string;
   fetchImpl?: typeof fetch;
+  syncTypePrefix?: string;
 };
 
 export function createShopifyPersistenceRuntime(config: ShopifyPersistenceRuntimeConfig): ShopifyPersistence {
