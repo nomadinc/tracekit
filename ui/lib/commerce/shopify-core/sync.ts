@@ -14,6 +14,8 @@ export type RunShopifyReadSyncArgs = {
   readPage: ShopifyPageReader;
   persistence: ShopifyPersistence;
   maxPages?: number;
+  initialCheckpoint?: ShopifyCheckpoint;
+  allowPartialCompletion?: boolean;
 };
 
 export type ShopifyReadSyncResult = {
@@ -55,7 +57,7 @@ export async function runShopifyReadSync(args: RunShopifyReadSyncArgs): Promise<
     throw asStageError("state_load", "shopify_state_load_failed", error);
   }
 
-  let checkpoint = normalizeShopifyCheckpoint(existing?.checkpoint || initialShopifyCheckpoint());
+  let checkpoint = normalizeShopifyCheckpoint(existing?.checkpoint || args.initialCheckpoint || initialShopifyCheckpoint());
   const maxPages = Number.isInteger(args.maxPages) && Number(args.maxPages) > 0 ? Number(args.maxPages) : 1000;
 
   try {
@@ -103,6 +105,15 @@ export async function runShopifyReadSync(args: RunShopifyReadSyncArgs): Promise<
         }
         return { resource: args.resource, pages, records, checkpoint };
       }
+    }
+
+    if (args.allowPartialCompletion) {
+      try {
+        await args.persistence.complete({ ...scope, resource: args.resource, checkpoint });
+      } catch (error) {
+        throw asStageError("run_complete", "shopify_run_complete_failed", error);
+      }
+      return { resource: args.resource, pages, records, checkpoint };
     }
 
     throw asStageError("page_validate", "shopify_max_pages_exceeded", new Error(`Shopify sync exceeded maxPages=${maxPages}.`));

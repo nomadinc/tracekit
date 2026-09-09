@@ -2,8 +2,8 @@ import "server-only";
 
 import { createShopifyAdminPageReader } from "./shopify-core/admin-reader";
 import { createShopifyPersistenceRuntime } from "./shopify-core/runtime";
+import { initialShopifyCheckpoint, normalizeShopifyCheckpoint, type ShopifyResource } from "./shopify-core/resources";
 import { runShopifyReadSync } from "./shopify-core/sync";
-import type { ShopifyResource } from "./shopify-core/resources";
 
 export async function runShopifyIncrementalResource(args: {
   organizationId: string;
@@ -15,6 +15,7 @@ export async function runShopifyIncrementalResource(args: {
   apiVersion?: string;
   maxPages?: number;
   pageSize?: number;
+  initialUpdatedAt?: string;
 }) {
   const url = String(process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim();
   const serviceRoleKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || "").trim();
@@ -27,6 +28,9 @@ export async function runShopifyIncrementalResource(args: {
     pageSize: args.pageSize,
   });
   const persistence = createShopifyPersistenceRuntime({ url, serviceRoleKey });
+  const initialCheckpoint = args.initialUpdatedAt
+    ? normalizeShopifyCheckpoint({ ...initialShopifyCheckpoint(), updatedAt: args.initialUpdatedAt })
+    : undefined;
 
   return runShopifyReadSync({
     organizationId: args.organizationId,
@@ -36,5 +40,6 @@ export async function runShopifyIncrementalResource(args: {
     readPage,
     persistence,
     maxPages: args.maxPages,
+    initialCheckpoint,
   });
 }
