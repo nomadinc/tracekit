@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { ConnectionDetail, ConnectionScheduleSummary } from "@/components/connections/integration-experience";
 import { ShopifyOnboardingStatus } from "@/components/connections/shopify-onboarding-status";
+import { ShopifyWebhookSecret } from "@/components/connections/shopify-webhook-secret";
 import { loadConnectionExperience } from "@/lib/commerce/integration-experience-server";
 import { loadShopifyOnboardingLifecycle } from "@/lib/commerce/shopify-onboarding-lifecycle";
 
@@ -12,6 +13,7 @@ export default async function ConnectionPage({ params }: { params: Promise<{ con
     return <>
       <ConnectionDetail connection={connection} />
       {lifecycle ? <ShopifyOnboardingStatus lifecycle={lifecycle} /> : null}
+      {connection.provider === "shopify" ? <ShopifyWebhookSecret connectionId={connectionId} /> : null}
       <ConnectionScheduleSummary connection={connection} />
     </>;
   } catch {
