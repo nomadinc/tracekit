@@ -37,6 +37,8 @@ export async function loadConnectionExperience(connectionId: string) {
 async function loadConnectionExperienceRow(organizationName: string, row: Row, canManage: boolean, canManageOrigins: boolean): Promise<ConnectionExperience> {
   const id = String(row.id);
   const organizationId = String(row.organization_id);
+  const provider = String(row.provider);
+  const scheduleResourceFilter = provider === "shopify" ? "resource=in.(products,customers,orders)" : "resource=eq.transactions";
   const [accounts, credentials, runs, activation, checkpoints, evidence, freshnessRows, schedules, controls, pauses, tkidSources] = await Promise.all([
     commercePersistenceRequest(`commerce_provider_accounts?connection_id=eq.${encodeURIComponent(id)}&organization_id=eq.${encodeURIComponent(organizationId)}&order=created_at.asc`),
     commercePersistenceRequest(`commerce_provider_credentials?connection_id=eq.${encodeURIComponent(id)}&organization_id=eq.${encodeURIComponent(organizationId)}&select=id,created_at,rotated_at,revoked_at,encryption_version&order=created_at.desc`),
@@ -45,7 +47,7 @@ async function loadConnectionExperienceRow(organizationName: string, row: Row, c
     commercePersistenceRequest(`commerce_sync_checkpoints?connection_id=eq.${encodeURIComponent(id)}&organization_id=eq.${encodeURIComponent(organizationId)}&select=state`),
     commercePersistenceRequest(`commerce_evidence_records?connection_id=eq.${encodeURIComponent(id)}&organization_id=eq.${encodeURIComponent(organizationId)}&select=id,storage_reference,deleted_at`),
     commercePersistenceRequest(`commerce_continuous_sync_state?connection_id=eq.${encodeURIComponent(id)}&organization_id=eq.${encodeURIComponent(organizationId)}&resource=eq.transactions&limit=1`),
-    optionalRows(`commerce_sync_schedules?connection_id=eq.${encodeURIComponent(id)}&organization_id=eq.${encodeURIComponent(organizationId)}&resource=eq.transactions&limit=1`),
+    optionalRows(`commerce_sync_schedules?connection_id=eq.${encodeURIComponent(id)}&organization_id=eq.${encodeURIComponent(organizationId)}&${scheduleResourceFilter}&order=resource.asc`),
     optionalRows(`tracekit_production_controls?organization_id=eq.${encodeURIComponent(organizationId)}&capability=eq.commerce_scheduler&limit=1`),
     optionalRows(`commerce_connection_pauses?connection_id=eq.${encodeURIComponent(id)}&organization_id=eq.${encodeURIComponent(organizationId)}&limit=1`),
     canManageOrigins?optionalRows(`tkid_sources?organization_id=eq.${encodeURIComponent(organizationId)}&environment=eq.production&order=created_at.asc&limit=1`):Promise.resolve([] as Row[]),
@@ -59,9 +61,9 @@ async function loadConnectionExperienceRow(organizationName: string, row: Row, c
     const metadata = object(run.metadata);
     const everflow = object(metadata.everflow);
     const linkage = object(everflow.linkage);
-    const isEverflow = String(row.provider) === "everflow";
+    const isEverflow = provider === "everflow";
     return {
-      id: String(run.id), connectionId: id, connectionName: String(row.display_name), provider: String(row.provider), mode: String(run.mode), resource: String(run.sync_type), status: String(run.status), startedAt: text(run.started_at), completedAt: text(run.completed_at), pagesCompleted: number(run.pages_completed), recordsSeen: number(run.records_seen), recordsCreated: number(run.records_created), recordsUpdated: number(run.records_updated), recordsUnchanged:number(run.records_unchanged), recordsFailed: number(run.records_failed), warnings: number(run.warnings_count), providerRequests:number(run.provider_request_count), stoppingReason:text(run.stopping_reason),freshnessResult:text(run.freshness_result), leaseActive: Boolean(run.lease_owner && run.lease_expires_at && new Date(String(run.lease_expires_at)) > new Date()), heartbeatAt: text(run.heartbeat_at), errorSummary: text(run.last_error_summary),
+      id: String(run.id), connectionId: id, connectionName: String(row.display_name), provider, mode: String(run.mode), resource: String(run.sync_type), status: String(run.status), startedAt: text(run.started_at), completedAt: text(run.completed_at), pagesCompleted: number(run.pages_completed), recordsSeen: number(run.records_seen), recordsCreated: number(run.records_created), recordsUpdated: number(run.records_updated), recordsUnchanged:number(run.records_unchanged), recordsFailed: number(run.records_failed), warnings: number(run.warnings_count), providerRequests:number(run.provider_request_count), stoppingReason:text(run.stopping_reason),freshnessResult:text(run.freshness_result), leaseActive: Boolean(run.lease_owner && run.lease_expires_at && new Date(String(run.lease_expires_at)) > new Date()), heartbeatAt: text(run.heartbeat_at), errorSummary: text(run.last_error_summary),
       nonOrderEvents: isEverflow ? nullableNumber(linkage, "non_order") : null,
       unmatchedCommerce: isEverflow ? nullableNumber(linkage, "unmatched") : null,
       matchedCommerce: isEverflow ? nullableNumber(linkage, "matched") : null,
@@ -81,17 +83,28 @@ async function loadConnectionExperienceRow(organizationName: string, row: Row, c
   });
   const latest = syncRuns[0];
   const freshness=freshnessRows[0];
-  const syncFrequency = (String(schedules[0]?.sync_frequency || "hourly") as SyncFrequency);
-  const lastEnqueuedAt = text(schedules[0]?.last_enqueued_at);
-  const nextSyncAt = syncFrequency === "manual" ? null : lastEnqueuedAt ? new Date(new Date(lastEnqueuedAt).getTime() + frequencyMinutes(syncFrequency) * 60_000).toISOString() : new Date().toISOString();
+  const activeSchedules = schedules.filter((schedule) => Boolean(schedule.enabled) && String(schedule.activation_state) === "enabled");
+  const scheduleForSummary = activeSchedules[0] || schedules[0];
+  const syncFrequency = (String(scheduleForSummary?.sync_frequency || "hourly") as SyncFrequency);
+  const lastEnqueuedAt = text(scheduleForSummary?.last_enqueued_at);
+  const nextScheduleTimes = (activeSchedules.length ? activeSchedules : schedules)
+    .map((schedule) => text(schedule.next_overlap_at))
+    .filter((value): value is string => Boolean(value))
+    .map((value) => new Date(value))
+    .filter((value) => !Number.isNaN(value.getTime()))
+    .sort((a, b) => a.getTime() - b.getTime());
+  const nextSyncAt = syncFrequency === "manual"
+    ? null
+    : nextScheduleTimes[0]?.toISOString()
+      || (lastEnqueuedAt ? new Date(new Date(lastEnqueuedAt).getTime() + frequencyMinutes(syncFrequency) * 60_000).toISOString() : new Date().toISOString());
   return {
-    id, provider: String(row.provider), displayName: String(row.display_name), environment: String(row.environment), status: String(row.status), organizationName, syncFrequency, nextSyncAt,
+    id, provider, displayName: String(row.display_name), environment: String(row.environment), status: String(row.status), organizationName, syncFrequency, nextSyncAt,
     providerAccountLabel: accounts[0] ? String(accounts[0].provider_account_label || accounts[0].provider_account_external_id) : null,
     lastVerifiedAt: text(row.last_success_at), lastSyncAt: latest?.completedAt || latest?.startedAt || null,
-    capabilities: String(row.provider) === "commas" ? COMMAS_CAPABILITIES : [], syncRuns,
+    capabilities: provider === "commas" ? COMMAS_CAPABILITIES : [], syncRuns,
     credential: activeCredential ? { status: "active", createdAt: text(activeCredential.created_at), rotatedAt: text(activeCredential.rotated_at), version: number(activeCredential.encryption_version) } : { status: credentials.length ? "revoked" : "missing", createdAt: null, rotatedAt: null, version: null },
     readiness, canManage,
-    productionReadiness:{schedulerState:String(controls[0]?.activation_state||schedules[0]?.activation_state||"disabled") as ConnectionExperience["productionReadiness"]["schedulerState"],connectionPaused:Boolean(pauses[0]?.paused),quotaMinimumRemaining:schedules[0]?.quota_minimum_remaining==null?null:number(schedules[0].quota_minimum_remaining),deepRequestBudget:schedules[0]?.deep_request_budget==null?null:number(schedules[0].deep_request_budget),blockers:[...(!controls.length?["Production control not configured"]:[]),...(!schedules.length?["Schedule policy not configured"]:[]),...(Boolean(pauses[0]?.paused)?["Connection paused"]:[])]},
+    productionReadiness:{schedulerState:String(controls[0]?.activation_state||scheduleForSummary?.activation_state||"disabled") as ConnectionExperience["productionReadiness"]["schedulerState"],connectionPaused:Boolean(pauses[0]?.paused),quotaMinimumRemaining:scheduleForSummary?.quota_minimum_remaining==null?null:number(scheduleForSummary.quota_minimum_remaining),deepRequestBudget:scheduleForSummary?.deep_request_budget==null?null:number(scheduleForSummary.deep_request_budget),blockers:[...(!controls.length?["Production control not configured"]:[]),...(!schedules.length?["Schedule policy not configured"]:[]),...(Boolean(pauses[0]?.paused)?["Connection paused"]:[])]},
     tkidOrigins:{sourceId:tkidSource?String(tkidSource.id):null,sourceState:String(tkidSource?.status||"disabled"),origins:tkidOrigins,blockers:originBlockers,canManage:canManageOrigins},
     freshness:freshness?{status:String(freshness.status) as ConnectionExperience["freshness"]["status"],lastAttemptedAt:text(freshness.last_attempted_at),lastSuccessfulAt:text(freshness.last_successful_at),lastProviderObservationAt:text(freshness.last_provider_observation_at),lastNormalizedRecordAt:text(freshness.last_normalized_record_at),latestProviderTransactionAt:text(freshness.latest_provider_transaction_at),providerTotal:freshness.provider_total_observed==null?null:number(freshness.provider_total_observed),lastDeepReconciliationAt:text(freshness.last_deep_reconciliation_at),stoppingReason:text(freshness.last_stopping_reason),attributionSourceState:String(freshness.attribution_source_state) as ConnectionExperience["freshness"]["attributionSourceState"],deepReconciliationRequired:String(freshness.status)==="degraded"}:{status:"unknown",lastAttemptedAt:null,lastSuccessfulAt:null,lastProviderObservationAt:null,lastNormalizedRecordAt:null,latestProviderTransactionAt:null,providerTotal:null,lastDeepReconciliationAt:null,stoppingReason:null,attributionSourceState:"unavailable",deepReconciliationRequired:false},
     diagnostics: { latestRequestStatus: row.last_error_at ? "failed" : row.last_success_at ? "succeeded" : null, latencyMs: null, providerRequestIdPresent: false, retryCount: 0, rateLimitRemaining: null, rateLimitReset: null, sanitizedError: text(row.last_error_code), activeRun: Boolean(latest && ["pending", "running", "paused"].includes(latest.status)), leaseOwnerPresent: Boolean(latest?.leaseActive), heartbeatAge: latest?.heartbeatAt || null, stalled: Boolean(latest?.status === "running" && !latest.leaseActive), pendingCheckpoints: checkpoints.filter((item) => item.state === "pending").length, failedCheckpoints: checkpoints.filter((item) => item.state === "failed").length, evidenceReferences: evidence.filter((item) => !item.deleted_at).length, missingEvidenceReferences: evidence.filter((item) => !item.storage_reference).length, hashState: evidence.length ? "pending" : "unavailable" },
