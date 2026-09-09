@@ -1,5 +1,5 @@
 import { checkpointFromMetadata, checkpointMetadata, type CommerceRepositoryClient } from "./repository";
-import type { ShopifyCheckpoint, ShopifyResource, ShopifySyncPage } from "./resources";
+import type { ShopifyCheckpoint, ShopifyResource } from "./resources";
 
 type Scope = { organizationId: string; connectionId: string; providerAccountId: string };
 
@@ -7,15 +7,18 @@ type SupabaseConfig = {
   url: string;
   serviceRoleKey: string;
   fetchImpl?: typeof fetch;
+  syncTypePrefix?: string;
 };
 
 export function createShopifyCommerceRepositoryClient(config: SupabaseConfig): CommerceRepositoryClient {
   const request = createPostgrestRequest(config);
+  const prefix = normalizeSyncTypePrefix(config.syncTypePrefix);
+  const typeFor = (resource: ShopifyResource) => `${prefix}_${resource}`;
 
   return {
     async latestShopifyRun(args) {
       const rows = await request<Array<{ id: string; status: string }>>(
-        `commerce_sync_runs?${scopeQuery(args)}&sync_type=eq.${encodeURIComponent(syncType(args.resource))}&select=id,status&order=created_at.desc&limit=1`,
+        `commerce_sync_runs?${scopeQuery(args)}&sync_type=eq.${encodeURIComponent(typeFor(args.resource))}&select=id,status&order=created_at.desc&limit=1`,
       );
       return rows[0] || null;
     },
@@ -35,7 +38,7 @@ export function createShopifyCommerceRepositoryClient(config: SupabaseConfig): C
           organization_id: args.organizationId,
           connection_id: args.connectionId,
           provider_account_id: args.providerAccountId,
-          sync_type: syncType(args.resource),
+          sync_type: typeFor(args.resource),
           mode: "shadow",
           status: "running",
           started_at: new Date().toISOString(),
@@ -70,7 +73,7 @@ export function createShopifyCommerceRepositoryClient(config: SupabaseConfig): C
     },
 
     async finishShopifyRun(args) {
-      await patchRun(request, args, {
+      await patchRun(request, args, typeFor(args.resource), {
         status: "completed",
         completed_at: new Date().toISOString(),
         pages_completed: args.pagesCompleted,
@@ -82,7 +85,7 @@ export function createShopifyCommerceRepositoryClient(config: SupabaseConfig): C
     },
 
     async failShopifyRun(args) {
-      await patchRun(request, args, {
+      await patchRun(request, args, typeFor(args.resource), {
         status: "failed",
         completed_at: new Date().toISOString(),
         pages_completed: args.pagesCompleted,
@@ -99,8 +102,10 @@ export function shopifyResumeCheckpoint(row: { metadata?: Record<string, unknown
   return checkpointFromMetadata(row?.metadata);
 }
 
-function syncType(resource: ShopifyResource) {
-  return `shopify_${resource}`;
+function normalizeSyncTypePrefix(value: unknown) {
+  const prefix = String(value || "shopify").trim().toLowerCase();
+  if (!/^[a-z][a-z0-9_]{0,63}$/.test(prefix)) throw new Error("Shopify sync type prefix is invalid.");
+  return prefix;
 }
 
 function scopeQuery(scope: Scope) {
@@ -114,9 +119,10 @@ function scopeQuery(scope: Scope) {
 async function patchRun(
   request: ReturnType<typeof createPostgrestRequest>,
   args: Scope & { syncRunId: string; resource: ShopifyResource },
+  syncType: string,
   body: Record<string, unknown>,
 ) {
-  await request(`commerce_sync_runs?${scopeQuery(args)}&id=eq.${encodeURIComponent(args.syncRunId)}&sync_type=eq.${encodeURIComponent(syncType(args.resource))}`, {
+  await request(`commerce_sync_runs?${scopeQuery(args)}&id=eq.${encodeURIComponent(args.syncRunId)}&sync_type=eq.${encodeURIComponent(syncType)}`, {
     method: "PATCH",
     headers: { Prefer: "return=minimal" },
     body: JSON.stringify({ ...body, updated_at: new Date().toISOString() }),
