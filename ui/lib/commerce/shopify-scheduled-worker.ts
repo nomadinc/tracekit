@@ -50,9 +50,7 @@ export async function runDueShopifySchedules(args: { limit?: number; now?: Date 
   ) as unknown as ScheduleRow[];
 
   const outcomes: Array<Record<string, unknown>> = [];
-  for (const schedule of due) {
-    outcomes.push(await runClaimedSchedule(schedule, now));
-  }
+  for (const schedule of due) outcomes.push(await runClaimedSchedule(schedule, now));
   return { scanned: due.length, outcomes };
 }
 
@@ -118,6 +116,10 @@ async function runClaimedSchedule(schedule: ScheduleRow, now: Date) {
     const key = decodeCommerceCredentialKey(process.env.COMMERCE_CREDENTIALS_ENC_KEY);
     const secret = await decryptCommerceCredential(credentialVersion.encrypted, key);
     const credential = parseShopifyConnectionCredential(secret);
+    const connectionRows = await commercePersistenceRequest(
+      `commerce_provider_connections?organization_id=eq.${encodeURIComponent(schedule.organization_id)}&id=eq.${encodeURIComponent(schedule.connection_id)}&select=created_at&limit=1`,
+    );
+    const initialUpdatedAt = String(connectionRows[0]?.created_at || "").trim() || undefined;
 
     const result = await runShopifyIncrementalResource({
       organizationId: schedule.organization_id,
@@ -129,6 +131,7 @@ async function runClaimedSchedule(schedule: ScheduleRow, now: Date) {
       apiVersion: credential.apiVersion,
       maxPages: 1,
       pageSize: 50,
+      initialUpdatedAt,
     });
 
     await finishSchedule(schedule, owner, now, true);
