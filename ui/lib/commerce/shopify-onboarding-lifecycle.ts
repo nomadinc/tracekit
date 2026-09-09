@@ -1,5 +1,7 @@
 import "server-only";
 
+import { resolveApplicationSession } from "@/lib/identity/application-session";
+import { requirePermission } from "@/lib/identity/authorization-gateway";
 import { commercePersistenceRequest } from "./supabase-control-repository";
 import type { ShopifyResource } from "./shopify-core/resources";
 
@@ -25,12 +27,18 @@ export type ShopifyOnboardingLifecycle = {
   liveResourcesHealthy: number;
 };
 
-export async function loadShopifyOnboardingLifecycle(args: {
-  connectionId: string;
-  organizationId: string;
-}): Promise<ShopifyOnboardingLifecycle> {
-  const connectionId = encodeURIComponent(args.connectionId);
-  const organizationId = encodeURIComponent(args.organizationId);
+export async function loadShopifyOnboardingLifecycle(connectionIdValue: string): Promise<ShopifyOnboardingLifecycle> {
+  const resolution = await resolveApplicationSession();
+  if (resolution.kind !== "authenticated" || !resolution.session.activeOrganization) throw new Error("The requested resource is unavailable.");
+  requirePermission(resolution.session, "connectors.view");
+
+  const connectionId = encodeURIComponent(String(connectionIdValue || "").trim());
+  const organizationId = encodeURIComponent(resolution.session.activeOrganization.id);
+  const connections = await commercePersistenceRequest(
+    `commerce_provider_connections?id=eq.${connectionId}&organization_id=eq.${organizationId}&provider=eq.shopify&select=id&limit=1`,
+  ) as Row[];
+  if (!connections[0]) throw new Error("The requested Shopify connection is unavailable.");
+
   const [schedules, runs] = await Promise.all([
     commercePersistenceRequest(
       `commerce_sync_schedules?connection_id=eq.${connectionId}&organization_id=eq.${organizationId}&resource=in.(${RESOURCES.join(",")})&select=resource,enabled,activation_state,last_enqueued_at,next_overlap_at`,
