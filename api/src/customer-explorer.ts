@@ -1,6 +1,7 @@
 import { cleanText } from "./identity-normalization.ts";
 import { normalizeJourneyMetadata, normalizeJourneyTimestamp } from "./journey-events.ts";
 import { aggregateJourneyAttributionEvidence, JOURNEY_EVIDENCE_MAX_EVENTS } from "./journey-attribution-evidence.ts";
+import { evaluateJourneyRiskSignals } from "./risk-signals.ts";
 import { buildCustomer360 } from "./explanations.ts";
 import { getWorkItemsForPerson } from "./work-items.ts";
 
@@ -1761,16 +1762,19 @@ export async function getCustomerJourneyDetail(supabase: any, params: CustomerJo
     }));
   const activity = buildJourneyActivity({ events: page, identityEvents, orders, credits: allCredits, commissions });
   const last = page[page.length - 1] || null;
+  const attributionEvidence = aggregateJourneyAttributionEvidence(
+    evidenceRows.slice(0, JOURNEY_EVIDENCE_MAX_EVENTS),
+    { source_truncated: evidenceRows.length > JOURNEY_EVIDENCE_MAX_EVENTS },
+  );
+  const riskSignals = await evaluateJourneyRiskSignals({ workspace_id: params.workspace_id, journey_id: params.journey_id, attribution_evidence_v1: attributionEvidence });
   return {
     ok: true,
     workspace_id: params.workspace_id,
     customer: compactPerson(person, identifiers),
     journey: {
       ...compactJourney(journey),
-      attribution_evidence_v1: aggregateJourneyAttributionEvidence(
-        evidenceRows.slice(0, JOURNEY_EVIDENCE_MAX_EVENTS),
-        { source_truncated: evidenceRows.length > JOURNEY_EVIDENCE_MAX_EVENTS },
-      ),
+      attribution_evidence_v1: attributionEvidence,
+      risk_signals_v1: riskSignals,
     },
     events: timeline,
     activity,

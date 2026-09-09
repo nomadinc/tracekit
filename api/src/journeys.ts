@@ -1,5 +1,6 @@
 import { cleanText } from "./identity-normalization.ts";
 import { aggregateJourneyAttributionEvidence, JOURNEY_EVIDENCE_MAX_EVENTS, type JourneyEvidenceEvent } from "./journey-attribution-evidence.ts";
+import { evaluateJourneyRiskSignals } from "./risk-signals.ts";
 import {
   compactJourneyEvent,
   decodeJourneyTimelineCursor,
@@ -592,9 +593,11 @@ export async function getJourneyDetail(repo: JourneyRepository, params: JourneyD
     : rows;
   const page = rows.slice(0, params.limit);
   const last = page[page.length - 1];
+  const attributionEvidence = aggregateJourneyAttributionEvidence(evidenceRows.slice(0, JOURNEY_EVIDENCE_MAX_EVENTS), { source_truncated: evidenceRows.length > JOURNEY_EVIDENCE_MAX_EVENTS });
+  const riskSignals = await evaluateJourneyRiskSignals({ workspace_id: params.workspace_id, journey_id: params.journey_id, attribution_evidence_v1: attributionEvidence });
   return {
     ok: true,
-    journey: { ...compactJourney(journey), attribution_evidence_v1: aggregateJourneyAttributionEvidence(evidenceRows.slice(0, JOURNEY_EVIDENCE_MAX_EVENTS), { source_truncated: evidenceRows.length > JOURNEY_EVIDENCE_MAX_EVENTS }) },
+    journey: { ...compactJourney(journey), attribution_evidence_v1: attributionEvidence, risk_signals_v1: riskSignals },
     events: page.map(compactJourneyEvent),
     next_cursor: rows.length > params.limit && last
       ? encodeJourneyTimelineCursor({ event_time: normalizeJourneyTimestamp(last.event_time), id: last.id })
