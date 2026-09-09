@@ -298,6 +298,8 @@ test("journey detail returns chronological events with pagination", async () => 
   assert.deepEqual(first.events.map((event) => event.id), ["event-1"]);
   assert.equal(first.journey.attribution_evidence_v1.schema_version, 1);
   assert.equal(first.journey.attribution_evidence_v1.providers[0].provider, "everflow");
+  assert.equal(first.journey.risk_signals_v1.schema_version, 1);
+  assert.deepEqual(first.journey.risk_signals_v1.signals, []);
   const second = await getJourneyDetail(repo, normalizeJourneyDetailParams({ workspace_id: "default", journey_id: "journey-1", limit: 1, cursor: first.next_cursor }));
   assert.deepEqual(second.events.map((event) => event.id), ["event-2"]);
   await assert.rejects(() => getJourneyDetail(repo, normalizeJourneyDetailParams({ workspace_id: "other", journey_id: "journey-1" })), /Journey not found/);
