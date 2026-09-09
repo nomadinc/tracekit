@@ -101,17 +101,58 @@ export function LoadingInline({ label = "Loading" }: { label?: string }) {
   );
 }
 
+type ClipboardEnvironment = {
+  clipboard?: Pick<Clipboard, "writeText"> | null;
+  document?: Pick<Document, "body" | "createElement" | "execCommand"> | null;
+};
+
+export async function writeTextToClipboard(value: string, environment: ClipboardEnvironment = {}): Promise<boolean> {
+  const clipboard = environment.clipboard === undefined ? globalThis.navigator?.clipboard : environment.clipboard;
+  if (clipboard?.writeText) {
+    try {
+      await clipboard.writeText(value);
+      return true;
+    } catch {
+      // Some production browser policies reject the async API despite a user gesture.
+    }
+  }
+
+  const documentRef = environment.document === undefined ? globalThis.document : environment.document;
+  if (!documentRef?.body || !documentRef.createElement || !documentRef.execCommand) return false;
+  const textarea = documentRef.createElement("textarea");
+  textarea.value = value;
+  textarea.setAttribute("readonly", "");
+  textarea.style.position = "fixed";
+  textarea.style.opacity = "0";
+  documentRef.body.appendChild(textarea);
+  textarea.focus();
+  textarea.select();
+  try {
+    return documentRef.execCommand("copy");
+  } catch {
+    return false;
+  } finally {
+    textarea.remove();
+  }
+}
+
 export function CopyButton({ value, label = "Copy" }: { value: string; label?: string }) {
-  const [copied, setCopied] = React.useState(false);
+  const [status, setStatus] = React.useState<"idle" | "copied" | "failed">("idle");
+  const resetTimer = React.useRef<number | null>(null);
+  React.useEffect(() => () => {
+    if (resetTimer.current !== null) window.clearTimeout(resetTimer.current);
+  }, []);
+
   async function copy() {
-    await navigator.clipboard.writeText(value);
-    setCopied(true);
-    window.setTimeout(() => setCopied(false), 1600);
+    const copied = await writeTextToClipboard(value);
+    setStatus(copied ? "copied" : "failed");
+    if (resetTimer.current !== null) window.clearTimeout(resetTimer.current);
+    resetTimer.current = window.setTimeout(() => setStatus("idle"), 1600);
   }
   return (
-    <button type="button" onClick={copy} className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/10">
+    <button type="button" onClick={copy} aria-label={status === "idle" ? label : `${label}: ${status === "copied" ? "copied" : "copy failed"}`} className="inline-flex min-w-24 items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/10">
       <Copy className="h-3.5 w-3.5" />
-      {copied ? "Copied" : label}
+      <span aria-live="polite">{status === "copied" ? "Copied" : status === "failed" ? "Copy failed" : label}</span>
     </button>
   );
 }
