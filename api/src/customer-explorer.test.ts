@@ -127,6 +127,11 @@ test("customer explorer is wired through read-only authenticated backend routes"
   assert.match(uiDetail, /Journey Explorer/);
   assert.match(uiDetail, /IdentityExplanationCard/);
   assert.match(uiDetail, /NarrativeTimeline/);
+  assert.match(uiDetail, /JourneyAttributionEvidenceSection/);
+  assert.match(module, /aggregateJourneyAttributionEvidence/);
+  assert.match(module, /JOURNEY_EVIDENCE_MAX_EVENTS/);
+  assert.match(module, /journey: \{[\s\S]*attribution_evidence_v1/);
+  assert.doesNotMatch(module.slice(module.indexOf("export async function getCustomerDetail"), module.indexOf("async function loadJourneyEvents")), /attribution_evidence_v1/);
   assert.equal(existsSync(new URL("../../ui/app/(app)/customers/[identity_key]/page.tsx", import.meta.url)), false);
 });
 

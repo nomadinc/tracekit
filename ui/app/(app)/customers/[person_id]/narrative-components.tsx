@@ -28,6 +28,7 @@ import {
   redactCustomerEvidence,
   type CustomerBadgeTone,
 } from "@/lib/customers";
+import { eventAttributionEvidence, flagLabel, providerLabel } from "@/lib/journey-attribution-evidence";
 
 export type ActivityFilter = "all" | "marketing" | "identity" | "commerce" | "attribution" | "commission" | "system";
 export type TimelineViewMode = "story" | "technical";
@@ -186,6 +187,44 @@ function TechnicalEvidenceDrawer({ evidence }: { evidence: any }) {
   );
 }
 
+function EventAttributionEvidenceDisclosure({ activity }: { activity: unknown }) {
+  const evidence = eventAttributionEvidence(activity);
+  if (!evidence) return null;
+  return (
+    <details className="mt-3 rounded-md border p-3 text-sm dark:border-white/10">
+      <summary className="cursor-pointer font-medium">Attribution evidence</summary>
+      <div className="mt-3 space-y-3 border-t pt-3 dark:border-white/10">
+        {evidence.identifiers.length ? (
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Identifiers</h4>
+            <div className="mt-2 space-y-2">
+              {evidence.identifiers.map((item, index) => (
+                <div key={`${item.raw_param}:${item.provider}:${index}`} className="flex flex-wrap items-center justify-between gap-2 rounded-md bg-slate-50 p-2 dark:bg-white/5">
+                  <span><span className="font-mono text-xs">{item.raw_param}</span> · {providerLabel(item.provider)}</span>
+                  <span className="break-all font-mono text-xs">{item.value}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        ) : null}
+        {evidence.marketing_params.length ? (
+          <div>
+            <h4 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Marketing parameters</h4>
+            <dl className="mt-2 grid gap-2 sm:grid-cols-2">
+              {evidence.marketing_params.map((item, index) => <div key={`${item.raw_param}:${index}`}><dt className="text-xs text-slate-500">{item.raw_param}</dt><dd className="break-all font-mono text-xs">{item.value}</dd></div>)}
+            </dl>
+          </div>
+        ) : null}
+        <dl className="grid gap-2 sm:grid-cols-2">
+          <div><dt className="text-xs text-slate-500">Referrer</dt><dd className="break-words">{evidence.referrer.client || "Not observed"}</dd></div>
+          <div><dt className="text-xs text-slate-500">Referrer origin</dt><dd className="break-words">{evidence.referrer.origin || "Not observed"}</dd></div>
+        </dl>
+        {evidence.flags.length ? <p className="text-xs text-slate-500">{evidence.flags.map(flagLabel).join(" · ")}</p> : null}
+      </div>
+    </details>
+  );
+}
+
 function ActivityTimelineItem({ activity, highlighted, mode }: { activity: any; highlighted: boolean; mode: TimelineViewMode }) {
   const displayFields = populatedEntries(activity.display_fields || {});
   return (
@@ -225,6 +264,7 @@ function ActivityTimelineItem({ activity, highlighted, mode }: { activity: any; 
             </div>
           </details>
         ) : null}
+        <EventAttributionEvidenceDisclosure activity={activity} />
         <TechnicalEvidenceDrawer evidence={activity.technical_evidence} />
       </div>
     </li>

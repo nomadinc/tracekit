@@ -1,5 +1,6 @@
 import { cleanText } from "./identity-normalization.ts";
 import { normalizeJourneyMetadata, normalizeJourneyTimestamp } from "./journey-events.ts";
+import { aggregateJourneyAttributionEvidence, JOURNEY_EVIDENCE_MAX_EVENTS } from "./journey-attribution-evidence.ts";
 import { buildCustomer360 } from "./explanations.ts";
 import { getWorkItemsForPerson } from "./work-items.ts";
 
@@ -1676,6 +1677,21 @@ async function loadJourneyEvents(supabase: any, params: CustomerJourneyDetailPar
   return supabaseRows(query, "Customer journey event lookup");
 }
 
+async function loadJourneyEvidenceEvents(supabase: any, params: CustomerJourneyDetailParams) {
+  return supabaseRows(
+    supabase
+      .from("journey_events")
+      .select("id,event_time,metadata")
+      .eq("workspace_id", params.workspace_id)
+      .eq("person_id", params.person_id)
+      .eq("journey_id", params.journey_id)
+      .order("event_time", { ascending: true })
+      .order("id", { ascending: true })
+      .limit(JOURNEY_EVIDENCE_MAX_EVENTS + 1),
+    "Customer journey attribution evidence lookup",
+  );
+}
+
 export async function getCustomerJourneyDetail(supabase: any, params: CustomerJourneyDetailParams) {
   const [person, journey] = await Promise.all([
     getPersonOrThrow(supabase, params.workspace_id, params.person_id),
@@ -1685,7 +1701,10 @@ export async function getCustomerJourneyDetail(supabase: any, params: CustomerJo
     ),
   ]);
   if (!journey) throw Object.assign(new Error("Journey not found."), { status: 404, code: "not_found" });
-  const eventRows = await loadJourneyEvents(supabase, params);
+  const [eventRows, evidenceRows] = await Promise.all([
+    loadJourneyEvents(supabase, params),
+    loadJourneyEvidenceEvents(supabase, params),
+  ]);
   const page = eventRows.slice(0, params.limit);
   let identityQuery = supabase
     .from("identity_resolution_events")
@@ -1746,7 +1765,13 @@ export async function getCustomerJourneyDetail(supabase: any, params: CustomerJo
     ok: true,
     workspace_id: params.workspace_id,
     customer: compactPerson(person, identifiers),
-    journey: compactJourney(journey),
+    journey: {
+      ...compactJourney(journey),
+      attribution_evidence_v1: aggregateJourneyAttributionEvidence(
+        evidenceRows.slice(0, JOURNEY_EVIDENCE_MAX_EVENTS),
+        { source_truncated: evidenceRows.length > JOURNEY_EVIDENCE_MAX_EVENTS },
+      ),
+    },
     events: timeline,
     activity,
     activity_summary: buildJourneyActivitySummary(journey, activity, allCredits, commissions),
