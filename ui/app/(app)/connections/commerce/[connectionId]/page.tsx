@@ -1,14 +1,17 @@
 import { notFound } from "next/navigation";
 import { ConnectionDetail, ConnectionScheduleSummary } from "@/components/connections/integration-experience";
-import { ShopifySmokeTest } from "@/components/connections/shopify-smoke-test";
+import { ShopifyOnboardingStatus } from "@/components/connections/shopify-onboarding-status";
 import { loadConnectionExperience } from "@/lib/commerce/integration-experience-server";
+import { loadShopifyOnboardingLifecycle } from "@/lib/commerce/shopify-onboarding-lifecycle";
 
 export default async function ConnectionPage({ params }: { params: Promise<{ connectionId: string }> }) {
   try {
-    const connection = await loadConnectionExperience((await params).connectionId);
+    const connectionId = (await params).connectionId;
+    const connection = await loadConnectionExperience(connectionId);
+    const lifecycle = connection.provider === "shopify" ? await loadShopifyOnboardingLifecycle(connectionId) : null;
     return <>
       <ConnectionDetail connection={connection} />
-      {connection.provider === "shopify" ? <ShopifySmokeTest connectionId={connection.id} /> : null}
+      {lifecycle ? <ShopifyOnboardingStatus lifecycle={lifecycle} /> : null}
       <ConnectionScheduleSummary connection={connection} />
     </>;
   } catch {
