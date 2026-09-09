@@ -4,12 +4,14 @@ import { randomUUID } from "node:crypto";
 import { decodeCommerceCredentialKey, decryptCommerceCredential } from "./credential-crypto";
 import { parseShopifyConnectionCredential } from "./shopify-verifier";
 import { runShopifyIncrementalResource } from "./shopify-incremental-runtime";
+import { runShopifyHistoricalResource } from "./shopify-historical-runtime";
 import { commercePersistenceRequest, SupabaseCommerceControlRepository } from "./supabase-control-repository";
 import type { ShopifyResource } from "./shopify-core/resources";
 
 const SHOPIFY_RESOURCES: ShopifyResource[] = ["products", "customers", "orders"];
 const DEFAULT_FREQUENCY = "5_minutes";
 const LEASE_SECONDS = 240;
+const BACKFILL_PAGE_SIZE = 50;
 
 type ConnectionRow = {
   id: string;
@@ -119,7 +121,8 @@ async function runClaimedSchedule(schedule: ScheduleRow, now: Date) {
     const connectionRows = await commercePersistenceRequest(
       `commerce_provider_connections?organization_id=eq.${encodeURIComponent(schedule.organization_id)}&id=eq.${encodeURIComponent(schedule.connection_id)}&select=created_at&limit=1`,
     );
-    const initialUpdatedAt = String(connectionRows[0]?.created_at || "").trim() || undefined;
+    const historicalCutoff = String(connectionRows[0]?.created_at || "").trim();
+    const initialUpdatedAt = historicalCutoff || undefined;
 
     const result = await runShopifyIncrementalResource({
       organizationId: schedule.organization_id,
@@ -134,8 +137,42 @@ async function runClaimedSchedule(schedule: ScheduleRow, now: Date) {
       initialUpdatedAt,
     });
 
+    // Historical work is deliberately subordinate to the live incremental path.
+    // One bounded page is attempted per resource/cadence until the M7 cursor is exhausted.
+    let backfill: Record<string, unknown> = { outcome: "not_started" };
+    if (historicalCutoff) {
+      try {
+        const historical = await runShopifyHistoricalResource({
+          organizationId: schedule.organization_id,
+          connectionId: schedule.connection_id,
+          providerAccountId: schedule.provider_account_id,
+          resource: schedule.resource,
+          historicalCutoff,
+          shopDomain: credential.shopDomain,
+          accessToken: credential.adminAccessToken,
+          apiVersion: credential.apiVersion,
+          maxPages: 1,
+          pageSize: BACKFILL_PAGE_SIZE,
+        });
+        backfill = {
+          outcome: historical.alreadyComplete ? "complete" : "progressed",
+          pages: historical.pages,
+          records: historical.records,
+          checkpointPage: historical.checkpoint.page,
+        };
+      } catch (error) {
+        // Backfill failure must never stop fresh orders/refunds from advancing.
+        backfill = { outcome: "failed", error: error instanceof Error ? error.message.slice(0, 300) : "unknown_error" };
+        console.error("shopify_onboarding_backfill_failed", {
+          connectionId: schedule.connection_id,
+          resource: schedule.resource,
+          message: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
+
     await finishSchedule(schedule, owner, now, true);
-    return { scheduleId: schedule.id, resource: schedule.resource, outcome: "completed", result };
+    return { scheduleId: schedule.id, resource: schedule.resource, outcome: "completed", result, backfill };
   } catch (error) {
     await finishSchedule(schedule, owner, now, false);
     console.error("shopify_scheduled_sync_failed", {
