@@ -57,8 +57,9 @@ export async function runShopifyHistoricalResource(args: {
     persistence,
     maxPages: args.maxPages,
     initialCheckpoint: initial,
+    allowPartialCompletion: true,
   });
-  return { ...result, alreadyComplete: false };
+  return { ...result, alreadyComplete: result.checkpoint.cursor === null };
 }
 
 function normalizeCutoff(value: unknown) {
