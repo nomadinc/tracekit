@@ -517,6 +517,33 @@ test("browser identify creates a person and repeat identify reuses it", async ()
   assert.equal(repo.people[0].last_name, "Example");
 });
 
+test("browser external_customer_id is idempotent workspace scoped and follows existing merge rules", async () => {
+  const repo = new MemoryIdentityRepository();
+  const service = createIdentityService(repo);
+  const resolve = (workspace_id: string, source_record_id: string, payload: Record<string, any>) => service.resolveIdentity({
+    workspace_id,
+    source_platform: "browser",
+    source_record_type: "browser_event",
+    source_record_id,
+    identifiers: browserIdentityIdentifiers(payload),
+  });
+
+  const created = await resolve("default", "identify-external-1", { external_customer_id: "customer-A" });
+  const repeated = await resolve("default", "identify-external-2", { external_customer_id: "customer-A" });
+  const otherWorkspace = await resolve("other", "identify-external-3", { external_customer_id: "customer-A" });
+  assert.equal(created.action, "created_person");
+  assert.equal(repeated.action, "matched_existing_person");
+  assert.equal(repeated.person_id, created.person_id);
+  assert.notEqual(otherWorkspace.person_id, created.person_id);
+
+  const emailPerson = await resolve("default", "identify-email-1", { email: "existing@example.com" });
+  const combined = await resolve("default", "identify-combined", { email: "existing@example.com", external_customer_id: "customer-B" });
+  const externalReuse = await resolve("default", "identify-external-reuse", { external_customer_id: "customer-B" });
+  assert.equal(combined.person_id, emailPerson.person_id);
+  assert.equal(externalReuse.person_id, emailPerson.person_id);
+  assert.equal(repo.identifiers.filter((item) => item.identifier_type === "external_customer_id").length, 3);
+});
+
 test("identity resolution batches ownership lookup and reuses caches during attach", async () => {
   const repo = new MemoryIdentityRepository();
   const metrics = createIdentityResolutionDebugMetrics();

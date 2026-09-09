@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import {
+  BROWSER_EXTERNAL_CUSTOMER_ID_MAX_LENGTH,
   BROWSER_EVENT_CONFIG_PATH,
   BROWSER_EVENT_INGESTION_PATH,
   BROWSER_EVENT_LEGACY_INGESTION_PATH,
@@ -577,6 +578,86 @@ test("identify events expose identity identifiers but page views do not require 
   assert.deepEqual(identifiers.map((item) => item.identifier_type), ["email", "phone"]);
   const nested = browserIdentityIdentifiers({ identity: { email: "Nested@Example.com" } });
   assert.deepEqual(nested.map((item) => item.identifier_type), ["email"]);
+});
+
+test("browser external_customer_id is explicit bounded and additive", () => {
+  const identifiers = browserIdentityIdentifiers({
+    external_customer_id: "  validation-customer-1  ",
+    email: "A@Example.com",
+  });
+  assert.deepEqual(identifiers.map((item) => item.identifier_type), ["email", "external_customer_id"]);
+  assert.equal(identifiers[1].value, "validation-customer-1");
+  assert.equal(identifiers[1].confidence, 0.99);
+
+  assert.equal(browserIdentityIdentifiers({ external_customer_id: "   " }).length, 0);
+  assert.equal(browserIdentityIdentifiers({ external_customer_id: "null" }).length, 0);
+  assert.equal(browserIdentityIdentifiers({ external_customer_id: "0" }).length, 0);
+  assert.equal(browserIdentityIdentifiers({ external_customer_id: "x".repeat(BROWSER_EXTERNAL_CUSTOMER_ID_MAX_LENGTH) })[0].value, "x".repeat(BROWSER_EXTERNAL_CUSTOMER_ID_MAX_LENGTH));
+  assert.equal(browserIdentityIdentifiers({ external_customer_id: "x".repeat(BROWSER_EXTERNAL_CUSTOMER_ID_MAX_LENGTH + 1) }).length, 0);
+  assert.equal(browserIdentityIdentifiers({ external_customer_id: { arbitrary: "object" } }).length, 0);
+  assert.equal(browserIdentityIdentifiers({ customer_id: "customer-1", user_id: "user-1", external_user_id: "external-1" }).length, 0);
+  assert.equal(browserIdentityIdentifiers({ identity: { external_customer_id: "nested-customer-1" } })[0].value, "nested-customer-1");
+});
+
+test("external customer identify resolves a normal journey while unrelated TKIDs stay anonymous", async () => {
+  const page = await normalizeBrowserEventForRawStorage({
+    workspace_id: "default",
+    event_id: "external-page-before-identify",
+    event_type: "page_view",
+    event_time: "2026-09-08T00:00:00.000Z",
+    tkid: "tkid_external_identity_001",
+    session_id: "shared-session-metadata",
+    page_url: "https://example.com/?_ef_transaction_id=EF_EXTERNAL_1",
+  }, { received_at: "2026-09-08T00:00:01.000Z", event_id_fallback: "fallback-page", request_context: {} });
+  const identify = await normalizeBrowserEventForRawStorage({
+    workspace_id: "default",
+    event_id: "external-identify-after-page",
+    event_type: "identify",
+    event_time: "2026-09-08T00:05:00.000Z",
+    tkid: "tkid_external_identity_001",
+    session_id: "shared-session-metadata",
+    external_customer_id: "tracekit_validation_001",
+  }, { received_at: "2026-09-08T00:05:01.000Z", event_id_fallback: "fallback-identify", request_context: {} });
+  const unrelated = await normalizeBrowserEventForRawStorage({
+    workspace_id: "default",
+    event_id: "external-unrelated-page",
+    event_type: "page_view",
+    event_time: "2026-09-08T00:06:00.000Z",
+    tkid: "tkid_external_identity_other",
+    session_id: "shared-session-metadata",
+  }, { received_at: "2026-09-08T00:06:01.000Z", event_id_fallback: "fallback-other", request_context: {} });
+  assert.equal(page.ok && identify.ok && unrelated.ok, true);
+  if (!page.ok || !identify.ok || !unrelated.ok) throw new Error("browser fixture failed validation");
+
+  assert.equal(browserIdentityIdentifiers(page.value.raw_payload).length, 0);
+  const personId = "person-external-1";
+  assert.deepEqual(browserIdentityIdentifiers(identify.value.raw_payload).map((item) => item.identifier_type), ["external_customer_id"]);
+
+  const applied = applyBrowserTkidIdentityToBatch([
+    { event_id: page.value.event_id, tkid: page.value.tkid },
+    { event_id: identify.value.event_id, tkid: identify.value.tkid },
+    { event_id: unrelated.value.event_id, tkid: unrelated.value.tkid },
+  ], new Map([
+    [page.value.event_id, null],
+    [identify.value.event_id, personId],
+    [unrelated.value.event_id, null],
+  ]));
+  assert.equal(applied.person_id_by_event_id.get(page.value.event_id), personId);
+  assert.equal(applied.person_id_by_event_id.get(unrelated.value.event_id), null);
+
+  const repo = new BrowserJourneyMemoryRepository();
+  repo.addPerson("default", personId);
+  for (const raw of [page.value, identify.value]) {
+    const input = buildBrowserJourneyEventInput(raw, { person_id: applied.person_id_by_event_id.get(raw.event_id) });
+    if (!input) throw new Error("browser journey input was not created");
+    repo.events.push({ id: `journey-${raw.event_id}`, journey_id: null, created_at: raw.received_at, updated_at: raw.received_at, ...input } as JourneyEventWithJourney);
+  }
+  const assignment = await assignJourneyEvents(repo, repo.events);
+  assert.equal(assignment.ok, true);
+  assert.equal(assignment.events_linked, 2);
+  assert.ok(repo.events[0].journey_id);
+  assert.equal(repo.events[1].journey_id, repo.events[0].journey_id);
+  assert.equal(repo.events[0].metadata?.attribution_evidence_v1.identifiers[0].value, "EF_EXTERNAL_1");
 });
 
 test("payload hashes are stable for exact replay detection", async () => {

@@ -17,6 +17,8 @@ export const BROWSER_EVENT_LEGACY_INGESTION_PATH = "/v1/event";
 export const BROWSER_EVENT_SETUP_PATH = "/v1/browser/setup";
 export const BROWSER_EVENT_CONFIG_PATH = "/v1/browser/config";
 export const BROWSER_EVENT_LEGACY_SETUP_PATH = "/v1/event/setup";
+export const BROWSER_EXTERNAL_CUSTOMER_ID_MAX_LENGTH = 256;
+const BROWSER_EXTERNAL_CUSTOMER_ID_PLACEHOLDERS = new Set(["null", "undefined", "unknown", "n/a", "na", "none", "(none)", "-", "--", "0"]);
 
 export const BROWSER_EVENT_TYPES = [
   "page_view",
@@ -476,9 +478,20 @@ export function browserIdentityIdentifiers(payload: Record<string, any>): Identi
   const identifiers: IdentityInputIdentifier[] = [];
   const email = firstText(payload.email, payload.identity?.email, payload.properties?.email, payload.user?.email);
   const phone = firstText(payload.phone, payload.identity?.phone, payload.properties?.phone, payload.user?.phone);
+  // Keep the browser contract explicit and bounded; the canonical identity
+  // normalizer trims again, preserves external ID case, and hashes type:value.
+  const externalCustomerId = [payload.external_customer_id, payload.identity?.external_customer_id]
+    .find((value) => {
+      if (typeof value !== "string") return false;
+      const normalized = cleanText(value);
+      return normalized.length > 0
+        && normalized.length <= BROWSER_EXTERNAL_CUSTOMER_ID_MAX_LENGTH
+        && !BROWSER_EXTERNAL_CUSTOMER_ID_PLACEHOLDERS.has(normalized.toLowerCase());
+    });
   const country = firstText(payload.country, payload.identity?.country, payload.properties?.country, payload.user?.country);
   if (email) identifiers.push({ identifier_type: "email", value: email, verification_status: "observed", confidence: 0.85 });
   if (phone) identifiers.push({ identifier_type: "phone", value: phone, country, verification_status: "observed", confidence: 0.75 });
+  if (externalCustomerId) identifiers.push({ identifier_type: "external_customer_id", value: cleanText(externalCustomerId), verification_status: "observed", confidence: 0.99 });
   return identifiers;
 }
 
