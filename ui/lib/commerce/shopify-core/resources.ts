@@ -4,6 +4,8 @@ export type ShopifyCheckpoint = {
   cursor: string | null;
   updatedAt: string | null;
   page: number;
+  /** Fixed upper bound for isolated historical backfill runs. */
+  historicalCutoff?: string | null;
   /** Legacy combined financial reconciliation cursor; retained for backward compatibility. */
   financialCursor?: string | null;
   /** Durable cursor for fully-refunded order reconciliation. */
@@ -31,6 +33,7 @@ export function initialShopifyCheckpoint(): ShopifyCheckpoint {
     cursor: null,
     updatedAt: null,
     page: 1,
+    historicalCutoff: null,
     financialCursor: null,
     refundedCursor: null,
     partiallyRefundedCursor: null,
@@ -43,6 +46,7 @@ export function normalizeShopifyCheckpoint(value: Partial<ShopifyCheckpoint> | n
     cursor: normalizeCursor(value?.cursor),
     updatedAt: normalizeIso(value?.updatedAt),
     page: Number.isInteger(value?.page) && Number(value?.page) > 0 ? Number(value?.page) : 1,
+    historicalCutoff: normalizeIso(value?.historicalCutoff),
     financialCursor: legacyFinancialCursor,
     refundedCursor: normalizeCursor(value?.refundedCursor) || legacyFinancialCursor,
     partiallyRefundedCursor: normalizeCursor(value?.partiallyRefundedCursor),
