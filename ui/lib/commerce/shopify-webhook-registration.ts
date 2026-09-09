@@ -10,11 +10,16 @@ export type ShopifyWebhookSubscription = {
   uri: string;
 };
 
+type ShopifyGraphqlPayload = {
+  data?: Record<string, any>;
+  errors?: Array<{ message?: string }>;
+};
+
 export async function listTraceKitShopifyWebhookSubscriptions(args: {
   credential: StoredShopifyCredential;
   callbackUrl: string;
   fetchImpl?: typeof fetch;
-}) {
+}): Promise<ShopifyWebhookSubscription[]> {
   const payload = await shopifyGraphql(args.credential, {
     query: `query TraceKitWebhookSubscriptions($topics: [WebhookSubscriptionTopic!]) {
       webhookSubscriptions(first: 20, topics: $topics) { nodes { id topic uri } }
@@ -74,7 +79,7 @@ async function shopifyGraphql(
   credential: StoredShopifyCredential,
   body: { query: string; variables?: Record<string, unknown> },
   fetchImpl: typeof fetch = fetch,
-) {
+): Promise<ShopifyGraphqlPayload> {
   const response = await fetchImpl(`https://${credential.shopDomain}/admin/api/${credential.apiVersion}/graphql.json`, {
     method: "POST",
     cache: "no-store",
@@ -86,7 +91,7 @@ async function shopifyGraphql(
     body: JSON.stringify(body),
   });
   if (!response.ok) throw new Error(`Shopify webhook Admin API request failed (${response.status}).`);
-  const payload = await response.json().catch(() => null) as any;
+  const payload = await response.json().catch(() => null) as ShopifyGraphqlPayload | null;
   if (!payload || (Array.isArray(payload.errors) && payload.errors.length)) {
     throw new Error(`Shopify webhook Admin API returned an error: ${String(payload?.errors?.[0]?.message || "invalid response")}`);
   }
