@@ -3,10 +3,11 @@ import type { CommerceConnectionVerifier } from "./control-plane";
 
 export const SHOPIFY_ADMIN_API_VERSION = "2026-07";
 
-type StoredShopifyCredential = {
+export type StoredShopifyCredential = {
   shopDomain: string;
   adminAccessToken: string;
   apiVersion: string;
+  appSecret?: string;
 };
 
 export function normalizeShopifyConnectionDomain(value: unknown) {
@@ -24,16 +25,19 @@ export function serializeShopifyConnectionCredential(input: {
   shopDomain: unknown;
   adminAccessToken: unknown;
   apiVersion?: unknown;
+  appSecret?: unknown;
 }) {
   const shopDomain = normalizeShopifyConnectionDomain(input.shopDomain);
   const adminAccessToken = String(input.adminAccessToken ?? "").trim();
+  const appSecret = String(input.appSecret ?? "").trim();
   const requestedVersion = String(input.apiVersion ?? SHOPIFY_ADMIN_API_VERSION).trim();
   const apiVersion = /^20\d\d-(01|04|07|10)$/.test(requestedVersion)
     ? requestedVersion
     : SHOPIFY_ADMIN_API_VERSION;
   if (!shopDomain) throw new Error("Enter a valid Shopify myshopify.com domain.");
   if (adminAccessToken.length < 8) throw new Error("Enter a valid Shopify Admin API access token.");
-  return JSON.stringify({ shopDomain, adminAccessToken, apiVersion } satisfies StoredShopifyCredential);
+  if (appSecret && appSecret.length < 8) throw new Error("Enter a valid Shopify app secret.");
+  return JSON.stringify({ shopDomain, adminAccessToken, apiVersion, ...(appSecret ? { appSecret } : {}) } satisfies StoredShopifyCredential);
 }
 
 export function parseShopifyConnectionCredential(secret: string): StoredShopifyCredential {
@@ -45,11 +49,12 @@ export function parseShopifyConnectionCredential(secret: string): StoredShopifyC
   }
   const shopDomain = normalizeShopifyConnectionDomain(parsed.shopDomain);
   const adminAccessToken = String(parsed.adminAccessToken ?? "").trim();
+  const appSecret = String(parsed.appSecret ?? "").trim();
   const apiVersion = String(parsed.apiVersion ?? SHOPIFY_ADMIN_API_VERSION).trim();
-  if (!shopDomain || adminAccessToken.length < 8 || !/^20\d\d-(01|04|07|10)$/.test(apiVersion)) {
+  if (!shopDomain || adminAccessToken.length < 8 || !/^20\d\d-(01|04|07|10)$/.test(apiVersion) || (appSecret && appSecret.length < 8)) {
     throw new Error("The Shopify credential is invalid.");
   }
-  return { shopDomain, adminAccessToken, apiVersion };
+  return { shopDomain, adminAccessToken, apiVersion, ...(appSecret ? { appSecret } : {}) };
 }
 
 export class BoundedShopifyConnectionVerifier implements CommerceConnectionVerifier {
