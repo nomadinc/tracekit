@@ -14,6 +14,7 @@ export type RunShopifyReadSyncArgs = {
   readPage: ShopifyPageReader;
   persistence: ShopifyPersistence;
   maxPages?: number;
+  initialCheckpoint?: ShopifyCheckpoint;
 };
 
 export type ShopifyReadSyncResult = {
@@ -55,7 +56,7 @@ export async function runShopifyReadSync(args: RunShopifyReadSyncArgs): Promise<
     throw asStageError("state_load", "shopify_state_load_failed", error);
   }
 
-  let checkpoint = normalizeShopifyCheckpoint(existing?.checkpoint || initialShopifyCheckpoint());
+  let checkpoint = normalizeShopifyCheckpoint(existing?.checkpoint || args.initialCheckpoint || initialShopifyCheckpoint());
   const maxPages = Number.isInteger(args.maxPages) && Number(args.maxPages) > 0 ? Number(args.maxPages) : 1000;
 
   try {
