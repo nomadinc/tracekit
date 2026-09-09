@@ -12,6 +12,10 @@ const SHOPIFY_RESOURCES: ShopifyResource[] = ["products", "customers", "orders"]
 const DEFAULT_FREQUENCY = "5_minutes";
 const LEASE_SECONDS = 240;
 const BACKFILL_PAGE_SIZE = 50;
+const LIVE_PAGE_SIZE = 50;
+// Orders request nested line items, transactions, refunds, and refund transactions.
+// Keep them below Shopify's 1,000-point single-query cost ceiling.
+const ORDER_PAGE_SIZE = 25;
 
 type ConnectionRow = {
   id: string;
@@ -133,7 +137,7 @@ async function runClaimedSchedule(schedule: ScheduleRow, now: Date) {
       accessToken: credential.adminAccessToken,
       apiVersion: credential.apiVersion,
       maxPages: 1,
-      pageSize: 50,
+      pageSize: pageSizeForResource(schedule.resource, LIVE_PAGE_SIZE),
       initialUpdatedAt,
     });
 
@@ -152,7 +156,7 @@ async function runClaimedSchedule(schedule: ScheduleRow, now: Date) {
           accessToken: credential.adminAccessToken,
           apiVersion: credential.apiVersion,
           maxPages: 1,
-          pageSize: BACKFILL_PAGE_SIZE,
+          pageSize: pageSizeForResource(schedule.resource, BACKFILL_PAGE_SIZE),
         });
         backfill = {
           outcome: historical.alreadyComplete ? "complete" : "progressed",
@@ -206,6 +210,10 @@ async function finishSchedule(schedule: ScheduleRow, owner: string, startedAt: D
       }),
     },
   );
+}
+
+function pageSizeForResource(resource: ShopifyResource, defaultSize: number) {
+  return resource === "orders" ? ORDER_PAGE_SIZE : defaultSize;
 }
 
 function frequencyMilliseconds(value: string) {
