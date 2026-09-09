@@ -30,7 +30,8 @@ export type GatewayDecision = {
 
 export type MockForwardOutcome =
   | { outcome: "succeeded"; httpStatus: number; responseReference: string }
-  | { outcome: "retryable_failure"; errorCode: string; retryAt: string };
+  | { outcome: "retryable_failure"; errorCode: string; retryAt: string }
+  | { outcome: "permanent_failure"; errorCode: string; httpStatus?: number };
 
 export interface ScrubberGatewayRepository {
   authenticate(tokenSha256: string): Promise<SourceScope | null>;
@@ -49,7 +50,7 @@ export interface ScrubberGatewayRepository {
 }
 
 export interface ScrubberMockForwarder {
-  forward(input: { conversionId: string; parameters: URLSearchParams }): Promise<MockForwardOutcome>;
+  forward(input: { conversionId: string; conversion: CanonicalConversion; parameters: URLSearchParams }): Promise<MockForwardOutcome>;
 }
 
 export class ScrubberGatewayError extends Error {
@@ -130,7 +131,7 @@ export async function processEverflowScrubberRequest(input: {
   });
   if (decision.duplicate || decision.decision !== "PASS") return { requestId, ...decision };
 
-  const outcome = await input.forwarder.forward({ conversionId: decision.conversionId, parameters: forwardingParameters });
+  const outcome = await input.forwarder.forward({ conversionId: decision.conversionId, conversion, parameters: forwardingParameters });
   const recorded = await input.repository.recordMockForward(decision.conversionId, outcome);
   return { requestId, ...decision, forwardStatus: recorded.forwardStatus, forwardAttemptNumber: recorded.attemptNumber, nextRetryAt: recorded.nextRetryAt };
 }
@@ -181,9 +182,9 @@ export class SupabaseScrubberGatewayRepository implements ScrubberGatewayReposit
   async recordMockForward(conversionId: string, outcome: MockForwardOutcome) {
     const rows = await rest("rpc/record_everflow_scrubber_mock_forward_v1", { method: "POST", body: JSON.stringify({
       p_conversion_id: conversionId, p_outcome: outcome.outcome,
-      p_http_status: outcome.outcome === "succeeded" ? outcome.httpStatus : null,
+      p_http_status: outcome.outcome === "succeeded" ? outcome.httpStatus : outcome.outcome === "permanent_failure" ? outcome.httpStatus || null : null,
       p_response_reference: outcome.outcome === "succeeded" ? outcome.responseReference : null,
-      p_error_code: outcome.outcome === "retryable_failure" ? outcome.errorCode : null,
+      p_error_code: outcome.outcome === "succeeded" ? null : outcome.errorCode,
       p_retry_at: outcome.outcome === "retryable_failure" ? outcome.retryAt : null,
     }) });
     const row = rows[0];

@@ -30,6 +30,7 @@ export async function POST(request: Request) {
       session: resolution.session,
       organizationId: resolution.session.activeOrganization.id,
       connectionId,
+      requestId,
     });
     return NextResponse.json({ ok: true, ...result, requestId }, { headers: responseHeaders(requestId) });
   } catch (error) {

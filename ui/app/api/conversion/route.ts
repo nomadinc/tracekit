@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import {
-  M2MockEverflowForwarder,
   processEverflowScrubberRequest,
   ScrubberGatewayError,
   SupabaseScrubberGatewayRepository,
 } from "@/lib/integrations/everflow-scrubber-gateway";
+import { configuredEverflowForwarder } from "@/lib/integrations/everflow-forwarding";
 
 export const dynamic = "force-dynamic";
 
@@ -15,8 +15,7 @@ export async function POST(request: Request) {
       authorization: request.headers.get("authorization"),
       rawBody: await request.text(),
       repository: new SupabaseScrubberGatewayRepository(),
-      // This class has no network implementation. Live Everflow is impossible in M2.
-      forwarder: new M2MockEverflowForwarder(),
+      forwarder: configuredEverflowForwarder(),
       requestId,
     });
     return NextResponse.json({ ok: true, ...result }, { status: result.duplicate ? 200 : 202, headers: { "x-tracekit-request-id": requestId } });

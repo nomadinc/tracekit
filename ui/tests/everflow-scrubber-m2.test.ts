@@ -41,7 +41,7 @@ class MemoryRepository implements ScrubberGatewayRepository {
   }
   async recordMockForward(_conversionId: string, outcome: MockForwardOutcome) {
     this.attempts.push(outcome);
-    return { forwardStatus: outcome.outcome === "succeeded" ? "succeeded" : "retry", attemptNumber: this.attempts.length, nextRetryAt: outcome.outcome === "retryable_failure" ? outcome.retryAt : null };
+    return { forwardStatus: outcome.outcome === "succeeded" ? "succeeded" : outcome.outcome === "retryable_failure" ? "retry" : "permanent_failure", attemptNumber: this.attempts.length, nextRetryAt: outcome.outcome === "retryable_failure" ? outcome.retryAt : null };
   }
 }
 
@@ -102,9 +102,9 @@ test("retryable mock forwarding retains PASS and records retry state", async () 
   assert.equal(repo.attempts.length, 1);
 });
 
-test("public ingress route uses bearer authentication and contains no live Everflow forwarder", () => {
+test("public ingress route uses bearer authentication and delegates to the feature-gated forwarder", () => {
   const route = readFileSync(new URL("../app/api/conversion/route.ts", import.meta.url), "utf8");
   assert.match(route, /request\.headers\.get\("authorization"\)/);
-  assert.match(route, /M2MockEverflowForwarder/);
+  assert.match(route, /configuredEverflowForwarder/);
   assert.doesNotMatch(route, /api\.eflow\.team|www\.eflow\.team|X-Eflow-Api-Key/);
 });

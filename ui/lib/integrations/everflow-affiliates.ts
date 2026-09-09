@@ -3,6 +3,7 @@ import type { CommerceControlPlane } from "@/lib/commerce/control-plane";
 import { commercePersistenceRequest } from "@/lib/commerce/supabase-control-repository";
 import type { TraceKitSessionContext } from "@/lib/identity/persistent-types";
 import { EVERFLOW_API_BASE, EverflowHealthError } from "./everflow-client";
+import { everflowMetadataErrorCode, finishEverflowMetadataSyncAudit, startEverflowMetadataSyncAudit } from "./everflow-metadata-audit";
 
 export const EVERFLOW_AFFILIATES_PATH = "/v1/networks/affiliates";
 export const EVERFLOW_AFFILIATES_URL = `${EVERFLOW_API_BASE}${EVERFLOW_AFFILIATES_PATH}`;
@@ -185,12 +186,21 @@ export async function syncEverflowAffiliates(input: {
   maxPages?: number;
   fetchPage?: typeof listEverflowAffiliatesPage;
   persistPage?: typeof persistEverflowAffiliates;
+  requestId?: string;
+  startAudit?: typeof startEverflowMetadataSyncAudit;
+  finishAudit?: typeof finishEverflowMetadataSyncAudit;
 }) {
+  const requestId = input.requestId || crypto.randomUUID();
+  const finishAudit = input.finishAudit || finishEverflowMetadataSyncAudit;
+  const auditId = await (input.startAudit || startEverflowMetadataSyncAudit)({ organizationId: input.organizationId, connectionId: input.connectionId, resource: "affiliates", requestId });
+  let providerAccountId: string | null = null;
+  try {
   const connection = await input.plane.getConnection(input.session, input.connectionId);
   if (connection.organizationId !== input.organizationId || connection.provider !== "everflow" || connection.status === "revoked") throw new Error("Everflow connection is unavailable.");
   const accounts = await input.plane.listProviderAccounts(input.session, input.connectionId);
   const account = accounts.find((candidate) => candidate.status === "active" && !candidate.provisional);
   if (!account) throw new Error("Everflow provider account is unavailable.");
+  providerAccountId = account.id;
   const apiKey = await input.plane.resolveCredentialForExecution(input.session, input.connectionId);
   const fetchPage = input.fetchPage || listEverflowAffiliatesPage;
   const persistPage = input.persistPage || persistEverflowAffiliates;
@@ -212,5 +222,10 @@ export async function syncEverflowAffiliates(input: {
     page += 1;
   }
   if (page >= maxPages && seen < totalCount) throw new Error("Everflow affiliate sync reached its bounded page limit.");
+  await finishAudit({ auditId, organizationId: input.organizationId, providerAccountId, status: "succeeded", pages: page, recordsSeen: seen, recordsPersisted: persisted });
   return { connectionId: input.connectionId, providerAccountId: account.id, networkId: account.externalId, seen, persisted, pages: page, totalCount };
+  } catch (error) {
+    await finishAudit({ auditId, organizationId: input.organizationId, providerAccountId, status: "failed", errorCode: everflowMetadataErrorCode(error) }).catch(() => undefined);
+    throw error;
+  }
 }

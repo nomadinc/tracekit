@@ -25,7 +25,7 @@ export async function POST(request: Request) {
     const connectionId = typeof body?.connectionId === "string" ? body.connectionId.trim() : "";
     if (!/^[0-9a-f-]{36}$/i.test(connectionId)) return NextResponse.json({ ok: false, message: "A valid Everflow connection is required.", requestId }, { status: 400, headers: responseHeaders(requestId) });
     const plane = createCommerceControlPlane({ evidenceStore: new MemoryCommerceEvidenceStore() });
-    const result = await syncEverflowOffers({ plane, session: resolution.session, organizationId: resolution.session.activeOrganization.id, connectionId });
+    const result = await syncEverflowOffers({ plane, session: resolution.session, organizationId: resolution.session.activeOrganization.id, connectionId, requestId });
     return NextResponse.json({ ok: true, ...result, requestId }, { headers: responseHeaders(requestId) });
   } catch (error) {
     if (error instanceof EverflowHealthError) return NextResponse.json({ ok: false, code: error.code, message: error.message, retryable: error.retryable, requestId }, { status: error.httpStatus, headers: responseHeaders(requestId) });
