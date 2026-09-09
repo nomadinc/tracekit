@@ -15,6 +15,14 @@ test("M8 scheduler prioritizes live sync and advances bounded historical backfil
   assert.match(worker, /shopify_onboarding_backfill_failed/);
 });
 
+test("Shopify orders stay below the Admin GraphQL single-query cost ceiling", async () => {
+  const worker = await source("lib/commerce/shopify-scheduled-worker.ts");
+  assert.match(worker, /ORDER_PAGE_SIZE\s*=\s*25/);
+  assert.match(worker, /pageSizeForResource\(schedule\.resource, LIVE_PAGE_SIZE\)/);
+  assert.match(worker, /pageSizeForResource\(schedule\.resource, BACKFILL_PAGE_SIZE\)/);
+  assert.match(worker, /resource === "orders" \? ORDER_PAGE_SIZE : defaultSize/);
+});
+
 test("M8 customer connection page replaces manual Shopify test controls with lifecycle status", async () => {
   const page = await source("app/(app)/connections/commerce/[connectionId]/page.tsx");
   assert.match(page, /ShopifyOnboardingStatus/);
