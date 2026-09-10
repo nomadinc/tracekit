@@ -32,6 +32,7 @@ test("HTTP classifier blocks mutations, webhook ingress, and GET relay lifecycle
   assert.equal(classifyHttpMaintenanceRequest("GET", "/v1/health"), "read_only");
   assert.equal(classifyHttpMaintenanceRequest("POST", "/v1/integrations/wowboost/run-now"), "http_mutation");
   assert.equal(classifyHttpMaintenanceRequest("POST", "/v1/integrations/everflow/webhook"), "webhook_ingress");
+  assert.equal(classifyHttpMaintenanceRequest("POST", "/v1/everflow/firehose"), "webhook_ingress");
   assert.equal(classifyHttpMaintenanceRequest("GET", "/v1/tkid/relay/return/flow"), "http_mutation");
 });
 

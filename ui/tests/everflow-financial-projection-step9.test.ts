@@ -30,6 +30,13 @@ test("Everflow payout is projected as signed affiliate cost, not duplicate custo
   assert.match(text, /source_direction: "cost"/);
 });
 
+test("poll reconciliation projects unprojected Firehose state history", () => {
+  const text = source();
+  const historyQuery = text.slice(text.indexOf("const historyRows"), text.indexOf("const histories"));
+  assert.match(historyQuery, /provider_account_id=in/);
+  assert.doesNotMatch(historyQuery, /sync_run_id=eq/);
+});
+
 test("baseline and state transitions have deterministic idempotency keys", () => {
   const text = source();
   assert.match(text, /everflow:affiliate_payout:baseline:/);
