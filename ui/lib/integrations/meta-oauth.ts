@@ -138,7 +138,9 @@ export async function discoverMetaAdAccounts(accessToken: string, fetchImpl: typ
   let after: string | null = null;
   for (let page = 0; page < MAX_ACCOUNT_PAGES; page += 1) {
     const url = new URL(`${META_GRAPH_BASE_URL}/me/adaccounts`);
-    url.searchParams.set("fields", "id,account_id,name,account_status,currency,timezone_name,timezone_offset_hours_utc,business{id,name}");
+    // Keep baseline account discovery within ads_read. Business Portfolio enrichment
+    // is a separate optional pass that may request business_management later.
+    url.searchParams.set("fields", "id,account_id,name,account_status,currency,timezone_name,timezone_offset_hours_utc");
     url.searchParams.set("limit", String(ACCOUNT_PAGE_SIZE));
     if (after) url.searchParams.set("after", after);
     const body = await graphJson(url, { method: "GET" }, fetchImpl, accessToken);
@@ -148,7 +150,6 @@ export async function discoverMetaAdAccounts(accessToken: string, fetchImpl: typ
       const rawId = typeof row.id === "string" ? row.id : String(row.id || "");
       const accountId = rawAccountId || rawId.replace(/^act_/, "");
       if (!accountId || !/^\d+$/.test(accountId)) continue;
-      const business = row.business && typeof row.business === "object" ? row.business as Record<string, unknown> : null;
       accounts.set(accountId, {
         id: rawId || `act_${accountId}`,
         accountId,
@@ -157,7 +158,7 @@ export async function discoverMetaAdAccounts(accessToken: string, fetchImpl: typ
         currency: typeof row.currency === "string" ? row.currency : null,
         timezoneName: typeof row.timezone_name === "string" ? row.timezone_name : null,
         timezoneOffsetHoursUtc: Number.isFinite(Number(row.timezone_offset_hours_utc)) ? Number(row.timezone_offset_hours_utc) : null,
-        business: business && business.id ? { id: String(business.id), name: typeof business.name === "string" ? business.name : null } : null,
+        business: null,
       });
     }
     const paging = body.paging && typeof body.paging === "object" ? body.paging as Record<string, unknown> : null;
