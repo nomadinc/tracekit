@@ -9,6 +9,32 @@ type StoredNext29Credential = {
   apiVersion: string;
 };
 
+type Next29VerificationResource = "orders" | "subscriptions" | "disputes";
+type Next29VerificationFailureCode = "provider_http_error" | "invalid_response" | "request_failed";
+
+export class Next29VerificationError extends Error {
+  readonly resource: Next29VerificationResource;
+  readonly providerStatus: number | null;
+  readonly providerRequestId: string | null;
+  readonly failureCode: Next29VerificationFailureCode;
+
+  constructor(input: {
+    resource: Next29VerificationResource;
+    providerStatus: number | null;
+    providerRequestId: string | null;
+    failureCode: Next29VerificationFailureCode;
+  }) {
+    const status = input.providerStatus == null ? "unknown" : String(input.providerStatus);
+    const requestId = input.providerRequestId || "none";
+    super(`29Next verification failed · resource ${input.resource} · provider status ${status} · request id ${requestId} · code ${input.failureCode}`);
+    this.name = "Next29VerificationError";
+    this.resource = input.resource;
+    this.providerStatus = input.providerStatus;
+    this.providerRequestId = input.providerRequestId;
+    this.failureCode = input.failureCode;
+  }
+}
+
 export function normalizeNext29Store(value: unknown) {
   let store = String(value ?? "").trim().toLowerCase();
   if (!store) return null;
@@ -50,6 +76,19 @@ export function parseNext29ConnectionCredential(secret: string): StoredNext29Cre
   return { store, accessToken, apiVersion };
 }
 
+function providerRequestId(response: Response) {
+  return response.headers.get("x-request-id") || response.headers.get("x-29next-request-id") || response.headers.get("request-id");
+}
+
+function emitSafeDiagnostic(error: Next29VerificationError) {
+  console.warn("next29_connection_verification_failed", {
+    resource: error.resource,
+    providerStatus: error.providerStatus,
+    providerRequestId: error.providerRequestId,
+    failureCode: error.failureCode,
+  });
+}
+
 export class BoundedNext29ConnectionVerifier implements CommerceConnectionVerifier {
   async verify(input: { provider: string; environment: string; secret: string; correlationId: string }) {
     if (input.provider !== "next29") throw new Error("Provider verification is unavailable.");
@@ -58,30 +97,64 @@ export class BoundedNext29ConnectionVerifier implements CommerceConnectionVerifi
     const timeout = setTimeout(() => controller.abort(), 12_000);
     try {
       const base = `https://${credential.store}.29next.store/api/admin/`;
-      const resources = ["orders/", "subscriptions/", "disputes/"] as const;
+      const resources = ["orders", "subscriptions", "disputes"] as const;
       let providerRequestIdPresent = false;
       let rateLimitRemaining: number | null = null;
       let providerStatus = 200;
 
       for (const resource of resources) {
-        const response = await fetch(new URL(resource, base).toString(), {
-          method: "GET",
-          cache: "no-store",
-          signal: controller.signal,
-          headers: {
-            Authorization: `Bearer ${credential.accessToken}`,
-            "X-29Next-Api-Version": credential.apiVersion,
-            Accept: "application/json",
-            "x-correlation-id": input.correlationId,
-          },
-        });
+        let response: Response;
+        try {
+          response = await fetch(new URL(`${resource}/`, base).toString(), {
+            method: "GET",
+            cache: "no-store",
+            signal: controller.signal,
+            headers: {
+              Authorization: `Bearer ${credential.accessToken}`,
+              "X-29Next-Api-Version": credential.apiVersion,
+              Accept: "application/json",
+              "x-correlation-id": input.correlationId,
+            },
+          });
+        } catch {
+          const error = new Next29VerificationError({
+            resource,
+            providerStatus: null,
+            providerRequestId: null,
+            failureCode: "request_failed",
+          });
+          emitSafeDiagnostic(error);
+          throw error;
+        }
+
         providerStatus = response.status;
-        providerRequestIdPresent ||= Boolean(response.headers.get("x-request-id") || response.headers.get("x-29next-request-id") || response.headers.get("request-id"));
+        const requestId = providerRequestId(response);
+        providerRequestIdPresent ||= Boolean(requestId);
         const remaining = response.headers.get("x-ratelimit-remaining");
         if (remaining && /^\d+$/.test(remaining)) rateLimitRemaining = Number(remaining);
-        if (!response.ok) throw new Error(`29Next ${resource.replace("/", "")} verification failed.`);
+
+        if (!response.ok) {
+          const error = new Next29VerificationError({
+            resource,
+            providerStatus: response.status,
+            providerRequestId: requestId,
+            failureCode: "provider_http_error",
+          });
+          emitSafeDiagnostic(error);
+          throw error;
+        }
+
         const payload = (await response.json().catch(() => null)) as { results?: unknown[] } | null;
-        if (!payload || !Array.isArray(payload.results)) throw new Error("29Next verification returned an invalid response.");
+        if (!payload || !Array.isArray(payload.results)) {
+          const error = new Next29VerificationError({
+            resource,
+            providerStatus: response.status,
+            providerRequestId: requestId,
+            failureCode: "invalid_response",
+          });
+          emitSafeDiagnostic(error);
+          throw error;
+        }
       }
 
       return {
