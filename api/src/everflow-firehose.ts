@@ -5,6 +5,7 @@ export const EVERFLOW_FIREHOSE_PATHS = {
   "/v1/everflow/firehose/conversion-updates": "conversion_update",
 } as const satisfies Record<string, EverflowFirehoseEventType>;
 export const EVERFLOW_FIREHOSE_MAX_BODY_BYTES = 256 * 1024;
+export const EVERFLOW_FIREHOSE_ROUTING_TIMEOUT_MS = 5_000;
 
 export type EverflowFirehoseEventType = "click" | "conversion" | "conversion_update";
 
@@ -32,8 +33,10 @@ type Scope = { organization_id: string; account_id: string; connection_id: strin
 export type FirehoseDependencies = {
   resolveNetwork(networkId: string): Promise<Scope | null>;
   recordMetric?(metric: string, scope?: Partial<Scope>, at?: string): Promise<void> | void;
+  recordRoutingUnavailable?(): Promise<void> | void;
   defer?(work: Promise<unknown>): void;
   now?: () => Date;
+  routingTimeoutMs?: number;
 };
 
 const encoder = new TextEncoder();
@@ -51,11 +54,37 @@ const bool = (value: unknown) => value === true || value === 1 || value === "1" 
   ? true : value === false || value === 0 || value === "0" || value === "false" ? false : null;
 const record = (value: unknown): Record<string, unknown> => value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 
-function response(status: number, error?: string) {
-  return new Response(JSON.stringify(error ? { ok: false, error } : { ok: true, accepted: true }), {
+function response(status: number, error?: string, details: Record<string, unknown> = {}) {
+  return new Response(JSON.stringify(error ? { ok: false, error, ...details } : { ok: true, accepted: true }), {
     status,
     headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" },
   });
+}
+
+class EverflowRoutingUnavailableError extends Error {
+  constructor() {
+    super("everflow_routing_unavailable");
+    this.name = "EverflowRoutingUnavailableError";
+  }
+}
+
+async function resolveFirehoseScope(deps: FirehoseDependencies, networkId: string) {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const timeoutMs = deps.routingTimeoutMs ?? EVERFLOW_FIREHOSE_ROUTING_TIMEOUT_MS;
+  try {
+    return await Promise.race([
+      deps.resolveNetwork(networkId),
+      new Promise<never>((_, reject) => {
+        timer = setTimeout(() => reject(new EverflowRoutingUnavailableError()), timeoutMs);
+      }),
+    ]);
+  } catch {
+    // A rejection at this boundary means routing could not be determined. A
+    // successful lookup returning null remains the distinct unknown-network case.
+    throw new EverflowRoutingUnavailableError();
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 export function constantTimeSecretEqual(expected: string, supplied: string) {
@@ -117,6 +146,10 @@ export async function handleEverflowFirehose(req: Request, eventType: EverflowFi
     const work = Promise.resolve(deps.recordMetric?.(name, scope, at)).catch(() => undefined);
     if (deps.defer) deps.defer(work); else void work;
   };
+  const routingUnavailable = () => {
+    const work = Promise.resolve().then(() => deps.recordRoutingUnavailable?.()).catch(() => undefined);
+    if (deps.defer) deps.defer(work); else void work;
+  };
   if (req.method !== "POST") return response(405, "method_not_allowed");
   if (!/^application\/json(?:\s*;|$)/i.test(req.headers.get("content-type") || "")) return response(415, "unsupported_media_type");
   const declaredLength = Number(req.headers.get("content-length") || 0);
@@ -148,7 +181,14 @@ export async function handleEverflowFirehose(req: Request, eventType: EverflowFi
   }
   const validation = validatePayload(eventType, payload);
   if ("error" in validation) return response(422, validation.error);
-  const scope = await deps.resolveNetwork(validation.networkId);
+  let scope: Scope | null;
+  try {
+    scope = await resolveFirehoseScope(deps, validation.networkId);
+  } catch (error) {
+    if (!(error instanceof EverflowRoutingUnavailableError)) throw error;
+    routingUnavailable();
+    return response(503, "routing_unavailable", { retryable: true });
+  }
   if (!scope) {
     metric("unknown_network");
     return response(422, "unknown_network");

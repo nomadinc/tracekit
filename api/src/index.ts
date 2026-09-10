@@ -22335,6 +22335,9 @@ async function runWowBoostImportPage(
         return handleEverflowFirehose(req, firehoseEventType, env, {
           resolveNetwork: (networkId) => resolveEverflowNetwork(db, networkId),
           recordMetric: (metric, scope, at) => recordFirehoseMetric(db, metric, scope, at),
+          recordRoutingUnavailable: () => console.warn("[TraceKit] Everflow Firehose routing unavailable", {
+            classification: "routing_unavailable",
+          }),
           defer: (work) => ctx.waitUntil(work),
         });
       }

@@ -4,6 +4,7 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import {
   EVERFLOW_FIREHOSE_MAX_BODY_BYTES,
+  EVERFLOW_FIREHOSE_ROUTING_TIMEOUT_MS,
   constantTimeSecretEqual,
   firehoseEventTypeForPath,
   handleEverflowFirehose,
@@ -77,6 +78,47 @@ test("strict validation and routing reject missing identity and unknown networks
   assert.equal((await handleEverflowFirehose(request({ network_id: 1, unix_timestamp: 1 }), "click", f.env, f.deps)).status, 422);
   assert.equal((await handleEverflowFirehose(request({ ...click, network_id: 999 }), "click", f.env, f.deps)).status, 422);
   assert.equal(f.messages.length, 0);
+});
+
+test("routing availability failures return bounded retryable 503 without queueing or unknown-network classification", async () => {
+  const failures = [
+    Object.assign(new Error("upstream unavailable: sensitive database detail"), { status: 503 }),
+    Object.assign(new Error("schema cache unavailable: sensitive database detail"), { code: "PGRST002" }),
+    new TypeError("fetch failed for sensitive upstream"),
+  ];
+  for (const failure of failures) {
+    const f = fixture();
+    f.deps.resolveNetwork = async () => { throw failure; };
+    const res = await handleEverflowFirehose(request(), "click", f.env, f.deps);
+    assert.equal(res.status, 503);
+    assert.deepEqual(await res.json(), { ok: false, error: "routing_unavailable", retryable: true });
+    assert.equal(f.messages.length, 0);
+    assert.equal(f.metrics.includes("unknown_network"), false);
+  }
+});
+
+test("routing lookup timeout is bounded and returns routing_unavailable without queueing", async () => {
+  const f = fixture();
+  f.deps.resolveNetwork = async () => new Promise(() => undefined);
+  f.deps.routingTimeoutMs = 5;
+  const res = await handleEverflowFirehose(request(), "click", f.env, f.deps);
+  assert.equal(res.status, 503);
+  assert.deepEqual(await res.json(), { ok: false, error: "routing_unavailable", retryable: true });
+  assert.equal(f.messages.length, 0);
+  assert.equal(EVERFLOW_FIREHOSE_ROUTING_TIMEOUT_MS, 5_000);
+});
+
+test("routing-unavailable telemetry is best effort and cannot replace the intended 503", async () => {
+  const f = fixture();
+  let telemetryCalls = 0;
+  f.deps.resolveNetwork = async () => { throw new Error("database unavailable"); };
+  f.deps.recordRoutingUnavailable = async () => { telemetryCalls += 1; throw new Error("telemetry unavailable"); };
+  const res = await handleEverflowFirehose(request(), "click", f.env, f.deps);
+  assert.equal(res.status, 503);
+  assert.deepEqual(await res.json(), { ok: false, error: "routing_unavailable", retryable: true });
+  assert.equal(f.messages.length, 0);
+  await new Promise((resolve) => setTimeout(resolve, 0));
+  assert.equal(telemetryCalls, 1);
 });
 
 test("conversion and update payloads use conversion identity without field inference", async () => {
