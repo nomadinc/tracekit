@@ -19,14 +19,8 @@ type MetaOAuthStatePayload = {
   expiresAt: number;
 };
 
-export type MetaToken = {
-  accessToken: string;
-  tokenType: string | null;
-  expiresIn: number | null;
-};
-
+export type MetaToken = { accessToken: string; tokenType: string | null; expiresIn: number | null };
 export type MetaIdentity = { id: string; name: string | null };
-
 export type MetaAdAccount = {
   id: string;
   accountId: string;
@@ -39,9 +33,7 @@ export type MetaAdAccount = {
 };
 
 export class MetaOAuthError extends Error {
-  constructor(readonly code: string, message: string, readonly httpStatus = 400, readonly retryable = false) {
-    super(message);
-  }
+  constructor(readonly code: string, message: string, readonly httpStatus = 400, readonly retryable = false) { super(message); }
 }
 
 function required(name: string) {
@@ -58,28 +50,17 @@ export function getMetaConfiguration() {
   let redirect: URL;
   try { redirect = new URL(redirectUri); }
   catch { throw new MetaOAuthError("meta_configuration_unavailable", "Meta connection configuration is unavailable.", 503, true); }
-  if (redirect.protocol !== "https:" && redirect.hostname !== "localhost" && redirect.hostname !== "127.0.0.1") {
-    throw new MetaOAuthError("meta_configuration_unavailable", "Meta connection configuration is unavailable.", 503, true);
-  }
+  if (redirect.protocol !== "https:" && redirect.hostname !== "localhost" && redirect.hostname !== "127.0.0.1") throw new MetaOAuthError("meta_configuration_unavailable", "Meta connection configuration is unavailable.", 503, true);
   if (stateSecret.length < 32) throw new MetaOAuthError("meta_configuration_unavailable", "Meta connection configuration is unavailable.", 503, true);
   return { appId, appSecret, redirectUri: redirect.toString(), stateSecret };
 }
 
-function signature(payload: string, secret: string) {
-  return createHmac("sha256", secret).update(payload).digest("base64url");
-}
+function signature(payload: string, secret: string) { return createHmac("sha256", secret).update(payload).digest("base64url"); }
 
 export function createMetaOAuthState(input: { organizationId: string; userId: string; now?: Date; nonce?: string }) {
   const { stateSecret } = getMetaConfiguration();
   const now = Math.floor((input.now || new Date()).getTime() / 1000);
-  const payload: MetaOAuthStatePayload = {
-    v: 1,
-    organizationId: input.organizationId,
-    userId: input.userId,
-    nonce: input.nonce || randomBytes(18).toString("base64url"),
-    issuedAt: now,
-    expiresAt: now + STATE_TTL_SECONDS,
-  };
+  const payload: MetaOAuthStatePayload = { v: 1, organizationId: input.organizationId, userId: input.userId, nonce: input.nonce || randomBytes(18).toString("base64url"), issuedAt: now, expiresAt: now + STATE_TTL_SECONDS };
   const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
   return `${encoded}.${signature(encoded, stateSecret)}`;
 }
@@ -96,9 +77,7 @@ export function verifyMetaOAuthState(state: string, input: { organizationId: str
   try { payload = JSON.parse(Buffer.from(encoded, "base64url").toString("utf8")); }
   catch { throw new MetaOAuthError("meta_oauth_state_invalid", "Meta authorization could not be verified.", 403); }
   const now = Math.floor((input.now || new Date()).getTime() / 1000);
-  if (payload.v !== 1 || payload.organizationId !== input.organizationId || payload.userId !== input.userId || !payload.nonce || payload.expiresAt < now || payload.issuedAt > now + 60) {
-    throw new MetaOAuthError("meta_oauth_state_invalid", "Meta authorization could not be verified.", 403);
-  }
+  if (payload.v !== 1 || payload.organizationId !== input.organizationId || payload.userId !== input.userId || !payload.nonce || payload.expiresAt < now || payload.issuedAt > now + 60) throw new MetaOAuthError("meta_oauth_state_invalid", "Meta authorization could not be verified.", 403);
   return payload;
 }
 
@@ -109,16 +88,12 @@ export function buildMetaAuthorizationUrl(input: { organizationId: string; userI
   url.searchParams.set("redirect_uri", config.redirectUri);
   url.searchParams.set("state", createMetaOAuthState(input));
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", [...META_REQUIRED_SCOPES, ...META_OPTIONAL_SCOPES].join(","));
+  url.searchParams.set("scope", META_REQUIRED_SCOPES.join(","));
   return url.toString();
 }
 
 async function graphJson(url: URL, init: RequestInit, fetchImpl: typeof fetch, accessToken?: string) {
-  const response = await fetchImpl(url, {
-    ...init,
-    cache: "no-store",
-    headers: { ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}), ...(init.headers || {}) },
-  });
+  const response = await fetchImpl(url, { ...init, cache: "no-store", headers: { ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}), ...(init.headers || {}) } });
   const body = await response.json().catch(() => ({})) as Record<string, unknown>;
   if (!response.ok) {
     const retryable = response.status === 429 || response.status >= 500;
@@ -139,11 +114,7 @@ export async function exchangeMetaAuthorizationCode(code: string, fetchImpl: typ
   const body = await graphJson(url, { method: "GET" }, fetchImpl);
   const accessToken = typeof body.access_token === "string" ? body.access_token : "";
   if (!accessToken) throw new MetaOAuthError("meta_token_exchange_failed", "Meta did not return a usable access token.", 502, true);
-  return {
-    accessToken,
-    tokenType: typeof body.token_type === "string" ? body.token_type : null,
-    expiresIn: Number.isFinite(Number(body.expires_in)) ? Number(body.expires_in) : null,
-  };
+  return { accessToken, tokenType: typeof body.token_type === "string" ? body.token_type : null, expiresIn: Number.isFinite(Number(body.expires_in)) ? Number(body.expires_in) : null };
 }
 
 export async function getMetaIdentity(accessToken: string, fetchImpl: typeof fetch = fetch): Promise<MetaIdentity> {
