@@ -25,10 +25,7 @@ export type MetaToken = {
   expiresIn: number | null;
 };
 
-export type MetaIdentity = {
-  id: string;
-  name: string | null;
-};
+export type MetaIdentity = { id: string; name: string | null };
 
 export type MetaAdAccount = {
   id: string;
@@ -42,12 +39,7 @@ export type MetaAdAccount = {
 };
 
 export class MetaOAuthError extends Error {
-  constructor(
-    readonly code: string,
-    message: string,
-    readonly httpStatus = 400,
-    readonly retryable = false,
-  ) {
+  constructor(readonly code: string, message: string, readonly httpStatus = 400, readonly retryable = false) {
     super(message);
   }
 }
@@ -73,10 +65,6 @@ export function getMetaConfiguration() {
   return { appId, appSecret, redirectUri: redirect.toString(), stateSecret };
 }
 
-function b64url(input: Buffer | string) {
-  return Buffer.from(input).toString("base64url");
-}
-
 function signature(payload: string, secret: string) {
   return createHmac("sha256", secret).update(payload).digest("base64url");
 }
@@ -92,7 +80,7 @@ export function createMetaOAuthState(input: { organizationId: string; userId: st
     issuedAt: now,
     expiresAt: now + STATE_TTL_SECONDS,
   };
-  const encoded = b64url(JSON.stringify(payload));
+  const encoded = Buffer.from(JSON.stringify(payload)).toString("base64url");
   return `${encoded}.${signature(encoded, stateSecret)}`;
 }
 
@@ -116,18 +104,21 @@ export function verifyMetaOAuthState(state: string, input: { organizationId: str
 
 export function buildMetaAuthorizationUrl(input: { organizationId: string; userId: string }) {
   const config = getMetaConfiguration();
-  const state = createMetaOAuthState(input);
   const url = new URL(META_OAUTH_DIALOG_URL);
   url.searchParams.set("client_id", config.appId);
   url.searchParams.set("redirect_uri", config.redirectUri);
-  url.searchParams.set("state", state);
+  url.searchParams.set("state", createMetaOAuthState(input));
   url.searchParams.set("response_type", "code");
   url.searchParams.set("scope", [...META_REQUIRED_SCOPES, ...META_OPTIONAL_SCOPES].join(","));
   return url.toString();
 }
 
-async function graphJson(url: URL, init: RequestInit, fetchImpl: typeof fetch) {
-  const response = await fetchImpl(url, { ...init, cache: "no-store" });
+async function graphJson(url: URL, init: RequestInit, fetchImpl: typeof fetch, accessToken?: string) {
+  const response = await fetchImpl(url, {
+    ...init,
+    cache: "no-store",
+    headers: { ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}), ...(init.headers || {}) },
+  });
   const body = await response.json().catch(() => ({})) as Record<string, unknown>;
   if (!response.ok) {
     const retryable = response.status === 429 || response.status >= 500;
@@ -158,8 +149,7 @@ export async function exchangeMetaAuthorizationCode(code: string, fetchImpl: typ
 export async function getMetaIdentity(accessToken: string, fetchImpl: typeof fetch = fetch): Promise<MetaIdentity> {
   const url = new URL(`${META_GRAPH_BASE_URL}/me`);
   url.searchParams.set("fields", "id,name");
-  url.searchParams.set("access_token", accessToken);
-  const body = await graphJson(url, { method: "GET" }, fetchImpl);
+  const body = await graphJson(url, { method: "GET" }, fetchImpl, accessToken);
   const id = typeof body.id === "string" ? body.id : String(body.id || "");
   if (!id) throw new MetaOAuthError("meta_identity_unavailable", "Meta identity could not be verified.", 502, true);
   return { id, name: typeof body.name === "string" ? body.name : null };
@@ -167,8 +157,7 @@ export async function getMetaIdentity(accessToken: string, fetchImpl: typeof fet
 
 export async function getMetaGrantedScopes(accessToken: string, fetchImpl: typeof fetch = fetch) {
   const url = new URL(`${META_GRAPH_BASE_URL}/me/permissions`);
-  url.searchParams.set("access_token", accessToken);
-  const body = await graphJson(url, { method: "GET" }, fetchImpl);
+  const body = await graphJson(url, { method: "GET" }, fetchImpl, accessToken);
   const data = Array.isArray(body.data) ? body.data as Array<Record<string, unknown>> : [];
   return data.filter((row) => row.status === "granted" && typeof row.permission === "string").map((row) => String(row.permission));
 }
@@ -180,9 +169,8 @@ export async function discoverMetaAdAccounts(accessToken: string, fetchImpl: typ
     const url = new URL(`${META_GRAPH_BASE_URL}/me/adaccounts`);
     url.searchParams.set("fields", "id,account_id,name,account_status,currency,timezone_name,timezone_offset_hours_utc,business{id,name}");
     url.searchParams.set("limit", String(ACCOUNT_PAGE_SIZE));
-    url.searchParams.set("access_token", accessToken);
     if (after) url.searchParams.set("after", after);
-    const body = await graphJson(url, { method: "GET" }, fetchImpl);
+    const body = await graphJson(url, { method: "GET" }, fetchImpl, accessToken);
     const data = Array.isArray(body.data) ? body.data as Array<Record<string, unknown>> : [];
     for (const row of data) {
       const rawAccountId = typeof row.account_id === "string" ? row.account_id : String(row.account_id || "");
