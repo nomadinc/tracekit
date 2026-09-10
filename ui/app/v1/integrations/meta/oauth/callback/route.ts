@@ -6,10 +6,11 @@ import { MetaOAuthError } from "@/lib/integrations/meta-oauth";
 
 export const dynamic = "force-dynamic";
 const STATE_COOKIE = "tracekit_meta_oauth_state";
-const RETURN_PATH = "/settings/integrations/meta";
+const RETURN_PATH = "/settings/integrations";
 
 function returnUrl(request: Request, params: Record<string, string>) {
   const url = new URL(RETURN_PATH, request.url);
+  url.searchParams.set("provider", "meta");
   for (const [key, value] of Object.entries(params)) url.searchParams.set(key, value);
   return url;
 }
