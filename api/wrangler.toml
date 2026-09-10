@@ -28,6 +28,10 @@ binding = "wowboost_imports"
 queue = "continuous-commerce"
 binding = "continuous_commerce"
 
+[[queues.producers]]
+queue = "tracekit-everflow-firehose"
+binding = "everflow_firehose"
+
 [[queues.consumers]]
 queue = "wowboost-imports"
 max_batch_size = 1
@@ -39,6 +43,13 @@ queue = "continuous-commerce"
 max_batch_size = 1
 max_batch_timeout = 5
 max_retries = 10
+
+[[queues.consumers]]
+queue = "tracekit-everflow-firehose"
+max_batch_size = 10
+max_batch_timeout = 2
+max_retries = 10
+dead_letter_queue = "tracekit-everflow-firehose-dlq"
 
 # This service must be provisioned separately; the binding does not authorize work.
 [[services]]
@@ -69,6 +80,7 @@ crons = ["*/5 * * * *"] # cadence selection runs every five minutes; schedules d
 # default remains 1 only for compatibility and is not a safe production fallback.
 # - TK_SECRET_KEY
 # - COMMAS_WEBHOOK_SECRET (secret_key returned by the Commas webhook subscription)
+# - EVERFLOW_FIREHOSE_SECRET (dedicated 256-bit bearer secret; never a plain var)
 # - TKID_HANDOFF_SIGNING_KEY_CURRENT (separate key; referenced by TKID handoff key metadata)
 # - TKID_HANDOFF_SIGNING_KEY_PREVIOUS (rotation window only)
 # - TRACEKIT_TKID_HANDOFF_SECRET (current v1 runtime binding; server-only, never a plain var)

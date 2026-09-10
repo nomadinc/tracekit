@@ -19,6 +19,7 @@ import { readQuotaBootstrapGate } from "./quota-bootstrap-gate";
 import { reconcileCommerceExecutionSignal, reconcileCommerceSchedulerSignals, runCommerceOperationalAlertEvaluation } from "./commerce-operational-alerts";
 import { createSupabaseServerFetch } from "./supabase-server-fetch";
 import { deriveCommasDisputeLedgerEvents, normalizeCommasDisputeEvent, sha256HexBytes, verifyCommasWebhookSignature, webhookStoragePath } from "./commas-dispute-webhook";
+import { EVERFLOW_FIREHOSE_BASE_PATH, firehoseEventTypeForPath, handleEverflowFirehose, processEverflowFirehoseEnvelope, recordFirehoseMetric, resolveEverflowNetwork, type EverflowFirehoseEnvelope } from "./everflow-firehose";
 import { COMMAS_ATTRIBUTION_EVENT_TYPES, attributionWebhookStoragePath, compareCommasAttributionToEverflow, normalizeCommasAttributionEvent } from "./commas-provider-attribution";
 import { enforceTkidRate, ephemeralTransportDimension, TkidRateLimitError, type DistributedCounterStore, type TkidAbuseClass } from "./tkid-distributed-abuse";
 import {
@@ -562,6 +563,8 @@ type Env = {
   CONTINUOUS_COMMERCE_RUNTIME?: Fetcher;
   CONTINUOUS_RUNTIME_SHARED_SECRET?: string;
   COMMAS_WEBHOOK_SECRET?: string;
+  EVERFLOW_FIREHOSE_SECRET?: string;
+  everflow_firehose?: Queue<EverflowFirehoseEnvelope>;
   TRACEKIT_COMMERCE_SCHEDULER_ENABLED?: string;
   TRACEKIT_COMMERCE_KILL_SWITCH?: string;
 };
@@ -22326,6 +22329,19 @@ async function runWowBoostImportPage(
         return maintenanceBlockedResponse(maintenanceClass);
       }
 
+      const firehoseEventType = firehoseEventTypeForPath(path);
+      if (firehoseEventType) {
+        const db = getSupabase(env);
+        return handleEverflowFirehose(req, firehoseEventType, env, {
+          resolveNetwork: (networkId) => resolveEverflowNetwork(db, networkId),
+          recordMetric: (metric, scope, at) => recordFirehoseMetric(db, metric, scope, at),
+          defer: (work) => ctx.waitUntil(work),
+        });
+      }
+      if (path === EVERFLOW_FIREHOSE_BASE_PATH || path.startsWith(`${EVERFLOW_FIREHOSE_BASE_PATH}/`)) {
+        return json({ ok: false, error: "firehose_endpoint_not_found" }, 404, { "cache-control": "no-store" });
+      }
+
       if (
         (
           path === "/v1/integrations/wowboost/import-orders-async"
@@ -22594,6 +22610,25 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 
 		  for (const msg of batch.messages) {
 		    const body = msg.body || {};
+		    if (body.schema_version === 1 && body.provider === "everflow" && body.transport === "firehose") {
+		      try {
+		        await processEverflowFirehoseEnvelope(getSupabase(env), body as EverflowFirehoseEnvelope);
+		        msg.ack();
+		      } catch (error) {
+		        await recordFirehoseMetric(getSupabase(env), "persistence_failure", {
+		          organization_id: String(body.organization_id || "") || undefined,
+		          connection_id: String(body.connection_id || "") || undefined,
+		          provider_account_id: String(body.provider_account_id || "") || undefined,
+		        }).catch(() => undefined);
+		        console.error("[TraceKit] Everflow Firehose processing failed", {
+		          event: "everflow.firehose.persistence_failed",
+		          event_type: String(body.event_type || "unknown").slice(0, 32),
+		          network_id: String(body.network_id || "unknown").slice(0, 128),
+		        });
+		        msg.retry();
+		      }
+		      continue;
+		    }
 		    if (isQueueObservabilityTest(body)) {
 		      console.log("[TraceKit] queue observability test delivered", { event: "queue_observability_test.delivered" });
 		      msg.ack();

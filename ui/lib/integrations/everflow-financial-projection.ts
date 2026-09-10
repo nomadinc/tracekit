@@ -266,7 +266,7 @@ export async function projectEverflowFinancialEffects(input: {
   const existingKeys = new Set(existingRows.map((row) => `${String(row.provider_account_id)}:${String(row.idempotency_key)}`));
 
   const historyRows = await commercePersistenceRequest(
-    `everflow_conversion_state_history?organization_id=eq.${encodeURIComponent(input.organizationId)}&connection_id=eq.${encodeURIComponent(input.connectionId)}&sync_run_id=eq.${encodeURIComponent(input.syncRunId)}&select=id,provider_account_id,source_identity,transition_type,payout_delta,status,event_name,is_event,payload_hash,first_seen_at`,
+    `everflow_conversion_state_history?organization_id=eq.${encodeURIComponent(input.organizationId)}&connection_id=eq.${encodeURIComponent(input.connectionId)}&provider_account_id=in.(${providerAccountIds.map(encodeURIComponent).join(",")})&select=id,provider_account_id,source_identity,transition_type,payout_delta,status,event_name,is_event,payload_hash,first_seen_at`,
   );
   const histories = historyRows.map(history);
   const historyBySource = new Map<string, StateHistory[]>();

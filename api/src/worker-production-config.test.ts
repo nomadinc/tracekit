@@ -18,6 +18,8 @@ test("production Worker configuration preserves the authorized Queue topology", 
   assert.equal(consumers.filter((entry: any) => entry.queue === "wowboost-imports").length, 1);
   assert.equal(producers.filter((entry: any) => entry.queue === "continuous-commerce").length, 1);
   assert.equal(consumers.filter((entry: any) => entry.queue === "continuous-commerce").length, 1);
+  assert.equal(producers.filter((entry: any) => entry.queue === "tracekit-everflow-firehose").length, 1);
+  assert.equal(consumers.filter((entry: any) => entry.queue === "tracekit-everflow-firehose").length, 1);
   const continuousProducer = producers.find((entry: any) => entry.queue === "continuous-commerce");
   const continuousConsumer = consumers.find((entry: any) => entry.queue === "continuous-commerce");
   assert.equal(continuousProducer.binding, "continuous_commerce");
@@ -28,6 +30,14 @@ test("production Worker configuration preserves the authorized Queue topology", 
     max_retries: 10,
   });
   assert.deepEqual(config.services, [{ binding: "CONTINUOUS_COMMERCE_RUNTIME", service: "tracekit-continuous-runtime" }]);
+  assert.equal(producers.find((entry: any) => entry.queue === "tracekit-everflow-firehose")?.binding, "everflow_firehose");
+  assert.deepEqual(consumers.find((entry: any) => entry.queue === "tracekit-everflow-firehose"), {
+    queue: "tracekit-everflow-firehose",
+    max_batch_size: 10,
+    max_batch_timeout: 2,
+    max_retries: 10,
+    dead_letter_queue: "tracekit-everflow-firehose-dlq",
+  });
 
   const wowboostProducer = producers.find((entry: any) => entry.queue === "wowboost-imports");
   const wowboostConsumer = consumers.find((entry: any) => entry.queue === "wowboost-imports");
@@ -43,7 +53,11 @@ test("production Worker configuration preserves the authorized Queue topology", 
 test("production Worker configuration preserves route, cron, maintenance, and key controls", () => {
   const config = productionConfig();
 
-  assert.deepEqual(config.routes, [{ pattern: "journey.trace-kit.io", custom_domain: true }]);
+  assert.deepEqual(config.routes, [
+    { pattern: "journey.trace-kit.io", custom_domain: true },
+    { pattern: "api.trace-kit.io", custom_domain: true },
+    { pattern: "webhooks.trace-kit.io", custom_domain: true },
+  ]);
   assert.deepEqual(config.triggers?.crons, ["*/5 * * * *"]);
   assert.equal(config.vars?.TRACEKIT_MAINTENANCE_WRITE_GATE_ENABLED, "false");
   assert.equal(config.vars?.TRACEKIT_COMMERCE_SCHEDULER_ENABLED, "false");

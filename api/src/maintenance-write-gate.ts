@@ -29,7 +29,7 @@ export function classifyHttpMaintenanceRequest(method: string, pathname: string)
   const path = pathname || "/";
   if (GET_WRITE_PATHS.some((pattern) => pattern.test(path))) return "http_mutation";
   if (["GET", "HEAD", "OPTIONS"].includes(normalizedMethod)) return "read_only";
-  if (/\/(?:webhooks?|ingest)(?:\/|$)/i.test(path)) return "webhook_ingress";
+  if (/\/(?:webhooks?|ingest|firehose)(?:\/|$)/i.test(path)) return "webhook_ingress";
   return "http_mutation";
 }
 
