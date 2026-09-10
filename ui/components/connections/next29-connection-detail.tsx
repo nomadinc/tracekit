@@ -3,18 +3,28 @@
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { useState } from "react";
-import { CheckCircle2, Database, RefreshCw, ShieldCheck } from "lucide-react";
+import { CheckCircle2, Database, PlayCircle, RefreshCw, ShieldCheck } from "lucide-react";
 import { NEXT29_CAPABILITIES, type ConnectionExperience } from "@/lib/commerce/integration-experience";
 import { readCommerceActionResponse } from "@/lib/commerce/action-response";
 
+type LiveValidationResponse = {
+  ok: boolean;
+  message?: string;
+  validation?: {
+    recordsObserved: { orders: number; subscriptions: number; disputes: number };
+    hasMore: { orders: boolean; subscriptions: boolean; disputes: boolean };
+    evidenceAndCanonicalPathExecuted: boolean;
+  };
+};
+
 export function Next29ConnectionDetail({ connection }: { connection: ConnectionExperience }) {
   const router = useRouter();
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState<"verify" | "validate" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const capabilities = connection.capabilities.length ? connection.capabilities : NEXT29_CAPABILITIES;
 
   async function verify() {
-    setBusy(true);
+    setBusy("verify");
     setNotice(null);
     try {
       const response = await fetch(`/api/commerce/connections/${connection.id}/verify`, {
@@ -29,7 +39,28 @@ export function Next29ConnectionDetail({ connection }: { connection: ConnectionE
     } catch (error) {
       setNotice(error instanceof Error ? error.message : "29Next verification failed.");
     } finally {
-      setBusy(false);
+      setBusy(null);
+    }
+  }
+
+  async function runLiveValidation() {
+    setBusy("validate");
+    setNotice(null);
+    try {
+      const response = await fetch("/api/next29/live-validation", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ connectionId: connection.id }),
+      });
+      const result = await response.json().catch(() => null) as LiveValidationResponse | null;
+      if (!response.ok || !result?.ok || !result.validation) throw new Error(result?.message || "29Next M12 live validation failed.");
+      const counts = result.validation.recordsObserved;
+      setNotice(`M12 bounded validation completed: ${counts.orders} orders, ${counts.subscriptions} subscriptions, ${counts.disputes} disputes. Evidence and canonical persistence executed.`);
+      router.refresh();
+    } catch (error) {
+      setNotice(error instanceof Error ? error.message : "29Next M12 live validation failed.");
+    } finally {
+      setBusy(null);
     }
   }
 
@@ -44,7 +75,8 @@ export function Next29ConnectionDetail({ connection }: { connection: ConnectionE
           </div>
           <div className="flex flex-wrap gap-2">
             <Link href="/connections/commerce" className="rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/[.04]">Back to Connections</Link>
-            {connection.canManage ? <button onClick={verify} disabled={busy || connection.credential.status !== "active"} className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-950 disabled:opacity-40"><RefreshCw className={`h-3.5 w-3.5 ${busy ? "animate-spin" : ""}`} />{busy ? "Verifying…" : "Verify Connection"}</button> : null}
+            {connection.canManage ? <button onClick={runLiveValidation} disabled={busy !== null || connection.credential.status !== "active" || connection.status !== "connected"} className="inline-flex items-center gap-2 rounded-lg border border-cyan-300/30 bg-cyan-300/10 px-3 py-2 text-xs font-semibold text-cyan-100 disabled:opacity-40"><PlayCircle className={`h-3.5 w-3.5 ${busy === "validate" ? "animate-pulse" : ""}`} />{busy === "validate" ? "Running M12…" : "Run M12 Live Validation"}</button> : null}
+            {connection.canManage ? <button onClick={verify} disabled={busy !== null || connection.credential.status !== "active"} className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-950 disabled:opacity-40"><RefreshCw className={`h-3.5 w-3.5 ${busy === "verify" ? "animate-spin" : ""}`} />{busy === "verify" ? "Verifying…" : "Verify Connection"}</button> : null}
           </div>
         </header>
 
@@ -57,7 +89,7 @@ export function Next29ConnectionDetail({ connection }: { connection: ConnectionE
             <p className="mt-4 text-xs leading-5 text-slate-500">The Admin API token is encrypted server-side and never returned to the browser.</p>
           </Panel>
           <Panel icon={<CheckCircle2 className="h-4 w-4" />} title="M12 activation state">
-            <Rows rows={[["Orders", "Read-only"], ["Subscriptions", "Read-only"], ["Disputes", "Read-only"], ["Scheduled sync", "Disabled"]]} />
+            <Rows rows={[["Orders", "Read-only"], ["Subscriptions", "Read-only"], ["Disputes", "Read-only"], ["Bounded live validation", "Max 10 each"], ["Scheduled sync", "Disabled"]]} />
             <p className="mt-4 text-xs leading-5 text-amber-200">Live webhook registration and automatic production execution remain disabled until M12 validation is complete.</p>
           </Panel>
         </section>
