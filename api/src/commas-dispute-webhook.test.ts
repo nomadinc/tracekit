@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { COMMAS_DISPUTE_EVENT_TYPES, deriveCommasDisputeLedgerEvents, hmacSha256Hex, normalizeCommasDisputeEvent, verifyCommasWebhookSignature, webhookStoragePath } from "./commas-dispute-webhook.ts";
+import { COMMAS_DISPUTE_EVENT_TYPES, deriveCommasDisputeLedgerEvents, hmacSha256Hex, isLogicalDisputeDeliveryDuplicate, normalizeCommasDisputeEvent, verifyCommasWebhookSignature, verifyCommasWebhookSignatureAgainstSecrets, webhookStoragePath } from "./commas-dispute-webhook.ts";
 
 const fixture = {
   id: "event-1",
@@ -43,6 +43,32 @@ test("Commas webhook signature uses raw bytes and fails closed", async () => {
   assert.equal(await verifyCommasWebhookSignature(raw, signature, "wrong"), false);
   assert.equal(await verifyCommasWebhookSignature(raw, null, "secret"), false);
   assert.equal(await verifyCommasWebhookSignature(new TextEncoder().encode(`${JSON.stringify(fixture)} `), signature, "secret"), false);
+});
+
+test("Commas webhook overlap accepts only the bounded primary or secondary secret", async () => {
+  const raw = new TextEncoder().encode(JSON.stringify(fixture));
+  const primary = await hmacSha256Hex("primary", raw);
+  const secondary = await hmacSha256Hex("secondary", raw);
+  assert.equal(await verifyCommasWebhookSignatureAgainstSecrets(raw, primary, ["primary", "secondary"]), true);
+  assert.equal(await verifyCommasWebhookSignatureAgainstSecrets(raw, secondary, ["primary", "secondary"]), true);
+  assert.equal(await verifyCommasWebhookSignatureAgainstSecrets(raw, primary, ["wrong", "secondary"]), false);
+  assert.equal(await verifyCommasWebhookSignatureAgainstSecrets(raw, null, ["primary", "secondary"]), false);
+  assert.equal(await verifyCommasWebhookSignatureAgainstSecrets(raw, primary, ["primary", "secondary", "third"]), false);
+  assert.equal(await verifyCommasWebhookSignatureAgainstSecrets(raw, secondary, [null, "secondary"]), false);
+  assert.equal(await verifyCommasWebhookSignatureAgainstSecrets(raw, primary, ["primary", "primary"]), false);
+});
+
+test("overlap verifier does not place secrets in its source-level diagnostics", async () => {
+  const source = await (await import("node:fs/promises")).readFile(new URL("./commas-dispute-webhook.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(source, /console\.(log|error).*secret/i);
+});
+
+test("overlap duplicate suppression keys logical dispute effects by dispute, event semantics, and payload", () => {
+  const event = { providerDisputeId: "dp_1", eventType: "dispute.created" as const };
+  assert.equal(isLogicalDisputeDeliveryDuplicate({ providerDisputeId: "dp_1", eventType: "dispute.created", payloadHash: "hash" }, event, "hash"), true);
+  assert.equal(isLogicalDisputeDeliveryDuplicate({ providerDisputeId: "dp_1", eventType: "dispute.created", payloadHash: "other" }, event, "hash"), false);
+  assert.equal(isLogicalDisputeDeliveryDuplicate({ providerDisputeId: "dp_1", eventType: "dispute.updated", payloadHash: "hash" }, event, "hash"), false);
+  assert.equal(isLogicalDisputeDeliveryDuplicate(null, event, "hash"), false);
 });
 
 test("webhook storage path is scoped and deterministic", () => {
@@ -88,6 +114,14 @@ test("migration 073 enforces the exact dispute-table ACL matrix without changing
   assert.match(source, /grant select, insert on public\.commerce_provider_dispute_lifecycle_events to service_role/);
   assert.doesNotMatch(source, /owner to|alter table .* owner|create policy|drop policy/);
   assert.match(source, /enable row level security/);
+});
+
+test("overlap idempotency migration keys lifecycle effects by logical payload", async () => {
+  const source = await (await import("node:fs/promises")).readFile(new URL("../../supabase/migrations/20260911210000_commas_dispute_overlap_idempotency.sql", import.meta.url), "utf8");
+  assert.match(source, /add column if not exists payload_hash/);
+  assert.match(source, /unique index if not exists commerce_provider_dispute_lifecycle_logical_uidx/);
+  assert.match(source, /dispute_id, event_type, payload_hash/);
+  assert.doesNotMatch(source, /drop table|delete from|truncate/i);
 });
 
 test("router exposes only the Commas webhook POST path and keeps scheduler/provider paths separate", async () => {

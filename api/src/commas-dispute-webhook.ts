@@ -91,7 +91,23 @@ export async function hmacSha256Hex(secret: string, body: Uint8Array) {
 }
 
 export async function verifyCommasWebhookSignature(rawBody: Uint8Array, supplied: string | null, secret: string | null | undefined) {
-  if (!supplied || !secret) return false;
+  return verifyCommasWebhookSignatureAgainstSecrets(rawBody, supplied, secret == null ? [] : [secret]);
+}
+
+/** Verify against the bounded primary/overlap secret set without exposing which matched. */
+export async function verifyCommasWebhookSignatureAgainstSecrets(rawBody: Uint8Array, supplied: string | null, secrets: readonly (string | null | undefined)[]) {
+  if (!supplied) return false;
+  const primary = secrets[0];
+  if (typeof primary !== "string" || primary.trim().length === 0) return false;
+  const active = secrets.filter((value): value is string => typeof value === "string" && value.trim().length > 0).map((value) => value.trim());
+  if (active.length === 0 || active.length > 2) return false;
+  if (new Set(active).size !== active.length) return false;
+  let valid = false;
+  for (const secret of active) valid = (await verifyCommasWebhookSignatureSingle(rawBody, supplied, secret)) || valid;
+  return valid;
+}
+
+async function verifyCommasWebhookSignatureSingle(rawBody: Uint8Array, supplied: string, secret: string) {
   const expected = await hmacSha256Hex(secret, rawBody);
   const actual = supplied.trim().toLowerCase();
   if (!/^[a-f0-9]{64}$/.test(actual) || actual.length !== expected.length) return false;
@@ -102,6 +118,11 @@ export async function verifyCommasWebhookSignature(rawBody: Uint8Array, supplied
 
 export function webhookStoragePath(organizationId: string, connectionId: string, providerAccountId: string, payloadHash: string) {
   return `${organizationId}/${connectionId}/${providerAccountId}/commas-dispute-webhook/${payloadHash}.json`;
+}
+
+/** Logical overlap duplicate: transport/event IDs may differ across subscriptions. */
+export function isLogicalDisputeDeliveryDuplicate(existing: { providerDisputeId?: string; eventType?: string; payloadHash?: string } | null | undefined, event: Pick<NormalizedCommasDisputeEvent, "providerDisputeId" | "eventType">, payloadHash: string) {
+  return Boolean(existing && existing.providerDisputeId === event.providerDisputeId && existing.eventType === event.eventType && existing.payloadHash === payloadHash);
 }
 
 export function deriveCommasDisputeLedgerEvents(event: NormalizedCommasDisputeEvent, processorAccountId: string) {

@@ -18,7 +18,7 @@ import { consumeCommerceMessage, isConnectedCommasConnection, isEligibleCommasSc
 import { readQuotaBootstrapGate } from "./quota-bootstrap-gate";
 import { reconcileCommerceExecutionSignal, reconcileCommerceSchedulerSignals, runCommerceOperationalAlertEvaluation } from "./commerce-operational-alerts";
 import { createSupabaseServerFetch } from "./supabase-server-fetch";
-import { deriveCommasDisputeLedgerEvents, normalizeCommasDisputeEvent, sha256HexBytes, verifyCommasWebhookSignature, webhookStoragePath } from "./commas-dispute-webhook";
+import { deriveCommasDisputeLedgerEvents, isLogicalDisputeDeliveryDuplicate, normalizeCommasDisputeEvent, sha256HexBytes, verifyCommasWebhookSignatureAgainstSecrets, webhookStoragePath } from "./commas-dispute-webhook";
 import { EVERFLOW_FIREHOSE_BASE_PATH, EverflowRoutingUnavailableError, firehoseEventTypeForPath, handleEverflowFirehose, processEverflowFirehoseEnvelope, recordFirehoseMetric, type EverflowFirehoseEnvelope } from "./everflow-firehose";
 import { COMMAS_ATTRIBUTION_EVENT_TYPES, attributionWebhookStoragePath, compareCommasAttributionToEverflow, normalizeCommasAttributionEvent } from "./commas-provider-attribution";
 import { enforceTkidRate, ephemeralTransportDimension, TkidRateLimitError, type DistributedCounterStore, type TkidAbuseClass } from "./tkid-distributed-abuse";
@@ -563,6 +563,7 @@ type Env = {
   CONTINUOUS_COMMERCE_RUNTIME?: Fetcher;
   CONTINUOUS_RUNTIME_SHARED_SECRET?: string;
   COMMAS_WEBHOOK_SECRET?: string;
+  COMMAS_WEBHOOK_SECRET_SECONDARY?: string;
   EVERFLOW_FIREHOSE_SECRET?: string;
   everflow_firehose?: Queue<EverflowFirehoseEnvelope>;
   TRACEKIT_COMMERCE_SCHEDULER_ENABLED?: string;
@@ -724,7 +725,7 @@ async function handleCommasDisputeWebhook(req: Request, env: Env): Promise<Respo
   const raw = new Uint8Array(await req.arrayBuffer());
   if (raw.byteLength === 0 || raw.byteLength > 262144) return json({ ok: false, error: "invalid_payload" }, 400);
   const suppliedSignature = req.headers.get("x-webhook-signature");
-  if (!await verifyCommasWebhookSignature(raw, suppliedSignature, env.COMMAS_WEBHOOK_SECRET)) {
+  if (!await verifyCommasWebhookSignatureAgainstSecrets(raw, suppliedSignature, [env.COMMAS_WEBHOOK_SECRET, env.COMMAS_WEBHOOK_SECRET_SECONDARY])) {
     console.log("[TraceKit] Commas dispute webhook authentication failed", { event: "commas.dispute_webhook.authentication_failed" });
     return json({ ok: false, error: "unauthorized" }, 401);
   }
@@ -743,13 +744,15 @@ async function handleCommasDisputeWebhook(req: Request, env: Env): Promise<Respo
   const { data: providerAccounts, error: accountError } = await db.from("commerce_provider_accounts").select("id").eq("organization_id", connection.organization_id).eq("connection_id", connection.id).eq("status", "active").limit(2);
   if (accountError || !providerAccounts || providerAccounts.length !== 1) return json({ ok: false, error: "scope_unavailable" }, 409);
   const providerAccountId = String(providerAccounts[0].id);
-  const { data: existing, error: existingError } = await db.from("commerce_dispute_webhook_events").select("id").eq("organization_id", connection.organization_id).eq("connection_id", connection.id).eq("provider_event_id", normalized.providerEventId).maybeSingle();
+  const { data: existing, error: existingError } = await db.from("commerce_dispute_webhook_events").select("id,payload_hash").eq("organization_id", connection.organization_id).eq("connection_id", connection.id).eq("provider_event_id", normalized.providerEventId).maybeSingle();
   if (existingError) return json({ ok: false, error: "dedupe_unavailable" }, 503);
   if (existing) {
     console.log("[TraceKit] Commas dispute webhook duplicate suppressed", { event: "commas.dispute_webhook.duplicate_suppressed" });
     return json({ ok: true, duplicate: true }, 200);
   }
   const payloadHash = await sha256HexBytes(raw);
+  const { data: logicalDuplicate, error: logicalDuplicateError } = await db.from("commerce_dispute_webhook_events").select("id,provider_dispute_id,event_type,payload_hash").eq("organization_id", connection.organization_id).eq("connection_id", connection.id).eq("provider_dispute_id", normalized.providerDisputeId).eq("event_type", normalized.eventType).eq("payload_hash", payloadHash).limit(1).maybeSingle();
+  if (logicalDuplicateError) return json({ ok: false, error: "dedupe_unavailable" }, 503);
   const storageReference = `commerce-evidence/${webhookStoragePath(String(connection.organization_id), String(connection.id), providerAccountId, payloadHash)}`;
   const storagePath = storageReference.slice("commerce-evidence/".length);
   const supabaseUrl = String(env.SUPABASE_URL || "").replace(/\/$/, "");
@@ -773,6 +776,10 @@ async function handleCommasDisputeWebhook(req: Request, env: Env): Promise<Respo
     if (String(webhookError.code) === "23505") return json({ ok: true, duplicate: true }, 200);
     return json({ ok: false, error: "event_persistence_failed" }, 503);
   }
+  if (isLogicalDisputeDeliveryDuplicate(logicalDuplicate ? { providerDisputeId: logicalDuplicate.provider_dispute_id, eventType: logicalDuplicate.event_type, payloadHash: logicalDuplicate.payload_hash } : null, normalized, payloadHash)) {
+    console.log("[TraceKit] Commas dispute logical duplicate suppressed", { event: "commas.dispute_webhook.logical_duplicate_suppressed" });
+    return json({ ok: true, duplicate: true }, 200);
+  }
   const { data: prior } = await db.from("commerce_provider_disputes").select("id").eq("organization_id", connection.organization_id).eq("connection_id", connection.id).eq("provider_account_id", providerAccountId).eq("provider_dispute_id", normalized.providerDisputeId).maybeSingle();
   const projection = { organization_id: connection.organization_id, account_id: connection.account_id, connection_id: connection.id, provider_account_id: providerAccountId, provider_dispute_id: normalized.providerDisputeId, latest_event_id: webhookEventId, latest_evidence_id: evidenceId, provider_transaction_id: normalized.providerTransactionId, payment_intent_id: normalized.paymentIntentId, payment_id: normalized.paymentId, order_id: normalized.orderId, external_order_id: normalized.externalOrderId, amount: normalized.amount, currency: normalized.currency, fee: normalized.fee, status: normalized.status, state: normalized.state, reason: normalized.reason, reason_code: normalized.reasonCode, response_deadline: normalized.responseDeadline, opened_at: normalized.openedAt, updated_at: normalized.updatedAt || now, closed_at: normalized.closedAt, buyer_reference: normalized.buyerReference, product_reference: normalized.productReference };
   const { data: dispute, error: disputeError } = prior ? await db.from("commerce_provider_disputes").update(projection).eq("id", prior.id).select("id").single() : await db.from("commerce_provider_disputes").insert(projection).select("id").single();
@@ -786,7 +793,8 @@ async function handleCommasDisputeWebhook(req: Request, env: Env): Promise<Respo
       await db.from("commerce_source_mappings").upsert({ organization_id: connection.organization_id, connection_id: connection.id, provider_account_id: providerAccountId, source_object_type: "commas_dispute", source_object_id: normalized.providerDisputeId, canonical_object_type: "dispute", canonical_object_id: dispute.id, first_seen_at: now, last_seen_at: now, source_created_at: normalized.createdAt, source_updated_at: normalized.updatedAt, payload_hash: payloadHash, mapping_version: "commas-dispute-v1", state: "active", metadata: { matched_via: "provider_transaction_id" } }, { onConflict: "connection_id,provider_account_id,source_object_type,source_object_id" });
     }
   }
-  const { error: lifecycleError } = await db.from("commerce_provider_dispute_lifecycle_events").insert({ organization_id: connection.organization_id, connection_id: connection.id, provider_account_id: providerAccountId, dispute_id: dispute.id, webhook_event_id: webhookEventId, event_type: normalized.eventType, status: normalized.status, state: normalized.state, reason: normalized.reason, reason_code: normalized.reasonCode, observed_at: now, metadata: { source: "commas_webhook" } });
+  const { error: lifecycleError } = await db.from("commerce_provider_dispute_lifecycle_events").insert({ organization_id: connection.organization_id, connection_id: connection.id, provider_account_id: providerAccountId, dispute_id: dispute.id, webhook_event_id: webhookEventId, event_type: normalized.eventType, status: normalized.status, state: normalized.state, reason: normalized.reason, reason_code: normalized.reasonCode, observed_at: now, payload_hash: payloadHash, metadata: { source: "commas_webhook" } });
+  if (lifecycleError && String(lifecycleError.code) === "23505") return json({ ok: true, duplicate: true }, 200);
   if (lifecycleError) return json({ ok: false, error: "normalization_failed" }, 503);
   const ledgerEvents = deriveCommasDisputeLedgerEvents(normalized, providerAccountId);
   if (ledgerEvents.length) {
