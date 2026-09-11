@@ -25,9 +25,9 @@ test("29Next M13 characterization does not activate webhook processing", () => {
   assert.match(route, /Diagnostic-only endpoint/);
 });
 
-test("29Next M13 characterization never returns signing secret or provider payload", () => {
+test("29Next M13 characterization returns proof only", () => {
   assert.match(route, /TRACEKIT_NEXT29_WEBHOOK_SIGNING_SECRET/);
-  assert.doesNotMatch(route, /signingSecret[,}]/);
-  assert.doesNotMatch(route, /rawBody:/);
-  assert.match(route, /serialization: proof\.serialization/);
+  assert.match(route, /verified: true, serialization: proof\.serialization, requestId/);
+  assert.doesNotMatch(route, /payload:\s*raw/);
+  assert.doesNotMatch(route, /signingSecret:\s*signingSecret/);
 });
