@@ -1,0 +1,59 @@
+import { randomUUID } from "node:crypto";
+import { NextResponse } from "next/server";
+import { characterizeNext29WebhookSignature } from "../../../../../../api/src/connectors/next29/activation-readiness.ts";
+import { commercePersistenceRequest } from "@/lib/commerce/supabase-control-repository";
+
+export const runtime = "nodejs";
+
+const MAX_BODY_BYTES = 256_000;
+
+function responseHeaders(requestId: string) {
+  return { "x-tracekit-request-id": requestId, "cache-control": "no-store" };
+}
+
+function failure(requestId: string, status: number, code: string, message: string) {
+  return NextResponse.json({ ok: false, code, message, requestId }, { status, headers: responseHeaders(requestId) });
+}
+
+export async function POST(request: Request, context: { params: Promise<{ connectionId: string }> }) {
+  const requestId = randomUUID();
+  try {
+    const environment = String(process.env.TRACEKIT_NEXT29_WEBHOOK_CHARACTERIZATION_ENV || "").trim().toLowerCase();
+    if (!new Set(["preview", "staging"]).has(environment) || process.env.NODE_ENV === "production") {
+      return failure(requestId, 404, "resource_unavailable", "The requested resource is unavailable.");
+    }
+
+    const signingSecret = String(process.env.TRACEKIT_NEXT29_WEBHOOK_SIGNING_SECRET || "").trim();
+    if (signingSecret.length < 8) {
+      return failure(requestId, 503, "characterization_unavailable", "29Next webhook characterization is not configured.");
+    }
+
+    const { connectionId } = await context.params;
+    if (!/^[0-9a-f-]{36}$/i.test(connectionId)) return failure(requestId, 404, "resource_unavailable", "The requested resource is unavailable.");
+    const connections = await commercePersistenceRequest(`commerce_provider_connections?id=eq.${encodeURIComponent(connectionId)}&provider=eq.next29&select=id&limit=1`);
+    if (connections.length !== 1) return failure(requestId, 404, "resource_unavailable", "The requested resource is unavailable.");
+
+    const signature = String(request.headers.get("x-29next-signature") || "").trim();
+    if (!signature) return failure(requestId, 400, "signature_missing", "29Next signature header is required.");
+
+    const raw = new Uint8Array(await request.arrayBuffer());
+    if (!raw.length || raw.length > MAX_BODY_BYTES) return failure(requestId, 413, "invalid_payload_size", "Webhook payload size is outside the characterization limit.");
+
+    const proof = await characterizeNext29WebhookSignature({ rawBody: raw, signature, signingSecret });
+    console.info("next29_m13_webhook_characterization", {
+      requestId,
+      connectionId,
+      verified: proof.verified,
+      serialization: proof.serialization,
+      byteSize: raw.byteLength,
+    });
+
+    // Diagnostic-only endpoint: do not persist provider payloads, reserve webhook
+    // receipts, invoke canonical handlers, or acknowledge production activation.
+    if (!proof.verified) return failure(requestId, 401, "signature_unverified", "29Next webhook signature could not be characterized.");
+    return NextResponse.json({ ok: true, verified: true, serialization: proof.serialization, requestId }, { status: 200, headers: responseHeaders(requestId) });
+  } catch (error) {
+    console.error("next29_m13_webhook_characterization_failed", { requestId, error: error instanceof Error ? error.message.slice(0, 300) : "unknown" });
+    return failure(requestId, 500, "characterization_failed", "29Next webhook characterization failed.");
+  }
+}
