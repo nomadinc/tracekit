@@ -1,10 +1,10 @@
 # WS-008 M12 — 29Next Activation Readiness & Live Validation
 
-Status: REVIEW pending dedicated local regression gate and live non-production proof.
+Status: PASS for bounded live ingestion proof. Production activation remains blocked pending M13 webhook characterization/readiness gate.
 
 ## Mission
 
-Prove the completed M2–M11 connector is safe to activate before any production schedule, external dispatcher, or live webhook is enabled.
+Prove the completed M2–M11 connector can safely read and persist real 29Next data before any production schedule, external dispatcher, or live webhook is enabled.
 
 M12 is a validation milestone, not an activation milestone.
 
@@ -12,100 +12,113 @@ M12 is a validation milestone, not an activation milestone.
 
 M11 is locked at `a2861c0ecc15f62e71c9d316961841baa43e8235` with 84/84 dedicated tests passing.
 
-## Readiness gate
+## Local regression gate
 
-`evaluateNext29ActivationReadiness()` is a pure fail-closed gate. Production readiness requires explicit evidence for:
+The dedicated M12/UI regression gate passed 25/25 after the operator-surface and capability-regression fixes.
 
-- all required 29Next/shared migrations applied,
-- stable API version `2024-04-01`,
-- read-only connection verification for orders, subscriptions, and disputes,
-- bounded live reads for all three resources,
-- immutable evidence persistence,
-- at least one canonical order reconciliation proof,
-- captured webhook signature verification,
-- known webhook signing serialization.
+The existing connector regression suite also proved the bounded M2–M12 runtime surfaces without enabling schedules or webhook delivery.
 
-Subscription/dispute canonical samples are reported as warnings when a validation store simply has no such records; the gate does not fabricate sample data.
+## Live environment
 
-If production execution is already enabled before the gate is evaluated, readiness fails closed.
+Live validation was executed from the non-production TraceKit UI against Supabase project `joahiwgidfbzwzyslrbq` using the working Stem Labs 29Next connection:
 
-## Non-production live-validation harness
+- connection: `3c9a11bf-d4bc-4328-b627-0808d0db5670`
+- API version: `2024-04-01`
+- Orders read: PASS
+- Subscriptions read: PASS, zero records observed in bounded sample
+- Disputes read: PASS, zero records observed in bounded sample
+- Scheduled execution: disabled
+- Webhook delivery: disabled
 
-`runNext29LiveValidation()`:
+## Bounded live-ingestion proof
 
-- accepts only `preview` or `staging`,
-- invokes the proven M9 bounded runtime,
-- reads orders, subscriptions, and disputes,
-- is hard capped at one page / 10 records per resource,
-- uses the actual evidence and canonical persistence adapters supplied by the runtime,
-- does not claim/enable schedules,
-- does not invoke the M11 dispatcher,
-- does not register webhooks,
-- does not mutate 29Next.
+The M12 operator harness remained hard capped at one page / 10 records per resource.
 
-The live report contains counts and booleans only; it does not return provider payloads or credentials.
+Final successful run:
 
-## Webhook serialization proof
+- orders: 10
+- subscriptions: 0
+- disputes: 0
+- evidence and canonical persistence path: executed
 
-29Next currently documents `X-29Next-Signature` as HMAC-SHA256 using the webhook signing secret. Their published Python example parses JSON and then signs `json.dumps(webhook_data)`, so production activation must validate the actual delivery serialization rather than assume raw-byte semantics.
+The successful order run completed with:
 
-`characterizeNext29WebhookSignature()` tests a captured delivery against:
+- `records_seen = 10`
+- `pages_completed = 1`
+- completed checkpoint at page 1
+- no next cursor
 
-1. exact received bytes,
-2. parsed + JSON reserialization,
-3. otherwise returns `unknown` and blocks activation.
+## Persistence reconciliation
 
-This diagnostic does not process, persist, or acknowledge the webhook.
+The successful order run reconciled cleanly:
 
-## Required migrations
+- latest-run order Evidence rows: 10
+- distinct latest-run source objects: 10
+- missing Evidence storage references: 0
+- platform orders: 10
+- order source mappings: 10
+- order lines: 18
+- provider products observed: 4
+- orders without mappings: 0
+- orders without Evidence: 0
+- duplicate provider orders: 0
+- duplicate source mappings: 0
+- order lines without parent order: 0
+- order lines without Evidence: 0
 
-M12 explicitly preflights these connector dependencies:
+There are 13 total order Evidence rows on the connection because three earlier failed M12 attempts persisted immutable Evidence before failing farther downstream. This is expected evidence-first behavior. The successful run itself contains exactly 10 Evidence rows for 10 distinct source orders.
 
-- `097_commerce_subscriptions_v1.sql`
-- `098_commerce_webhook_receipts_v1.sql`
-- `20260901060000_generalize_commerce_dispute_observations.sql`
-- `20260902030000_next29_incremental_scheduler_foundation.sql`
-- `20260902043000_next29_scheduler_dispatch_runtime.sql`
+## Rare-sample warnings
 
-The repository gate proves every referenced filename exists and the set is unique. Applying them to a real non-production database remains part of the live validation phase.
+### Subscription live canonical sample
 
-## Activation boundary
+**WARNING — sample unavailable, not a failure.**
 
-M12 does not:
+The bounded subscription read completed successfully but returned zero subscription records. No synthetic subscription was created and no canonical subscription proof is claimed.
 
-- write or expose a 29Next API token,
-- enable a production schedule,
-- create/enable an external cron or timer,
-- register a production webhook,
-- mutate provider orders/subscriptions/disputes,
-- change Shopify, Everflow, or Commas runtimes.
+The M5/M6 subscription model, normalization, schema, ingestion, rebill lineage, pending reconciliation, and regression tests remain intact. A real subscription sample should be observed opportunistically when available.
 
-## Acceptance gate
+### Dispute live canonical sample
 
-The M2–M12 dedicated local gate must prove the existing 84 M2–M11 tests plus:
+**WARNING — sample unavailable, not a failure.**
 
-- complete evidence can satisfy the readiness evaluator,
-- missing migrations/live reads fail readiness,
-- premature production execution fails readiness,
-- no-sample subscription/dispute cases remain explicit warnings,
-- raw-byte webhook signatures are characterized correctly,
-- JSON-reserialized signatures are characterized correctly,
-- live validation exercises all three read resources with strict bounds,
-- live validation refuses production,
-- every required migration filename exists,
-- the required migration list is unique.
+The bounded dispute read completed successfully but returned zero dispute records. No synthetic chargeback/dispute was created and no canonical dispute proof is claimed.
 
-Expected dedicated total after M12: 94 tests.
+The M8 dispute API ingestion, webhook refresh path, reconciliation, lifecycle, financial projection, provenance, and regression tests remain intact. A real dispute sample should be observed opportunistically when available.
 
-## Live proof still required after local PASS
+These two warnings are explicitly non-blocking for completing M12 bounded live-ingestion proof. They must remain visible until real samples are observed; they must never be converted into fabricated PASS evidence.
 
-A local 94/94 result makes M12 code ready for live validation, not ready for production activation. The remaining operator proof is:
+## Live defects found and corrected during M12
 
-1. apply/verify migrations in Preview or Staging,
-2. provision one real 29Next connection with read scopes only,
-3. run read-only capability verification,
-4. run the one-page/10-record live validation,
-5. inspect evidence/canonical rows for identity and totals,
-6. send/capture one real 29Next test webhook and characterize its signing serialization,
-7. evaluate the readiness gate,
-8. only then decide whether a later milestone may activate ongoing execution.
+M12 live proof exposed and corrected several integration-boundary defects before activation:
+
+- 29Next OAuth app permissions were initially absent.
+- A token minted before permissions were configured returned 401 and had to be reissued.
+- The generic credential-rotation path did not serialize 29Next `{ store, accessToken, apiVersion }` credentials correctly; a provider-specific rotation path/UI was added.
+- M12 persistence diagnostics were hardened so cleanup writes cannot hide the original persistence boundary.
+- `commerce_order_lines.id` was NOT NULL with no default; the schema now supplies `gen_random_uuid()` for the surrogate key.
+- stale/duplicate 29Next connection state was identified; the working connection above is the validation baseline.
+
+## Readiness boundary carried into M13
+
+M12 proves real bounded reads and real Evidence/canonical order persistence. It does **not** activate ongoing production execution.
+
+The following remain disabled after M12:
+
+- production schedules
+- external cron/timer dispatch
+- live webhook processing
+- provider mutations
+
+Webhook signature characterization and the final fail-closed activation-readiness decision are carried into M13 and must complete before any ongoing execution is enabled.
+
+## M12 result
+
+**PASS — bounded live 29Next ingestion and order canonical persistence.**
+
+Known non-blocking warnings:
+
+1. no live subscription sample in the bounded validation window;
+2. no live dispute sample in the bounded validation window.
+
+Next milestone: **M13 — Controlled Activation, Webhook Characterization & Canary.**
