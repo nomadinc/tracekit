@@ -19,7 +19,8 @@ export async function POST(request: Request, context: { params: Promise<{ connec
   const requestId = randomUUID();
   try {
     const environment = String(process.env.TRACEKIT_NEXT29_WEBHOOK_CHARACTERIZATION_ENV || "").trim().toLowerCase();
-    if (!new Set(["preview", "staging"]).has(environment) || process.env.NODE_ENV === "production") {
+    const vercelEnvironment = String(process.env.VERCEL_ENV || "").trim().toLowerCase();
+    if (!new Set(["preview", "staging"]).has(environment) || vercelEnvironment === "production") {
       return failure(requestId, 404, "resource_unavailable", "The requested resource is unavailable.");
     }
 
