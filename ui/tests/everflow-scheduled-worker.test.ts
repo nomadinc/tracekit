@@ -128,11 +128,61 @@ test("Everflow click failures persist safe stage and error diagnostics", () => {
     "ui/lib/integrations/everflow-click-incremental.ts",
   );
 
-  assert.match(worker, /stage = "provider_fetch"/);
+  assert.match(worker, /stage = "provider_read"/);
   assert.match(worker, /stage = "persistence"/);
   assert.match(worker, /stage = "state_commit"/);
   assert.match(worker, /classifyClickFailure\(error, stage\)/);
+  assert.match(worker, /new EverflowScheduledClickFailure\(diagnostic\)/);
+  assert.match(
+    worker,
+    /catch \(error\)[\s\S]*error instanceof EverflowScheduledClickFailure[\s\S]*clickFailureCode: clickFailure\?\.errorCode[\s\S]*clickFailureStage: clickFailure\?\.stage[\s\S]*clickFailureRetryable: clickFailure\?\.retryable[\s\S]*clickFailureHttpStatus: clickFailure\?\.httpStatus/,
+  );
+  assert.match(
+    worker,
+    /error\.code === "everflow_timeout"[\s\S]*"everflow_click_provider_timeout"/,
+  );
+  assert.match(
+    worker,
+    /error\.code === "everflow_invalid_response"[\s\S]*"everflow_click_invalid_response"[\s\S]*"everflow_click_provider_http_error"/,
+  );
+  assert.match(worker, /error instanceof EverflowClickDatabaseError/);
+  assert.match(worker, /errorCode: error\.code/);
   assert.match(incremental, /errorCode: input\.errorCode/);
   assert.match(incremental, /stage: input\.stage/);
   assert.match(incremental, /retryable: input\.retryable/);
+  const clickMetadataStart = worker.indexOf("clickSync: clickSync");
+  const clickMetadataEnd = worker.indexOf(
+    'stage = "cursor_commit"',
+    clickMetadataStart,
+  );
+  const clickMetadata = worker.slice(clickMetadataStart, clickMetadataEnd);
+  assert.doesNotMatch(
+    clickMetadata,
+    /clickFailureSummary|error\.message|summary:/,
+  );
+  assert.match(
+    incremental,
+    /last_stopping_reason: "window_complete",[\s\S]*warnings: \[\]/,
+  );
+  assert.match(
+    worker,
+    /clickSync: clickSync[\s\S]*status: clickSync\.status[\s\S]*: \{[\s\S]*status: "failed"/,
+  );
+});
+
+test("click failure diagnostics do not alter conversion or Firehose behavior", () => {
+  const worker = source("ui/lib/integrations/everflow-scheduled-worker.ts"),
+    firehose = source("api/src/everflow-firehose.ts");
+  const scheduledChunkStart = worker.indexOf(
+    "export async function runEverflowScheduledChunk",
+  );
+  const clickSyncStart = worker.indexOf("let clickSync", scheduledChunkStart);
+  const conversionBlock = worker.slice(scheduledChunkStart, clickSyncStart);
+
+  assert.match(conversionBlock, /syncEverflowScheduledConversionPage/);
+  assert.doesNotMatch(
+    conversionBlock,
+    /clickFailure(Code|Stage|Retryable|HttpStatus)/,
+  );
+  assert.doesNotMatch(firehose, /clickFailure(Code|Stage|Retryable|HttpStatus)/);
 });

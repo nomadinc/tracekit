@@ -83,8 +83,10 @@ type EverflowNetworkMetadata = {
   timezoneId?: number | null;
 };
 
+type ClickFailureStage = "provider_read" | "persistence" | "state_commit";
+
 type ClickFailureDiagnostic = {
-  stage: string;
+  stage: ClickFailureStage;
   errorCode: string;
   httpStatus: number | null;
   retryable: boolean | null;
@@ -104,7 +106,7 @@ const uuid =
 
 function classifyClickFailure(
   error: unknown,
-  stage: string,
+  stage: ClickFailureStage,
 ): ClickFailureDiagnostic {
   const split =
     error && typeof error === "object" && "telemetry" in error
@@ -148,7 +150,12 @@ function classifyClickFailure(
   if (error instanceof EverflowHealthError) {
     return {
       stage,
-      errorCode: error.code,
+      errorCode:
+        error.code === "everflow_timeout"
+          ? "everflow_click_provider_timeout"
+          : error.code === "everflow_invalid_response"
+            ? "everflow_click_invalid_response"
+            : "everflow_click_provider_http_error",
       httpStatus: error.httpStatus,
       retryable: error.retryable,
       summary: error.message,
@@ -158,7 +165,7 @@ function classifyClickFailure(
   if (error instanceof Error && error.name === "AbortError") {
     return {
       stage,
-      errorCode: "everflow_timeout",
+      errorCode: "everflow_click_provider_timeout",
       httpStatus: 504,
       retryable: true,
       summary: "Everflow click ingestion exceeded the request timeout.",
@@ -173,6 +180,13 @@ function classifyClickFailure(
     summary: `Everflow click ingestion failed during ${stage}.`,
     ...extra,
   };
+}
+
+class EverflowScheduledClickFailure extends Error {
+  constructor(readonly diagnostic: ClickFailureDiagnostic) {
+    super("Everflow scheduled click sync failed.");
+    this.name = "EverflowScheduledClickFailure";
+  }
 }
 
 function credentialKey() {
@@ -448,10 +462,10 @@ export async function runEverflowScheduledClickChunk(scope: SchedulerScope) {
     attemptedAt: now.toISOString(),
     window,
   });
-  let stage = "execution_context";
+  let stage: ClickFailureStage = "provider_read";
   try {
     const execution = await everflowClickExecutionContext(scope);
-    stage = "provider_fetch";
+    stage = "provider_read";
     let persistedCount = 0,
       acceptedCount = 0;
     const runtime = scope.runtime || createEverflowSchedulerRuntime();
@@ -472,7 +486,7 @@ export async function runEverflowScheduledClickChunk(scope: SchedulerScope) {
           telemetry: splitTelemetry,
           updatedAt: new Date().toISOString(),
         });
-        stage = "provider_fetch";
+        stage = "provider_read";
       },
       fetchInterval: (interval) =>
         fetchEverflowClickStream({
@@ -506,7 +520,7 @@ export async function runEverflowScheduledClickChunk(scope: SchedulerScope) {
           providerRequestCount: splitTelemetry.providerRequestCount,
           smallestIntervalSeconds: splitTelemetry.smallestIntervalSeconds,
         });
-        stage = "provider_fetch";
+        stage = "provider_read";
       },
     });
     if (ingestion.status === "partial")
@@ -560,7 +574,7 @@ export async function runEverflowScheduledClickChunk(scope: SchedulerScope) {
       bootstrap: window.bootstrap,
       ...diagnostic,
     }).catch(() => undefined);
-    throw error;
+    throw new EverflowScheduledClickFailure(diagnostic);
   }
 }
 
@@ -647,10 +661,15 @@ export async function runEverflowScheduledChunk(scope: SchedulerScope) {
       ReturnType<typeof runEverflowScheduledClickChunk>
     > | null = null;
     let clickSyncFailed = false;
+    let clickFailure: ClickFailureDiagnostic | null = null;
     try {
       clickSync = await runEverflowScheduledClickChunk(scope);
-    } catch {
+    } catch (error) {
       clickSyncFailed = true;
+      clickFailure =
+        error instanceof EverflowScheduledClickFailure
+          ? error.diagnostic
+          : classifyClickFailure(error, "provider_read");
     }
 
     stage = "classification_metadata";
@@ -682,6 +701,10 @@ export async function runEverflowScheduledChunk(scope: SchedulerScope) {
           : {
               status: "failed",
               warningCode: "everflow_scheduled_click_sync_failed",
+              clickFailureCode: clickFailure?.errorCode,
+              clickFailureStage: clickFailure?.stage,
+              clickFailureRetryable: clickFailure?.retryable,
+              clickFailureHttpStatus: clickFailure?.httpStatus,
             },
       },
     });
