@@ -11,7 +11,7 @@ import type { Next29EvidenceSink } from "../../../api/src/connectors/next29/type
 import { parseNext29ConnectionCredential } from "./next29-verifier";
 import { createCommerceControlPlane } from "./server-control-plane";
 import { SupabaseCommerceEvidenceStore } from "./supabase-evidence-store";
-import { commercePersistenceRequest } from "./supabase-control-repository";
+import { CommercePersistenceError, commercePersistenceRequest as rawCommercePersistenceRequest } from "./supabase-control-repository";
 import type { TraceKitSessionContext } from "@/lib/identity/persistent-types";
 
 const MAX_RECORDS = 10;
@@ -24,6 +24,18 @@ type ValidationContext = Scope & {
   environment: "preview" | "staging";
   client: Next29Client;
 };
+
+async function commercePersistenceRequest(path: string, init: RequestInit = {}) {
+  try {
+    return await rawCommercePersistenceRequest(path, init);
+  } catch (error) {
+    if (error instanceof CommercePersistenceError) {
+      const target = String(path || "unknown").split("?")[0].replace(/[^a-z0-9_\/-]/gi, "_").slice(0, 120);
+      throw new Error(`29Next M12 persistence failed · target ${target} · status ${error.status} · code ${error.databaseCode}`);
+    }
+    throw error;
+  }
+}
 
 export async function runStoredNext29LiveValidation(input: {
   session: TraceKitSessionContext;
