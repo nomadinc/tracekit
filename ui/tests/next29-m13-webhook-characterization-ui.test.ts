@@ -10,7 +10,8 @@ test("29Next M13 characterization endpoint is non-production diagnostic only", (
   assert.match(route, /TRACEKIT_NEXT29_WEBHOOK_CHARACTERIZATION_ENV/);
   assert.match(route, /preview/);
   assert.match(route, /staging/);
-  assert.match(route, /process\.env\.NODE_ENV === "production"/);
+  assert.match(route, /process\.env\.VERCEL_ENV/);
+  assert.match(route, /vercelEnvironment === "production"/);
   assert.match(route, /characterizeNext29WebhookSignature/);
   assert.match(route, /x-29next-signature/);
   assert.match(route, /request\.arrayBuffer\(\)/);
