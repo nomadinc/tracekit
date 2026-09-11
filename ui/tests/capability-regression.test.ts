@@ -41,9 +41,8 @@ test("29Next connection UI remains available and read-only activation stays gate
   assert.match(overview, /type ConnectProvider = "commas" \| "everflow" \| "shopify" \| "next29"/);
   assert.match(overview, /\/api\/next29\/connect/);
   assert.match(overview, /Scheduled sync or live webhook registration|scheduled sync or register a live webhook/i);
-  assert.match(verifier, /orders\//);
-  assert.match(verifier, /subscriptions\//);
-  assert.match(verifier, /disputes\//);
+  assert.match(verifier, /const resources = \["orders", "subscriptions", "disputes"\] as const/);
+  assert.match(verifier, /new URL\(`\$\{resource\}\/`, base\)/);
   assert.match(verifier, /X-29Next-Api-Version/);
   assert.match(providerVerifier, /input\.provider === "next29"/);
   assert.match(connectRoute, /provider: "next29"/);
