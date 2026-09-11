@@ -88,7 +88,7 @@ function productObservations(lines: Next29CanonicalOrderLine[]): Next29Canonical
       unitCost: line.unitCost,
     });
   }
-  return [...rows.values()];
+  return Array.from(rows.values());
 }
 
 function normalizeLine(value: unknown): Next29CanonicalOrderLine | null {
@@ -163,7 +163,7 @@ function normalizeRefund(value: unknown): Next29CanonicalRefund | null {
     amount: money(refund.total_refund_amount ?? report.total_refund_amount),
     currency: currency(report.currency),
     occurredAt: timestamp(refund.created_at),
-    transactionIds: [...new Set(txIds)],
+    transactionIds: Array.from(new Set(txIds)),
   };
 }
 
