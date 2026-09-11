@@ -5,6 +5,7 @@ import { createCommerceControlPlane } from "@/lib/commerce/server-control-plane"
 import { MemoryCommerceEvidenceStore } from "@/lib/commerce/evidence-store";
 import { CommerceProviderConnectionVerifier } from "@/lib/commerce/provider-verifier";
 import { normalizeShopifyConnectionDomain, serializeShopifyConnectionCredential } from "@/lib/commerce/shopify-verifier";
+import { serializeNext29ConnectionCredential } from "@/lib/commerce/next29-verifier";
 import { commercePersistenceRequest } from "@/lib/commerce/supabase-control-repository";
 
 const attempts = new Map<string, { count: number; reset: number }>();
@@ -138,6 +139,19 @@ export async function POST(request: Request, context: { params: Promise<{ commer
           secret = serializeShopifyConnectionCredential({ shopDomain: body.shopDomain, adminAccessToken: body.adminAccessToken, apiVersion: body.apiVersion });
         } catch (error) {
           return failure(requestId, 400, "invalid_request", error instanceof Error ? error.message : "Enter valid Shopify credentials and try again.");
+        }
+      } else if (connection.provider === "next29") {
+        const accounts = await plane.listProviderAccounts(resolution.session, connectionId);
+        const active = accounts.filter((account) => account.status === "active" && !account.provisional);
+        if (active.length !== 1) return failure(requestId, 409, "credential_rotation_not_permitted", "29Next credential rotation requires exactly one active store account.");
+        try {
+          secret = serializeNext29ConnectionCredential({
+            store: active[0].externalId,
+            accessToken: body.accessToken,
+            apiVersion: body.apiVersion,
+          });
+        } catch (error) {
+          return failure(requestId, 400, "invalid_request", error instanceof Error ? error.message : "Enter a valid 29Next Admin API access token.");
         }
       } else {
         if (typeof body.apiKey !== "string" || body.apiKey.length < 8) return failure(requestId, 400, "invalid_request", "Enter a valid credential and try again.");
