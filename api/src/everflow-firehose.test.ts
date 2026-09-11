@@ -5,11 +5,13 @@ import { fileURLToPath } from "node:url";
 import {
   EVERFLOW_FIREHOSE_MAX_BODY_BYTES,
   EVERFLOW_FIREHOSE_ROUTING_TIMEOUT_MS,
+  EverflowRoutingUnavailableError,
   constantTimeSecretEqual,
   firehoseEventTypeForPath,
   handleEverflowFirehose,
   privacySafePayload,
   processEverflowFirehoseEnvelope,
+  resolveEverflowNetwork,
   type EverflowFirehoseEnvelope,
 } from "./everflow-firehose.ts";
 
@@ -33,7 +35,7 @@ function fixture(overrides: Record<string, unknown> = {}) {
   const messages: EverflowFirehoseEnvelope[] = [];
   const metrics: string[] = [];
   const env = { EVERFLOW_FIREHOSE_SECRET: secret, everflow_firehose: { send: async (message: EverflowFirehoseEnvelope) => { messages.push(message); } }, ...overrides };
-  const deps = { resolveNetwork: async (networkId: string) => networkId === "1" ? scope : null, recordMetric: async (metric: string) => { metrics.push(metric); }, now: () => new Date("2026-09-10T12:00:00.000Z") };
+  const deps = { recordMetric: async (metric: string) => { metrics.push(metric); }, now: () => new Date("2026-09-10T12:00:00.000Z") };
   return { env, deps, messages, metrics };
 }
 
@@ -47,12 +49,14 @@ test("constant-time comparison and path-authoritative event discriminator", () =
   assert.equal(firehoseEventTypeForPath("/v1/everflow/firehose/impressions"), null);
 });
 
-test("receiver accepts a valid click, resolves tenant scope, strips sensitive fields, and queues", async () => {
+test("receiver accepts a valid click without routing, strips sensitive fields, and queues", async () => {
   const f = fixture();
   const res = await handleEverflowFirehose(request(), "click", f.env, f.deps);
   assert.equal(res.status, 202);
   assert.equal(f.messages.length, 1);
-  assert.deepEqual({ organization_id: f.messages[0].organization_id, connection_id: f.messages[0].connection_id, provider_account_id: f.messages[0].provider_account_id }, { organization_id: "org", connection_id: "connection", provider_account_id: "provider" });
+  assert.equal("organization_id" in f.messages[0], false);
+  assert.equal("connection_id" in f.messages[0], false);
+  assert.equal("provider_account_id" in f.messages[0], false);
   assert.equal(f.messages[0].payload.user_ip, undefined);
   assert.deepEqual(f.metrics, ["authenticated", "received", "queued"]);
 });
@@ -73,52 +77,19 @@ test("receiver enforces method, JSON content, malformed JSON, size, and supporte
   assert.equal((await handleEverflowFirehose(request(click, { body: JSON.stringify({ ...click, padding: "x".repeat(EVERFLOW_FIREHOSE_MAX_BODY_BYTES) }) }), "click", f.env, f.deps)).status, 413);
 });
 
-test("strict validation and routing reject missing identity and unknown networks", async () => {
+test("strict validation rejects missing identity but queues any syntactically valid network for async routing", async () => {
   const f = fixture();
   assert.equal((await handleEverflowFirehose(request({ network_id: 1, unix_timestamp: 1 }), "click", f.env, f.deps)).status, 422);
-  assert.equal((await handleEverflowFirehose(request({ ...click, network_id: 999 }), "click", f.env, f.deps)).status, 422);
-  assert.equal(f.messages.length, 0);
+  assert.equal((await handleEverflowFirehose(request({ ...click, network_id: 999 }), "click", f.env, f.deps)).status, 202);
+  assert.equal(f.messages.length, 1);
 });
 
-test("routing availability failures return bounded retryable 503 without queueing or unknown-network classification", async () => {
-  const failures = [
-    Object.assign(new Error("upstream unavailable: sensitive database detail"), { status: 503 }),
-    Object.assign(new Error("schema cache unavailable: sensitive database detail"), { code: "PGRST002" }),
-    new TypeError("fetch failed for sensitive upstream"),
-  ];
-  for (const failure of failures) {
+test("click, conversion, and update queue while the routing database is unavailable", async () => {
+  for (const [eventType, payload] of [["click", click], ["conversion", conversion], ["conversion_update", { ...conversion, update_timestamp: 1715788460 }]] as const) {
     const f = fixture();
-    f.deps.resolveNetwork = async () => { throw failure; };
-    const res = await handleEverflowFirehose(request(), "click", f.env, f.deps);
-    assert.equal(res.status, 503);
-    assert.deepEqual(await res.json(), { ok: false, error: "routing_unavailable", retryable: true });
-    assert.equal(f.messages.length, 0);
-    assert.equal(f.metrics.includes("unknown_network"), false);
+    assert.equal((await handleEverflowFirehose(request(payload), eventType, f.env, f.deps)).status, 202);
+    assert.equal(f.messages.length, 1);
   }
-});
-
-test("routing lookup timeout is bounded and returns routing_unavailable without queueing", async () => {
-  const f = fixture();
-  f.deps.resolveNetwork = async () => new Promise(() => undefined);
-  f.deps.routingTimeoutMs = 5;
-  const res = await handleEverflowFirehose(request(), "click", f.env, f.deps);
-  assert.equal(res.status, 503);
-  assert.deepEqual(await res.json(), { ok: false, error: "routing_unavailable", retryable: true });
-  assert.equal(f.messages.length, 0);
-  assert.equal(EVERFLOW_FIREHOSE_ROUTING_TIMEOUT_MS, 5_000);
-});
-
-test("routing-unavailable telemetry is best effort and cannot replace the intended 503", async () => {
-  const f = fixture();
-  let telemetryCalls = 0;
-  f.deps.resolveNetwork = async () => { throw new Error("database unavailable"); };
-  f.deps.recordRoutingUnavailable = async () => { telemetryCalls += 1; throw new Error("telemetry unavailable"); };
-  const res = await handleEverflowFirehose(request(), "click", f.env, f.deps);
-  assert.equal(res.status, 503);
-  assert.deepEqual(await res.json(), { ok: false, error: "routing_unavailable", retryable: true });
-  assert.equal(f.messages.length, 0);
-  await new Promise((resolve) => setTimeout(resolve, 0));
-  assert.equal(telemetryCalls, 1);
 });
 
 test("conversion and update payloads use conversion identity without field inference", async () => {
@@ -127,22 +98,22 @@ test("conversion and update payloads use conversion identity without field infer
     const payload = eventType === "conversion_update" ? { ...conversion, update_timestamp: 1715788460 } : conversion;
     assert.equal((await handleEverflowFirehose(request(payload), eventType as "conversion" | "conversion_update", f.env, f.deps)).status, 202);
     assert.equal(f.messages[0].event_type, eventType);
-    assert.match(f.messages[0].dedupe_identity, /cv-1$/);
+    assert.equal(f.messages[0].network_id, "1");
   }
 });
 
-test("same transaction in a different network cannot share tenant scope", async () => {
+test("same transaction in a different network retains distinct async routing input", async () => {
   const f = fixture();
-  const second = { ...scope, organization_id: "org-2", connection_id: "connection-2", provider_account_id: "provider-2" };
-  f.deps.resolveNetwork = async (networkId: string) => networkId === "1" ? scope : second;
   await handleEverflowFirehose(request(), "click", f.env, f.deps);
   await handleEverflowFirehose(request({ ...click, network_id: 2 }), "click", f.env, f.deps);
-  assert.notEqual(f.messages[0].dedupe_identity, f.messages[1].dedupe_identity);
+  assert.notEqual(f.messages[0].network_id, f.messages[1].network_id);
 });
 
 test("queue publication failure is retryable and never acknowledged", async () => {
   const f = fixture({ everflow_firehose: { send: async () => { throw new Error("queue down"); } } });
-  assert.equal((await handleEverflowFirehose(request(), "click", f.env, f.deps)).status, 503);
+  const response = await handleEverflowFirehose(request(), "click", f.env, f.deps);
+  assert.equal(response.status, 503);
+  assert.deepEqual(await response.json(), { ok: false, error: "queue_publication_failed" });
   assert.ok(f.metrics.includes("queue_failure"));
 });
 
@@ -158,12 +129,48 @@ test("privacy snapshot removes raw IP, user agent, redirect, geo, secrets, and r
   assert.deepEqual(safe, { transaction_id: "tx" });
 });
 
-test("consumer calls the single atomic persistence RPC", async () => {
+test("consumer resolves tenant scope before calling the single atomic persistence RPC", async () => {
   const calls: Array<[string, Record<string, unknown>]> = [];
   const db = { from: () => { throw new Error("unused"); }, rpc: async (name: string, args: Record<string, unknown>) => { calls.push([name, args]); return { data: { status: "processed" }, error: null }; } };
-  const envelope: EverflowFirehoseEnvelope = { schema_version: 1, provider: "everflow", transport: "firehose", received_at: new Date().toISOString(), event_type: "click", network_id: "1", ...scope, dedupe_identity: "d", payload: click };
-  assert.deepEqual(await processEverflowFirehoseEnvelope(db, envelope), { status: "processed" });
+  const envelope: EverflowFirehoseEnvelope = { schema_version: 1, provider: "everflow", transport: "firehose", received_at: new Date().toISOString(), event_type: "click", network_id: "1", payload: click };
+  const result = await processEverflowFirehoseEnvelope(db, envelope, { resolveNetwork: async () => ({ status: "resolved", scope }) });
+  assert.equal(result.status, "processed");
   assert.equal(calls[0][0], "ingest_everflow_firehose_event_v1");
+  assert.equal(calls[0][1].p_organization_id, "org");
+});
+
+test("consumer retries availability errors and bounds routing lookup to five seconds", async () => {
+  const db = { from: () => { throw new Error("unused"); }, rpc: async () => ({ data: null, error: null }) };
+  const envelope: EverflowFirehoseEnvelope = { schema_version: 1, provider: "everflow", transport: "firehose", received_at: new Date().toISOString(), event_type: "click", network_id: "1", payload: click };
+  for (const failure of [Object.assign(new Error("unavailable"), { status: 503 }), Object.assign(new Error("cache"), { code: "PGRST002" }), new TypeError("fetch failed")]) {
+    await assert.rejects(() => processEverflowFirehoseEnvelope(db, envelope, { resolveNetwork: async () => { throw failure; } }), EverflowRoutingUnavailableError);
+  }
+  await assert.rejects(() => processEverflowFirehoseEnvelope(db, envelope, { resolveNetwork: async () => new Promise(() => undefined), routingTimeoutMs: 5 }), EverflowRoutingUnavailableError);
+  assert.equal(EVERFLOW_FIREHOSE_ROUTING_TIMEOUT_MS, 5_000);
+});
+
+test("unknown and ambiguous networks never reach persistence", async () => {
+  let rpcCalls = 0;
+  const db = { from: () => { throw new Error("unused"); }, rpc: async () => { rpcCalls += 1; return { data: null, error: null }; } };
+  const envelope: EverflowFirehoseEnvelope = { schema_version: 1, provider: "everflow", transport: "firehose", received_at: new Date().toISOString(), event_type: "click", network_id: "1", payload: click };
+  for (const status of ["unknown_network", "ambiguous_network"] as const) {
+    assert.deepEqual(await processEverflowFirehoseEnvelope(db, envelope, { resolveNetwork: async () => ({ status }) }), { status });
+  }
+  assert.equal(rpcCalls, 0);
+});
+
+test("network lookup distinguishes zero, one, and multiple eligible mappings", async () => {
+  const mapping = { id: "provider", organization_id: "org", connection_id: "connection", commerce_provider_connections: { account_id: "account" } };
+  const dbFor = (data: unknown[]) => {
+    const builder: Record<string, unknown> = {};
+    builder.select = () => builder;
+    builder.eq = () => builder;
+    builder.limit = async () => ({ data, error: null });
+    return { from: () => builder, rpc: async () => ({ data: null, error: null }) };
+  };
+  assert.deepEqual(await resolveEverflowNetwork(dbFor([]), "1"), { status: "unknown_network" });
+  assert.deepEqual(await resolveEverflowNetwork(dbFor([mapping, mapping]), "1"), { status: "ambiguous_network" });
+  assert.deepEqual(await resolveEverflowNetwork(dbFor([mapping]), "1"), { status: "resolved", scope });
 });
 
 test("migration codifies duplicate, out-of-order, stale-update, and poll convergence semantics", () => {
@@ -195,7 +202,17 @@ test("worker consumer retries failures and never logs raw payloads", () => {
   const here = fileURLToPath(new URL(".", import.meta.url));
   const source = readFileSync(`${here}/index.ts`, "utf8");
   const start = source.indexOf('body.provider === "everflow"');
-  const branch = source.slice(start, source.indexOf("continue;", start) + 9);
+  const branch = source.slice(start, source.indexOf("if (isQueueObservabilityTest", start));
   assert.match(branch, /msg\.retry\(\)/);
+  assert.match(branch, /ctx\.waitUntil\(recordFirehoseMetric/);
   assert.doesNotMatch(branch, /body\.payload|JSON\.stringify\(body/);
+  assert.doesNotMatch(branch, /network_id:/);
+});
+
+test("worker receipt path has no tenant-routing database dependency", () => {
+  const here = fileURLToPath(new URL(".", import.meta.url));
+  const source = readFileSync(`${here}/index.ts`, "utf8");
+  const start = source.indexOf("const firehoseEventType = firehoseEventTypeForPath(path)");
+  const branch = source.slice(start, source.indexOf("if (path === EVERFLOW_FIREHOSE_BASE_PATH", start));
+  assert.doesNotMatch(branch, /resolveEverflowNetwork|resolveNetwork/);
 });
