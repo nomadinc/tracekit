@@ -22,6 +22,7 @@ export function Next29ConnectionDetail({ connection }: { connection: ConnectionE
   const [busy, setBusy] = useState<"verify" | "validate" | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const capabilities = connection.capabilities.length ? connection.capabilities : NEXT29_CAPABILITIES;
+  const liveValidationVerified = connection.status === "connected" || Boolean(connection.lastVerifiedAt);
 
   async function verify() {
     setBusy("verify");
@@ -75,7 +76,7 @@ export function Next29ConnectionDetail({ connection }: { connection: ConnectionE
           </div>
           <div className="flex flex-wrap gap-2">
             <Link href="/connections/commerce" className="rounded-lg border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/[.04]">Back to Connections</Link>
-            {connection.canManage ? <button onClick={runLiveValidation} disabled={busy !== null || connection.credential.status !== "active" || connection.status !== "connected"} className="inline-flex items-center gap-2 rounded-lg border border-cyan-300/30 bg-cyan-300/10 px-3 py-2 text-xs font-semibold text-cyan-100 disabled:opacity-40"><PlayCircle className={`h-3.5 w-3.5 ${busy === "validate" ? "animate-pulse" : ""}`} />{busy === "validate" ? "Running M12…" : "Run M12 Live Validation"}</button> : null}
+            {connection.canManage ? <button onClick={runLiveValidation} disabled={busy !== null || connection.credential.status !== "active" || !liveValidationVerified} className="inline-flex items-center gap-2 rounded-lg border border-cyan-300/30 bg-cyan-300/10 px-3 py-2 text-xs font-semibold text-cyan-100 disabled:opacity-40"><PlayCircle className={`h-3.5 w-3.5 ${busy === "validate" ? "animate-pulse" : ""}`} />{busy === "validate" ? "Running M12…" : "Run M12 Live Validation"}</button> : null}
             {connection.canManage ? <button onClick={verify} disabled={busy !== null || connection.credential.status !== "active"} className="inline-flex items-center gap-2 rounded-lg bg-white px-3 py-2 text-xs font-semibold text-slate-950 disabled:opacity-40"><RefreshCw className={`h-3.5 w-3.5 ${busy === "verify" ? "animate-spin" : ""}`} />{busy === "verify" ? "Verifying…" : "Verify Connection"}</button> : null}
           </div>
         </header>
