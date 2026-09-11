@@ -1,5 +1,6 @@
 import "server-only";
 import { EVERFLOW_API_BASE, EverflowHealthError } from "./everflow-client";
+import { deduplicateEverflowClicks } from "./everflow-click-dedup";
 import { everflowClickRowCountIsSaturated } from "./everflow-click-window";
 
 export const EVERFLOW_CLICKS_STREAM_PATH =
@@ -353,9 +354,18 @@ export async function persistEverflowClicks(input: {
   observedAt?: string;
   canContinue?: () => boolean;
 }) {
-  if (!input.clicks.length) return { seen: 0, persisted: 0 };
+  const deduplication = deduplicateEverflowClicks(input);
+  if (!deduplication.clicks.length)
+    return {
+      seen: 0,
+      persisted: 0,
+      complete: true,
+      normalizedRowCount: 0,
+      deduplicatedRowCount: 0,
+      duplicateObservationsRemoved: 0,
+    };
   const observedAt = input.observedAt || new Date().toISOString();
-  const rows = input.clicks.map((c) => ({
+  const rows = deduplication.clicks.map((c) => ({
     account_id: input.accountId,
     organization_id: input.organizationId,
     connection_id: input.connectionId,
@@ -418,7 +428,15 @@ export async function persistEverflowClicks(input: {
     offset += EVERFLOW_CLICK_PERSIST_BATCH_SIZE
   ) {
     if (input.canContinue && !input.canContinue())
-      return { seen: input.clicks.length, persisted, complete: false };
+      return {
+        seen: input.clicks.length,
+        persisted,
+        complete: false,
+        normalizedRowCount: deduplication.normalizedRowCount,
+        deduplicatedRowCount: deduplication.deduplicatedRowCount,
+        duplicateObservationsRemoved:
+          deduplication.duplicateObservationsRemoved,
+      };
     const batch = rows.slice(
       offset,
       offset + EVERFLOW_CLICK_PERSIST_BATCH_SIZE,
@@ -433,5 +451,12 @@ export async function persistEverflowClicks(input: {
     );
     persisted += batch.length;
   }
-  return { seen: input.clicks.length, persisted, complete: true };
+  return {
+    seen: input.clicks.length,
+    persisted,
+    complete: true,
+    normalizedRowCount: deduplication.normalizedRowCount,
+    deduplicatedRowCount: deduplication.deduplicatedRowCount,
+    duplicateObservationsRemoved: deduplication.duplicateObservationsRemoved,
+  };
 }
