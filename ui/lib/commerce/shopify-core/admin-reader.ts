@@ -13,43 +13,85 @@ type GraphqlConnection = {
   pageInfo?: { hasNextPage?: boolean; endCursor?: unknown };
 };
 
+type GraphqlCost = {
+  requestedQueryCost?: number;
+  actualQueryCost?: number;
+  throttleStatus?: {
+    maximumAvailable?: number;
+    currentlyAvailable?: number;
+    restoreRate?: number;
+  };
+};
+
 type GraphqlResponse = {
   data?: Record<string, any>;
   errors?: Array<{ message?: string }>;
+  extensions?: { cost?: GraphqlCost };
 };
 
 const DEFAULT_API_VERSION = "2026-07";
 const DEFAULT_PAGE_SIZE = 100;
+const ORDER_PAGE_SIZE_CAP = 25;
+const GENERAL_PAGE_SIZE_CAP = 100;
 const REFUNDED_QUERY = "financial_status:refunded";
 const PARTIALLY_REFUNDED_QUERY = "financial_status:partially_refunded";
+const QUERY_COST_LIMIT_ERROR = /exceeds the single query max cost limit/i;
+
+export function shopifyPageSizeForResource(resource: ShopifyResource, requestedPageSize: unknown) {
+  const requested = normalizePageSize(requestedPageSize);
+  const cap = resource === "orders" ? ORDER_PAGE_SIZE_CAP : GENERAL_PAGE_SIZE_CAP;
+  return Math.min(requested, cap);
+}
 
 export function createShopifyAdminPageReader(config: ShopifyAdminReaderConfig) {
   const shopDomain = normalizeShopDomain(config.shopDomain);
   const accessToken = required(config.accessToken, "Shopify Admin access token");
   const apiVersion = String(config.apiVersion || DEFAULT_API_VERSION).trim();
-  const pageSize = normalizePageSize(config.pageSize);
+  const requestedPageSize = normalizePageSize(config.pageSize);
   const fetchImpl = config.fetchImpl || fetch;
   const endpoint = `https://${shopDomain}/admin/api/${apiVersion}/graphql.json`;
 
-  async function requestGraphql(query: string, variables: Record<string, unknown>): Promise<GraphqlResponse> {
-    const response = await fetchImpl(endpoint, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Shopify-Access-Token": accessToken,
-      },
-      body: JSON.stringify({ query, variables }),
-    });
+  async function requestGraphql(
+    label: string,
+    query: string,
+    variables: Record<string, unknown>,
+  ): Promise<GraphqlResponse> {
+    let requestVariables = { ...variables };
+    for (;;) {
+      const response = await fetchImpl(endpoint, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Shopify-Access-Token": accessToken,
+        },
+        body: JSON.stringify({ query, variables: requestVariables }),
+      });
 
-    if (!response.ok) {
-      throw new Error(`Shopify Admin GraphQL request failed (${response.status}): ${(await response.text()).slice(0, 1000)}`);
-    }
+      if (!response.ok) {
+        throw new Error(`Shopify Admin GraphQL request failed (${response.status}): ${(await response.text()).slice(0, 1000)}`);
+      }
 
-    const payload = await response.json() as GraphqlResponse;
-    if (payload.errors?.length) {
-      throw new Error(`Shopify Admin GraphQL error: ${payload.errors.map((error) => error.message || "unknown error").join("; ")}`);
+      const payload = await response.json() as GraphqlResponse;
+      if (!payload.errors?.length) {
+        logQueryCost(label, requestVariables.first, payload.extensions?.cost);
+        return payload;
+      }
+
+      const messages = payload.errors.map((error) => error.message || "unknown error");
+      const currentFirst = Number(requestVariables.first);
+      if (messages.some((message) => QUERY_COST_LIMIT_ERROR.test(message)) && Number.isInteger(currentFirst) && currentFirst > 1) {
+        const nextFirst = Math.max(1, Math.floor(currentFirst / 2));
+        console.warn("shopify_graphql_cost_retry", {
+          query: label,
+          previousPageSize: currentFirst,
+          nextPageSize: nextFirst,
+        });
+        requestVariables = { ...requestVariables, first: nextFirst };
+        continue;
+      }
+
+      throw new Error(`Shopify Admin GraphQL error: ${messages.join("; ")}`);
     }
-    return payload;
   }
 
   return async function readShopifyPage(args: {
@@ -57,13 +99,14 @@ export function createShopifyAdminPageReader(config: ShopifyAdminReaderConfig) {
     checkpoint: ShopifyCheckpoint;
   }): Promise<ShopifySyncPage> {
     const checkpoint = normalizeShopifyCheckpoint(args.checkpoint);
+    const pageSize = shopifyPageSizeForResource(args.resource, requestedPageSize);
     const incrementalVariables: Record<string, unknown> = {
       first: pageSize,
       after: checkpoint.cursor,
       query: checkpoint.updatedAt ? `updated_at:>='${checkpoint.updatedAt}'` : null,
     };
 
-    const incrementalPayload = await requestGraphql(queryFor(args.resource), incrementalVariables);
+    const incrementalPayload = await requestGraphql(args.resource, queryFor(args.resource), incrementalVariables);
     const connection = requireConnection(incrementalPayload.data?.[args.resource], args.resource);
     const incrementalNodes = validNodes(connection.nodes);
     const highWater = maxUpdatedAt(checkpoint.updatedAt, incrementalNodes);
@@ -75,14 +118,14 @@ export function createShopifyAdminPageReader(config: ShopifyAdminReaderConfig) {
     let partiallyRefundedCursor = checkpoint.partiallyRefundedCursor;
 
     if (args.resource === "orders") {
-      const refundedPayload = await requestGraphql(FINANCIAL_ORDERS_QUERY, {
+      const refundedPayload = await requestGraphql("orders_refunded", FINANCIAL_ORDERS_QUERY, {
         first: pageSize,
         after: checkpoint.refundedCursor,
         query: REFUNDED_QUERY,
       });
       const refundedConnection = requireConnection(refundedPayload.data?.orders, "refundedOrders");
 
-      const partiallyRefundedPayload = await requestGraphql(FINANCIAL_ORDERS_QUERY, {
+      const partiallyRefundedPayload = await requestGraphql("orders_partially_refunded", FINANCIAL_ORDERS_QUERY, {
         first: pageSize,
         after: checkpoint.partiallyRefundedCursor,
         query: PARTIALLY_REFUNDED_QUERY,
@@ -204,6 +247,24 @@ function maxUpdatedAt(current: string | null, nodes: ShopifyResourceNode[]) {
     if (!latest || candidate > latest) latest = candidate;
   }
   return latest ? latest.toISOString() : null;
+}
+
+function logQueryCost(label: string, pageSize: unknown, cost: GraphqlCost | undefined) {
+  if (!cost) return;
+  console.info("shopify_graphql_cost", {
+    query: label,
+    pageSize: Number(pageSize) || null,
+    requestedQueryCost: finiteNumber(cost.requestedQueryCost),
+    actualQueryCost: finiteNumber(cost.actualQueryCost),
+    maximumAvailable: finiteNumber(cost.throttleStatus?.maximumAvailable),
+    currentlyAvailable: finiteNumber(cost.throttleStatus?.currentlyAvailable),
+    restoreRate: finiteNumber(cost.throttleStatus?.restoreRate),
+  });
+}
+
+function finiteNumber(value: unknown) {
+  const number = Number(value);
+  return Number.isFinite(number) ? number : null;
 }
 
 function normalizeShopDomain(value: unknown) {
