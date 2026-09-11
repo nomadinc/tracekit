@@ -19,7 +19,7 @@ import { readQuotaBootstrapGate } from "./quota-bootstrap-gate";
 import { reconcileCommerceExecutionSignal, reconcileCommerceSchedulerSignals, runCommerceOperationalAlertEvaluation } from "./commerce-operational-alerts";
 import { createSupabaseServerFetch } from "./supabase-server-fetch";
 import { deriveCommasDisputeLedgerEvents, normalizeCommasDisputeEvent, sha256HexBytes, verifyCommasWebhookSignature, webhookStoragePath } from "./commas-dispute-webhook";
-import { EVERFLOW_FIREHOSE_BASE_PATH, firehoseEventTypeForPath, handleEverflowFirehose, processEverflowFirehoseEnvelope, recordFirehoseMetric, resolveEverflowNetwork, type EverflowFirehoseEnvelope } from "./everflow-firehose";
+import { EVERFLOW_FIREHOSE_BASE_PATH, EverflowRoutingUnavailableError, firehoseEventTypeForPath, handleEverflowFirehose, processEverflowFirehoseEnvelope, recordFirehoseMetric, type EverflowFirehoseEnvelope } from "./everflow-firehose";
 import { COMMAS_ATTRIBUTION_EVENT_TYPES, attributionWebhookStoragePath, compareCommasAttributionToEverflow, normalizeCommasAttributionEvent } from "./commas-provider-attribution";
 import { enforceTkidRate, ephemeralTransportDimension, TkidRateLimitError, type DistributedCounterStore, type TkidAbuseClass } from "./tkid-distributed-abuse";
 import {
@@ -22333,11 +22333,7 @@ async function runWowBoostImportPage(
       if (firehoseEventType) {
         const db = getSupabase(env);
         return handleEverflowFirehose(req, firehoseEventType, env, {
-          resolveNetwork: (networkId) => resolveEverflowNetwork(db, networkId),
           recordMetric: (metric, scope, at) => recordFirehoseMetric(db, metric, scope, at),
-          recordRoutingUnavailable: () => console.warn("[TraceKit] Everflow Firehose routing unavailable", {
-            classification: "routing_unavailable",
-          }),
           defer: (work) => ctx.waitUntil(work),
         });
       }
@@ -22615,18 +22611,34 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 		    const body = msg.body || {};
 		    if (body.schema_version === 1 && body.provider === "everflow" && body.transport === "firehose") {
 		      try {
-		        await processEverflowFirehoseEnvelope(getSupabase(env), body as EverflowFirehoseEnvelope);
+		        const db = getSupabase(env);
+		        const metric = (name: string, scope?: Parameters<typeof recordFirehoseMetric>[2]) => {
+		          ctx.waitUntil(recordFirehoseMetric(db, name, scope).catch(() => undefined));
+		        };
+		        const outcome = await processEverflowFirehoseEnvelope(db, body as EverflowFirehoseEnvelope);
+		        if (outcome.status === "unknown_network" || outcome.status === "ambiguous_network") {
+		          if (outcome.status === "unknown_network") {
+		            metric("unknown_network");
+		          }
+		          console.warn("[TraceKit] Everflow Firehose routing rejected", {
+		            event: `everflow.firehose.${outcome.status}`,
+		            classification: outcome.status,
+		          });
+		          msg.ack();
+		          continue;
+		        }
+		        metric("processed");
+		        metric("processed", outcome.scope);
 		        msg.ack();
 		      } catch (error) {
-		        await recordFirehoseMetric(getSupabase(env), "persistence_failure", {
-		          organization_id: String(body.organization_id || "") || undefined,
-		          connection_id: String(body.connection_id || "") || undefined,
-		          provider_account_id: String(body.provider_account_id || "") || undefined,
-		        }).catch(() => undefined);
+		        const routingUnavailable = error instanceof EverflowRoutingUnavailableError;
+		        if (!routingUnavailable) {
+		          ctx.waitUntil(recordFirehoseMetric(getSupabase(env), "persistence_failure").catch(() => undefined));
+		        }
 		        console.error("[TraceKit] Everflow Firehose processing failed", {
-		          event: "everflow.firehose.persistence_failed",
+		          event: routingUnavailable ? "everflow.firehose.routing_unavailable" : "everflow.firehose.persistence_failed",
+		          classification: routingUnavailable ? "routing_unavailable" : "persistence_failure",
 		          event_type: String(body.event_type || "unknown").slice(0, 32),
-		          network_id: String(body.network_id || "unknown").slice(0, 128),
 		        });
 		        msg.retry();
 		      }

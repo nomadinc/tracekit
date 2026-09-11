@@ -16,11 +16,6 @@ export type EverflowFirehoseEnvelope = {
   received_at: string;
   event_type: EverflowFirehoseEventType;
   network_id: string;
-  organization_id: string;
-  account_id: string;
-  connection_id: string;
-  provider_account_id: string;
-  dedupe_identity: string;
   payload: Record<string, unknown>;
 };
 
@@ -30,12 +25,18 @@ type FirehoseEnv = {
 };
 
 type Scope = { organization_id: string; account_id: string; connection_id: string; provider_account_id: string };
+export type EverflowNetworkResolution =
+  | { status: "resolved"; scope: Scope }
+  | { status: "unknown_network" }
+  | { status: "ambiguous_network" };
 export type FirehoseDependencies = {
-  resolveNetwork(networkId: string): Promise<Scope | null>;
   recordMetric?(metric: string, scope?: Partial<Scope>, at?: string): Promise<void> | void;
-  recordRoutingUnavailable?(): Promise<void> | void;
   defer?(work: Promise<unknown>): void;
   now?: () => Date;
+};
+
+export type FirehoseConsumerDependencies = {
+  resolveNetwork?(networkId: string): Promise<EverflowNetworkResolution>;
   routingTimeoutMs?: number;
 };
 
@@ -61,19 +62,19 @@ function response(status: number, error?: string, details: Record<string, unknow
   });
 }
 
-class EverflowRoutingUnavailableError extends Error {
+export class EverflowRoutingUnavailableError extends Error {
   constructor() {
     super("everflow_routing_unavailable");
     this.name = "EverflowRoutingUnavailableError";
   }
 }
 
-async function resolveFirehoseScope(deps: FirehoseDependencies, networkId: string) {
+async function resolveFirehoseScope(db: FirehoseDatabase, deps: FirehoseConsumerDependencies, networkId: string) {
   let timer: ReturnType<typeof setTimeout> | null = null;
   const timeoutMs = deps.routingTimeoutMs ?? EVERFLOW_FIREHOSE_ROUTING_TIMEOUT_MS;
   try {
     return await Promise.race([
-      deps.resolveNetwork(networkId),
+      (deps.resolveNetwork || ((value) => resolveEverflowNetwork(db, value)))(networkId),
       new Promise<never>((_, reject) => {
         timer = setTimeout(() => reject(new EverflowRoutingUnavailableError()), timeoutMs);
       }),
@@ -146,10 +147,6 @@ export async function handleEverflowFirehose(req: Request, eventType: EverflowFi
     const work = Promise.resolve(deps.recordMetric?.(name, scope, at)).catch(() => undefined);
     if (deps.defer) deps.defer(work); else void work;
   };
-  const routingUnavailable = () => {
-    const work = Promise.resolve().then(() => deps.recordRoutingUnavailable?.()).catch(() => undefined);
-    if (deps.defer) deps.defer(work); else void work;
-  };
   if (req.method !== "POST") return response(405, "method_not_allowed");
   if (!/^application\/json(?:\s*;|$)/i.test(req.headers.get("content-type") || "")) return response(415, "unsupported_media_type");
   const declaredLength = Number(req.headers.get("content-length") || 0);
@@ -181,34 +178,20 @@ export async function handleEverflowFirehose(req: Request, eventType: EverflowFi
   }
   const validation = validatePayload(eventType, payload);
   if ("error" in validation) return response(422, validation.error);
-  let scope: Scope | null;
-  try {
-    scope = await resolveFirehoseScope(deps, validation.networkId);
-  } catch (error) {
-    if (!(error instanceof EverflowRoutingUnavailableError)) throw error;
-    routingUnavailable();
-    return response(503, "routing_unavailable", { retryable: true });
-  }
-  if (!scope) {
-    metric("unknown_network");
-    return response(422, "unknown_network");
-  }
   if (!env.everflow_firehose) return response(503, "queue_unavailable");
   const receivedAt = (deps.now?.() || new Date()).toISOString();
   const envelope: EverflowFirehoseEnvelope = {
     schema_version: 1, provider: "everflow", transport: "firehose", received_at: receivedAt,
-    event_type: eventType, network_id: validation.networkId, organization_id: scope.organization_id,
-    account_id: scope.account_id, connection_id: scope.connection_id, provider_account_id: scope.provider_account_id,
-    dedupe_identity: `${scope.connection_id}:${scope.provider_account_id}:${eventType}:${validation.identity}`,
+    event_type: eventType, network_id: validation.networkId,
     payload: privacySafePayload(payload),
   };
+  metric("received", undefined, receivedAt);
   try {
     await env.everflow_firehose.send(envelope);
-    metric("received", scope, receivedAt);
-    metric("queued", scope, receivedAt);
+    metric("queued", undefined, receivedAt);
     return response(202);
   } catch {
-    metric("queue_failure", scope, receivedAt);
+    metric("queue_failure", undefined, receivedAt);
     return response(503, "queue_publication_failed");
   }
 }
@@ -218,16 +201,17 @@ export type FirehoseDatabase = {
   rpc(name: string, args: Record<string, unknown>): PromiseLike<{ data: unknown; error: { message?: string } | null }>;
 };
 
-export async function resolveEverflowNetwork(db: FirehoseDatabase, networkId: string): Promise<Scope | null> {
+export async function resolveEverflowNetwork(db: FirehoseDatabase, networkId: string): Promise<EverflowNetworkResolution> {
   const { data, error } = await db.from("commerce_provider_accounts")
     .select("id,organization_id,connection_id,commerce_provider_connections!inner(account_id,provider,status)")
     .eq("provider_account_external_id", networkId).eq("status", "active")
     .eq("commerce_provider_connections.provider", "everflow").eq("commerce_provider_connections.status", "connected").limit(2);
   if (error) throw new Error("everflow_network_lookup_failed");
-  if (!Array.isArray(data) || data.length !== 1) return null;
+  if (!Array.isArray(data) || data.length === 0) return { status: "unknown_network" };
+  if (data.length !== 1) return { status: "ambiguous_network" };
   const connection = Array.isArray(data[0].commerce_provider_connections) ? data[0].commerce_provider_connections[0] : data[0].commerce_provider_connections;
-  if (!connection?.account_id) return null;
-  return { account_id: String(connection.account_id), organization_id: String(data[0].organization_id), connection_id: String(data[0].connection_id), provider_account_id: String(data[0].id) };
+  if (!connection?.account_id) return { status: "ambiguous_network" };
+  return { status: "resolved", scope: { account_id: String(connection.account_id), organization_id: String(data[0].organization_id), connection_id: String(data[0].connection_id), provider_account_id: String(data[0].id) } };
 }
 
 export async function recordFirehoseMetric(db: FirehoseDatabase, metric: string, scope: Partial<Scope> = {}, at?: string) {
@@ -238,13 +222,19 @@ export async function recordFirehoseMetric(db: FirehoseDatabase, metric: string,
   if (error) throw new Error("everflow_metric_write_failed");
 }
 
-export async function processEverflowFirehoseEnvelope(db: FirehoseDatabase, envelope: EverflowFirehoseEnvelope) {
+export async function processEverflowFirehoseEnvelope(db: FirehoseDatabase, envelope: EverflowFirehoseEnvelope, deps: FirehoseConsumerDependencies = {}) {
   if (envelope.schema_version !== 1 || envelope.provider !== "everflow" || envelope.transport !== "firehose") throw new Error("invalid_everflow_firehose_envelope");
+  const payload = record(envelope.payload);
+  const validation = validatePayload(envelope.event_type, payload);
+  if ("error" in validation || validation.networkId !== envelope.network_id) throw new Error("invalid_everflow_firehose_envelope");
+  const resolution = await resolveFirehoseScope(db, deps, envelope.network_id);
+  if (resolution.status !== "resolved") return resolution;
+  const scope = resolution.scope;
   const { data, error } = await db.rpc("ingest_everflow_firehose_event_v1", {
-    p_organization_id: envelope.organization_id, p_account_id: envelope.account_id, p_connection_id: envelope.connection_id,
-    p_provider_account_id: envelope.provider_account_id, p_network_id: envelope.network_id, p_event_type: envelope.event_type,
+    p_organization_id: scope.organization_id, p_account_id: scope.account_id, p_connection_id: scope.connection_id,
+    p_provider_account_id: scope.provider_account_id, p_network_id: envelope.network_id, p_event_type: envelope.event_type,
     p_received_at: envelope.received_at, p_payload: envelope.payload,
   });
   if (error) throw new Error(String(error.message || "everflow_firehose_persistence_failed").slice(0, 160));
-  return data;
+  return { status: "processed" as const, scope, data };
 }

@@ -9,7 +9,7 @@ Everflow Support must configure three event-filtered HTTP Firehose deliveries:
 Configure this authentication header on each delivery:
 
 - `Authorization: Bearer <EVERFLOW_FIREHOSE_SECRET>`
-The endpoint path is the authoritative event discriminator; no custom event-type header or payload-field inference is used. The common `/v1/everflow/firehose` path and impressions are not accepted. Delivery is acknowledged with `202` only after the dedicated `tracekit-everflow-firehose` Queue accepts the bounded envelope. Queue processing has ten retries and routes exhaustion to `tracekit-everflow-firehose-dlq`.
+The endpoint path is the authoritative event discriminator; no custom event-type header or payload-field inference is used. The common `/v1/everflow/firehose` path and impressions are not accepted. Delivery is acknowledged with `202` only after the dedicated `tracekit-everflow-firehose` Queue accepts the bounded, privacy-filtered envelope. A `202` means TraceKit has durably accepted responsibility for processing; it does not mean tenant routing, normalization, or persistence has completed. Because Everflow does not automatically retry production Firehose requests, Queue publication is the critical synchronous acceptance boundary. Queue publication failure returns `503` and never returns `202`. Queue processing has ten retries and routes exhaustion to `tracekit-everflow-firehose-dlq`.
 
 ## Fields for Everflow Support
 
@@ -27,7 +27,7 @@ Do not request impressions, `raw_query_string`, IP addresses, user agents, devic
 
 ## Routing and ordering
 
-`network_id` must resolve to exactly one active provider account on a connected Everflow connection. The resolved organization, account, connection, and provider-account scope is placed in the internal envelope and revalidated atomically by the database writer. Transaction IDs are never used for tenant routing.
+The receiver places only the provider `network_id` and sanitized provider payload in the Queue envelope; it performs no Supabase lookup and includes no database-derived tenant identifiers. The Queue consumer must resolve `network_id` to exactly one active provider account on a connected Everflow connection before persistence. A transient routing lookup failure retries the Queue message. A successful lookup with zero or multiple eligible mappings is rejected without persistence as `unknown_network` or `ambiguous_network`. The resolved organization, account, connection, and provider-account scope is revalidated atomically by the database writer. Transaction IDs are never used for tenant routing.
 
 Clicks converge on `(organization_id, connection_id, provider_account_id, transaction_id)`. Conversions converge on `(connection_id, provider_account_id, source_identity)`, where source identity is Everflow's `conversion_id`, independent of poll or Firehose transport.
 
@@ -41,4 +41,4 @@ Click `unix_timestamp`, conversion `conversion_timestamp`, and conversion-update
 
 The receiver never logs payloads. Its bounded snapshot removes IP addresses, user agents, geolocation/device objects, redirect URLs, and raw query strings before queueing. Requested query parameters are retained with bounded keys and values because they are existing attribution evidence.
 
-The server-only health table records receipt, authentication/rejection, malformed input, unknown networks, queue success/failure, processing/replay, persistence failure, and the last receive/process timestamps. Lag is `last_received_at - last_processed_at`; Cloudflare supplies Queue/DLQ depth. Receipt timestamps detect silence/backlog but do not prove provider completeness, so polling remains enabled for bootstrap, reconciliation, repair, and fallback.
+The server-only health table records receipt, authentication/rejection, malformed input, unknown networks, queue success/failure, processing/replay, persistence failure, and the last receive/process timestamps. Bounded Worker events separately classify routing availability and ambiguous routing without logging provider identifiers or payloads. Lag is `last_received_at - last_processed_at`; Cloudflare supplies Queue/DLQ depth. Receipt timestamps detect silence/backlog but do not prove provider completeness, so polling remains enabled for bootstrap, reconciliation, repair, and fallback.
