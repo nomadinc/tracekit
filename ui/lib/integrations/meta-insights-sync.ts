@@ -71,7 +71,7 @@ async function existingFacts(orgId: string, accountId: string, rows: Row[]) {
     byDate.get(date)!.add(adId);
   }
   const result = new Map<string, Row>();
-  for (const [date, ids] of byDate) {
+  for (const [date, ids] of Array.from(byDate.entries())) {
     const found = await marketingPersistenceRequest(`marketing_performance_daily?organization_id=eq.${encodeURIComponent(orgId)}&provider_account_id=eq.${encodeURIComponent(accountId)}&report_date=eq.${encodeURIComponent(date)}&entity_level=eq.ad&provider_entity_id=in.(${Array.from(ids).join(",")})&reporting_key=eq.${encodeURIComponent(REPORTING_KEY)}`);
     for (const row of found) result.set(`${row.report_date}:${row.provider_entity_id}`, row);
   }
