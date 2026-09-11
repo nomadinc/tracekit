@@ -255,11 +255,26 @@ test("normalization and persistence are bounded without changing identity", () =
 
 test("all click database operations use a narrow path-local timeout", () => {
   const clicks = source("ui/lib/integrations/everflow-clicks.ts"),
-    incremental = source("ui/lib/integrations/everflow-click-incremental.ts");
-  assert.match(clicks, /EVERFLOW_CLICK_DATABASE_TIMEOUT_MS = 10_000/);
+    incremental = source("ui/lib/integrations/everflow-click-incremental.ts"),
+    conversions = source("ui/lib/integrations/everflow-conversions.ts"),
+    commerce = source("ui/lib/commerce/supabase-control-repository.ts"),
+    worker = source("ui/lib/integrations/everflow-scheduled-worker.ts"),
+    route = source("ui/app/api/cron/everflow-scheduler/route.ts");
+  assert.match(clicks, /EVERFLOW_CLICK_DATABASE_TIMEOUT_MS = 15_000/);
   assert.match(clicks, /everflow_click_database_timeout/);
+  assert.match(clicks, /controller\.abort\(\)/);
   assert.doesNotMatch(incremental, /commercePersistenceRequest/);
   assert.match(incremental, /everflowClickDatabaseRequest/);
+  assert.doesNotMatch(conversions, /EVERFLOW_CLICK_DATABASE_TIMEOUT_MS/);
+  assert.match(conversions, /EVERFLOW_CONVERSION_TIMEOUT_MS = 10_000/);
+  assert.doesNotMatch(commerce, /EVERFLOW_CLICK_DATABASE_TIMEOUT_MS/);
+  assert.doesNotMatch(commerce, /AbortController|setTimeout/);
+  assert.match(
+    worker,
+    /EVERFLOW_CLICK_DATABASE_TIMEOUT_MS \+ 5_000/,
+  );
+  assert.equal(EVERFLOW_SCHEDULER_INVOCATION_BUDGET_MS, 235_000);
+  assert.match(route, /export const maxDuration = 300/);
 });
 
 test("adaptive state stores exact bounds and safe timing only", () => {
