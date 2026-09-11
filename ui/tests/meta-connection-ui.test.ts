@@ -24,7 +24,7 @@ test("Meta UI starts OAuth through the bounded server route and explains read-on
 
 test("Meta UI preserves multiple connections and account selections independently", () => {
   assert.match(panel, /connections\.map\(\(connection\)/);
-  assert.match(panel, /selected:\s*Record<string, Set<string>>/);
+  assert.match(panel, /useState<Record<string, Set<string>>>/);
   assert.match(panel, /connection\.accounts\.map/);
   assert.match(panel, /Select all available accounts/);
   assert.match(panel, /accountIds:\s*Array\.from\(selected\[connection\.connectionId\]/);
