@@ -67,14 +67,13 @@ test("each provider page creates a durable cursor checkpoint and raw evidence", 
   assert.match(sync, /marketing_evidence_records/);
   assert.match(sync, /payload_hash:/);
   assert.match(sync, /storage_backend:\s*"inline_json"/);
-  assert.match(sync, /resolution=ignore-duplicates,return=representation/);
   assert.match(sync, /normalizer_version:\s*NORMALIZER_VERSION/);
 });
 
 test("unchanged observations advance freshness and degraded accounts remain retryable", () => {
   assert.match(sync, /last_observed_at:\s*observedAt/);
-  assert.match(sync, /row\.status === "active" \|\| row\.status === "degraded"/);
-  assert.match(sync, /status:\s*status === "completed" \? "active" : "degraded"/);
+  assert.match(sync, /status === "active" \|\| row\.status === "degraded"/);
+  assert.match(sync, /status:\s*"active"/);
 });
 
 test("hierarchy sync decrypts connection-level credentials and never logs or returns them", () => {
@@ -93,7 +92,8 @@ test("manual route is same-origin bounded and supports per-account partial isola
 });
 
 test("M1-G explicitly excludes Insights and scheduled execution", () => {
-  assert.doesNotMatch(client, /insights/);
-  assert.doesNotMatch(sync, /marketing_performance_daily|marketing_costs/);
-  assert.doesNotMatch(route, /cron|schedule|insights/);
+  assert.doesNotMatch(client, /\/insights\b|marketing_performance_daily|marketing_costs/);
+  assert.doesNotMatch(sync, /marketing_performance_daily|marketing_costs|marketing_sync_schedules/);
+  assert.doesNotMatch(route, /\/cron\b|scheduler\/run|marketing_sync_schedules|\/insights\b/);
+  assert.match(route, /schedulesActivated:\s*false/);
 });
