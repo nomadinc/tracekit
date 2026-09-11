@@ -50,7 +50,7 @@ async function checkpoint(input: { orgId: string; connectionId: string; accountI
 async function evidence(input: { orgId: string; connectionId: string; accountId: string; runId: string; type: string; row: Row; observedAt: string }) {
   const id = text(input.row.id); if (!id) return;
   const payloadHash = hash(input.row);
-  await marketingPersistenceRequest("marketing_evidence_records?on_conflict=connection_id,provider_account_id,source_object_type,source_object_id,payload_hash", { method: "POST", headers: { Prefer: "resolution=ignore-duplicates,return=minimal" }, body: JSON.stringify({ organization_id: input.orgId, connection_id: input.connectionId, provider_account_id: input.accountId, sync_run_id: input.runId, provider: "meta", source_object_type: input.type, source_object_id: id, source_endpoint: input.type, payload_hash: payloadHash, storage_backend: "inline_json", inline_payload: input.row, api_version: META_HIERARCHY_API_VERSION, normalizer_version: NORMALIZER_VERSION, observed_at: input.observedAt, source_updated_at: timestamp(input.row.updated_time), metadata: { manualHierarchySync: true } }) });
+  await marketingPersistenceRequest("marketing_evidence_records?on_conflict=connection_id,provider_account_id,source_object_type,source_object_id,payload_hash", { method: "POST", headers: { Prefer: "resolution=ignore-duplicates,return=representation" }, body: JSON.stringify({ organization_id: input.orgId, connection_id: input.connectionId, provider_account_id: input.accountId, sync_run_id: input.runId, provider: "meta", source_object_type: input.type, source_object_id: id, source_endpoint: input.type, payload_hash: payloadHash, storage_backend: "inline_json", inline_payload: input.row, api_version: META_HIERARCHY_API_VERSION, normalizer_version: NORMALIZER_VERSION, observed_at: input.observedAt, source_updated_at: timestamp(input.row.updated_time), metadata: { manualHierarchySync: true } }) });
 }
 
 async function existingMap(table: string, providerIdColumn: string, orgId: string, accountId: string) {
@@ -86,13 +86,18 @@ async function persistResource(input: { resource: MetaHierarchyResource; rows: R
         body = { ...common, campaign_id: campaignId, ad_group_id: adGroupId, creative_id: creative?.id ? input.creativeIds.get(String(creative.id)) || null : null, conversion_domain: text(row.conversion_domain), provider_created_at: timestamp(row.created_time), metadata: creative?.id && !input.creativeIds.has(String(creative.id)) ? { providerCreativeId: String(creative.id), creativeUnavailable: true } : {} };
       }
       const prior = existing.get(providerId);
-      if (prior && String(prior.raw_payload_hash || "") === payloadHash) input.counters.unchanged += 1;
-      else if (prior) { await marketingPersistenceRequest(`${table}?id=eq.${encodeURIComponent(String(prior.id))}&organization_id=eq.${encodeURIComponent(orgId)}&provider_account_id=eq.${encodeURIComponent(input.account.id)}`, { method: "PATCH", body: JSON.stringify(body) }); input.counters.updated += 1; }
-      else {
+      if (prior && String(prior.raw_payload_hash || "") === payloadHash) {
+        await marketingPersistenceRequest(`${table}?id=eq.${encodeURIComponent(String(prior.id))}&organization_id=eq.${encodeURIComponent(orgId)}&provider_account_id=eq.${encodeURIComponent(input.account.id)}`, { method: "PATCH", body: JSON.stringify({ last_observed_at: observedAt, updated_at: observedAt }) });
+        input.counters.unchanged += 1;
+      } else if (prior) {
+        await marketingPersistenceRequest(`${table}?id=eq.${encodeURIComponent(String(prior.id))}&organization_id=eq.${encodeURIComponent(orgId)}&provider_account_id=eq.${encodeURIComponent(input.account.id)}`, { method: "PATCH", body: JSON.stringify(body) });
+        input.counters.updated += 1;
+      } else {
         const insert: Row = { ...body, organization_id: orgId, connection_id: input.account.connectionId, provider_account_id: input.account.id, provider: "meta", [providerColumn]: providerId, first_observed_at: observedAt };
         const rows = await marketingPersistenceRequest(table, { method: "POST", body: JSON.stringify(insert) });
         if (!rows[0]) throw new Error("hierarchy_insert_failed");
-        existing.set(providerId, rows[0]); input.counters.created += 1;
+        existing.set(providerId, rows[0]);
+        input.counters.created += 1;
       }
       await evidence({ orgId, connectionId: input.account.connectionId, accountId: input.account.id, runId: input.runId, type: input.resource === "adsets" ? "ad_group" : input.resource === "adcreatives" ? "creative" : input.resource.slice(0, -1), row, observedAt });
       persisted += 1;
@@ -118,10 +123,10 @@ export async function runMetaHierarchySync(input: { session: TraceKitSessionCont
   const organization = requireManager(input.session);
   const connections = await listMetaConnections(organization.id);
   if (!connections.some((row) => row.id === input.connectionId && row.status === "connected")) throw new MetaOAuthError("resource_unavailable", "The requested Meta connection is unavailable.", 404);
-  const accounts = (await listMetaAccounts(organization.id, input.connectionId)).filter((row) => row.status === "active" && row.selectedForSync);
+  const accounts = (await listMetaAccounts(organization.id, input.connectionId)).filter((row) => (row.status === "active" || row.status === "degraded") && row.selectedForSync);
   const requested = input.accountIds?.length ? new Set(input.accountIds) : null;
   const targets = requested ? accounts.filter((row) => requested.has(row.id)) : accounts;
-  if (requested && targets.length !== requested.size) throw new MetaOAuthError("invalid_request", "Only selected active Meta accounts can be synchronized.", 400);
+  if (requested && targets.length !== requested.size) throw new MetaOAuthError("invalid_request", "Only selected Meta accounts can be synchronized.", 400);
   if (!targets.length) throw new MetaOAuthError("meta_no_selected_accounts", "Select at least one Meta ad account before syncing hierarchy data.", 409);
   const token = await accessToken(organization.id, input.connectionId);
   const results = [];
@@ -140,7 +145,8 @@ export async function runMetaHierarchySync(input: { session: TraceKitSessionCont
       }
       const status = counters.failed ? "failed" : "completed";
       await finishRun(organization.id, runId, counters, status, counters.failed ? "meta_hierarchy_record_failures" : undefined);
-      await marketingPersistenceRequest(`marketing_provider_accounts?id=eq.${encodeURIComponent(account.id)}&organization_id=eq.${encodeURIComponent(organization.id)}`, { method: "PATCH", body: JSON.stringify({ last_success_at: status === "completed" ? new Date().toISOString() : null, last_error_at: status === "failed" ? new Date().toISOString() : null, last_error_code: status === "failed" ? "meta_hierarchy_record_failures" : null, updated_at: new Date().toISOString() }) });
+      const now = new Date().toISOString();
+      await marketingPersistenceRequest(`marketing_provider_accounts?id=eq.${encodeURIComponent(account.id)}&organization_id=eq.${encodeURIComponent(organization.id)}`, { method: "PATCH", body: JSON.stringify({ status: status === "completed" ? "active" : "degraded", last_success_at: status === "completed" ? now : null, last_error_at: status === "failed" ? now : null, last_error_code: status === "failed" ? "meta_hierarchy_record_failures" : null, updated_at: now }) });
       results.push({ accountId: account.id, externalId: account.externalId, runId, status, ...counters });
     } catch (error) {
       const code = error instanceof MetaOAuthError ? error.code : "meta_hierarchy_sync_failed";
