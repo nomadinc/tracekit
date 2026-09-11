@@ -35,7 +35,12 @@ export default function middleware(request: NextRequest, event: NextFetchEvent) 
     redirectUri,
     middlewareAuth: {
       enabled: true,
-      unauthenticatedPaths: ["/auth/:path*", "/api/health", "/api/cron/:path*"],
+      unauthenticatedPaths: [
+        "/auth/:path*",
+        "/api/health",
+        "/api/cron/:path*",
+        "/api/next29/webhook-characterize/:path*",
+      ],
     },
   })(request, event);
 }
