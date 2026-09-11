@@ -152,7 +152,7 @@ async function persistWebhookEvidence(args: {
       mode: "shadow",
       status: "running",
       started_at: new Date().toISOString(),
-      metadata: { webhook_id: args.webhookId, topic: args.topic, shop_domain: args.connection.shopDomain, payload_hash: payloadHash },
+      metadata: { webhook_id: args.webhookId, topic: args.topic, shop_domain: args.connection.shopDomain, body_hash: payloadHash },
     }),
   });
   const runId = runs[0]?.id;
