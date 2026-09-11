@@ -126,14 +126,21 @@ export async function runNext29HistoricalOrders(args: RunNext29HistoricalOrdersA
     await args.persistence.completeRun({ ...scope, syncRunId, checkpoint, pagesCompleted: pages, recordsSeen: records, hasMore });
     return { syncRunId, pages, records, checkpoint, hasMore, resumeCursor, bounded: true };
   } catch (error) {
-    await args.persistence.failRun({
-      ...scope,
-      syncRunId,
-      checkpoint,
-      pagesCompleted: pages,
-      recordsSeen: records,
-      error: safeError(error),
-    });
+    try {
+      await args.persistence.failRun({
+        ...scope,
+        syncRunId,
+        checkpoint,
+        pagesCompleted: pages,
+        recordsSeen: records,
+        error: safeError(error),
+      });
+    } catch (failurePersistenceError) {
+      console.warn("next29_historical_failure_recording_failed", {
+        syncRunId,
+        error: safeError(failurePersistenceError),
+      });
+    }
     throw error;
   }
 }
