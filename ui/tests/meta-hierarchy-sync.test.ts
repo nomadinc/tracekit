@@ -67,7 +67,14 @@ test("each provider page creates a durable cursor checkpoint and raw evidence", 
   assert.match(sync, /marketing_evidence_records/);
   assert.match(sync, /payload_hash:/);
   assert.match(sync, /storage_backend:\s*"inline_json"/);
+  assert.match(sync, /resolution=ignore-duplicates,return=representation/);
   assert.match(sync, /normalizer_version:\s*NORMALIZER_VERSION/);
+});
+
+test("unchanged observations advance freshness and degraded accounts remain retryable", () => {
+  assert.match(sync, /last_observed_at:\s*observedAt/);
+  assert.match(sync, /row\.status === "active" \|\| row\.status === "degraded"/);
+  assert.match(sync, /status:\s*status === "completed" \? "active" : "degraded"/);
 });
 
 test("hierarchy sync decrypts connection-level credentials and never logs or returns them", () => {
