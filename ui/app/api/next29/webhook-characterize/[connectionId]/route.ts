@@ -21,7 +21,13 @@ export async function POST(request: Request, context: { params: Promise<{ connec
     const environment = String(process.env.TRACEKIT_NEXT29_WEBHOOK_CHARACTERIZATION_ENV || "").trim().toLowerCase();
     const vercelEnvironment = String(process.env.VERCEL_ENV || "").trim().toLowerCase();
     if (!new Set(["preview", "staging"]).has(environment) || vercelEnvironment === "production") {
-      return failure(requestId, 404, "resource_unavailable", "The requested resource is unavailable.");
+      console.warn("next29_m13_webhook_characterization_gate", {
+        requestId,
+        gate: "environment",
+        configuredEnvironment: environment || "unset",
+        vercelEnvironment: vercelEnvironment || "unset",
+      });
+      return failure(requestId, 404, "characterization_environment_unavailable", "29Next webhook characterization is unavailable in this environment.");
     }
 
     const signingSecret = String(process.env.TRACEKIT_NEXT29_WEBHOOK_SIGNING_SECRET || "").trim();
@@ -30,9 +36,15 @@ export async function POST(request: Request, context: { params: Promise<{ connec
     }
 
     const { connectionId } = await context.params;
-    if (!/^[0-9a-f-]{36}$/i.test(connectionId)) return failure(requestId, 404, "resource_unavailable", "The requested resource is unavailable.");
+    if (!/^[0-9a-f-]{36}$/i.test(connectionId)) {
+      console.warn("next29_m13_webhook_characterization_gate", { requestId, gate: "connection_id_format" });
+      return failure(requestId, 404, "connection_unavailable", "The requested 29Next connection is unavailable.");
+    }
     const connections = await commercePersistenceRequest(`commerce_provider_connections?id=eq.${encodeURIComponent(connectionId)}&provider=eq.next29&select=id&limit=1`);
-    if (connections.length !== 1) return failure(requestId, 404, "resource_unavailable", "The requested resource is unavailable.");
+    if (connections.length !== 1) {
+      console.warn("next29_m13_webhook_characterization_gate", { requestId, gate: "connection_lookup", connectionId });
+      return failure(requestId, 404, "connection_unavailable", "The requested 29Next connection is unavailable.");
+    }
 
     const signature = String(request.headers.get("x-29next-signature") || "").trim();
     if (!signature) return failure(requestId, 400, "signature_missing", "29Next signature header is required.");
