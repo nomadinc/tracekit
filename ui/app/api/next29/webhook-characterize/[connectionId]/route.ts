@@ -1,7 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { characterizeNext29WebhookSignature } from "../../../../../../api/src/connectors/next29/activation-readiness.ts";
-import { commercePersistenceRequest } from "@/lib/commerce/supabase-control-repository";
 
 export const runtime = "nodejs";
 
@@ -40,11 +39,6 @@ export async function POST(request: Request, context: { params: Promise<{ connec
       console.warn("next29_m13_webhook_characterization_gate", { requestId, gate: "connection_id_format" });
       return failure(requestId, 404, "connection_unavailable", "The requested 29Next connection is unavailable.");
     }
-    const connections = await commercePersistenceRequest(`commerce_provider_connections?id=eq.${encodeURIComponent(connectionId)}&provider=eq.next29&select=id&limit=1`);
-    if (connections.length !== 1) {
-      console.warn("next29_m13_webhook_characterization_gate", { requestId, gate: "connection_lookup", connectionId });
-      return failure(requestId, 404, "connection_unavailable", "The requested 29Next connection is unavailable.");
-    }
 
     const signature = String(request.headers.get("x-29next-signature") || "").trim();
     if (!signature) return failure(requestId, 400, "signature_missing", "29Next signature header is required.");
@@ -61,8 +55,8 @@ export async function POST(request: Request, context: { params: Promise<{ connec
       byteSize: raw.byteLength,
     });
 
-    // Diagnostic-only endpoint: do not persist provider payloads, reserve webhook
-    // receipts, invoke canonical handlers, or acknowledge production activation.
+    // Diagnostic-only endpoint: do not query commerce persistence, persist provider
+    // payloads, reserve webhook receipts, invoke canonical handlers, or activate schedules.
     if (!proof.verified) return failure(requestId, 401, "signature_unverified", "29Next webhook signature could not be characterized.");
     return NextResponse.json({ ok: true, verified: true, serialization: proof.serialization, requestId }, { status: 200, headers: responseHeaders(requestId) });
   } catch (error) {
