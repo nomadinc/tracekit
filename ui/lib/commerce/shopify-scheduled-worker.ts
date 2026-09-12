@@ -4,14 +4,13 @@ import { randomUUID } from "node:crypto";
 import { decodeCommerceCredentialKey, decryptCommerceCredential } from "./credential-crypto";
 import { parseShopifyConnectionCredential } from "./shopify-verifier";
 import { runShopifyIncrementalResource } from "./shopify-incremental-runtime";
-import { runShopifyHistoricalResource } from "./shopify-historical-runtime";
+import { runShopifyBulkHistoricalResource } from "./shopify-core/bulk-runtime";
 import { commercePersistenceRequest, SupabaseCommerceControlRepository } from "./supabase-control-repository";
 import type { ShopifyResource } from "./shopify-core/resources";
 
 const SHOPIFY_RESOURCES: ShopifyResource[] = ["products", "customers", "orders"];
 const DEFAULT_FREQUENCY = "5_minutes";
 const LEASE_SECONDS = 240;
-const BACKFILL_PAGE_SIZE = 50;
 const LIVE_PAGE_SIZE = 50;
 // Orders request nested line items, transactions, refunds, and refund transactions.
 // Keep them below Shopify's 1,000-point single-query cost ceiling.
@@ -142,11 +141,11 @@ async function runClaimedSchedule(schedule: ScheduleRow, now: Date) {
     });
 
     // Historical work is deliberately subordinate to the live incremental path.
-    // One bounded page is attempted per resource/cadence until the M7 cursor is exhausted.
+    // M10 advances one durable Shopify Bulk Operations state transition per cadence.
     let backfill: Record<string, unknown> = { outcome: "not_started" };
     if (historicalCutoff) {
       try {
-        const historical = await runShopifyHistoricalResource({
+        const historical = await runShopifyBulkHistoricalResource({
           organizationId: schedule.organization_id,
           connectionId: schedule.connection_id,
           providerAccountId: schedule.provider_account_id,
@@ -155,15 +154,8 @@ async function runClaimedSchedule(schedule: ScheduleRow, now: Date) {
           shopDomain: credential.shopDomain,
           accessToken: credential.adminAccessToken,
           apiVersion: credential.apiVersion,
-          maxPages: 1,
-          pageSize: pageSizeForResource(schedule.resource, BACKFILL_PAGE_SIZE),
         });
-        backfill = {
-          outcome: historical.alreadyComplete ? "complete" : "progressed",
-          pages: historical.pages,
-          records: historical.records,
-          checkpointPage: historical.checkpoint.page,
-        };
+        backfill = { ...historical };
       } catch (error) {
         // Backfill failure must never stop fresh orders/refunds from advancing.
         backfill = { outcome: "failed", error: error instanceof Error ? error.message.slice(0, 300) : "unknown_error" };
