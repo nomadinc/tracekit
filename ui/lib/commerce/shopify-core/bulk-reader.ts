@@ -63,9 +63,10 @@ export function createShopifyBulkReader(config: ShopifyBulkReaderConfig) {
       return normalizeOperation(result?.bulkOperation);
     },
 
-    async current() {
-      const data = await graphql<{ currentBulkOperation?: Record<string, unknown> | null }>(CURRENT_BULK_QUERY);
-      return data.currentBulkOperation ? normalizeOperation(data.currentBulkOperation) : null;
+    async get(operationId: string) {
+      const id = required(operationId, "Shopify bulk operation id");
+      const data = await graphql<{ bulkOperation?: Record<string, unknown> | null }>(BULK_OPERATION_QUERY, { id });
+      return data.bulkOperation ? normalizeOperation(data.bulkOperation) : null;
     },
 
     async download(url: string) {
@@ -135,7 +136,7 @@ function bulkQueryFor(resource: ShopifyResource, before: string) {
 
 const BULK_RUN_MUTATION = `#graphql\nmutation TraceKitShopifyBulk($query: String!) {\n  bulkOperationRunQuery(query: $query) {\n    bulkOperation { id status errorCode objectCount fileSize url partialDataUrl createdAt completedAt }\n    userErrors { field message }\n  }\n}`;
 
-const CURRENT_BULK_QUERY = `#graphql\nquery TraceKitCurrentBulkOperation {\n  currentBulkOperation(type: QUERY) { id status errorCode objectCount fileSize url partialDataUrl createdAt completedAt }\n}`;
+const BULK_OPERATION_QUERY = `#graphql\nquery TraceKitBulkOperation($id: ID!) {\n  bulkOperation(id: $id) { id status errorCode objectCount fileSize url partialDataUrl createdAt completedAt }\n}`;
 
 function normalizeOperation(value: Record<string, unknown> | null | undefined): ShopifyBulkOperation {
   const id = clean(value?.id);
