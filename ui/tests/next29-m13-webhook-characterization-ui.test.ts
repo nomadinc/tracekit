@@ -21,10 +21,12 @@ test("29Next M13 characterization endpoint is non-production diagnostic only", (
   assert.match(route, /MAX_BODY_BYTES = 256_000/);
 });
 
-test("29Next M13 characterization does not activate webhook processing", () => {
+test("29Next M13 characterization does not activate webhook processing or depend on commerce persistence", () => {
   assert.doesNotMatch(route, /handleNext29Webhook/);
   assert.doesNotMatch(route, /reserveWebhook/);
   assert.doesNotMatch(route, /commerce_webhook_receipts/);
+  assert.doesNotMatch(route, /commercePersistenceRequest/);
+  assert.doesNotMatch(route, /commerce_provider_connections/);
   assert.doesNotMatch(route, /enable.*schedule/i);
   assert.match(route, /Diagnostic-only endpoint/);
 });
