@@ -39,30 +39,43 @@ export async function loadShopifyOnboardingLifecycle(connectionIdValue: string):
   ) as Row[];
   if (!connections[0]) throw new Error("The requested Shopify connection is unavailable.");
 
+  const syncTypes = [
+    ...RESOURCES.map((r) => `shopify_${r}`),
+    ...RESOURCES.map((r) => `shopify_bulk_${r}`),
+    // Keep legacy M7 runs visible while existing connections transition to M10 bulk history.
+    ...RESOURCES.map((r) => `shopify_backfill_${r}`),
+  ];
+
   const [schedules, runs] = await Promise.all([
     commercePersistenceRequest(
       `commerce_sync_schedules?connection_id=eq.${connectionId}&organization_id=eq.${organizationId}&resource=in.(${RESOURCES.join(",")})&select=resource,enabled,activation_state,last_enqueued_at,next_overlap_at`,
     ) as Promise<Row[]>,
     commercePersistenceRequest(
-      `commerce_sync_runs?connection_id=eq.${connectionId}&organization_id=eq.${organizationId}&sync_type=in.(${[...RESOURCES.map((r) => `shopify_${r}`), ...RESOURCES.map((r) => `shopify_backfill_${r}`)].join(",")})&select=sync_type,status,records_seen,completed_at,started_at,metadata,created_at&order=created_at.desc&limit=60`,
+      `commerce_sync_runs?connection_id=eq.${connectionId}&organization_id=eq.${organizationId}&sync_type=in.(${syncTypes.join(",")})&select=sync_type,status,records_seen,completed_at,started_at,metadata,created_at&order=created_at.desc&limit=90`,
     ) as Promise<Row[]>,
   ]);
 
   const resources = RESOURCES.map((resource): ShopifyOnboardingResourceStatus => {
     const schedule = schedules.find((row) => String(row.resource) === resource);
     const incremental = runs.find((row) => String(row.sync_type) === `shopify_${resource}`);
-    const backfill = runs.find((row) => String(row.sync_type) === `shopify_backfill_${resource}`);
-    const backfillCheckpoint = object(object(backfill?.metadata).shopify_checkpoint);
-    const backfillComplete = String(backfill?.status || "") === "completed"
-      && backfillCheckpoint.cursor == null
-      && Number(backfillCheckpoint.page || 0) > 1;
+    const bulkBackfill = runs.find((row) => String(row.sync_type) === `shopify_bulk_${resource}`);
+    const legacyBackfill = runs.find((row) => String(row.sync_type) === `shopify_backfill_${resource}`);
+    const backfill = bulkBackfill || legacyBackfill;
+
+    const isBulk = String(backfill?.sync_type || "").startsWith("shopify_bulk_");
+    const legacyCheckpoint = object(object(backfill?.metadata).shopify_checkpoint);
+    const backfillComplete = isBulk
+      ? String(backfill?.status || "") === "completed"
+      : String(backfill?.status || "") === "completed"
+        && legacyCheckpoint.cursor == null
+        && Number(legacyCheckpoint.page || 0) > 1;
 
     return {
       resource,
       scheduleReady: Boolean(schedule?.enabled) && String(schedule?.activation_state) === "enabled",
       incrementalStatus: normalizeRunStatus(incremental?.status),
       backfillStatus: backfillComplete ? "completed" : normalizeRunStatus(backfill?.status),
-      backfillRecords: Number(backfill?.records_seen || 0),
+      backfillRecords: Number(backfill?.records_seen || object(backfill?.metadata).records_seen || 0),
       lastIncrementalAt: text(incremental?.completed_at || incremental?.started_at),
     };
   });
@@ -76,7 +89,7 @@ export async function loadShopifyOnboardingLifecycle(connectionIdValue: string):
     return {
       state: "needs_attention",
       label: "Needs attention",
-      detail: "Live Shopify sync remains prioritized. One onboarding task failed and will be retried on the next bounded scheduler cycle.",
+      detail: "Live Shopify sync remains prioritized. One onboarding task failed and will be retried on the next scheduler cycle.",
       resources, schedulesReady, backfillsComplete, liveResourcesHealthy,
     };
   }
@@ -92,7 +105,7 @@ export async function loadShopifyOnboardingLifecycle(connectionIdValue: string):
     return {
       state: "syncing_history",
       label: "Syncing history",
-      detail: "Live Shopify data is already flowing while TraceKit imports pre-connection history in bounded resumable batches.",
+      detail: "Live Shopify data is already flowing while TraceKit imports pre-connection history with resumable Shopify Bulk Operations.",
       resources, schedulesReady, backfillsComplete, liveResourcesHealthy,
     };
   }
