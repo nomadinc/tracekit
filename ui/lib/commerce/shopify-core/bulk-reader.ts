@@ -104,9 +104,9 @@ export function parseShopifyBulkJsonl(resource: ShopifyResource, jsonl: string):
 
   if (resource !== "orders") return Array.from(objects.values()) as ShopifyResourceNode[];
 
-  for (const [parentId, list] of children.entries()) {
+  children.forEach((list, parentId) => {
     const parent = objects.get(parentId);
-    if (!parent) continue;
+    if (!parent) return;
     const lineItems: Record<string, any>[] = [];
     const transactions: Record<string, any>[] = [];
     const refunds: Record<string, any>[] = [];
@@ -121,7 +121,7 @@ export function parseShopifyBulkJsonl(resource: ShopifyResource, jsonl: string):
     if (lineItems.length) parent.lineItems = { nodes: lineItems };
     if (transactions.length) parent.transactions = transactions;
     if (refunds.length) parent.refunds = refunds;
-  }
+  });
 
   return Array.from(objects.values()) as ShopifyResourceNode[];
 }
