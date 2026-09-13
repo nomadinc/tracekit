@@ -81,7 +81,7 @@ test("missing persisted Shopify operation is durably failed so the next pass can
   assert.equal(restarted.operationId, "gid://shopify/BulkOperation/restarted");
 });
 
-test("completed Shopify operation without result URL is durably failed for restart", async () => {
+test("completed Shopify operation without result URL is durably failed when objects exist", async () => {
   const updates: Array<Record<string, unknown>> = [];
   const store = {
     async latest() {
@@ -100,7 +100,7 @@ test("completed Shopify operation without result URL is durably failed for resta
   } as any;
   const reader = {
     async start() { throw new Error("start should not run"); },
-    async get() { return operation({ url: null }); },
+    async get() { return operation({ objectCount: "10", url: null }); },
     async download() { throw new Error("download should not run"); },
   } as any;
 
@@ -112,4 +112,51 @@ test("completed Shopify operation without result URL is durably failed for resta
   assert.equal(updates[0].status, "failed");
   assert.equal(updates[0].last_error_code, "shopify_bulk_result_url_missing");
   assert.equal(updates[0].last_error_summary, "Completed Shopify bulk operation is missing its result URL.");
+});
+
+test("completed zero-object Shopify operation without result URL is a successful empty backfill", async () => {
+  const updates: Array<Record<string, unknown>> = [];
+  let downloads = 0;
+  let writes = 0;
+  const store = {
+    async latest() {
+      return {
+        id: "run_empty",
+        status: "running",
+        metadata: {
+          bulk_operation_id: "gid://shopify/BulkOperation/123",
+          bulk_status: "RUNNING",
+          historical_cutoff: cutoff,
+        },
+      };
+    },
+    async create() { throw new Error("create should not run"); },
+    async update(_scope: unknown, _runId: string, body: Record<string, unknown>) { updates.push(body); },
+  } as any;
+  const reader = {
+    async start() { throw new Error("start should not run"); },
+    async get() { return operation({ objectCount: "0", fileSize: null, url: null }); },
+    async download() { downloads += 1; return ""; },
+  } as any;
+
+  const result = await advanceShopifyBulkBackfill({
+    ...scope,
+    store,
+    reader,
+    writer: async () => { writes += 1; },
+  });
+
+  assert.equal(result.outcome, "complete");
+  assert.equal(result.records, 0);
+  assert.equal(result.alreadyComplete, false);
+  assert.equal(downloads, 0);
+  assert.equal(writes, 0);
+  assert.equal(updates.length, 1);
+  assert.equal(updates[0].status, "completed");
+  assert.equal(updates[0].records_seen, 0);
+  assert.equal(updates[0].last_error_code, null);
+  assert.equal(updates[0].last_error_summary, null);
+  assert.equal((updates[0].metadata as any).bulk_status, "COMPLETED");
+  assert.equal((updates[0].metadata as any).bulk_object_count, "0");
+  assert.equal((updates[0].metadata as any).records_seen, 0);
 });
