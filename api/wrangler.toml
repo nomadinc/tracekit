@@ -12,7 +12,7 @@ routes = [
   SUPABASE_URL = "https://uoeosoiegatlqtzemsfv.supabase.co"
   TRACEKIT_ROOT_DOMAIN = "buyecowatt.com"
   TRACEKIT_AUTO_LINK_OUTBOUND = "true"
-  TRACEKIT_COMMERCE_SCHEDULER_ENABLED = "false"
+  TRACEKIT_COMMERCE_SCHEDULER_ENABLED = "true"
   TRACEKIT_MAINTENANCE_WRITE_GATE_ENABLED = "false"
   TRACEKIT_COMMERCE_KILL_SWITCH = "enabled"
   TRACEKIT_TKID_ERASURE_EXECUTOR_ENABLED = "false"
@@ -23,7 +23,8 @@ routes = [
 queue = "wowboost-imports"
 binding = "wowboost_imports"
 
-# Continuous Commerce remains disabled by environment/database controls.
+# Commas continuous sync is gated by its connected scope, enabled schedule,
+# production control, pause state, active-run and provider-quota checks.
 [[queues.producers]]
 queue = "continuous-commerce"
 binding = "continuous_commerce"
@@ -56,15 +57,13 @@ dead_letter_queue = "tracekit-everflow-firehose-dlq"
 binding = "CONTINUOUS_COMMERCE_RUNTIME"
 service = "tracekit-continuous-runtime"
 
-# Phase 2.8 Continuous Commerce implementation remains dormant in source.
-# Production Queue attachment requires a separate reviewed configuration change.
+# Queue dispatch remains guarded by the Commas continuous-sync control plane.
 
 [triggers]
 crons = ["*/5 * * * *"] # cadence selection runs every five minutes; schedules decide eligibility
 
-# Phase 2.8 note: this existing trigger is not authorization to run Continuous
-# Commas or TKID. Production-intelligence jobs must pass the database capability
-# controls and server-only configuration validator; their controls deploy disabled.
+# The Commas scheduler still requires the database capability, connection,
+# schedule, lease and quota gates. TKID has separate controls.
 
 # Required Cloudflare Worker secrets:
 # - SUPABASE_SERVICE_ROLE_KEY

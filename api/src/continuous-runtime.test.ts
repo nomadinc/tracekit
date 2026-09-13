@@ -12,8 +12,8 @@ const id = "11111111-1111-4111-8111-111111111111";
 const message = { schema_version: 1, job_type: "commerce_continuous", provider: "commas", account_id: id, organization_id: id, connection_id: id, provider_account_id: id, resource: "transactions", requested_mode: "continuous", scheduler_identity: "schedule:bucket", requested_at: "2026-08-10T00:00:00Z" } as const;
 const config = unstable_readConfig({ config: new URL("../continuous-runtime/wrangler.toml", import.meta.url).pathname });
 
-test("runtime configuration is inert and has no scheduler or queue bindings", () => {
-  assert.equal(config.vars?.TRACEKIT_COMMERCE_SCHEDULER_ENABLED, "false");
+test("runtime configuration enables guarded Commas sync without direct scheduler or queue bindings", () => {
+  assert.equal(config.vars?.TRACEKIT_COMMERCE_SCHEDULER_ENABLED, "true");
   assert.equal(config.vars?.TRACEKIT_COMMERCE_KILL_SWITCH, "enabled");
   assert.equal(config.triggers?.crons, undefined);
   assert.deepEqual(config.queues, { producers: [], consumers: [] });
