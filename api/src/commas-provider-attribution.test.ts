@@ -80,3 +80,14 @@ test("runtime persists immutable Evidence before invoking the observation projec
   assert.doesNotMatch(handler,/journey_attribution_credits/);
   assert.doesNotMatch(handler,/api_metadata/);
 });
+
+test("Evidence reconciliation remains service-role-only, exact-ORD-only, and credit-free",async()=>{
+  const sql=await (await import("node:fs/promises")).readFile(new URL("../../supabase/migrations/20260913223346_reconcile_commas_provider_observations_v2.sql",import.meta.url),"utf8");
+  assert.match(sql,/source_object_type='commas_attribution_webhook'/);
+  assert.match(sql,/source_object_type='commas_public_transaction'/);
+  assert.match(sql,/source_connector,source_record_id/);
+  assert.match(sql,/on conflict\(workspace_id,source_platform,source_connector,source_record_id,event_type\) do nothing/);
+  assert.match(sql,/grant execute on function public\.reconcile_commas_provider_observation_v2[\s\S]*to service_role/);
+  assert.doesNotMatch(sql,/insert into public\.journey_attribution_credits|update public\.journey_attribution_credits|delete from public\.journey_attribution_credits/i);
+  assert.doesNotMatch(sql,/update public\.commerce_evidence_records|update public\.commerce_provider_attribution_webhook_deliveries/i);
+});

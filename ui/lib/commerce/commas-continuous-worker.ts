@@ -447,6 +447,14 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
           console.error("[TraceKit] Commas public transaction identity projection failed",{event:"commerce.provider_attribution.ord_projection_failed",records:normalized.length,retryable:true});
         }
         try {
+          const reconciled=await db("rpc/reconcile_commas_provider_observations_after_ord_v2",{method:"POST",body:JSON.stringify({p_organization_id:scope.organizationId,p_connection_id:scope.connectionId,p_provider_account_id:scope.providerAccountId,p_limit:100})});
+          const result=reconciled[0]||{};
+          if(Number(result.observations_scanned||0)>0)console.log("[TraceKit] Commas provider attribution reconciled",{event:"commerce.provider_attribution.reconciled",observations:Number(result.observations_scanned||0),exact:Number(result.exact_matches||0),journey_events:Number(result.journey_events_created||0)});
+        } catch {
+          // The next bounded transaction scan can retry this derived shadow projection.
+          console.error("[TraceKit] Commas provider attribution reconciliation failed",{event:"commerce.provider_attribution.reconciliation_failed",retryable:true});
+        }
+        try {
           await db("rpc/reconcile_commas_order_economic_allocation_batch_v1",{method:"POST",body:JSON.stringify({p_organization_id:scope.organizationId,p_connection_id:scope.connectionId,p_provider_account_id:scope.providerAccountId,p_canonical_order_ids:normalized.map((item)=>item.canonical_order_id)})});
         } catch {
           console.error("[TraceKit] Commas economic allocation failed",{event:"commerce.economic_allocation.failed",orders:normalized.length,retryable:true});
