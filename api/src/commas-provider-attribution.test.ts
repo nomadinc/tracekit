@@ -14,6 +14,14 @@ test("purchase attribution preserves aliases independently and validates ORD ide
   assert.equal(isValidCommasPublicTransactionId("123"),false);
 });
 
+test("purchase attribution reads additional_params from the observed Commas data envelope", () => {
+  const event=normalizeCommasAttributionEvent({id:"evt-nested",type:"product.purchased",data:{payment_id:"ORD-ABC",additional_params:{affid:"42",sub1:"landing",_ef_transaction_id:"ef-1",transaction_id:"ef-1",tid:"ef-1",c1:"ef-1"}}})!;
+  assert.equal(event.paymentPublicTransactionId,"ORD-ABC");
+  assert.equal(event.parameters.affiliateId,"42");
+  assert.equal(event.parameters.sub1,"landing");
+  assert.equal(event.parameters.aliasState,"all_agree");
+});
+
 test("purchase and subscription events remain behind the existing raw-body signature gate",async()=>{
   for(const type of ["product.purchased","subscription.created"]){const raw=new TextEncoder().encode(JSON.stringify({id:`evt-${type}`,type}));const signature=await hmacSha256Hex("secret",raw);assert.equal(await verifyCommasWebhookSignature(raw,signature,"secret"),true);assert.equal(await verifyCommasWebhookSignature(raw,signature,"wrong"),false)}
 });

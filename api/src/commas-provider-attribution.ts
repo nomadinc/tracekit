@@ -95,7 +95,7 @@ export function normalizeCommasAttributionEvent(payload: unknown): NormalizedCom
       paymentPublicTransactionId: paymentId,
       paymentIdentityState: !paymentId ? "missing" : isValidCommasPublicTransactionId(paymentId) ? "valid" : "malformed",
       subscriptionProviderId: null,
-      parameters: normalizeCommasAdditionalParams(root.additional_params),
+      parameters: normalizeCommasAdditionalParams(root.additional_params ?? data.additional_params),
     };
   }
   const subscription = object(root.subscription ?? data.subscription);
