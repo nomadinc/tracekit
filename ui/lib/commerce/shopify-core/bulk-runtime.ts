@@ -81,7 +81,21 @@ export async function advanceShopifyBulkBackfill(args: Scope & {
   if (!expectedOperationId) throw new Error("Shopify bulk run is missing its operation id.");
   const operation = await args.reader.get(expectedOperationId);
   if (!operation) {
-    throw new Error("Shopify bulk operation is no longer available for the persisted TraceKit run.");
+    const errorCode = "shopify_bulk_operation_unavailable";
+    const errorSummary = "Shopify bulk operation is no longer available for the persisted TraceKit run.";
+    await args.store.update(args, run.id, {
+      status: "failed",
+      completed_at: new Date().toISOString(),
+      last_error_code: errorCode,
+      last_error_summary: errorSummary,
+      metadata: {
+        ...(run.metadata || {}),
+        bulk_operation_id: expectedOperationId,
+        bulk_status: "UNAVAILABLE",
+        historical_cutoff: cutoff,
+      },
+    });
+    return { outcome: "failed" as const, runId: run.id, operationId: expectedOperationId, status: "UNAVAILABLE", errorCode };
   }
   if (operation.id !== expectedOperationId) {
     throw new Error("Shopify bulk operation id does not match the persisted TraceKit run.");
@@ -103,7 +117,18 @@ export async function advanceShopifyBulkBackfill(args: Scope & {
     return { outcome: "waiting" as const, runId: run.id, operationId: operation.id, status: operation.status };
   }
 
-  if (!operation.url) throw new Error("Completed Shopify bulk operation is missing its result URL.");
+  if (!operation.url) {
+    const errorCode = "shopify_bulk_result_url_missing";
+    const errorSummary = "Completed Shopify bulk operation is missing its result URL.";
+    await args.store.update(args, run.id, {
+      status: "failed",
+      completed_at: new Date().toISOString(),
+      last_error_code: errorCode,
+      last_error_summary: errorSummary,
+      metadata: operationMetadata(operation, cutoff),
+    });
+    return { outcome: "failed" as const, runId: run.id, operationId: operation.id, status: operation.status, errorCode };
+  }
   const jsonl = await args.reader.download(operation.url);
   const nodes = parseShopifyBulkJsonl(args.resource, jsonl);
   const checkpoint = normalizeShopifyCheckpoint({ ...initialShopifyCheckpoint(), historicalCutoff: cutoff, page: 1 });
