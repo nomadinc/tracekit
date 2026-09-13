@@ -118,6 +118,19 @@ export async function advanceShopifyBulkBackfill(args: Scope & {
   }
 
   if (!operation.url) {
+    if (bulkObjectCount(operation) === 0) {
+      const completedAt = new Date().toISOString();
+      await args.store.update(args, run.id, {
+        status: "completed",
+        completed_at: completedAt,
+        pages_completed: 1,
+        records_seen: 0,
+        last_error_code: null,
+        last_error_summary: null,
+        metadata: { ...operationMetadata(operation, cutoff), records_seen: 0, persisted_at: completedAt },
+      });
+      return { outcome: "complete" as const, runId: run.id, operationId: operation.id, records: 0, alreadyComplete: false };
+    }
     const errorCode = "shopify_bulk_result_url_missing";
     const errorSummary = "Completed Shopify bulk operation is missing its result URL.";
     await args.store.update(args, run.id, {
@@ -248,6 +261,11 @@ function metadataCutoff(metadata: Record<string, unknown> | null | undefined) {
 function metadataNumber(metadata: Record<string, unknown> | null | undefined, key: string) {
   const value = Number(metadata?.[key]);
   return Number.isFinite(value) ? value : 0;
+}
+
+function bulkObjectCount(operation: ShopifyBulkOperation) {
+  const value = Number(operation.objectCount);
+  return Number.isFinite(value) ? value : null;
 }
 
 function isFailure(status: string) {
