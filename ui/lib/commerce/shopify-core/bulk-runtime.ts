@@ -118,7 +118,7 @@ export async function advanceShopifyBulkBackfill(args: Scope & {
   }
 
   if (!operation.url) {
-    if (bulkObjectCount(operation) === 0) {
+    if (operation.objectCount === "0") {
       const completedAt = new Date().toISOString();
       await args.store.update(args, run.id, {
         status: "completed",
@@ -261,11 +261,6 @@ function metadataCutoff(metadata: Record<string, unknown> | null | undefined) {
 function metadataNumber(metadata: Record<string, unknown> | null | undefined, key: string) {
   const value = Number(metadata?.[key]);
   return Number.isFinite(value) ? value : 0;
-}
-
-function bulkObjectCount(operation: ShopifyBulkOperation) {
-  const value = Number(operation.objectCount);
-  return Number.isFinite(value) ? value : null;
 }
 
 function isFailure(status: string) {
