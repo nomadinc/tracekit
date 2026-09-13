@@ -44,7 +44,16 @@ export async function POST(request: Request, context: { params: Promise<{ connec
     return NextResponse.json({ ok: true, accepted: true, duplicate: result.duplicate, eventId: result.eventId, requestId }, { status: 200, headers: headers(requestId) });
   } catch (error) {
     const message = error instanceof Error ? error.message : "unknown";
-    console.error("next29_m13_webhook_canary_failed", { requestId, error: message.replace(/Bearer\s+[^\s]+/gi, "Bearer <redacted>").slice(0, 300) });
+    const persistenceStatus = error && typeof error === "object" && "status" in error ? Number((error as { status?: unknown }).status) : null;
+    const persistenceCode = error && typeof error === "object" && "databaseCode" in error
+      ? String((error as { databaseCode?: unknown }).databaseCode ?? "").replace(/[^a-z0-9_.-]/gi, "_").slice(0, 80) || null
+      : null;
+    console.error("next29_m13_webhook_canary_failed", {
+      requestId,
+      error: message.replace(/Bearer\s+[^\s]+/gi, "Bearer <redacted>").slice(0, 300),
+      persistenceStatus,
+      persistenceCode,
+    });
     if (/signature verification failed/i.test(message)) return fail(requestId, 401, "signature_unverified", "29Next webhook signature verification failed.");
     if (/accepts only order\.created/i.test(message)) return fail(requestId, 422, "event_not_enabled", "This M13 canary accepts only order.created events.");
     if (/unavailable|requires exactly one active provider account|schedules to remain disabled|another commerce sync/i.test(message)) return fail(requestId, 409, "canary_gate_failed", "29Next webhook canary safety gate failed.");
