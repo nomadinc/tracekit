@@ -147,8 +147,8 @@ test("completed zero-object Shopify operation without result URL is a successful
   });
 
   assert.equal(result.outcome, "complete");
-  assert.equal(result.records, 0);
-  assert.equal(result.alreadyComplete, false);
+  assert.equal((result as any).records, 0);
+  assert.equal((result as any).alreadyComplete, false);
   assert.equal(downloads, 0);
   assert.equal(writes, 0);
   assert.equal(updates.length, 1);
