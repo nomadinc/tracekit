@@ -26,7 +26,7 @@ type BulkStateStore = {
 
 type BulkReader = {
   start(args: { resource: ShopifyResource; before: string }): Promise<ShopifyBulkOperation>;
-  current(): Promise<ShopifyBulkOperation | null>;
+  get(operationId: string): Promise<ShopifyBulkOperation | null>;
   download(url: string): Promise<string>;
 };
 
@@ -79,9 +79,12 @@ export async function advanceShopifyBulkBackfill(args: Scope & {
 
   const expectedOperationId = metadataString(run.metadata, "bulk_operation_id");
   if (!expectedOperationId) throw new Error("Shopify bulk run is missing its operation id.");
-  const operation = await args.reader.current();
-  if (!operation || operation.id !== expectedOperationId) {
-    throw new Error("Shopify bulk operation state no longer matches the persisted TraceKit run.");
+  const operation = await args.reader.get(expectedOperationId);
+  if (!operation) {
+    throw new Error("Shopify bulk operation is no longer available for the persisted TraceKit run.");
+  }
+  if (operation.id !== expectedOperationId) {
+    throw new Error("Shopify bulk operation id does not match the persisted TraceKit run.");
   }
 
   if (isFailure(operation.status)) {
