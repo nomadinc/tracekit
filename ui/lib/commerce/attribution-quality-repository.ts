@@ -3,6 +3,9 @@ import type { aggregateCommasAttributionQuality } from "./attribution-quality";
 import { commercePersistenceCount, commercePersistenceRequest } from "./supabase-control-repository";
 
 type Aggregate = ReturnType<typeof aggregateCommasAttributionQuality>;
+type SqlAggregate = Omit<Aggregate, "latency"> & {
+  latency?: Omit<Aggregate["latency"], "liveV2"> & { liveV2?: Aggregate["latency"]["liveV2"] };
+};
 type Conflict = Aggregate["conflicts"][number] & {
   classification: string;
   fieldDiagnostics: Record<"transactionIdentity" | "affiliateId" | "sub1" | "sub4", string>;
@@ -29,7 +32,7 @@ async function readAggregate(scope: { organizationId: string; connectionId: stri
   const rows = await commercePersistenceRequest(`rpc/read_commas_attribution_quality_v1?${query}`);
   if (rows.length !== 1 || rows[0].mode !== "SHADOW_MEASUREMENT" || rows[0].creditImpact !== "NONE")
     throw new Error("Attribution quality aggregate unavailable.");
-  return rows[0] as unknown as Aggregate & { currentEverflow: Record<string, number>; paymentPathAvailability: string;
+  return rows[0] as unknown as SqlAggregate & { currentEverflow: Record<string, number>; paymentPathAvailability: string;
     initialMatchState: string; identityLatency: string; maturity: Aggregate["maturity"] & { measurementEpochAt: string | null } };
 }
 

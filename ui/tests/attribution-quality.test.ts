@@ -1,7 +1,10 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
 import { aggregateCommasAttributionQuality, type QualityObservation } from "../lib/commerce/attribution-quality";
+import { AttributionQualityLatencySection } from "../lib/commerce/attribution-quality-latency";
 
 const sample = (patch: Partial<QualityObservation> = {}): QualityObservation => ({
   id: "opaque-1", eventId: "event-1", evidenceId: "evidence-1", observedAt: "2026-09-13T22:00:00Z",
@@ -116,4 +119,15 @@ test("conflict drill-down compares Everflow once per scoped transaction cohort",
   assert.match(sql, /order by c\.first_observed_at desc,c\.id desc limit p_limit offset p_offset/);
   assert.doesNotMatch(sql, /left join lateral/);
   assert.doesNotMatch(sql, /\b(?:insert|update|delete|truncate)\b\s+(?:into\s+|from\s+)?public\./i);
+});
+
+test("production SQL latency without liveV2 renders instead of throwing digest 2660621090", () => {
+  const sqlLatency = {
+    webhookToOrdAvailable: { measured: 119, medianSeconds: 60, p95Seconds: 120, maxSeconds: 180 },
+    webhookToJourneyShadow: { measured: 119, medianSeconds: 65, p95Seconds: 125, maxSeconds: 185 },
+  };
+  const html = renderToStaticMarkup(createElement(AttributionQualityLatencySection, { latency: sqlLatency }));
+  assert.match(html, /Live v2: webhook → ORD available: Unavailable/);
+  assert.match(html, /Live v2: webhook → Journey shadow: Unavailable/);
+  assert.match(renderToStaticMarkup(createElement(AttributionQualityLatencySection, { latency: null })), /Latency is temporarily unavailable/);
 });
