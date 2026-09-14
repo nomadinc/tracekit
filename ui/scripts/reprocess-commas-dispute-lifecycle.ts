@@ -23,7 +23,8 @@ type Row = Record<string, any>;
 async function request(path: string, init: RequestInit = {}) {
   const response = await fetch(`${url}${path}`, { ...init, headers: { ...auth, ...(init.headers || {}) } });
   if (!response.ok) throw new Error(`scoped persistence HTTP ${response.status}`);
-  return response.status === 204 ? [] : await response.json() as Row[];
+  const body = await response.text();
+  return body ? JSON.parse(body) as Row[] : [];
 }
 async function list(table: string, select: string, extra = "") {
   const rows = await request(`/rest/v1/${table}?select=${select}&${scope}${extra}&limit=1000`);
@@ -75,6 +76,7 @@ async function main() {
     const currentEvent = projection ? eventIdMap.get(String(projection.latest_event_id)) : null;
     if (projection && !currentEvent) throw new Error("latest projection event missing");
     const current = currentEvent ? await verified(currentEvent) : null;
+    if (projection && (projection.latest_evidence_id !== currentEvent?.evidence_id || Date.parse(String(projection.updated_at)) !== Date.parse(String(current?.updatedAt)))) throw new Error("latest projection Evidence/timestamp conflict");
     const projectionAction = classifyCommasDisputeProjection(normalized, current);
     const existingLifecycle = lifecycleMap.get(String(event.id));
     if (existingLifecycle && ((existingLifecycle.payload_hash !== null && existingLifecycle.payload_hash !== event.payload_hash) || existingLifecycle.event_type !== event.event_type || existingLifecycle.dispute_id !== projection?.id || existingLifecycle.status !== normalized.status || existingLifecycle.state !== normalized.state || existingLifecycle.reason !== normalized.reason || existingLifecycle.reason_code !== normalized.reasonCode)) throw new Error("lifecycle semantic conflict");
@@ -91,10 +93,17 @@ async function main() {
   if (plans.length !== manifest.events.length) throw new Error("frozen cohort incomplete");
   const mutatingProjectionCounts = new Map<string, number>();
   for (const plan of plans) if (plan.projectionAction === "create" || plan.projectionAction === "advance") mutatingProjectionCounts.set(String(plan.event.provider_dispute_id), (mutatingProjectionCounts.get(String(plan.event.provider_dispute_id)) || 0) + 1);
-  if (Array.from(mutatingProjectionCounts.values()).some(count => count > 1)) throw new Error("multiple projection changes for one dispute require separate cohort plans");
+  const tiedPairs = { safe: 0, ambiguous: 0 };
+  for (let left = 0; left < plans.length; left++) for (let right = left + 1; right < plans.length; right++) {
+    const a = plans[left], b = plans[right];
+    if (a.event.provider_dispute_id !== b.event.provider_dispute_id || Date.parse(String(a.normalized.updatedAt)) !== Date.parse(String(b.normalized.updatedAt))) continue;
+    const tie = classifyCommasDisputeProjection(a.normalized, b.normalized);
+    if (tie === "safe_tie_noop") tiedPairs.safe++; else if (tie === "ambiguous_tie") tiedPairs.ambiguous++;
+  }
+  if (apply && Array.from(mutatingProjectionCounts.values()).some(count => count > 1)) throw new Error("multiple projection changes for one dispute require separate cohort plans");
   const planHash = createHash("sha256").update(JSON.stringify(plans.map(plan => ({ event: plan.event.id, latest: plan.projection?.latest_event_id || null, action: plan.projectionAction, lifecycle: plan.createLifecycle })))).digest("hex");
   if (apply && arg("--expected-plan-sha256") !== planHash) throw new Error("live plan changed since reviewed dry run");
-  console.log(JSON.stringify({ mode: apply ? "apply" : "dry_run", manifestSha256: manifestHash, planSha256: planHash, frozenEvents: plans.length, evidenceHashesVerified: payloadCache.size, ...counts }));
+  console.log(JSON.stringify({ mode: apply ? "apply" : "dry_run", manifestSha256: manifestHash, planSha256: planHash, frozenEvents: plans.length, evidenceHashesVerified: payloadCache.size, equalTimestampCandidatePairs: tiedPairs, ...counts }));
   if (!apply) return;
   const writes = { lifecycle: 0, projectionsCreated: 0, projectionsAdvanced: 0 };
   for (const plan of plans) {

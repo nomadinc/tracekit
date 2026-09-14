@@ -1,0 +1,89 @@
+{
+  "project": "uoeosoiegatlqtzemsfv",
+  "captured_at": "2026-09-14T18:20:03.221Z",
+  "count": 9,
+  "disputes": [
+    {
+      "dispute_row_id": "2a5d8804-ff70-4a2b-bee7-525c48ea029a",
+      "provider_dispute_id": "du_1TgyjXFK1d7mDBo7usLYUS8f",
+      "latest_event_id": "bb3219df-7bd6-4946-8541-bce70b3f8b4d",
+      "newest_provider_updated_at": "2026-09-08 00:20:36+00",
+      "newest_event_ids": [
+        "aad39cc6-fdc9-4d26-a875-8b507791bd20"
+      ]
+    },
+    {
+      "dispute_row_id": "a07fb02d-99b2-4c60-9c7b-3bf9476e4111",
+      "provider_dispute_id": "du_1TgypHFK1d7mDBo7tX1FyhAY",
+      "latest_event_id": "d1a8d864-b868-49a1-8684-be40507b6515",
+      "newest_provider_updated_at": "2026-09-08 00:21:59+00",
+      "newest_event_ids": [
+        "d02092ba-0a83-43f8-9098-49a179dfc032"
+      ]
+    },
+    {
+      "dispute_row_id": "2db9bd09-f15c-4357-ba38-53f1887790f5",
+      "provider_dispute_id": "du_1ThhR2FK1d7mDBo7CN3RsjmQ",
+      "latest_event_id": "fd15940d-da9a-4425-8141-7987ff3ee933",
+      "newest_provider_updated_at": "2026-09-09 00:17:59+00",
+      "newest_event_ids": [
+        "3257a207-c224-43da-8c56-a3cc6981ca58"
+      ]
+    },
+    {
+      "dispute_row_id": "c322e843-9d26-4868-829e-ff0cc740cca7",
+      "provider_dispute_id": "du_1TimflFK1d7mDBo7jm6JApAv",
+      "latest_event_id": "26f5c1bf-1cfe-4603-a8ab-1087c4898601",
+      "newest_provider_updated_at": "2026-09-10 00:22:35+00",
+      "newest_event_ids": [
+        "e3db148f-3fc5-46d3-932e-ae7009eb93b1"
+      ]
+    },
+    {
+      "dispute_row_id": "815b1645-4d97-4708-a3bb-6d32fafe469f",
+      "provider_dispute_id": "du_1TtIycFK1d7mDBo7jX10bLPP",
+      "latest_event_id": "1473f2a5-9a4c-40d7-827b-1fdfa77b3f4d",
+      "newest_provider_updated_at": "2026-09-14 04:03:27+00",
+      "newest_event_ids": [
+        "679680d4-ce58-4482-8ba4-cbbe6848eaad"
+      ]
+    },
+    {
+      "dispute_row_id": "9d5e3765-bbc6-4da6-8c35-d2e09062d41a",
+      "provider_dispute_id": "du_1Tz6JxFK1d7mDBo7bCXTdcw3",
+      "latest_event_id": "abef5648-cada-4d26-abf7-c38b10ab80f4",
+      "newest_provider_updated_at": "2026-08-24 18:27:49+00",
+      "newest_event_ids": [
+        "68a59380-f8e7-446c-b1fa-4736cfd2e66c"
+      ]
+    },
+    {
+      "dispute_row_id": "9324e9a6-bccc-4f6d-ab26-2f33b87a5e00",
+      "provider_dispute_id": "du_1U4YM5LTMv7fAiIQsMXWJazi",
+      "latest_event_id": "b67b42ae-c526-4837-98fe-eaba410e78ce",
+      "newest_provider_updated_at": "2026-09-13 00:33:57+00",
+      "newest_event_ids": [
+        "0a5c40bd-90bd-4165-9d14-8bf195a10c9e",
+        "ec485305-40b5-45fb-b984-0732a759ee1a"
+      ]
+    },
+    {
+      "dispute_row_id": "bed526c2-a1ed-49ee-98f0-6e8f19a8e142",
+      "provider_dispute_id": "du_1U9pDXLTMv7fAiIQEcl4riwF",
+      "latest_event_id": "41f82884-714d-4b6a-841b-9244293e93f1",
+      "newest_provider_updated_at": "2026-09-14 17:08:26+00",
+      "newest_event_ids": [
+        "de7faa54-a99a-4b29-b29c-9e0f18fb366f"
+      ]
+    },
+    {
+      "dispute_row_id": "113084e0-15fb-4a47-a522-69845ea91138",
+      "provider_dispute_id": "du_1UFXUNFK1d7mDBo7itPXIdew",
+      "latest_event_id": "d4509b2a-1a9f-4e6c-bf55-4beabbe83e44",
+      "newest_provider_updated_at": "2026-09-14 10:54:45+00",
+      "newest_event_ids": [
+        "32da00d5-a700-4c36-9d2e-94607bfcdc17"
+      ]
+    }
+  ]
+}

@@ -1,0 +1,113 @@
+{
+  "project": "uoeosoiegatlqtzemsfv",
+  "organization": "5f1de64a-1b37-40bb-81c8-32197eda0b41",
+  "connection": "ea1c2313-6120-4692-84c5-ec3562e7dcf6",
+  "providerAccount": "0369c701-717f-4c34-b230-8341bcdb7e65",
+  "source": "frozen-nine-stale-projections-excluding-one-equal-timestamp-tie",
+  "events": [
+    {
+      "id": "68a59380-f8e7-446c-b1fa-4736cfd2e66c",
+      "provider_event_id": "dfa98911-d131-4e66-af90-4617c54fa812",
+      "provider_dispute_id": "du_1Tz6JxFK1d7mDBo7bCXTdcw3",
+      "event_type": "dispute.updated",
+      "evidence_id": "c1803b94-83df-48f3-8b89-3ba64c62a09f",
+      "payload_hash": "89532e29932e0ee5b7be106d458ce5d7eea429f494c024dc4b9baa10ec92a8dc",
+      "provider_created_at": "2026-08-24 18:27:49+00",
+      "provider_updated_at": "2026-08-24 18:27:49+00",
+      "organization_id": "5f1de64a-1b37-40bb-81c8-32197eda0b41",
+      "connection_id": "ea1c2313-6120-4692-84c5-ec3562e7dcf6",
+      "provider_account_id": "0369c701-717f-4c34-b230-8341bcdb7e65"
+    },
+    {
+      "id": "aad39cc6-fdc9-4d26-a875-8b507791bd20",
+      "provider_event_id": "a9b885a5-a930-4550-ad68-584171c8824f",
+      "provider_dispute_id": "du_1TgyjXFK1d7mDBo7usLYUS8f",
+      "event_type": "dispute.updated",
+      "evidence_id": "9fa93771-4660-4267-a137-4ed7e0749718",
+      "payload_hash": "bffb58ce8c13a424fb930e6dbf1b4be2b16dd9693930925850572c3482d6f362",
+      "provider_created_at": "2026-09-08 00:20:37+00",
+      "provider_updated_at": "2026-09-08 00:20:36+00",
+      "organization_id": "5f1de64a-1b37-40bb-81c8-32197eda0b41",
+      "connection_id": "ea1c2313-6120-4692-84c5-ec3562e7dcf6",
+      "provider_account_id": "0369c701-717f-4c34-b230-8341bcdb7e65"
+    },
+    {
+      "id": "d02092ba-0a83-43f8-9098-49a179dfc032",
+      "provider_event_id": "1182b9b7-2925-4113-be03-7052f27088b3",
+      "provider_dispute_id": "du_1TgypHFK1d7mDBo7tX1FyhAY",
+      "event_type": "dispute.updated",
+      "evidence_id": "daf27854-7832-4a51-8ac4-14b3248e5672",
+      "payload_hash": "320437fa52319b8ba2f40736f3ae7db17c4320b22de49f5a09bba275b3e2596e",
+      "provider_created_at": "2026-09-08 00:21:59+00",
+      "provider_updated_at": "2026-09-08 00:21:59+00",
+      "organization_id": "5f1de64a-1b37-40bb-81c8-32197eda0b41",
+      "connection_id": "ea1c2313-6120-4692-84c5-ec3562e7dcf6",
+      "provider_account_id": "0369c701-717f-4c34-b230-8341bcdb7e65"
+    },
+    {
+      "id": "3257a207-c224-43da-8c56-a3cc6981ca58",
+      "provider_event_id": "03d76b91-8812-4f40-b18c-2d5455445d3c",
+      "provider_dispute_id": "du_1ThhR2FK1d7mDBo7CN3RsjmQ",
+      "event_type": "dispute.updated",
+      "evidence_id": "93f678cc-e923-4754-ab4c-c3c072d702a6",
+      "payload_hash": "175243aadf5e1e547d1dcecbc90da9d692df3525ab3e1c5e5a567bb6febd00ec",
+      "provider_created_at": "2026-09-09 00:18:00+00",
+      "provider_updated_at": "2026-09-09 00:17:59+00",
+      "organization_id": "5f1de64a-1b37-40bb-81c8-32197eda0b41",
+      "connection_id": "ea1c2313-6120-4692-84c5-ec3562e7dcf6",
+      "provider_account_id": "0369c701-717f-4c34-b230-8341bcdb7e65"
+    },
+    {
+      "id": "e3db148f-3fc5-46d3-932e-ae7009eb93b1",
+      "provider_event_id": "2e5f538b-a3a5-4a6a-86b4-d1a09b8fbd1e",
+      "provider_dispute_id": "du_1TimflFK1d7mDBo7jm6JApAv",
+      "event_type": "dispute.updated",
+      "evidence_id": "7a32d4f9-9ae1-4b9a-afe1-6a3811af020e",
+      "payload_hash": "9ecfd3662eb1a91377a237a871f3fc852cfb3ba11fe78d8a3227b17559d22d47",
+      "provider_created_at": "2026-09-10 00:22:36+00",
+      "provider_updated_at": "2026-09-10 00:22:35+00",
+      "organization_id": "5f1de64a-1b37-40bb-81c8-32197eda0b41",
+      "connection_id": "ea1c2313-6120-4692-84c5-ec3562e7dcf6",
+      "provider_account_id": "0369c701-717f-4c34-b230-8341bcdb7e65"
+    },
+    {
+      "id": "679680d4-ce58-4482-8ba4-cbbe6848eaad",
+      "provider_event_id": "e918f115-c092-4e4c-baa1-b9344c81dfd1",
+      "provider_dispute_id": "du_1TtIycFK1d7mDBo7jX10bLPP",
+      "event_type": "dispute.updated",
+      "evidence_id": "e8e73906-9615-4790-a6bd-bd52cf7ded88",
+      "payload_hash": "9de5f5b8f040fe89503f36384d9facf28c853eb87ba68e7bab3adc805c09ad8e",
+      "provider_created_at": "2026-09-14 04:03:27+00",
+      "provider_updated_at": "2026-09-14 04:03:27+00",
+      "organization_id": "5f1de64a-1b37-40bb-81c8-32197eda0b41",
+      "connection_id": "ea1c2313-6120-4692-84c5-ec3562e7dcf6",
+      "provider_account_id": "0369c701-717f-4c34-b230-8341bcdb7e65"
+    },
+    {
+      "id": "32da00d5-a700-4c36-9d2e-94607bfcdc17",
+      "provider_event_id": "9aaac691-b0e9-4bdf-bf71-4ac3181fa5be",
+      "provider_dispute_id": "du_1UFXUNFK1d7mDBo7itPXIdew",
+      "event_type": "dispute.updated",
+      "evidence_id": "9b7cd0c8-d562-45e8-b50d-fac0c8997760",
+      "payload_hash": "3ab3ce4eab89dbb27d71727517f4f1e978e65c4151b2edb0624f06f91b9fa927",
+      "provider_created_at": "2026-09-14 10:54:47+00",
+      "provider_updated_at": "2026-09-14 10:54:45+00",
+      "organization_id": "5f1de64a-1b37-40bb-81c8-32197eda0b41",
+      "connection_id": "ea1c2313-6120-4692-84c5-ec3562e7dcf6",
+      "provider_account_id": "0369c701-717f-4c34-b230-8341bcdb7e65"
+    },
+    {
+      "id": "de7faa54-a99a-4b29-b29c-9e0f18fb366f",
+      "provider_event_id": "198e8e74-7eb8-4202-8ded-3b0504b1d60e",
+      "provider_dispute_id": "du_1U9pDXLTMv7fAiIQEcl4riwF",
+      "event_type": "dispute.updated",
+      "evidence_id": "556be968-f000-44b1-8912-ac10437082e6",
+      "payload_hash": "c6bb1c6ac80ce0b44f93939cd3a793783cbff985862d009275840842ca77e3cd",
+      "provider_created_at": "2026-09-14 17:08:26+00",
+      "provider_updated_at": "2026-09-14 17:08:26+00",
+      "organization_id": "5f1de64a-1b37-40bb-81c8-32197eda0b41",
+      "connection_id": "ea1c2313-6120-4692-84c5-ec3562e7dcf6",
+      "provider_account_id": "0369c701-717f-4c34-b230-8341bcdb7e65"
+    }
+  ]
+}
