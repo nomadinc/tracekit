@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { classifyCommasDisputeProjection, normalizeCommasDisputeEvent, type NormalizedCommasDisputeEvent } from "../../api/src/commas-dispute-webhook.ts";
 
 // Operator-only, read-only inspection. Inject the ignored local Supabase env and
 // all three explicit commerce scope IDs. Use --gaps-only for the first pass.
@@ -53,7 +54,7 @@ async function main() {
   const fields = new Map<string, { count: number; types: Record<string, number> }>();
   const statuses: Record<string, number> = {};
   const identityPaths = { rootId: 0, rootEventId: 0, dataDisputeId: 0 };
-  const observedStates: Array<{ dispute: string; event: string; providerTime: string; eventTime: string; status: string; dataHash: string }> = [];
+  const observedStates: Array<{ dispute: string; event: string; providerTime: string; eventTime: string; status: string; dataHash: string; normalized: NormalizedCommasDisputeEvent }> = [];
   const daily: Record<string, { events: number; stringAmounts: number; numericAmounts: number }> = {};
   const amountRelations = { comparable: 0, totalEqualsAmountPlusFee: 0, totalEqualsAmount: 0 };
   const gaps: Record<string, number> = { projection_missing: 0, projection_exists: 0, later_lifecycle_exists: 0 };
@@ -94,7 +95,9 @@ async function main() {
     const rawStatus = String(dispute.status || dispute.state || "missing").toLowerCase();
     const status = ["needs_response", "under_review", "won", "lost", "lost_rdr", "missing"].includes(rawStatus) ? rawStatus : "other";
     statuses[status] = (statuses[status] || 0) + 1;
-    observedStates.push({ dispute: String(event.provider_dispute_id), event: String(event.id), providerTime: String(dispute.updated_at || dispute.created_at || ""), eventTime: String(root.created_at || ""), status, dataHash: createHash("sha256").update(JSON.stringify(dispute)).digest("hex") });
+    const normalized = normalizeCommasDisputeEvent(payload);
+    if (!normalized) throw new Error("Restricted Evidence normalization failed");
+    observedStates.push({ dispute: String(event.provider_dispute_id), event: String(event.id), providerTime: String(dispute.updated_at || dispute.created_at || ""), eventTime: String(root.created_at || ""), status, dataHash: createHash("sha256").update(JSON.stringify(dispute)).digest("hex"), normalized });
     const day = String(event.observed_at).slice(0, 10);
     const dayRow = daily[day] || { events: 0, stringAmounts: 0, numericAmounts: 0 };
     dayRow.events++;
@@ -115,7 +118,7 @@ async function main() {
     }
   }
   await Promise.all(Array.from({ length: 6 }, () => worker()));
-  const ordering = { strictlyStale: 0, tiedDifferentEvent: 0, tiedSameStatus: 0, tiedSameData: 0, tiedLaterEventTime: 0 };
+  const ordering = { strictlyStale: 0, tiedDifferentEvent: 0, tiedSameStatus: 0, tiedSameData: 0, tiedLaterEventTime: 0, tiedSemanticIdentical: 0, tiedSemanticConflict: 0 };
   if (selected.length === events.length) {
     const grouped = new Map<string, typeof observedStates>();
     for (const row of observedStates) grouped.set(row.dispute, [...(grouped.get(row.dispute) || []), row]);
@@ -132,6 +135,9 @@ async function main() {
         if (peers.every(row => row.status === latest.status)) ordering.tiedSameStatus++;
         if (peers.every(row => row.dataHash === latest.dataHash)) ordering.tiedSameData++;
         if (peers.some(row => row.eventTime > latest.eventTime)) ordering.tiedLaterEventTime++;
+        const tieDecisions = peers.map(row => classifyCommasDisputeProjection(row.normalized, latest.normalized));
+        if (tieDecisions.includes("ambiguous_tie")) ordering.tiedSemanticConflict++;
+        else if (tieDecisions.every(decision => decision === "safe_tie_noop")) ordering.tiedSemanticIdentical++;
       }
     }
   }
