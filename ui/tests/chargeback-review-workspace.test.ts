@@ -41,6 +41,26 @@ test("review workspace preserves the existing affiliate/source chargeback report
   assert.match(await readFile(new URL("../app/(app)/dashboard/financial-issue-analysis-client.tsx", import.meta.url), "utf8"), /\/v1\/chargebacks\/analysis/);
 });
 
+test("live disputes do not present opaque buyer IDs as customers or assume currency and order certainty", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const workspace = await readFile(new URL("../components/chargebacks/chargeback-review-workspace.tsx", import.meta.url), "utf8");
+  const route = await readFile(new URL("../app/api/chargebacks/route.ts", import.meta.url), "utf8");
+  assert.match(route, /source: "live"[\s\S]*?customer: null/);
+  assert.match(workspace, /Provider buyer reference not shown/);
+  assert.match(workspace, /Suggested match/);
+  assert.doesNotMatch(workspace, /currency:"USD"|Matched order/);
+});
+
+test("dispute review does not present unverified currency or provider buyer reference as customer identity", async () => {
+  const { readFile } = await import("node:fs/promises");
+  const workspace = await readFile(new URL("../components/chargebacks/chargeback-review-workspace.tsx", import.meta.url), "utf8");
+  const route = await readFile(new URL("../app/api/chargebacks/route.ts", import.meta.url), "utf8");
+  assert.doesNotMatch(workspace, /currency:"USD"/);
+  assert.match(workspace, /Provider buyer reference not shown/);
+  assert.match(workspace, /Suggested match/);
+  assert.match(route, /customer: null, confidence: row\.reconciliation_state/);
+});
+
 test("chargeback routes use same-origin JSON while Worker APIs keep their configured base", async () => {
   const { readFile } = await import("node:fs/promises");
   const workspace = await readFile(new URL("../components/chargebacks/chargeback-review-workspace.tsx", import.meta.url), "utf8");
