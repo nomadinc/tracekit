@@ -262,7 +262,7 @@ function createOrderPersistence(context: CanaryContext) {
         connection_id: input.connectionId,
         provider_account_id: input.providerAccountId,
         sync_type: "orders",
-        mode: "webhook_canary",
+        mode: "historical_backfill",
         status: "running",
         started_at: new Date().toISOString(),
         metadata: { provider: "next29", m13_webhook_canary: true, max_records: 1 },
