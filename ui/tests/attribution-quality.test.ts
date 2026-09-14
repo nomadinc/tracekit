@@ -127,7 +127,7 @@ test("production SQL latency without liveV2 renders instead of throwing digest 2
     webhookToJourneyShadow: { measured: 119, medianSeconds: 65, p95Seconds: 125, maxSeconds: 185 },
   };
   const html = renderToStaticMarkup(createElement(AttributionQualityLatencySection, { latency: sqlLatency }));
-  assert.match(html, /Live v2: webhook → ORD available: Unavailable/);
-  assert.match(html, /Live v2: webhook → Journey shadow: Unavailable/);
+  assert.match(html, /Live v2 · ORD available<\/h3><p[^>]*>Unavailable/);
+  assert.match(html, /Live v2 · Journey shadow<\/h3><p[^>]*>Unavailable/);
   assert.match(renderToStaticMarkup(createElement(AttributionQualityLatencySection, { latency: null })), /Latency is temporarily unavailable/);
 });
