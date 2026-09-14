@@ -19,7 +19,7 @@ import { readQuotaBootstrapGate } from "./quota-bootstrap-gate";
 import { reconcileCommerceExecutionSignal, reconcileCommerceSchedulerSignals, runCommerceOperationalAlertEvaluation } from "./commerce-operational-alerts";
 import { createSupabaseServerFetch } from "./supabase-server-fetch";
 import { classifyCommasDisputeProjection, commasDisputeProjectionValues, isLogicalDisputeDeliveryDuplicate, normalizeCommasDisputeEvent, sha256HexBytes, verifyCommasWebhookSignatureAgainstSecrets, webhookStoragePath } from "./commas-dispute-webhook";
-import { EVERFLOW_FIREHOSE_BASE_PATH, EverflowRoutingUnavailableError, firehoseEventTypeForPath, handleEverflowFirehose, processEverflowFirehoseEnvelope, recordFirehoseMetric, type EverflowFirehoseEnvelope } from "./everflow-firehose";
+import { EVERFLOW_FIREHOSE_BASE_PATH, EverflowRoutingUnavailableError, firehoseEventTypeForPath, handleEverflowFirehose, processEverflowFirehoseEnvelope, recordFirehoseMetric, recordFirehoseRoutingObservation, type EverflowFirehoseEnvelope } from "./everflow-firehose";
 import { COMMAS_ATTRIBUTION_EVENT_TYPES, attributionWebhookStoragePath, compareCommasAttributionToEverflow, normalizeCommasAttributionEvent } from "./commas-provider-attribution";
 import { enforceTkidRate, ephemeralTransportDimension, TkidRateLimitError, type DistributedCounterStore, type TkidAbuseClass } from "./tkid-distributed-abuse";
 import {
@@ -22671,15 +22671,15 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 		        const metric = (name: string, scope?: Parameters<typeof recordFirehoseMetric>[2]) => {
 		          ctx.waitUntil(recordFirehoseMetric(db, name, scope).catch(() => undefined));
 		        };
-		        const outcome = await processEverflowFirehoseEnvelope(db, body as EverflowFirehoseEnvelope);
+		        const outcome = await processEverflowFirehoseEnvelope(db, body as EverflowFirehoseEnvelope, {
+		          observeRouting: (observation) => {
+		            ctx.waitUntil(recordFirehoseRoutingObservation(db, observation).catch(() => undefined));
+		          },
+		        });
 		        if (outcome.status === "unknown_network" || outcome.status === "ambiguous_network") {
 		          if (outcome.status === "unknown_network") {
 		            metric("unknown_network");
 		          }
-		          console.warn("[TraceKit] Everflow Firehose routing rejected", {
-		            event: `everflow.firehose.${outcome.status}`,
-		            classification: outcome.status,
-		          });
 		          msg.ack();
 		          continue;
 		        }

@@ -11,6 +11,7 @@ import {
   handleEverflowFirehose,
   privacySafePayload,
   processEverflowFirehoseEnvelope,
+  recordFirehoseRoutingObservation,
   resolveEverflowNetwork,
   type EverflowFirehoseEnvelope,
 } from "./everflow-firehose.ts";
@@ -157,6 +158,55 @@ test("unknown and ambiguous networks never reach persistence", async () => {
     assert.deepEqual(await processEverflowFirehoseEnvelope(db, envelope, { resolveNetwork: async () => ({ status }) }), { status });
   }
   assert.equal(rpcCalls, 0);
+});
+
+test("routing observations persist only bounded operational fields", async () => {
+  let table = "";
+  let inserted: Record<string, unknown> | null = null;
+  const db = { from: (name: string) => ({ insert: async (row: Record<string, unknown>) => { table = name; inserted = row; return { error: null }; } }), rpc: async () => ({ data: null, error: null }) };
+  await recordFirehoseRoutingObservation(db, { event_type: "conversion_update", network_id: "900", routing_result: "unknown_network", received_at: "2026-09-14T12:00:00.000Z" });
+  assert.equal(table, "everflow_firehose_routing_observations");
+  assert.deepEqual(Object.keys(inserted || {}).sort(), ["event_type", "network_id", "observed_at", "provider", "received_at", "routing_result"]);
+  assert.equal(inserted?.network_id, "900");
+  assert.equal(inserted?.routing_result, "unknown_network");
+  assert.doesNotMatch(JSON.stringify(inserted), /tx-1|cv-1|payload|authorization|Bearer|user_ip|query_parameters/);
+});
+
+test("each routing outcome records the network while preserving fail-closed behavior", async () => {
+  const observations: Array<{ network_id: string; routing_result: string }> = [];
+  let persisted = 0;
+  const db = { from: () => { throw new Error("unused"); }, rpc: async () => { persisted++; return { data: null, error: null }; } };
+  const envelope: EverflowFirehoseEnvelope = { schema_version: 1, provider: "everflow", transport: "firehose", received_at: "2026-09-14T12:00:00.000Z", event_type: "click", network_id: "900", payload: { ...click, network_id: 900 } };
+  const observeRouting = (observation: { network_id: string; routing_result: string }) => { observations.push(observation); };
+  for (const status of ["unknown_network", "ambiguous_network"] as const) {
+    assert.deepEqual(await processEverflowFirehoseEnvelope(db, envelope, { resolveNetwork: async () => ({ status }), observeRouting }), { status });
+  }
+  assert.equal((await processEverflowFirehoseEnvelope(db, envelope, { resolveNetwork: async () => ({ status: "resolved", scope }), observeRouting })).status, "processed");
+  await assert.rejects(() => processEverflowFirehoseEnvelope(db, envelope, { resolveNetwork: async () => { throw new Error("routing down"); }, observeRouting }), EverflowRoutingUnavailableError);
+  assert.deepEqual(observations.map(row => [row.network_id, row.routing_result]), [["900", "unknown_network"], ["900", "ambiguous_network"], ["900", "resolved"], ["900", "routing_unavailable"]]);
+  assert.equal(persisted, 1);
+});
+
+test("diagnostic write failure cannot block valid processing or weaken tenant rejection", async () => {
+  let persisted = 0;
+  const db = { from: () => ({ insert: async () => ({ error: { message: "diagnostics unavailable" } }) }), rpc: async () => { persisted++; return { data: null, error: null }; } };
+  const envelope: EverflowFirehoseEnvelope = { schema_version: 1, provider: "everflow", transport: "firehose", received_at: "2026-09-14T12:00:00.000Z", event_type: "click", network_id: "900", payload: { ...click, network_id: 900 } };
+  const observeRouting = (observation: Parameters<typeof recordFirehoseRoutingObservation>[1]) => recordFirehoseRoutingObservation(db, observation);
+  assert.equal((await processEverflowFirehoseEnvelope(db, envelope, { resolveNetwork: async () => ({ status: "resolved", scope }), observeRouting })).status, "processed");
+  assert.deepEqual(await processEverflowFirehoseEnvelope(db, envelope, { resolveNetwork: async () => ({ status: "unknown_network" }), observeRouting }), { status: "unknown_network" });
+  await assert.rejects(() => processEverflowFirehoseEnvelope(db, envelope, { resolveNetwork: async () => { throw new Error("routing down"); }, observeRouting }), EverflowRoutingUnavailableError);
+  assert.equal(persisted, 1);
+});
+
+test("routing observation migration is server-only, bounded, and automatically retained", () => {
+  const here = fileURLToPath(new URL(".", import.meta.url));
+  const sql = readFileSync(`${here}/../../supabase/migrations/20260914203000_everflow_firehose_routing_observations.sql`, "utf8");
+  assert.match(sql, /char_length\(network_id\) between 1 and 128/);
+  assert.match(sql, /enable row level security/);
+  assert.match(sql, /revoke all[\s\S]*from public, anon, authenticated/);
+  assert.match(sql, /grant select, insert[\s\S]*to service_role/);
+  assert.match(sql, /observed_at < now\(\) - interval '14 days'/);
+  assert.doesNotMatch(sql, /^\s*(?:transaction_id|conversion_id|payload|authorization|user_agent|query_parameters)\s+\w+|alter table public\.everflow_(click|conversion)/im);
 });
 
 test("network lookup distinguishes zero, one, and multiple eligible mappings", async () => {
