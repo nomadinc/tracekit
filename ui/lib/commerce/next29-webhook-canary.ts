@@ -159,10 +159,46 @@ function createReceiptStore() {
   return createNext29WebhookIdempotency({
     async reserveReceipt(input) {
       const existing = await commercePersistenceRequest(`commerce_webhook_receipts?connection_id=eq.${encodeURIComponent(input.connectionId)}&provider_account_id=eq.${encodeURIComponent(input.providerAccountId)}&provider=eq.next29&provider_event_id=eq.${encodeURIComponent(input.providerEventId)}&select=id,status,delivery_count&limit=1`);
+
       if (existing[0]) {
-        await commercePersistenceRequest(`commerce_webhook_receipts?id=eq.${encodeURIComponent(String(existing[0].id))}`, { method: "PATCH", body: JSON.stringify({ delivery_count: Number(existing[0].delivery_count || 1) + 1, updated_at: new Date().toISOString() }) });
+        const now = new Date().toISOString();
+        const status = String(existing[0].status || "").trim().toLowerCase();
+        const deliveryCount = Number(existing[0].delivery_count || 1) + 1;
+
+        if (status === "failed") {
+          await commercePersistenceRequest(
+            `commerce_webhook_receipts?id=eq.${encodeURIComponent(String(existing[0].id))}`,
+            {
+              method: "PATCH",
+              body: JSON.stringify({
+                status: "reserved",
+                delivery_count: deliveryCount,
+                last_error_summary: null,
+                failed_at: null,
+                completed_at: null,
+                last_received_at: now,
+                updated_at: now,
+              }),
+            },
+          );
+          return { accepted: true };
+        }
+
+        await commercePersistenceRequest(
+          `commerce_webhook_receipts?id=eq.${encodeURIComponent(String(existing[0].id))}`,
+          {
+            method: "PATCH",
+            body: JSON.stringify({
+              delivery_count: deliveryCount,
+              last_received_at: now,
+              updated_at: now,
+            }),
+          },
+        );
+
         return { accepted: false };
       }
+
       const row = next29WebhookReceiptInsert({
         organizationId: input.organizationId,
         connectionId: input.connectionId,
@@ -171,14 +207,49 @@ function createReceiptStore() {
         eventType: input.eventType,
         apiVersion: input.apiVersion,
       });
-      await commercePersistenceRequest("commerce_webhook_receipts", { method: "POST", body: JSON.stringify(row) });
+
+      await commercePersistenceRequest("commerce_webhook_receipts", {
+        method: "POST",
+        body: JSON.stringify(row),
+      });
+
       return { accepted: true };
     },
+
     async completeReceipt(input) {
-      await commercePersistenceRequest(`commerce_webhook_receipts?connection_id=eq.${encodeURIComponent(input.connectionId)}&provider_account_id=eq.${encodeURIComponent(input.providerAccountId)}&provider=eq.next29&provider_event_id=eq.${encodeURIComponent(input.providerEventId)}`, { method: "PATCH", body: JSON.stringify({ status: "completed", last_error_summary: null, completed_at: new Date().toISOString(), updated_at: new Date().toISOString() }) });
+      const now = new Date().toISOString();
+
+      await commercePersistenceRequest(
+        `commerce_webhook_receipts?connection_id=eq.${encodeURIComponent(input.connectionId)}&provider_account_id=eq.${encodeURIComponent(input.providerAccountId)}&provider=eq.next29&provider_event_id=eq.${encodeURIComponent(input.providerEventId)}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            status: "completed",
+            last_error_summary: null,
+            completed_at: now,
+            failed_at: null,
+            updated_at: now,
+          }),
+        },
+      );
     },
+
     async failReceipt(input) {
-      await commercePersistenceRequest(`commerce_webhook_receipts?connection_id=eq.${encodeURIComponent(input.connectionId)}&provider_account_id=eq.${encodeURIComponent(input.providerAccountId)}&provider=eq.next29&provider_event_id=eq.${encodeURIComponent(input.providerEventId)}`, { method: "PATCH", body: JSON.stringify({ status: "failed", last_error_summary: safeError(input.error), updated_at: new Date().toISOString() }) });
+      const now = new Date().toISOString();
+
+      await commercePersistenceRequest(
+        `commerce_webhook_receipts?connection_id=eq.${encodeURIComponent(input.connectionId)}&provider_account_id=eq.${encodeURIComponent(input.providerAccountId)}&provider=eq.next29&provider_event_id=eq.${encodeURIComponent(input.providerEventId)}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({
+            status: "failed",
+            last_error_summary: safeError(input.error),
+            failed_at: now,
+            completed_at: null,
+            updated_at: now,
+          }),
+        },
+      );
     },
   });
 }

@@ -34,6 +34,11 @@ test("29Next M13 webhook canary persists idempotent receipt and keeps schedules 
   assert.match(helper, /commerce_webhook_receipts/);
   assert.match(helper, /status: "completed"/);
   assert.match(helper, /status: "failed"/);
+  assert.match(helper, /status === "failed"/);
+  assert.match(helper, /status: "reserved"/);
+  assert.match(helper, /failed_at: null/);
+  assert.match(helper, /failed_at: now/);
+  assert.match(helper, /completed_at: null/);
   assert.match(helper, /commerce_sync_schedules/);
   assert.match(helper, /enabled=eq\.true/);
   assert.doesNotMatch(helper, /enabled:\s*true/);
