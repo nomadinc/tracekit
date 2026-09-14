@@ -69,7 +69,7 @@ export default async function CommasAttributionQualityPage() {
     </section>
 
     <Panel title="Quality funnel" description="Verified accepted purchase events through shadow projection.">
-      <ol className="grid gap-2 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-8">{Object.entries(funnel).map(([label, value], index) => <li className="min-w-0 rounded-lg border border-slate-200/70 bg-slate-50/60 p-3 dark:border-white/10 dark:bg-white/[.03]" key={label}><span className="tk-label">{String(index + 1).padStart(2, "0")} · {label}</span><strong className="mt-2 block text-lg font-semibold tabular-nums">{value ?? "—"}</strong></li>)}</ol>
+      <ol className="grid gap-2 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-8">{Object.entries(funnel).map(([label, value], index) => <li className="min-w-0 rounded-lg border border-slate-200/70 bg-slate-50/60 p-3 dark:border-white/10 dark:bg-white/[.03]" key={label}><span className="tk-label block min-h-8 leading-4">{String(index + 1).padStart(2, "0")} · {label}</span><strong className="mt-2 block text-lg font-semibold tabular-nums">{value ?? "—"}</strong></li>)}</ol>
       <p className={`mt-3 text-xs leading-5 ${muted}`}>Unsigned or malformed rejected requests are not durably counted and are excluded from this verified-purchase cohort.</p>
     </Panel>
 
