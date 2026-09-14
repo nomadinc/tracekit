@@ -49,7 +49,7 @@ async function main(){
     const tid=p.aliasState==="conflict"?null:p.efTransactionId||p.transactionId||p.tid||p.c1;
     prepared.push({observation,parameters,comparison:{state:"no_commas_tid",matched_fields:[],conflicting_fields:[]},tid});
   }
-  const tids=[...new Set(prepared.map(item=>item.tid).filter((value):value is string=>Boolean(value)))];
+  const tids=Array.from(new Set(prepared.map(item=>item.tid).filter((value):value is string=>Boolean(value))));
   const everflow=new Map<string,Row[]>();
   for(let i=0;i<tids.length;i+=40){
     const values=tids.slice(i,i+40).map(encodeURIComponent).join(",");
@@ -61,7 +61,7 @@ async function main(){
   const comparisonCounts:Record<string,number>={exact_match:0,partial_match:0,conflict:0,no_everflow_record:0,no_commas_tid:0};
   for(const item of prepared){
     const p=asObject(item.parameters),rows=item.tid?everflow.get(item.tid)||[]:[];
-    const unique=[...new Map(rows.map(row=>[JSON.stringify([row.transaction_id,row.affiliate_id,row.sub1,row.sub4]),row])).values()];
+    const unique=Array.from(new Map(rows.map(row=>[JSON.stringify([row.transaction_id,row.affiliate_id,row.sub1,row.sub4]),row])).values());
     const comparison=unique.length>1?{state:"conflict" as const,matched_fields:[],conflicting_fields:["ambiguous_everflow_identity"]}:compareCommasAttributionToEverflow({affiliateId:p.affiliate_id as string|null,sub1:p.sub1 as string|null,sub4:p.sub4 as string|null,efTransactionId:p.ef_transaction_id as string|null,transactionId:p.transaction_id as string|null,tid:p.tid as string|null,c1:p.c1 as string|null,aliasState:p.alias_state as "all_agree"|"single_alias"|"conflict"|"none",restrictedMetadata:p.restricted_metadata as any},unique[0]??null);
     item.comparison=comparison;comparisonCounts[comparison.state]++;
   }
