@@ -28,6 +28,7 @@ test("29Next M13 webhook canary accepts only order.created and refreshes current
   assert.match(helper, /persistNext29Evidence/);
   assert.match(helper, /createNext29HistoricalPersistence/);
   assert.match(helper, /mode: "historical_backfill"/);
+  assert.match(helper, /metadata: _unsupportedMetadata/);
   assert.doesNotMatch(helper, /mode: "webhook_canary"/);
 });
 

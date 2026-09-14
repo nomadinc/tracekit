@@ -339,7 +339,10 @@ function createOrderPersistence(context: CanaryContext) {
       return { id: String(rows[0].id), canonicalObjectId };
     },
     async upsertPlatformOrder(input: any) {
-      await upsertComposite("platform_orders", "platform_order_id", next29PlatformOrderRow({ ...input, accountId: context.accountId }));
+      const { metadata: _unsupportedMetadata, ...row } =
+        next29PlatformOrderRow({ ...input, accountId: context.accountId });
+
+      await upsertComposite("platform_orders", "platform_order_id", row);
     },
     async upsertProducts(input: any) { await upsertProducts(context, input.evidenceId, input.expansion); },
     async upsertOrderLines(input: any) { await upsertOrderLines(context, input.canonicalOrderId, input.evidenceId, input.expansion); },
