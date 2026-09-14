@@ -839,10 +839,10 @@ async function handleCommasDisputeWebhook(req: Request, env: Env): Promise<Respo
     if (error || !created) return json({ ok: false, error: "projection_creation_failed" }, 503);
     disputeId = created.id;
   } else if (decision === "advance") {
-    const { data: advanced, error } = await db.from("commerce_provider_disputes").update(commasDisputeProjectionValues(normalized, scope)).eq("id", disputeId).eq("organization_id", scope.organizationId).eq("connection_id", scope.connectionId).eq("provider_account_id", scope.providerAccountId).lt("updated_at", normalized.updatedAt).select("id").maybeSingle();
+    const { data: advanced, error } = await db.from("commerce_provider_disputes").update(commasDisputeProjectionValues(normalized, scope)).eq("id", disputeId).eq("organization_id", scope.organizationId).eq("connection_id", scope.connectionId).eq("provider_account_id", scope.providerAccountId).eq("latest_event_id", prior.latest_event_id).eq("updated_at", prior.updated_at).select("id").maybeSingle();
     if (error || !advanced) return json({ ok: false, error: "projection_concurrent_change" }, 503);
-  } else if (decision === "ambiguous_tie") {
-    console.log("[TraceKit] Commas dispute equal timestamp conflict", { event: "commas_dispute_equal_timestamp_conflict" });
+  } else if (decision === "ambiguous_tie" || decision === "terminal_conflict") {
+    console.log("[TraceKit] Commas dispute projection conflict", { event: decision === "terminal_conflict" ? "commas_dispute_terminal_conflict" : "commas_dispute_equal_timestamp_conflict" });
   }
   const { data: lifecycle, error: lifecycleLookupError } = await db.from("commerce_provider_dispute_lifecycle_events").select("id,dispute_id,event_type,payload_hash,status,state,reason,reason_code").eq("organization_id", scope.organizationId).eq("connection_id", scope.connectionId).eq("provider_account_id", scope.providerAccountId).eq("webhook_event_id", webhookEventId).maybeSingle();
   if (lifecycleLookupError) return json({ ok: false, error: "lifecycle_lookup_failed" }, 503);

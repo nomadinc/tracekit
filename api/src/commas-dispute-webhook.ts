@@ -1,4 +1,12 @@
 export const COMMAS_DISPUTE_EVENT_TYPES = ["dispute.created", "dispute.updated"] as const;
+/** Provider-confirmed platform currency; never infer it from an absent payload field. */
+export const COMMAS_CURRENCY = "USD" as const;
+export const LIVE_COMMAS_DISPUTE_RECOVERY_POSTING = "UNSUPPORTED" as const;
+export const COMMAS_DISPUTE_WALLET_POSTING = "UNSUPPORTED" as const;
+/** Neither a dispute status nor webhook event ID identifies a wallet movement. */
+export function hasProviderEconomicEntryIdentity(value: { providerLedgerEntryId?: string | null }) {
+  return Boolean(text(value.providerLedgerEntryId));
+}
 export type CommasDisputeEventType = typeof COMMAS_DISPUTE_EVENT_TYPES[number];
 
 const text = (value: unknown) => typeof value === "string" && value.trim() ? value.trim() : null;
@@ -51,7 +59,8 @@ export function normalizeCommasDisputeEvent(payload: unknown): NormalizedCommasD
   if (!providerEventId || !providerDisputeId) return null;
   const buyer = object(data.buyer || data.customer);
   const product = object(data.product || data.item);
-  const currency = text(data.currency)?.toUpperCase() || null;
+  const suppliedCurrency = text(data.currency)?.toUpperCase();
+  if (suppliedCurrency && suppliedCurrency !== COMMAS_CURRENCY) return null;
   return {
     providerEventId,
     eventType: eventType as CommasDisputeEventType,
@@ -65,7 +74,7 @@ export function normalizeCommasDisputeEvent(payload: unknown): NormalizedCommasD
     orderId: text(data.order_id),
     externalOrderId: text(data.external_order_id || data.external_order_reference),
     amount: numberValue(data.amount),
-    currency,
+    currency: COMMAS_CURRENCY,
     fee: numberValue(data.dispute_fee || data.fee),
     totalAmount: numberValue(data.total_amount),
     status: text(data.status),
@@ -80,14 +89,25 @@ export function normalizeCommasDisputeEvent(payload: unknown): NormalizedCommasD
   };
 }
 
-/** A provider event identifies an observation; only data.updated_at orders dispute state. */
-export type DisputeProjectionDecision = "create" | "advance" | "stale" | "safe_tie_noop" | "ambiguous_tie";
+/** Provider event IDs dedupe observations, never economic wallet movements. */
+export type DisputeProjectionDecision = "create" | "advance" | "stale" | "safe_tie_noop" | "ambiguous_tie" | "terminal_conflict";
+// Both warning variants are observed in retained lifecycle Evidence; their
+// needs_response -> under_review transition has also been observed.
+const statusRank: Record<string, number> = { needs_response: 0, warning_needs_response: 0, under_review: 1, warning_under_review: 1, won: 2, lost: 2 };
 const stateFields = ["providerDisputeId", "processorDisputeId", "paymentIntentId", "paymentId", "providerTransactionId", "orderId", "externalOrderId", "amount", "currency", "fee", "totalAmount", "status", "state", "reason", "reasonCode", "responseDeadline", "openedAt", "closedAt", "buyerReference", "productReference"] as const;
 export function classifyCommasDisputeProjection(incoming: NormalizedCommasDisputeEvent, current: NormalizedCommasDisputeEvent | null): DisputeProjectionDecision {
   if (!current) return "create";
   const nextTime = Date.parse(incoming.updatedAt || "");
   const priorTime = Date.parse(current.updatedAt || "");
   if (!Number.isFinite(nextTime) || !Number.isFinite(priorTime) || incoming.providerDisputeId !== current.providerDisputeId) throw new Error("dispute_provider_state_unorderable");
+  const nextRank = incoming.status ? statusRank[incoming.status] : undefined;
+  const priorRank = current.status ? statusRank[current.status] : undefined;
+  if ((nextRank === undefined || priorRank === undefined) && incoming.status !== current.status) return "ambiguous_tie";
+  if (nextRank !== undefined && priorRank !== undefined) {
+    if (nextRank === 2 && priorRank === 2 && incoming.status !== current.status) return "terminal_conflict";
+    if (nextRank > priorRank) return "advance";
+    if (nextRank < priorRank) return "stale";
+  }
   if (nextTime > priorTime) return "advance";
   if (nextTime < priorTime) return "stale";
   return stateFields.every(field => incoming[field] === current[field]) ? "safe_tie_noop" : "ambiguous_tie";

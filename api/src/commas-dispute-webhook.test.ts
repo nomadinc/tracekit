@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { COMMAS_DISPUTE_EVENT_TYPES, classifyCommasDisputeProjection, hmacSha256Hex, isLogicalDisputeDeliveryDuplicate, normalizeCommasDisputeEvent, verifyCommasWebhookSignature, verifyCommasWebhookSignatureAgainstSecrets, webhookStoragePath } from "./commas-dispute-webhook.ts";
+import { COMMAS_CURRENCY, COMMAS_DISPUTE_EVENT_TYPES, COMMAS_DISPUTE_WALLET_POSTING, LIVE_COMMAS_DISPUTE_RECOVERY_POSTING, classifyCommasDisputeProjection, hasProviderEconomicEntryIdentity, hmacSha256Hex, isLogicalDisputeDeliveryDuplicate, normalizeCommasDisputeEvent, verifyCommasWebhookSignature, verifyCommasWebhookSignatureAgainstSecrets, webhookStoragePath } from "./commas-dispute-webhook.ts";
 
 const fixture = {
   id: "event-1",
@@ -27,7 +27,9 @@ test("Commas dispute envelope normalizes created and updated without inventing f
   assert.equal(event?.amount, 49);
   assert.equal(event?.fee, 15);
   assert.equal(event?.buyerReference, "user_1");
-  assert.equal(event?.currency, null);
+  assert.equal(event?.currency, "USD");
+  assert.equal(COMMAS_CURRENCY, "USD");
+  assert.equal(normalizeCommasDisputeEvent({ ...fixture, data: { ...fixture.data, currency: "EUR" } }), null);
   assert.equal(normalizeCommasDisputeEvent({ ...fixture, type: "payment.succeeded" }), null);
   assert.equal(normalizeCommasDisputeEvent({ ...fixture, id: undefined }), null);
   const updated = normalizeCommasDisputeEvent({ ...fixture, id: "event-2", type: "dispute.updated", data: { ...fixture.data, status: "won", updated_at: "2026-08-24T12:00:00Z" } });
@@ -39,7 +41,7 @@ test("Commas dispute envelope normalizes created and updated without inventing f
 test("strict provider-state ordering never picks an equal-timestamp winner", () => {
   const base = normalizeCommasDisputeEvent({ ...fixture, data: { ...fixture.data, updated_at: "2026-08-23T12:00:00Z", total_amount: 64 } })!;
   const newer = { ...base, updatedAt: "2026-08-24T12:00:00Z", status: "won" };
-  const older = { ...base, updatedAt: "2026-08-22T12:00:00Z", status: "lost" };
+  const older = { ...base, updatedAt: "2026-08-22T12:00:00Z" };
   assert.equal(classifyCommasDisputeProjection(base, null), "create");
   assert.equal(classifyCommasDisputeProjection(newer, base), "advance");
   assert.equal(classifyCommasDisputeProjection(older, base), "stale");
@@ -47,6 +49,31 @@ test("strict provider-state ordering never picks an equal-timestamp winner", () 
   assert.equal(classifyCommasDisputeProjection({ ...base, totalAmount: 65 }, base), "ambiguous_tie");
   assert.equal(classifyCommasDisputeProjection({ ...base, buyerReference: "different" }, base), "ambiguous_tie");
   assert.throws(() => classifyCommasDisputeProjection({ ...base, updatedAt: null }, base), /unorderable/);
+});
+
+test("confirmed core dispute statuses advance monotonically without invented timestamp or terminal tie-breaks", () => {
+  const base = normalizeCommasDisputeEvent({ ...fixture, data: { ...fixture.data, updated_at: "2026-08-23T12:00:00Z" } })!;
+  const review = { ...base, status: "under_review", updatedAt: base.updatedAt };
+  const won = { ...review, status: "won", updatedAt: "2026-08-22T12:00:00Z" };
+  assert.equal(classifyCommasDisputeProjection(review, base), "advance");
+  assert.equal(classifyCommasDisputeProjection(won, review), "advance");
+  assert.equal(classifyCommasDisputeProjection(base, review), "stale");
+  assert.equal(classifyCommasDisputeProjection(review, won), "stale");
+  assert.equal(classifyCommasDisputeProjection({ ...won, status: "lost", updatedAt: "2026-09-01T00:00:00Z" }, won), "terminal_conflict");
+  assert.equal(classifyCommasDisputeProjection({ ...review, reason: "different" }, review), "ambiguous_tie");
+  assert.equal(classifyCommasDisputeProjection({ ...review, providerEventId: "redelivery" }, review), "safe_tie_noop");
+  assert.equal(classifyCommasDisputeProjection({ ...base, status: "warning_under_review" }, { ...base, status: "warning_needs_response" }), "advance");
+  assert.equal(classifyCommasDisputeProjection({ ...won, status: "new_provider_state" }, won), "ambiguous_tie");
+});
+
+test("descriptive dispute amounts and status cannot establish wallet economics", () => {
+  const event = normalizeCommasDisputeEvent({ ...fixture, data: { ...fixture.data, total_amount: 64, status: "won" } })!;
+  assert.equal(event.totalAmount, 64);
+  assert.equal(COMMAS_DISPUTE_WALLET_POSTING, "UNSUPPORTED");
+  assert.equal(LIVE_COMMAS_DISPUTE_RECOVERY_POSTING, "UNSUPPORTED");
+  assert.equal(hasProviderEconomicEntryIdentity({}), false);
+  assert.equal(hasProviderEconomicEntryIdentity({ providerLedgerEntryId: null }), false);
+  assert.equal(hasProviderEconomicEntryIdentity({ providerLedgerEntryId: "ledger-entry" }), true);
 });
 
 test("Commas webhook signature uses raw bytes and fails closed", async () => {
@@ -92,6 +119,9 @@ test("dispute webhook handler cannot post unproven financial events", async () =
   const source = await (await import("node:fs/promises")).readFile(new URL("./index.ts", import.meta.url), "utf8");
   const handler = source.slice(source.indexOf("async function handleCommasDisputeWebhook("), source.indexOf("async function handleCommasAttributionWebhookPayload("));
   assert.doesNotMatch(handler, /insert_chargeback_ledger_events|deriveCommasDisputeLedgerEvents|commerce_source_mappings/);
+  assert.doesNotMatch(handler, /from\("conversions"\)\.insert|from\("financial_ledger"\)\.insert/);
+  assert.match(handler, /\.eq\("latest_event_id", prior\.latest_event_id\)\.eq\("updated_at", prior\.updated_at\)/);
+  assert.doesNotMatch(handler, /\.lt\("updated_at", normalized\.updatedAt\)/);
 });
 
 test("migration adds immutable event, projection, and lifecycle storage without scheduler dependencies", async () => {
