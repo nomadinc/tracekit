@@ -37,7 +37,15 @@ export type FirehoseDependencies = {
 
 export type FirehoseConsumerDependencies = {
   resolveNetwork?(networkId: string): Promise<EverflowNetworkResolution>;
+  observeRouting?(observation: EverflowRoutingObservation): Promise<void> | void;
   routingTimeoutMs?: number;
+};
+
+export type EverflowRoutingObservation = {
+  event_type: EverflowFirehoseEventType;
+  network_id: string;
+  routing_result: "resolved" | "unknown_network" | "ambiguous_network" | "routing_unavailable";
+  received_at: string;
 };
 
 const encoder = new TextEncoder();
@@ -222,12 +230,39 @@ export async function recordFirehoseMetric(db: FirehoseDatabase, metric: string,
   if (error) throw new Error("everflow_metric_write_failed");
 }
 
+export async function recordFirehoseRoutingObservation(db: FirehoseDatabase, observation: EverflowRoutingObservation) {
+  const { error } = await db.from("everflow_firehose_routing_observations").insert({
+    provider: "everflow",
+    event_type: observation.event_type,
+    network_id: observation.network_id,
+    routing_result: observation.routing_result,
+    received_at: observation.received_at,
+    observed_at: new Date().toISOString(),
+  });
+  if (error) throw new Error("everflow_routing_observation_write_failed");
+}
+
+function observeFirehoseRouting(deps: FirehoseConsumerDependencies, envelope: EverflowFirehoseEnvelope, routingResult: EverflowRoutingObservation["routing_result"]) {
+  try {
+    void Promise.resolve(deps.observeRouting?.({ event_type: envelope.event_type, network_id: envelope.network_id, routing_result: routingResult, received_at: envelope.received_at })).catch(() => undefined);
+  } catch {
+    // Operational diagnostics must never change routing or persistence behavior.
+  }
+}
+
 export async function processEverflowFirehoseEnvelope(db: FirehoseDatabase, envelope: EverflowFirehoseEnvelope, deps: FirehoseConsumerDependencies = {}) {
   if (envelope.schema_version !== 1 || envelope.provider !== "everflow" || envelope.transport !== "firehose") throw new Error("invalid_everflow_firehose_envelope");
   const payload = record(envelope.payload);
   const validation = validatePayload(envelope.event_type, payload);
   if ("error" in validation || validation.networkId !== envelope.network_id) throw new Error("invalid_everflow_firehose_envelope");
-  const resolution = await resolveFirehoseScope(db, deps, envelope.network_id);
+  let resolution: EverflowNetworkResolution;
+  try {
+    resolution = await resolveFirehoseScope(db, deps, envelope.network_id);
+  } catch (error) {
+    observeFirehoseRouting(deps, envelope, "routing_unavailable");
+    throw error;
+  }
+  observeFirehoseRouting(deps, envelope, resolution.status);
   if (resolution.status !== "resolved") return resolution;
   const scope = resolution.scope;
   const { data, error } = await db.rpc("ingest_everflow_firehose_event_v1", {
