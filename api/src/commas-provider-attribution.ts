@@ -73,7 +73,7 @@ export function normalizeCommasAdditionalParams(value: unknown): CommasAttributi
     restrictedMetadata: {
       additional_param_keys: keys,
       unknown_param_keys: keys.filter((key) => !KNOWN_KEYS.has(key) && !SECRET_KEY.test(key)),
-      rejected_normalized_keys: [...new Set(rejected)].sort(),
+      rejected_normalized_keys: Array.from(new Set(rejected)).sort(),
       secret_like_keys_present: keys.some((key) => SECRET_KEY.test(key)),
     },
   };
