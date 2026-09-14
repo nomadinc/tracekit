@@ -39,21 +39,25 @@ export async function loadShopifyOnboardingLifecycle(connectionIdValue: string):
   ) as Row[];
   if (!connections[0]) throw new Error("The requested Shopify connection is unavailable.");
 
-  const syncTypes = [
-    ...RESOURCES.map((r) => `shopify_${r}`),
+  const incrementalTypes = RESOURCES.map((r) => `shopify_${r}`);
+  const historicalTypes = [
     ...RESOURCES.map((r) => `shopify_bulk_${r}`),
     // Keep legacy M7 runs visible while existing connections transition to M10 bulk history.
     ...RESOURCES.map((r) => `shopify_backfill_${r}`),
   ];
 
-  const [schedules, runs] = await Promise.all([
+  const [schedules, incrementalRuns, historicalRuns] = await Promise.all([
     commercePersistenceRequest(
       `commerce_sync_schedules?connection_id=eq.${connectionId}&organization_id=eq.${organizationId}&resource=in.(${RESOURCES.join(",")})&select=resource,enabled,activation_state,last_enqueued_at,next_overlap_at`,
     ) as Promise<Row[]>,
     commercePersistenceRequest(
-      `commerce_sync_runs?connection_id=eq.${connectionId}&organization_id=eq.${organizationId}&sync_type=in.(${syncTypes.join(",")})&select=sync_type,status,records_seen,completed_at,started_at,metadata,created_at&order=created_at.desc&limit=90`,
+      `commerce_sync_runs?connection_id=eq.${connectionId}&organization_id=eq.${organizationId}&sync_type=in.(${incrementalTypes.join(",")})&select=sync_type,status,records_seen,completed_at,started_at,metadata,created_at&order=created_at.desc&limit=90`,
+    ) as Promise<Row[]>,
+    commercePersistenceRequest(
+      `commerce_sync_runs?connection_id=eq.${connectionId}&organization_id=eq.${organizationId}&sync_type=in.(${historicalTypes.join(",")})&select=sync_type,status,records_seen,completed_at,started_at,metadata,created_at&order=created_at.desc&limit=90`,
     ) as Promise<Row[]>,
   ]);
+  const runs = [...incrementalRuns, ...historicalRuns];
 
   const resources = RESOURCES.map((resource): ShopifyOnboardingResourceStatus => {
     const schedule = schedules.find((row) => String(row.resource) === resource);
