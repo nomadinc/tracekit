@@ -107,3 +107,13 @@ test("stored comparison, pending identity, unavailable latency and payment path 
   assert.match(sql, /'transactionIdentity'[\s\S]*'affiliateId'[\s\S]*'sub1'[\s\S]*'sub4'/);
   assert.doesNotMatch(sql, /'rawAdditionalParams'|'email'|'phone'|'signatureValue'/);
 });
+
+test("conflict drill-down compares Everflow once per scoped transaction cohort", () => {
+  const sql = readFileSync(new URL("../../supabase/migrations/20260914044200_commas_attribution_conflicts_set_based_v2.sql", import.meta.url), "utf8");
+  assert.match(sql, /with base as materialized/);
+  assert.match(sql, /ef_raw as materialized/);
+  assert.match(sql, /where organization_id=p_organization_id and transaction_id in \(select observed_tid from base/);
+  assert.match(sql, /order by c\.first_observed_at desc,c\.id desc limit p_limit offset p_offset/);
+  assert.doesNotMatch(sql, /left join lateral/);
+  assert.doesNotMatch(sql, /\b(?:insert|update|delete|truncate)\b\s+(?:into\s+|from\s+)?public\./i);
+});
