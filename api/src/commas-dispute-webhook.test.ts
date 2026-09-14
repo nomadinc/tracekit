@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { COMMAS_DISPUTE_EVENT_TYPES, deriveCommasDisputeLedgerEvents, hmacSha256Hex, isLogicalDisputeDeliveryDuplicate, normalizeCommasDisputeEvent, verifyCommasWebhookSignature, verifyCommasWebhookSignatureAgainstSecrets, webhookStoragePath } from "./commas-dispute-webhook.ts";
+import { COMMAS_DISPUTE_EVENT_TYPES, classifyCommasDisputeProjection, hmacSha256Hex, isLogicalDisputeDeliveryDuplicate, normalizeCommasDisputeEvent, verifyCommasWebhookSignature, verifyCommasWebhookSignatureAgainstSecrets, webhookStoragePath } from "./commas-dispute-webhook.ts";
 
 const fixture = {
   id: "event-1",
@@ -34,6 +34,19 @@ test("Commas dispute envelope normalizes created and updated without inventing f
   assert.equal(updated?.providerEventId, "event-2");
   assert.equal(updated?.providerDisputeId, "dp_1");
   assert.equal(updated?.status, "won");
+});
+
+test("strict provider-state ordering never picks an equal-timestamp winner", () => {
+  const base = normalizeCommasDisputeEvent({ ...fixture, data: { ...fixture.data, updated_at: "2026-08-23T12:00:00Z", total_amount: 64 } })!;
+  const newer = { ...base, updatedAt: "2026-08-24T12:00:00Z", status: "won" };
+  const older = { ...base, updatedAt: "2026-08-22T12:00:00Z", status: "lost" };
+  assert.equal(classifyCommasDisputeProjection(base, null), "create");
+  assert.equal(classifyCommasDisputeProjection(newer, base), "advance");
+  assert.equal(classifyCommasDisputeProjection(older, base), "stale");
+  assert.equal(classifyCommasDisputeProjection({ ...base, providerEventId: "another", createdAt: "2026-09-01T00:00:00Z" }, base), "safe_tie_noop");
+  assert.equal(classifyCommasDisputeProjection({ ...base, totalAmount: 65 }, base), "ambiguous_tie");
+  assert.equal(classifyCommasDisputeProjection({ ...base, buyerReference: "different" }, base), "ambiguous_tie");
+  assert.throws(() => classifyCommasDisputeProjection({ ...base, updatedAt: null }, base), /unorderable/);
 });
 
 test("Commas webhook signature uses raw bytes and fails closed", async () => {
@@ -75,13 +88,10 @@ test("webhook storage path is scoped and deterministic", () => {
   assert.equal(webhookStoragePath("org", "connection", "provider", "abc"), "org/connection/provider/commas-dispute-webhook/abc.json");
 });
 
-test("ledger effects are emitted only when the event proves a lost chargeback with explicit currency", () => {
-  const lost = normalizeCommasDisputeEvent({ ...fixture, data: { ...fixture.data, status: "lost", currency: "USD", transaction_id: "txn-1" } });
-  assert.equal(deriveCommasDisputeLedgerEvents(lost!, "provider-account").length, 2);
-  const won = normalizeCommasDisputeEvent({ ...fixture, data: { ...fixture.data, status: "won", currency: "USD", transaction_id: "txn-1" } });
-  assert.equal(deriveCommasDisputeLedgerEvents(won!, "provider-account").length, 0);
-  const noCurrency = normalizeCommasDisputeEvent({ ...fixture, data: { ...fixture.data, status: "lost", transaction_id: "txn-1" } });
-  assert.equal(deriveCommasDisputeLedgerEvents(noCurrency!, "provider-account").length, 0);
+test("dispute webhook handler cannot post unproven financial events", async () => {
+  const source = await (await import("node:fs/promises")).readFile(new URL("./index.ts", import.meta.url), "utf8");
+  const handler = source.slice(source.indexOf("async function handleCommasDisputeWebhook("), source.indexOf("async function handleCommasAttributionWebhookPayload("));
+  assert.doesNotMatch(handler, /insert_chargeback_ledger_events|deriveCommasDisputeLedgerEvents|commerce_source_mappings/);
 });
 
 test("migration adds immutable event, projection, and lifecycle storage without scheduler dependencies", async () => {

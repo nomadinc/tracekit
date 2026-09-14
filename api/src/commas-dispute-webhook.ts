@@ -24,6 +24,7 @@ export type NormalizedCommasDisputeEvent = {
   amount: number | null;
   currency: string | null;
   fee: number | null;
+  totalAmount: number | null;
   status: string | null;
   state: string | null;
   reason: string | null;
@@ -66,6 +67,7 @@ export function normalizeCommasDisputeEvent(payload: unknown): NormalizedCommasD
     amount: numberValue(data.amount),
     currency,
     fee: numberValue(data.dispute_fee || data.fee),
+    totalAmount: numberValue(data.total_amount),
     status: text(data.status),
     state: text(data.state),
     reason: text(data.reason),
@@ -78,16 +80,34 @@ export function normalizeCommasDisputeEvent(payload: unknown): NormalizedCommasD
   };
 }
 
+/** A provider event identifies an observation; only data.updated_at orders dispute state. */
+export type DisputeProjectionDecision = "create" | "advance" | "stale" | "safe_tie_noop" | "ambiguous_tie";
+const stateFields = ["providerDisputeId", "processorDisputeId", "paymentIntentId", "paymentId", "providerTransactionId", "orderId", "externalOrderId", "amount", "currency", "fee", "totalAmount", "status", "state", "reason", "reasonCode", "responseDeadline", "openedAt", "closedAt", "buyerReference", "productReference"] as const;
+export function classifyCommasDisputeProjection(incoming: NormalizedCommasDisputeEvent, current: NormalizedCommasDisputeEvent | null): DisputeProjectionDecision {
+  if (!current) return "create";
+  const nextTime = Date.parse(incoming.updatedAt || "");
+  const priorTime = Date.parse(current.updatedAt || "");
+  if (!Number.isFinite(nextTime) || !Number.isFinite(priorTime) || incoming.providerDisputeId !== current.providerDisputeId) throw new Error("dispute_provider_state_unorderable");
+  if (nextTime > priorTime) return "advance";
+  if (nextTime < priorTime) return "stale";
+  return stateFields.every(field => incoming[field] === current[field]) ? "safe_tie_noop" : "ambiguous_tie";
+}
+
+export function commasDisputeProjectionValues(event: NormalizedCommasDisputeEvent, scope: { organizationId: string; accountId: string; connectionId: string; providerAccountId: string; eventId: string; evidenceId: string }) {
+  if (!event.updatedAt || !Number.isFinite(Date.parse(event.updatedAt))) throw new Error("dispute_provider_state_unorderable");
+  return { organization_id: scope.organizationId, account_id: scope.accountId, connection_id: scope.connectionId, provider_account_id: scope.providerAccountId, provider_dispute_id: event.providerDisputeId, latest_event_id: scope.eventId, latest_evidence_id: scope.evidenceId, provider_transaction_id: event.providerTransactionId, payment_intent_id: event.paymentIntentId, payment_id: event.paymentId, order_id: event.orderId, external_order_id: event.externalOrderId, amount: event.amount, currency: event.currency, fee: event.fee, status: event.status, state: event.state, reason: event.reason, reason_code: event.reasonCode, response_deadline: event.responseDeadline, opened_at: event.openedAt, updated_at: event.updatedAt, closed_at: event.closedAt, buyer_reference: event.buyerReference, product_reference: event.productReference };
+}
+
 const encoder = new TextEncoder();
 export async function sha256HexBytes(input: Uint8Array) {
-  const digest = await crypto.subtle.digest("SHA-256", input);
-  return [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  const digest = await crypto.subtle.digest("SHA-256", Uint8Array.from(input));
+  return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 export async function hmacSha256Hex(secret: string, body: Uint8Array) {
   const key = await crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
-  const signature = await crypto.subtle.sign("HMAC", key, body);
-  return [...new Uint8Array(signature)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
+  const signature = await crypto.subtle.sign("HMAC", key, Uint8Array.from(body));
+  return Array.from(new Uint8Array(signature), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 export async function verifyCommasWebhookSignature(rawBody: Uint8Array, supplied: string | null, secret: string | null | undefined) {
@@ -123,12 +143,4 @@ export function webhookStoragePath(organizationId: string, connectionId: string,
 /** Logical overlap duplicate: transport/event IDs may differ across subscriptions. */
 export function isLogicalDisputeDeliveryDuplicate(existing: { providerDisputeId?: string; eventType?: string; payloadHash?: string } | null | undefined, event: Pick<NormalizedCommasDisputeEvent, "providerDisputeId" | "eventType">, payloadHash: string) {
   return Boolean(existing && existing.providerDisputeId === event.providerDisputeId && existing.eventType === event.eventType && existing.payloadHash === payloadHash);
-}
-
-export function deriveCommasDisputeLedgerEvents(event: NormalizedCommasDisputeEvent, processorAccountId: string) {
-  if (!event.providerTransactionId || !event.currency || event.amount === null || !["lost", "lost_rdr"].includes(String(event.status || "").toLowerCase())) return [];
-  const base = { transaction_id: event.providerTransactionId, processor_account_id: processorAccountId, currency: event.currency, occurred_at: event.updatedAt || event.closedAt || event.createdAt || new Date().toISOString(), status: event.status, reason: event.reason, dispute_id: event.providerDisputeId, platform: "commas", event_source: "commas", ingestion_method: "webhook", connector_id: "commas", source_direction: "debit" };
-  const effects = [{ ...base, ledger_type: "chargeback", amount: event.amount, source_event_id: event.providerEventId, source_amount: event.amount }];
-  if (event.fee !== null && event.fee !== 0) effects.push({ ...base, ledger_type: "chargeback_fee", amount: event.fee, source_event_id: `${event.providerEventId}:fee`, source_amount: event.fee });
-  return effects;
 }
