@@ -29,8 +29,12 @@ export function normalizeShopifyOrderRecord(record: ShopifyPersistedRecord, shop
   const createdAt = iso(order.createdAt || order.processedAt || order.updatedAt, "Shopify order timestamp");
   const status = String(order.displayFinancialStatus || order.financialStatus || order.status || "UNKNOWN").toUpperCase();
   const cancelled = Boolean(order.cancelledAt);
-  const statusNorm = cancelled ? "CANCELLED" : normalizeFinancialStatus(status);
-  const total = money(order.currentTotalPriceSet ?? order.totalPriceSet ?? order.totalPrice);
+  const refunds = connectionNodes(order.refunds);
+  const currentTotal = money(order.currentTotalPriceSet ?? order.totalPriceSet ?? order.totalPrice);
+  const originalTotal = money(order.totalPriceSet ?? order.totalPrice);
+  const fullyRefunded = refunds.length > 0 && currentTotal !== null && originalTotal !== null && originalTotal > 0 && currentTotal <= 0;
+  const statusNorm = cancelled ? "CANCELLED" : fullyRefunded ? "REFUNDED" : normalizeFinancialStatus(status);
+  const total = currentTotal;
   const subtotal = money(order.currentSubtotalPriceSet ?? order.subtotalPriceSet ?? order.subtotalPrice);
   const shipping = money(order.currentTotalShippingPriceSet ?? order.totalShippingPriceSet ?? order.totalShippingPrice);
   const tax = money(order.currentTotalTaxSet ?? order.totalTaxSet ?? order.totalTax);
