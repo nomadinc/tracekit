@@ -41,6 +41,7 @@ export default function middleware(request: NextRequest, event: NextFetchEvent) 
         "/api/cron/:path*",
         "/api/next29/webhook-characterize/:path*",
         "/api/next29/webhook-canary/:path*",
+        "/api/next29/webhook/:path*",
       ],
     },
   })(request, event);
