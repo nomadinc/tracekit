@@ -47,7 +47,15 @@ export async function POST(request: Request) {
   });
 
   if (!previous?.id) {
-    return NextResponse.json({ ok: false, code: "credential_unavailable" }, { status: 409 });
+    const supabaseUrl = String(process.env.NEXT_PUBLIC_SUPABASE_URL || "");
+    const projectRef = /^https:\/\/([^.]+)\.supabase\.co/i.exec(supabaseUrl)?.[1] || "unknown";
+
+    return NextResponse.json({
+      ok: false,
+      code: "credential_unavailable",
+      projectRef,
+      connectionId: CONNECTION_ID,
+    }, { status: 409 });
   }
 
   await rotateTypedCommerceCredential({
