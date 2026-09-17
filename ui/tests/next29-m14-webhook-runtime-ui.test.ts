@@ -21,11 +21,13 @@ test("29Next M14 permanent webhook route is inert, raw-byte signed, and bounded"
   assert.match(route, /cache-control/);
 });
 
-test("29Next M14 signing secret is behind a server-only resolver", () => {
+test("29Next M14 signing secret is behind a server-only connection-scoped resolver", () => {
   assert.match(resolver, /import "server-only"/);
   assert.match(resolver, /resolveNext29WebhookSigningSecret/);
-  assert.match(resolver, /TRACEKIT_NEXT29_WEBHOOK_SIGNING_SECRET/);
+  assert.match(resolver, /resolveTypedCommerceCredential/);
+  assert.match(resolver, /credentialType: "webhook_signing_secret"/);
   assert.match(resolver, /M14\.1B/);
+  assert.doesNotMatch(resolver, /TRACEKIT_NEXT29_WEBHOOK_SIGNING_SECRET/);
   assert.doesNotMatch(route, /process\.env\.TRACEKIT_NEXT29_WEBHOOK_SIGNING_SECRET/);
 });
 
