@@ -1,13 +1,7 @@
 import "server-only";
+import { resolveTypedCommerceCredential } from "./typed-credential-store";
 
-/**
- * M14.1A signing-secret boundary.
- *
- * The environment fallback preserves the already-proven M13 staging contract only.
- * M14.1B must replace this fallback with connection-scoped encrypted storage before
- * production activation. Keep callers dependent on this resolver rather than on
- * environment-variable storage policy.
- */
+/** M14.1B connection-scoped signing-secret resolver. */
 export async function resolveNext29WebhookSigningSecret(input: {
   connectionId: string;
 }): Promise<string> {
@@ -15,7 +9,14 @@ export async function resolveNext29WebhookSigningSecret(input: {
     throw new Error("29Next webhook signing secret is unavailable.");
   }
 
-  const secret = String(process.env.TRACEKIT_NEXT29_WEBHOOK_SIGNING_SECRET || "").trim();
-  if (secret.length < 8) throw new Error("29Next webhook signing secret is unavailable.");
-  return secret;
+  try {
+    const secret = (await resolveTypedCommerceCredential({
+      connectionId: input.connectionId,
+      credentialType: "webhook_signing_secret",
+    })).trim();
+    if (secret.length < 8) throw new Error("invalid");
+    return secret;
+  } catch {
+    throw new Error("29Next webhook signing secret is unavailable.");
+  }
 }
