@@ -39,6 +39,15 @@ export async function runNext29WebhookCanary(input: {
   signingSecret: string;
 }): Promise<Next29WebhookCanaryResult> {
   assertCanaryEnvironment();
+  return runNext29OrderCreatedWebhook(input);
+}
+
+export async function runNext29OrderCreatedWebhook(input: {
+  connectionId: string;
+  rawBody: Uint8Array;
+  signature: string | null;
+  signingSecret: string;
+}): Promise<Next29WebhookCanaryResult> {
   if (input.rawBody.byteLength < 1 || input.rawBody.byteLength > MAX_BODY_BYTES) throw new Error("29Next webhook payload size is outside the canary limit.");
   if (!(await verifyNext29WebhookSignature({ rawBody: input.rawBody, signature: input.signature, signingSecret: input.signingSecret }))) {
     throw new Error("29Next webhook signature verification failed.");
@@ -46,7 +55,7 @@ export async function runNext29WebhookCanary(input: {
 
   const envelope = parseNext29Webhook(input.rawBody);
   if (envelope.event_type !== "order.created" || envelope.object !== "order") {
-    throw new Error("29Next M13 canary accepts only order.created events.");
+    throw new Error("29Next webhook processor accepts only order.created events.");
   }
 
   const context = await resolveContext(input.connectionId);

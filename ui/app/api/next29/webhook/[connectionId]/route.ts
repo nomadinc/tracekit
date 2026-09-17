@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
-import { runNext29WebhookCanary } from "@/lib/commerce/next29-webhook-canary";
+import { runNext29OrderCreatedWebhook } from "@/lib/commerce/next29-webhook-canary";
 import { resolveNext29WebhookSigningSecret } from "@/lib/commerce/next29-webhook-signing-secret";
 
 export const runtime = "nodejs";
@@ -22,9 +22,14 @@ export async function POST(request: Request, context: { params: Promise<{ connec
     const configured = String(process.env.TRACEKIT_NEXT29_WEBHOOK_RUNTIME_ENV || "").trim().toLowerCase();
     const vercelEnvironment = String(process.env.VERCEL_ENV || "").trim().toLowerCase();
 
-    // M14.1A is deliberately inert in production. M14.1B must provide
-    // connection-scoped encrypted signing-secret storage before this guard changes.
-    if (configured !== "staging" || vercelEnvironment === "production") {
+    // Fail closed unless the explicit runtime mode matches the Vercel environment.
+    // Production processing requires both runtime_env=production and VERCEL_ENV=production.
+    if (
+      !(
+        (configured === "staging" && vercelEnvironment !== "production") ||
+        (configured === "production" && vercelEnvironment === "production")
+      )
+    ) {
       return fail(requestId, 404, "webhook_runtime_unavailable", "29Next webhook runtime is unavailable in this environment.");
     }
 
@@ -39,10 +44,8 @@ export async function POST(request: Request, context: { params: Promise<{ connec
     const { connectionId } = await context.params;
     const signingSecret = await resolveNext29WebhookSigningSecret({ connectionId });
 
-    // M14.1A intentionally reuses the M13-proven order.created processor. The
-    // permanent route contract is now isolated; M14.1B will extract the remaining
-    // canary environment guard while replacing secret storage.
-    const result = await runNext29WebhookCanary({ connectionId, rawBody, signature, signingSecret });
+    // Reuse the M13-proven order.created processor without the M13 environment gate.
+    const result = await runNext29OrderCreatedWebhook({ connectionId, rawBody, signature, signingSecret });
 
     console.info("next29_webhook_runtime", {
       requestId,

@@ -12,7 +12,10 @@ const middleware = fs.readFileSync(path.join(root, "middleware.ts"), "utf8");
 test("29Next M14 permanent webhook route is inert, raw-byte signed, and bounded", () => {
   assert.match(route, /runtime = "nodejs"/);
   assert.match(route, /TRACEKIT_NEXT29_WEBHOOK_RUNTIME_ENV/);
-  assert.match(route, /configured !== "staging"/);
+  assert.match(route, /configured === "staging"/);
+  assert.match(route, /configured === "production"/);
+  assert.match(route, /vercelEnvironment !== "production"/);
+  assert.match(route, /vercelEnvironment === "production"/);
   assert.match(route, /VERCEL_ENV/);
   assert.match(route, /vercelEnvironment === "production"/);
   assert.match(route, /request\.arrayBuffer\(\)/);
@@ -32,7 +35,8 @@ test("29Next M14 signing secret is behind a server-only connection-scoped resolv
 });
 
 test("29Next M14 route reuses proven order.created processing without broadening event coverage", () => {
-  assert.match(route, /runNext29WebhookCanary/);
+  assert.match(route, /runNext29OrderCreatedWebhook/);
+  assert.doesNotMatch(route, /runNext29WebhookCanary/);
   assert.match(helper, /envelope\.event_type !== "order\.created"/);
   assert.match(helper, /envelope\.object !== "order"/);
   assert.match(helper, /status === "failed"/);
@@ -40,6 +44,21 @@ test("29Next M14 route reuses proven order.created processing without broadening
   assert.match(helper, /status: "completed"/);
   assert.match(helper, /commerce_sync_schedules/);
   assert.doesNotMatch(route, /order\.updated|transaction\.created|subscription\.created|dispute\.created|refund\.created/);
+});
+
+test("M14 shared order.created processor is extracted from the M13 environment gate", () => {
+  assert.match(helper, /export async function runNext29WebhookCanary/);
+  assert.match(helper, /assertCanaryEnvironment\(\);\s*return runNext29OrderCreatedWebhook\(input\);/);
+  assert.match(helper, /export async function runNext29OrderCreatedWebhook/);
+
+  const sharedProcessor = helper.split(
+    "export async function runNext29OrderCreatedWebhook",
+  )[1]?.split("function assertCanaryEnvironment")[0] || "";
+
+  assert.ok(sharedProcessor.length > 0);
+  assert.doesNotMatch(sharedProcessor, /assertCanaryEnvironment\(/);
+  assert.match(sharedProcessor, /event_type !== "order\.created"/);
+  assert.match(sharedProcessor, /assertExecutionDisabled\(context\.connectionId\)/);
 });
 
 test("only the exact permanent 29Next webhook path is added to WorkOS bypass", () => {
