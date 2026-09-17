@@ -2,12 +2,13 @@ import { timingSafeEqual } from "node:crypto";
 import { NextResponse } from "next/server";
 import {
   activeTypedCommerceCredential,
+  insertTypedCommerceCredential,
   rotateTypedCommerceCredential,
 } from "@/lib/commerce/typed-credential-store";
 
 export const runtime = "nodejs";
 
-const CONNECTION_ID = "3c9a11bf-d4bc-4328-b627-0808d0db5670";
+const CONNECTION_ID = "48a40567-2308-495c-b982-18e00fc802c7";
 const ORGANIZATION_ID = "5f1de64a-1b37-40bb-81c8-32197eda0b41";
 
 function authorized(request: Request) {
@@ -46,28 +47,36 @@ export async function POST(request: Request) {
     credentialType: "webhook_signing_secret",
   });
 
-  if (!previous?.id) {
-    const supabaseUrl = String(process.env.NEXT_PUBLIC_SUPABASE_URL || "");
-    const projectRef = /^https:\/\/([^.]+)\.supabase\.co/i.exec(supabaseUrl)?.[1] || "unknown";
+  if (previous?.id) {
+    await rotateTypedCommerceCredential({
+      organizationId: ORGANIZATION_ID,
+      connectionId: CONNECTION_ID,
+      credentialType: "webhook_signing_secret",
+      previousId: String(previous.id),
+      secret,
+    });
 
     return NextResponse.json({
-      ok: false,
-      code: "credential_unavailable",
-      projectRef,
+      ok: true,
+      action: "rotated",
       connectionId: CONNECTION_ID,
-    }, { status: 409 });
+    });
   }
 
-  await rotateTypedCommerceCredential({
+  const credentialId = await insertTypedCommerceCredential({
     organizationId: ORGANIZATION_ID,
     connectionId: CONNECTION_ID,
     credentialType: "webhook_signing_secret",
-    previousId: String(previous.id),
     secret,
   });
 
+  if (!credentialId) {
+    return NextResponse.json({ ok: false, code: "credential_create_failed" }, { status: 500 });
+  }
+
   return NextResponse.json({
     ok: true,
-    rotated: true,
+    action: "created",
+    connectionId: CONNECTION_ID,
   });
 }
