@@ -7,7 +7,7 @@ const root = path.resolve(process.cwd(), "..");
 const read = (relative: string) => fs.readFileSync(path.join(root, relative), "utf8");
 
 test("M14.1B permits one active commerce credential per connection and type", () => {
-  const migration = read("supabase/migrations/065_commerce_credentials_by_type.sql");
+  const migration = read("supabase/migrations/20260916190000_commerce_credentials_by_type.sql");
   assert.match(migration, /drop index if exists public\.commerce_provider_credentials_active_connection_uidx/);
   assert.match(migration, /\(connection_id, credential_type\)/);
   assert.match(migration, /where revoked_at is null/);
