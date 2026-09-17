@@ -19,6 +19,7 @@ import { readQuotaBootstrapGate } from "./quota-bootstrap-gate";
 import { reconcileCommerceExecutionSignal, reconcileCommerceSchedulerSignals, runCommerceOperationalAlertEvaluation } from "./commerce-operational-alerts";
 import { createSupabaseServerFetch } from "./supabase-server-fetch";
 import { classifyCommasDisputeProjection, commasDisputeProjectionValues, isLogicalDisputeDeliveryDuplicate, normalizeCommasDisputeEvent, sha256HexBytes, verifyCommasWebhookSignatureAgainstSecrets, webhookStoragePath } from "./commas-dispute-webhook";
+import { normalizeCommasRefundCreated } from "./commas-refund-created";
 import { EVERFLOW_FIREHOSE_BASE_PATH, EverflowRoutingUnavailableError, firehoseEventTypeForPath, handleEverflowFirehose, processEverflowFirehoseEnvelope, recordFirehoseMetric, recordFirehoseRoutingObservation, type EverflowFirehoseEnvelope } from "./everflow-firehose";
 import { COMMAS_ATTRIBUTION_EVENT_TYPES, attributionWebhookStoragePath, compareCommasAttributionToEverflow, normalizeCommasAttributionEvent } from "./commas-provider-attribution";
 import { enforceTkidRate, ephemeralTransportDimension, TkidRateLimitError, type DistributedCounterStore, type TkidAbuseClass } from "./tkid-distributed-abuse";
@@ -756,6 +757,7 @@ async function handleCommasDisputeWebhook(req: Request, env: Env): Promise<Respo
   try { payload = JSON.parse(new TextDecoder().decode(raw)); } catch { return json({ ok: false, error: "malformed_json" }, 400); }
   const attributionEnvelope=payload&&typeof payload==="object"&&!Array.isArray(payload)?payload as Record<string,unknown>:{};
   const attributionEventType=String(attributionEnvelope.type||attributionEnvelope.event_type||"").trim();
+  if (attributionEventType === "refund.created") return handleCommasRefundCreatedWebhookPayload(raw, payload, env);
   if(COMMAS_ATTRIBUTION_EVENT_TYPES.includes(attributionEventType as any))return handleCommasAttributionWebhookPayload(raw,payload,attributionEventType as any,env);
   const normalized = normalizeCommasDisputeEvent(payload);
   if (!normalized) return json({ ok: false, error: "unsupported_event" }, 400);
@@ -853,6 +855,89 @@ async function handleCommasDisputeWebhook(req: Request, env: Env): Promise<Respo
   }
   console.log("[TraceKit] Commas dispute lifecycle completed", { event: "commas.dispute_webhook.lifecycle_completed", projection_action: decision, lifecycle_created: !lifecycle });
   return json({ ok: true, duplicate: Boolean(existing), status: "accepted" }, 200);
+}
+
+async function handleCommasRefundCreatedWebhookPayload(raw: Uint8Array, payload: unknown, env: Env): Promise<Response> {
+  const envelope = payload && typeof payload === "object" && !Array.isArray(payload) ? payload as Record<string, unknown> : {};
+  const providerEventId = String(envelope.id || envelope.event_id || "").trim();
+  if (!providerEventId || providerEventId.length > 256) return json({ ok: false, error: "invalid_provider_event_identity" }, 400);
+  const db = getSupabase(env);
+  const { data: connections, error: connectionError } = await db.from("commerce_provider_connections").select("id,organization_id,account_id").eq("provider", "commas").eq("status", "connected").limit(2);
+  if (connectionError || !connections || connections.length !== 1) return json({ ok: false, error: "scope_unavailable" }, 409);
+  const connection = connections[0] as any;
+  const { data: accounts, error: accountError } = await db.from("commerce_provider_accounts").select("id").eq("organization_id", connection.organization_id).eq("connection_id", connection.id).eq("status", "active").limit(2);
+  if (accountError || !accounts || accounts.length !== 1) return json({ ok: false, error: "scope_unavailable" }, 409);
+  const providerAccountId = String(accounts[0].id);
+  const payloadHash = await sha256HexBytes(raw);
+  const { data: prior, error: priorError } = await db.from("commerce_refund_created_observations").select("id,evidence_id,payload_hash,provider_refund_hashid").eq("organization_id", connection.organization_id).eq("connection_id", connection.id).eq("provider_account_id", providerAccountId).eq("provider_event_id", providerEventId).maybeSingle();
+  if (priorError) return json({ ok: false, error: "observation_lookup_failed" }, 503);
+  if (prior && prior.payload_hash !== payloadHash) return json({ ok: false, error: "provider_event_payload_conflict" }, 409);
+  const storagePath = `${connection.organization_id}/${connection.id}/${providerAccountId}/commas-refund-created-webhook/${payloadHash}.json`;
+  const storageReference = `commerce-evidence/${storagePath}`;
+  const storageHeaders: Record<string, string> = { apikey: env.SUPABASE_SERVICE_ROLE_KEY, "content-type": "application/json", "x-upsert": "false" };
+  if (!env.SUPABASE_SERVICE_ROLE_KEY.startsWith("sb_secret_")) storageHeaders.Authorization = `Bearer ${env.SUPABASE_SERVICE_ROLE_KEY}`;
+  const storageUrl = `${String(env.SUPABASE_URL || "").replace(/\/$/, "")}/storage/v1/object/commerce-evidence/${storagePath.split("/").map(encodeURIComponent).join("/")}`;
+  if (!prior) {
+    const stored = await fetch(storageUrl, { method: "POST", headers: storageHeaders, body: raw.buffer.slice(raw.byteOffset, raw.byteOffset + raw.byteLength) as ArrayBuffer });
+    if (!stored.ok && stored.status !== 409) return json({ ok: false, error: "evidence_persistence_failed" }, 503);
+    if (stored.status === 409) {
+      const retained = await fetch(storageUrl, { headers: storageHeaders });
+      if (!retained.ok || await sha256HexBytes(new Uint8Array(await retained.arrayBuffer())) !== payloadHash) return json({ ok: false, error: "evidence_storage_conflict" }, 503);
+    }
+  }
+  const { data: evidenceRows, error: evidenceLookupError } = await db.from("commerce_evidence_records").select("id,payload_hash,storage_reference,pii_classification,deleted_at").eq("organization_id", connection.organization_id).eq("connection_id", connection.id).eq("provider_account_id", providerAccountId).eq("source_object_type", "commas_refund_created_webhook").eq("source_object_id", providerEventId).limit(2);
+  if (evidenceLookupError || (evidenceRows || []).length > 1 || (evidenceRows || []).some((row: any) => row.payload_hash !== payloadHash || row.storage_reference !== storageReference || row.pii_classification !== "restricted" || row.deleted_at !== null)) return json({ ok: false, error: "evidence_identity_conflict" }, 503);
+  if (prior) {
+    const retained = await fetch(storageUrl, { headers: storageHeaders });
+    if (!retained.ok || await sha256HexBytes(new Uint8Array(await retained.arrayBuffer())) !== payloadHash) return json({ ok: false, error: "evidence_storage_conflict" }, 503);
+  }
+  let evidenceId = String(evidenceRows?.[0]?.id || "");
+  const now = new Date().toISOString();
+  if (!evidenceId) {
+    let runId = crypto.randomUUID();
+    const { error: runError } = await db.from("commerce_sync_runs").insert({ id: runId, organization_id: connection.organization_id, connection_id: connection.id, provider_account_id: providerAccountId, sync_type: "refund_created_webhook", mode: "shadow", status: "completed", scheduler_idempotency_key: `commas-refund-created:${providerEventId}`, started_at: now, completed_at: now, records_seen: 1, records_created: 1, metadata: { source: "commas_webhook", provider_event_id: providerEventId, event_type: "refund.created" } });
+    if (runError) {
+      if (String(runError.code) !== "23505") return json({ ok: false, error: "evidence_persistence_failed" }, 503);
+      const { data: retainedRun, error } = await db.from("commerce_sync_runs").select("id").eq("organization_id", connection.organization_id).eq("connection_id", connection.id).eq("provider_account_id", providerAccountId).eq("scheduler_idempotency_key", `commas-refund-created:${providerEventId}`).maybeSingle();
+      if (error || !retainedRun) return json({ ok: false, error: "run_identity_conflict" }, 503);
+      runId = retainedRun.id;
+    }
+    evidenceId = crypto.randomUUID();
+    const { error: evidenceError } = await db.from("commerce_evidence_records").insert({ id: evidenceId, organization_id: connection.organization_id, connection_id: connection.id, provider_account_id: providerAccountId, sync_run_id: runId, source_object_type: "commas_refund_created_webhook", source_object_id: providerEventId, payload_hash: payloadHash, storage_backend: "object_storage", storage_reference: storageReference, content_type: "application/json", byte_size: raw.byteLength, observed_at: now, normalizer_version: "commas-refund-created-v1", mapping_version: "commas-ord-exact-v1", pii_classification: "restricted", retention_policy: "commerce-provider-raw-v1", metadata: { immutable: true, event_type: "refund.created" } });
+    if (evidenceError && String(evidenceError.code) !== "23505") return json({ ok: false, error: "evidence_persistence_failed" }, 503);
+    if (evidenceError) {
+      const { data: concurrent, error } = await db.from("commerce_evidence_records").select("id,payload_hash").eq("organization_id", connection.organization_id).eq("connection_id", connection.id).eq("provider_account_id", providerAccountId).eq("source_object_type", "commas_refund_created_webhook").eq("source_object_id", providerEventId).maybeSingle();
+      if (error || !concurrent || concurrent.payload_hash !== payloadHash) return json({ ok: false, error: "evidence_identity_conflict" }, 503);
+      evidenceId = concurrent.id;
+    }
+  }
+  // Capture the signed raw provider event before derived normalization or order resolution.
+  const refund = normalizeCommasRefundCreated(payload);
+  if (!refund || refund.providerEventId !== providerEventId || !Number.isFinite(Date.parse(refund.createdAt))) return json({ ok: false, error: "invalid_refund_payload" }, 400);
+  if (prior && (prior.evidence_id !== evidenceId || prior.provider_refund_hashid !== refund.providerRefundId)) return json({ ok: false, error: "provider_event_identity_conflict" }, 409);
+  if (prior) {
+    const { error: postingError } = await db.rpc("post_commas_refund_created_seller_cost_v1", { p_organization_id: connection.organization_id, p_connection_id: connection.id, p_provider_account_id: providerAccountId, p_provider_event_id: providerEventId });
+    if (postingError) return json({ ok: false, error: "financial_gate_unavailable" }, 503);
+    return json({ ok: true, duplicate: true, status: "accepted" }, 200);
+  }
+  let orderMatchState = "legacy_unresolved";
+  let canonicalOrderId: string | null = null;
+  if (refund.paymentIdentityState === "ord") {
+    const { data: matches, error } = await db.rpc("resolve_commas_refund_created_order_v1", { p_organization_id: connection.organization_id, p_connection_id: connection.id, p_provider_account_id: providerAccountId, p_original_payment_id: refund.originalPaymentId });
+    if (error || !matches || matches.length !== 1) return json({ ok: false, error: "order_resolution_unavailable" }, 503);
+    orderMatchState = matches[0].match_state;
+    canonicalOrderId = matches[0].canonical_order_id;
+  }
+  const financialState = refund.status === "pending" ? "provider_settlement_unobservable" : refund.status === "failed" ? "failed_no_economics" : canonicalOrderId ? "eligible_not_yet_enabled" : "identity_unresolved";
+  const { error: insertError } = await db.from("commerce_refund_created_observations").insert({ organization_id: connection.organization_id, account_id: connection.account_id, connection_id: connection.id, provider_account_id: providerAccountId, provider_event_id: providerEventId, provider_refund_hashid: refund.providerRefundId, original_payment_id: refund.originalPaymentId, refund_transaction_hashid: refund.refundTransactionId, canonical_order_id: canonicalOrderId, order_match_state: orderMatchState, evidence_id: evidenceId, payload_hash: payloadHash, status: refund.status, refund_type: refund.refundType, buyer_amount: refund.buyerAmount, seller_refund_cost: refund.providerRefundCost, creator_amount: refund.creatorAmount, processor_fee: refund.processorFee, affiliate_clawback: refund.affiliateCommissionClawback, currency: "USD", provider_created_at: refund.createdAt, provider_updated_at: refund.updatedAt, financial_state: financialState, financial_policy_version: refund.policyVersion });
+  if (insertError) {
+    if (String(insertError.code) !== "23505") return json({ ok: false, error: "observation_persistence_failed" }, 503);
+    const { data: concurrent, error } = await db.from("commerce_refund_created_observations").select("evidence_id,payload_hash,provider_refund_hashid").eq("organization_id", connection.organization_id).eq("connection_id", connection.id).eq("provider_account_id", providerAccountId).eq("provider_event_id", providerEventId).maybeSingle();
+    if (error || !concurrent || concurrent.evidence_id !== evidenceId || concurrent.payload_hash !== payloadHash || concurrent.provider_refund_hashid !== refund.providerRefundId) return json({ ok: false, error: "refund_identity_conflict" }, 409);
+  }
+  const { error: postingError } = await db.rpc("post_commas_refund_created_seller_cost_v1", { p_organization_id: connection.organization_id, p_connection_id: connection.id, p_provider_account_id: providerAccountId, p_provider_event_id: providerEventId });
+  if (postingError) return json({ ok: false, error: "financial_gate_unavailable" }, 503);
+  return json({ ok: true, duplicate: Boolean(insertError), status: "accepted" }, 200);
 }
 
 async function handleCommasAttributionWebhookPayload(raw: Uint8Array, payload: unknown, eventType: (typeof COMMAS_ATTRIBUTION_EVENT_TYPES)[number], env: Env): Promise<Response> {

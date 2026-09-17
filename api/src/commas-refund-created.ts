@@ -71,7 +71,7 @@ export function normalizeCommasRefundCreated(payload: unknown): NormalizedCommas
 }
 
 export function refundCreatedFinancialDecision(refund: NormalizedCommasRefundCreated) {
-  if (refund.status === "pending") return { state: "pending_provider_settlement" as const, postEconomics: false, amount: null, currency: COMMAS_REFUND_CURRENCY };
+  if (refund.status === "pending") return { state: "provider_settlement_unobservable" as const, postEconomics: false, amount: null, currency: COMMAS_REFUND_CURRENCY };
   if (refund.status === "failed") return { state: "failed_no_economics" as const, postEconomics: false, amount: null, currency: COMMAS_REFUND_CURRENCY };
   return { state: "realized" as const, postEconomics: true, amount: -Math.abs(refund.providerRefundCost), currency: COMMAS_REFUND_CURRENCY };
 }

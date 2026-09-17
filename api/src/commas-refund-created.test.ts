@@ -22,7 +22,7 @@ test("normalizes success using ORD identity and provider refund_cost", () => {
 
 test("pending persists provisionally and never posts economics", () => {
   const row = normalizeCommasRefundCreated(event({ status: "pending", refund_cost: 0, refund_cost_creator_amount: 0, processor: { processor_refund_cost_fee: 0 } })); assert.ok(row);
-  assert.equal(refundCreatedFinancialDecision(row).state, "pending_provider_settlement");
+  assert.equal(refundCreatedFinancialDecision(row).state, "provider_settlement_unobservable");
   assert.equal(refundCreatedFinancialDecision(row).postEconomics, false);
   assert.deepEqual(pendingCommasRefundSettlementReadContract(), { supported: false, reason: "unsupported_pending_settlement_read" });
 });

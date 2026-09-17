@@ -23,7 +23,7 @@ create table public.commerce_refund_created_observations (
   currency text not null default 'USD' check(currency='USD'),
   provider_created_at timestamptz,
   provider_updated_at timestamptz,
-  financial_state text not null check(financial_state in ('ready','pending_provider_settlement','failed_no_economics','identity_unresolved','provider_contract_conflict')),
+  financial_state text not null check(financial_state in ('eligible_not_yet_enabled','provider_settlement_unobservable','failed_no_economics','identity_unresolved','provider_contract_conflict','posted')),
   financial_policy_version text not null default 'commas-refund-created-seller-cost-v1',
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
@@ -36,6 +36,17 @@ create table public.commerce_refund_created_observations (
 );
 create index commerce_refund_created_observations_order_idx on public.commerce_refund_created_observations(organization_id,canonical_order_id,provider_created_at);
 create index commerce_refund_created_observations_pending_idx on public.commerce_refund_created_observations(organization_id,connection_id,provider_account_id,status) where status='pending';
+create or replace view public.commerce_refund_created_pending_diagnostics with (security_invoker=true) as
+select organization_id,connection_id,provider_account_id,
+       count(*)::bigint as pending_unobservable_count,
+       min(provider_created_at) as oldest_pending_created_at,
+       coalesce(sum(buyer_amount),0) as pending_buyer_amount_usd,
+       coalesce(sum(seller_refund_cost),0) as provisional_provider_refund_cost_usd
+from public.commerce_refund_created_observations
+where status='pending' and financial_state='provider_settlement_unobservable'
+group by organization_id,connection_id,provider_account_id;
+revoke all on public.commerce_refund_created_pending_diagnostics from public,anon,authenticated,authenticator;
+grant select on public.commerce_refund_created_pending_diagnostics to service_role;
 alter table public.commerce_refund_created_observations enable row level security;
 revoke all on public.commerce_refund_created_observations from public,anon,authenticated,authenticator;
 grant select,insert,update on public.commerce_refund_created_observations to service_role;
