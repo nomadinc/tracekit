@@ -1,89 +1,17 @@
 import { NextResponse } from "next/server";
 import { resolveApplicationSession } from "@/lib/identity/application-session";
 import { commercePersistenceCount, commercePersistenceRequest } from "@/lib/commerce/supabase-control-repository";
-import { normalizeConfidence, parseReviewFilters } from "@/lib/chargebacks/review";
+import { matchAuthority, normalizeConfidence, parseReviewFilters } from "@/lib/chargebacks/review";
 import { summaryFromExactCounts } from "@/lib/chargebacks/summary";
-
 type Row = Record<string, any>;
-
-function unavailable() { return NextResponse.json({ ok: false, error: "resource_unavailable" }, { status: 404 }); }
-function enc(value: string) { return encodeURIComponent(value); }
-function qLike(value: string) { return `*${value.replace(/[,*()]/g, " ")}*`; }
-
-async function authorizedOrganization() {
-  const resolution = await resolveApplicationSession();
-  if (resolution.kind !== "authenticated" || !resolution.session.activeOrganization) return null;
-  return resolution.session.activeOrganization.id;
-}
-
-async function listReconciliations(organizationId: string, ids: string[]) {
-  if (!ids.length) return [] as Row[];
-  return await commercePersistenceRequest(`commerce_dispute_reconciliations?organization_id=eq.${enc(organizationId)}&dispute_id=in.(${ids.map(enc).join(",")})&algorithm_version=eq.historical-v1`);
-}
-
-async function exactSummary(organizationId: string, filters: ReturnType<typeof parseReviewFilters>) {
-  const historical = [`organization_id=eq.${enc(organizationId)}`];
-  if (filters.status) historical.push(`status=ilike.${enc(filters.status)}`);
-  if (filters.reason) historical.push(`reason=ilike.${enc(qLike(filters.reason))}`);
-  if (filters.product) historical.push(`product_evidence=ilike.${enc(qLike(filters.product))}`);
-  if (filters.from) historical.push(`dispute_date=gte.${enc(filters.from)}`);
-  if (filters.to) historical.push(`dispute_date=lte.${enc(filters.to)}`);
-  if (filters.search) historical.push(`or=(customer_email_normalized.ilike.${enc(qLike(filters.search))},product_evidence.ilike.${enc(qLike(filters.search))},source_row_identity.ilike.${enc(qLike(filters.search))})`);
-  if (filters.matched === "matched") historical.push("matching_state=in.(high_confidence,medium_confidence)");
-  if (filters.matched === "unmatched") historical.push("matching_state=eq.unmatched");
-  if (["high_confidence", "medium_confidence", "needs_review", "unmatched"].includes(filters.confidence)) historical.push(`matching_state=eq.${filters.confidence}`);
-  const count = (extra = "") => commercePersistenceCount(`commerce_historical_disputes?select=id&${historical.join("&")}${extra ? `&${extra}` : ""}&limit=1`);
-  const statuses = ["lost", "won", "needs_response", "under_review"];
-  const confidenceBands = ["high_confidence", "medium_confidence", "needs_review", "unmatched"];
-  const [total, ...counts] = await Promise.all([
-    count(),
-    ...statuses.map((status) => count(`status=ilike.${enc(qLike(status.replace(/_/g, " ")))}`)),
-    ...confidenceBands.map((band) => count(`matching_state=eq.${band}`)),
-  ]);
-  const statusCounts: Record<string, number> = {};
-  statuses.forEach((status, index) => { statusCounts[status] = counts[index] || 0; });
-  const confidence: Record<string, number> = {};
-  confidenceBands.forEach((band, index) => { confidence[band] = counts[statuses.length + index] || 0; });
-  // Historical Resolution Center rows do not carry a trustworthy currency.
-  // Do not present their numeric amounts as USD or combine unlike currencies.
-  return summaryFromExactCounts({ total, statuses: statusCounts, confidence });
-}
-
-export async function GET(request: Request) {
-  const organizationId = await authorizedOrganization();
-  if (!organizationId) return unavailable();
-  const filters = parseReviewFilters(new URL(request.url).searchParams);
-  try {
-    const offset = (filters.page - 1) * filters.pageSize;
-    const parts = [
-      `organization_id=eq.${enc(organizationId)}`,
-      `order=dispute_date.desc.nullslast,created_at.desc`,
-      `limit=${filters.pageSize}`, `offset=${offset}`,
-    ];
-    if (filters.status) parts.push(`status=ilike.${enc(filters.status)}`);
-    if (filters.reason) parts.push(`reason=ilike.${enc(qLike(filters.reason))}`);
-    if (filters.product) parts.push(`product_evidence=ilike.${enc(qLike(filters.product))}`);
-    if (filters.from) parts.push(`dispute_date=gte.${enc(filters.from)}`);
-    if (filters.to) parts.push(`dispute_date=lte.${enc(filters.to)}`);
-    if (filters.search) parts.push(`or=(customer_email_normalized.ilike.${enc(qLike(filters.search))},product_evidence.ilike.${enc(qLike(filters.search))},source_row_identity.ilike.${enc(qLike(filters.search))})`);
-    if (filters.matched === "matched") parts.push(`matching_state=in.(high_confidence,medium_confidence)`);
-    if (filters.matched === "unmatched") parts.push(`matching_state=eq.unmatched`);
-    if (["high_confidence", "medium_confidence", "needs_review", "unmatched"].includes(filters.confidence)) parts.push(`matching_state=eq.${filters.confidence}`);
-    const disputes = await commercePersistenceRequest(`commerce_historical_disputes?select=id,account_id,organization_id,connection_id,provider_account_id,status,state,transaction_date,dispute_date,closed_date,customer_email_normalized,product_evidence,amount,dispute_fee,payment_method,reason,matching_state&${parts.join("&")}`) as Row[];
-    const recs = await listReconciliations(organizationId, disputes.map((row) => String(row.id)));
-    const recByDispute = new Map(recs.map((row) => [String(row.dispute_id), row]));
-    const rows = disputes.map((row) => {
-      const reconciliation = recByDispute.get(String(row.id));
-      return { id: row.id, source: "historical", sourceLabel: "Historical Import", status: row.status || row.state, disputeDate: row.dispute_date, transactionDate: row.transaction_date, amount: row.amount, fee: row.dispute_fee, reason: row.reason, product: row.product_evidence, paymentMethod: row.payment_method, customer: row.customer_email_normalized ? String(row.customer_email_normalized).replace(/(^.).*(@.*$)/, "$1•••$2") : null, confidence: normalizeConfidence(reconciliation?.confidence_band || row.matching_state), score: reconciliation?.numeric_score ?? null, candidateCount: reconciliation?.candidate_count ?? 0, matchedOrderId: reconciliation?.matched_canonical_order_id || null, factors: reconciliation?.evidence_factors || {}, detailId: row.id };
-    });
-    const live = await commercePersistenceRequest(`commerce_provider_disputes?organization_id=eq.${enc(organizationId)}&order=opened_at.desc.nullslast,updated_at.desc&limit=${filters.pageSize}`) as Row[];
-    const liveRows = live.map((row) => ({ id: `live:${row.id}`, source: "live", sourceLabel: "Live Provider Event", status: row.status || row.state, disputeDate: row.opened_at || row.updated_at, transactionDate: null, amount: row.amount, fee: row.fee, reason: row.reason || row.reason_code, product: row.product_reference, paymentMethod: null, customer: null, confidence: row.reconciliation_state === "matched" ? "high_confidence" : row.reconciliation_state === "review" ? "needs_review" : "unmatched", score: null, candidateCount: 0, matchedOrderId: row.matched_canonical_order_id || null, factors: {}, detailId: row.id } as Row));
-    const displayRows = [...rows, ...liveRows].slice(0, filters.pageSize);
-    const globalSummary = await exactSummary(organizationId, filters);
-    const historicalSourceCount = globalSummary.total;
-    const liveSourceCount = await commercePersistenceCount(`commerce_provider_disputes?select=id&organization_id=eq.${enc(organizationId)}&limit=1`);
-    return NextResponse.json({ ok: true, rows: displayRows, pagination: { page: filters.page, pageSize: filters.pageSize, returned: displayRows.length, hasMore: rows.length === filters.pageSize || liveRows.length === filters.pageSize }, summary: globalSummary, sourceCounts: { historical: historicalSourceCount, live: liveSourceCount }, filters });
-  } catch { return NextResponse.json({ ok: false, error: "chargeback_review_unavailable" }, { status: 503 }); }
-}
-
-export async function POST() { return NextResponse.json({ ok: false, error: "read_only_review" }, { status: 405 }); }
+function unavailable(){return NextResponse.json({ok:false,error:"resource_unavailable"},{status:404});}
+function enc(v:string){return encodeURIComponent(v);} function qLike(v:string){return `*${v.replace(/[,*()]/g," ")}*`;}
+async function authorizedOrganization(){const r=await resolveApplicationSession();return r.kind==="authenticated"&&r.session.activeOrganization?r.session.activeOrganization.id:null;}
+async function listReconciliations(org:string,ids:string[]){if(!ids.length)return[] as Row[];return await commercePersistenceRequest(`commerce_dispute_reconciliations?organization_id=eq.${enc(org)}&dispute_id=in.(${ids.map(enc).join(",")})&algorithm_version=eq.historical-v1`);}
+async function historicalSummary(org:string,filters:ReturnType<typeof parseReviewFilters>){const p=[`organization_id=eq.${enc(org)}`];if(filters.status)p.push(`status=ilike.${enc(filters.status)}`);if(filters.reason)p.push(`reason=ilike.${enc(qLike(filters.reason))}`);if(filters.product)p.push(`product_evidence=ilike.${enc(qLike(filters.product))}`);if(filters.from)p.push(`dispute_date=gte.${enc(filters.from)}`);if(filters.to)p.push(`dispute_date=lte.${enc(filters.to)}`);if(filters.search)p.push(`or=(customer_email_normalized.ilike.${enc(qLike(filters.search))},product_evidence.ilike.${enc(qLike(filters.search))},source_row_identity.ilike.${enc(qLike(filters.search))})`);if(filters.matched==="matched")p.push("matching_state=in.(high_confidence,medium_confidence)");if(filters.matched==="unmatched")p.push("matching_state=eq.unmatched");if(["high_confidence","medium_confidence","needs_review","unmatched"].includes(filters.confidence))p.push(`matching_state=eq.${filters.confidence}`);const count=(extra="")=>commercePersistenceCount(`commerce_historical_disputes?select=id&${p.join("&")}${extra?`&${extra}`:""}&limit=1`);const statuses=["lost","won","needs_response","under_review"];const bands=["high_confidence","medium_confidence","needs_review","unmatched"];const [total,...counts]=await Promise.all([count(),...statuses.map(s=>count(`status=ilike.${enc(qLike(s.replace(/_/g," ")))}`)),...bands.map(b=>count(`matching_state=eq.${b}`))]);const statusCounts:Record<string,number>={};statuses.forEach((s,i)=>statusCounts[s]=counts[i]||0);const confidence:Record<string,number>={};bands.forEach((b,i)=>confidence[b]=counts[statuses.length+i]||0);return summaryFromExactCounts({total,statuses:statusCounts,confidence});}
+async function liveSummary(org:string){const base=`organization_id=eq.${enc(org)}`;const count=(extra="")=>commercePersistenceCount(`commerce_provider_disputes?select=id&${base}${extra?`&${extra}`:""}&limit=1`);const statuses=["lost","won","needs_response","under_review"];const [total,...counts]=await Promise.all([count(),...statuses.map(s=>count(`status=ilike.${enc(qLike(s.replace(/_/g," ")))}`))]);const statusCounts:Record<string,number>={};statuses.forEach((s,i)=>statusCounts[s]=counts[i]||0);return {total,statuses:statusCounts};}
+export async function GET(request:Request){const organizationId=await authorizedOrganization();if(!organizationId)return unavailable();const filters=parseReviewFilters(new URL(request.url).searchParams);try{const offset=(filters.page-1)*filters.pageSize;const parts=[`organization_id=eq.${enc(organizationId)}`,`order=dispute_date.desc.nullslast,created_at.desc`,`limit=${filters.pageSize}`,`offset=${offset}`];if(filters.status)parts.push(`status=ilike.${enc(filters.status)}`);if(filters.reason)parts.push(`reason=ilike.${enc(qLike(filters.reason))}`);if(filters.product)parts.push(`product_evidence=ilike.${enc(qLike(filters.product))}`);if(filters.from)parts.push(`dispute_date=gte.${enc(filters.from)}`);if(filters.to)parts.push(`dispute_date=lte.${enc(filters.to)}`);if(filters.search)parts.push(`or=(customer_email_normalized.ilike.${enc(qLike(filters.search))},product_evidence.ilike.${enc(qLike(filters.search))},source_row_identity.ilike.${enc(qLike(filters.search))})`);if(filters.matched==="matched")parts.push("matching_state=in.(high_confidence,medium_confidence)");if(filters.matched==="unmatched")parts.push("matching_state=eq.unmatched");if(["high_confidence","medium_confidence","needs_review","unmatched"].includes(filters.confidence))parts.push(`matching_state=eq.${filters.confidence}`);
+const disputes=await commercePersistenceRequest(`commerce_historical_disputes?select=id,account_id,organization_id,connection_id,provider_account_id,status,state,transaction_date,dispute_date,closed_date,customer_email_normalized,product_evidence,amount,dispute_fee,payment_method,reason,matching_state&${parts.join("&")}`) as Row[];const recs=await listReconciliations(organizationId,disputes.map(r=>String(r.id)));const recBy=new Map(recs.map(r=>[String(r.dispute_id),r]));const rows=disputes.map(row=>{const rec=recBy.get(String(row.id));const matchedOrderId=rec?.matched_canonical_order_id||null;return{id:row.id,source:"historical",sourceLabel:"Historical Import",status:row.status||row.state,disputeDate:row.dispute_date,transactionDate:row.transaction_date,amount:row.amount,fee:row.dispute_fee,reason:row.reason,product:row.product_evidence,paymentMethod:row.payment_method,customer:row.customer_email_normalized?String(row.customer_email_normalized).replace(/(^.).*(@.*$)/,"$1•••$2"):null,confidence:normalizeConfidence(rec?.confidence_band||row.matching_state),matchAuthority:matchAuthority({source:"historical",matchedOrderId}),score:rec?.numeric_score??null,candidateCount:rec?.candidate_count??0,matchedOrderId,factors:rec?.evidence_factors||{}};});
+const live=await commercePersistenceRequest(`commerce_provider_disputes?organization_id=eq.${enc(organizationId)}&order=opened_at.desc.nullslast,updated_at.desc&limit=${filters.pageSize}`) as Row[];const liveRows=live.map(row=>{const matchedOrderId=row.matched_canonical_order_id||null;return{id:`live:${row.id}`,source:"live",sourceLabel:"Live Provider Event",status:row.status||row.state,disputeDate:row.opened_at||row.updated_at,transactionDate:null,amount:row.amount,fee:row.fee,reason:row.reason||row.reason_code,product:row.product_reference,paymentMethod:null,customer:null,confidence:row.reconciliation_state==="matched"?"high_confidence":row.reconciliation_state==="review"?"needs_review":"unmatched",matchAuthority:matchAuthority({source:"live",matchedOrderId,reconciliationState:row.reconciliation_state}),score:null,candidateCount:0,matchedOrderId,factors:{}};});
+const displayRows=[...rows,...liveRows].slice(0,filters.pageSize);const [historical,liveCounts]=await Promise.all([historicalSummary(organizationId,filters),liveSummary(organizationId)]);const combinedStatuses:Record<string,number>={};for(const s of ["lost","won","needs_response","under_review"])combinedStatuses[s]=(historical.statuses?.[s]||0)+(liveCounts.statuses[s]||0);const portfolioSummary={total:historical.total+liveCounts.total,statuses:combinedStatuses,confidence:historical.confidence,disputedAmount:null,fees:null,currencies:[],financialScope:"not_aggregated",historicalTotal:historical.total,liveTotal:liveCounts.total};return NextResponse.json({ok:true,rows:displayRows,pagination:{page:filters.page,pageSize:filters.pageSize,returned:displayRows.length,hasMore:rows.length===filters.pageSize||liveRows.length===filters.pageSize},summary:portfolioSummary,sourceCounts:{historical:historical.total,live:liveCounts.total},filters});}catch{return NextResponse.json({ok:false,error:"chargeback_review_unavailable"},{status:503});}}
+export async function POST(){return NextResponse.json({ok:false,error:"read_only_review"},{status:405});}

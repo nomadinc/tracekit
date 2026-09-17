@@ -1,4 +1,5 @@
 export type ReviewConfidence = "high_confidence" | "medium_confidence" | "needs_review" | "unmatched";
+export type MatchAuthority = "exact" | "suggested" | "unmatched";
 
 export const CONFIDENCE_LABELS: Record<ReviewConfidence, string> = {
   high_confidence: "High Confidence",
@@ -7,15 +8,26 @@ export const CONFIDENCE_LABELS: Record<ReviewConfidence, string> = {
   unmatched: "Unmatched",
 };
 
+export const MATCH_AUTHORITY_LABELS: Record<MatchAuthority, string> = {
+  exact: "Exact",
+  suggested: "Suggested",
+  unmatched: "Unmatched",
+};
+
 export function normalizeConfidence(value: unknown): ReviewConfidence {
   const v = String(value || "").toLowerCase();
-  return v === "high_confidence" || v === "medium_confidence" || v === "needs_review" || v === "unmatched"
-    ? v
-    : "unmatched";
+  return v === "high_confidence" || v === "medium_confidence" || v === "needs_review" || v === "unmatched" ? v : "unmatched";
 }
 
-export function confidenceLabel(value: unknown) {
-  return CONFIDENCE_LABELS[normalizeConfidence(value)];
+export function confidenceLabel(value: unknown) { return CONFIDENCE_LABELS[normalizeConfidence(value)]; }
+
+// Historical reconciliation is heuristic even when confidence is high. Only a
+// provider-backed live relationship may be presented to users as Exact.
+export function matchAuthority(args: { source?: unknown; matchedOrderId?: unknown; reconciliationState?: unknown }): MatchAuthority {
+  const matched = Boolean(String(args.matchedOrderId || "").trim());
+  if (!matched) return "unmatched";
+  if (String(args.source || "").toLowerCase() === "live" && String(args.reconciliationState || "").toLowerCase() === "matched") return "exact";
+  return "suggested";
 }
 
 export function safeStatus(value: unknown) {
@@ -38,16 +50,5 @@ export function evidenceFactorLabels(value: unknown): Array<{ label: string; res
 export function parseReviewFilters(params: URLSearchParams) {
   const page = Math.max(1, Math.min(10000, Number(params.get("page") || 1) || 1));
   const pageSize = Math.max(10, Math.min(100, Number(params.get("page_size") || 50) || 50));
-  return {
-    page,
-    pageSize,
-    status: params.get("status") || "",
-    confidence: params.get("confidence") || "",
-    reason: params.get("reason") || "",
-    product: params.get("product") || "",
-    search: params.get("search") || "",
-    from: params.get("from") || "",
-    to: params.get("to") || "",
-    matched: params.get("matched") || "",
-  };
+  return { page, pageSize, status: params.get("status") || "", confidence: params.get("confidence") || "", reason: params.get("reason") || "", product: params.get("product") || "", search: params.get("search") || "", from: params.get("from") || "", to: params.get("to") || "", matched: params.get("matched") || "" };
 }
