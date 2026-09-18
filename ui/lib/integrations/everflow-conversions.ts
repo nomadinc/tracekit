@@ -495,6 +495,7 @@ export async function syncEverflowConversions(input: {
   maxPages?: number;
   fetchPage?: typeof listEverflowConversionsPage;
   persistPage?: typeof persistEverflowConversions;
+  syncType?: string;
 }) {
   const range = validateEverflowConversionRange(input.from, input.to);
   const connection = await input.plane.getConnection(input.session, input.connectionId);
@@ -514,7 +515,7 @@ export async function syncEverflowConversions(input: {
   const fetchPage = input.fetchPage || listEverflowConversionsPage;
   const persistPage = input.persistPage || persistEverflowConversions;
 
-  const run = await input.plane.createSyncRun(input.session, input.connectionId, account.id, "shadow", "everflow_conversions");
+  const run = await input.plane.createSyncRun(input.session, input.connectionId, account.id, "shadow", input.syncType || "everflow_conversions");
   const owner = `everflow-conversions:${randomUUID()}`;
   const claimed = await input.plane.claimSyncRun(input.session, input.connectionId, run.id, owner, 120);
   if (!claimed) throw new Error("Everflow conversion sync could not acquire its run lease.");
