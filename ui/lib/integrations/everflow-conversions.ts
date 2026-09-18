@@ -496,6 +496,7 @@ export async function syncEverflowConversions(input: {
   fetchPage?: typeof listEverflowConversionsPage;
   persistPage?: typeof persistEverflowConversions;
   syncType?: string;
+  providerTimeoutMs?: number;
 }) {
   const range = validateEverflowConversionRange(input.from, input.to);
   const connection = await input.plane.getConnection(input.session, input.connectionId);
@@ -536,7 +537,7 @@ export async function syncEverflowConversions(input: {
         pageFingerprint: null,
       });
       try {
-        const result = await fetchPage({ apiKey, from: range.from, to: range.to, timezoneId, currencyId, page, pageSize });
+        const result = await fetchPage({ apiKey, from: range.from, to: range.to, timezoneId, currencyId, page, pageSize, timeoutMs: input.providerTimeoutMs });
         totalCount = result.totalCount;
         for (const conversion of result.conversions) {
           if (conversion.networkId && String(conversion.networkId) !== String(account.externalId)) {
