@@ -804,6 +804,36 @@ async function finishSchedule(
   return Boolean(rows[0]);
 }
 
+async function runQueuedHistoricalImport(runtime:EverflowClickRuntime){
+  const rows=await commercePersistenceRequest("commerce_sync_runs?sync_type=eq.everflow_conversions_historical&status=in.(queued,running)&select=id,account_id,organization_id,connection_id,provider_account_id,status,lease_expires_at,metadata&order=created_at.asc&limit=5") as Record<string,any>[];
+  const candidate=rows.find(row=>row.status==="queued"||(row.status==="running"&&row.lease_expires_at&&Date.parse(String(row.lease_expires_at))<Date.now())); if(!candidate)return null;
+  const owner=`everflow-historical:${randomUUID()}`,repo=new SupabaseCommerceControlRepository();
+  const claimed=await repo.claimSyncRun({runId:String(candidate.id),organizationId:String(candidate.organization_id),connectionId:String(candidate.connection_id),owner,leaseSeconds:240}); if(!claimed)return{runId:candidate.id,status:"claim_lost"};
+  const metadata=candidate.metadata||{},from=String(metadata.from||""),to=String(metadata.to||"");
+  try{
+    const credentials=await commercePersistenceRequest(`commerce_provider_credentials?connection_id=eq.${encodeURIComponent(String(candidate.connection_id))}&organization_id=eq.${encodeURIComponent(String(candidate.organization_id))}&credential_type=eq.api_key&revoked_at=is.null&select=secret_iv,secret_ciphertext,encryption_key_id,encryption_version&limit=1`) as Record<string,any>[];
+    const credential=credentials[0]; if(!credential)throw new Error("The Everflow credential is unavailable.");
+    const keyId=String(process.env.COMMERCE_CREDENTIALS_KEY_ID||""),version=Number(process.env.COMMERCE_CREDENTIALS_ENCRYPTION_VERSION||"1"); if(!keyId)throw new Error("Commerce credential encryption is unavailable.");
+    const encrypted={keyId:String(credential.encryption_key_id),encryptionVersion:Number(credential.encryption_version),iv:Uint8Array.from(Buffer.from(String(credential.secret_iv).replace(/^\\x/,""),"hex")),ciphertext:Uint8Array.from(Buffer.from(String(credential.secret_ciphertext).replace(/^\\x/,""),"hex"))};
+    const apiKey=await decryptCommerceCredential(encrypted,decodeCommerceCredentialKey(process.env.COMMERCE_CREDENTIALS_ENC_KEY));
+    const connections=await commercePersistenceRequest(`commerce_provider_connections?id=eq.${encodeURIComponent(String(candidate.connection_id))}&select=capabilities&limit=1`) as Record<string,any>[],network=(connections[0]?.capabilities?.everflowNetwork||{}) as Record<string,any>;
+    const timezoneId=Number(network.timezoneId),currencyId=String(network.currencyId||""); if(!Number.isInteger(timezoneId)||!currencyId)throw new Error("Everflow reporting metadata is unavailable. Re-verify the connection.");
+    const { listEverflowConversionsPage,persistEverflowConversions }=await import("./everflow-conversions");
+    let page=1,seen=0,persisted=0,total=0; const pageSize=200;
+    while(page<=10){
+      const result=await runWithinEverflowSchedulerDeadline(runtime,()=>listEverflowConversionsPage({apiKey,from,to,timezoneId,currencyId,page,pageSize,timeoutMs:30000})); total=result.totalCount;
+      persisted+=await persistEverflowConversions({accountId:String(candidate.account_id),organizationId:String(candidate.organization_id),connectionId:String(candidate.connection_id),providerAccountId:String(candidate.provider_account_id),syncRunId:String(candidate.id),conversions:result.conversions}); seen+=result.conversions.length;
+      await repo.heartbeatSyncRun({runId:String(candidate.id),organizationId:String(candidate.organization_id),connectionId:String(candidate.connection_id),owner,leaseSeconds:240});
+      await commercePersistenceRequest(`commerce_sync_runs?id=eq.${encodeURIComponent(String(candidate.id))}`,{method:"PATCH",body:JSON.stringify({records_seen:seen,records_created:persisted,pages_completed:page,heartbeat_at:new Date().toISOString(),metadata:{...metadata,total_count:total}})});
+      if(!result.conversions.length||seen>=total||result.conversions.length<result.pageSize)break; page++;
+    }
+    if(page>=10&&seen<total)throw new Error("Historical Everflow import reached its bounded page limit and will require another resumable worker pass.");
+    let linkageProcessed=0,linkageMatched=0,linkageRemaining=1,linkagePasses=0; while(linkageRemaining>0&&linkagePasses<20){const linked=await commercePersistenceRequest("rpc/run_everflow_order_reconciliation_batch_v1",{method:"POST",body:JSON.stringify({p_connection_id:String(candidate.connection_id),p_limit:500})}) as Record<string,any>[];const row=linked[0]||{};linkageProcessed+=Number(row.processed||0);linkageMatched+=Number(row.matched||0);linkageRemaining=Number(row.remaining||0);linkagePasses++;if(Number(row.processed||0)===0)break;}
+    await commercePersistenceRequest(`commerce_sync_runs?id=eq.${encodeURIComponent(String(candidate.id))}`,{method:"PATCH",body:JSON.stringify({status:"completed",completed_at:new Date().toISOString(),lease_owner:null,lease_expires_at:null,heartbeat_at:new Date().toISOString(),records_seen:seen,records_created:persisted,pages_completed:page,metadata:{...metadata,total_count:total,result:{seen,persisted,pages:page,linkageProcessed,linkageMatched,linkageRemaining}}})});
+    return{runId:candidate.id,status:"completed",seen,persisted,pages:page,linkageProcessed,linkageMatched,linkageRemaining};
+  }catch(error){const message=error instanceof Error?error.message:"Historical Everflow import failed.";await commercePersistenceRequest(`commerce_sync_runs?id=eq.${encodeURIComponent(String(candidate.id))}`,{method:"PATCH",body:JSON.stringify({status:"failed",lease_owner:null,lease_expires_at:null,last_error_code:"everflow_historical_import_failed",last_error_summary:message,updated_at:new Date().toISOString()})}).catch(()=>undefined);return{runId:candidate.id,status:"failed",error:message};}
+}
+
 export async function runDueEverflowSchedules(
   input: {
     now?: Date;
@@ -818,6 +848,7 @@ export async function runDueEverflowSchedules(
   await ensureEverflowConversionSchedules(input.connectionId);
   const due = await dueEverflowSchedules(now, input.connectionId);
   const results: Array<Record<string, unknown>> = [];
+  const historicalImport = await runQueuedHistoricalImport(runtime).catch(error=>({status:"failed",error:error instanceof Error?error.message:"historical_import_worker_failed"}));
 
   for (const candidate of due.slice(0, limit)) {
     const claim = await claimSchedule(candidate, now);
@@ -880,6 +911,7 @@ export async function runDueEverflowSchedules(
     due: due.length,
     processed: results.length,
     results,
+    historicalImport,
     requestId: randomUUID(),
   };
 }
