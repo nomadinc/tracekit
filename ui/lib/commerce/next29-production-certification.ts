@@ -3,6 +3,9 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { Next29Client } from "../../../api/src/connectors/next29/client.ts";
 import { runNext29LiveValidation, type Next29LiveValidationReport } from "../../../api/src/connectors/next29/live-validation.ts";
+import { runNext29IncrementalCycle } from "../../../api/src/connectors/next29/incremental-runtime.ts";
+import { createNext29IncrementalControl } from "../../../api/src/connectors/next29/schedule-repository.ts";
+
 import { createNext29HistoricalPersistence } from "../../../api/src/connectors/next29/repository.ts";
 import { createNext29SubscriptionPersistence, next29SubscriptionLineRows, next29SubscriptionOrderLinkRow, next29SubscriptionRow } from "../../../api/src/connectors/next29/subscription-repository.ts";
 import { createNext29DisputePersistence } from "../../../api/src/connectors/next29/dispute-repository.ts";
@@ -89,6 +92,93 @@ export async function runStoredNext29ProductionCertification(input: {
     client,
     evidenceSink,
     persistence,
+  });
+}
+
+export async function runStoredNext29ControlledOrderIncremental(input: {
+  session: TraceKitSessionContext;
+  connectionId: string;
+}) {
+  const environment = productionCertificationEnvironment();
+  const evidenceStore = new SupabaseCommerceEvidenceStore();
+  const plane = createCommerceControlPlane({ evidenceStore });
+  const connection = await plane.getConnection(input.session, input.connectionId);
+  if (connection.provider !== "next29" || connection.status !== "connected") throw new Error("29Next controlled incremental requires a connected 29Next connection.");
+  if (!input.session.activeAccount?.id || !input.session.activeOrganization?.id) throw new Error("29Next controlled incremental requires an active workspace.");
+  const accounts = (await plane.listProviderAccounts(input.session, input.connectionId)).filter((row) => row.status === "active" && !row.provisional);
+  if (accounts.length !== 1) throw new Error("29Next controlled incremental requires exactly one active provider account.");
+
+  const rows = await commercePersistenceRequest(`commerce_sync_schedules?connection_id=eq.${encodeURIComponent(connection.id)}&select=id,resource,enabled,activation_state`);
+  const orders = rows.filter((row) => row.resource === "next29_orders");
+  const others = rows.filter((row) => row.resource !== "next29_orders" && (row.enabled || row.activation_state === "enabled"));
+  if (orders.length !== 1 || !orders[0].enabled || orders[0].activation_state !== "enabled") throw new Error("29Next controlled incremental requires exactly one enabled orders schedule.");
+  if (others.length) throw new Error("29Next controlled incremental requires subscription and dispute schedules to remain disabled.");
+  const activeRuns = await commercePersistenceRequest(`commerce_sync_runs?connection_id=eq.${encodeURIComponent(connection.id)}&status=in.(queued,running)&select=id&limit=1`);
+  if (activeRuns.length) throw new Error("29Next controlled incremental will not run while another commerce sync is active.");
+
+  const secret = await plane.resolveCredentialForExecution(input.session, input.connectionId);
+  const credential = parseNext29ConnectionCredential(secret);
+  const client = new Next29Client({ store: credential.store, accessToken: credential.accessToken, apiVersion: credential.apiVersion });
+  const context: ProductionCertificationContext = {
+    accountId: input.session.activeAccount.id,
+    organizationId: connection.organizationId,
+    connectionId: connection.id,
+    providerAccountId: accounts[0].id,
+    environment,
+    client,
+  };
+  const evidenceSink: Next29EvidenceSink = {
+    async putImmutable(item) {
+      const stored = await evidenceStore.putImmutable({
+        organizationId: item.organizationId, connectionId: item.connectionId, providerAccountId: item.providerAccountId,
+        sourceObjectType: item.sourceObjectType, payload: item.payload, contentType: item.contentType,
+      });
+      return { storageReference: stored.storageReference, payloadHash: stored.payloadHash, byteSize: stored.byteSize };
+    },
+  };
+  const persistence = createPersistence(context);
+  const rpc = async (name: string, body: Record<string, unknown>) => commercePersistenceRequest(`rpc/${name}`, { method: "POST", body: JSON.stringify(body) });
+  const control = createNext29IncrementalControl({
+    async claimSchedule(i) {
+      const found = rows.find((row) => row.resource === i.resource);
+      if (!found?.id) return null;
+      const result = await rpc("claim_next29_resource_schedule", { p_schedule_id: found.id, p_now: i.now, p_lease_owner: i.leaseOwner, p_lease_seconds: i.leaseSeconds });
+      const row = result[0];
+      if (!row) return null;
+      return {
+        id: String(row.id),
+        resource: String(row.resource),
+        enabled: Boolean(row.enabled),
+        successful_through_at: row.successful_through_at ? String(row.successful_through_at) : null,
+        active_window_start_at: row.active_window_start_at ? String(row.active_window_start_at) : null,
+        active_window_end_at: row.active_window_end_at ? String(row.active_window_end_at) : null,
+        resume_cursor: row.resume_cursor ? String(row.resume_cursor) : null,
+      };
+    },
+    async heartbeatSchedule(i) {
+      const result = await rpc("heartbeat_next29_resource_schedule", { p_schedule_id: i.scheduleId, p_lease_owner: i.leaseOwner, p_now: i.now, p_lease_seconds: i.leaseSeconds });
+      const row = result?.[0];
+      return row?.heartbeat_next29_resource_schedule === true;
+    },
+    async finishSchedule(i) {
+      await rpc("finish_next29_resource_schedule", {
+        p_schedule_id: i.scheduleId, p_lease_owner: i.leaseOwner, p_now: i.now, p_outcome: i.outcome,
+        p_successful_through_at: i.successfulThrough, p_active_window_start_at: i.activeWindowStart,
+        p_active_window_end_at: i.activeWindowEnd, p_resume_cursor: i.resumeCursor, p_error_code: null,
+      });
+    },
+    async failSchedule(i) {
+      await rpc("finish_next29_resource_schedule", {
+        p_schedule_id: i.scheduleId, p_lease_owner: i.leaseOwner, p_now: i.now, p_outcome: "failed",
+        p_successful_through_at: null, p_active_window_start_at: null, p_active_window_end_at: null,
+        p_resume_cursor: null, p_error_code: i.errorCode,
+      });
+    },
+  });
+  return runNext29IncrementalCycle({
+    organizationId: context.organizationId, connectionId: context.connectionId, providerAccountId: context.providerAccountId,
+    client, evidenceSink, persistence, control, resources: ["orders"], leaseOwner: `production-certification-${randomUUID()}`,
+    bounds: { maxPagesPerResource: 1, maxRecordsPerResource: 10 },
   });
 }
 
