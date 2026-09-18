@@ -21,7 +21,7 @@ export async function POST(request:Request,context:{params:Promise<{connectionId
   if(!Number.isFinite(startMs)||!Number.isFinite(endMs)||startMs>endMs)return fail(400,"invalid_date_range","Historical import date range is invalid.");
   if(endMs-startMs>30*86400000)return fail(400,"historical_import_range_too_large","Historical imports are limited to 31 calendar days per run.");
   const plane=createCommerceControlPlane({evidenceStore:new SupabaseCommerceEvidenceStore()});
-  const result=await syncEverflowConversions({plane,session:resolution.session,organizationId:resolution.session.activeOrganization.id,connectionId,from:start+" 00:00:00",to:end+" 23:59:59",syncType:"everflow_conversions_historical"});
+  const result=await syncEverflowConversions({plane,session:resolution.session,organizationId:resolution.session.activeOrganization.id,connectionId,from:start+" 00:00:00",to:end+" 23:59:59",syncType:"everflow_conversions_historical",providerTimeoutMs:30000});
   return NextResponse.json({ok:true,code:"everflow_historical_import_completed",message:`Imported ${result.persisted} Everflow conversion records from ${start} through ${end}.`,result});
  }catch(error){return fail(500,"everflow_historical_import_failed",error instanceof Error?error.message:"Historical Everflow import failed.");}
 }
