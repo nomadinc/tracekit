@@ -158,7 +158,7 @@ export async function runStoredNext29ControlledOrderIncremental(input: {
     async heartbeatSchedule(i) {
       const result = await rpc("heartbeat_next29_resource_schedule", { p_schedule_id: i.scheduleId, p_lease_owner: i.leaseOwner, p_now: i.now, p_lease_seconds: i.leaseSeconds });
       const row = result?.[0];
-      return row === true || row?.heartbeat_next29_resource_schedule === true;
+      return row?.heartbeat_next29_resource_schedule === true;
     },
     async finishSchedule(i) {
       await rpc("finish_next29_resource_schedule", {
