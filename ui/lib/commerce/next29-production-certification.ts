@@ -157,8 +157,11 @@ export async function runStoredNext29ControlledOrderIncremental(input: {
     },
     async heartbeatSchedule(i) {
       const result = await rpc("heartbeat_next29_resource_schedule", { p_schedule_id: i.scheduleId, p_lease_owner: i.leaseOwner, p_now: i.now, p_lease_seconds: i.leaseSeconds });
-      const row = result?.[0];
-      return row?.heartbeat_next29_resource_schedule === true || row?.heartbeat_next29_resource_schedule === "true";
+      const row: unknown = result?.[0];
+      if (row === true || row === "true") return true;
+      if (typeof row !== "object" || row === null) return false;
+      const value = (row as Record<string, unknown>).heartbeat_next29_resource_schedule;
+      return value === true || value === "true";
     },
     async finishSchedule(i) {
       await rpc("finish_next29_resource_schedule", {
