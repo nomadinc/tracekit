@@ -16,7 +16,8 @@ export async function GET(_request:Request,context:{params:Promise<{connectionId
  requirePermission(resolution.session,"connectors.manage"); const {connectionId}=await context.params,organizationId=resolution.session.activeOrganization.id;
  const s=await scope(connectionId,organizationId); if(!s)return fail(404,"resource_unavailable","The requested resource is unavailable.");
  const rows=await commercePersistenceRequest(`commerce_sync_runs?connection_id=eq.${encodeURIComponent(connectionId)}&organization_id=eq.${encodeURIComponent(organizationId)}&sync_type=eq.everflow_conversions_historical&select=id,status,created_at,started_at,completed_at,heartbeat_at,lease_expires_at,last_error_code,last_error_summary,records_seen,records_created,records_updated,pages_completed,metadata&order=created_at.desc&limit=1`) as Record<string,any>[];
- return NextResponse.json({ok:true,run:rows[0]||null});
+ const run=rows[0]||null;if(run?.status==="running"&&run.lease_expires_at&&Date.parse(String(run.lease_expires_at))<Date.now()){run.effective_status="interrupted";run.status_message="The historical import worker stopped before recording completion. TraceKit will recover the expired run on a subsequent worker pass.";run.lease_expired=true;}else if(run){run.effective_status=run.status;run.lease_expired=false;}
+ return NextResponse.json({ok:true,run});
 }
 export async function POST(request:Request,context:{params:Promise<{connectionId:string}>}){
  try{
