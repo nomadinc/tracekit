@@ -804,6 +804,22 @@ async function finishSchedule(
   return Boolean(rows[0]);
 }
 
+async function runQueuedHistoricalImport(runtime:EverflowClickRuntime){
+  const rows=await commercePersistenceRequest("commerce_sync_runs?sync_type=eq.everflow_conversions_historical&status=in.(queued,running)&select=id,account_id,organization_id,connection_id,provider_account_id,status,lease_expires_at,metadata&order=created_at.asc&limit=5") as Record<string,any>[];
+  const candidate=rows.find(row=>row.status==="queued"||(row.status==="running"&&row.lease_expires_at&&Date.parse(String(row.lease_expires_at))<Date.now())); if(!candidate)return null;
+  const owner=`everflow-historical:${randomUUID()}`,repo=new SupabaseCommerceControlRepository(),session={user:{id:String(candidate.metadata?.requested_by_user_id||"00000000-0000-0000-0000-000000000000")},activeAccount:{id:String(candidate.account_id)},activeOrganization:{id:String(candidate.organization_id),accountId:String(candidate.account_id)},organizations:[{id:String(candidate.organization_id),accountId:String(candidate.account_id)}],permissions:["connectors.manage"],correlationId:randomUUID()} as unknown as TraceKitSessionContext;
+  const claimed=await repo.claimSyncRun({runId:String(candidate.id),organizationId:String(candidate.organization_id),connectionId:String(candidate.connection_id),owner,leaseSeconds:240}); if(!claimed)return{runId:candidate.id,status:"claim_lost"};
+  const metadata=candidate.metadata||{},from=String(metadata.from||""),to=String(metadata.to||"");
+  try{
+    const { createCommerceControlPlane }=await import("@/lib/commerce/server-control-plane"); const { SupabaseCommerceEvidenceStore }=await import("@/lib/commerce/supabase-evidence-store"); const { syncEverflowConversions }=await import("./everflow-conversions");
+    await repo.transitionSyncRun({runId:String(candidate.id),organizationId:String(candidate.organization_id),connectionId:String(candidate.connection_id),owner,transition:"completed"}).catch(()=>false);
+    const plane=createCommerceControlPlane({evidenceStore:new SupabaseCommerceEvidenceStore()});
+    const result=await runWithinEverflowSchedulerDeadline(runtime,()=>syncEverflowConversions({plane,session,organizationId:String(candidate.organization_id),connectionId:String(candidate.connection_id),from,to,syncType:"everflow_conversions_historical_worker",providerTimeoutMs:30000,maxPages:10}));
+    await commercePersistenceRequest(`commerce_sync_runs?id=eq.${encodeURIComponent(String(candidate.id))}`,{method:"PATCH",body:JSON.stringify({status:"completed",completed_at:new Date().toISOString(),lease_owner:null,lease_expires_at:null,heartbeat_at:new Date().toISOString(),records_seen:result.seen,records_created:result.persisted,pages_completed:result.pages,metadata:{...metadata,result:{seen:result.seen,persisted:result.persisted,pages:result.pages,linkage:result.linkage}}})});
+    return{runId:candidate.id,status:"completed",seen:result.seen,persisted:result.persisted,pages:result.pages};
+  }catch(error){const message=error instanceof Error?error.message:"Historical Everflow import failed.";await commercePersistenceRequest(`commerce_sync_runs?id=eq.${encodeURIComponent(String(candidate.id))}`,{method:"PATCH",body:JSON.stringify({status:"failed",lease_owner:null,lease_expires_at:null,last_error_code:"everflow_historical_import_failed",last_error_summary:message,updated_at:new Date().toISOString()})}).catch(()=>undefined);return{runId:candidate.id,status:"failed",error:message};}
+}
+
 export async function runDueEverflowSchedules(
   input: {
     now?: Date;
@@ -818,6 +834,7 @@ export async function runDueEverflowSchedules(
   await ensureEverflowConversionSchedules(input.connectionId);
   const due = await dueEverflowSchedules(now, input.connectionId);
   const results: Array<Record<string, unknown>> = [];
+  const historicalImport = await runQueuedHistoricalImport(runtime).catch(error=>({status:"failed",error:error instanceof Error?error.message:"historical_import_worker_failed"}));
 
   for (const candidate of due.slice(0, limit)) {
     const claim = await claimSchedule(candidate, now);
@@ -880,6 +897,7 @@ export async function runDueEverflowSchedules(
     due: due.length,
     processed: results.length,
     results,
+    historicalImport,
     requestId: randomUUID(),
   };
 }
