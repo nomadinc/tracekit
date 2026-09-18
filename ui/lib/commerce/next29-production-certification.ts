@@ -93,9 +93,9 @@ export async function runStoredNext29ProductionCertification(input: {
 }
 
 export function productionCertificationEnvironment(): "production" {
-  const requested = String(process.env.TRACEKIT_NEXT29_LIVE_VALIDATION_ENV || "").trim().toLowerCase();
+  const requested = String(process.env.TRACEKIT_NEXT29_PRODUCTION_CERTIFICATION_ENV || "").trim().toLowerCase();
   if (!VALIDATION_ENV.has(requested)) {
-    throw new Error("Set TRACEKIT_NEXT29_LIVE_VALIDATION_ENV to production before running 29Next Production certification.");
+    throw new Error("Set TRACEKIT_NEXT29_PRODUCTION_CERTIFICATION_ENV to production before running 29Next Production certification.");
   }
   if (String(process.env.VERCEL_ENV || "").trim().toLowerCase() !== "production") throw new Error("29Next Production certification requires the Production Vercel runtime.");
   return requested as "production";
