@@ -143,7 +143,17 @@ export async function runStoredNext29ControlledOrderIncremental(input: {
       const found = rows.find((row) => row.resource === i.resource);
       if (!found?.id) return null;
       const result = await rpc("claim_next29_resource_schedule", { p_schedule_id: found.id, p_now: i.now, p_lease_owner: i.leaseOwner, p_lease_seconds: i.leaseSeconds });
-      return result[0] ?? null;
+      const row = result[0];
+      if (!row) return null;
+      return {
+        id: String(row.id),
+        resource: String(row.resource),
+        enabled: Boolean(row.enabled),
+        successful_through_at: row.successful_through_at ? String(row.successful_through_at) : null,
+        active_window_start_at: row.active_window_start_at ? String(row.active_window_start_at) : null,
+        active_window_end_at: row.active_window_end_at ? String(row.active_window_end_at) : null,
+        resume_cursor: row.resume_cursor ? String(row.resume_cursor) : null,
+      };
     },
     async heartbeatSchedule(i) {
       const result = await rpc("heartbeat_next29_resource_schedule", { p_schedule_id: i.scheduleId, p_lease_owner: i.leaseOwner, p_now: i.now, p_lease_seconds: i.leaseSeconds });
