@@ -1,6 +1,6 @@
 import { notFound } from "next/navigation";
 import { ConnectionDetail, ConnectionScheduleSummary } from "@/components/connections/integration-experience";
-import { EverflowManualSync, EverflowNetworkSelector } from "@/components/connections/everflow-admin-controls";
+import { EverflowHistoricalImport, EverflowManualSync, EverflowNetworkSelector } from "@/components/connections/everflow-admin-controls";
 import { ShopifyOnboardingStatus } from "@/components/connections/shopify-onboarding-status";
 import { ShopifyWebhookSecret } from "@/components/connections/shopify-webhook-secret";
 import { loadConnectionExperience, loadConnectionExperiences } from "@/lib/commerce/integration-experience-server";
@@ -14,7 +14,7 @@ export default async function ConnectionPage({ params }: { params: Promise<{ con
     const connections = connection.provider === "everflow" ? await loadConnectionExperiences() : [];
     return <>
       <ConnectionDetail connection={connection} />
-      {connection.provider === "everflow" ? <div className="mx-auto max-w-[1360px] px-5 sm:px-8 lg:px-10"><EverflowNetworkSelector connections={connections} selectedId={connection.id} /><EverflowManualSync connection={connection} /></div> : null}
+      {connection.provider === "everflow" ? <div className="mx-auto max-w-[1360px] px-5 sm:px-8 lg:px-10"><EverflowNetworkSelector connections={connections} selectedId={connection.id} /><EverflowManualSync connection={connection} /><EverflowHistoricalImport connection={connection} /></div> : null}
       {lifecycle ? <ShopifyOnboardingStatus lifecycle={lifecycle} /> : null}
       {connection.provider === "shopify" ? <ShopifyWebhookSecret connectionId={connectionId} /> : null}
       <ConnectionScheduleSummary connection={connection} />
