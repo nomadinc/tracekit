@@ -95,9 +95,10 @@ export async function runStoredNext29ProductionCertification(input: {
   });
 }
 
-export async function runStoredNext29ControlledOrderIncremental(input: {
+export async function runStoredNext29ControlledIncremental(input: {
   session: TraceKitSessionContext;
   connectionId: string;
+  resource: "orders" | "subscriptions" | "disputes";
 }) {
   const environment = productionCertificationEnvironment();
   const evidenceStore = new SupabaseCommerceEvidenceStore();
@@ -109,10 +110,11 @@ export async function runStoredNext29ControlledOrderIncremental(input: {
   if (accounts.length !== 1) throw new Error("29Next controlled incremental requires exactly one active provider account.");
 
   const rows = await commercePersistenceRequest(`commerce_sync_schedules?connection_id=eq.${encodeURIComponent(connection.id)}&select=id,resource,enabled,activation_state`);
-  const orders = rows.filter((row) => row.resource === "next29_orders");
-  const others = rows.filter((row) => row.resource !== "next29_orders" && (row.enabled || row.activation_state === "enabled"));
-  if (orders.length !== 1 || !orders[0].enabled || orders[0].activation_state !== "enabled") throw new Error("29Next controlled incremental requires exactly one enabled orders schedule.");
-  if (others.length) throw new Error("29Next controlled incremental requires subscription and dispute schedules to remain disabled.");
+  const targetResource = `next29_${input.resource}`;
+  const target = rows.filter((row) => row.resource === targetResource);
+  const enabled = rows.filter((row) => row.enabled || row.activation_state === "enabled");
+  if (target.length !== 1 || !target[0].enabled || target[0].activation_state !== "enabled") throw new Error(`29Next controlled incremental requires the ${input.resource} schedule to be enabled.`);
+  if (enabled.length !== 1 || enabled[0].resource !== targetResource) throw new Error("29Next controlled incremental requires exactly one enabled 29Next resource schedule.");
   const activeRuns = await commercePersistenceRequest(`commerce_sync_runs?connection_id=eq.${encodeURIComponent(connection.id)}&status=in.(queued,running)&select=id&limit=1`);
   if (activeRuns.length) throw new Error("29Next controlled incremental will not run while another commerce sync is active.");
 
@@ -180,7 +182,7 @@ export async function runStoredNext29ControlledOrderIncremental(input: {
   });
   return runNext29IncrementalCycle({
     organizationId: context.organizationId, connectionId: context.connectionId, providerAccountId: context.providerAccountId,
-    client, evidenceSink, persistence, control, resources: ["orders"], leaseOwner: `production-certification-${randomUUID()}`,
+    client, evidenceSink, persistence, control, resources: [input.resource], leaseOwner: `production-certification-${randomUUID()}`,
     bounds: { maxPagesPerResource: 1, maxRecordsPerResource: 10 },
   });
 }
