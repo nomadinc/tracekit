@@ -22,7 +22,7 @@ const VALIDATION_ENV = new Set(["production"]);
 type Row = Record<string, unknown>;
 type Scope = { organizationId: string; connectionId: string; providerAccountId: string };
 
-type ProductionCertificationContext = Scope & {
+export type ProductionCertificationContext = Scope & {
   accountId: string;
   environment: "production";
   client: Next29Client;
@@ -83,7 +83,7 @@ export async function runStoredNext29ProductionCertification(input: {
     },
   };
 
-  const persistence = createPersistence(context);
+  const persistence = createNext29RuntimePersistence(context);
   return runNext29LiveValidation({
     environment: "staging",
     organizationId: context.organizationId,
@@ -138,7 +138,7 @@ export async function runStoredNext29ControlledIncremental(input: {
       return { storageReference: stored.storageReference, payloadHash: stored.payloadHash, byteSize: stored.byteSize };
     },
   };
-  const persistence = createPersistence(context);
+  const persistence = createNext29RuntimePersistence(context);
   const rpc = async (name: string, body: Record<string, unknown>) => commercePersistenceRequest(`rpc/${name}`, { method: "POST", body: JSON.stringify(body) });
   const control = createNext29IncrementalControl({
     async claimSchedule(i) {
@@ -204,7 +204,7 @@ async function assertExecutionDisabled(scope: Scope) {
   if (activeRuns.length) throw new Error("29Next live validation will not run while another commerce sync is active.");
 }
 
-function createPersistence(context: ProductionCertificationContext) {
+export function createNext29RuntimePersistence(context: ProductionCertificationContext) {
   const runClient = createRunClient(context);
   const evidence = createEvidenceClient(context);
   const mappings = createMappingClient(context);
