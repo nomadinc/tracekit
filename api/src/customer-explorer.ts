@@ -130,6 +130,7 @@ const PLATFORM_ORDER_SELECT = [
   "currency",
   "transaction_id",
   "everflow_transaction_id",
+  "tkid",
   "affiliate_id",
   "everflow_offer_id",
   "source_id",
