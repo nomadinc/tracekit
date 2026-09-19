@@ -38,7 +38,8 @@ async function loadConnectionExperienceRow(organizationName: string, row: Row, c
   const id = String(row.id);
   const organizationId = String(row.organization_id);
   const provider = String(row.provider);
-  const scheduleResourceFilter = provider === "shopify" ? "resource=in.(products,customers,orders)" : provider === "everflow" ? "resource=eq.everflow_conversions" : "resource=eq.transactions";\n  const freshnessResource = provider === "everflow" ? "everflow_conversions" : "transactions";
+  const scheduleResourceFilter = provider === "shopify" ? "resource=in.(products,customers,orders)" : provider === "everflow" ? "resource=eq.everflow_conversions" : "resource=eq.transactions";
+  const freshnessResource = provider === "everflow" ? "everflow_conversions" : "transactions";
   const [accounts, credentials, runs, activation, checkpoints, evidence, freshnessRows, schedules, controls, pauses, tkidSources] = await Promise.all([
     commercePersistenceRequest(`commerce_provider_accounts?connection_id=eq.${encodeURIComponent(id)}&organization_id=eq.${encodeURIComponent(organizationId)}&order=created_at.asc`),
     commercePersistenceRequest(`commerce_provider_credentials?connection_id=eq.${encodeURIComponent(id)}&organization_id=eq.${encodeURIComponent(organizationId)}&select=id,created_at,rotated_at,revoked_at,encryption_version&order=created_at.desc`),
