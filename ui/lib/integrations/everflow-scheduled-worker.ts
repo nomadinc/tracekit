@@ -834,6 +834,42 @@ async function runQueuedHistoricalImport(runtime:EverflowClickRuntime){
   }catch(error){const message=error instanceof Error?error.message:"Historical Everflow import failed.";await commercePersistenceRequest(`commerce_sync_runs?id=eq.${encodeURIComponent(String(candidate.id))}`,{method:"PATCH",body:JSON.stringify({status:"failed",lease_owner:null,lease_expires_at:null,last_error_code:"everflow_historical_import_failed",last_error_summary:message,updated_at:new Date().toISOString()})}).catch(()=>undefined);return{runId:candidate.id,status:"failed",error:message};}
 }
 
+async function finalizeStaleEverflowConversionRuns(now = new Date()) {
+  const cutoff = new Date(now.getTime() - 30 * 60_000).toISOString();
+  const rows = await commercePersistenceRequest(
+    `commerce_sync_runs?sync_type=eq.everflow_conversions&status=in.(queued,running)&select=id,organization_id,connection_id,status,created_at,lease_expires_at&order=created_at.asc&limit=500`,
+  ) as Record<string, any>[];
+  let interrupted = 0;
+  let abandoned = 0;
+  for (const row of rows) {
+    const expiredRunning = row.status === "running" && row.lease_expires_at && Date.parse(String(row.lease_expires_at)) < now.getTime();
+    const staleQueued = row.status === "queued" && Date.parse(String(row.created_at)) < Date.parse(cutoff);
+    if (!expiredRunning && !staleQueued) continue;
+    const code = expiredRunning ? "everflow_sync_lease_expired" : "everflow_sync_queue_abandoned";
+    const summary = expiredRunning
+      ? "Everflow conversion sync stopped before completion and its execution lease expired."
+      : "Everflow conversion sync remained queued beyond the bounded dispatch window and was superseded.";
+    await commercePersistenceRequest(
+      `commerce_sync_runs?id=eq.${encodeURIComponent(String(row.id))}&organization_id=eq.${encodeURIComponent(String(row.organization_id))}&connection_id=eq.${encodeURIComponent(String(row.connection_id))}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({
+          status: "failed",
+          completed_at: now.toISOString(),
+          lease_owner: null,
+          lease_expires_at: null,
+          last_error_code: code,
+          last_error_summary: summary,
+          updated_at: now.toISOString(),
+        }),
+      },
+    );
+    if (expiredRunning) interrupted += 1;
+    else abandoned += 1;
+  }
+  return { inspected: rows.length, interrupted, abandoned };
+}
+
 export async function runDueEverflowSchedules(
   input: {
     now?: Date;
@@ -843,6 +879,7 @@ export async function runDueEverflowSchedules(
   } = {},
 ) {
   const now = input.now || new Date();
+  const staleRunRecovery = await finalizeStaleEverflowConversionRuns(now);
   const runtime = input.runtime || createEverflowSchedulerRuntime();
   const limit = Math.max(1, Math.min(5, input.limit || 1));
   await ensureEverflowConversionSchedules(input.connectionId);
@@ -912,6 +949,7 @@ export async function runDueEverflowSchedules(
     processed: results.length,
     results,
     historicalImport,
+    staleRunRecovery,
     requestId: randomUUID(),
   };
 }
