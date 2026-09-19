@@ -277,8 +277,26 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
         id: drawerId, kind: "tracking", title: "Tracking evidence",
         question: "What tracking evidence is available for this customer?",
         summary: snapshot.trackingExplanation,
-        facts: [{ label: "Canonical Journey", value: snapshot.journeyId }],
-        evidence: snapshot.journey.length ? ["Canonical Journey activity is retained and inspectable."] : ["No canonical Journey activity was returned."],
+        facts: [
+          { label: "Canonical Journey", value: snapshot.journeyId },
+          { label: "Linked orders", value: String(snapshot.orders.length) },
+          { label: "Orders with tracking evidence", value: String(snapshot.orders.filter((order) => order.trackingHealth === "Healthy").length) },
+        ],
+        evidence: Array.from(new Set(snapshot.orders.flatMap((order) => {
+          const e = order.trackingEvidence;
+          if (!e) return [];
+          return [
+            e.everflowTransactionId ? `Everflow transaction ID: ${e.everflowTransactionId}` : null,
+            e.tkid ? `TKID: ${e.tkid}` : null,
+            e.affiliateId ? `Affiliate ID: ${e.affiliateId}` : null,
+            e.sourceId ? `Source ID: ${e.sourceId}` : null,
+            e.sub1 ? `sub1: ${e.sub1}` : null,
+            e.sub2 ? `sub2: ${e.sub2}` : null,
+            e.sub3 ? `sub3: ${e.sub3}` : null,
+            e.sub4 ? `sub4: ${e.sub4}` : null,
+            e.sub5 ? `sub5: ${e.sub5}` : null,
+          ].filter((value): value is string => Boolean(value));
+        }))).slice(0, 24).concat(snapshot.journeyId === "Not materialized" ? ["Canonical Journey has not yet been materialized; retained commerce evidence is shown separately and is not promoted to a Journey conclusion."] : []),
         relationships: [{ type: "Customer", id: customerId, label: snapshot.customer.name }],
       };
     }
