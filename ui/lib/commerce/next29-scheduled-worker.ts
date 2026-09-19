@@ -16,7 +16,7 @@ export async function runDueNext29Schedules(args: { limit?: number } = {}) {
   const rpc = async (name:string, body:Record<string,unknown>) => commercePersistenceRequest(`rpc/${name}`, {method:"POST",body:JSON.stringify(body)});
   const repository=createNext29ScheduledWorkerRepository({
     async ensureNext29Schedules(input){const r=await rpc("ensure_next29_resource_schedules",{p_connection_id:input.connectionId});const v:unknown=r[0];return typeof v==="number"?v:Number(v||0);},
-    async listDueNext29Schedules(input){return await rpc("list_due_next29_resource_schedules",{p_now:input.now,p_limit:input.limit}) as any;},
+    async listDueNext29Schedules(input){const rows=await rpc("list_due_next29_resource_schedules",{p_now:input.now,p_limit:input.limit});console.info("next29_scheduler_due_discovery",{now:input.now,limit:input.limit,count:rows.length,resources:rows.map((row)=>String(row.resource||"")).filter(Boolean)});return rows as any;},
   });
   return runNext29ScheduledWorker({
     repository,
