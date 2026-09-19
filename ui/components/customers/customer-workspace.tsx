@@ -15,9 +15,8 @@ import {
 } from "lucide-react";
 import { AccessBoundary } from "@/components/identity/access-control";
 import { useIdentity } from "@/components/identity/identity-provider";
-import { resolveMockRepositoryScope } from "@/lib/identity/mock-repository-scope";
+import { productionCustomerRepository as customerRepository } from "@/lib/customers/production-repository";
 import { useShellDrawer } from "@/components/layout/shell-drawer";
-import { customerRepository } from "@/lib/customers/mock-repository";
 import {
   customerDeepLinkHref,
   normalizeCustomerDeepLink,
@@ -51,7 +50,7 @@ function CustomerWorkspaceContent() {
     drawer = useShellDrawer();
   const { session, setActiveOrganization, setActiveBusinessContext } =
     useIdentity();
-  const scope = React.useMemo(() => resolveMockRepositoryScope(session), [session]);
+  const scope = React.useMemo(() => ({ authenticated: session.authenticated, workspaceId: "default", organizationId: session.activeOrganizationId, businessContextId: session.activeBusinessContextId, session }), [session]);
   const requested = React.useMemo(
     () => parseCustomerDeepLink(params),
     [params],
@@ -108,9 +107,9 @@ function CustomerWorkspaceContent() {
       .resolveCustomer(scope, requested.customerId)
       .then((r) => {
         if (!on || !r) return;
-        if (session.developmentOnly && r.organizationId !== scope.mockOrganizationId)
+        if (session.developmentOnly && r.organizationId && r.organizationId !== session.activeOrganizationId)
           setActiveOrganization(r.organizationId);
-        if (r.businessContextId) setActiveBusinessContext(r.businessContextId);
+        if (r.businessContextId && r.businessContextId !== session.activeBusinessContextId) setActiveBusinessContext(r.businessContextId);
       });
     return () => {
       on = false;
@@ -119,7 +118,6 @@ function CustomerWorkspaceContent() {
     customers,
     requested.customerId,
     scope,
-    scope.mockOrganizationId,
     session.developmentOnly,
     setActiveBusinessContext,
     setActiveOrganization,
@@ -202,7 +200,7 @@ function CustomerWorkspaceContent() {
       />
     );
   if (!snapshot) return <State title="Customer not found" />;
-  const active = snapshot.journey[replayIndex];
+  const active = snapshot.journey[replayIndex] || null;
   return (
     <div className="flex min-h-[calc(100dvh-8rem)] overflow-hidden rounded-xl border bg-white shadow-sm dark:border-white/10 dark:bg-ink">
       <CustomerList
@@ -255,10 +253,10 @@ function CustomerWorkspaceContent() {
             <div className="text-right">
               <p className="text-[9px] uppercase text-slate-400">Profit</p>
               <strong className="text-3xl">
-                {money(snapshot.customer.profit)}
+                {snapshot.customer.profit === null ? "Unavailable" : money(snapshot.customer.profit)}
               </strong>
               <p className="text-[10px] font-semibold">
-                ✓ {snapshot.customer.profitStatus}
+                {snapshot.customer.profitStatus}
               </p>
             </div>
           </div>
@@ -317,7 +315,7 @@ function CustomerWorkspaceContent() {
                 <SkipForward className="h-4 w-4" />
               </button>
               <button
-                onClick={() => inspect(`event:${active.id}`)}
+                onClick={() => active && inspect(`event:${active.id}`)} disabled={!active}
                 className="rounded-lg border px-3 text-xs font-semibold"
               >
                 Inspect active
@@ -523,7 +521,7 @@ function CustomerList({
           >
             <span className="flex justify-between">
               <strong className="text-xs">{c.name}</strong>
-              <strong className="text-xs">{money(c.profit)}</strong>
+              <strong className="text-xs">{c.profit === null ? "—" : money(c.profit)}</strong>
             </span>
             <p className="mt-1 text-[10px] text-slate-500">{c.lastActivity}</p>
             <p className="mt-1 text-[10px]">
