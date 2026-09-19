@@ -105,7 +105,7 @@ function orderRow(row: any) {
     date: when(row?.created_at),
     amount: n(row?.amount),
     profit: null,
-    profitStatus: "Unavailable" as const,
+    profitStatus: "Estimated" as const,\n    profitAvailable: false,
     status: String(row?.status || "Unknown"),
     refunded: /refund|return|void|chargeback/i.test(String(row?.status || "")),
     offerId: String(row?.offer_id || ""),
