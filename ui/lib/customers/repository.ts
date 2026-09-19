@@ -1,2 +1,10 @@
 import type { CustomerDeepLinkState, CustomerDrawerRecord, CustomerJourneyEvent, CustomerListFilter, CustomerScope, CustomerSearchResult, CustomerSummary, CustomerWorkspaceSnapshot } from "./types";
-export interface CustomerRepository { listCustomers(scope:CustomerScope,filter?:CustomerListFilter):Promise<CustomerSummary[]>; resolveCustomer(scope:CustomerScope,customerId:string):Promise<{organizationId:string;businessContextId:string|null;customerId:string}|null>; loadWorkspace(scope:CustomerScope,customerId:string):Promise<CustomerWorkspaceSnapshot|null>; loadJourney(scope:CustomerScope,customerId:string):Promise<CustomerJourneyEvent[]>; loadDrawer(scope:CustomerScope,customerId:string,drawerId:string):Promise<CustomerDrawerRecord|null>; search(scope:CustomerScope,query:string):Promise<CustomerSearchResult[]>; resolveDeepLink(scope:CustomerScope,state:CustomerDeepLinkState):Promise<CustomerDeepLinkState>; }
+export interface CustomerRepository<TScope = CustomerScope> {
+  listCustomers(scope:TScope,filter?:CustomerListFilter):Promise<CustomerSummary[]>;
+  resolveCustomer(scope:TScope,customerId:string):Promise<{organizationId:string;businessContextId:string|null;customerId:string}|null>;
+  loadWorkspace(scope:TScope,customerId:string):Promise<CustomerWorkspaceSnapshot|null>;
+  loadJourney(scope:TScope,customerId:string):Promise<CustomerJourneyEvent[]>;
+  loadDrawer(scope:TScope,customerId:string,drawerId:string):Promise<CustomerDrawerRecord|null>;
+  search(scope:TScope,query:string):Promise<CustomerSearchResult[]>;
+  resolveDeepLink(scope:TScope,state:CustomerDeepLinkState):Promise<CustomerDeepLinkState>;
+}

@@ -1,14 +1,22 @@
 import type { MockRepositoryScope } from "@/lib/identity/mock-repository-scope";
+import type { IdentitySession } from "@/lib/identity/types";
 import type { CustomerDrawerTarget } from "@/lib/navigation/drawer-contract";
 
 export type CustomerTrackingState = "Healthy" | "Degraded" | "Interference Likely" | "Incomplete" | "Unknown";
 export type CustomerScope = MockRepositoryScope;
+export type ProductionCustomerScope = {
+  authenticated: boolean;
+  workspaceId: string;
+  organizationId: string | null;
+  businessContextId: string | null;
+  session: IdentitySession;
+};
 export type CustomerListFilter = { query?: string; state?: "all" | "recent" | "repeat" | "refunded" | "interference"; offerId?: string | null };
-export type CustomerSummary = { id: string; organizationId: string; offerIds: string[]; name: string; email: string; phone: string; sensitiveMasked: boolean; profit: number; profitStatus: "Estimated" | "Reconciled"; lastActivity: string; status: string; trackingHealth: CustomerTrackingState; repeat: boolean; refunded: boolean; interferenceLikely: boolean; journeyPreview: string };
+export type CustomerSummary = { id: string; organizationId: string; offerIds: string[]; name: string; email: string; phone: string; sensitiveMasked: boolean; profit: number; profitStatus: "Estimated" | "Reconciled"; profitAvailable?: boolean; lastActivity: string; status: string; trackingHealth: CustomerTrackingState; repeat: boolean; refunded: boolean; interferenceLikely: boolean; journeyPreview: string };
 export type CustomerIdentifier = { id: string; type: string; value: string; status: "Observed" | "Missing" | "Recovered"; eventId: string };
 export type CustomerRedirectStep = { url: string; statusCode: number; added: string[]; removed: string[]; transition: string; elapsedMs: number };
 export type CustomerJourneyEvent = { id: string; name: string; timestamp: string; domain: string; role: string; status: string; confidence: string; trackingHealth: CustomerTrackingState; trackingStatus: string; originalUrl: string; referrer: string; destinationUrl: string; queryParameters: Record<string,string>; identifiers: CustomerIdentifier[]; redirects: CustomerRedirectStep[]; diagnostics: Array<{ label:string; result:"Observed"|"Missing"|"Likely" }>; relationships: Array<{ type:string; id:string; label:string }>; explanation: { conclusion:string; reason:string; evidence:string[] } };
-export type CustomerRelatedOrder = { id:string; number:string; date:string; amount:number; profit:number|null; profitStatus:"Estimated"|"Reconciled"; status:string; refunded:boolean; offerId:string; offerName:string; trackingHealth:CustomerTrackingState };
+export type CustomerRelatedOrder = { id:string; number:string; date:string; amount:number; profit:number|null; profitStatus:"Estimated"|"Reconciled"; profitAvailable?:boolean; status:string; refunded:boolean; offerId:string; offerName:string; trackingHealth:CustomerTrackingState };
 export type CustomerRelatedOffer = { id:string; name:string; firstTouch:string };
 export type CustomerPrivacySignal = { id:string; label:string; state:"Observed"|"Likely"|"Incomplete"; explanation:string; evidence:string[] };
 export type CustomerWorkspaceSnapshot = { customer:CustomerSummary; lifetimeRevenue:number; customerSince:string; firstTouch:string; lastPurchase:string; journeyId:string; journey:CustomerJourneyEvent[]; orders:CustomerRelatedOrder[]; offers:CustomerRelatedOffer[]; privacySignals:CustomerPrivacySignal[]; trackingExplanation:string };
