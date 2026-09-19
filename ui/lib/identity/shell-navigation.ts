@@ -19,6 +19,7 @@ const NAVIGATION_ICONS: Record<string, LucideIcon> = {
   Customers: Users,
   Orders: ShoppingBag,
   Money: Landmark,
+  Chargebacks: CreditCard,
   Operations: ClipboardList,
   Settings,
   Connections: Plug,
