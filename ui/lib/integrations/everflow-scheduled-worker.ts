@@ -829,7 +829,7 @@ async function runQueuedHistoricalImport(runtime:EverflowClickRuntime){
       if(!result.conversions.length||seen>=total||result.conversions.length<result.pageSize)break; page++;pagesThisPass++;
     }
     if(seen<total){await commercePersistenceRequest(`commerce_sync_runs?id=eq.${encodeURIComponent(String(candidate.id))}`,{method:"PATCH",body:JSON.stringify({status:"queued",lease_owner:null,lease_expires_at:null,heartbeat_at:new Date().toISOString(),records_seen:seen,records_created:persisted,pages_completed:page,metadata:{...metadata,total_count:total,next_page:page+1,records_seen:seen,records_persisted:persisted,resume_pending:true}})});return{runId:candidate.id,status:"queued",seen,persisted,nextPage:page+1,total,resumePending:true};}
-    let linkageProcessed=0,linkageMatched=0,linkageRemaining=1,linkagePasses=0,linkageError:string|null=null; try{while(linkageRemaining>0&&linkagePasses<20){const linked=await commercePersistenceRequest("rpc/run_everflow_order_reconciliation_batch_v1",{method:"POST",body:JSON.stringify({p_connection_id:String(candidate.connection_id),p_limit:500})}) as Record<string,any>[];const row=linked[0]||{};linkageProcessed+=Number(row.processed||0);linkageMatched+=Number(row.matched||0);linkageRemaining=Number(row.remaining||0);linkagePasses++;if(Number(row.processed||0)===0)break;}}catch(error){linkageError=error instanceof CommercePersistenceError?`Commerce persistence failed (${error.status}/${error.databaseCode}).`:error instanceof Error?error.message:"Everflow attribution reconciliation failed.";}
+    let linkageProcessed=0,linkageMatched=0,linkageRemaining=1,linkagePasses=0,linkageError:string|null=null; try{while(linkageRemaining>0&&linkagePasses<4){const linked=await commercePersistenceRequest("rpc/run_everflow_order_reconciliation_batch_v1",{method:"POST",body:JSON.stringify({p_connection_id:String(candidate.connection_id),p_limit:25})}) as Record<string,any>[];const row=linked[0]||{};linkageProcessed+=Number(row.processed||0);linkageMatched+=Number(row.matched||0);linkageRemaining=Number(row.remaining||0);linkagePasses++;if(Number(row.processed||0)===0)break;}}catch(error){linkageError=error instanceof CommercePersistenceError?`Commerce persistence failed (${error.status}/${error.databaseCode}).`:error instanceof Error?error.message:"Everflow attribution reconciliation failed.";}
     if(!linkageError&&linkageRemaining>0)linkageError=`Attribution reconciliation has ${linkageRemaining} records remaining and will continue separately.`;const finalStatus=linkageError?"completed_with_warnings":"completed";await commercePersistenceRequest(`commerce_sync_runs?id=eq.${encodeURIComponent(String(candidate.id))}`,{method:"PATCH",body:JSON.stringify({status:finalStatus,completed_at:new Date().toISOString(),lease_owner:null,lease_expires_at:null,heartbeat_at:new Date().toISOString(),records_seen:seen,records_created:persisted,pages_completed:page,warnings_count:linkageError?1:0,last_error_code:linkageError?"everflow_historical_reconciliation_warning":null,last_error_summary:linkageError,metadata:{...metadata,total_count:total,result:{seen,persisted,pages:page,linkageProcessed,linkageMatched,linkageRemaining,linkageError}}})});
     return{runId:candidate.id,status:finalStatus,seen,persisted,pages:page,linkageProcessed,linkageMatched,linkageRemaining,linkageError};
   }catch(error){const message=error instanceof CommercePersistenceError?`Commerce persistence failed (${error.status}/${error.databaseCode}).`:error instanceof Error?error.message:"Historical Everflow import failed.";await commercePersistenceRequest(`commerce_sync_runs?id=eq.${encodeURIComponent(String(candidate.id))}`,{method:"PATCH",body:JSON.stringify({status:"failed",lease_owner:null,lease_expires_at:null,last_error_code:"everflow_historical_import_failed",last_error_summary:message,updated_at:new Date().toISOString()})}).catch(()=>undefined);return{runId:candidate.id,status:"failed",error:message};}
@@ -871,6 +871,13 @@ async function finalizeStaleEverflowConversionRuns(now = new Date()) {
   return { inspected: rows.length, interrupted, abandoned };
 }
 
+async function runEverflowReconciliationMaintenance(connectionId?:string){
+  const connections=connectionId?[{id:connectionId}]:await commercePersistenceRequest("commerce_provider_connections?provider=eq.everflow&status=eq.connected&select=id&order=created_at.asc&limit=20") as Record<string,any>[];
+  const results:Array<Record<string,unknown>>=[];
+  for(const connection of connections){try{const rows=await commercePersistenceRequest("rpc/run_everflow_order_reconciliation_batch_v1",{method:"POST",body:JSON.stringify({p_connection_id:String(connection.id),p_limit:25})}) as Record<string,any>[];const row=rows[0]||{};results.push({connectionId:String(connection.id),processed:Number(row.processed||0),matched:Number(row.matched||0),remaining:Number(row.remaining||0)});}catch(error){results.push({connectionId:String(connection.id),status:"warning",error:error instanceof CommercePersistenceError?`Commerce persistence failed (${error.status}/${error.databaseCode}).`:error instanceof Error?error.message:"Everflow reconciliation maintenance failed."});}}
+  return results;
+}
+
 export async function runDueEverflowSchedules(
   input: {
     now?: Date;
@@ -887,6 +894,7 @@ export async function runDueEverflowSchedules(
   const due = await dueEverflowSchedules(now, input.connectionId);
   const results: Array<Record<string, unknown>> = [];
   const historicalImport = await runQueuedHistoricalImport(runtime).catch(error=>({status:"failed",error:error instanceof Error?error.message:"historical_import_worker_failed"}));
+  const reconciliationMaintenance = historicalImport ? [] : await runEverflowReconciliationMaintenance(input.connectionId).catch(error=>[{status:"warning",error:error instanceof Error?error.message:"reconciliation_maintenance_failed"}]);
 
   for (const candidate of due.slice(0, limit)) {
     const claim = await claimSchedule(candidate, now);
