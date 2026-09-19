@@ -18,6 +18,7 @@ export type ShopifyOrderDraft = {
   phone: string | null;
   transaction_id: string | null;
   raw_json: Record<string, unknown>;
+  transactionRelationships: Array<{ providerTransactionId: string; parentProviderTransactionId: null; type: string | null; status: string | null }>;
 };
 
 export function normalizeShopifyOrderRecord(record: ShopifyPersistedRecord, shopDomain?: string | null): ShopifyOrderDraft {
@@ -56,6 +57,11 @@ export function normalizeShopifyOrderRecord(record: ShopifyPersistedRecord, shop
     phone: clean(order.phone) || clean(order.customer?.phone) || clean(order.shippingAddress?.phone) || clean(order.billingAddress?.phone) || null,
     transaction_id: clean(sale?.id) || null,
     raw_json: order,
+    transactionRelationships: transactions.flatMap((tx) => {
+      const providerTransactionId = clean(tx?.id);
+      if (!providerTransactionId) return [];
+      return [{ providerTransactionId, parentProviderTransactionId: null, type: clean(tx?.kind) || null, status: clean(tx?.status) || null }];
+    }),
   };
 }
 
