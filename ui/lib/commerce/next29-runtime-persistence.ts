@@ -10,6 +10,7 @@ import { CommercePersistenceError, commercePersistenceRequest as rawCommercePers
 
 const MAX_RECORDS = 50;
 
+type Row = Record<string, unknown>;
 export type Next29RuntimeScope = { organizationId:string; connectionId:string; providerAccountId:string; };
 export type Next29RuntimeContext = Next29RuntimeScope & { accountId:string; environment:"production"; client:Next29Client; };
 
