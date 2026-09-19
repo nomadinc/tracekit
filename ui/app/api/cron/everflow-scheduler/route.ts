@@ -64,7 +64,7 @@ export async function GET(request: Request) {
 
   await patchTelemetry(requestId, { scheduler_started_at: new Date().toISOString(), scheduler_status: "running" });
   try {
-    scheduler = await runDueEverflowSchedules({ limit: 1 });
+    scheduler = await runDueEverflowSchedules({ limit: 3 });
     await patchTelemetry(requestId, {
       scheduler_completed_at: new Date().toISOString(),
       scheduler_status: "completed",
