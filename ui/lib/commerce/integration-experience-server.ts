@@ -38,7 +38,7 @@ async function loadConnectionExperienceRow(organizationName: string, row: Row, c
   const id = String(row.id);
   const organizationId = String(row.organization_id);
   const provider = String(row.provider);
-  const scheduleResourceFilter = provider === "shopify" ? "resource=in.(products,customers,orders)" : "resource=eq.transactions";
+  const scheduleResourceFilter = provider === "shopify" ? "resource=in.(products,customers,orders)" : provider === "everflow" ? "resource=eq.everflow_conversions" : "resource=eq.transactions";\n  const freshnessResource = provider === "everflow" ? "everflow_conversions" : "transactions";
   const [accounts, credentials, runs, activation, checkpoints, evidence, freshnessRows, schedules, controls, pauses, tkidSources] = await Promise.all([
     commercePersistenceRequest(`commerce_provider_accounts?connection_id=eq.${encodeURIComponent(id)}&organization_id=eq.${encodeURIComponent(organizationId)}&order=created_at.asc`),
     commercePersistenceRequest(`commerce_provider_credentials?connection_id=eq.${encodeURIComponent(id)}&organization_id=eq.${encodeURIComponent(organizationId)}&select=id,created_at,rotated_at,revoked_at,encryption_version&order=created_at.desc`),
@@ -46,7 +46,7 @@ async function loadConnectionExperienceRow(organizationName: string, row: Row, c
     commercePersistenceRequest(`commerce_repository_activation?connection_id=eq.${encodeURIComponent(id)}&organization_id=eq.${encodeURIComponent(organizationId)}`),
     commercePersistenceRequest(`commerce_sync_checkpoints?connection_id=eq.${encodeURIComponent(id)}&organization_id=eq.${encodeURIComponent(organizationId)}&select=state`),
     commercePersistenceRequest(`commerce_evidence_records?connection_id=eq.${encodeURIComponent(id)}&organization_id=eq.${encodeURIComponent(organizationId)}&select=id,storage_reference,deleted_at`),
-    commercePersistenceRequest(`commerce_continuous_sync_state?connection_id=eq.${encodeURIComponent(id)}&organization_id=eq.${encodeURIComponent(organizationId)}&resource=eq.transactions&limit=1`),
+    commercePersistenceRequest(`commerce_continuous_sync_state?connection_id=eq.${encodeURIComponent(id)}&organization_id=eq.${encodeURIComponent(organizationId)}&resource=eq.${encodeURIComponent(freshnessResource)}&limit=1`),
     optionalRows(`commerce_sync_schedules?connection_id=eq.${encodeURIComponent(id)}&organization_id=eq.${encodeURIComponent(organizationId)}&${scheduleResourceFilter}&order=resource.asc`),
     optionalRows(`tracekit_production_controls?organization_id=eq.${encodeURIComponent(organizationId)}&capability=eq.commerce_scheduler&limit=1`),
     optionalRows(`commerce_connection_pauses?connection_id=eq.${encodeURIComponent(id)}&organization_id=eq.${encodeURIComponent(organizationId)}&limit=1`),
