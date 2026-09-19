@@ -1,32 +1,18 @@
 import "server-only";
 
 import { randomUUID } from "node:crypto";
-import { Next29Client } from "../../../api/src/connectors/next29/client.ts";
-import { runNext29LiveValidation, type Next29LiveValidationReport } from "../../../api/src/connectors/next29/live-validation.ts";
-import { runNext29IncrementalCycle } from "../../../api/src/connectors/next29/incremental-runtime.ts";
-import { createNext29IncrementalControl } from "../../../api/src/connectors/next29/schedule-repository.ts";
-
+import type { Next29Client } from "../../../api/src/connectors/next29/client.ts";
 import { createNext29HistoricalPersistence } from "../../../api/src/connectors/next29/repository.ts";
 import { createNext29SubscriptionPersistence, next29SubscriptionLineRows, next29SubscriptionOrderLinkRow, next29SubscriptionRow } from "../../../api/src/connectors/next29/subscription-repository.ts";
 import { createNext29DisputePersistence } from "../../../api/src/connectors/next29/dispute-repository.ts";
 import type { Next29CanonicalExpansion } from "../../../api/src/connectors/next29/expansion.ts";
-import type { Next29EvidenceSink } from "../../../api/src/connectors/next29/types.ts";
-import { parseNext29ConnectionCredential } from "./next29-verifier";
-import { createCommerceControlPlane } from "./server-control-plane";
-import { SupabaseCommerceEvidenceStore } from "./supabase-evidence-store";
 import { CommercePersistenceError, commercePersistenceRequest as rawCommercePersistenceRequest } from "./supabase-control-repository";
-import type { TraceKitSessionContext } from "@/lib/identity/persistent-types";
 
-const MAX_RECORDS = 10;
-const VALIDATION_ENV = new Set(["production"]);
+const MAX_RECORDS = 50;
+
 type Row = Record<string, unknown>;
-type Scope = { organizationId: string; connectionId: string; providerAccountId: string };
-
-export type ProductionCertificationContext = Scope & {
-  accountId: string;
-  environment: "production";
-  client: Next29Client;
-};
+export type Next29RuntimeScope = { organizationId:string; connectionId:string; providerAccountId:string; };
+export type Next29RuntimeContext = Next29RuntimeScope & { accountId:string; environment:"production"; client:Next29Client; };
 
 async function commercePersistenceRequest(path: string, init: RequestInit = {}) {
   try {
@@ -34,177 +20,13 @@ async function commercePersistenceRequest(path: string, init: RequestInit = {}) 
   } catch (error) {
     if (error instanceof CommercePersistenceError) {
       const target = String(path || "unknown").split("?")[0].replace(/[^a-z0-9_\/-]/gi, "_").slice(0, 120);
-      throw new Error(`29Next production-certification persistence failed · target ${target} · status ${error.status} · code ${error.databaseCode}`);
+      throw new Error(`29Next runtime persistence failed · target ${target} · status ${error.status} · code ${error.databaseCode}`);
     }
     throw error;
   }
 }
 
-export async function runStoredNext29ProductionCertification(input: {
-  session: TraceKitSessionContext;
-  connectionId: string;
-}): Promise<Next29LiveValidationReport> {
-  const environment = productionCertificationEnvironment();
-  const evidenceStore = new SupabaseCommerceEvidenceStore();
-  const plane = createCommerceControlPlane({ evidenceStore });
-  const connection = await plane.getConnection(input.session, input.connectionId);
-  if (connection.provider !== "next29") throw new Error("29Next live validation requires a 29Next connection.");
-  if (!input.session.activeAccount?.id || !input.session.activeOrganization?.id) throw new Error("29Next live validation requires an active workspace.");
-
-  const accounts = (await plane.listProviderAccounts(input.session, input.connectionId))
-    .filter((row) => row.status === "active" && !row.provisional);
-  if (accounts.length !== 1) throw new Error("29Next live validation requires exactly one active provider account.");
-
-  await assertExecutionDisabled({ organizationId: connection.organizationId, connectionId: connection.id, providerAccountId: accounts[0].id });
-
-  const secret = await plane.resolveCredentialForExecution(input.session, input.connectionId);
-  const credential = parseNext29ConnectionCredential(secret);
-  const client = new Next29Client({ store: credential.store, accessToken: credential.accessToken, apiVersion: credential.apiVersion });
-  const context: ProductionCertificationContext = {
-    accountId: input.session.activeAccount.id,
-    organizationId: connection.organizationId,
-    connectionId: connection.id,
-    providerAccountId: accounts[0].id,
-    environment,
-    client,
-  };
-
-  const evidenceSink: Next29EvidenceSink = {
-    async putImmutable(item) {
-      const stored = await evidenceStore.putImmutable({
-        organizationId: item.organizationId,
-        connectionId: item.connectionId,
-        providerAccountId: item.providerAccountId,
-        sourceObjectType: item.sourceObjectType,
-        payload: item.payload,
-        contentType: item.contentType,
-      });
-      return { storageReference: stored.storageReference, payloadHash: stored.payloadHash, byteSize: stored.byteSize };
-    },
-  };
-
-  const persistence = createNext29RuntimePersistence(context);
-  return runNext29LiveValidation({
-    environment: "staging",
-    organizationId: context.organizationId,
-    connectionId: context.connectionId,
-    providerAccountId: context.providerAccountId,
-    client,
-    evidenceSink,
-    persistence,
-  });
-}
-
-export async function runStoredNext29ControlledIncremental(input: {
-  session: TraceKitSessionContext;
-  connectionId: string;
-  resource: "orders" | "subscriptions" | "disputes";
-}) {
-  const environment = productionCertificationEnvironment();
-  const evidenceStore = new SupabaseCommerceEvidenceStore();
-  const plane = createCommerceControlPlane({ evidenceStore });
-  const connection = await plane.getConnection(input.session, input.connectionId);
-  if (connection.provider !== "next29" || connection.status !== "connected") throw new Error("29Next controlled incremental requires a connected 29Next connection.");
-  if (!input.session.activeAccount?.id || !input.session.activeOrganization?.id) throw new Error("29Next controlled incremental requires an active workspace.");
-  const accounts = (await plane.listProviderAccounts(input.session, input.connectionId)).filter((row) => row.status === "active" && !row.provisional);
-  if (accounts.length !== 1) throw new Error("29Next controlled incremental requires exactly one active provider account.");
-
-  const rows = await commercePersistenceRequest(`commerce_sync_schedules?connection_id=eq.${encodeURIComponent(connection.id)}&select=id,resource,enabled,activation_state`);
-  const targetResource = `next29_${input.resource}`;
-  const target = rows.filter((row) => row.resource === targetResource);
-  const enabled = rows.filter((row) => row.enabled || row.activation_state === "enabled");
-  if (target.length !== 1 || !target[0].enabled || target[0].activation_state !== "enabled") throw new Error(`29Next controlled incremental requires the ${input.resource} schedule to be enabled.`);
-  if (enabled.length !== 1 || enabled[0].resource !== targetResource) throw new Error("29Next controlled incremental requires exactly one enabled 29Next resource schedule.");
-  const activeRuns = await commercePersistenceRequest(`commerce_sync_runs?connection_id=eq.${encodeURIComponent(connection.id)}&status=in.(queued,running)&select=id&limit=1`);
-  if (activeRuns.length) throw new Error("29Next controlled incremental will not run while another commerce sync is active.");
-
-  const secret = await plane.resolveCredentialForExecution(input.session, input.connectionId);
-  const credential = parseNext29ConnectionCredential(secret);
-  const client = new Next29Client({ store: credential.store, accessToken: credential.accessToken, apiVersion: credential.apiVersion });
-  const context: ProductionCertificationContext = {
-    accountId: input.session.activeAccount.id,
-    organizationId: connection.organizationId,
-    connectionId: connection.id,
-    providerAccountId: accounts[0].id,
-    environment,
-    client,
-  };
-  const evidenceSink: Next29EvidenceSink = {
-    async putImmutable(item) {
-      const stored = await evidenceStore.putImmutable({
-        organizationId: item.organizationId, connectionId: item.connectionId, providerAccountId: item.providerAccountId,
-        sourceObjectType: item.sourceObjectType, payload: item.payload, contentType: item.contentType,
-      });
-      return { storageReference: stored.storageReference, payloadHash: stored.payloadHash, byteSize: stored.byteSize };
-    },
-  };
-  const persistence = createNext29RuntimePersistence(context);
-  const rpc = async (name: string, body: Record<string, unknown>) => commercePersistenceRequest(`rpc/${name}`, { method: "POST", body: JSON.stringify(body) });
-  const control = createNext29IncrementalControl({
-    async claimSchedule(i) {
-      const found = rows.find((row) => row.resource === i.resource);
-      if (!found?.id) return null;
-      const result = await rpc("claim_next29_resource_schedule", { p_schedule_id: found.id, p_now: i.now, p_lease_owner: i.leaseOwner, p_lease_seconds: i.leaseSeconds });
-      const row = result[0];
-      if (!row) return null;
-      return {
-        id: String(row.id),
-        resource: String(row.resource),
-        enabled: Boolean(row.enabled),
-        successful_through_at: row.successful_through_at ? String(row.successful_through_at) : null,
-        active_window_start_at: row.active_window_start_at ? String(row.active_window_start_at) : null,
-        active_window_end_at: row.active_window_end_at ? String(row.active_window_end_at) : null,
-        resume_cursor: row.resume_cursor ? String(row.resume_cursor) : null,
-      };
-    },
-    async heartbeatSchedule(i) {
-      const result = await rpc("heartbeat_next29_resource_schedule", { p_schedule_id: i.scheduleId, p_lease_owner: i.leaseOwner, p_now: i.now, p_lease_seconds: i.leaseSeconds });
-      const row: unknown = result?.[0];
-      if (row === true || row === "true") return true;
-      if (typeof row !== "object" || row === null) return false;
-      const value = (row as Record<string, unknown>).heartbeat_next29_resource_schedule;
-      return value === true || value === "true";
-    },
-    async finishSchedule(i) {
-      await rpc("finish_next29_resource_schedule", {
-        p_schedule_id: i.scheduleId, p_lease_owner: i.leaseOwner, p_now: i.now, p_outcome: i.outcome,
-        p_successful_through_at: i.successfulThrough, p_active_window_start_at: i.activeWindowStart,
-        p_active_window_end_at: i.activeWindowEnd, p_resume_cursor: i.resumeCursor, p_error_code: null,
-      });
-    },
-    async failSchedule(i) {
-      await rpc("finish_next29_resource_schedule", {
-        p_schedule_id: i.scheduleId, p_lease_owner: i.leaseOwner, p_now: i.now, p_outcome: "failed",
-        p_successful_through_at: null, p_active_window_start_at: null, p_active_window_end_at: null,
-        p_resume_cursor: null, p_error_code: i.errorCode,
-      });
-    },
-  });
-  return runNext29IncrementalCycle({
-    organizationId: context.organizationId, connectionId: context.connectionId, providerAccountId: context.providerAccountId,
-    client, evidenceSink, persistence, control, resources: [input.resource], leaseOwner: `production-certification-${randomUUID()}`,
-    bounds: { maxPagesPerResource: 1, maxRecordsPerResource: 10 },
-  });
-}
-
-export function productionCertificationEnvironment(): "production" {
-  const requested = String(process.env.TRACEKIT_NEXT29_PRODUCTION_CERTIFICATION_ENV || "").trim().toLowerCase();
-  if (!VALIDATION_ENV.has(requested)) {
-    throw new Error("Set TRACEKIT_NEXT29_PRODUCTION_CERTIFICATION_ENV to production before running 29Next Production certification.");
-  }
-  if (String(process.env.VERCEL_ENV || "").trim().toLowerCase() !== "production") throw new Error("29Next Production certification requires the Production Vercel runtime.");
-  return requested as "production";
-}
-
-async function assertExecutionDisabled(scope: Scope) {
-  const encodedConnection = encodeURIComponent(scope.connectionId);
-  const schedules = await commercePersistenceRequest(`commerce_sync_schedules?connection_id=eq.${encodedConnection}&enabled=eq.true&select=id&limit=1`).catch(() => []);
-  if (schedules.length) throw new Error("29Next live validation requires all connection schedules to remain disabled.");
-  const activeRuns = await commercePersistenceRequest(`commerce_sync_runs?connection_id=eq.${encodedConnection}&status=in.(queued,running)&select=id&limit=1`);
-  if (activeRuns.length) throw new Error("29Next live validation will not run while another commerce sync is active.");
-}
-
-export function createNext29RuntimePersistence(context: ProductionCertificationContext) {
+export function createNext29RuntimePersistence(context: Next29RuntimeContext) {
   const runClient = createRunClient(context);
   const evidence = createEvidenceClient(context);
   const mappings = createMappingClient(context);
@@ -293,7 +115,7 @@ export function createNext29RuntimePersistence(context: ProductionCertificationC
         organization_id: input.organizationId, account_id: context.accountId, connection_id: input.connectionId, provider_account_id: input.providerAccountId,
         provider: "next29", provider_dispute_id: input.providerDisputeId, source_kind: "api", provider_event_id: null,
         evidence_id: input.evidenceId, payload_hash: input.payloadHash, observed_at: input.observedAt,
-        source_created_at: input.sourceCreatedAt, source_updated_at: input.sourceUpdatedAt, metadata: { provider: "next29", production_certification: true },
+        source_created_at: input.sourceCreatedAt, source_updated_at: input.sourceUpdatedAt, metadata: { provider: "next29", runtime: "production" },
       }) });
       return { observationId: String(rows[0].id) };
     },
@@ -351,10 +173,10 @@ export function createNext29RuntimePersistence(context: ProductionCertificationC
   return { orders, subscriptions, disputes };
 }
 
-function createRunClient(context: ProductionCertificationContext) {
+function createRunClient(context: Next29RuntimeContext) {
   const methods = (resource: "orders" | "subscriptions" | "disputes") => ({
-    async createHistoricalRun(input: Scope) { return createRun(context, input, resource); },
-    async createSubscriptionRun(input: Scope) { return createRun(context, input, resource); },
+    async createHistoricalRun(input: Next29RuntimeScope) { return createRun(context, input, resource); },
+    async createSubscriptionRun(input: Next29RuntimeScope) { return createRun(context, input, resource); },
     async appendHistoricalCheckpoint(input: any) { await checkpoint(input, resource); },
     async appendSubscriptionCheckpoint(input: any) { await checkpoint(input, resource); },
     async finishHistoricalRun(input: any) { await finishRun(input, false); },
@@ -365,7 +187,7 @@ function createRunClient(context: ProductionCertificationContext) {
   return { orders: methods("orders"), subscriptions: methods("subscriptions"), disputes: methods("disputes") };
 }
 
-function createEvidenceClient(_context: ProductionCertificationContext) {
+function createEvidenceClient(_context: Next29RuntimeContext) {
   const ensure = (sourceObjectType: string, normalizerVersion: string, mappingVersion: string) => async (input: any) => {
     const query = `commerce_evidence_records?connection_id=eq.${encodeURIComponent(input.connectionId)}&provider_account_id=eq.${encodeURIComponent(input.providerAccountId)}&source_object_type=eq.${encodeURIComponent(sourceObjectType)}&source_object_id=eq.${encodeURIComponent(input.sourceObjectId)}&payload_hash=eq.${encodeURIComponent(input.payloadHash)}&select=id&limit=1`;
     const existing = await commercePersistenceRequest(query);
@@ -376,7 +198,7 @@ function createEvidenceClient(_context: ProductionCertificationContext) {
       storage_backend: "object_storage", storage_reference: input.storageReference, content_type: "application/json", byte_size: input.byteSize,
       source_updated_at: input.sourceUpdatedAt || null, observed_at: new Date().toISOString(), normalizer_version: normalizerVersion,
       mapping_version: mappingVersion, pii_classification: "sensitive", retention_policy: "commerce_evidence_default",
-      metadata: { provider: "next29", production_certification: true },
+      metadata: { provider: "next29", runtime: "production" },
     }) });
     return { evidenceId: String(rows[0].id) };
   };
@@ -387,7 +209,7 @@ function createEvidenceClient(_context: ProductionCertificationContext) {
   };
 }
 
-function createMappingClient(_context: ProductionCertificationContext) {
+function createMappingClient(_context: Next29RuntimeContext) {
   const ensure = (sourceObjectType: string, canonicalObjectType: string) => async (input: any) => {
     const query = `commerce_source_mappings?connection_id=eq.${encodeURIComponent(input.connectionId)}&provider_account_id=eq.${encodeURIComponent(input.providerAccountId)}&source_object_type=eq.${encodeURIComponent(sourceObjectType)}&source_object_id=eq.${encodeURIComponent(input.sourceObjectId)}&select=id,canonical_object_id&limit=1`;
     const existing = await commercePersistenceRequest(query);
@@ -401,7 +223,7 @@ function createMappingClient(_context: ProductionCertificationContext) {
       organization_id: input.organizationId, connection_id: input.connectionId, provider_account_id: input.providerAccountId,
       source_object_type: sourceObjectType, source_object_id: input.sourceObjectId, canonical_object_type: canonicalObjectType,
       canonical_object_id: canonicalObjectId, first_seen_at: now, last_seen_at: now, source_updated_at: input.sourceUpdatedAt || null,
-      payload_hash: input.payloadHash, mapping_version: input.mappingVersion, state: "active", metadata: { provider: "next29", production_certification: true },
+      payload_hash: input.payloadHash, mapping_version: input.mappingVersion, state: "active", metadata: { provider: "next29", runtime: "production" },
     }) });
     return { id: String(rows[0].id), canonicalObjectId };
   };
@@ -411,11 +233,11 @@ function createMappingClient(_context: ProductionCertificationContext) {
   };
 }
 
-async function createRun(context: ProductionCertificationContext, input: Scope, resource: string) {
+async function createRun(context: Next29RuntimeContext, input: Next29RuntimeScope, resource: string) {
   const rows = await commercePersistenceRequest("commerce_sync_runs", { method: "POST", body: JSON.stringify({
     organization_id: input.organizationId, connection_id: input.connectionId, provider_account_id: input.providerAccountId,
     sync_type: resource, mode: "historical_backfill", status: "running", started_at: new Date().toISOString(),
-    metadata: { provider: "next29", production_certification: true, validation_environment: context.environment, max_pages: 1, max_records: MAX_RECORDS },
+    metadata: { provider: "next29", runtime: "production", max_pages: 1, max_records: MAX_RECORDS },
   }) });
   return { id: String(rows[0].id) };
 }
@@ -426,7 +248,7 @@ async function checkpoint(input: any, resource: string) {
     sync_run_id: input.syncRunId, organization_id: input.organizationId, connection_id: input.connectionId, provider_account_id: input.providerAccountId,
     resource, page, per_page: MAX_RECORDS, state: "completed", completed_at: new Date().toISOString(),
     last_source_id: input.checkpoint?.lastSourceObjectId || null,
-    metadata: { provider: "next29", next_cursor_present: Boolean(input.checkpoint?.next), records_seen: Number(input.recordsSeen || 0), production_certification: true },
+    metadata: { provider: "next29", next_cursor_present: Boolean(input.checkpoint?.next), records_seen: Number(input.recordsSeen || 0), runtime: "production" },
   };
   await upsertComposite("commerce_sync_checkpoints", "sync_run_id,resource,page,per_page", body);
 }
@@ -441,12 +263,12 @@ async function finishRun(input: any, failed: boolean) {
     body.last_error_code = "next29_live_validation_failed";
     body.last_error_summary = safeError(input.error);
   } else {
-    body.metadata = { provider: "next29", production_certification: true, has_more: Boolean(input.hasMore) };
+    body.metadata = { provider: "next29", runtime: "production", has_more: Boolean(input.hasMore) };
   }
   await commercePersistenceRequest(`commerce_sync_runs?id=eq.${encodeURIComponent(input.syncRunId)}&organization_id=eq.${encodeURIComponent(input.organizationId)}&connection_id=eq.${encodeURIComponent(input.connectionId)}`, { method: "PATCH", body: JSON.stringify(body) });
 }
 
-async function upsertProducts(context: ProductionCertificationContext, evidenceId: string, expansion: Next29CanonicalExpansion) {
+async function upsertProducts(context: Next29RuntimeContext, evidenceId: string, expansion: Next29CanonicalExpansion) {
   const now = new Date().toISOString();
   for (const product of expansion.products) {
     await upsertComposite("commerce_provider_products", "connection_id,provider_account_id,provider_product_id", {
@@ -458,7 +280,7 @@ async function upsertProducts(context: ProductionCertificationContext, evidenceI
   }
 }
 
-async function upsertOrderLines(context: ProductionCertificationContext, canonicalOrderId: string, evidenceId: string, expansion: Next29CanonicalExpansion) {
+async function upsertOrderLines(context: Next29RuntimeContext, canonicalOrderId: string, evidenceId: string, expansion: Next29CanonicalExpansion) {
   for (const line of expansion.lines) {
     if (line.quantity <= 0) continue;
     let providerProductUuid: string | null = null;
@@ -475,7 +297,7 @@ async function upsertOrderLines(context: ProductionCertificationContext, canonic
   }
 }
 
-async function upsertCustomer(context: ProductionCertificationContext, evidenceId: string, expansion: Next29CanonicalExpansion) {
+async function upsertCustomer(context: Next29RuntimeContext, evidenceId: string, expansion: Next29CanonicalExpansion) {
   const customer = expansion.customer;
   if (!customer) return;
   const existing = await commercePersistenceRequest(`person_source_identities?organization_id=eq.${encodeURIComponent(context.organizationId)}&connection_id=eq.${encodeURIComponent(context.connectionId)}&provider_account_id=eq.${encodeURIComponent(context.providerAccountId)}&source_type=eq.provider_customer_id&source_id=eq.${encodeURIComponent(customer.providerCustomerId)}&select=person_id&limit=1`);
@@ -490,7 +312,7 @@ async function upsertCustomer(context: ProductionCertificationContext, evidenceI
   }
 }
 
-async function upsertTransactions(context: ProductionCertificationContext, canonicalOrderId: string, expansion: Next29CanonicalExpansion) {
+async function upsertTransactions(context: Next29RuntimeContext, canonicalOrderId: string, expansion: Next29CanonicalExpansion) {
   const orderRows = await commercePersistenceRequest(`platform_orders?organization_id=eq.${encodeURIComponent(context.organizationId)}&canonical_order_id=eq.${encodeURIComponent(canonicalOrderId)}&select=order_id,platform_order_id&limit=1`);
   const providerOrderId = orderRows[0]?.order_id ? String(orderRows[0].order_id) : null;
   for (const tx of expansion.transactions) {
@@ -508,7 +330,7 @@ async function upsertTransactions(context: ProductionCertificationContext, canon
   }
 }
 
-async function upsertRefunds(context: ProductionCertificationContext, canonicalOrderId: string, evidenceId: string, expansion: Next29CanonicalExpansion) {
+async function upsertRefunds(context: Next29RuntimeContext, canonicalOrderId: string, evidenceId: string, expansion: Next29CanonicalExpansion) {
   for (const refund of expansion.refunds) {
     await upsertComposite("commerce_refund_events", "connection_id,provider_account_id,provider_refund_id", {
       account_id: context.accountId, organization_id: context.organizationId, connection_id: context.connectionId, provider_account_id: context.providerAccountId,
@@ -519,7 +341,7 @@ async function upsertRefunds(context: ProductionCertificationContext, canonicalO
   }
 }
 
-async function canonicalOrderByProviderId(context: ProductionCertificationContext, providerOrderId: string) {
+async function canonicalOrderByProviderId(context: Next29RuntimeContext, providerOrderId: string) {
   const rows = await commercePersistenceRequest(`platform_orders?organization_id=eq.${encodeURIComponent(context.organizationId)}&connection_id=eq.${encodeURIComponent(context.connectionId)}&provider_account_id=eq.${encodeURIComponent(context.providerAccountId)}&provider_order_id=eq.${encodeURIComponent(providerOrderId)}&select=canonical_order_id&limit=2`);
   return rows.length === 1 && rows[0].canonical_order_id ? String(rows[0].canonical_order_id) : null;
 }

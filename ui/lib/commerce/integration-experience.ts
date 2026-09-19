@@ -49,7 +49,7 @@ export const NEXT29_CAPABILITIES: SafeCapability[] = [
   { name: "Disputes / chargebacks", state: "supported", reason: "Historical API ingestion and webhook lifecycle foundations are implemented." },
   { name: "Signed webhooks", state: "supported", reason: "Connection-scoped HMAC verification and durable idempotent receipt handling are implemented." },
   { name: "Incremental sync", state: "supported", reason: "Date-window checkpoints, leases, and bounded scheduled dispatch are implemented." },
-  { name: "Production activation", state: "limited", reason: "Permanent order.created runtime passed M14 staging validation; production activation remains explicitly gated." },
+  { name: "Production activation", state: "supported", reason: "Signed order.created webhook and autonomous bounded orders, subscriptions, and disputes scheduling are operational in Production." },
 ];
 
 export const PROVIDER_CATALOG = [

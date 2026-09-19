@@ -8,7 +8,7 @@ import { runNext29ScheduledWorker } from "../../../api/src/connectors/next29/sch
 import type { Next29EvidenceSink } from "../../../api/src/connectors/next29/types.ts";
 import { decodeCommerceCredentialKey, decryptCommerceCredential } from "./credential-crypto";
 import { parseNext29ConnectionCredential } from "./next29-verifier";
-import { createNext29RuntimePersistence, type ProductionCertificationContext } from "./next29-production-certification";
+import { createNext29RuntimePersistence, type Next29RuntimeContext } from "./next29-runtime-persistence";
 import { commercePersistenceRequest, SupabaseCommerceControlRepository } from "./supabase-control-repository";
 import { SupabaseCommerceEvidenceStore } from "./supabase-evidence-store";
 
@@ -34,7 +34,7 @@ export async function runDueNext29Schedules(args: { limit?: number } = {}) {
       const client=new Next29Client({store:credential.store,accessToken:credential.accessToken,apiVersion:credential.apiVersion});
       const evidenceStore=new SupabaseCommerceEvidenceStore();
       const evidenceSink:Next29EvidenceSink={async putImmutable(item){const s=await evidenceStore.putImmutable({organizationId:item.organizationId,connectionId:item.connectionId,providerAccountId:item.providerAccountId,sourceObjectType:item.sourceObjectType,payload:item.payload,contentType:item.contentType});return {storageReference:s.storageReference,payloadHash:s.payloadHash,byteSize:s.byteSize};}};
-      const context:ProductionCertificationContext={accountId:connection.accountId,organizationId:target.organizationId,connectionId:target.connectionId,providerAccountId:target.providerAccountId,environment:"production",client};
+      const context:Next29RuntimeContext={accountId:connection.accountId,organizationId:target.organizationId,connectionId:target.connectionId,providerAccountId:target.providerAccountId,environment:"production",client};
       const rows=await commercePersistenceRequest(`commerce_sync_schedules?connection_id=eq.${encodeURIComponent(target.connectionId)}&select=id,resource,enabled,activation_state`);
       const control=createNext29IncrementalControl({
         async claimSchedule(i){const found=rows.find(x=>x.resource===i.resource);if(!found?.id)return null;const rr=await rpc("claim_next29_resource_schedule",{p_schedule_id:found.id,p_now:i.now,p_lease_owner:i.leaseOwner,p_lease_seconds:i.leaseSeconds});const row=rr[0];if(!row)return null;return {id:String(row.id),resource:String(row.resource),enabled:Boolean(row.enabled),successful_through_at:row.successful_through_at?String(row.successful_through_at):null,active_window_start_at:row.active_window_start_at?String(row.active_window_start_at):null,active_window_end_at:row.active_window_end_at?String(row.active_window_end_at):null,resume_cursor:row.resume_cursor?String(row.resume_cursor):null};},
