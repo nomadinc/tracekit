@@ -1,0 +1,10 @@
+import { strict as assert } from "node:assert";
+import { normalizeCheckoutChampTransaction } from "../src/connectors/checkoutchamp/transaction-evidence.ts";
+const row=normalizeCheckoutChampTransaction({transactionId:"TX2",parentTxnId:"TX1",txnType:"SALE",orderId:"O2",actualOrderId:"A2",billingCycleNumber:"2",affId:"74EA",custom1:"0123456789abcdef0123456789abcdef",_ef_transaction_id:"confirmed"});
+assert.equal(row?.parentProviderTransactionId,"TX1");
+assert.equal(row?.billingCycleNumber,2);
+assert.equal(row?.attribution.custom1,"0123456789abcdef0123456789abcdef");
+assert.equal(row?.attribution.explicitEverflowTransactionId,"confirmed");
+const rawOnly=normalizeCheckoutChampTransaction({transactionId:"TX3",custom1:"0123456789abcdef0123456789abcdef"});
+assert.equal(rawOnly?.attribution.explicitEverflowTransactionId,null);
+console.log("checkoutchamp transaction evidence tests passed");
