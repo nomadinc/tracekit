@@ -10,6 +10,18 @@ import { CommercePersistenceError, commercePersistenceRequest as rawCommercePers
 
 export type Next29RuntimeContext = { accountId:string; organizationId:string; connectionId:string; providerAccountId:string; environment:"production"; client:Next29Client; };
 
+async function commercePersistenceRequest(path: string, init: RequestInit = {}) {
+  try {
+    return await rawCommercePersistenceRequest(path, init);
+  } catch (error) {
+    if (error instanceof CommercePersistenceError) {
+      const target = String(path || "unknown").split("?")[0].replace(/[^a-z0-9_\/-]/gi, "_").slice(0, 120);
+      throw new Error(`29Next runtime persistence failed · target ${target} · status ${error.status} · code ${error.databaseCode}`);
+    }
+    throw error;
+  }
+}
+
 export function createNext29RuntimePersistence(context: Next29RuntimeContext) {
   const runClient = createRunClient(context);
   const evidence = createEvidenceClient(context);
