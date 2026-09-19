@@ -98,8 +98,27 @@ function mapEvent(row: any, identity: any): CustomerJourneyEvent {
     },
   };
 }
+function orderTrackingEvidence(row: any) {
+  return {
+    tkid: row?.tkid ? String(row.tkid) : null,
+    everflowTransactionId: row?.everflow_transaction_id ? String(row.everflow_transaction_id) : null,
+    transactionId: row?.transaction_id ? String(row.transaction_id) : null,
+    affiliateId: row?.affiliate_id ? String(row.affiliate_id) : null,
+    sourceId: row?.source_id ? String(row.source_id) : null,
+    sub1: row?.sub1 ? String(row.sub1) : null,
+    sub2: row?.sub2 ? String(row.sub2) : null,
+    sub3: row?.sub3 ? String(row.sub3) : null,
+    sub4: row?.sub4 ? String(row.sub4) : null,
+    sub5: row?.sub5 ? String(row.sub5) : null,
+  };
+}
+function hasTrackingEvidence(row: any) {
+  const evidence = orderTrackingEvidence(row);
+  return Boolean(evidence.tkid || evidence.everflowTransactionId || evidence.affiliateId || evidence.sourceId || evidence.sub1 || evidence.sub2 || evidence.sub3 || evidence.sub4 || evidence.sub5);
+}
 function orderRow(row: any) {
   const id = String(row?.platform_order_id || row?.order_id || "");
+  const trackingEvidence = orderTrackingEvidence(row);
   return {
     id,
     number: String(row?.order_id || row?.platform_order_id || "Order"),
@@ -112,7 +131,43 @@ function orderRow(row: any) {
     refunded: /refund|return|void|chargeback/i.test(String(row?.status || "")),
     offerId: String(row?.offer_id || ""),
     offerName: row?.offer_id ? `Offer ${row.offer_id}` : "Offer evidence unavailable",
-    trackingHealth: "Unknown" as const,
+    trackingHealth: hasTrackingEvidence(row) ? "Healthy" as const : "Incomplete" as const,
+    trackingEvidence,
+  };
+}
+function orderEvidenceEvent(row: any): CustomerJourneyEvent {
+  const evidence = orderTrackingEvidence(row);
+  const evidenceLines = [
+    evidence.everflowTransactionId ? `Everflow transaction ID: ${evidence.everflowTransactionId}` : null,
+    evidence.tkid ? `TKID: ${evidence.tkid}` : null,
+    evidence.affiliateId ? `Affiliate ID: ${evidence.affiliateId}` : null,
+    evidence.sourceId ? `Source ID: ${evidence.sourceId}` : null,
+    ...(["sub1","sub2","sub3","sub4","sub5"] as const).map((key) => evidence[key] ? `${key}: ${evidence[key]}` : null),
+    row?.transaction_id ? `Commerce transaction ID: ${String(row.transaction_id)}` : null,
+  ].filter((value): value is string => Boolean(value));
+  return {
+    id: `order-evidence-${String(row?.platform_order_id || row?.order_id || "unknown")}`,
+    name: "Purchase observed",
+    timestamp: when(row?.created_at),
+    domain: String(row?.platform || "Commerce"),
+    role: "commerce",
+    status: "Observed",
+    confidence: "Observed provider evidence",
+    trackingHealth: evidenceLines.length ? "Healthy" : "Incomplete",
+    trackingStatus: evidenceLines.length ? "Tracking identifiers retained" : "Tracking identifiers missing",
+    originalUrl: "",
+    referrer: "",
+    destinationUrl: "",
+    queryParameters: {},
+    identifiers: [],
+    redirects: [],
+    diagnostics: evidenceLines.length ? [{ label: "Order-level tracking evidence", result: "Observed" }] : [{ label: "Order-level tracking evidence", result: "Missing" }],
+    relationships: [{ type: "Order", id: String(row?.platform_order_id || row?.order_id || ""), label: String(row?.order_id || row?.platform_order_id || "Order") }],
+    explanation: {
+      conclusion: `Commerce order ${String(row?.order_id || row?.platform_order_id || "")} was observed.`,
+      reason: evidenceLines.length ? "The commerce record retains acquisition/tracking identifiers even though a canonical Journey has not yet been materialized." : "The commerce record is linked to this customer, but no acquisition/tracking identifiers were retained on this order.",
+      evidence: evidenceLines.length ? evidenceLines : ["Linked by the production Customer Explorer commerce relationship."],
+    },
   };
 }
 
@@ -149,24 +204,33 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
     };
     const customer = summary(listLike, scope);
     const activity = Array.isArray(journeyDetail?.activity) ? journeyDetail.activity : Array.isArray(journeyDetail?.events) ? journeyDetail.events : [];
-    const story = activity.map((row: any) => mapEvent(row, journeyDetail?.identity_context));
-    const orders = (detail.orders || []).map(orderRow);
+    const canonicalStory = activity.map((row: any) => mapEvent(row, journeyDetail?.identity_context));
+    const rawOrders = Array.isArray(detail.orders) ? detail.orders : [];
+    const story = canonicalStory.length ? canonicalStory : rawOrders.map(orderEvidenceEvent).sort((a: CustomerJourneyEvent, b: CustomerJourneyEvent) => Date.parse(a.timestamp) - Date.parse(b.timestamp));
+    const orders = rawOrders.map(orderRow);
+    const trackedOrders = rawOrders.filter(hasTrackingEvidence);
     const acquisition = detail.customer_360?.acquisition || {};
-    const firstSource = acquisition?.first_attributed_source?.source || acquisition?.first_attributed_source?.affiliate_id;
+    const firstTrackedOrder = rawOrders.find(hasTrackingEvidence);
+    const firstSource = acquisition?.first_attributed_source?.source || acquisition?.first_attributed_source?.affiliate_id || firstTrackedOrder?.affiliate_id || firstTrackedOrder?.source_id;
+    customer.trackingHealth = canonicalStory.length ? customer.trackingHealth : trackedOrders.length ? "Incomplete" : "Unknown";
     return {
       customer,
       lifetimeRevenue: n(detail.summary?.lifetime_revenue),
       customerSince: when(detail.summary?.first_seen_at),
       firstTouch: firstSource ? String(firstSource) : "No retained attribution conclusion",
       lastPurchase: orders[0]?.date || "No linked purchase",
-      journeyId: String(selectedJourney?.id || "No canonical journey"),
+      journeyId: String(selectedJourney?.id || "Not materialized"),
       journey: story,
       orders,
       offers: [],
       privacySignals: [],
-      trackingExplanation: detail.customer_360?.evidence_limits?.length
-        ? String(detail.customer_360.evidence_limits.join(" "))
-        : story.length ? "Production Journey evidence is available. Inspect an event to review retained evidence." : "No canonical Journey events are available for this customer.",
+      trackingExplanation: canonicalStory.length
+        ? "Canonical Journey evidence is available. Inspect an event to review retained evidence."
+        : trackedOrders.length
+          ? `Canonical Journey not yet materialized. ${trackedOrders.length} of ${rawOrders.length} linked order(s) retain acquisition/tracking identifiers; the Customer Story is showing observed commerce evidence without inventing a canonical Journey.`
+          : detail.customer_360?.evidence_limits?.length
+            ? String(detail.customer_360.evidence_limits.join(" "))
+            : "No canonical Journey or retained order-level acquisition evidence is available for this customer.",
     };
   }
   async loadJourney(scope: ProductionCustomerScope, customerId: string) {
