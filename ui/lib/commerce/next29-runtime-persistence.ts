@@ -8,7 +8,8 @@ import { createNext29DisputePersistence } from "../../../api/src/connectors/next
 import type { Next29CanonicalExpansion } from "../../../api/src/connectors/next29/expansion.ts";
 import { CommercePersistenceError, commercePersistenceRequest as rawCommercePersistenceRequest } from "./supabase-control-repository";
 
-export type Next29RuntimeContext = { accountId:string; organizationId:string; connectionId:string; providerAccountId:string; environment:"production"; client:Next29Client; };
+export type Next29RuntimeScope = { organizationId:string; connectionId:string; providerAccountId:string; };
+export type Next29RuntimeContext = Next29RuntimeScope & { accountId:string; environment:"production"; client:Next29Client; };
 
 async function commercePersistenceRequest(path: string, init: RequestInit = {}) {
   try {
@@ -171,8 +172,8 @@ export function createNext29RuntimePersistence(context: Next29RuntimeContext) {
 
 function createRunClient(context: Next29RuntimeContext) {
   const methods = (resource: "orders" | "subscriptions" | "disputes") => ({
-    async createHistoricalRun(input: Scope) { return createRun(context, input, resource); },
-    async createSubscriptionRun(input: Scope) { return createRun(context, input, resource); },
+    async createHistoricalRun(input: Next29RuntimeScope) { return createRun(context, input, resource); },
+    async createSubscriptionRun(input: Next29RuntimeScope) { return createRun(context, input, resource); },
     async appendHistoricalCheckpoint(input: any) { await checkpoint(input, resource); },
     async appendSubscriptionCheckpoint(input: any) { await checkpoint(input, resource); },
     async finishHistoricalRun(input: any) { await finishRun(input, false); },
@@ -229,7 +230,7 @@ function createMappingClient(_context: Next29RuntimeContext) {
   };
 }
 
-async function createRun(context: Next29RuntimeContext, input: Scope, resource: string) {
+async function createRun(context: Next29RuntimeContext, input: Next29RuntimeScope, resource: string) {
   const rows = await commercePersistenceRequest("commerce_sync_runs", { method: "POST", body: JSON.stringify({
     organization_id: input.organizationId, connection_id: input.connectionId, provider_account_id: input.providerAccountId,
     sync_type: resource, mode: "historical_backfill", status: "running", started_at: new Date().toISOString(),
