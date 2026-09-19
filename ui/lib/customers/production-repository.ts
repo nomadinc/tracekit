@@ -222,7 +222,7 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
   }
   async search(scope: ProductionCustomerScope, query: string): Promise<CustomerSearchResult[]> {
     const rows = await this.listCustomers(scope, { query });
-    return rows.map((row) => ({ id: row.id, type: "customer", title: row.name, subtitle: row.journeyPreview, value: row.id, href: `/customers?v=1&customer_id=${encodeURIComponent(row.id)}` }));
+    return rows.map((row: CustomerSummary) => ({ id: row.id, type: "customer", title: row.name, subtitle: row.journeyPreview, value: row.id, href: `/customers?v=1&customer_id=${encodeURIComponent(row.id)}` }));
   }
   async resolveDeepLink(_scope: ProductionCustomerScope, state: CustomerDeepLinkState) { return state; }
 }
