@@ -253,10 +253,10 @@ function CustomerWorkspaceContent() {
             <div className="text-right">
               <p className="text-[9px] uppercase text-slate-400">Profit</p>
               <strong className="text-3xl">
-                {snapshot.customer.profit === null ? "Unavailable" : money(snapshot.customer.profit)}
+                {snapshot.customer.profitAvailable === false ? "Unavailable" : money(snapshot.customer.profit)}
               </strong>
               <p className="text-[10px] font-semibold">
-                {snapshot.customer.profitStatus}
+                {snapshot.customer.profitAvailable === false ? "No authoritative customer-profit read model" : snapshot.customer.profitStatus}
               </p>
             </div>
           </div>
@@ -521,7 +521,7 @@ function CustomerList({
           >
             <span className="flex justify-between">
               <strong className="text-xs">{c.name}</strong>
-              <strong className="text-xs">{c.profit === null ? "—" : money(c.profit)}</strong>
+              <strong className="text-xs">{c.profitAvailable === false ? "—" : money(c.profit)}</strong>
             </span>
             <p className="mt-1 text-[10px] text-slate-500">{c.lastActivity}</p>
             <p className="mt-1 text-[10px]">
