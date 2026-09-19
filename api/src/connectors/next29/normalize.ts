@@ -15,6 +15,7 @@ export type NormalizedNext29Order = {
   discountAmount: number | null;
   isTest: boolean;
   attribution: Record<string, string | null>;
+  transactionRelationships: Array<{ providerTransactionId: string; parentProviderTransactionId: string | null; type: string | null; status: string | null }>;
 };
 
 export function normalizeNext29Order(order: Next29Order): NormalizedNext29Order {
@@ -39,6 +40,7 @@ export function normalizeNext29Order(order: Next29Order): NormalizedNext29Order 
     discountAmount: decimal(order.total_discount),
     isTest: order.is_test === true,
     attribution: normalizeAttribution(order.attribution),
+    transactionRelationships: normalizeTransactionRelationships((order as Record<string, unknown>).transactions),
   };
 }
 
@@ -105,4 +107,21 @@ function optionalText(value: unknown) {
   if (typeof value !== "string" && typeof value !== "number") return null;
   const result = String(value).trim();
   return result || null;
+}
+
+
+function normalizeTransactionRelationships(value: unknown) {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return [];
+    const source = entry as Record<string, unknown>;
+    const providerTransactionId = optionalText(source.id);
+    if (!providerTransactionId) return [];
+    return [{
+      providerTransactionId,
+      parentProviderTransactionId: optionalText(source.parent_id),
+      type: optionalText(source.type),
+      status: optionalText(source.status),
+    }];
+  });
 }
