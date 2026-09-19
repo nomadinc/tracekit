@@ -104,8 +104,39 @@ async function writeOrders(request: PostgrestRequest, context: ConnectionContext
       }),
     });
 
+    await writeTransactionRelationships(request, context, proof, mapping.canonicalObjectId, order);
     await writeOrderLines(request, context, record, proof, mapping.canonicalObjectId, order.currency);
     await writeRefunds(request, context, record, proof, mapping.canonicalObjectId, order.currency, order.order_id);
+  }
+}
+
+async function writeTransactionRelationships(
+  request: PostgrestRequest,
+  context: ConnectionContext,
+  proof: ShopifyEvidence,
+  canonicalOrderId: string,
+  order: ReturnType<typeof normalizeShopifyOrderRecord>,
+) {
+  for (const relationship of order.transactionRelationships) {
+    await request("commerce_transaction_relationship_evidence?on_conflict=connection_id,provider_account_id,provider_transaction_id", {
+      method: "POST",
+      headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
+      body: JSON.stringify({
+        organization_id: context.organizationId,
+        connection_id: context.connectionId,
+        provider_account_id: context.providerAccountId,
+        canonical_order_id: canonicalOrderId,
+        evidence_id: proof.id,
+        provider: "shopify",
+        provider_order_id: order.provider_order_id,
+        provider_transaction_id: relationship.providerTransactionId,
+        parent_provider_transaction_id: null,
+        transaction_type: relationship.type,
+        transaction_status: relationship.status,
+        metadata: { provider: "shopify", relationship_source: "order.transactions", parentage: "not_supplied" },
+        updated_at: new Date().toISOString(),
+      }),
+    });
   }
 }
 
