@@ -17,10 +17,8 @@ export type ShopifyOrderDraft = {
   email: string | null;
   phone: string | null;
   transaction_id: string | null;
-  everflow_transaction_id: string | null;
-  everflow_offer_id: string | null;
-  affiliate_id: string | null;
   raw_json: Record<string, unknown>;
+  transactionRelationships: Array<{ providerTransactionId: string; parentProviderTransactionId: null; type: string | null; status: string | null }>;
 };
 
 export function normalizeShopifyOrderRecord(record: ShopifyPersistedRecord, shopDomain?: string | null): ShopifyOrderDraft {
@@ -32,19 +30,14 @@ export function normalizeShopifyOrderRecord(record: ShopifyPersistedRecord, shop
   const createdAt = iso(order.createdAt || order.processedAt || order.updatedAt, "Shopify order timestamp");
   const status = String(order.displayFinancialStatus || order.financialStatus || order.status || "UNKNOWN").toUpperCase();
   const cancelled = Boolean(order.cancelledAt);
-  const refunds = connectionNodes(order.refunds);
-  const currentTotal = money(order.currentTotalPriceSet ?? order.totalPriceSet ?? order.totalPrice);
-  const originalTotal = money(order.totalPriceSet ?? order.totalPrice);
-  const fullyRefunded = refunds.length > 0 && currentTotal !== null && originalTotal !== null && originalTotal > 0 && currentTotal <= 0;
-  const statusNorm = cancelled ? "CANCELLED" : fullyRefunded ? "REFUNDED" : normalizeFinancialStatus(status);
-  const total = currentTotal;
+  const statusNorm = cancelled ? "CANCELLED" : normalizeFinancialStatus(status);
+  const total = money(order.currentTotalPriceSet ?? order.totalPriceSet ?? order.totalPrice);
   const subtotal = money(order.currentSubtotalPriceSet ?? order.subtotalPriceSet ?? order.subtotalPrice);
   const shipping = money(order.currentTotalShippingPriceSet ?? order.totalShippingPriceSet ?? order.totalShippingPrice);
   const tax = money(order.currentTotalTaxSet ?? order.totalTaxSet ?? order.totalTax);
   const currency = currencyCode(order.currentTotalPriceSet ?? order.totalPriceSet ?? order.totalPrice, order.currencyCode || "USD");
   const transactions = connectionNodes(order.transactions);
   const sale = transactions.find((tx) => ["SALE", "CAPTURE"].includes(String(tx.kind || "").toUpperCase()) && String(tx.status || "").toUpperCase().startsWith("SUCCESS")) || transactions[0];
-  const attribution = shopifyJourneyAttribution(order.customerJourneySummary);
 
   return {
     platform: "shopify",
@@ -63,41 +56,89 @@ export function normalizeShopifyOrderRecord(record: ShopifyPersistedRecord, shop
     email: clean(order.email) || clean(order.customer?.email) || null,
     phone: clean(order.phone) || clean(order.customer?.phone) || clean(order.shippingAddress?.phone) || clean(order.billingAddress?.phone) || null,
     transaction_id: clean(sale?.id) || null,
-    everflow_transaction_id: attribution.transactionId,
-    everflow_offer_id: attribution.offerId,
-    affiliate_id: attribution.affiliateId,
     raw_json: order,
+    transactionRelationships: transactions.flatMap((tx) => {
+      const providerTransactionId = clean(tx?.id);
+      if (!providerTransactionId) return [];
+      return [{ providerTransactionId, parentProviderTransactionId: null, type: clean(tx?.kind) || null, status: clean(tx?.status) || null }];
+    }),
   };
 }
 
 export function normalizeShopifyProductRecord(record: ShopifyPersistedRecord) {
   if (record.resource !== "products") throw new Error("Shopify product normalization only accepts product records.");
   const product = record.payload as Record<string, any>;
-  return { provider_product_id: required(product.id, "Shopify product id"), title: clean(product.title) || "Unknown Shopify Product", description: clean(product.descriptionPlainSummary) || clean(product.description) || null, updated_at: record.providerUpdatedAt, variants: connectionNodes(product.variants).map((variant) => ({ provider_variant_id: required(variant.id, "Shopify variant id"), title: clean(variant.title) || null, sku: clean(variant.sku) || null, price: money(variant.price) })), raw_json: product };
+  return {
+    provider_product_id: required(product.id, "Shopify product id"),
+    title: clean(product.title) || "Unknown Shopify Product",
+    description: clean(product.descriptionPlainSummary) || clean(product.description) || null,
+    updated_at: record.providerUpdatedAt,
+    variants: connectionNodes(product.variants).map((variant) => ({
+      provider_variant_id: required(variant.id, "Shopify variant id"),
+      title: clean(variant.title) || null,
+      sku: clean(variant.sku) || null,
+      price: money(variant.price),
+    })),
+    raw_json: product,
+  };
 }
 
 export function normalizeShopifyCustomerRecord(record: ShopifyPersistedRecord) {
   if (record.resource !== "customers") throw new Error("Shopify customer normalization only accepts customer records.");
   const customer = record.payload as Record<string, any>;
   const name = [clean(customer.firstName), clean(customer.lastName)].filter(Boolean).join(" ");
-  return { provider_customer_id: required(customer.id, "Shopify customer id"), display_name: name || clean(customer.displayName) || null, email: clean(customer.email) || null, phone: clean(customer.phone) || null, updated_at: record.providerUpdatedAt, raw_json: customer };
-}
-
-function shopifyJourneyAttribution(summary: any) {
-  const last = summary?.lastVisit?.utmParameters;
-  const first = summary?.firstVisit?.utmParameters;
   return {
-    transactionId: clean(last?.term) || clean(first?.term) || null,
-    affiliateId: clean(last?.source) || clean(first?.source) || null,
-    offerId: clean(last?.campaign) || clean(first?.campaign) || null,
+    provider_customer_id: required(customer.id, "Shopify customer id"),
+    display_name: name || clean(customer.displayName) || null,
+    email: clean(customer.email) || null,
+    phone: clean(customer.phone) || null,
+    updated_at: record.providerUpdatedAt,
+    raw_json: customer,
   };
 }
 
-function normalizeFinancialStatus(value: string) { if (value.includes("REFUND")) return "REFUNDED"; if (value.includes("PAID")) return "COMPLETED"; if (value.includes("AUTHORIZED") || value.includes("PENDING")) return "PENDING"; if (value.includes("VOID") || value.includes("CANCEL")) return "CANCELLED"; return value || "UNKNOWN"; }
-function connectionNodes(value: any): any[] { if (Array.isArray(value)) return value; if (Array.isArray(value?.nodes)) return value.nodes.filter(Boolean); if (Array.isArray(value?.edges)) return value.edges.map((edge: any) => edge?.node).filter(Boolean); return []; }
-function money(value: any): number | null { const raw = value?.shopMoney?.amount ?? value?.presentmentMoney?.amount ?? value?.amount ?? value; if (raw === null || raw === undefined || raw === "") return null; const number = Number(raw); return Number.isFinite(number) ? number : null; }
-function currencyCode(value: any, fallback: string) { return String(value?.shopMoney?.currencyCode ?? value?.presentmentMoney?.currencyCode ?? value?.currencyCode ?? fallback).toUpperCase(); }
-function gidTail(value: string) { const parts = value.split("/").filter(Boolean); return parts.length ? parts[parts.length - 1] : value; }
-function clean(value: unknown) { return String(value ?? "").trim(); }
-function required(value: unknown, label: string) { const result = clean(value); if (!result) throw new Error(`${label} is required.`); return result; }
-function iso(value: unknown, label: string) { const date = new Date(String(value || "")); if (Number.isNaN(date.getTime())) throw new Error(`${label} is required.`); return date.toISOString(); }
+function normalizeFinancialStatus(value: string) {
+  if (value.includes("REFUND")) return "REFUNDED";
+  if (value.includes("PAID")) return "COMPLETED";
+  if (value.includes("AUTHORIZED") || value.includes("PENDING")) return "PENDING";
+  if (value.includes("VOID") || value.includes("CANCEL")) return "CANCELLED";
+  return value || "UNKNOWN";
+}
+
+function connectionNodes(value: any): any[] {
+  if (Array.isArray(value)) return value;
+  if (Array.isArray(value?.nodes)) return value.nodes.filter(Boolean);
+  if (Array.isArray(value?.edges)) return value.edges.map((edge: any) => edge?.node).filter(Boolean);
+  return [];
+}
+
+function money(value: any): number | null {
+  const raw = value?.shopMoney?.amount ?? value?.presentmentMoney?.amount ?? value?.amount ?? value;
+  if (raw === null || raw === undefined || raw === "") return null;
+  const number = Number(raw);
+  return Number.isFinite(number) ? number : null;
+}
+
+function currencyCode(value: any, fallback: string) {
+  return String(value?.shopMoney?.currencyCode ?? value?.presentmentMoney?.currencyCode ?? value?.currencyCode ?? fallback).toUpperCase();
+}
+
+function gidTail(value: string) {
+  return value.split("/").filter(Boolean).at(-1) || value;
+}
+
+function clean(value: unknown) {
+  return String(value ?? "").trim();
+}
+
+function required(value: unknown, label: string) {
+  const result = clean(value);
+  if (!result) throw new Error(`${label} is required.`);
+  return result;
+}
+
+function iso(value: unknown, label: string) {
+  const date = new Date(String(value || ""));
+  if (Number.isNaN(date.getTime())) throw new Error(`${label} is required.`);
+  return date.toISOString();
+}
