@@ -2,7 +2,7 @@ import "server-only";
 import { resolveApplicationSession } from "@/lib/identity/application-session";
 import { requirePermission } from "@/lib/identity/authorization-gateway";
 import { commercePersistenceRequest } from "./supabase-control-repository";
-import { COMMAS_CAPABILITIES, type ConnectionExperience, type SafeReadinessGate, type SafeSyncRun, type SyncFrequency } from "./integration-experience";
+import { COMMAS_CAPABILITIES, EVERFLOW_CAPABILITIES, SHOPIFY_CAPABILITIES, NEXT29_CAPABILITIES, type ConnectionExperience, type SafeReadinessGate, type SafeSyncRun, type SyncFrequency } from "./integration-experience";
 import { canManageTkidOrigins } from "@/lib/tkid/origin-authorization";
 
 type Row = Record<string, unknown>;
@@ -38,8 +38,8 @@ async function loadConnectionExperienceRow(organizationName: string, row: Row, c
   const id = String(row.id);
   const organizationId = String(row.organization_id);
   const provider = String(row.provider);
-  const scheduleResourceFilter = provider === "shopify" ? "resource=in.(products,customers,orders)" : provider === "everflow" ? "resource=eq.everflow_conversions" : "resource=eq.transactions";
-  const freshnessResource = provider === "everflow" ? "everflow_conversions" : "transactions";
+  const scheduleResourceFilter = provider === "shopify" ? "resource=in.(products,customers,orders)" : provider === "everflow" ? "resource=eq.everflow_conversions" : provider === "next29" ? "resource=in.(next29_orders,next29_subscriptions,next29_disputes)" : "resource=eq.transactions";
+  const freshnessResource = provider === "everflow" ? "everflow_conversions" : provider === "next29" ? "next29_orders" : "transactions";
   const [accounts, credentials, runs, activation, checkpoints, evidence, freshnessRows, schedules, controls, pauses, tkidSources] = await Promise.all([
     commercePersistenceRequest(`commerce_provider_accounts?connection_id=eq.${encodeURIComponent(id)}&organization_id=eq.${encodeURIComponent(organizationId)}&order=created_at.asc`),
     commercePersistenceRequest(`commerce_provider_credentials?connection_id=eq.${encodeURIComponent(id)}&organization_id=eq.${encodeURIComponent(organizationId)}&select=id,created_at,rotated_at,revoked_at,encryption_version&order=created_at.desc`),
@@ -102,7 +102,7 @@ async function loadConnectionExperienceRow(organizationName: string, row: Row, c
     id, provider, displayName: String(row.display_name), environment: String(row.environment), status: String(row.status), organizationName, syncFrequency, nextSyncAt,
     providerAccountLabel: accounts[0] ? String(accounts[0].provider_account_label || accounts[0].provider_account_external_id) : null,
     lastVerifiedAt: text(row.last_success_at), lastSyncAt: latest?.completedAt || latest?.startedAt || null,
-    capabilities: provider === "commas" ? COMMAS_CAPABILITIES : [], syncRuns,
+    capabilities: provider === "commas" ? COMMAS_CAPABILITIES : provider === "everflow" ? EVERFLOW_CAPABILITIES : provider === "shopify" ? SHOPIFY_CAPABILITIES : provider === "next29" ? NEXT29_CAPABILITIES : [], syncRuns,
     credential: activeCredential ? { status: "active", createdAt: text(activeCredential.created_at), rotatedAt: text(activeCredential.rotated_at), version: number(activeCredential.encryption_version) } : { status: credentials.length ? "revoked" : "missing", createdAt: null, rotatedAt: null, version: null },
     readiness, canManage,
     productionReadiness:{schedulerState:String(controls[0]?.activation_state||scheduleForSummary?.activation_state||"disabled") as ConnectionExperience["productionReadiness"]["schedulerState"],connectionPaused:Boolean(pauses[0]?.paused),quotaMinimumRemaining:scheduleForSummary?.quota_minimum_remaining==null?null:number(scheduleForSummary.quota_minimum_remaining),deepRequestBudget:scheduleForSummary?.deep_request_budget==null?null:number(scheduleForSummary.deep_request_budget),blockers:[...(!controls.length?["Production control not configured"]:[]),...(!schedules.length?["Schedule policy not configured"]:[]),...(Boolean(pauses[0]?.paused)?["Connection paused"]:[])]},
