@@ -73,6 +73,24 @@ export function createNext29RuntimePersistence(context: Next29RuntimeContext) {
     async upsertOrderLines(input) { await upsertOrderLines(context, input.canonicalOrderId, input.evidenceId, input.expansion); },
     async upsertCustomerIdentity(input) { await upsertCustomer(context, input.evidenceId, input.expansion); },
     async upsertTransactions(input) { await upsertTransactions(context, input.canonicalOrderId, input.expansion); },
+    async upsertTransactionRelationships(input) {
+      for (const relationship of input.relationships) {
+        await upsertComposite("commerce_transaction_relationship_evidence", "connection_id,provider_account_id,provider_transaction_id", {
+          organization_id: input.organizationId,
+          connection_id: input.connectionId,
+          provider_account_id: input.providerAccountId,
+          canonical_order_id: input.canonicalOrderId,
+          evidence_id: input.evidenceId,
+          provider: "next29",
+          provider_order_id: input.providerOrderId,
+          provider_transaction_id: relationship.providerTransactionId,
+          parent_provider_transaction_id: relationship.parentProviderTransactionId,
+          transaction_type: relationship.type,
+          transaction_status: relationship.status,
+          metadata: { provider: "next29", relationship_source: "order.transactions.parent_id" },
+        });
+      }
+    },
     async upsertRefunds(input) { await upsertRefunds(context, input.canonicalOrderId, input.evidenceId, input.expansion); },
   });
 

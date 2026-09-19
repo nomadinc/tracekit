@@ -45,6 +45,7 @@ export type Next29CommerceRepositoryClient = {
   upsertCustomerIdentity(input: ExpansionWriteInput): Promise<void>;
   upsertTransactions(input: ExpansionWriteInput): Promise<void>;
   upsertRefunds(input: ExpansionWriteInput): Promise<void>;
+  upsertTransactionRelationships(input: Next29HistoricalScope & { canonicalOrderId: string; providerOrderId: string; evidenceId: string; relationships: NormalizedNext29Order["transactionRelationships"] }): Promise<void>;
 };
 
 export function createNext29HistoricalPersistence(client: Next29CommerceRepositoryClient): Next29HistoricalPersistence {
@@ -100,6 +101,15 @@ export function createNext29HistoricalPersistence(client: Next29CommerceReposito
       await client.upsertOrderLines(expansionInput);
       await client.upsertCustomerIdentity(expansionInput);
       await client.upsertTransactions(expansionInput);
+      await client.upsertTransactionRelationships({
+        organizationId: input.organizationId,
+        connectionId: input.connectionId,
+        providerAccountId: input.providerAccountId,
+        canonicalOrderId: mapping.canonicalObjectId,
+        providerOrderId: input.normalized.sourceObjectId,
+        evidenceId: evidence.evidenceId,
+        relationships: input.normalized.transactionRelationships,
+      });
       await client.upsertRefunds(expansionInput);
     },
 
