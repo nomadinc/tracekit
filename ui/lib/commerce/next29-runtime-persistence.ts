@@ -8,6 +8,8 @@ import { createNext29DisputePersistence } from "../../../api/src/connectors/next
 import type { Next29CanonicalExpansion } from "../../../api/src/connectors/next29/expansion.ts";
 import { CommercePersistenceError, commercePersistenceRequest as rawCommercePersistenceRequest } from "./supabase-control-repository";
 
+const MAX_RECORDS = 50;
+
 export type Next29RuntimeScope = { organizationId:string; connectionId:string; providerAccountId:string; };
 export type Next29RuntimeContext = Next29RuntimeScope & { accountId:string; environment:"production"; client:Next29Client; };
 
@@ -112,7 +114,7 @@ export function createNext29RuntimePersistence(context: Next29RuntimeContext) {
         organization_id: input.organizationId, account_id: context.accountId, connection_id: input.connectionId, provider_account_id: input.providerAccountId,
         provider: "next29", provider_dispute_id: input.providerDisputeId, source_kind: "api", provider_event_id: null,
         evidence_id: input.evidenceId, payload_hash: input.payloadHash, observed_at: input.observedAt,
-        source_created_at: input.sourceCreatedAt, source_updated_at: input.sourceUpdatedAt, metadata: { provider: "next29", production_certification: true },
+        source_created_at: input.sourceCreatedAt, source_updated_at: input.sourceUpdatedAt, metadata: { provider: "next29", runtime: "production" },
       }) });
       return { observationId: String(rows[0].id) };
     },
@@ -195,7 +197,7 @@ function createEvidenceClient(_context: Next29RuntimeContext) {
       storage_backend: "object_storage", storage_reference: input.storageReference, content_type: "application/json", byte_size: input.byteSize,
       source_updated_at: input.sourceUpdatedAt || null, observed_at: new Date().toISOString(), normalizer_version: normalizerVersion,
       mapping_version: mappingVersion, pii_classification: "sensitive", retention_policy: "commerce_evidence_default",
-      metadata: { provider: "next29", production_certification: true },
+      metadata: { provider: "next29", runtime: "production" },
     }) });
     return { evidenceId: String(rows[0].id) };
   };
@@ -220,7 +222,7 @@ function createMappingClient(_context: Next29RuntimeContext) {
       organization_id: input.organizationId, connection_id: input.connectionId, provider_account_id: input.providerAccountId,
       source_object_type: sourceObjectType, source_object_id: input.sourceObjectId, canonical_object_type: canonicalObjectType,
       canonical_object_id: canonicalObjectId, first_seen_at: now, last_seen_at: now, source_updated_at: input.sourceUpdatedAt || null,
-      payload_hash: input.payloadHash, mapping_version: input.mappingVersion, state: "active", metadata: { provider: "next29", production_certification: true },
+      payload_hash: input.payloadHash, mapping_version: input.mappingVersion, state: "active", metadata: { provider: "next29", runtime: "production" },
     }) });
     return { id: String(rows[0].id), canonicalObjectId };
   };
@@ -234,7 +236,7 @@ async function createRun(context: Next29RuntimeContext, input: Next29RuntimeScop
   const rows = await commercePersistenceRequest("commerce_sync_runs", { method: "POST", body: JSON.stringify({
     organization_id: input.organizationId, connection_id: input.connectionId, provider_account_id: input.providerAccountId,
     sync_type: resource, mode: "historical_backfill", status: "running", started_at: new Date().toISOString(),
-    metadata: { provider: "next29", production_certification: true, validation_environment: context.environment, max_pages: 1, max_records: MAX_RECORDS },
+    metadata: { provider: "next29", runtime: "production", max_pages: 1, max_records: MAX_RECORDS },
   }) });
   return { id: String(rows[0].id) };
 }
@@ -245,7 +247,7 @@ async function checkpoint(input: any, resource: string) {
     sync_run_id: input.syncRunId, organization_id: input.organizationId, connection_id: input.connectionId, provider_account_id: input.providerAccountId,
     resource, page, per_page: MAX_RECORDS, state: "completed", completed_at: new Date().toISOString(),
     last_source_id: input.checkpoint?.lastSourceObjectId || null,
-    metadata: { provider: "next29", next_cursor_present: Boolean(input.checkpoint?.next), records_seen: Number(input.recordsSeen || 0), production_certification: true },
+    metadata: { provider: "next29", next_cursor_present: Boolean(input.checkpoint?.next), records_seen: Number(input.recordsSeen || 0), runtime: "production" },
   };
   await upsertComposite("commerce_sync_checkpoints", "sync_run_id,resource,page,per_page", body);
 }
@@ -260,7 +262,7 @@ async function finishRun(input: any, failed: boolean) {
     body.last_error_code = "next29_live_validation_failed";
     body.last_error_summary = safeError(input.error);
   } else {
-    body.metadata = { provider: "next29", production_certification: true, has_more: Boolean(input.hasMore) };
+    body.metadata = { provider: "next29", runtime: "production", has_more: Boolean(input.hasMore) };
   }
   await commercePersistenceRequest(`commerce_sync_runs?id=eq.${encodeURIComponent(input.syncRunId)}&organization_id=eq.${encodeURIComponent(input.organizationId)}&connection_id=eq.${encodeURIComponent(input.connectionId)}`, { method: "PATCH", body: JSON.stringify(body) });
 }
