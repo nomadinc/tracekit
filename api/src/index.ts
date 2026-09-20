@@ -990,6 +990,12 @@ async function handleCommasAttributionWebhookPayload(raw: Uint8Array, payload: u
   const {data:recorded,error:recordError}=await db.rpc("record_commas_provider_attribution_observation_v1",{p_organization_id:connection.organization_id,p_connection_id:connection.id,p_provider_account_id:providerAccountId,p_evidence_id:evidenceId,p_provider_event_id:normalized.providerEventId,p_provider_event_type:normalized.eventType,p_payload_hash:payloadHash,p_provider_created_at:normalized.providerCreatedAt,p_payment_public_transaction_id:normalized.paymentPublicTransactionId,p_payment_identity_state:normalized.paymentIdentityState,p_subscription_provider_id:normalized.subscriptionProviderId,p_parameters:parameters,p_everflow_comparison:comparison});
   if(recordError)return json({ok:false,error:"attribution_projection_failed"},503);
   const result=Array.isArray(recorded)?recorded[0]:recorded;
+  if(result?.journey_event_created){
+    const {data:createdJourneyEvents,error:journeyEventError}=await db.from("journey_events").select(JOURNEY_EVENT_ASSIGNMENT_SELECT).eq("workspace_id",String(connection.organization_id)).eq("source_platform","commas").eq("source_connector","commas_provider_observed_checkout").eq("source_record_id",normalized.providerEventId).eq("event_type","purchase").limit(1);
+    if(journeyEventError)return json({ok:false,error:"journey_assignment_lookup_failed"},503);
+    const assignment=await assignCanonicalJourneyEvents(env,createdJourneyEvents||[],{source:"provider_observed_checkout"});
+    if(!assignment.ok||assignment.records_failed)return json({ok:false,error:"journey_assignment_failed"},503);
+  }
   console.log("[TraceKit] Commas provider attribution observed",{event:"commerce.provider_attribution.observed",event_type:normalized.eventType,match_state:result?.match_state||"unknown",alias_state:p.aliasState,payload_conflict:Boolean(result?.payload_conflict)});
   return json({ok:true,status:"accepted",duplicate:Boolean(result?.replayed),payload_conflict:Boolean(result?.payload_conflict),match_state:result?.match_state||"unknown",shadow:true},200);
 }
