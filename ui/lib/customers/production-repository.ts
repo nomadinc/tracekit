@@ -149,15 +149,18 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
     };
     const customer = summary(listLike, scope);
     const activity = Array.isArray(journeyDetail?.activity) ? journeyDetail.activity : Array.isArray(journeyDetail?.events) ? journeyDetail.events : [];
-    const story = activity.map((row: any) => mapEvent(row, journeyDetail?.identity_context));
+    const timeline = Array.isArray(journeyDetail?.events) ? journeyDetail.events : [];
+    const story = timeline.length ? timeline.map((row: any) => mapEvent(row, journeyDetail?.identity_context)) : activity.map((row: any) => mapEvent(row, journeyDetail?.identity_context));
     const orders = (detail.orders || []).map(orderRow);
     const acquisition = detail.customer_360?.acquisition || {};
-    const firstSource = acquisition?.first_attributed_source?.source || acquisition?.first_attributed_source?.affiliate_id;
+    const attribution = Array.isArray(journeyDetail?.attribution) ? journeyDetail.attribution : [];
+    const firstCredit = attribution.find((credit: any) => credit?.status === "attributed" && credit?.model === "first_touch") || attribution.find((credit: any) => credit?.status === "attributed");
+    const firstSource = acquisition?.first_attributed_source?.source || acquisition?.first_attributed_source?.affiliate_id || firstCredit?.source || firstCredit?.affiliate_id;
     return {
       customer,
       lifetimeRevenue: n(detail.summary?.lifetime_revenue),
       customerSince: when(detail.summary?.first_seen_at),
-      firstTouch: firstSource ? String(firstSource) : "No retained attribution conclusion",
+      firstTouch: firstSource ? (firstCredit?.affiliate_id && !firstCredit?.source ? `Affiliate ${firstCredit.affiliate_id}${firstCredit.offer_id ? ` · Offer ${firstCredit.offer_id}` : ""}` : String(firstSource)) : "No retained attribution conclusion",
       lastPurchase: orders[0]?.date || "No linked purchase",
       journeyId: String(selectedJourney?.id || "No canonical journey"),
       journey: story,
