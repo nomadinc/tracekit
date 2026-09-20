@@ -3,6 +3,8 @@
 // Integrations: CheckoutChamp/Konnektive + WOWSuite (WowBoost + WowPay umbrella)
 
 import { createClient } from "@supabase/supabase-js";
+import { queryCheckoutChampTransactions } from "./connectors/checkoutchamp/client";
+import { createCheckoutChampTransactionEvidenceStore } from "./connectors/checkoutchamp/evidence-store";
 import {
   decryptIntegrationSecretFromRow,
   encryptIntegrationSecret,
@@ -9475,6 +9477,38 @@ async function insertCheckoutChampLedgerEvents(env: Env, rows: any[]) {
     rollup_orders_refreshed: rollup.orders_refreshed,
     rollup_daily_refreshed: rollup.daily_refreshed,
     rollup_warnings: rollup.warnings,
+  };
+}
+
+async function runCheckoutChampTransactionEvidenceImport(env: Env, args: { from: string; to: string; page?: number; pageSize?: number }) {
+  const creds = await getLatestCredential(env, "checkoutchamp");
+  if (!creds) throw new Error("CheckoutChamp/Konnektive not connected.");
+  const credential = {
+    baseUrl: String(creds.base_url || env.DEFAULT_CC_BASE || DEFAULT_CC_BASE).replace(/\/+$/, ""),
+    loginId: String(creds.username || "").trim(),
+    password: await decryptSecretFromCredRow(env, creds),
+  };
+  const result = await queryCheckoutChampTransactions(credential, {
+    from: args.from, to: args.to, page: args.page || 1, resultsPerPage: Math.min(200, Math.max(1, args.pageSize || 50)),
+  });
+  const persist = createCheckoutChampTransactionEvidenceStore({ url: env.SUPABASE_URL, serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY });
+  const scope = checkoutChampCoreScope();
+  let persisted = 0;
+  for (const transaction of result.normalized) { await persist(scope, transaction); persisted += 1; }
+  return {
+    fetched: result.raw.length, normalized: result.normalized.length, persisted, total_results: result.totalResults,
+    parent_transaction_count: result.normalized.filter((row:any) => Boolean(row.parentProviderTransactionId)).length,
+    explicit_everflow_count: result.normalized.filter((row:any) => Boolean(row.attribution.explicitEverflowTransactionId)).length,
+    custom1_count: result.normalized.filter((row:any) => Boolean(row.attribution.custom1)).length,
+    custom2_count: result.normalized.filter((row:any) => Boolean(row.attribution.custom2)).length,
+  };
+}
+
+function checkoutChampCoreScope() {
+  return {
+    organizationId: String(globalThis.process?.env?.CHECKOUTCHAMP_CORE_ORGANIZATION_ID || "").trim(),
+    connectionId: String(globalThis.process?.env?.CHECKOUTCHAMP_CORE_CONNECTION_ID || "").trim(),
+    providerAccountId: String(globalThis.process?.env?.CHECKOUTCHAMP_CORE_PROVIDER_ACCOUNT_ID || "").trim(),
   };
 }
 
@@ -20097,6 +20131,15 @@ if (path === "/v1/product-costs/rules/delete" && req.method === "POST") {
     if (error) throw new Error(error.message);
 
     return json({ ok: true, message: "Settings saved." });
+  }
+
+  if (path === "/v1/integrations/checkoutchamp/import-transactions-evidence" && req.method === "POST") {
+    const body = await readJsonBody(req);
+    const from = String(body.from ?? "").trim();
+    const to = String(body.to ?? "").trim();
+    if (!parseYmd(from) || !parseYmd(to)) return json({ ok:false,error:"bad_request",message:"from/to must be YYYY-MM-DD" },400);
+    const result = await runCheckoutChampTransactionEvidenceImport(env, { from, to, page: Math.max(1,Number(body.page||1)||1), pageSize: Math.min(200,Math.max(1,Number(body.page_size||50)||50)) });
+    return json({ ok:true,platform:"checkoutchamp",resource:"transactions_evidence",from,to,...result });
   }
 
   if ((path === "/v1/integrations/checkoutchamp/import-orders" || path === "/v1/integrations/checkoutchamp/run-now") && req.method === "POST") {
