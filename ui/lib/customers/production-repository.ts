@@ -63,6 +63,13 @@ function mapEvent(row: any, identity: any): CustomerJourneyEvent {
   const tech = row?.technical_evidence || row?.technical || {};
   const display = row?.display_fields || {};
   const explanation = row?.explanation || {};
+  const attributionEvidence = [
+    row?.transaction_id ? `Transaction ID: ${row.transaction_id}` : null,
+    row?.affiliate_id ? `Affiliate ID: ${row.affiliate_id}` : null,
+    row?.offer_id ? `Offer ID: ${row.offer_id}` : null,
+    row?.source ? `Source: ${row.source}` : null,
+    row?.medium ? `Medium: ${row.medium}` : null,
+  ].filter((value): value is string => Boolean(value));
   const identifiers = Array.isArray(identity?.identifiers) ? identity.identifiers.map((i: any) => ({
     id: String(i.id || i.type || "identifier"),
     type: String(i.type || i.identifier_type || "Identifier"),
@@ -94,7 +101,7 @@ function mapEvent(row: any, identity: any): CustomerJourneyEvent {
     explanation: {
       conclusion: String(row?.summary || row?.title || "Evidence recorded."),
       reason: String(explanation?.reason || explanation?.fallback_reason || "Retained production evidence."),
-      evidence: Object.entries(tech).filter(([,v]) => v !== null && v !== undefined && typeof v !== "object").map(([k,v]) => `${k}: ${String(v)}`).slice(0, 12),
+      evidence: [...attributionEvidence, ...Object.entries(tech).filter(([,v]) => v !== null && v !== undefined && typeof v !== "object").map(([k,v]) => `${k}: ${String(v)}`)].slice(0, 12),
     },
   };
 }
