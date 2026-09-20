@@ -1,4 +1,5 @@
 import { CommasClient } from "../../api/src/connectors/commas/client.ts";
+import { auditCommasRawTransaction } from "../../api/src/connectors/commas/raw-evidence-audit.ts";
 import { decodeCommerceCredentialKey, decryptCommerceCredential } from "../lib/commerce/credential-crypto";
 import { normalizeCommasTransaction } from "../lib/commerce/commas-shadow-normalizer";
 import { SupabaseCommerceEvidenceStore } from "../lib/commerce/supabase-evidence-store-core";
@@ -68,6 +69,7 @@ async function main() {
   const selected = selectBoundedTransactions(items, args);
   if (selected.length > HARD_TRANSACTION_MAX) throw new Error("Selected transaction count exceeds the hard maximum.");
   console.log(JSON.stringify({ event: "bounded_preflight", sourceTransactions: selected.length, providerPagesFetched: 1 }));
+  console.log(JSON.stringify({ event: "raw_transaction_evidence_audit", observations: selected.map((transaction) => auditCommasRawTransaction(jsonObject(transaction))) }));
   const run = (await db("commerce_sync_runs", { method: "POST", body: JSON.stringify({ organization_id: selectedScope.organizationId, connection_id: selectedScope.connectionId, provider_account_id: selectedScope.providerAccountId, sync_type: "bounded_transaction_validation", mode: "shadow", metadata: { validation: "commas_bounded_shadow", selected_count: selected.length, historical_checkpoint_advanced: false } }) }, true))[0];
   const store = new SupabaseCommerceEvidenceStore(); let created = 0;
   for (const transaction of selected) {
