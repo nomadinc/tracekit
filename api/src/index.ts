@@ -209,6 +209,7 @@ import {
   JOURNEY_ASSIGNMENT_MAX_BATCH_SIZE,
   JOURNEY_DEFAULT_TIMEOUT_SECONDS,
   assignJourneyEvents,
+  assignResolvedJourneyEvents,
   createSupabaseJourneyRepository,
   decodeJourneyBackfillCursor as decodeJourneyAssignmentBackfillCursor,
   decodeJourneyListCursor,
@@ -2634,6 +2635,22 @@ function domainEventOutboxPublisher(env: Env) {
   return async (event: any) => {
     await publishDomainEventOutbox(supabase, event);
   };
+}
+
+async function assignCanonicalJourneyEvents(env: Env, events: any[], args: { source?: string } = {}) {
+  const eligible = (events || []).filter((event: any) => String(event?.person_id || "").trim() && !String(event?.journey_id || "").trim());
+  if (!eligible.length) return { ok: true, events_scanned: 0, events_linked: 0, journeys_created: 0, records_failed: 0 };
+  const result = await assignResolvedJourneyEvents(getJourneyRepository(env), eligible as any, {
+    timeout_seconds: JOURNEY_DEFAULT_TIMEOUT_SECONDS,
+  });
+  console.log("[TraceKit] canonical journey assignment", {
+    source: args.source || "journey_event_persistence",
+    events_scanned: result.events_scanned,
+    events_linked: result.events_linked,
+    journeys_created: result.journeys_created,
+    records_failed: result.records_failed,
+  });
+  return result;
 }
 
 async function publishJourneyPurchaseDomainEvents(env: Env, events: any[], args: { job_id?: string | null; source?: string; project_inline?: boolean } = {}) {
