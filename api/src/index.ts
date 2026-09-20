@@ -9492,7 +9492,7 @@ async function runCheckoutChampTransactionEvidenceImport(env: Env, args: { from:
     from: args.from, to: args.to, page: args.page || 1, resultsPerPage: Math.min(200, Math.max(1, args.pageSize || 50)),
   });
   const persist = createCheckoutChampTransactionEvidenceStore({ url: env.SUPABASE_URL, serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY });
-  const scope = checkoutChampCoreScope();
+  const scope = await checkoutChampCoreScope(env);
   let persisted = 0;
   for (const transaction of result.normalized) { await persist(scope, transaction); persisted += 1; }
   return {
@@ -9504,11 +9504,34 @@ async function runCheckoutChampTransactionEvidenceImport(env: Env, args: { from:
   };
 }
 
-function checkoutChampCoreScope() {
+async function checkoutChampCoreScope(env: Env) {
+  const supabase = getSupabase(env);
+  const { data: connections, error: connectionError } = await supabase
+    .from("commerce_provider_connections")
+    .select("id,organization_id")
+    .eq("provider", "checkoutchamp")
+    .eq("status", "connected")
+    .limit(2);
+  if (connectionError) throw new Error(`Checkout Champ Core connection lookup failed: ${connectionError.message}`);
+  if (!connections?.length) throw new Error("Checkout Champ Core connection is unavailable.");
+  if (connections.length !== 1) throw new Error("Checkout Champ Core connection lookup is ambiguous.");
+
+  const connection = connections[0] as any;
+  const { data: accounts, error: accountError } = await supabase
+    .from("commerce_provider_accounts")
+    .select("id")
+    .eq("organization_id", connection.organization_id)
+    .eq("connection_id", connection.id)
+    .eq("status", "active")
+    .limit(2);
+  if (accountError) throw new Error(`Checkout Champ Core provider account lookup failed: ${accountError.message}`);
+  if (!accounts?.length) throw new Error("Checkout Champ Core provider account is unavailable.");
+  if (accounts.length !== 1) throw new Error("Checkout Champ Core provider account lookup is ambiguous.");
+
   return {
-    organizationId: String(globalThis.process?.env?.CHECKOUTCHAMP_CORE_ORGANIZATION_ID || "").trim(),
-    connectionId: String(globalThis.process?.env?.CHECKOUTCHAMP_CORE_CONNECTION_ID || "").trim(),
-    providerAccountId: String(globalThis.process?.env?.CHECKOUTCHAMP_CORE_PROVIDER_ACCOUNT_ID || "").trim(),
+    organizationId: String(connection.organization_id),
+    connectionId: String(connection.id),
+    providerAccountId: String((accounts[0] as any).id),
   };
 }
 
