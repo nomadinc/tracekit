@@ -186,6 +186,7 @@ import {
   JOURNEY_EVENTS_BACKFILL_PHASE,
   JOURNEY_EVENTS_CONNECTOR_ID,
   JOURNEY_EVENTS_PLATFORM_ORDER_SELECT,
+  createJourneyEvent,
   createJourneyEventsBatch,
   createSupabaseJourneyEventRepository,
   getPersonTimeline,
@@ -2657,6 +2658,83 @@ async function assignCanonicalJourneyEvents(env: Env, events: any[], args: { sou
     records_failed: result.records_failed,
   });
   return result;
+}
+
+async function projectEverflowAcquisitionForTransaction(env: Env, args: {
+  organization_id: string;
+  transaction_id: string;
+}) {
+  const db = getSupabase(env);
+  const { data: observations, error: observationError } = await db.from("commerce_provider_attribution_observations")
+    .select("person_id,canonical_order_id")
+    .eq("organization_id", args.organization_id)
+    .eq("match_state", "exact")
+    .eq("everflow_comparison_state", "exact_match")
+    .or(`ef_transaction_id.eq.${args.transaction_id},transaction_id.eq.${args.transaction_id},tid.eq.${args.transaction_id},c1.eq.${args.transaction_id}`)
+    .not("person_id", "is", null)
+    .limit(3);
+  if (observationError) throw new Error(`Everflow acquisition relationship lookup failed: ${observationError.message}`);
+  const people = Array.from(new Set((observations || []).map((row: any) => String(row.person_id || "")).filter(Boolean)));
+  if (people.length !== 1) return { status: people.length ? "ambiguous_relationship" : "unresolved_relationship", event: null };
+
+  const { data: clicks, error: clickError } = await db.from("everflow_click_events")
+    .select("id,organization_id,transaction_id,click_at,source_id,affiliate_id,offer_id,sub1,sub2,sub3,sub4,sub5,session_id,query_parameters")
+    .eq("organization_id", args.organization_id)
+    .eq("transaction_id", args.transaction_id)
+    .order("click_at", { ascending: true })
+    .limit(2);
+  if (clickError) throw new Error(`Everflow click lookup failed: ${clickError.message}`);
+  if (!clicks?.length) return { status: "click_not_observed", event: null };
+  if (clicks.length > 1) return { status: "ambiguous_click", event: null };
+  const click: any = clicks[0];
+  const result = await createJourneyEvent(getJourneyEventRepository(env), {
+    workspace_id: args.organization_id,
+    person_id: people[0],
+    session_id: click.session_id || null,
+    event_type: "affiliate_click",
+    event_time: click.click_at,
+    source_platform: "everflow",
+    source_connector: "everflow_firehose_acquisition_projection",
+    source_record_id: String(click.id),
+    affiliate_id: click.affiliate_id,
+    offer_id: click.offer_id,
+    source: click.source_id,
+    sub1: click.sub1,
+    sub2: click.sub2,
+    sub3: click.sub3,
+    sub4: click.sub4,
+    sub5: click.sub5,
+    transaction_id: click.transaction_id,
+    metadata: {
+      provenance: "everflow_click_event",
+      relationship: "deterministic_provider_observed_exact_match",
+      query_parameters: click.query_parameters || {},
+    },
+  });
+  if (result.event) {
+    const { data: purchaseEvents, error: purchaseError } = await db.from("journey_events")
+      .select(JOURNEY_EVENT_ASSIGNMENT_SELECT)
+      .eq("workspace_id", args.organization_id)
+      .eq("person_id", people[0])
+      .not("journey_id", "is", null)
+      .in("event_type", ["purchase","upsell","subscription_started","subscription_renewed"])
+      .gte("event_time", click.click_at)
+      .order("event_time", { ascending: true })
+      .limit(2);
+    if (purchaseError) throw new Error(`Everflow acquisition conversion Journey lookup failed: ${purchaseError.message}`);
+    const purchaseJourneyIds = Array.from(new Set((purchaseEvents || []).map((event: any) => String(event.journey_id || "")).filter(Boolean)));
+    if (purchaseJourneyIds.length === 1) {
+      const { error: assignError } = await db.from("journey_events").update({ journey_id: purchaseJourneyIds[0], updated_at: new Date().toISOString() }).eq("id", result.event.id).is("journey_id", null);
+      if (assignError) throw new Error(`Everflow acquisition Journey linkage failed: ${assignError.message}`);
+      result.event.journey_id = purchaseJourneyIds[0];
+    } else if (!purchaseJourneyIds.length) {
+      const assignment = await assignCanonicalJourneyEvents(env, [result.event], { source: "everflow_acquisition_projection" });
+      if (!assignment.ok || assignment.records_failed) throw new Error("Everflow acquisition Journey assignment failed.");
+    } else {
+      return { status: "ambiguous_journey_relationship", event: result.event };
+    }
+  }
+  return { status: result.status, event: result.event };
 }
 
 async function publishJourneyPurchaseDomainEvents(env: Env, events: any[], args: { job_id?: string | null; source?: string; project_inline?: boolean } = {}) {
@@ -22859,6 +22937,19 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 		        }
 		        metric("processed");
 		        metric("processed", outcome.scope);
+		        const firehosePayload = body.payload && typeof body.payload === "object" ? body.payload as Record<string, any> : {};
+		        const firehoseTransactionId = String(firehosePayload.transaction_id || "").trim();
+		        if (firehoseTransactionId && (body.event_type === "click" || body.event_type === "conversion" || body.event_type === "conversion_update")) {
+		          const projection = await projectEverflowAcquisitionForTransaction(env, {
+		            organization_id: outcome.scope.organization_id,
+		            transaction_id: firehoseTransactionId,
+		          });
+		          console.log("[TraceKit] Everflow acquisition Journey projection", {
+		            event_type: body.event_type,
+		            status: projection.status,
+		            transaction_id_present: true,
+		          });
+		        }
 		        msg.ack();
 		      } catch (error) {
 		        const routingUnavailable = error instanceof EverflowRoutingUnavailableError;
