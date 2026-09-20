@@ -2659,6 +2659,64 @@ async function assignCanonicalJourneyEvents(env: Env, events: any[], args: { sou
   return result;
 }
 
+async function projectEverflowAcquisitionForTransaction(env: Env, args: {
+  organization_id: string;
+  transaction_id: string;
+}) {
+  const db = getSupabase(env);
+  const { data: observations, error: observationError } = await db.from("commerce_provider_attribution_observations")
+    .select("person_id,canonical_order_id")
+    .eq("organization_id", args.organization_id)
+    .eq("match_state", "exact")
+    .eq("everflow_comparison_state", "exact_match")
+    .or(`ef_transaction_id.eq.${args.transaction_id},transaction_id.eq.${args.transaction_id},tid.eq.${args.transaction_id},c1.eq.${args.transaction_id}`)
+    .not("person_id", "is", null)
+    .limit(3);
+  if (observationError) throw new Error(`Everflow acquisition relationship lookup failed: ${observationError.message}`);
+  const people = Array.from(new Set((observations || []).map((row: any) => String(row.person_id || "")).filter(Boolean)));
+  if (people.length !== 1) return { status: people.length ? "ambiguous_relationship" : "unresolved_relationship", event: null };
+
+  const { data: clicks, error: clickError } = await db.from("everflow_click_events")
+    .select("id,organization_id,transaction_id,click_at,source_id,affiliate_id,offer_id,sub1,sub2,sub3,sub4,sub5,session_id,query_parameters")
+    .eq("organization_id", args.organization_id)
+    .eq("transaction_id", args.transaction_id)
+    .order("click_at", { ascending: true })
+    .limit(2);
+  if (clickError) throw new Error(`Everflow click lookup failed: ${clickError.message}`);
+  if (!clicks?.length) return { status: "click_not_observed", event: null };
+  if (clicks.length > 1) return { status: "ambiguous_click", event: null };
+  const click: any = clicks[0];
+  const result = await createJourneyEvent(getJourneyEventRepository(env), {
+    workspace_id: args.organization_id,
+    person_id: people[0],
+    session_id: click.session_id || null,
+    event_type: "affiliate_click",
+    event_time: click.click_at,
+    source_platform: "everflow",
+    source_connector: "everflow_firehose_acquisition_projection",
+    source_record_id: String(click.id),
+    affiliate_id: click.affiliate_id,
+    offer_id: click.offer_id,
+    source: click.source_id,
+    sub1: click.sub1,
+    sub2: click.sub2,
+    sub3: click.sub3,
+    sub4: click.sub4,
+    sub5: click.sub5,
+    transaction_id: click.transaction_id,
+    metadata: {
+      provenance: "everflow_click_event",
+      relationship: "deterministic_provider_observed_exact_match",
+      query_parameters: click.query_parameters || {},
+    },
+  });
+  if (result.event) {
+    const assignment = await assignCanonicalJourneyEvents(env, [result.event], { source: "everflow_acquisition_projection" });
+    if (!assignment.ok || assignment.records_failed) throw new Error("Everflow acquisition Journey assignment failed.");
+  }
+  return { status: result.status, event: result.event };
+}
+
 async function publishJourneyPurchaseDomainEvents(env: Env, events: any[], args: { job_id?: string | null; source?: string; project_inline?: boolean } = {}) {
   const publisher = args.project_inline === false ? domainEventOutboxPublisher(env) : domainEventPublisher(env);
   let published = 0;
