@@ -186,6 +186,7 @@ import {
   JOURNEY_EVENTS_BACKFILL_PHASE,
   JOURNEY_EVENTS_CONNECTOR_ID,
   JOURNEY_EVENTS_PLATFORM_ORDER_SELECT,
+  createJourneyEvent,
   createJourneyEventsBatch,
   createSupabaseJourneyEventRepository,
   getPersonTimeline,
@@ -22917,6 +22918,19 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
 		        }
 		        metric("processed");
 		        metric("processed", outcome.scope);
+		        const firehosePayload = body.payload && typeof body.payload === "object" ? body.payload as Record<string, any> : {};
+		        const firehoseTransactionId = String(firehosePayload.transaction_id || "").trim();
+		        if (firehoseTransactionId && (body.event_type === "click" || body.event_type === "conversion" || body.event_type === "conversion_update")) {
+		          const projection = await projectEverflowAcquisitionForTransaction(env, {
+		            organization_id: outcome.scope.organization_id,
+		            transaction_id: firehoseTransactionId,
+		          });
+		          console.log("[TraceKit] Everflow acquisition Journey projection", {
+		            event_type: body.event_type,
+		            status: projection.status,
+		            transaction_id_present: true,
+		          });
+		        }
 		        msg.ack();
 		      } catch (error) {
 		        const routingUnavailable = error instanceof EverflowRoutingUnavailableError;
