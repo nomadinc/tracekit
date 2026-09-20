@@ -570,6 +570,27 @@ export async function assignJourneyEvents(repo: JourneyRepository, events: Journ
   return result;
 }
 
+export async function assignResolvedJourneyEvents(repo: JourneyRepository, events: JourneyEventWithJourney[], args: {
+  timeout_seconds?: number;
+  now?: string;
+} = {}) {
+  const eligible = events.filter((event) => cleanText(event.person_id) && !cleanText(event.journey_id));
+  if (!eligible.length) {
+    return {
+      ok: true,
+      events_scanned: 0,
+      journeys_created: 0,
+      events_linked: 0,
+      events_skipped: 0,
+      records_failed: 0,
+      has_more: false,
+      next_cursor: null,
+      errors: [],
+    } satisfies JourneyBackfillResult;
+  }
+  return assignJourneyEvents(repo, eligible, args);
+}
+
 export async function getPersonJourneys(repo: JourneyRepository, params: PersonJourneysParams) {
   const person = await repo.getPersonById(params.workspace_id, params.person_id);
   if (!person) throw new JourneyNotFoundError("Person not found.");

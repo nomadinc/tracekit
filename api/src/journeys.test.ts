@@ -5,6 +5,7 @@ import {
   JOURNEY_ASSIGNMENT_BACKFILL_INDEX,
   JOURNEY_DEFAULT_TIMEOUT_SECONDS,
   assignJourneyEvents,
+  assignResolvedJourneyEvents,
   compactJourney,
   createSupabaseJourneyRepository,
   decodeJourneyBackfillCursor,
@@ -173,6 +174,22 @@ test("same person events inside timeout share a journey while gaps create new jo
   assert.equal(repo.journeys[0].event_count, 2);
   assert.equal(repo.journeys[0].purchase_count, 1);
   assert.equal(String(repo.journeys[0].total_revenue), "10");
+});
+
+test("canonical resolved-event assignment ignores anonymous and already-assigned events", async () => {
+  const repo = new MemoryJourneyRepository();
+  repo.addPerson("default", "person-1");
+  repo.addEvent({ id: "event-new", person_id: "person-1", event_time: "2026-01-01T00:00:00.000Z", event_type: "purchase", amount: "10" });
+  repo.addEvent({ id: "event-assigned", person_id: "person-1", event_time: "2026-01-01T00:01:00.000Z", event_type: "purchase", amount: "5", journey_id: "journey-existing" });
+  repo.events.push({ ...repo.events[0], id: "event-anonymous", source_record_id: "event-anonymous", person_id: null, event_time: "2026-01-01T00:02:00.000Z" });
+
+  const result = await assignResolvedJourneyEvents(repo, repo.events);
+
+  assert.equal(result.events_scanned, 1);
+  assert.equal(result.events_linked, 1);
+  assert.ok(repo.events.find((event) => event.id === "event-new")?.journey_id);
+  assert.equal(repo.events.find((event) => event.id === "event-assigned")?.journey_id, "journey-existing");
+  assert.equal(repo.events.find((event) => event.id === "event-anonymous")?.journey_id, null);
 });
 
 test("different people never share journeys", async () => {
