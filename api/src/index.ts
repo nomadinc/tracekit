@@ -2712,8 +2712,27 @@ async function projectEverflowAcquisitionForTransaction(env: Env, args: {
     },
   });
   if (result.event) {
-    const assignment = await assignCanonicalJourneyEvents(env, [result.event], { source: "everflow_acquisition_projection" });
-    if (!assignment.ok || assignment.records_failed) throw new Error("Everflow acquisition Journey assignment failed.");
+    const { data: purchaseEvents, error: purchaseError } = await db.from("journey_events")
+      .select(JOURNEY_EVENT_ASSIGNMENT_SELECT)
+      .eq("workspace_id", args.organization_id)
+      .eq("person_id", people[0])
+      .not("journey_id", "is", null)
+      .in("event_type", ["purchase","upsell","subscription_started","subscription_renewed"])
+      .gte("event_time", click.click_at)
+      .order("event_time", { ascending: true })
+      .limit(2);
+    if (purchaseError) throw new Error(`Everflow acquisition conversion Journey lookup failed: ${purchaseError.message}`);
+    const purchaseJourneyIds = Array.from(new Set((purchaseEvents || []).map((event: any) => String(event.journey_id || "")).filter(Boolean)));
+    if (purchaseJourneyIds.length === 1) {
+      const { error: assignError } = await db.from("journey_events").update({ journey_id: purchaseJourneyIds[0], updated_at: new Date().toISOString() }).eq("id", result.event.id).is("journey_id", null);
+      if (assignError) throw new Error(`Everflow acquisition Journey linkage failed: ${assignError.message}`);
+      result.event.journey_id = purchaseJourneyIds[0];
+    } else if (!purchaseJourneyIds.length) {
+      const assignment = await assignCanonicalJourneyEvents(env, [result.event], { source: "everflow_acquisition_projection" });
+      if (!assignment.ok || assignment.records_failed) throw new Error("Everflow acquisition Journey assignment failed.");
+    } else {
+      return { status: "ambiguous_journey_relationship", event: result.event };
+    }
   }
   return { status: result.status, event: result.event };
 }
