@@ -201,6 +201,8 @@ function CustomerWorkspaceContent() {
     );
   if (!snapshot) return <State title="Customer not found" />;
   const active = snapshot.journey[replayIndex] || null;
+  const trackedOrderCount = snapshot.orders.filter((order) => order.trackingHealth === "Healthy").length;
+  const canonicalJourneyAvailable = snapshot.journeyId !== "Not materialized";
   return (
     <div className="flex min-h-[calc(100dvh-8rem)] overflow-hidden rounded-xl border bg-white shadow-sm dark:border-white/10 dark:bg-ink">
       <CustomerList
@@ -251,12 +253,12 @@ function CustomerWorkspaceContent() {
               </div>
             </div>
             <div className="text-right">
-              <p className="text-[9px] uppercase text-slate-400">Profit</p>
-              <strong className="text-3xl">
-                {snapshot.customer.profitAvailable === false ? "Unavailable" : money(snapshot.customer.profit)}
+              <p className="text-[9px] uppercase text-slate-400">Evidence coverage</p>
+              <strong className="text-lg">
+                {trackedOrderCount}/{snapshot.orders.length} orders tracked
               </strong>
-              <p className="text-[10px] font-semibold">
-                {snapshot.customer.profitAvailable === false ? "No authoritative customer-profit read model" : snapshot.customer.profitStatus}
+              <p className="text-[10px] text-slate-500">
+                {canonicalJourneyAvailable ? "Canonical Journey available" : "Journey materialization pending"}
               </p>
             </div>
           </div>
@@ -281,13 +283,14 @@ function CustomerWorkspaceContent() {
             <div>
               <h2 className="text-sm font-semibold">Customer Story</h2>
               <p className="text-[11px] text-slate-500">
-                Discovery, attribution, commerce, and financial outcome.
+                {canonicalJourneyAvailable ? "Canonical Journey evidence across acquisition and commerce." : "Observed commerce and tracking evidence while canonical Journey materialization is pending."}
               </p>
             </div>
             <div className="flex gap-2">
               <button
                 onClick={() => setReplaying((v) => !v)}
-                className="rounded-lg border p-2"
+                disabled={!snapshot.journey.length}
+                className="rounded-lg border p-2 disabled:opacity-40"
               >
                 {replaying ? (
                   <Pause className="h-4 w-4" />
@@ -300,7 +303,8 @@ function CustomerWorkspaceContent() {
                   setReplaying(false);
                   setReplayIndex(0);
                 }}
-                className="rounded-lg border p-2"
+                disabled={!snapshot.journey.length}
+                className="rounded-lg border p-2 disabled:opacity-40"
               >
                 <RotateCcw className="h-4 w-4" />
               </button>
@@ -310,7 +314,8 @@ function CustomerWorkspaceContent() {
                     Math.min(snapshot.journey.length - 1, i + 1),
                   )
                 }
-                className="rounded-lg border p-2"
+                disabled={!snapshot.journey.length}
+                className="rounded-lg border p-2 disabled:opacity-40"
               >
                 <SkipForward className="h-4 w-4" />
               </button>
@@ -408,7 +413,7 @@ function CustomerWorkspaceContent() {
                 <span className="text-right text-xs">
                   <strong>{money(o.amount)}</strong>
                   <span className="block">
-                    {o.profit === null ? "Profit restricted" : money(o.profit)}
+                    {o.trackingHealth === "Healthy" ? "Tracking evidence retained" : "Tracking evidence incomplete"}
                   </span>
                 </span>
               </button>
