@@ -2691,7 +2691,7 @@ async function projectEverflowAcquisitionForTransaction(env: Env, args: {
     workspace_id: args.organization_id,
     person_id: people[0],
     session_id: click.session_id || null,
-    event_type: "affiliate_click",
+    event_type: "click",
     event_time: click.click_at,
     source_platform: "everflow",
     source_connector: "everflow_firehose_acquisition_projection",
