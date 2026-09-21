@@ -192,13 +192,15 @@ function CustomerWorkspaceContent() {
     return <State title="Loading Customer Workspace…" />;
   if (error)
     return <State title="Customer Workspace unavailable" detail={error} />;
-  if (!customers.length)
+  if (!customers.length) {
+    const activeQuery = String(filter.query || "").trim();
     return (
       <State
-        title="No accessible Customers"
-        detail="No Customers match the active scope and filters."
+        title={activeQuery ? `No customers found for "${activeQuery}"` : "No customers available"}
+        detail={activeQuery ? "Try a different name, email, phone, order ID, or transaction ID." : "There are no customers available in the current workspace."}
       />
     );
+  }
   if (!snapshot) return <State title="Customer not found" />;
   const active = snapshot.journey[replayIndex] || null;
   return (

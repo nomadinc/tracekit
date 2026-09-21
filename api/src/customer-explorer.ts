@@ -1283,7 +1283,8 @@ async function findPersonIdsBySearch(supabase: any, params: CustomerListParams) 
     }
   }
 
-  if (search.exact_candidates.length) {
+  const exactIdentifierSearch = Boolean(search.email || search.phone_candidates.some((value) => value.length >= 7) || uuidSearch);
+  if (exactIdentifierSearch && search.exact_candidates.length) {
     const identifierRows = await supabaseRows(
       supabase
         .from("person_identifiers")
@@ -1309,7 +1310,8 @@ async function findPersonIdsBySearch(supabase: any, params: CustomerListParams) 
     `affiliate_id.eq.${search.text}`,
   ];
   if (search.email) orderOrParts.push(`customer_email_normalized.eq.${search.email}`);
-  const orderRows = await supabaseRows(
+  const exactOrderSearch = Boolean(search.email || uuidSearch || /^\d+$/.test(search.text) || search.text.length >= 12);
+  const orderRows = exactOrderSearch ? await supabaseRows(
     supabase
       .from("platform_orders")
       .select("person_id,platform_order_id,order_id,transaction_id,everflow_transaction_id,commerce_reference,affiliate_id,customer_email_normalized")
@@ -1318,7 +1320,7 @@ async function findPersonIdsBySearch(supabase: any, params: CustomerListParams) 
       .or(orderOrParts.join(","))
       .limit(100),
     "Customer order search",
-  );
+  ) : [];
   for (const row of orderRows) {
     personIds.push(cleanText(row.person_id));
     if (cleanText(row.order_id) === search.text) setMatchReason(matchReasons, row.person_id, `Matched by order ID ${row.order_id}`);
