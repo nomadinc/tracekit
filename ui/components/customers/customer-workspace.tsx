@@ -192,22 +192,16 @@ function CustomerWorkspaceContent() {
     return <State title="Loading Customer Workspace…" />;
   if (error)
     return <State title="Customer Workspace unavailable" detail={error} />;
-  if (!customers.length) {
-    const activeQuery = String(filter.query || "").trim();
-    return (
-      <State
-        title={activeQuery ? `No customers found for "${activeQuery}"` : "No customers available"}
-        detail={activeQuery ? "Try a different name, email, phone, order ID, or transaction ID." : "There are no customers available in the current workspace."}
-      />
-    );
-  }
-  if (!snapshot) return <State title="Customer not found" />;
-  const active = snapshot.journey[replayIndex] || null;
+  if (!customers.length && !String(filter.query || "").trim())
+    return <State title="No customers available" detail="There are no customers available in the current workspace." />;
+  if (!snapshot && customers.length) return <State title="Customer not found" />;
+  const active = snapshot?.journey[replayIndex] || null;
   return (
     <div className="flex min-h-[calc(100dvh-8rem)] overflow-hidden rounded-xl border bg-white shadow-sm dark:border-white/10 dark:bg-ink">
       <CustomerList
         customers={customers}
-        selected={snapshot.customer.id}
+        selected={snapshot?.customer.id || ""}
+        emptyQuery={String(filter.query || "").trim()}
         filter={filter}
         setFilter={setFilter}
         select={(id) => {
@@ -225,6 +219,10 @@ function CustomerWorkspaceContent() {
         close={() => setListOpen(false)}
       />
       <main className="min-w-0 flex-1 overflow-y-auto">
+        {!snapshot ? (
+          <div className="p-8 text-sm text-slate-500">No customer is selected. Refine or clear the search to continue.</div>
+        ) : (
+        <>
         <header className="border-b p-5 dark:border-white/10">
           <div className="flex items-start justify-between gap-4">
             <div className="flex gap-3">
@@ -443,6 +441,8 @@ function CustomerWorkspaceContent() {
             </button>
           ))}
         </section>
+        </>
+        )}
       </main>
     </div>
   );
@@ -450,6 +450,7 @@ function CustomerWorkspaceContent() {
 function CustomerList({
   customers,
   selected,
+  emptyQuery,
   filter,
   setFilter,
   select,
@@ -458,6 +459,7 @@ function CustomerList({
 }: {
   customers: CustomerSummary[];
   selected: string;
+  emptyQuery: string;
   filter: CustomerListFilter;
   setFilter: (f: CustomerListFilter) => void;
   select: (id: string) => void;
@@ -514,6 +516,12 @@ function CustomerList({
         </div>
       </div>
       <div className="overflow-y-auto">
+        {!customers.length && emptyQuery ? (
+          <div className="m-3 rounded-lg border border-dashed p-3 text-xs text-slate-500" role="status">
+            <p className="font-medium text-slate-700 dark:text-slate-200">No customers found for {emptyQuery}</p>
+            <p className="mt-1">Try a different name, email, phone, order ID, or transaction ID.</p>
+          </div>
+        ) : null}
         {customers.map((c) => (
           <button
             key={c.id}
