@@ -195,7 +195,7 @@ function CustomerWorkspaceContent() {
   if (!customers.length && !String(filter.query || "").trim())
     return <State title="No customers available" detail="There are no customers available in the current workspace." />;
   if (!snapshot && customers.length) return <State title="Customer not found" />;
-  const active = snapshot.journey[replayIndex] || null;
+  const active = snapshot?.journey[replayIndex] || null;
   return (
     <div className="flex min-h-[calc(100dvh-8rem)] overflow-hidden rounded-xl border bg-white shadow-sm dark:border-white/10 dark:bg-ink">
       <CustomerList
