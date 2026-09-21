@@ -50,7 +50,7 @@ function CustomerWorkspaceContent() {
     drawer = useShellDrawer();
   const { session, setActiveOrganization, setActiveBusinessContext } =
     useIdentity();
-  const scope = React.useMemo(() => ({ authenticated: session.authenticated, workspaceId: "default", organizationId: session.activeOrganizationId, businessContextId: session.activeBusinessContextId, session }), [session]);
+  const scope = React.useMemo(() => ({ authenticated: session.authenticated, workspaceId: session.activeOrganizationId || "", organizationId: session.activeOrganizationId, businessContextId: session.activeBusinessContextId, session }), [session]);
   const requested = React.useMemo(
     () => parseCustomerDeepLink(params),
     [params],
