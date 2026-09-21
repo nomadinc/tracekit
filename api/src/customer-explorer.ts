@@ -1271,13 +1271,16 @@ async function findPersonIdsBySearch(supabase: any, params: CustomerListParams) 
   const personIds: string[] = [];
   const matchReasons = new Map<string, string>();
 
-  const exactPerson = await supabaseMaybeSingle(
-    supabase.from("people").select("id").eq("workspace_id", params.workspace_id).eq("id", search.text),
-    "Customer person search",
-  );
-  if (exactPerson?.id) {
-    personIds.push(exactPerson.id);
-    setMatchReason(matchReasons, exactPerson.id, "Matched by person ID");
+  const uuidSearch = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(search.text);
+  if (uuidSearch) {
+    const exactPerson = await supabaseMaybeSingle(
+      supabase.from("people").select("id").eq("workspace_id", params.workspace_id).eq("id", search.text),
+      "Customer person search",
+    );
+    if (exactPerson?.id) {
+      personIds.push(exactPerson.id);
+      setMatchReason(matchReasons, exactPerson.id, "Matched by person ID");
+    }
   }
 
   if (search.exact_candidates.length) {
