@@ -1437,7 +1437,35 @@ async function queryCustomerPeople(supabase: any, params: CustomerListParams, ca
     query = cursorFilterPeople(query, params);
   }
   query = query.order("updated_at", { ascending: false }).order("id", { ascending: false }).limit(params.limit + 1);
-  const rows = await supabaseRows(query, "Customer list lookup");
+  let rows = await supabaseRows(query, "Customer list lookup");
+  if (!candidateIds && !params.cursor && !params.from && !params.to_exclusive) {
+    const launchIds = await supabaseRows(
+      supabase.from("journey_attribution_credits").select("person_id,conversion_event_time").eq("workspace_id", params.workspace_id).eq("status", "attributed").order("conversion_event_time", { ascending: false }).limit(500),
+      "Customer launch evidence priority lookup",
+    );
+    const launchPriority = new Map<string, number>();
+    for (const row of launchIds) {
+      const id = cleanText(row.person_id);
+      if (id && !launchPriority.has(id)) launchPriority.set(id, launchPriority.size);
+    }
+    if (launchPriority.size) {
+      const visible = new Map(rows.map((row: any) => [cleanText(row.id), row]));
+      const missingIds = Array.from(launchPriority.keys()).filter((id) => !visible.has(id)).slice(0, params.limit);
+      if (missingIds.length) {
+        const launchPeople = await supabaseRows(
+          supabase.from("people").select(PEOPLE_SELECT).eq("workspace_id", params.workspace_id).in("id", missingIds),
+          "Customer launch evidence people lookup",
+        );
+        for (const person of launchPeople) visible.set(cleanText(person.id), person);
+      }
+      rows = Array.from(visible.values()).sort((a: any, b: any) => {
+        const ap = launchPriority.get(cleanText(a.id));
+        const bp = launchPriority.get(cleanText(b.id));
+        if (ap !== undefined || bp !== undefined) return (ap ?? Number.MAX_SAFE_INTEGER) - (bp ?? Number.MAX_SAFE_INTEGER);
+        return Date.parse(String(b.updated_at || b.created_at || 0)) - Date.parse(String(a.updated_at || a.created_at || 0));
+      }).slice(0, params.limit + 1);
+    }
+  }
   if (candidateIds) {
     const priority = new Map(candidateIds.map((id, index) => [id, index]));
     rows.sort((a: any, b: any) => (priority.get(cleanText(a.id)) ?? 9999) - (priority.get(cleanText(b.id)) ?? 9999));
