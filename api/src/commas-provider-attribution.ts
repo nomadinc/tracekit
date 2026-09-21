@@ -11,7 +11,7 @@ const bounded = (value: unknown, maximum = 512) => {
 };
 
 const SECRET_KEY = /(?:^|[_-])(secret|token|password|authorization|cookie|api[_-]?key)(?:$|[_-])/i;
-const KNOWN_KEYS = new Set(["affid", "sub1", "sub4", "_ef_transaction_id", "transaction_id", "tid", "c1"]);
+const KNOWN_KEYS = new Set(["affid", "sub1", "sub4", "_ef_transaction_id", "transaction_id", "tid", "c1", "tkid"]);
 
 export type CommasAttributionParameters = {
   affiliateId: string | null;
@@ -21,6 +21,7 @@ export type CommasAttributionParameters = {
   transactionId: string | null;
   tid: string | null;
   c1: string | null;
+  tkid: string | null;
   aliasState: "all_agree" | "single_alias" | "conflict" | "none";
   restrictedMetadata: {
     additional_param_keys: string[];
@@ -69,6 +70,7 @@ export function normalizeCommasAdditionalParams(value: unknown): CommasAttributi
     transactionId,
     tid,
     c1,
+    tkid: read("tkid"),
     aliasState,
     restrictedMetadata: {
       additional_param_keys: keys,
