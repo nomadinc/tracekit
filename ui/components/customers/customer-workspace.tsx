@@ -219,6 +219,10 @@ function CustomerWorkspaceContent() {
         close={() => setListOpen(false)}
       />
       <main className="min-w-0 flex-1 overflow-y-auto">
+        {!snapshot ? (
+          <div className="p-8 text-sm text-slate-500">No customer is selected. Refine or clear the search to continue.</div>
+        ) : (
+        <>
         <header className="border-b p-5 dark:border-white/10">
           <div className="flex items-start justify-between gap-4">
             <div className="flex gap-3">
@@ -437,6 +441,8 @@ function CustomerWorkspaceContent() {
             </button>
           ))}
         </section>
+        </>
+        )}
       </main>
     </div>
   );
