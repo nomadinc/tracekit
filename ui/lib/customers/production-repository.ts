@@ -59,7 +59,7 @@ function summary(row: any, scope: ProductionCustomerScope): CustomerSummary {
     journeyPreview: `${Number(row?.journey_count || 0)} journey(s) · ${Number(row?.order_count || 0)} order(s) · ${source}`,
   };
 }
-function mapEvent(row: any, identity: any): CustomerJourneyEvent {
+function mapEvent(row: any, identity: any, credits: any[] = [], orders: any[] = []): CustomerJourneyEvent {
   const tech = row?.technical_evidence || row?.technical || {};
   const display = row?.display_fields || {};
   const explanation = row?.explanation || {};
@@ -70,6 +70,24 @@ function mapEvent(row: any, identity: any): CustomerJourneyEvent {
     row?.source ? `Source: ${row.source}` : null,
     row?.medium ? `Medium: ${row.medium}` : null,
   ].filter((value): value is string => Boolean(value));
+  const eventId = String(row?.id || "");
+  const eventType = String(row?.event_type || row?.activity_type || "").toLowerCase();
+  const matchingCredits = credits.filter((credit: any) => String(credit?.touchpoint_event_id || "") === eventId || String(credit?.conversion_event_id || "") === eventId);
+  const attributedCredit = matchingCredits.find((credit: any) => credit?.status === "attributed");
+  const relatedOrder = eventType === "purchase" ? orders.find((order: any) => {
+    const orderTime = Date.parse(String(order?.created_at || ""));
+    const eventTime = Date.parse(String(row?.event_time || row?.occurred_at || ""));
+    return Number.isFinite(orderTime) && Number.isFinite(eventTime) && Math.abs(orderTime - eventTime) <= 5000;
+  }) : null;
+  const eventAmount = n(row?.amount);
+  const sourceLabel = String(row?.source_platform || tech?.source_platform || "TraceKit");
+  const affiliate = row?.affiliate_id || attributedCredit?.affiliate_id;
+  const offer = row?.offer_id || attributedCredit?.offer_id;
+  const name = eventType === "click"
+    ? `${sourceLabel === "everflow" ? "Everflow " : ""}Affiliate Click`
+    : eventType === "purchase"
+      ? `Purchase${eventAmount ? ` · ${eventAmount.toFixed(0)}` : ""}`
+      : String(row?.title || eventName(eventType));
   const identifiers = Array.isArray(identity?.identifiers) ? identity.identifiers.map((i: any) => ({
     id: String(i.id || i.type || "identifier"),
     type: String(i.type || i.identifier_type || "Identifier"),
@@ -78,13 +96,13 @@ function mapEvent(row: any, identity: any): CustomerJourneyEvent {
     eventId: String(row?.id || ""),
   })) : [];
   return {
-    id: String(row?.id || ""),
-    name: String(row?.title || eventName(row?.event_type || row?.activity_type)),
+    id: eventId,
+    name,
     timestamp: when(row?.occurred_at || row?.event_time),
     domain: String(row?.source_platform || tech?.source_platform || "TraceKit"),
     role: String(row?.category || row?.event_type || row?.activity_type || "evidence"),
     status: row?.system_derived ? "Derived" : "Observed",
-    confidence: explanation?.reason_is_stored ? "Stored conclusion" : row?.system_derived ? "Derived from retained evidence" : "Observed evidence",
+    confidence: attributedCredit ? `Attributed${affiliate ? ` · Affiliate ${affiliate}` : ""}${offer ? ` · Offer ${offer}` : ""}` : relatedOrder ? `Commas · Order ${relatedOrder.order_id || relatedOrder.platform_order_id || ""}` : explanation?.reason_is_stored ? "Stored conclusion" : row?.system_derived ? "Derived from retained evidence" : "Observed evidence",
     trackingHealth: "Unknown",
     trackingStatus: String(row?.system_derived ? "Derived" : "Observed"),
     originalUrl: String(display?.url || row?.url || ""),
@@ -96,6 +114,7 @@ function mapEvent(row: any, identity: any): CustomerJourneyEvent {
     diagnostics: [],
     relationships: [
       ...(row?.related_order_id ? [{ type: "Order", id: String(row.related_order_id), label: String(row.related_order_id) }] : []),
+      ...(relatedOrder ? [{ type: "Order", id: String(relatedOrder.platform_order_id || relatedOrder.order_id), label: String(relatedOrder.order_id || relatedOrder.platform_order_id) }] : []),
       ...(tech?.journey_id ? [{ type: "Journey", id: String(tech.journey_id), label: String(tech.journey_id) }] : []),
     ],
     explanation: {
@@ -150,19 +169,25 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
       last_activity_at: detail.summary?.last_seen_at,
       journey_count: detail.summary?.total_journeys,
       order_count: detail.summary?.total_orders,
-      has_attribution: n(detail.summary?.attributed_revenue) > 0,
-      identity_status: detail.summary?.identity_status,
+      has_attribution: Array.isArray(detail.attribution) && detail.attribution.some((credit: any) => credit?.status === "attributed"),
+      identity_status: detail.customer?.id && (detail.customer?.primary_email || detail.customer?.primary_phone) ? (Number(detail.summary?.identity_link_count || 0) > 0 ? "Resolved" : "Known · limited identity evidence") : detail.summary?.identity_status,
       source_systems: detail.summary?.source_systems || [],
     };
     const customer = summary(listLike, scope);
     const activity = Array.isArray(journeyDetail?.activity) ? journeyDetail.activity : Array.isArray(journeyDetail?.events) ? journeyDetail.events : [];
     const timeline = Array.isArray(journeyDetail?.events) ? journeyDetail.events : [];
-    const story = timeline.length ? timeline.map((row: any) => mapEvent(row, journeyDetail?.identity_context)) : activity.map((row: any) => mapEvent(row, journeyDetail?.identity_context));
-    const orders = (detail.orders || []).map(orderRow);
+    const rawOrders = Array.isArray(detail.orders) ? detail.orders : [];
+    const orders = rawOrders.map(orderRow);
     const acquisition = detail.customer_360?.acquisition || {};
     const attribution = Array.isArray(journeyDetail?.attribution) ? journeyDetail.attribution : [];
+    const story = timeline.length ? timeline.map((row: any) => mapEvent(row, journeyDetail?.identity_context, attribution, rawOrders)) : activity.map((row: any) => mapEvent(row, journeyDetail?.identity_context, attribution, rawOrders));
     const firstCredit = attribution.find((credit: any) => credit?.status === "attributed" && credit?.model === "first_touch") || attribution.find((credit: any) => credit?.status === "attributed");
     const firstSource = acquisition?.first_attributed_source?.source || acquisition?.first_attributed_source?.affiliate_id || firstCredit?.source || firstCredit?.affiliate_id;
+    const attributedOffer = firstCredit?.offer_id ? String(firstCredit.offer_id) : "";
+    const enrichedOrders = orders.map((order: any) => ({
+      ...order,
+      offerName: order.offerId ? order.offerName : attributedOffer ? `Journey attributed to Offer ${attributedOffer} · not supplied on Order` : order.offerName,
+    }));
     return {
       customer,
       lifetimeRevenue: n(detail.summary?.lifetime_revenue),
@@ -171,8 +196,8 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
       lastPurchase: orders[0]?.date || "No linked purchase",
       journeyId: String(selectedJourney?.id || "No canonical journey"),
       journey: story,
-      orders,
-      offers: [],
+      orders: enrichedOrders,
+      offers: attributedOffer ? [{ id: attributedOffer, name: `Offer ${attributedOffer}`, firstTouch: firstCredit?.affiliate_id ? `Affiliate ${firstCredit.affiliate_id}` : "Attributed Journey" }] : [],
       privacySignals: [],
       trackingExplanation: detail.customer_360?.evidence_limits?.length
         ? String(detail.customer_360.evidence_limits.join(" "))
