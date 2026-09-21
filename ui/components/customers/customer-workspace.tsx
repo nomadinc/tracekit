@@ -252,12 +252,10 @@ function CustomerWorkspaceContent() {
             </div>
             <div className="text-right">
               <p className="text-[9px] uppercase text-slate-400">Profit</p>
-              <strong className="text-3xl">
-                {snapshot.customer.profitAvailable === false ? "Unavailable" : money(snapshot.customer.profit)}
+              <strong className={snapshot.customer.profitAvailable === false ? "text-sm font-semibold text-slate-500" : "text-3xl"}>
+                {snapshot.customer.profitAvailable === false ? "Not available" : money(snapshot.customer.profit)}
               </strong>
-              <p className="text-[10px] font-semibold">
-                {snapshot.customer.profitAvailable === false ? "No authoritative customer-profit read model" : snapshot.customer.profitStatus}
-              </p>
+              {snapshot.customer.profitAvailable !== false ? <p className="text-[10px] font-semibold">{snapshot.customer.profitStatus}</p> : null}
             </div>
           </div>
           <div className="mt-5 grid gap-4 border-t pt-4 sm:grid-cols-3 lg:grid-cols-6 dark:border-white/10">
@@ -408,7 +406,7 @@ function CustomerWorkspaceContent() {
                 <span className="text-right text-xs">
                   <strong>{money(o.amount)}</strong>
                   <span className="block">
-                    {o.profit === null ? "Profit restricted" : money(o.profit)}
+                    {o.profit === null ? "Profit not available" : money(o.profit)}
                   </span>
                 </span>
               </button>
@@ -474,7 +472,7 @@ function CustomerList({
         <div>
           <h2 className="font-semibold">Customers</h2>
           <p className="text-[10px] text-slate-500">
-            {customers.length} accessible
+            {emptyQuery ? `${customers.length} result${customers.length === 1 ? "" : "s"}` : `${customers.length} accessible`}
           </p>
         </div>
         {mobile ? (
