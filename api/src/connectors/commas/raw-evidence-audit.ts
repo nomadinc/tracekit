@@ -35,7 +35,6 @@ function shapeOnly(value:unknown,depth=0):unknown {
  const o=value as Json;
  return {type:"object",keys:Object.keys(o).filter(k=>!SENSITIVE.test(k)).sort(),fields:Object.fromEntries(Object.entries(o).filter(([k])=>!SENSITIVE.test(k)).map(([k,v])=>[k,shapeOnly(v,depth+1)]))};
 }
-}
 function walk(value:unknown,path:string,out:string[],depth=0){
  if(depth>4)return;
  if(Array.isArray(value)){if(value.length)walk(value[0],path+"[]",out,depth+1);return;}
