@@ -518,7 +518,7 @@ function CustomerList({
       <div className="overflow-y-auto">
         {!customers.length && emptyQuery ? (
           <div className="m-3 rounded-lg border border-dashed p-3 text-xs text-slate-500" role="status">
-            <p className="font-medium text-slate-700 dark:text-slate-200">No customers found for "{emptyQuery}"</p>
+            <p className="font-medium text-slate-700 dark:text-slate-200">No customers found for {emptyQuery}</p>
             <p className="mt-1">Try a different name, email, phone, order ID, or transaction ID.</p>
           </div>
         ) : null}
