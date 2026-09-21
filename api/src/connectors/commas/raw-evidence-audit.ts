@@ -24,7 +24,17 @@ export function auditCommasRawTransaction(transaction:Json){
    topLevelKeys:Object.keys(transaction).filter(k=>!SENSITIVE.test(k)).sort(),
    servicePaymentKeys:Object.keys(obj(transaction.servicePayment)||{}).filter(k=>!SENSITIVE.test(k)).sort(),
    productKeys:Object.keys(obj(transaction.product)||obj(transaction.service)||{}).filter(k=>!SENSITIVE.test(k)).sort(),
+   apiMetadataShape: shapeOnly(transaction.api_metadata),
  };
+}
+function shapeOnly(value:unknown,depth=0):unknown {
+ if(depth>3)return "depth_limit";
+ if(value===null)return "null";
+ if(Array.isArray(value))return {type:"array",length:value.length,itemShape:value.length?shapeOnly(value[0],depth+1):null};
+ if(typeof value!=="object")return {type:typeof value};
+ const o=value as Json;
+ return {type:"object",keys:Object.keys(o).filter(k=>!SENSITIVE.test(k)).sort(),fields:Object.fromEntries(Object.entries(o).filter(([k])=>!SENSITIVE.test(k)).map(([k,v])=>[k,shapeOnly(v,depth+1)]))};
+}
 }
 function walk(value:unknown,path:string,out:string[],depth=0){
  if(depth>4)return;
