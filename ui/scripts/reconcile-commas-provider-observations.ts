@@ -62,7 +62,7 @@ async function main(){
   for(const item of prepared){
     const p=asObject(item.parameters),rows=item.tid?everflow.get(item.tid)||[]:[];
     const unique=Array.from(new Map(rows.map(row=>[JSON.stringify([row.transaction_id,row.affiliate_id,row.sub1,row.sub4]),row])).values());
-    const comparison=unique.length>1?{state:"conflict" as const,matched_fields:[],conflicting_fields:["ambiguous_everflow_identity"]}:compareCommasAttributionToEverflow({affiliateId:p.affiliate_id as string|null,sub1:p.sub1 as string|null,sub4:p.sub4 as string|null,efTransactionId:p.ef_transaction_id as string|null,transactionId:p.transaction_id as string|null,tid:p.tid as string|null,c1:p.c1 as string|null,aliasState:p.alias_state as "all_agree"|"single_alias"|"conflict"|"none",restrictedMetadata:p.restricted_metadata as any},unique[0]??null);
+    const comparison=unique.length>1?{state:"conflict" as const,matched_fields:[],conflicting_fields:["ambiguous_everflow_identity"]}:compareCommasAttributionToEverflow({affiliateId:p.affiliate_id as string|null,sub1:p.sub1 as string|null,sub4:p.sub4 as string|null,efTransactionId:p.ef_transaction_id as string|null,transactionId:p.transaction_id as string|null,tid:p.tid as string|null,c1:p.c1 as string|null,tkid:p.tkid as string|null,aliasState:p.alias_state as "all_agree"|"single_alias"|"conflict"|"none",restrictedMetadata:p.restricted_metadata as any},unique[0]??null);
     item.comparison=comparison;comparisonCounts[comparison.state]++;
   }
   const summary={mode:apply?"apply":"dry_run",observations:prepared.length,evidenceHashesVerified:prepared.length,presence,aliasStates:aliases,everflowComparison:comparisonCounts};
