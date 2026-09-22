@@ -455,6 +455,7 @@ function OrderWorkspaceContent() {
                   {i + 1} · {e.status}
                 </span>
                 <strong className="mt-1 block text-xs">{e.label}</strong>
+                {e.context ? <span className="mt-1 block text-[10px] font-semibold">{e.context}</span> : null}
                 <span className="mt-2 block text-[10px] text-slate-500">
                   {e.timestamp}
                 </span>
