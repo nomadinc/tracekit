@@ -77,6 +77,7 @@ function OrderWorkspaceContent() {
         customerId: requested.customerId,
       })
       .then((v) => on && setOrders(v))
+      .catch(() => on && setOrders([]))
       .finally(() => on && setLoading(false));
     return () => {
       on = false;
@@ -169,6 +170,9 @@ function OrderWorkspaceContent() {
     if (r) drawer.openDrawer(<OrderDrawerContent record={r} />, r.title);
   };
   if (loading && !snap) return <State text="Loading Order Workspace…" />;
+  if (!orders.length && requested.orderId) {
+    return <State text={`Order ${requested.orderId} could not be loaded from the production Order read path`} />;
+  }
   if (!orders.length) return <State text="No accessible Orders" />;
   if (!snap) return <State text="Order not found" />;
   const active = snap.timeline[replayIndex];
