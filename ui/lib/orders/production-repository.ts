@@ -41,7 +41,7 @@ function status(v: unknown): OrderSummary["status"] {
   if (/pending|open/.test(s)) return "Pending";
   return "Paid";
 }
-function orderId(row: any) { return String(row?.platform_order_id || row?.order_id || row?.id || ""); }
+function orderId(row: any) { return String(row?.order_id || row?.platform_order_id || row?.id || ""); }
 function summary(row: any, customer: any, scope: ProductionScope): OrderSummary {
   const id = orderId(row);
   return {
