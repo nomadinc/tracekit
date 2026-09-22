@@ -52,7 +52,10 @@ export function normalizeOrderDeepLink(state: OrderDeepLinkState, list: OrderSum
 
 function legacyDrawer(value: string | null | undefined): OrderDrawerTarget | null {
   if (!value) return null;
-  const [prefix, recordId] = value.split(":", 2);
+  const separator = value.indexOf(":");
+  if (separator < 0) return null;
+  const prefix = value.slice(0, separator);
+  const recordId = value.slice(separator + 1);
   const kind = prefix === "financial" ? "financial-line" : prefix === "event" ? "timeline-event" : prefix;
   return ORDER_DRAWER_KINDS.has(kind as OrderDrawerTarget["kind"]) && isOpaqueId(recordId) ? { kind: kind as OrderDrawerTarget["kind"], recordId } : null;
 }
