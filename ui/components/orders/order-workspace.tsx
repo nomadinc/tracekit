@@ -181,6 +181,7 @@ function OrderWorkspaceContent() {
       <OrderList
         orders={orders}
         selected={snap.order.id}
+        selectedOrder={snap.order}
         filter={filter}
         setFilter={setFilter}
         select={(id) => {
@@ -493,6 +494,7 @@ function OrderWorkspaceContent() {
 function OrderList({
   orders,
   selected,
+  selectedOrder,
   filter,
   setFilter,
   select,
@@ -501,6 +503,7 @@ function OrderList({
 }: {
   orders: OrderSummary[];
   selected: string;
+  selectedOrder: OrderSummary | null;
   filter: OrderListFilter;
   setFilter: (f: OrderListFilter) => void;
   select: (id: string) => void;
@@ -559,7 +562,7 @@ function OrderList({
       </div>
       <div className="overflow-y-auto">
         {orders.map((o) => {
-          const displayed = o.id === selected && snap ? snap.order : o;
+          const displayed = o.id === selected && selectedOrder ? selectedOrder : o;
           return (
           <button
             key={o.id}
