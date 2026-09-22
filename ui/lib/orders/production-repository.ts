@@ -76,22 +76,26 @@ function event(row: any, order: OrderSummary, credits: any[] = []): OrderTimelin
   const attributed = matchingCredits.find((credit:any) => credit?.status === "attributed") || null;
   const affiliateId = row?.affiliate_id || attributed?.affiliate_id;
   const offerId = row?.offer_id || attributed?.offer_id;
-  const explicitOrder = Boolean(row?.related_order_id) || Object.values(tech).some((v:any) => String(v || "").includes(order.number));
+  const relationshipValues = [
+    row?.related_order_id, row?.order_id, row?.platform_order_id,
+    ...(Array.isArray(row?.relationships) ? row.relationships.flatMap((rel:any) => [rel?.id, rel?.label, rel?.record_id]) : []),
+    ...Object.values(tech),
+  ];
+  const explicitOrder = relationshipValues.some((v:any) => String(v || "").includes(order.number));
   const baseLabel = String(row?.title || row?.event_type || row?.activity_type || "Evidence").replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
   const label = eventType === "click" && source === "everflow" ? "Everflow Affiliate Click" : baseLabel;
-  const context = [
-    source ? (source === "commas" ? "Commas" : source === "everflow" ? "Everflow" : source) : null,
-    explicitOrder ? `Order ${order.number}` : null,
-    affiliateId ? `Affiliate ${affiliateId}` : null,
-    offerId ? `Offer ${offerId}` : null,
-  ].filter(Boolean).join(" · ");
+  const sourceLabel = source ? (source === "commas" ? "Commas" : source === "everflow" ? "Everflow" : source) : "";
+  const context = [sourceLabel || null, explicitOrder ? `Order ${order.number}` : null].filter(Boolean).join(" · ");
+  const attributionContext = affiliateId || offerId
+    ? `${eventType === "click" && source === "everflow" ? "" : "Journey attributed · "}${affiliateId ? `Affiliate ${affiliateId}` : ""}${affiliateId && offerId ? " · " : ""}${offerId ? `Offer ${offerId}` : ""}`
+    : "";
   const identifiers = [
     row?.transaction_id ? { id: `${id}:transaction`, type: "Transaction ID", value: String(row.transaction_id), eventId: id } : null,
     row?.affiliate_id ? { id: `${id}:affiliate`, type: "Affiliate ID", value: String(row.affiliate_id), eventId: id } : null,
     row?.offer_id ? { id: `${id}:offer`, type: "Offer ID", value: String(row.offer_id), eventId: id } : null,
   ].filter(Boolean) as any[];
   return {
-    id, label, timestamp: when(row?.event_time || row?.occurred_at), context,
+    id, label, timestamp: when(row?.event_time || row?.occurred_at), context, attributionContext,
     status: /refund|chargeback/i.test(label) ? "Negative" : "Observed",
     confidence: row?.system_derived ? "Derived from retained evidence" : "Observed evidence",
     originalUrl: String(row?.url || row?.display_fields?.url || ""), referrer: "", destinationUrl: "",
@@ -145,13 +149,15 @@ export class ProductionOrderRepository {
     const credit=credits.find((c:any)=>c?.status==="attributed")||{};
     const affiliate=credit?.affiliate_id ? `Affiliate ${credit.affiliate_id}` : "Not observed";
     const offer=credit?.offer_id ? `Offer ${credit.offer_id}` : "Not observed";
+    const trafficSource=String(credit?.source || credit?.medium || "").trim() || "Not observed";
     const attributedCredits = credits.filter((c:any)=>c?.status==="attributed");
     o.trackingHealth = attributedCredits.length && timeline.length ? "Healthy" : timeline.length ? "Incomplete" : "Unknown";
     const clickRow = rows.find((r:any)=>String(r?.event_type || r?.activity_type || "").toLowerCase()==="click");
     const explicitPurchaseRow = rows.find((r:any)=>{
       const type=String(r?.event_type || r?.activity_type || "").toLowerCase();
       const tech=r?.technical_evidence || r?.technical || {};
-      return type==="purchase" && (Boolean(r?.related_order_id) || Object.values(tech).some((v:any)=>String(v || "").includes(o.number)));
+      const values=[r?.related_order_id,r?.order_id,r?.platform_order_id,...(Array.isArray(r?.relationships)?r.relationships.flatMap((rel:any)=>[rel?.id,rel?.label,rel?.record_id]):[]),...Object.values(tech)];
+      return type==="purchase" && values.some((v:any)=>String(v || "").includes(o.number));
     });
     const clickTs=Date.parse(String(clickRow?.event_time || clickRow?.occurred_at || ""));
     const purchaseTs=Date.parse(String(explicitPurchaseRow?.event_time || explicitPurchaseRow?.occurred_at || ""));
@@ -163,7 +169,7 @@ export class ProductionOrderRepository {
       ledger:[],
       shipping:{charged:0,actual:0,packaging:0,margin:0},
       processorFee:{processor:"Not available",pricingRule:"Not available",percentageRate:0,fixedFee:0,currency:"USD",captures:[],expectedFee:0,observedFee:0,variance:0,settlementStatus:"Not available"},
-      attribution:{trafficSource:affiliate,affiliate,campaign:"Not observed",creative:"Not observed",offerUrl:offer,landingPage:"Not observed",clickPurchaseDelta},
+      attribution:{trafficSource,affiliate,campaign:"Not observed",creative:"Not observed",offerUrl:offer,landingPage:"Not observed",clickPurchaseDelta},
       timeline, identifiers:timeline.flatMap(x=>x.identifiers),
       relatedCustomer:{id:o.customerId,name:o.customerName},
       relatedOffer:{id:String(credit?.offer_id||""),name:offer},

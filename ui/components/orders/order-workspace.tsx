@@ -239,7 +239,7 @@ function OrderWorkspaceContent() {
               ],
               ["Tracking Health", snap.order.trackingHealth],
               ["Traffic Source", snap.attribution.trafficSource],
-              ["Offer URL", snap.attribution.offerUrl],
+              ["Attributed Offer", snap.attribution.offerUrl],
               ["Click → Purchase", snap.attribution.clickPurchaseDelta],
             ].map(([l, v]) => (
               <div key={l}>
@@ -456,6 +456,7 @@ function OrderWorkspaceContent() {
                 </span>
                 <strong className="mt-1 block text-xs">{e.label}</strong>
                 {e.context ? <span className="mt-1 block text-[10px] font-semibold">{e.context}</span> : null}
+                {e.attributionContext ? <span className="mt-1 block text-[10px] text-slate-500">{e.attributionContext}</span> : null}
                 <span className="mt-2 block text-[10px] text-slate-500">
                   {e.timestamp}
                 </span>
