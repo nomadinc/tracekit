@@ -67,17 +67,31 @@ function summary(row: any, customer: any, scope: ProductionScope): OrderSummary 
 async function customerDetail(scope: ProductionScope, customerId: string) {
   return get(`/api/customers/${encodeURIComponent(customerId)}?${qs(scope)}`);
 }
-function event(row: any, order: OrderSummary): OrderTimelineEvent {
+function event(row: any, order: OrderSummary, credits: any[] = []): OrderTimelineEvent {
   const tech = row?.technical_evidence || row?.technical || {};
   const id = String(row?.id || crypto.randomUUID());
-  const label = String(row?.title || row?.event_type || row?.activity_type || "Evidence").replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
+  const eventType = String(row?.event_type || row?.activity_type || "").toLowerCase();
+  const source = String(row?.source_platform || tech?.source_platform || "").toLowerCase();
+  const matchingCredits = credits.filter((credit:any) => String(credit?.touchpoint_event_id || "") === id || String(credit?.conversion_event_id || "") === id);
+  const attributed = matchingCredits.find((credit:any) => credit?.status === "attributed") || null;
+  const affiliateId = row?.affiliate_id || attributed?.affiliate_id;
+  const offerId = row?.offer_id || attributed?.offer_id;
+  const explicitOrder = Boolean(row?.related_order_id) || Object.values(tech).some((v:any) => String(v || "").includes(order.number));
+  const baseLabel = String(row?.title || row?.event_type || row?.activity_type || "Evidence").replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
+  const label = eventType === "click" && source === "everflow" ? "Everflow Affiliate Click" : baseLabel;
+  const context = [
+    source ? (source === "commas" ? "Commas" : source === "everflow" ? "Everflow" : source) : null,
+    explicitOrder ? `Order ${order.number}` : null,
+    affiliateId ? `Affiliate ${affiliateId}` : null,
+    offerId ? `Offer ${offerId}` : null,
+  ].filter(Boolean).join(" · ");
   const identifiers = [
     row?.transaction_id ? { id: `${id}:transaction`, type: "Transaction ID", value: String(row.transaction_id), eventId: id } : null,
     row?.affiliate_id ? { id: `${id}:affiliate`, type: "Affiliate ID", value: String(row.affiliate_id), eventId: id } : null,
     row?.offer_id ? { id: `${id}:offer`, type: "Offer ID", value: String(row.offer_id), eventId: id } : null,
   ].filter(Boolean) as any[];
   return {
-    id, label, timestamp: when(row?.event_time || row?.occurred_at),
+    id, label, timestamp: when(row?.event_time || row?.occurred_at), context,
     status: /refund|chargeback/i.test(label) ? "Negative" : "Observed",
     confidence: row?.system_derived ? "Derived from retained evidence" : "Observed evidence",
     originalUrl: String(row?.url || row?.display_fields?.url || ""), referrer: "", destinationUrl: "",
@@ -126,23 +140,35 @@ export class ProductionOrderRepository {
     let jd:any=null;
     if(journeys[0]?.id) jd=await get(`/api/customers/${encodeURIComponent(o.customerId)}/journeys/${encodeURIComponent(journeys[0].id)}?${qs(scope,{limit:100})}`).catch(()=>null);
     const rows=Array.isArray(jd?.events)?jd.events:Array.isArray(jd?.activity)?jd.activity:[];
-    const timeline: OrderTimelineEvent[] = rows.map((r:any)=>event(r,o));
     const credits=Array.isArray(jd?.attribution)?jd.attribution:[];
+    const timeline: OrderTimelineEvent[] = rows.map((r:any)=>event(r,o,credits));
     const credit=credits.find((c:any)=>c?.status==="attributed")||{};
     const affiliate=credit?.affiliate_id ? `Affiliate ${credit.affiliate_id}` : "Not observed";
     const offer=credit?.offer_id ? `Offer ${credit.offer_id}` : "Not observed";
+    const attributedCredits = credits.filter((c:any)=>c?.status==="attributed");
+    o.trackingHealth = attributedCredits.length && timeline.length ? "Healthy" : timeline.length ? "Incomplete" : "Unknown";
+    const clickRow = rows.find((r:any)=>String(r?.event_type || r?.activity_type || "").toLowerCase()==="click");
+    const explicitPurchaseRow = rows.find((r:any)=>{
+      const type=String(r?.event_type || r?.activity_type || "").toLowerCase();
+      const tech=r?.technical_evidence || r?.technical || {};
+      return type==="purchase" && (Boolean(r?.related_order_id) || Object.values(tech).some((v:any)=>String(v || "").includes(o.number)));
+    });
+    const clickTs=Date.parse(String(clickRow?.event_time || clickRow?.occurred_at || ""));
+    const purchaseTs=Date.parse(String(explicitPurchaseRow?.event_time || explicitPurchaseRow?.occurred_at || ""));
+    const deltaMs=Number.isFinite(clickTs)&&Number.isFinite(purchaseTs)&&purchaseTs>=clickTs ? purchaseTs-clickTs : null;
+    const clickPurchaseDelta=deltaMs===null ? "Not calculated" : `${Math.floor(deltaMs/60000)}m ${Math.floor((deltaMs%60000)/1000)}s`;
     return {
       order:o,
       commercial:{mainProduct:"Not available from current Order read model",orderBumps:[],upsells:[],shippingCharged:0,taxCollected:0,discounts:0,quantity:0},
       ledger:[],
       shipping:{charged:0,actual:0,packaging:0,margin:0},
       processorFee:{processor:"Not available",pricingRule:"Not available",percentageRate:0,fixedFee:0,currency:"USD",captures:[],expectedFee:0,observedFee:0,variance:0,settlementStatus:"Not available"},
-      attribution:{trafficSource:affiliate,affiliate,campaign:"Not observed",creative:"Not observed",offerUrl:offer,landingPage:"Not observed",clickPurchaseDelta:"Not calculated"},
+      attribution:{trafficSource:affiliate,affiliate,campaign:"Not observed",creative:"Not observed",offerUrl:offer,landingPage:"Not observed",clickPurchaseDelta},
       timeline, identifiers:timeline.flatMap(x=>x.identifiers),
       relatedCustomer:{id:o.customerId,name:o.customerName},
       relatedOffer:{id:String(credit?.offer_id||""),name:offer},
       trackingExplanation: timeline.length ? "Retained production Journey evidence is available." : "No canonical Journey evidence was returned for this Order.",
-      waitingOn:["Authoritative Order profit read model"], intelligence:[],
+      waitingOn:[], intelligence:[],
     };
   }
   async loadTimeline(scope: ProductionScope,id:string){return (await this.loadWorkspace(scope,id))?.timeline||[];}
