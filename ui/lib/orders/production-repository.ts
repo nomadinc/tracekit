@@ -93,7 +93,10 @@ export class ProductionOrderRepository {
     if (filter.customerId) {
       const d = await customerDetail(scope, filter.customerId);
       let rows = (Array.isArray(d.orders) ? d.orders : []).map((r:any)=>summary(r,d.customer,scope));
-      if (filter.offerId) rows = rows.filter((r:OrderSummary)=>r.offerId === filter.offerId);
+      // A Customer → Order deep link may carry Journey-attributed Offer context even
+      // when the commerce Order did not supply an offer_id. Do not filter that
+      // canonical Order out by an attribution-only Offer.
+      if (filter.offerId) rows = rows.filter((r:OrderSummary)=>!r.offerId || r.offerId === filter.offerId);
       if (filter.query) { const q=filter.query.toLowerCase(); rows=rows.filter((r:OrderSummary)=>`${r.number} ${r.customerName} ${r.customerEmail}`.toLowerCase().includes(q)); }
       return rows;
     }
