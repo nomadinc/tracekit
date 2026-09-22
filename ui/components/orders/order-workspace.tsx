@@ -251,10 +251,9 @@ function OrderWorkspaceContent() {
         </header>
         {!snap.ledger.length ? (
           <section className="m-5 rounded-xl border p-6">
-            <h2 className="font-semibold">Financial details restricted</h2>
+            <h2 className="font-semibold">Profit details not available</h2>
             <p className="mt-2 text-sm text-slate-500">
-              This identity can inspect the Order Story but cannot view
-              financial line detail.
+              TraceKit has not asserted an authoritative Order profit read model for this Order.
             </p>
           </section>
         ) : (
@@ -361,7 +360,7 @@ function OrderWorkspaceContent() {
                 className="rounded-lg border p-3 text-left"
               >
                 <span className="block text-[9px] uppercase text-slate-400">
-                  {k.replace(/([A-Z])/g, " $1")}
+                  {k === "offerUrl" ? "Attributed Offer" : k === "clickPurchaseDelta" ? "Click → Purchase" : k.replace(/([A-Z])/g, " $1")}
                 </span>
                 <strong className="break-all text-xs">{v}</strong>
               </button>
@@ -559,7 +558,9 @@ function OrderList({
         </div>
       </div>
       <div className="overflow-y-auto">
-        {orders.map((o) => (
+        {orders.map((o) => {
+          const displayed = o.id === selected && snap ? snap.order : o;
+          return (
           <button
             key={o.id}
             onClick={() => select(o.id)}
@@ -569,21 +570,22 @@ function OrderList({
             <span className="flex justify-between">
               <strong className="text-xs">{o.number}</strong>
               <strong className="text-xs">
-                {o.profit === null ? "Restricted" : cash(o.profit)}
+                {displayed.profit === null ? "Not available" : cash(displayed.profit)}
               </strong>
             </span>
             <p className="mt-1 text-[10px] text-slate-500">
               {o.customerName} · {o.date}
             </p>
             <p className="mt-1 text-[10px]">
-              {o.scenario} · {o.profitStatus}
+              {displayed.profit === null ? "Profit not available" : `${displayed.scenario} · ${displayed.profitStatus}`}
             </p>
             <p className="mt-1 flex gap-1 text-[9px]">
               <ShieldCheck className="h-3 w-3" />
-              {o.trackingHealth}
+              {displayed.trackingHealth}
             </p>
           </button>
-        ))}
+          );
+        })}
       </div>
     </aside>
   );
