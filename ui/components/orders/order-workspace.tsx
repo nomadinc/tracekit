@@ -15,7 +15,7 @@ import {
 } from "lucide-react";
 import { AccessBoundary } from "@/components/identity/access-control";
 import { useIdentity } from "@/components/identity/identity-provider";
-import { resolveMockRepositoryScope } from "@/lib/identity/mock-repository-scope";
+
 import { useShellDrawer } from "@/components/layout/shell-drawer";
 import { withDevelopmentIdentity } from "@/lib/identity/development-state";
 import { PRODUCTION_ROUTES } from "@/lib/navigation/production-routes";
@@ -24,7 +24,7 @@ import {
   orderDeepLinkHref,
   parseOrderDeepLink,
 } from "@/lib/orders/deep-link";
-import { orderRepository } from "@/lib/orders/mock-repository";
+import { productionOrderRepository as orderRepository } from "@/lib/orders/production-repository";
 import type {
   OrderDeepLinkState,
   OrderListFilter,
@@ -46,7 +46,7 @@ function OrderWorkspaceContent() {
     drawer = useShellDrawer();
   const { session, setActiveOrganization, setActiveBusinessContext } =
     useIdentity();
-  const scope = React.useMemo(() => resolveMockRepositoryScope(session), [session]);
+  const scope = React.useMemo(() => ({ authenticated: session.authenticated, workspaceId: session.activeOrganizationId || "", organizationId: session.activeOrganizationId, businessContextId: session.activeBusinessContextId, session }), [session]);
   const requested = React.useMemo(() => parseOrderDeepLink(params), [params]);
   const [orders, setOrders] = React.useState<OrderSummary[]>([]),
     [snap, setSnap] = React.useState<OrderWorkspaceSnapshot | null>(null),
@@ -77,6 +77,7 @@ function OrderWorkspaceContent() {
         customerId: requested.customerId,
       })
       .then((v) => on && setOrders(v))
+      .catch(() => on && setOrders([]))
       .finally(() => on && setLoading(false));
     return () => {
       on = false;
@@ -90,9 +91,9 @@ function OrderWorkspaceContent() {
       .resolveOrder(scope, requested.orderId)
       .then((r) => {
         if (!on || !r) return;
-        if (session.developmentOnly && r.organizationId !== scope.mockOrganizationId)
+        if (session.developmentOnly && r.organizationId && r.organizationId !== scope.organizationId)
           setActiveOrganization(r.organizationId);
-        setActiveBusinessContext(r.businessContextId);
+        if (r.businessContextId) setActiveBusinessContext(r.businessContextId);
       });
     return () => {
       on = false;
@@ -101,7 +102,7 @@ function OrderWorkspaceContent() {
     orders,
     requested.orderId,
     scope,
-    scope.mockOrganizationId,
+    scope.organizationId,
     session.developmentOnly,
     setActiveBusinessContext,
     setActiveOrganization,
@@ -169,6 +170,9 @@ function OrderWorkspaceContent() {
     if (r) drawer.openDrawer(<OrderDrawerContent record={r} />, r.title);
   };
   if (loading && !snap) return <State text="Loading Order Workspace…" />;
+  if (!orders.length && requested.orderId) {
+    return <State text={`Order ${requested.orderId} could not be loaded from the production Order read path`} />;
+  }
   if (!orders.length) return <State text="No accessible Orders" />;
   if (!snap) return <State text="Order not found" />;
   const active = snap.timeline[replayIndex];
@@ -218,14 +222,10 @@ function OrderWorkspaceContent() {
             </div>
             <div className="text-right">
               <p className="text-[9px] uppercase text-slate-400">Net Profit</p>
-              <strong className="text-3xl">
-                {snap.order.profit === null
-                  ? "Restricted"
-                  : cash(snap.order.profit)}
+              <strong className={snap.order.profit === null ? "text-sm font-semibold text-slate-500" : "text-3xl"}>
+                {snap.order.profit === null ? "Not available" : cash(snap.order.profit)}
               </strong>
-              <p className="text-[10px] font-semibold">
-                ✓ {snap.order.profitStatus}
-              </p>
+              {snap.order.profit !== null ? <p className="text-[10px] font-semibold">✓ {snap.order.profitStatus}</p> : null}
             </div>
           </div>
           <div className="mt-5 grid gap-4 border-t pt-4 sm:grid-cols-3 lg:grid-cols-6">
@@ -305,7 +305,7 @@ function OrderWorkspaceContent() {
             ))}
           </section>
         )}
-        <div className="grid gap-5 p-5 xl:grid-cols-2">
+        {snap.ledger.length ? <div className="grid gap-5 p-5 xl:grid-cols-2">
           <section className="rounded-xl border">
             <Title text="What Was Sold" />
             <div className="p-5 text-xs">
@@ -350,7 +350,7 @@ function OrderWorkspaceContent() {
               </strong>
             </button>
           </section>
-        </div>
+        </div> : null}
         <section className="mx-5 mb-5 rounded-xl border">
           <Title text="Attribution" />
           <div className="grid gap-3 p-5 sm:grid-cols-3">

@@ -392,7 +392,8 @@ function CustomerWorkspaceContent() {
                   go({
                     focus: "orders",
                     orderId: o.id,
-                    drawerId: `order:${o.id}`,
+                    drawer: { kind: "related-order", recordId: o.id },
+                    drawerId: null,
                   })
                 }
                 className="grid w-full grid-cols-[1fr_auto] border-b p-4 text-left dark:border-white/10"

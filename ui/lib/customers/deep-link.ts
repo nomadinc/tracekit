@@ -49,7 +49,10 @@ export function normalizeCustomerDeepLink(state: CustomerDeepLinkState, customer
 
 function legacyDrawer(value: string | null | undefined): CustomerDrawerTarget | null {
   if (!value) return null;
-  const [prefix, recordId] = value.split(":", 2);
+  const separator = value.indexOf(":");
+  if (separator < 0) return null;
+  const prefix = value.slice(0, separator);
+  const recordId = value.slice(separator + 1);
   const kind = prefix === "event" ? "journey-event" : prefix === "order" ? "related-order" : prefix === "offer" ? "related-offer" : prefix;
   return CUSTOMER_DRAWER_KINDS.has(kind as CustomerDrawerTarget["kind"]) && isOpaqueId(recordId) ? { kind: kind as CustomerDrawerTarget["kind"], recordId } : null;
 }
