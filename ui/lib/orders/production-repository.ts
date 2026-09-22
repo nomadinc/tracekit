@@ -123,7 +123,7 @@ export class ProductionOrderRepository {
     let jd:any=null;
     if(journeys[0]?.id) jd=await get(`/api/customers/${encodeURIComponent(o.customerId)}/journeys/${encodeURIComponent(journeys[0].id)}?${qs(scope,{limit:100})}`).catch(()=>null);
     const rows=Array.isArray(jd?.events)?jd.events:Array.isArray(jd?.activity)?jd.activity:[];
-    const timeline=rows.map((r:any)=>event(r,o));
+    const timeline: OrderTimelineEvent[] = rows.map((r:any)=>event(r,o));
     const credits=Array.isArray(jd?.attribution)?jd.attribution:[];
     const credit=credits.find((c:any)=>c?.status==="attributed")||{};
     const affiliate=credit?.affiliate_id ? `Affiliate ${credit.affiliate_id}` : "Not observed";
