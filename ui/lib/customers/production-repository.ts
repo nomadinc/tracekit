@@ -231,7 +231,7 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
         relationships: event.relationships,
       };
     }
-    if (kind === "order") {
+    if (kind === "order" || kind === "related-order") {
       const order = snapshot.orders.find((row) => row.id === key);
       if (!order) return null;
       return {
