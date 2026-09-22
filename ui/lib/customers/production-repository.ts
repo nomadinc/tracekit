@@ -125,7 +125,7 @@ function mapEvent(row: any, identity: any, credits: any[] = [], orders: any[] = 
   };
 }
 function orderRow(row: any) {
-  const id = String(row?.platform_order_id || row?.order_id || "");
+  const id = String(row?.order_id || row?.platform_order_id || "");
   return {
     id,
     number: String(row?.order_id || row?.platform_order_id || "Order"),
