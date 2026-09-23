@@ -14,10 +14,12 @@ type McpCustomerRepository = Pick<
   "listCustomers" | "loadWorkspace" | "search"
 >;
 
+type ProductionOrderScope = Parameters<typeof productionOrderRepository.listOrders>[0];
+
 type McpOrderRepository = {
-  listOrders(scope: OrderScope, filter?: Parameters<OrderRepository["listOrders"]>[1]): Promise<OrderSummary[]>;
-  loadWorkspace(scope: OrderScope, id: string): Promise<OrderWorkspaceSnapshot | null>;
-  search(scope: OrderScope, query: string): Promise<OrderSearchResult[]>;
+  listOrders(scope: ProductionOrderScope, filter?: Parameters<OrderRepository["listOrders"]>[1]): Promise<OrderSummary[]>;
+  loadWorkspace(scope: ProductionOrderScope, id: string): Promise<OrderWorkspaceSnapshot | null>;
+  search(scope: ProductionOrderScope, query: string): Promise<OrderSearchResult[]>;
 };
 
 export type McpReadRepositories = {
@@ -88,7 +90,7 @@ export class TraceKitMcpReadService {
 
   listOrders(input: { query?: string; customerId?: string; offerId?: string; limit?: number } = {}) {
     return this.audited("list_orders", "orders.view", null, null, async () => {
-      const scope = authorizeMcpRead(this.session, "orders.view") as OrderScope;
+      const scope = authorizeMcpRead(this.session, "orders.view") as ProductionOrderScope;
       const limit = Math.max(1, Math.min(50, Math.trunc(input.limit || 25)));
       const rows: OrderSummary[] = await this.repositories.orders.listOrders(scope, {
         query: input.query,
@@ -101,7 +103,7 @@ export class TraceKitMcpReadService {
 
   getOrder(orderId: string) {
     return this.audited("get_order", "orders.view", "order", orderId, async () => {
-      const scope = authorizeMcpRead(this.session, "orders.view") as OrderScope;
+      const scope = authorizeMcpRead(this.session, "orders.view") as ProductionOrderScope;
       const value: OrderWorkspaceSnapshot | null = await this.repositories.orders.loadWorkspace(scope, orderId);
       return value ? projectOrderWorkspace(this.session, value) : null;
     });
@@ -125,7 +127,7 @@ export class TraceKitMcpReadService {
       }
 
       if (this.session.effectivePermissions.includes("orders.view")) {
-        const scope = authorizeMcpRead(this.session, "orders.view") as OrderScope;
+        const scope = authorizeMcpRead(this.session, "orders.view") as ProductionOrderScope;
         const rows: OrderSearchResult[] = await this.repositories.orders.search(scope, query);
         results.push(...rows.map((row: OrderSearchResult) => ({
           type: "order" as const,
