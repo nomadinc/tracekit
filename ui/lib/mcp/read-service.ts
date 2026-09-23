@@ -3,7 +3,7 @@ import type { IdentityTenancyRepository } from "@/lib/identity/persistent-reposi
 import type { CustomerRepository } from "@/lib/customers/repository";
 import type { CustomerSearchResult, CustomerSummary, CustomerWorkspaceSnapshot, ProductionCustomerScope } from "@/lib/customers/types";
 import type { OrderRepository } from "@/lib/orders/repository";
-import type { OrderScope, OrderSearchResult, OrderSummary, OrderWorkspaceSnapshot } from "@/lib/orders/types";
+import type { OrderSearchResult, OrderSummary, OrderWorkspaceSnapshot } from "@/lib/orders/types";
 import { productionCustomerRepository } from "@/lib/customers/production-repository";
 import { productionOrderRepository } from "@/lib/orders/production-repository";
 import { authorizeMcpRead, projectCustomerSummary, projectCustomerWorkspace, projectOrderSummary, projectOrderWorkspace } from "./governed-read-service";
