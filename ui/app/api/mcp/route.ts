@@ -15,7 +15,8 @@ function json(body: unknown, status = 200, extraHeaders:Record<string,string>={}
 function unauthorized(message="Authentication required") {
   return json({ jsonrpc:"2.0",id:null,error:{code:-32001,message}},401,{"WWW-Authenticate":mcpWwwAuthenticate()});
 }
-async function authenticatedSession(request:Request) {
+type McpAuthResult = { session: Awaited<ReturnType<typeof resolveApplicationSession>> extends { session: infer S } ? S : never; diagnostic: "ok" } | { session: null; diagnostic: string };
+async function authenticatedSession(request:Request):Promise<McpAuthResult> {
   const authorization=request.headers.get("authorization");
   const scheme=authorization?.trim().split(/\s+/,1)[0]?.toLowerCase() || "none";
   const token=bearerToken(request);
@@ -24,23 +25,28 @@ async function authenticatedSession(request:Request) {
     authorization_scheme: scheme === "bearer" ? "bearer" : scheme === "none" ? "none" : "other",
     bearer_token_parsed: Boolean(token),
   });
+  if(authorization && scheme!=="bearer") return {session:null,diagnostic:"non_bearer_scheme"};
+  if(authorization && !token) return {session:null,diagnostic:"bearer_parse_failed"};
   if(token){
     try{
       const identity=await verifyMcpBearerToken(token);
-      return await resolveMcpExternalSession(identity,new SupabaseIdentityTenancyRepository());
+      const session=await resolveMcpExternalSession(identity,new SupabaseIdentityTenancyRepository());
+      return session ? {session,diagnostic:"ok"} : {session:null,diagnostic:"identity_resolution_failed"};
     }catch(error:unknown){
       const message=String((error as {message?:unknown}|null)?.message||"invalid_bearer_token");
-      console.warn("[mcp-auth] bearer rejected", { reason: message.startsWith("invalid_bearer_token:") ? message.split(":")[1] : "verification_failed" });
-      return null;
+      const reason=message.startsWith("invalid_bearer_token:") ? message.split(":")[1] : "verification_failed";
+      console.warn("[mcp-auth] bearer rejected", { reason });
+      return {session:null,diagnostic:reason};
     }
   }
   const resolution=await resolveApplicationSession();
-  return resolution.kind==="authenticated" ? resolution.session : null;
+  return resolution.kind==="authenticated" ? {session:resolution.session,diagnostic:"ok"} : {session:null,diagnostic:"no_authorization_header"};
 }
 
 export async function POST(request: Request) {
-  const session=await authenticatedSession(request);
-  if(!session) return unauthorized();
+  const auth=await authenticatedSession(request);
+  if(!auth.session) return json({jsonrpc:"2.0",id:null,error:{code:-32001,message:"Authentication required"}},401,{"WWW-Authenticate":mcpWwwAuthenticate(),"X-TraceKit-MCP-Auth-Diagnostic":auth.diagnostic});
+  const session=auth.session;
   let body: unknown;
   try { body = await request.json(); }
   catch { return json({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } }, 400); }
