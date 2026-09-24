@@ -722,3 +722,23 @@ test("chargeback runtime route and task type are wired without changing gateway 
   assert.doesNotMatch(gatewayTaskSource, /insertChargebackLedgerEvents/);
   assert.match(source, /runGatewayClassicImportPage\(env, \{ platform, from, to, page, pageSize \}\)/);
 });
+
+
+test("production scheduler wires PayPal dispute ingestion alongside transaction sync", () => {
+  const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+
+  assert.match(source, /ctx\.waitUntil\(runScheduledPaypalImport\(env\)\);\s*ctx\.waitUntil\(runScheduledPaypalDisputeImport\(env\)\);/);
+  assert.match(source, /platforms:\s*\["paypal"\]/);
+  assert.match(source, /force_new_job:\s*false/);
+  assert.match(source, /Math\.max\(24, Math\.min\(72,/);
+});
+
+test("scheduled PayPal disputes reuse the existing chargeback runtime instead of a parallel importer", () => {
+  const source = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+
+  assert.match(source, /async function ensureChargebackIngestionRuntimeJob/);
+  assert.match(source, /findActiveConnectorRuntimeJob\(env,/);
+  assert.match(source, /chargeback_backfill_resume/);
+  assert.match(source, /createAndEnqueueConnectorRuntimeTask\(env, chargebackTaskPlanForAccount/);
+  assert.match(source, /const result = await ensureChargebackIngestionRuntimeJob\(env, args\);/);
+});
