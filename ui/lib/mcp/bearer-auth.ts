@@ -44,7 +44,7 @@ export async function verifyMcpBearerToken(token:string) {
   if(payload.iss!==issuer) reject("issuer_mismatch");
   if(!audienceMatches(payload.aud)) reject("audience_mismatch");
   if(!payload.sub) reject("missing_sub");
-  if(!payload.org_id) reject("missing_org");
+
   const now=Math.floor(Date.now()/1000);
   if(!payload.exp) reject("missing_exp");
   if(payload.exp<=now) reject("expired");
@@ -53,7 +53,7 @@ export async function verifyMcpBearerToken(token:string) {
   const key=await crypto.subtle.importKey("jwk",jwk,{name:"RSASSA-PKCS1-v1_5",hash:"SHA-256"},false,["verify"]);
   const ok=await crypto.subtle.verify("RSASSA-PKCS1-v1_5",key,b64url(parts[2]),Buffer.from(`${parts[0]}.${parts[1]}`));
   if(!ok) reject("signature_invalid");
-  return {workosUserId:payload.sub,workosOrganizationId:payload.org_id,authenticationMethod:"oauth_bearer",clientId:payload.client_id||null,scope:payload.scope||""};
+  return {workosUserId:payload.sub,workosOrganizationId:payload.org_id||null,authenticationMethod:"oauth_bearer",clientId:payload.client_id||null,scope:payload.scope||""};
 }
 export function mcpResourceMetadata() {
   const issuer=authKitIssuer();
