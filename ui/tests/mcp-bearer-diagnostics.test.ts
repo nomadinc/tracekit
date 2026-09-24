@@ -11,3 +11,12 @@ test("M3 bearer diagnostics classify safe pre-signature failures",async()=>{
  await assert.rejects(()=>verifyMcpBearerToken(token({iss:"https://issuer.example.test",aud:"https://app.trace-kit.io/api/mcp",sub:"u",exp:9999999999})),/missing_org/);
  await assert.rejects(()=>verifyMcpBearerToken(token({iss:"https://issuer.example.test",aud:"https://app.trace-kit.io/api/mcp",sub:"u",org_id:"o",exp:1})),/expired/);
 });
+
+test("M3 route diagnostics never log authorization value", async () => {
+ const { readFileSync } = await import("node:fs");
+ const route=readFileSync(new URL("../app/api/mcp/route.ts",import.meta.url),"utf8");
+ assert.match(route,/authorization_header_present/);
+ assert.match(route,/authorization_scheme/);
+ assert.match(route,/bearer_token_parsed/);
+ assert.doesNotMatch(route,/console\.(?:info|warn)\([^\n]*authorization\s*[,}]/);
+});
