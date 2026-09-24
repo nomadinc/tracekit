@@ -18,7 +18,8 @@ function authKitIssuer() {
 function audienceMatches(aud:JwtPayload["aud"]) {
   return typeof aud==="string" ? aud===MCP_RESOURCE : Array.isArray(aud) && aud.includes(MCP_RESOURCE);
 }
-function reject(reason:string):never { throw new Error(`invalid_bearer_token:${reason}`); }\nasync function jwkFor(issuer:string,kid:string) {
+function reject(reason:string):never { throw new Error(`invalid_bearer_token:${reason}`); }
+async function jwkFor(issuer:string,kid:string) {
   const res=await fetch(`${issuer}/oauth2/jwks`,{cache:"no-store",headers:{accept:"application/json"}});
   if(!res.ok) reject("jwks_unavailable");
   const body=await res.json() as {keys?:JsonWebKey[]};
