@@ -21,7 +21,11 @@ async function authenticatedSession(request:Request) {
     try{
       const identity=await verifyMcpBearerToken(token);
       return await resolveMcpExternalSession(identity,new SupabaseIdentityTenancyRepository());
-    }catch{return null;}
+    }catch(error:unknown){
+      const message=String((error as {message?:unknown}|null)?.message||"invalid_bearer_token");
+      console.warn("[mcp-auth] bearer rejected", { reason: message.startsWith("invalid_bearer_token:") ? message.split(":")[1] : "verification_failed" });
+      return null;
+    }
   }
   const resolution=await resolveApplicationSession();
   return resolution.kind==="authenticated" ? resolution.session : null;
