@@ -7,7 +7,7 @@ export function canManageTkidOrigins(session: TraceKitSessionContext) {
   const organizationId = session.activeOrganization?.id;
   if (!organizationId || !session.activeBusinessContextId) return false;
   if (!session.effectivePermissions.includes("connectors.manage") || !session.effectivePermissions.includes("admin.manage_feature_access")) return false;
-  return session.membership.role === "platform-admin" || session.permissionOverrides.some((override) =>
+  return session.membership.role === "platform-admin" || session.membership.role === "organization-owner" || session.permissionOverrides.some((override) =>
     override.effect === "allow" &&
     override.capability === "admin.manage_feature_access" &&
     override.organizationId === organizationId &&

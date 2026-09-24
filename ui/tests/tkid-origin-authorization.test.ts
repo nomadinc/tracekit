@@ -39,3 +39,6 @@ test("missing Bullseye Business Context and cross-Organization override remain d
   cross.permissionOverrides[0].organizationId="org-other";
   assert.equal(canManageTkidOrigins(cross),false);
 });
+
+
+test("organization owner can manage TKID origins when required permissions and context are active",()=>{const session=baseSession();session.membership.role="organization-owner";session.effectivePermissions=["connectors.manage","admin.manage_feature_access"];session.activeBusinessContextId="push-button-system-5f1de64a";assert.equal(canManageTkidOrigins(session as any),true)});
