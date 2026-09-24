@@ -20,3 +20,11 @@ test("M3 route diagnostics never log authorization value", async () => {
  assert.match(route,/bearer_token_parsed/);
  assert.doesNotMatch(route,/console\.(?:info|warn)\([^\n]*authorization\s*[,}]/);
 });
+
+test("M3 response diagnostic exposes only fixed auth reason codes", async () => {
+ const { readFileSync }=await import("node:fs");
+ const route=readFileSync(new URL("../app/api/mcp/route.ts",import.meta.url),"utf8");
+ assert.match(route,/X-TraceKit-MCP-Auth-Diagnostic/);
+ for(const reason of ["non_bearer_scheme","bearer_parse_failed","identity_resolution_failed","no_authorization_header"]) assert.match(route,new RegExp(reason));
+ assert.doesNotMatch(route,/X-TraceKit-MCP-Auth-Diagnostic[^\n]*(authorization|token|payload|sub|org_id)/i);
+});
