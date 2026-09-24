@@ -16,7 +16,14 @@ function unauthorized(message="Authentication required") {
   return json({ jsonrpc:"2.0",id:null,error:{code:-32001,message}},401,{"WWW-Authenticate":mcpWwwAuthenticate()});
 }
 async function authenticatedSession(request:Request) {
+  const authorization=request.headers.get("authorization");
+  const scheme=authorization?.trim().split(/\s+/,1)[0]?.toLowerCase() || "none";
   const token=bearerToken(request);
+  console.info("[mcp-auth] request boundary", {
+    authorization_header_present: Boolean(authorization),
+    authorization_scheme: scheme === "bearer" ? "bearer" : scheme === "none" ? "none" : "other",
+    bearer_token_parsed: Boolean(token),
+  });
   if(token){
     try{
       const identity=await verifyMcpBearerToken(token);
