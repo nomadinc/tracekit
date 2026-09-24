@@ -15,7 +15,7 @@ function session(input:{organizationId?:string;role?:"organization-admin"|"organ
     membership:{id:"membership-review",userId:"review-user",accountId:null,organizationId,role,status:"active"},
     role,
     effectivePermissions:["connectors.view","connectors.manage","admin.manage_feature_access"],
-    permissionOverrides:input.resourceType?[{id:"override-review",membershipId:"membership-review",capability:"admin.manage_feature_access",effect:"allow",organizationId:input.overrideOrganizationId??organizationId,resourceType:input.resourceType,resourceId:input.resourceId??null}]:[],
+    permissionOverrides:input.resourceType?[{id:"override-review",membershipId:"membership-review",capability:"admin.manage_feature_access",effect:"allow",organizationId:input.overrideOrganizationId??organizationId,resourceType:input.resourceType,resourceId:input.resourceId===undefined?null:input.resourceId}]:[],
     accessibleBusinessContexts:[],activeBusinessContextId:input.businessContext===undefined?"offer-bullseye":input.businessContext,
     assurance:{authenticationMethod:"workos",impersonated:false},correlationId:"correlation-review",
   };
@@ -41,7 +41,16 @@ test("organization-owner requires the scoped TKID override",()=>{
   assert.equal(canManageTkidOrigins(session({role:"organization-owner",resourceType:"tkid_origin_registry"})),true);
 });
 
-test("missing Bullseye Business Context and cross-Organization override remain denied",()=>{
+test("registry-wide authorization requires a null resource ID",()=>{
+  assert.equal(canManageTkidOrigins(session({resourceType:"tkid_origin_registry",resourceId:null})),true);
+  assert.equal(canManageTkidOrigins(session({resourceType:"tkid_origin_registry",resourceId:"origin-arbitrary"})),false);
+  assert.equal(canManageTkidOrigins(session({resourceType:"tkid_origin_registry",resourceId:"origin-wrong"})),false);
+  const unnormalized=session({resourceType:"tkid_origin_registry"});
+  unnormalized.permissionOverrides[0].resourceId=undefined as unknown as null;
+  assert.equal(canManageTkidOrigins(unnormalized),false);
+});
+
+test("missing Bullseye Business Context and wrong-scope overrides remain denied",()=>{
   assert.equal(canManageTkidOrigins(session({resourceType:"tkid_origin_registry",businessContext:null})),false);
   const cross=session({resourceType:"tkid_origin_registry"});
   cross.permissionOverrides[0].organizationId="org-other";

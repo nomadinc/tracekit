@@ -6,7 +6,7 @@ const migration = readFileSync(new URL("../../supabase/migrations/20260924055441
 
 test("TKID provisioning is operator-authorized, tenant-scoped, and audited", () => {
   assert.match(migration, /p_confirmation is distinct from 'provision-tkid-origin-registry-access'/);
-  assert.match(migration, /actor_membership\.organization_id=p_organization_id/);
+  assert.match(migration, /requester_membership\.organization_id=p_organization_id/);
   assert.match(migration, /m\.id=p_membership_id and m\.organization_id=p_organization_id/);
   assert.match(migration, /r\.role_key='organization-owner'/);
   assert.match(migration, /c\.id=p_business_context_id and c\.organization_id=p_organization_id/);
@@ -14,8 +14,32 @@ test("TKID provisioning is operator-authorized, tenant-scoped, and audited", () 
   assert.match(migration, /'admin\.manage_feature_access','allow'/);
   assert.match(migration, /'tkid_origin_registry',null/);
   assert.match(migration, /authorization\.tkid_origin_registry\.provisioned/);
+  assert.match(migration, /null,v_account_id,p_organization_id/);
+  assert.match(migration, /'execution_context','service_role_operator_provisioning'/);
+  assert.match(migration, /'requester_identity_authenticated',false/);
+  assert.doesNotMatch(migration, /authenticated_identity_id/);
   assert.match(migration, /grant execute[\s\S]*to service_role/);
   assert.doesNotMatch(migration, /grant execute[\s\S]*to (anon|authenticated)/);
+});
+
+test("TKID provisioning returns exact idempotent rollback evidence", () => {
+  for (const field of [
+    "access_id",
+    "access_created",
+    "access_changed",
+    "access_prior_status",
+    "access_resulting_status",
+    "override_id",
+    "override_created",
+    "override_reused",
+    "audit_event_id",
+    "correlation_id",
+  ]) assert.match(migration, new RegExp(`'${field}'`));
+  assert.match(migration, /select id,status into v_access_id,v_access_prior_status[\s\S]*for update/);
+  assert.match(migration, /if v_access_id is null then[\s\S]*v_access_created := true;[\s\S]*v_access_changed := true/);
+  assert.match(migration, /elsif v_access_prior_status <> 'active' then[\s\S]*v_access_changed := true/);
+  assert.match(migration, /if v_override_id is null then[\s\S]*v_override_created := true/);
+  assert.match(migration, /'override_reused',not v_override_created/);
 });
 
 test("migration defines a reusable mechanism and does not silently mutate the EcoWatt tenant", () => {

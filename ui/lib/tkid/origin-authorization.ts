@@ -11,7 +11,8 @@ export function canManageTkidOrigins(session: TraceKitSessionContext) {
     override.effect === "allow" &&
     override.capability === "admin.manage_feature_access" &&
     override.organizationId === organizationId &&
-    override.resourceType === TKID_ORIGIN_RESOURCE_TYPE,
+    override.resourceType === TKID_ORIGIN_RESOURCE_TYPE &&
+    override.resourceId === null,
   );
 }
 
