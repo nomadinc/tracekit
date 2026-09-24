@@ -36,6 +36,17 @@ async function rest(path: string, init: RequestInit = {}) {
 const user = (row: Row): PersistentUser => ({ id: String(row.id), workosUserId: String(row.workos_user_id), primaryEmail: String(row.primary_email), displayName: String(row.display_name), avatarUrl: row.avatar_url ? String(row.avatar_url) : null, status: row.status as PersistentUser["status"] });
 
 export class SupabaseIdentityTenancyRepository implements IdentityTenancyRepository {
+  async userByWorkOSId(workosUserId: string) {
+    const rows = await rest(`tracekit_users?workos_user_id=eq.${encodeURIComponent(workosUserId)}&status=eq.active&limit=1`) as Row[];
+    return rows[0] ? user(rows[0]) : null;
+  }
+
+  async organizationByWorkOSId(workosOrganizationId: string) {
+    const rows = await rest(`tracekit_organizations?workos_organization_id=eq.${encodeURIComponent(workosOrganizationId)}&status=eq.active&limit=1`) as Row[];
+    const row = rows[0];
+    return row ? { id: String(row.id), owningAccountId: String(row.owning_account_id), agencyId: row.agency_id ? String(row.agency_id) : null, workosOrganizationId: String(row.workos_organization_id), name: String(row.name), status: String(row.status) } : null;
+  }
+
   async synchronizeUser(identity: WorkOSIdentityInput) {
     const displayName = [identity.firstName, identity.lastName].filter(Boolean).join(" ") || identity.email;
     const payload = { workos_user_id: identity.id, primary_email: identity.email, display_name: displayName, avatar_url: identity.profilePictureUrl || null, last_sign_in_at: new Date().toISOString(), updated_at: new Date().toISOString() };

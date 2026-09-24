@@ -359,3 +359,12 @@ test("real-data mode blocks privileged legacy proxies regardless of caller works
   assert.equal(shouldBlockLegacyRealDataProxy("/api/health", true), false);
   assert.equal(shouldBlockLegacyRealDataProxy("/api/customers", false), false);
 });
+
+test("MCP OAuth discovery and resource routes bypass interactive AuthKit middleware only", () => {
+  const middleware = readFileSync(new URL("../middleware.ts", import.meta.url), "utf8");
+  assert.match(middleware, /"\/api\/mcp"/);
+  assert.match(middleware, /"\/\.well-known\/oauth-protected-resource"/);
+  const mcpRoute = readFileSync(new URL("../app/api/mcp/route.ts", import.meta.url), "utf8");
+  assert.match(mcpRoute, /verifyMcpBearerToken/);
+  assert.match(mcpRoute, /WWW-Authenticate/);
+});

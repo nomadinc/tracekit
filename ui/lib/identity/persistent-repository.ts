@@ -47,6 +47,8 @@ export type FirstAdminBootstrapResult = {
 };
 
 export interface IdentityTenancyRepository {
+  userByWorkOSId(workosUserId: string): Promise<PersistentUser | null>;
+  organizationByWorkOSId(workosOrganizationId: string): Promise<PersistentOrganizationRecord | null>;
   synchronizeUser(identity: WorkOSIdentityInput): Promise<PersistentUser>;
   membershipsForUser(userId: string): Promise<PersistentMembership[]>;
   isEmptyInstallation(): Promise<boolean>;
