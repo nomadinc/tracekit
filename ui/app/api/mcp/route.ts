@@ -21,11 +21,6 @@ async function authenticatedSession(request:Request):Promise<McpAuthResult> {
   const authorization=request.headers.get("authorization");
   const scheme=authorization?.trim().split(/\s+/,1)[0]?.toLowerCase() || "none";
   const token=bearerToken(request);
-  console.info("[mcp-auth] request boundary", {
-    authorization_header_present: Boolean(authorization),
-    authorization_scheme: scheme === "bearer" ? "bearer" : scheme === "none" ? "none" : "other",
-    bearer_token_parsed: Boolean(token),
-  });
   if(authorization && scheme!=="bearer") return {session:null,diagnostic:"non_bearer_scheme"};
   if(authorization && !token) return {session:null,diagnostic:"bearer_parse_failed"};
   if(token){
@@ -36,7 +31,6 @@ async function authenticatedSession(request:Request):Promise<McpAuthResult> {
     }catch(error:unknown){
       const message=String((error as {message?:unknown}|null)?.message||"invalid_bearer_token");
       const reason=message.startsWith("invalid_bearer_token:") ? message.split(":")[1] : "verification_failed";
-      console.warn("[mcp-auth] bearer rejected", { reason });
       return {session:null,diagnostic:reason};
     }
   }
@@ -46,7 +40,7 @@ async function authenticatedSession(request:Request):Promise<McpAuthResult> {
 
 export async function POST(request: Request) {
   const auth=await authenticatedSession(request);
-  if(!auth.session) return json({jsonrpc:"2.0",id:null,error:{code:-32001,message:"Authentication required"}},401,{"WWW-Authenticate":mcpWwwAuthenticate(),"X-TraceKit-MCP-Auth-Diagnostic":auth.diagnostic});
+  if(!auth.session) return unauthorized();
   const session=auth.session;
   let body: unknown;
   try { body = await request.json(); }
