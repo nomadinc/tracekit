@@ -5,6 +5,7 @@ import { createTraceKitMcpReadService } from "@/lib/mcp/server";
 import { handleTraceKitMcpMessage, TRACEKIT_MCP_PROTOCOL_VERSION } from "@/lib/mcp/protocol";
 import { bearerToken, mcpWwwAuthenticate, verifyMcpBearerToken } from "@/lib/mcp/bearer-auth";
 import { resolveMcpExternalSession } from "@/lib/mcp/external-session";
+import type { TraceKitSessionContext } from "@/lib/identity/persistent-types";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -15,7 +16,7 @@ function json(body: unknown, status = 200, extraHeaders:Record<string,string>={}
 function unauthorized(message="Authentication required") {
   return json({ jsonrpc:"2.0",id:null,error:{code:-32001,message}},401,{"WWW-Authenticate":mcpWwwAuthenticate()});
 }
-type McpAuthResult = { session: Awaited<ReturnType<typeof resolveApplicationSession>> extends { session: infer S } ? S : never; diagnostic: "ok" } | { session: null; diagnostic: string };
+type McpAuthResult = { session: TraceKitSessionContext; diagnostic: "ok" } | { session: null; diagnostic: string };
 async function authenticatedSession(request:Request):Promise<McpAuthResult> {
   const authorization=request.headers.get("authorization");
   const scheme=authorization?.trim().split(/\s+/,1)[0]?.toLowerCase() || "none";
