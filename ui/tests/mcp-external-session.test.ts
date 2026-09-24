@@ -27,3 +27,17 @@ test("external MCP identity fails closed when token organization is not the user
  const repo=repository({membershipsForUser:async()=>[{id:"other",userId:"usr",accountId:"acct",organizationId:"other-org",role:"organization-admin",status:"active"}]});
  assert.equal(await resolveMcpExternalSession({workosUserId:"w-user",workosOrganizationId:"w-org"},repo),null);
 });
+
+test("external MCP identity without org claim resolves exactly one active organization membership",async()=>{
+ const session=await resolveMcpExternalSession({workosUserId:"w-user",workosOrganizationId:null},repository());
+ assert.equal(session?.activeOrganization?.id,"org");
+});
+test("external MCP identity without org claim fails closed when organization membership is ambiguous",async()=>{
+ const repo=repository({
+  membershipsForUser:async()=>[
+   {id:"m1",userId:"usr",accountId:"acct",organizationId:"org",role:"organization-admin",status:"active"},
+   {id:"m2",userId:"usr",accountId:"acct",organizationId:"org-2",role:"organization-admin",status:"active"},
+  ],
+ });
+ assert.equal(await resolveMcpExternalSession({workosUserId:"w-user",workosOrganizationId:null},repo),null);
+});
