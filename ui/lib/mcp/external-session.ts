@@ -7,7 +7,7 @@ import { MOCK_BUSINESS_CONTEXTS } from "@/lib/identity/mock";
 
 export type McpExternalIdentity = {
   workosUserId: string;
-  workosOrganizationId: string;
+  workosOrganizationId?: string | null;
   authenticationMethod?: string | null;
 };
 
@@ -15,16 +15,26 @@ export async function resolveMcpExternalSession(
   identity: McpExternalIdentity,
   repository: IdentityTenancyRepository,
 ): Promise<TraceKitSessionContext | null> {
-  if (!identity.workosUserId || !identity.workosOrganizationId) return null;
-  const [user, organizationRecord] = await Promise.all([
-    repository.userByWorkOSId(identity.workosUserId),
-    repository.organizationByWorkOSId(identity.workosOrganizationId),
-  ]);
-  if (!user || user.status !== "active" || !organizationRecord || organizationRecord.status !== "active") return null;
+  if (!identity.workosUserId) return null;
+  const user = await repository.userByWorkOSId(identity.workosUserId);
+  if (!user || user.status !== "active") return null;
 
-  const memberships = await repository.membershipsForUser(user.id);
-  const membership = memberships.find((candidate) => candidate.status === "active" && candidate.organizationId === organizationRecord.id);
-  if (!membership) return null;
+  const memberships = (await repository.membershipsForUser(user.id)).filter((candidate) => candidate.status === "active");
+  let membership = null as (typeof memberships)[number] | null;
+  let organizationRecord = null as Awaited<ReturnType<IdentityTenancyRepository["organizationByWorkOSId"]>>;
+
+  if (identity.workosOrganizationId) {
+    organizationRecord = await repository.organizationByWorkOSId(identity.workosOrganizationId);
+    if (!organizationRecord || organizationRecord.status !== "active") return null;
+    membership = memberships.find((candidate) => candidate.organizationId === organizationRecord!.id) || null;
+  } else {
+    const organizationMemberships = memberships.filter((candidate) => Boolean(candidate.organizationId));
+    if (organizationMemberships.length !== 1) return null;
+    membership = organizationMemberships[0];
+    const candidates = await repository.organizationsForMembership(membership, null);
+    organizationRecord = candidates.find((candidate) => candidate.id === membership!.organizationId) || null;
+  }
+  if (!membership || !organizationRecord || organizationRecord.status !== "active") return null;
 
   const account = await repository.accountById(membership.accountId || organizationRecord.owningAccountId);
   if (!account || account.status !== "active") return null;
