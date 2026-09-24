@@ -38,7 +38,8 @@ export async function verifyMcpBearerToken(token:string) {
   let header:JwtHeader,payload:JwtPayload;
   try { header=JSON.parse(b64url(parts[0]).toString("utf8")); payload=JSON.parse(b64url(parts[1]).toString("utf8")); }
   catch { reject("decode_failed"); }
-  if(header.alg!=="RS256") reject("unsupported_alg");\n  if(!header.kid) reject("missing_kid");
+  if(header.alg!=="RS256") reject("unsupported_alg");
+  if(!header.kid) reject("missing_kid");
   const issuer=authKitIssuer();
   if(payload.iss!==issuer) reject("issuer_mismatch");
   if(!audienceMatches(payload.aud)) reject("audience_mismatch");
