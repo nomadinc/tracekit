@@ -7137,13 +7137,9 @@ async function createChargebackIngestionJob(env: Env, args: ChargebackBackfillRe
   return data as ImportJobRow;
 }
 
-async function startChargebackIngestionRuntimeJob(env: Env, args: ChargebackBackfillRequest) {
+async function ensureChargebackIngestionRuntimeJob(env: Env, args: ChargebackBackfillRequest) {
   if (!env.wowboost_imports) {
-    return json({
-      ok: false,
-      error: "queue_not_configured",
-      message: "wowboost_imports queue binding is missing. Check wrangler.toml.",
-    }, 500);
+    throw new Error("wowboost_imports queue binding is missing. Check wrangler.toml.");
   }
 
   const accounts = await discoverChargebackProcessorAccounts(env, args.workspace_id, args.platforms);
@@ -7159,11 +7155,7 @@ async function startChargebackIngestionRuntimeJob(env: Env, args: ChargebackBack
     });
     if (existing) {
       await reconcileConnectorRuntimeJobQueue(env, existing, { reason: "chargeback_backfill_resume" }).catch(() => {});
-      return json({
-        ok: true,
-        reused: true,
-        job: await connectorRuntimeJobPayload(env, existing),
-      });
+      return { reused: true, accounts, job: await connectorRuntimeJobPayload(env, existing) };
     }
   }
 
@@ -7172,18 +7164,73 @@ async function startChargebackIngestionRuntimeJob(env: Env, args: ChargebackBack
     await createAndEnqueueConnectorRuntimeTask(env, chargebackTaskPlanForAccount({ job, request: args, account }));
   }
   const updated = await getImportJob(env, job.id);
+  return { reused: false, accounts, job: await connectorRuntimeJobPayload(env, updated || job) };
+}
+
+async function startChargebackIngestionRuntimeJob(env: Env, args: ChargebackBackfillRequest) {
+  if (!env.wowboost_imports) {
+    return json({
+      ok: false,
+      error: "queue_not_configured",
+      message: "wowboost_imports queue binding is missing. Check wrangler.toml.",
+    }, 500);
+  }
+
+  const result = await ensureChargebackIngestionRuntimeJob(env, args);
   return json({
     ok: true,
-    reused: false,
-    accounts: accounts.map((account) => ({
-      account_key: account.account_key,
-      platform: account.platform,
-      family: account.family,
-      connector_id: account.connector_id,
-      processor_account_id: account.processor_account_id,
-    })),
-    job: await connectorRuntimeJobPayload(env, updated || job),
-  }, 202);
+    reused: result.reused,
+    ...(result.reused ? {} : {
+      accounts: result.accounts.map((account) => ({
+        account_key: account.account_key,
+        platform: account.platform,
+        family: account.family,
+        connector_id: account.connector_id,
+        processor_account_id: account.processor_account_id,
+      })),
+    }),
+    job: result.job,
+  }, result.reused ? 200 : 202);
+}
+
+async function runScheduledPaypalDisputeImport(env: Env) {
+  const settings = await getIntegrationSettings(env, "paypal", {
+    auto_import_enabled: true,
+    auto_import_interval_minutes: 60,
+    auto_import_lookback_hours: 30,
+  });
+  if (!settings?.auto_import_enabled) return;
+
+  const now = new Date();
+  const lookbackHours = Math.max(24, Math.min(72, Number(settings.auto_import_lookback_hours || 30)));
+  const from = new Date(now.getTime() - lookbackHours * 3600000).toISOString().slice(0, 10);
+  const to = now.toISOString().slice(0, 10);
+
+  try {
+    const result = await ensureChargebackIngestionRuntimeJob(env, {
+      workspace_id: "default",
+      from,
+      to,
+      platforms: ["paypal"],
+      dry_run: false,
+      force_new_job: false,
+      paypal_page_size: CHARGEBACK_PAYPAL_DEFAULT_PAGE_SIZE,
+      gateway_page_size: CHARGEBACK_GATEWAY_DEFAULT_PAGE_SIZE,
+      gateway_max_pages: CHARGEBACK_GATEWAY_DEFAULT_MAX_PAGES,
+    });
+    console.log("[cron] paypal dispute sync", {
+      reused: result.reused,
+      from,
+      to,
+      accounts: result.accounts.length,
+    });
+  } catch (error) {
+    console.error("[cron] paypal dispute sync failed", {
+      error: error instanceof Error ? error.message : String(error),
+      from,
+      to,
+    });
+  }
 }
 
 function chargebackProgressAccounts(progress: ConnectorRuntimeProgress & Record<string, any>) {
@@ -23940,6 +23987,7 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
     ctx.waitUntil(runScheduledCheckoutChampImport(env));
     ctx.waitUntil(runScheduledShopifyImport(env));
     ctx.waitUntil(runScheduledPaypalImport(env));
+    ctx.waitUntil(runScheduledPaypalDisputeImport(env));
     ctx.waitUntil(runScheduledGatewayTransactionSnapshotImport(env));
     ctx.waitUntil(runScheduledWowBoostImport(env));
     ctx.waitUntil(runScheduledDomainEventProjectionReplay(getSupabase(env), {
