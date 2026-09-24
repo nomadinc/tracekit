@@ -35,7 +35,7 @@ export default function middleware(request: NextRequest, event: NextFetchEvent) 
     redirectUri,
     middlewareAuth: {
       enabled: true,
-      unauthenticatedPaths: ["/auth/:path*", "/api/health", "/api/cron/:path*", "/api/webhooks/shopify", "/api/next29/webhook/:path*", "/api/internal/next29-credential-repair"],
+      unauthenticatedPaths: ["/auth/:path*", "/api/health", "/api/cron/:path*", "/api/webhooks/shopify", "/api/next29/webhook/:path*", "/api/internal/next29-credential-repair", "/api/mcp", "/.well-known/oauth-protected-resource"],
     },
   })(request, event);
 }
