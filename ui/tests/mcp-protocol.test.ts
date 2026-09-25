@@ -33,3 +33,16 @@ test("MCP governed denial becomes generic tool error",async()=>{
  assert.equal(result.result.isError,true);
  assert.equal(result.result.content[0].text,"The requested resource is unavailable.");
 });
+
+test("M4 protocol keeps internal failures generic and unavailable resources non-specific",async()=>{
+ const failing:any={listCustomers:async()=>{throw new Error("database password secret");},getCustomer:async()=>{throw new Error("access_denied");},listOrders:async()=>[],getOrder:async()=>null,search:async()=>[]};
+ const internal:any=await handleTraceKitMcpMessage(failing,{jsonrpc:"2.0",id:20,method:"tools/call",params:{name:"tracekit.list_customers",arguments:{limit:5}}});
+ assert.equal(internal.result.isError,true); assert.equal(internal.result.content[0].text,"TraceKit could not complete the request."); assert.doesNotMatch(JSON.stringify(internal),/password secret/);
+ const denied:any=await handleTraceKitMcpMessage(failing,{jsonrpc:"2.0",id:21,method:"tools/call",params:{name:"tracekit.get_customer",arguments:{customer_id:"foreign"}}});
+ assert.equal(denied.result.isError,true); assert.equal(denied.result.content[0].text,"The requested resource is unavailable.");
+});
+test("M4 protocol rejects unknown arguments before tool execution",async()=>{
+ let called=false; const svc:any={listCustomers:async()=>{called=true;return[];}};
+ const out:any=await handleTraceKitMcpMessage(svc,{jsonrpc:"2.0",id:22,method:"tools/call",params:{name:"tracekit.list_customers",arguments:{limit:5,organization_id:"foreign"}}});
+ assert.equal(out.error.code,-32602); assert.equal(called,false);
+});
