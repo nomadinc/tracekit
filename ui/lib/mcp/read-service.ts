@@ -26,7 +26,7 @@ type McpOrderRepository = {
 export type McpReadRepositories = {
   customers: McpCustomerRepository;
   orders: McpOrderRepository;
-  journey: { explain(scope: ProductionCustomerScope, customerId: string, journeyId?: string): Promise<JourneyIntelligence | null>; analyze(scope: ProductionCustomerScope, limit?: number): Promise<CrossJourneyAnalysis> };
+  journey: { explain(scope: ProductionCustomerScope, customerId: string, journeyId?: string): Promise<JourneyIntelligence | null>; analyze(scope: ProductionCustomerScope, customerLimit?: number, journeyLimit?: number): Promise<CrossJourneyAnalysis> };
   audit: Pick<IdentityTenancyRepository, "recordAuditEvent">;
 };
 
@@ -90,11 +90,12 @@ export class TraceKitMcpReadService {
     });
   }
 
-  analyzeJourneys(input:{limit?:number}={}) {
+  analyzeJourneys(input:{customerLimit?:number;journeyLimit?:number}={}) {
     return this.audited("analyze_journeys", "customers.view", null, null, async () => {
       const scope=authorizeMcpRead(this.session,"customers.view") as ProductionCustomerScope;
-      const limit=Math.max(1,Math.min(50,Math.trunc(input.limit||25)));
-      return this.repositories.journey.analyze(scope,limit);
+      const customerLimit=Math.max(1,Math.min(50,Math.trunc(input.customerLimit||25)));
+      const journeyLimit=Math.max(1,Math.min(100,Math.trunc(input.journeyLimit||50)));
+      return this.repositories.journey.analyze(scope,customerLimit,journeyLimit);
     });
   }
 
