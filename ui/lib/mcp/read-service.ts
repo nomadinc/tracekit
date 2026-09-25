@@ -8,6 +8,7 @@ import { productionCustomerRepository } from "@/lib/customers/production-reposit
 import { productionOrderRepository } from "@/lib/orders/production-repository";
 import { authorizeMcpRead, projectCustomerSummary, projectCustomerWorkspace, projectOrderSummary, projectOrderWorkspace } from "./governed-read-service";
 import { recordMcpToolAudit } from "./audit";
+import type { JourneyIntelligence } from "./journey-repository";
 
 type McpCustomerRepository = Pick<
   CustomerRepository<ProductionCustomerScope>,
@@ -25,6 +26,7 @@ type McpOrderRepository = {
 export type McpReadRepositories = {
   customers: McpCustomerRepository;
   orders: McpOrderRepository;
+  journey: { explain(scope: ProductionCustomerScope, customerId: string, journeyId?: string): Promise<JourneyIntelligence | null> };
   audit: Pick<IdentityTenancyRepository, "recordAuditEvent">;
 };
 
@@ -85,6 +87,13 @@ export class TraceKitMcpReadService {
       const scope = authorizeMcpRead(this.session, "customers.view") as ProductionCustomerScope;
       const value: CustomerWorkspaceSnapshot | null = await this.repositories.customers.loadWorkspace(scope, customerId);
       return value ? projectCustomerWorkspace(this.session, value) : null;
+    });
+  }
+
+  explainJourney(customerId: string, journeyId?: string) {
+    return this.audited("explain_journey", "customers.view", "customer", customerId, async () => {
+      const scope = authorizeMcpRead(this.session, "customers.view") as ProductionCustomerScope;
+      return this.repositories.journey.explain(scope, customerId, journeyId);
     });
   }
 
