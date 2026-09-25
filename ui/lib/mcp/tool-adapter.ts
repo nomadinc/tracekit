@@ -28,6 +28,21 @@ export const TRACEKIT_MCP_TOOLS = [
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   {
+    name: "tracekit.explain_journey",
+    title: "Explain TraceKit journey",
+    description: "Return the authorized canonical Journey as structured chronology, attribution evidence, commerce relationships, provenance, and explicit evidence limits. Conclusions remain evidence-backed.",
+    inputSchema: {
+      type: "object",
+      properties: {
+        customer_id: { type: "string", minLength: 1, maxLength: 512 },
+        journey_id: { type: "string", minLength: 1, maxLength: 512 },
+      },
+      required: ["customer_id"],
+      additionalProperties: false,
+    },
+    annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+  },
+  {
     name: "tracekit.list_orders",
     title: "List TraceKit orders",
     description: "List orders visible in the authenticated TraceKit Organization. Financial and customer-sensitive fields are permission-projected.",
@@ -106,6 +121,9 @@ export async function callTraceKitMcpTool(
     case "tracekit.get_customer":
       assertKeys(args, ["customer_id"]);
       return service.getCustomer(text(args.customer_id, "customer_id", true)!);
+    case "tracekit.explain_journey":
+      assertKeys(args, ["customer_id", "journey_id"]);
+      return service.explainJourney(text(args.customer_id, "customer_id", true)!, text(args.journey_id, "journey_id"));
     case "tracekit.list_orders":
       assertKeys(args, ["query", "customer_id", "offer_id", "limit"]);
       return service.listOrders({
