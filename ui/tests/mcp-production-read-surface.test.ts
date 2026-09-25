@@ -1,0 +1,3 @@
+import assert from "node:assert/strict";import test from "node:test";import{readFileSync}from"node:fs";
+test("M4 MCP read repositories are server-native",()=>{for(const file of ["customer-repository.ts","order-repository.ts"]){const s=readFileSync(new URL(`../lib/mcp/${file}`,import.meta.url),"utf8");assert.match(s,/TRACEKIT_API_BASE_URL/);assert.match(s,/x-tk-secret/);assert.doesNotMatch(s,/fetch\(\s*["'`]\/api\//);}});
+test("M4 MCP server does not wire browser production repositories",()=>{const s=readFileSync(new URL("../lib/mcp/server.ts",import.meta.url),"utf8");assert.match(s,/mcpCustomerRepository/);assert.match(s,/mcpOrderRepository/);assert.doesNotMatch(s,/productionCustomerRepository|productionOrderRepository/);});
