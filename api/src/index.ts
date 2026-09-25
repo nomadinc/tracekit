@@ -3,6 +3,7 @@
 // Integrations: CheckoutChamp/Konnektive + WOWSuite (WowBoost + WowPay umbrella)
 
 import { createClient } from "@supabase/supabase-js";
+import { adminAuthError } from "./admin-auth";
 import { queryCheckoutChampTransactions } from "./connectors/checkoutchamp/client";
 import { createCheckoutChampTransactionEvidenceStore } from "./connectors/checkoutchamp/evidence-store";
 import {
@@ -709,17 +710,6 @@ async function fetchWithTimeout(url: string, init: RequestInit = {}, timeoutMs =
 
 async function readJsonBody(req: Request) {
   return (await req.json().catch(() => ({}))) as any;
-}
-
-function adminAuthError(req: Request, env: Env) {
-  const expected = String(env.TK_SECRET_KEY || "").trim();
-  if (!expected) return json({ ok: false, error: "admin_auth_not_configured" }, 500);
-  const headerSecret = String(req.headers.get("x-tk-secret") || "").trim();
-  const authorization = String(req.headers.get("authorization") || "").trim();
-  const bearerMatch = /^Bearer\s+(.+)$/i.exec(authorization);
-  const supplied = headerSecret || String(bearerMatch?.[1] || "").trim();
-  if (supplied && supplied === expected) return null;
-  return json({ ok: false, error: "unauthorized" }, 401);
 }
 
 async function loadRetainedCommasDisputeState(db: any, env: Env, eventId: string, scope: { organizationId: string; connectionId: string; providerAccountId: string }) {
@@ -21693,6 +21683,8 @@ if (path === "/v1/product-costs/rules/delete" && req.method === "POST") {
   }
   
   if (path === "/v1/integrations/gateway-classic/import-one-page" && req.method === "POST") {
+  const auth = adminAuthError(req, env);
+  if (auth) return auth;
   try {
     const body = await readJsonBody(req);
     const platform = String(body.platform ?? "").trim();
@@ -21726,6 +21718,8 @@ if (path === "/v1/product-costs/rules/delete" && req.method === "POST") {
 }
 
 if (path === "/v1/integrations/gateway-classic/status" && req.method === "GET") {
+  const auth = adminAuthError(req, env);
+  if (auth) return auth;
   try {
     const url = new URL(req.url);
     const platform = String(url.searchParams.get("platform") || "").trim();
@@ -21767,6 +21761,8 @@ if (path === "/v1/integrations/gateway-classic/status" && req.method === "GET") 
 }
 
 if (path === "/v1/integrations/gateway-classic/list" && req.method === "GET") {
+  const auth = adminAuthError(req, env);
+  if (auth) return auth;
   try {
     const supabase = getSupabase(env);
 
