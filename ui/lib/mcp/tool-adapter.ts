@@ -46,7 +46,7 @@ export const TRACEKIT_MCP_TOOLS = [
     name: "tracekit.analyze_journeys",
     title: "Analyze TraceKit journeys",
     description: "Aggregate bounded, authorized Journey evidence across customers. Returns denominated conclusion coverage, retained source/connector/affiliate/offer breakdowns, evidence limits, and bounded supporting samples without causal or quality scoring.",
-    inputSchema: {type:"object",properties:{limit:{type:"integer",minimum:1,maximum:50,default:25}},additionalProperties:false},
+    inputSchema: {type:"object",properties:{customer_limit:{type:"integer",minimum:1,maximum:50,default:25},journey_limit:{type:"integer",minimum:1,maximum:100,default:50}},additionalProperties:false},
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   {
@@ -132,8 +132,8 @@ export async function callTraceKitMcpTool(
       assertKeys(args, ["customer_id", "journey_id"]);
       return service.explainJourney(text(args.customer_id, "customer_id", true)!, text(args.journey_id, "journey_id"));
     case "tracekit.analyze_journeys":
-      assertKeys(args, ["limit"]);
-      return service.analyzeJourneys({limit:limit(args.limit,50,25)});
+      assertKeys(args, ["customer_limit", "journey_limit"]);
+      return service.analyzeJourneys({customerLimit:limit(args.customer_limit,50,25),journeyLimit:limit(args.journey_limit,100,50)});
     case "tracekit.list_orders":
       assertKeys(args, ["query", "customer_id", "offer_id", "limit"]);
       return service.listOrders({
