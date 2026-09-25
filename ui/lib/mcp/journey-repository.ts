@@ -26,8 +26,8 @@ export type CrossJourneyAnalysis={
  conclusions:{attributionEstablished:{count:number;denominator:number};attributionUnresolved:{count:number;denominator:number};commerceLinked:{count:number;denominator:number};deterministicIdentityBridge:{count:number;denominator:number};deterministicIdentityBridgeMissing:{count:number;denominator:number}};
  bySourcePlatform:Array<{value:string;journeys:number}>;byConnector:Array<{value:string;journeys:number}>;byAffiliate:Array<{value:string;journeys:number}>;byOffer:Array<{value:string;journeys:number}>;evidenceLimits:Array<{value:string;journeys:number}>;samples:Array<{customerId:string;journeyId:string|null;attributionStatus:string;commerceLinked:boolean;deterministicIdentityBridge:boolean}>;
 };
-function counts(values:string[]){const m=new Map<string,number>();for(const v of new Set(values.filter(Boolean)))m.set(v,(m.get(v)||0)+1);return m;}
-function add(map:Map<string,number>,values:string[]){for(const v of new Set(values.filter(Boolean)))map.set(v,(map.get(v)||0)+1);}
+
+function add(map:Map<string,number>,values:string[]){for(const v of Array.from(new Set(values.filter(Boolean))))map.set(v,(map.get(v)||0)+1);}
 export const mcpJourneyRepository={
  async analyze(s:ProductionCustomerScope,limit=25):Promise<CrossJourneyAnalysis>{
   if(!s.authenticated)return{analyzed:{customers:0,journeys:0},conclusions:{attributionEstablished:{count:0,denominator:0},attributionUnresolved:{count:0,denominator:0},commerceLinked:{count:0,denominator:0},deterministicIdentityBridge:{count:0,denominator:0},deterministicIdentityBridgeMissing:{count:0,denominator:0}},bySourcePlatform:[],byConnector:[],byAffiliate:[],byOffer:[],evidenceLimits:[],samples:[]};
