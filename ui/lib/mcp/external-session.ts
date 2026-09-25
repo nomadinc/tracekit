@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { IdentityTenancyRepository } from "@/lib/identity/persistent-repository";
 import type { TraceKitSessionContext } from "@/lib/identity/persistent-types";
 import { resolveEffectivePermissions } from "@/lib/identity/persistent-authorization";
-import type { BusinessContext } from "@/lib/identity/types";
+import { persistentBusinessContextsWithDisplay } from "@/lib/identity/business-context-resolution";
 import { MOCK_BUSINESS_CONTEXTS } from "@/lib/identity/mock";
 
 export type McpExternalIdentity = {
@@ -44,10 +44,11 @@ export async function resolveMcpExternalSession(
 
   const overrides = await repository.permissionOverrides(membership.id);
   const effectivePermissions = Array.from(resolveEffectivePermissions(membership, overrides));
-  const allowedContextIds = await repository.businessContextIds(membership.id, organizationRecord.id);
-  const accessibleBusinessContexts: BusinessContext[] = MOCK_BUSINESS_CONTEXTS
-    .filter((context) => allowedContextIds.includes(context.id))
-    .map((context) => ({ ...context, organizationId: organizationRecord.id }));
+  const persistentContexts = await repository.businessContexts(membership.id, organizationRecord.id);
+  const accessibleBusinessContexts = persistentBusinessContextsWithDisplay(
+    persistentContexts.filter((context) => context.organizationId === organizationRecord.id),
+    MOCK_BUSINESS_CONTEXTS,
+  );
 
   return {
     user,

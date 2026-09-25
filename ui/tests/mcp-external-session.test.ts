@@ -11,7 +11,7 @@ function repository(overrides:Partial<IdentityTenancyRepository>={}):IdentityTen
   synchronizeUser:async()=>{throw new Error("not used");}, membershipsForUser:async()=>[membership], isEmptyInstallation:async()=>false,
   bootstrapFirstAdmin:async()=>{throw new Error("not used");}, accountById:async()=>({id:"acct",accountType:"client",name:"Account",status:"active"}),
   agencyByAccountId:async()=>null, organizationsForMembership:async()=>[{id:"org",owningAccountId:"acct",agencyId:null,workosOrganizationId:"w-org",name:"Org",status:"active"}],
-  permissionOverrides:async()=>[],businessContextIds:async()=>[],recordAuditEvent:async()=>{},
+  permissionOverrides:async()=>[],businessContexts:async()=>[],recordAuditEvent:async()=>{},
   ...overrides,
  } as IdentityTenancyRepository;
 }
@@ -40,4 +40,45 @@ test("external MCP identity without org claim fails closed when organization mem
   ],
  });
  assert.equal(await resolveMcpExternalSession({workosUserId:"w-user",workosOrganizationId:null},repo),null);
+});
+
+test("external MCP session authorizes persistent contexts absent from mock metadata",async()=>{
+ const persistent={id:"persistent-context",organizationId:"org",name:"Persistent Context",mark:"PC"};
+ const session=await resolveMcpExternalSession({workosUserId:"w-user",workosOrganizationId:"w-org"},repository({businessContexts:async(membershipId,organizationId)=>{
+  assert.equal(membershipId,"mem"); assert.equal(organizationId,"org"); return [persistent];
+ }}));
+ assert.deepEqual(session?.accessibleBusinessContexts,[persistent]);
+ assert.equal(session?.activeBusinessContextId,"persistent-context");
+});
+
+test("external MCP session uses mock context data only as display decoration",async()=>{
+ const session=await resolveMcpExternalSession({workosUserId:"w-user",workosOrganizationId:"w-org"},repository({
+  businessContexts:async()=>[{id:"offer-bullseye",organizationId:"org",name:"Persistent Name",mark:"PN"}],
+ }));
+ assert.deepEqual(session?.accessibleBusinessContexts,[{id:"offer-bullseye",organizationId:"org",name:"Bullseye",mark:"B"}]);
+ assert.equal(session?.activeBusinessContextId,"offer-bullseye");
+});
+
+test("external MCP session cannot activate a mock-only or missing persistent context",async()=>{
+ const session=await resolveMcpExternalSession({workosUserId:"w-user",workosOrganizationId:"w-org"},repository({businessContexts:async()=>[]}));
+ assert.deepEqual(session?.accessibleBusinessContexts,[]);
+ assert.equal(session?.activeBusinessContextId,null);
+});
+
+test("external MCP session excludes contexts outside the selected organization",async()=>{
+ const session=await resolveMcpExternalSession({workosUserId:"w-user",workosOrganizationId:"w-org"},repository({
+  businessContexts:async()=>[{id:"offer-bullseye",organizationId:"other-org",name:"Other",mark:"O"}],
+ }));
+ assert.deepEqual(session?.accessibleBusinessContexts,[]);
+ assert.equal(session?.activeBusinessContextId,null);
+});
+
+test("external MCP permission overrides retain deny precedence independently of context resolution",async()=>{
+ const overrides:any[]=[
+  {id:"allow",membershipId:"mem",capability:"admin.manage_feature_access",effect:"allow",organizationId:"org",resourceType:"tkid_origin_registry",resourceId:null},
+  {id:"deny",membershipId:"mem",capability:"admin.manage_feature_access",effect:"deny",organizationId:"org",resourceType:"tkid_origin_registry",resourceId:null},
+ ];
+ const session=await resolveMcpExternalSession({workosUserId:"w-user",workosOrganizationId:"w-org"},repository({permissionOverrides:async()=>overrides}));
+ assert.deepEqual(session?.permissionOverrides,overrides);
+ assert.equal(session?.effectivePermissions.includes("admin.manage_feature_access"),false);
 });
