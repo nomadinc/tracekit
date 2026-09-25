@@ -1,5 +1,5 @@
 import type { CustomerListFilter, CustomerSearchResult, CustomerSummary, CustomerWorkspaceSnapshot, ProductionCustomerScope } from "@/lib/customers/types";
-import { productionCustomerRepository } from "@/lib/customers/production-repository";
+
 
 function apiBaseUrl() {
   return String(process.env.TRACEKIT_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8787").replace(/\/+$/, "");
@@ -41,9 +41,17 @@ export const mcpCustomerRepository = {
     return rows.map((row:CustomerSummary)=>({id:row.id,type:"customer",title:row.name,subtitle:row.journeyPreview,value:row.id,href:`/customers?v=1&customer_id=${encodeURIComponent(row.id)}`}));
   },
   async loadWorkspace(scope:ProductionCustomerScope,customerId:string):Promise<CustomerWorkspaceSnapshot|null> {
-    // Detail mapping remains shared with the production repository for now; M3 live proof only exercises list/search.
-    // Fail closed rather than loop back through the public UI API from the server runtime.
-    void scope; void customerId; void productionCustomerRepository;
-    throw new Error("mcp_customer_detail_not_yet_server_adapted");
+    if(!scope.authenticated||!customerId) return null;
+    const detail=await coreGet(`/v1/customers/${encodeURIComponent(customerId)}?${qs(scope)}`);
+    const journeys=Array.isArray(detail.journeys)?detail.journeys:[];
+    const selected=journeys[0]||null;
+    let journey:any=null;
+    if(selected?.id) journey=await coreGet(`/v1/customers/${encodeURIComponent(customerId)}/journeys/${encodeURIComponent(selected.id)}?${qs(scope,{limit:100})}`);
+    const listLike={customer:detail.customer,last_activity_at:detail.summary?.last_seen_at,journey_count:detail.summary?.total_journeys,order_count:detail.summary?.total_orders,has_attribution:Array.isArray(detail.attribution)&&detail.attribution.some((x:any)=>x?.status==="attributed"),identity_status:detail.summary?.identity_status,source_systems:detail.summary?.source_systems||[]};
+    const customer=summary(listLike,scope);
+    const rawOrders=Array.isArray(detail.orders)?detail.orders:[];
+    const orders=rawOrders.map((row:any)=>({id:String(row?.order_id||row?.platform_order_id||""),number:String(row?.order_id||row?.platform_order_id||"Order"),date:String(row?.created_at||"Not observed"),amount:Number(row?.amount||0),profit:null,profitStatus:"Estimated" as const,profitAvailable:false,status:String(row?.status||"Unknown"),refunded:/refund|return|void|chargeback/i.test(String(row?.status||"")),offerId:String(row?.offer_id||""),offerName:row?.offer_id?`Offer ${row.offer_id}`:"Offer evidence unavailable",trackingHealth:"Unknown" as const}));
+    const events=Array.isArray(journey?.events)?journey.events:Array.isArray(journey?.activity)?journey.activity:[];
+    return {customer,lifetimeRevenue:Number(detail.summary?.lifetime_revenue||0),customerSince:String(detail.summary?.first_seen_at||"Not observed"),firstTouch:String(detail.customer_360?.acquisition?.first_attributed_source?.source||"No retained attribution conclusion"),lastPurchase:orders[0]?.date||"No linked purchase",journeyId:String(selected?.id||"No canonical journey"),journey:events.map((row:any)=>({id:String(row?.id||""),name:String(row?.title||row?.event_type||"Event"),timestamp:String(row?.occurred_at||row?.event_time||"Not observed"),domain:String(row?.source_platform||"TraceKit"),role:String(row?.category||row?.event_type||"evidence"),status:row?.system_derived?"Derived":"Observed",confidence:"Retained evidence",trackingHealth:"Unknown" as const,trackingStatus:row?.system_derived?"Derived":"Observed",originalUrl:String(row?.display_fields?.url||row?.url||""),referrer:"",destinationUrl:"",queryParameters:{},identifiers:[],redirects:[],diagnostics:[],relationships:[],explanation:{conclusion:String(row?.summary||row?.title||"Evidence recorded."),reason:"Retained production evidence.",evidence:[]}})),orders,offers:[],privacySignals:[],trackingExplanation:events.length?"Production Journey evidence is available.":"No canonical Journey events are available for this customer."};
   },
 };
