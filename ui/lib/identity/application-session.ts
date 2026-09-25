@@ -10,9 +10,9 @@ import { SupabaseIdentityTenancyRepository } from "./supabase-identity-repositor
 import { cookies } from "next/headers";
 import { headers } from "next/headers";
 import { ACTIVE_ORGANIZATION_COOKIE, readActiveOrganization } from "./active-organization-cookie";
-import type { BusinessContext } from "./types";
 import { MOCK_BUSINESS_CONTEXTS } from "./mock";
 import { resolveUnaffiliatedSessionState } from "./first-admin-bootstrap";
+import { persistentBusinessContextsWithDisplay } from "./business-context-resolution";
 
 const DEVELOPMENT_REVIEW_HEADER = "x-tracekit-development-review";
 
@@ -111,16 +111,10 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
   const permissions = Array.from(resolveEffectivePermissions(membership, overrides));
   const requestedOrganizationId = readActiveOrganization(jar.get(ACTIVE_ORGANIZATION_COOKIE)?.value, user.id);
   const activeOrganization = organizations.find((organization) => organization.id === requestedOrganizationId) || organizations[0] || null;
-  // Display metadata remains mock-only; persistent access rows constrain which IDs may be shown.
-  const allowedContextIds = activeOrganization ? await repository.businessContextIds(membership.id, activeOrganization.id) : [];
-  const businessContexts: BusinessContext[] = activeOrganization
-    ? MOCK_BUSINESS_CONTEXTS.filter((context) =>
-        allowedContextIds.includes(context.id),
-      ).map((context) => ({
-        ...context,
-        organizationId: activeOrganization.id,
-      }))
-    : [];
+  // Persistent access and catalog rows authorize the context. Mock metadata is
+  // an optional display overlay and can never remove a persistent context.
+  const persistentContexts = activeOrganization ? await repository.businessContexts(membership.id, activeOrganization.id) : [];
+  const businessContexts = persistentBusinessContextsWithDisplay(persistentContexts, MOCK_BUSINESS_CONTEXTS);
   const activeBusinessContextId = businessContexts[0]?.id ?? null;
   const session: TraceKitSessionContext = {
     user,

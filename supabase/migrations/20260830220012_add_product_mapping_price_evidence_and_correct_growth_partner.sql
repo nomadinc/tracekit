@@ -5,7 +5,8 @@ do $$
 declare
   v_corrected_count integer;
 begin
-  update public.commerce_product_mapping_rules
+  if public.pbs_historical_tenant_prerequisite_v1() then
+    update public.commerce_product_mapping_rules
   set status = 'inactive',
       evidence = evidence || jsonb_build_object(
         'correction', 'discounted_price_does_not_establish_funnel_identity',
@@ -20,9 +21,10 @@ begin
     and match_value in ('ZvpxR', 'JEoZJ')
     and offer_step_id = '995cc1b6-1d91-45a0-a571-d74cabbc8489'::uuid;
 
-  get diagnostics v_corrected_count = row_count;
-  if v_corrected_count <> 2 then
-    raise exception 'expected exactly two ambiguous Growth Partner rules, corrected %', v_corrected_count;
+    get diagnostics v_corrected_count = row_count;
+    if v_corrected_count <> 2 then
+      raise exception 'expected exactly two ambiguous Growth Partner rules, corrected %', v_corrected_count;
+    end if;
   end if;
 end $$;
 

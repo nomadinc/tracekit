@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const migration = readFileSync(new URL("../../supabase/migrations/20260830233407_add_commas_economic_order_allocations.sql", import.meta.url), "utf8");
+const migration = readFileSync(new URL("../../supabase/migrations/20260831010201_add_commas_economic_order_allocations.sql", import.meta.url), "utf8");
 const worker = readFileSync(new URL("../lib/commerce/commas-continuous-worker.ts", import.meta.url), "utf8");
 
 const allocation = (gross: number) => {
