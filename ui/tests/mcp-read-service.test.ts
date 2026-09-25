@@ -38,3 +38,26 @@ test("M2 search exposes only entity classes the principal can view",async()=>{
  const y=repositories(); const restricted=new TraceKitMcpReadService(session("read-only-operations"),y.repos as any);
  assert.deepEqual(await restricted.search("Person"),[]);
 });
+
+test("M4 nonexistent entity IDs return null and successful audited reads",async()=>{
+ const x=repositories(); const svc=new TraceKitMcpReadService(session("organization-admin"),x.repos as any);
+ assert.equal(await svc.getCustomer("missing"),null);
+ assert.equal(await svc.getOrder("missing"),null);
+ assert.deepEqual(x.audits.map(e=>[e.action,e.result]),[["mcp.tool.get_customer","success"],["mcp.tool.get_order","success"]]);
+});
+test("M4 repository failures are audited as failure without leaking through audit metadata",async()=>{
+ const x=repositories(); x.repos.orders.listOrders=async()=>{throw new Error("database secret detail");};
+ const svc=new TraceKitMcpReadService(session("organization-admin"),x.repos as any);
+ await assert.rejects(()=>svc.listOrders({limit:5}),/database secret detail/);
+ const audit=x.audits.at(-1); assert.equal(audit.result,"failure"); assert.equal(audit.action,"mcp.tool.list_orders");
+ assert.equal(audit.metadata?.["database secret detail"],undefined);
+});
+test("M4 list and search bounds are enforced before projection",async()=>{
+ const x=repositories();
+ x.repos.customers.listCustomers=async()=>Array.from({length:80},(_,i)=>({...customer,id:`c${i}`}));
+ x.repos.orders.search=async()=>Array.from({length:40},(_,i)=>({id:`order:o${i}`,type:"Order",title:String(i),subtitle:"Person",value:`o${i}`,href:"/"}));
+ x.repos.customers.search=async()=>Array.from({length:40},(_,i)=>({id:`c${i}`,type:"customer",title:String(i),subtitle:"Customer",value:`c${i}`,href:"/"}));
+ const svc=new TraceKitMcpReadService(session("organization-admin"),x.repos as any);
+ assert.equal((await svc.listCustomers({limit:50})).length,50);
+ assert.equal((await svc.search("x",{limit:25})).length,25);
+});
