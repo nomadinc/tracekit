@@ -8,7 +8,7 @@ import { productionCustomerRepository } from "@/lib/customers/production-reposit
 import { productionOrderRepository } from "@/lib/orders/production-repository";
 import { authorizeMcpRead, projectCustomerSummary, projectCustomerWorkspace, projectOrderSummary, projectOrderWorkspace } from "./governed-read-service";
 import { recordMcpToolAudit } from "./audit";
-import type { JourneyIntelligence } from "./journey-repository";
+import type { JourneyIntelligence, CrossJourneyAnalysis } from "./journey-repository";
 
 type McpCustomerRepository = Pick<
   CustomerRepository<ProductionCustomerScope>,
@@ -26,7 +26,7 @@ type McpOrderRepository = {
 export type McpReadRepositories = {
   customers: McpCustomerRepository;
   orders: McpOrderRepository;
-  journey: { explain(scope: ProductionCustomerScope, customerId: string, journeyId?: string): Promise<JourneyIntelligence | null> };
+  journey: { explain(scope: ProductionCustomerScope, customerId: string, journeyId?: string): Promise<JourneyIntelligence | null>; analyze(scope: ProductionCustomerScope, limit?: number): Promise<CrossJourneyAnalysis> };
   audit: Pick<IdentityTenancyRepository, "recordAuditEvent">;
 };
 
@@ -87,6 +87,14 @@ export class TraceKitMcpReadService {
       const scope = authorizeMcpRead(this.session, "customers.view") as ProductionCustomerScope;
       const value: CustomerWorkspaceSnapshot | null = await this.repositories.customers.loadWorkspace(scope, customerId);
       return value ? projectCustomerWorkspace(this.session, value) : null;
+    });
+  }
+
+  analyzeJourneys(input:{limit?:number}={}) {
+    return this.audited("analyze_journeys", "customers.view", null, null, async () => {
+      const scope=authorizeMcpRead(this.session,"customers.view") as ProductionCustomerScope;
+      const limit=Math.max(1,Math.min(50,Math.trunc(input.limit||25)));
+      return this.repositories.journey.analyze(scope,limit);
     });
   }
 
