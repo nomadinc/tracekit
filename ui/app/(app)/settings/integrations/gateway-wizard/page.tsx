@@ -2,7 +2,11 @@
 "use client";
 
 import * as React from "react";
-import { apiPostJson, apiGetJson } from "@/lib/api";
+import {
+  importGatewayClassicPage,
+  listGatewayClassicAccounts,
+  saveGatewayClassicCredentials,
+} from "@/lib/gateway-classic/client";
 
 type SaveResponse = {
   ok: boolean;
@@ -116,7 +120,7 @@ export default function GatewayWizardPage() {
   async function loadAccounts() {
   setLoadingAccounts(true);
   try {
-    const res = await apiGetJson<GatewayListResponse>("/v1/integrations/gateway-classic/list");
+    const res = await listGatewayClassicAccounts<GatewayListResponse>();
 
     if (!res.ok) {
       throw new Error(res.message || res.error || "Failed to load accounts");
@@ -138,7 +142,7 @@ React.useEffect(() => {
     setSaving(true);
     setMessage(null);
     try {
-      const res = await apiPostJson<SaveResponse>("/v1/integrations/save-credentials", {
+      const res = await saveGatewayClassicCredentials<SaveResponse>({
         platform: platformKey,
         baseUrl,
         username,
@@ -158,7 +162,7 @@ React.useEffect(() => {
     setMessage(null);
     setLastResult(null);
     try {
-      const res = await apiPostJson<ImportResponse>("/v1/integrations/gateway-classic/import-one-page", {
+      const res = await importGatewayClassicPage<ImportResponse>({
         platform: platformKey,
         from,
         to,
@@ -180,7 +184,7 @@ React.useEffect(() => {
     setMessage(null);
     try {
       const effectivePage = typeof nextPage === "number" ? nextPage : page;
-      const res = await apiPostJson<ImportResponse>("/v1/integrations/gateway-classic/import-one-page", {
+      const res = await importGatewayClassicPage<ImportResponse>({
         platform: platformKey,
         from,
         to,
