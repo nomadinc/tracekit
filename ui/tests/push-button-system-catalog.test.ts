@@ -2,12 +2,13 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const catalog = readFileSync(new URL("../../supabase/migrations/20260830050245_create_push_button_system_catalog.sql", import.meta.url), "utf8");
+const catalogMigration = readFileSync(new URL("../../supabase/migrations/20260830193240_expand_pbs_catalog_and_seed_mapping_intelligence.sql", import.meta.url), "utf8");
+const catalog = catalogMigration.match(/create or replace function public\.create_push_button_system_catalog[\s\S]*?comment on function public\.create_push_button_system_catalog\(uuid, text, text\) is[\s\S]*?;/)?.[0] || "";
 const mappingGuard = readFileSync(new URL("../../supabase/migrations/20260830044726_guard_commerce_product_mapping_decisions.sql", import.meta.url), "utf8");
 const ingestion = readFileSync(new URL("../../supabase/migrations/043_commerce_shadow_ingestion_v1.sql", import.meta.url), "utf8");
 const persistence = readFileSync(new URL("../../supabase/migrations/039_commerce_persistence_v1.sql", import.meta.url), "utf8");
 const route = readFileSync(new URL("../app/api/commerce/create-push-button-system-catalog/route.ts", import.meta.url), "utf8");
-const platinumRecommendation = readFileSync(new URL("../../supabase/migrations/20260831031900_recommend_5m6yv_oto2_platinum.sql", import.meta.url), "utf8");
+const platinumRecommendation = readFileSync(new URL("../../supabase/migrations/20260831032600_recommend_5m6yv_oto2_platinum.sql", import.meta.url), "utf8");
 
 test("Push Button System bootstrap creates one context, one offer, seven stable steps, and no variants", () => {
   assert.match(catalog, /'push-button-system-5f1de64a'/);

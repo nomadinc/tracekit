@@ -11,6 +11,7 @@ declare
   v_connection constant uuid := 'ea1c2313-6120-4692-84c5-ec3562e7dcf6';
   v_account constant uuid := '0369c701-717f-4c34-b230-8341bcdb7e65';
 begin
+  if not public.pbs_historical_tenant_prerequisite_v1() then return; end if;
   if not exists (
     select 1 from public.canonical_offers
     where id = v_offer and organization_id = v_org
@@ -45,12 +46,16 @@ end $$;
 
 insert into public.offer_steps
   (id, organization_id, canonical_offer_id, role, sequence, label, metadata)
-values
+select id::uuid, organization_id::uuid, canonical_offer_id::uuid,
+       role, sequence, label, metadata
+from (values
   ('efc6b70d-296c-4f28-8c50-3851dd0c467e',
    '5f1de64a-1b37-40bb-81c8-32197eda0b41',
    'b842611c-9918-40ac-9241-d542a8c6f8b4',
    'order_bump', 4, 'Order Bump — Millionaire Interview Series',
    '{"catalog_key":"order-bump-millionaire-interview-series","parent_step_key":"front-end","default_price":94,"accepted_prices":[94],"currency":"USD","identity_basis":"operator_authorized"}'::jsonb)
+) approved(id, organization_id, canonical_offer_id, role, sequence, label, metadata)
+where public.pbs_historical_tenant_prerequisite_v1()
 on conflict (id) do update set
   role = excluded.role,
   sequence = excluded.sequence,
@@ -63,7 +68,11 @@ with upserted as (
     (organization_id, connection_id, provider_account_id, provider, rule_kind,
      match_value, normalized_match_value, business_context_id, canonical_offer_id,
      offer_step_id, offer_variant_id, confidence, execution_mode, status, priority, evidence)
-  values
+  select organization_id::uuid, connection_id::uuid, provider_account_id::uuid,
+         provider, rule_kind, match_value, normalized_match_value,
+         business_context_id, canonical_offer_id::uuid, offer_step_id::uuid,
+         offer_variant_id::uuid, confidence, execution_mode, status, priority, evidence
+  from (values
     ('5f1de64a-1b37-40bb-81c8-32197eda0b41',
      'ea1c2313-6120-4692-84c5-ec3562e7dcf6',
      '0369c701-717f-4c34-b230-8341bcdb7e65',
@@ -73,6 +82,10 @@ with upserted as (
      'efc6b70d-296c-4f28-8c50-3851dd0c467e', null,
      100, 'suggest', 'active', 10,
      '{"identity_basis":"operator_authorized","source":"pbs-final-catalog-confirmation","note":"Millionaire Interview Series order bump"}'::jsonb)
+  ) approved(organization_id, connection_id, provider_account_id, provider, rule_kind,
+    match_value, normalized_match_value, business_context_id, canonical_offer_id,
+    offer_step_id, offer_variant_id, confidence, execution_mode, status, priority, evidence)
+  where public.pbs_historical_tenant_prerequisite_v1()
   on conflict (
     organization_id,
     (coalesce(connection_id, '00000000-0000-0000-0000-000000000000'::uuid)),
@@ -104,6 +117,7 @@ where organization_id = '5f1de64a-1b37-40bb-81c8-32197eda0b41'::uuid
 
 do $$
 begin
+  if not public.pbs_historical_tenant_prerequisite_v1() then return; end if;
   if not exists (
     select 1 from public.offer_steps
     where id = 'efc6b70d-296c-4f28-8c50-3851dd0c467e'::uuid

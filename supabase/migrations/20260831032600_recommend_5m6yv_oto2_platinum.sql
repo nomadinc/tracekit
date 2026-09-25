@@ -12,6 +12,7 @@ declare
   v_connection constant uuid := 'ea1c2313-6120-4692-84c5-ec3562e7dcf6';
   v_account constant uuid := '0369c701-717f-4c34-b230-8341bcdb7e65';
 begin
+  if not public.pbs_historical_tenant_prerequisite_v1() then return; end if;
   if not exists (
     select 1
     from public.offer_steps
@@ -73,7 +74,11 @@ with upserted as (
     (organization_id, connection_id, provider_account_id, provider, rule_kind,
      match_value, normalized_match_value, business_context_id, canonical_offer_id,
      offer_step_id, offer_variant_id, confidence, execution_mode, status, priority, evidence)
-  values
+  select organization_id::uuid, connection_id::uuid, provider_account_id::uuid,
+         provider, rule_kind, match_value, normalized_match_value,
+         business_context_id, canonical_offer_id::uuid, offer_step_id::uuid,
+         offer_variant_id::uuid, confidence, execution_mode, status, priority, evidence
+  from (values
     ('5f1de64a-1b37-40bb-81c8-32197eda0b41',
      'ea1c2313-6120-4692-84c5-ec3562e7dcf6',
      '0369c701-717f-4c34-b230-8341bcdb7e65',
@@ -83,6 +88,10 @@ with upserted as (
      'a4992adc-57e8-4bb1-9360-f421d2d9322c', null,
      100, 'suggest', 'active', 10,
      '{"identity_basis":"operator_authorized","source":"operator-confirmed-commas-classification","note":"5M6yv is the existing Push Button System OTO 2 Platinum product"}'::jsonb)
+  ) approved(organization_id, connection_id, provider_account_id, provider, rule_kind,
+    match_value, normalized_match_value, business_context_id, canonical_offer_id,
+    offer_step_id, offer_variant_id, confidence, execution_mode, status, priority, evidence)
+  where public.pbs_historical_tenant_prerequisite_v1()
   on conflict (
     organization_id,
     (coalesce(connection_id, '00000000-0000-0000-0000-000000000000'::uuid)),
@@ -109,6 +118,7 @@ on conflict (rule_id, amount, currency) do update set
 
 do $$
 begin
+  if not public.pbs_historical_tenant_prerequisite_v1() then return; end if;
   if not exists (
     select 1
     from public.commerce_product_mapping_rules r

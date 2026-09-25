@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const migration = readFileSync(
-  new URL("../../supabase/migrations/20260831012648_frozen_commas_economic_allocation_manifest.sql", import.meta.url),
+  new URL("../../supabase/migrations/20260831014400_frozen_commas_economic_allocation_manifest.sql", import.meta.url),
   "utf8",
 );
 

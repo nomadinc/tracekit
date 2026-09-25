@@ -2,8 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const migration = readFileSync(new URL("../../supabase/migrations/20260830222807_complete_commas_canonical_catalog.sql", import.meta.url), "utf8");
-const millionaireMigration = readFileSync(new URL("../../supabase/migrations/20260830224531_add_millionaire_interview_order_bump.sql", import.meta.url), "utf8");
+const migration = readFileSync(new URL("../../supabase/migrations/20260830224050_complete_commas_canonical_catalog.sql", import.meta.url), "utf8");
+const millionaireMigration = readFileSync(new URL("../../supabase/migrations/20260830224941_add_millionaire_interview_order_bump.sql", import.meta.url), "utf8");
 const route = readFileSync(new URL("../app/api/commerce/product-mappings/route.ts", import.meta.url), "utf8");
 
 const GOLD = "8d1b5be3-c60c-45ec-baa6-a2e1b6b610d5";
