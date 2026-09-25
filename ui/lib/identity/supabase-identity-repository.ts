@@ -120,9 +120,15 @@ export class SupabaseIdentityTenancyRepository implements IdentityTenancyReposit
     return rows.map((row) => ({ id: String(row.id), membershipId: String(row.membership_id), capability: row.capability as PermissionOverride["capability"], effect: row.effect as PermissionOverride["effect"], organizationId: row.organization_id ? String(row.organization_id) : null, resourceType: row.resource_type ? String(row.resource_type) : null, resourceId: row.resource_id ? String(row.resource_id) : null }));
   }
 
-  async businessContextIds(membershipId: string, organizationId: string) {
-    const rows = await rest(`tracekit_business_context_access?membership_id=eq.${encodeURIComponent(membershipId)}&organization_id=eq.${encodeURIComponent(organizationId)}&status=eq.active&select=business_context_id`) as Row[];
-    return rows.map((row) => String(row.business_context_id));
+  async businessContexts(membershipId: string, organizationId: string) {
+    const rows = await rest(`tracekit_business_context_access?membership_id=eq.${encodeURIComponent(membershipId)}&organization_id=eq.${encodeURIComponent(organizationId)}&status=eq.active&select=business_context_id,tracekit_business_contexts!inner(id,organization_id,name,status)&tracekit_business_contexts.organization_id=eq.${encodeURIComponent(organizationId)}&tracekit_business_contexts.status=eq.active&order=created_at.asc,business_context_id.asc`) as Array<Row & { tracekit_business_contexts?: Row }>;
+    return rows.flatMap((row) => {
+      const context = row.tracekit_business_contexts;
+      if (!context || String(context.id) !== String(row.business_context_id) || String(context.organization_id) !== organizationId) return [];
+      const name = String(context.name);
+      const mark = name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "BC";
+      return [{ id: String(context.id), organizationId, name, mark }];
+    });
   }
 
   async recordAuditEvent(event: AuditEventInput) {

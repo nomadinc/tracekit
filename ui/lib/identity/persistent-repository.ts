@@ -7,6 +7,7 @@ import type {
   PersistentUser,
   WorkOSIdentityInput,
 } from "./persistent-types";
+import type { BusinessContext } from "./types";
 
 export type PersistentOrganizationRecord = {
   id: string;
@@ -57,7 +58,7 @@ export interface IdentityTenancyRepository {
   agencyByAccountId(accountId: string): Promise<PersistentAgency | null>;
   organizationsForMembership(membership: PersistentMembership, agency: PersistentAgency | null): Promise<PersistentOrganizationRecord[]>;
   permissionOverrides(membershipId: string): Promise<PermissionOverride[]>;
-  businessContextIds(membershipId: string, organizationId: string): Promise<string[]>;
+  businessContexts(membershipId: string, organizationId: string): Promise<BusinessContext[]>;
   recordAuditEvent(event: AuditEventInput): Promise<void>;
 }
 

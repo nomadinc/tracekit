@@ -1,3 +1,151 @@
+-- Fixed-scope, operator-authorized canonical catalog foundation for Push Button
+-- System. This function creates catalog targets only: it never reads or writes
+-- commerce_provider_products or commerce_product_mapping_decisions.
+
+create or replace function public.create_push_button_system_catalog(
+  p_actor_user_id uuid,
+  p_correlation_id text,
+  p_confirmation text
+)
+returns jsonb
+language plpgsql
+security invoker
+set search_path = public, pg_temp
+as $$
+declare
+  v_organization_id constant uuid := '5f1de64a-1b37-40bb-81c8-32197eda0b41'::uuid;
+  v_account_id constant uuid := '39d895f9-71ac-44d3-ac33-6e9043f6267e'::uuid;
+  v_context_id constant text := 'push-button-system-5f1de64a';
+  v_offer_id constant uuid := 'b842611c-9918-40ac-9241-d542a8c6f8b4'::uuid;
+  v_existing integer;
+begin
+  if p_confirmation is distinct from 'create-push-button-system-catalog'
+    or nullif(btrim(p_correlation_id), '') is null
+  then
+    raise exception 'invalid Push Button System catalog confirmation' using errcode = '22023';
+  end if;
+
+  if not exists (
+    select 1
+    from public.tracekit_memberships m
+    where m.user_id = p_actor_user_id
+      and m.organization_id = v_organization_id
+      and m.status = 'active'
+  ) then
+    raise exception 'Push Button System catalog actor unavailable' using errcode = '42501';
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended('catalog:push-button-system:' || v_organization_id::text, 0));
+
+  select count(*) into v_existing
+  from public.offer_steps
+  where organization_id = v_organization_id
+    and canonical_offer_id = v_offer_id
+    and id in (
+      '8110e951-8ca6-406a-8817-55575fe647ba'::uuid,
+      '8d1b5be3-c60c-45ec-baa6-a2e1b6b610d5'::uuid,
+      'e215a9be-453c-461f-ab06-7e75742be9f1'::uuid,
+      '2df33aef-aee2-459e-ac65-6e3cbd3dbd13'::uuid,
+      'a4992adc-57e8-4bb1-9360-f421d2d9322c'::uuid,
+      'bf339297-6717-4286-b83c-b9af54b8d0f3'::uuid,
+      '155997e9-244b-4547-94e0-4fde658f8c0f'::uuid
+    );
+
+  insert into public.tracekit_business_contexts
+    (id, account_id, organization_id, name, status, fulfillment_type, metadata)
+  values
+    (v_context_id, v_account_id, v_organization_id, 'Push Button System', 'active', 'digital',
+     jsonb_build_object('catalog_key', 'push-button-system', 'identity_basis', 'operator_authorized'))
+  on conflict (id) do nothing;
+
+  insert into public.canonical_offers
+    (id, account_id, organization_id, business_context_id, name, status, metadata)
+  values
+    (v_offer_id, v_account_id, v_organization_id, v_context_id, 'Push Button System', 'active',
+     jsonb_build_object('catalog_key', 'push-button-system', 'identity_basis', 'operator_authorized'))
+  on conflict (id) do nothing;
+
+  insert into public.offer_steps
+    (id, organization_id, canonical_offer_id, role, sequence, label, metadata)
+  values
+    ('8110e951-8ca6-406a-8817-55575fe647ba', v_organization_id, v_offer_id, 'front_end', 0, 'Front End',
+     '{"catalog_key":"front-end","default_price":67,"currency":"USD","identity_basis":"operator_authorized"}'::jsonb),
+    ('8d1b5be3-c60c-45ec-baa6-a2e1b6b610d5', v_organization_id, v_offer_id, 'upsell', 1, 'OTO 1 — Gold',
+     '{"catalog_key":"oto-1-gold","default_price":297,"currency":"USD","identity_basis":"operator_authorized"}'::jsonb),
+    ('e215a9be-453c-461f-ab06-7e75742be9f1', v_organization_id, v_offer_id, 'downsell', 1, 'OTO 1 — Downsell 1',
+     '{"catalog_key":"oto-1-downsell-1","parent_step_key":"oto-1-gold","default_price":197,"currency":"USD","identity_basis":"operator_authorized"}'::jsonb),
+    ('2df33aef-aee2-459e-ac65-6e3cbd3dbd13', v_organization_id, v_offer_id, 'downsell', 2, 'OTO 1 — Downsell 2',
+     '{"catalog_key":"oto-1-downsell-2","parent_step_key":"oto-1-gold","default_price":97,"currency":"USD","identity_basis":"operator_authorized"}'::jsonb),
+    ('a4992adc-57e8-4bb1-9360-f421d2d9322c', v_organization_id, v_offer_id, 'upsell', 2, 'OTO 2 — Platinum',
+     '{"catalog_key":"oto-2-platinum","default_price":299,"currency":"USD","identity_basis":"operator_authorized"}'::jsonb),
+    ('bf339297-6717-4286-b83c-b9af54b8d0f3', v_organization_id, v_offer_id, 'downsell', 3, 'OTO 2 — Downsell 1',
+     '{"catalog_key":"oto-2-downsell-1","parent_step_key":"oto-2-platinum","default_price":199,"currency":"USD","identity_basis":"operator_authorized"}'::jsonb),
+    ('155997e9-244b-4547-94e0-4fde658f8c0f', v_organization_id, v_offer_id, 'downsell', 4, 'OTO 2 — Downsell 2',
+     '{"catalog_key":"oto-2-downsell-2","parent_step_key":"oto-2-platinum","default_price":99,"currency":"USD","identity_basis":"operator_authorized"}'::jsonb)
+  on conflict (id) do nothing;
+
+  if not exists (
+    select 1 from public.tracekit_business_contexts
+    where id = v_context_id and account_id = v_account_id and organization_id = v_organization_id
+      and name = 'Push Button System' and status = 'active' and fulfillment_type = 'digital'
+  ) or not exists (
+    select 1 from public.canonical_offers
+    where id = v_offer_id and account_id = v_account_id and organization_id = v_organization_id
+      and business_context_id = v_context_id and name = 'Push Button System' and status = 'active'
+  ) or (
+    select count(*)
+    from public.offer_steps s
+    join (values
+      ('8110e951-8ca6-406a-8817-55575fe647ba'::uuid, 'front_end', 0, 'Front End', 'front-end', null::text, 67::numeric),
+      ('8d1b5be3-c60c-45ec-baa6-a2e1b6b610d5'::uuid, 'upsell', 1, 'OTO 1 — Gold', 'oto-1-gold', null::text, 297::numeric),
+      ('e215a9be-453c-461f-ab06-7e75742be9f1'::uuid, 'downsell', 1, 'OTO 1 — Downsell 1', 'oto-1-downsell-1', 'oto-1-gold', 197::numeric),
+      ('2df33aef-aee2-459e-ac65-6e3cbd3dbd13'::uuid, 'downsell', 2, 'OTO 1 — Downsell 2', 'oto-1-downsell-2', 'oto-1-gold', 97::numeric),
+      ('a4992adc-57e8-4bb1-9360-f421d2d9322c'::uuid, 'upsell', 2, 'OTO 2 — Platinum', 'oto-2-platinum', null::text, 299::numeric),
+      ('bf339297-6717-4286-b83c-b9af54b8d0f3'::uuid, 'downsell', 3, 'OTO 2 — Downsell 1', 'oto-2-downsell-1', 'oto-2-platinum', 199::numeric),
+      ('155997e9-244b-4547-94e0-4fde658f8c0f'::uuid, 'downsell', 4, 'OTO 2 — Downsell 2', 'oto-2-downsell-2', 'oto-2-platinum', 99::numeric)
+    ) expected(id, role, sequence, label, catalog_key, parent_step_key, default_price)
+      on expected.id = s.id
+     and s.organization_id = v_organization_id
+     and s.canonical_offer_id = v_offer_id
+     and s.role = expected.role
+     and s.sequence = expected.sequence
+     and s.label = expected.label
+     and s.metadata->>'catalog_key' = expected.catalog_key
+     and s.metadata->>'parent_step_key' is not distinct from expected.parent_step_key
+     and (s.metadata->>'default_price')::numeric = expected.default_price
+     and s.metadata->>'currency' = 'USD'
+     and s.metadata->>'identity_basis' = 'operator_authorized'
+  ) <> 7 then
+    raise exception 'Push Button System catalog conflicts with existing canonical state' using errcode = '23505';
+  end if;
+
+  insert into public.tracekit_audit_events
+    (actor_user_id, account_id, organization_id, action, target_type, target_id,
+     result, permission_evaluated, correlation_id, metadata)
+  values
+    (p_actor_user_id, v_account_id, v_organization_id, 'commerce.catalog.push_button_system_created',
+     'canonical_offer', v_offer_id::text, 'success', 'offers.manage', btrim(p_correlation_id),
+     jsonb_build_object('business_context_id', v_context_id, 'offer_step_count', 7,
+       'variant_count', 0, 'created_step_count', 7 - v_existing));
+
+  return jsonb_build_object(
+    'business_context_id', v_context_id,
+    'canonical_offer_id', v_offer_id,
+    'offer_step_count', 7,
+    'variant_count', 0,
+    'created_step_count', 7 - v_existing
+  );
+end;
+$$;
+
+revoke all on function public.create_push_button_system_catalog(uuid, text, text)
+  from public, anon, authenticated;
+grant execute on function public.create_push_button_system_catalog(uuid, text, text)
+  to service_role;
+
+comment on function public.create_push_button_system_catalog(uuid, text, text) is
+  'Fixed-scope, idempotent Push Button System canonical catalog creation; never maps provider Products.';
+
 -- Expand the operator-authorized Push Button System catalog and seed the
 -- tenant-scoped mapping intelligence registry with facts confirmed during the
 -- production catalog audit. This migration creates canonical targets and
@@ -6,10 +154,102 @@
 
 begin;
 
+-- Explicit boundary for the historically tenant-scoped PBS transitions.
+-- A completely absent tenant is the normal state of a fresh installation.
+-- Partial or conflicting reuse of the fixed Production identities fails closed.
+create or replace function public.pbs_historical_tenant_prerequisite_v1()
+returns boolean
+language plpgsql
+stable
+security invoker
+set search_path = public, pg_temp
+as $$
+declare
+  v_account_exists boolean;
+  v_organization_exists boolean;
+begin
+  select exists (
+    select 1 from public.tracekit_accounts
+    where id = '39d895f9-71ac-44d3-ac33-6e9043f6267e'::uuid
+  ) into v_account_exists;
+  select exists (
+    select 1 from public.tracekit_organizations
+    where id = '5f1de64a-1b37-40bb-81c8-32197eda0b41'::uuid
+  ) into v_organization_exists;
+
+  if not v_account_exists and not v_organization_exists then return false; end if;
+  if not exists (
+    select 1 from public.tracekit_accounts
+    where id = '39d895f9-71ac-44d3-ac33-6e9043f6267e'::uuid
+      and account_type = 'client' and name = 'TraceKit' and status = 'active'
+      and white_label_configuration = '{}'::jsonb
+  ) or not exists (
+    select 1 from public.tracekit_organizations
+    where id = '5f1de64a-1b37-40bb-81c8-32197eda0b41'::uuid
+      and owning_account_id = '39d895f9-71ac-44d3-ac33-6e9043f6267e'::uuid
+      and agency_id is null and workos_organization_id is null
+      and name = 'TraceKit' and status = 'active'
+  ) then
+    raise exception 'PBS historical tenant prerequisite conflicts with fixed scope'
+      using errcode = '23505';
+  end if;
+  return true;
+end;
+$$;
+
+revoke all on function public.pbs_historical_tenant_prerequisite_v1()
+  from public, anon, authenticated;
+grant execute on function public.pbs_historical_tenant_prerequisite_v1()
+  to service_role;
+
+-- When the exact tenant exists, require the separately operator-authorized
+-- seven-step catalog foundation before applying any expansion DML.
+do $pbs_foundation_validation$
+begin
+  if public.pbs_historical_tenant_prerequisite_v1() then
+    if not exists (
+      select 1 from public.tracekit_business_contexts
+      where id = 'push-button-system-5f1de64a'
+        and account_id = '39d895f9-71ac-44d3-ac33-6e9043f6267e'
+        and organization_id = '5f1de64a-1b37-40bb-81c8-32197eda0b41'
+        and name = 'Push Button System' and status = 'active' and fulfillment_type = 'digital'
+        and metadata = '{"catalog_key":"push-button-system","identity_basis":"operator_authorized"}'::jsonb
+    ) then raise exception 'Push Button System business context conflicts with approved foundation' using errcode = '23505'; end if;
+    if not exists (
+      select 1 from public.canonical_offers
+      where id = 'b842611c-9918-40ac-9241-d542a8c6f8b4'
+        and account_id = '39d895f9-71ac-44d3-ac33-6e9043f6267e'
+        and organization_id = '5f1de64a-1b37-40bb-81c8-32197eda0b41'
+        and business_context_id = 'push-button-system-5f1de64a'
+        and name = 'Push Button System' and status = 'active'
+        and metadata = '{"catalog_key":"push-button-system","identity_basis":"operator_authorized"}'::jsonb
+    ) then raise exception 'Push Button System canonical offer conflicts with approved foundation' using errcode = '23505'; end if;
+    if (
+      select count(*) from public.offer_steps s
+      join (values
+        ('8110e951-8ca6-406a-8817-55575fe647ba'::uuid, 'front_end', 0, 'Front End', '{"catalog_key":"front-end","default_price":67,"currency":"USD","identity_basis":"operator_authorized"}'::jsonb),
+        ('8d1b5be3-c60c-45ec-baa6-a2e1b6b610d5'::uuid, 'upsell', 1, 'OTO 1 — Gold', '{"catalog_key":"oto-1-gold","default_price":297,"currency":"USD","identity_basis":"operator_authorized"}'::jsonb),
+        ('e215a9be-453c-461f-ab06-7e75742be9f1'::uuid, 'downsell', 1, 'OTO 1 — Downsell 1', '{"catalog_key":"oto-1-downsell-1","parent_step_key":"oto-1-gold","default_price":197,"currency":"USD","identity_basis":"operator_authorized"}'::jsonb),
+        ('2df33aef-aee2-459e-ac65-6e3cbd3dbd13'::uuid, 'downsell', 2, 'OTO 1 — Downsell 2', '{"catalog_key":"oto-1-downsell-2","parent_step_key":"oto-1-gold","default_price":97,"currency":"USD","identity_basis":"operator_authorized"}'::jsonb),
+        ('a4992adc-57e8-4bb1-9360-f421d2d9322c'::uuid, 'upsell', 2, 'OTO 2 — Platinum', '{"catalog_key":"oto-2-platinum","default_price":299,"currency":"USD","identity_basis":"operator_authorized"}'::jsonb),
+        ('bf339297-6717-4286-b83c-b9af54b8d0f3'::uuid, 'downsell', 3, 'OTO 2 — Downsell 1', '{"catalog_key":"oto-2-downsell-1","parent_step_key":"oto-2-platinum","default_price":199,"currency":"USD","identity_basis":"operator_authorized"}'::jsonb),
+        ('155997e9-244b-4547-94e0-4fde658f8c0f'::uuid, 'downsell', 4, 'OTO 2 — Downsell 2', '{"catalog_key":"oto-2-downsell-2","parent_step_key":"oto-2-platinum","default_price":99,"currency":"USD","identity_basis":"operator_authorized"}'::jsonb)
+      ) expected(id, role, sequence, label, metadata)
+        on s.id = expected.id
+       and s.organization_id = '5f1de64a-1b37-40bb-81c8-32197eda0b41'
+       and s.canonical_offer_id = 'b842611c-9918-40ac-9241-d542a8c6f8b4'
+       and s.role = expected.role and s.sequence = expected.sequence
+       and s.label = expected.label and s.metadata = expected.metadata
+    ) <> 7 then raise exception 'Push Button System foundational steps conflict with approved catalog' using errcode = '23505'; end if;
+  end if;
+end
+$pbs_foundation_validation$;
 -- Canonical steps: order bumps and confirmed upsell/downsell families.
 insert into public.offer_steps
   (id, organization_id, canonical_offer_id, role, sequence, label, metadata)
-values
+select id::uuid, organization_id::uuid, canonical_offer_id::uuid,
+       role, sequence, label, metadata
+from (values
   ('a5d6d601-790d-4b7c-97f3-a9f833465ef5', '5f1de64a-1b37-40bb-81c8-32197eda0b41', 'b842611c-9918-40ac-9241-d542a8c6f8b4', 'order_bump', 1, 'Order Bump — Revenue Booster Roadmap',
    '{"catalog_key":"order-bump-revenue-booster-roadmap","parent_step_key":"front-end","default_price":25,"currency":"USD","identity_basis":"operator_authorized"}'::jsonb),
   ('2fa222b9-1325-4cd5-b712-03313f093057', '5f1de64a-1b37-40bb-81c8-32197eda0b41', 'b842611c-9918-40ac-9241-d542a8c6f8b4', 'order_bump', 2, 'Order Bump — Fast Track Support',
@@ -40,6 +280,8 @@ values
 
   ('830a4236-1a26-435e-9b7f-d7016e142100', '5f1de64a-1b37-40bb-81c8-32197eda0b41', 'b842611c-9918-40ac-9241-d542a8c6f8b4', 'upsell', 14, 'Super Affiliate',
    '{"catalog_key":"super-affiliate","default_price":499,"currency":"USD","identity_basis":"operator_authorized","standalone":true,"has_downsells":false}'::jsonb)
+) approved(id, organization_id, canonical_offer_id, role, sequence, label, metadata)
+where public.pbs_historical_tenant_prerequisite_v1()
 on conflict (id) do update
 set role = excluded.role,
     sequence = excluded.sequence,
@@ -51,8 +293,13 @@ set role = excluded.role,
 insert into public.commerce_product_mapping_policies
   (organization_id, provider, auto_map_enabled, auto_map_min_confidence,
    bulk_review_min_confidence, require_exact_id_for_auto_map)
-values
+select organization_id::uuid, provider, auto_map_enabled,
+       auto_map_min_confidence, bulk_review_min_confidence,
+       require_exact_id_for_auto_map
+from (values
   ('5f1de64a-1b37-40bb-81c8-32197eda0b41', 'commas', false, 100, 90, true)
+) approved(organization_id, provider, auto_map_enabled, auto_map_min_confidence, bulk_review_min_confidence, require_exact_id_for_auto_map)
+where public.pbs_historical_tenant_prerequisite_v1()
 on conflict (organization_id, provider) do update
 set auto_map_enabled = false,
     auto_map_min_confidence = 100,
@@ -149,6 +396,7 @@ with seeded(provider_product_id, offer_step_id, price, price_role, evidence_note
     s.offer_step_id, null, 100, 'suggest', 'active', 10,
     jsonb_build_object('identity_basis','operator_authorized','source','pbs-production-catalog-audit','note',s.evidence_note)
   from seeded s
+  where public.pbs_historical_tenant_prerequisite_v1()
   on conflict (
     organization_id,
     (coalesce(connection_id, '00000000-0000-0000-0000-000000000000'::uuid)),
@@ -201,6 +449,7 @@ select
   a.offer_step_id, null, a.confidence, 'suggest', 'active', a.priority,
   jsonb_build_object('identity_basis','operator_authorized_alias','source','pbs-production-catalog-audit')
 from aliases a
+where public.pbs_historical_tenant_prerequisite_v1()
 on conflict (
   organization_id,
   (coalesce(connection_id, '00000000-0000-0000-0000-000000000000'::uuid)),

@@ -78,3 +78,34 @@ test("synchronizeUser updates an existing WorkOS identity without merge-upsert",
     else process.env.SUPABASE_SERVICE_ROLE_KEY = previousKey;
   }
 });
+
+test("business contexts come from active persistent access and catalog rows", async () => {
+  let requestedUrl = "";
+  await withFakeSupabase("sb_secret_test", (url) => {
+    requestedUrl = url;
+    return [{
+      business_context_id: "push-button-system-5f1de64a",
+      tracekit_business_contexts: {
+        id: "push-button-system-5f1de64a",
+        organization_id: "5f1de64a-1b37-40bb-81c8-32197eda0b41",
+        name: "Push Button System",
+        status: "active",
+      },
+    }];
+  }, async () => {
+    assert.deepEqual(await new SupabaseIdentityTenancyRepository().businessContexts(
+      "169bfcac-221e-4d68-96e9-0b8b8f28bcff",
+      "5f1de64a-1b37-40bb-81c8-32197eda0b41",
+    ), [{
+      id: "push-button-system-5f1de64a",
+      organizationId: "5f1de64a-1b37-40bb-81c8-32197eda0b41",
+      name: "Push Button System",
+      mark: "PB",
+    }]);
+  });
+  assert.match(requestedUrl, /tracekit_business_context_access\?/);
+  assert.match(requestedUrl, /status=eq\.active/);
+  assert.match(requestedUrl, /tracekit_business_contexts!inner/);
+  assert.match(requestedUrl, /tracekit_business_contexts\.status=eq\.active/);
+  assert.match(requestedUrl, /order=created_at\.asc,business_context_id\.asc/);
+});

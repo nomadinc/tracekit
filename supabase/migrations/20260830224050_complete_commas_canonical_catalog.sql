@@ -12,6 +12,7 @@ declare
   v_account constant uuid := '0369c701-717f-4c34-b230-8341bcdb7e65';
   v_test_product uuid;
 begin
+  if not public.pbs_historical_tenant_prerequisite_v1() then return; end if;
   -- Existing identities are fixed production contracts. Fail closed rather
   -- than accidentally creating a parallel branch or replacing an approved
   -- target.
@@ -84,7 +85,9 @@ end $$;
 -- older Gold -> Silver -> Bronze -> Bronze Discounted branch.
 insert into public.offer_steps
   (id, organization_id, canonical_offer_id, role, sequence, label, metadata)
-values
+select id::uuid, organization_id::uuid, canonical_offer_id::uuid,
+       role, sequence, label, metadata
+from (values
   ('67cb7e8d-e91d-42a8-a6db-69b60c18cc26', '5f1de64a-1b37-40bb-81c8-32197eda0b41', 'b842611c-9918-40ac-9241-d542a8c6f8b4', 'downsell', 15, 'Silver',
    '{"catalog_key":"original-gold-silver","parent_step_key":"oto-1-gold","default_price":195,"accepted_prices":[195],"currency":"USD","identity_basis":"operator_authorized"}'::jsonb),
   ('d7d5a3c4-15b3-40e5-a16b-e43eced43d1e', '5f1de64a-1b37-40bb-81c8-32197eda0b41', 'b842611c-9918-40ac-9241-d542a8c6f8b4', 'downsell', 16, 'Bronze',
@@ -93,6 +96,8 @@ values
    '{"catalog_key":"original-gold-bronze-discounted","parent_step_key":"original-gold-bronze","default_price":79,"accepted_prices":[70,79],"currency":"USD","identity_basis":"operator_authorized","price_note":"historical price tests of one canonical step"}'::jsonb),
   ('a04a0cab-af78-4664-9d37-3a2677a4750f', '5f1de64a-1b37-40bb-81c8-32197eda0b41', 'b842611c-9918-40ac-9241-d542a8c6f8b4', 'downsell', 18, 'Growth Partner — Downsell 1',
    '{"catalog_key":"growth-partner-downsell-1","parent_step_key":"growth-partner","default_price":199,"accepted_prices":[177,199],"currency":"USD","identity_basis":"operator_authorized","price_note":"historical price tests of one canonical step"}'::jsonb)
+) approved(id, organization_id, canonical_offer_id, role, sequence, label, metadata)
+where public.pbs_historical_tenant_prerequisite_v1()
 on conflict (id) do update set
   role = excluded.role,
   sequence = excluded.sequence,
@@ -144,6 +149,7 @@ with seeded(provider_product_id, offer_step_id, price, price_role, note) as (
     s.offer_step_id, null, 100, 'suggest', 'active', 10,
     jsonb_build_object('identity_basis','operator_authorized','source','pbs-final-catalog-confirmation','note',s.note)
   from seeded s
+  where public.pbs_historical_tenant_prerequisite_v1()
   on conflict (
     organization_id,
     (coalesce(connection_id, '00000000-0000-0000-0000-000000000000'::uuid)),
@@ -213,6 +219,7 @@ declare
   v_connection constant uuid := 'ea1c2313-6120-4692-84c5-ec3562e7dcf6';
   v_account constant uuid := '0369c701-717f-4c34-b230-8341bcdb7e65';
 begin
+  if not public.pbs_historical_tenant_prerequisite_v1() then return; end if;
   if (select count(*) from public.commerce_product_mapping_rules
       where organization_id=v_org and connection_id=v_connection and provider_account_id=v_account
         and provider='commas' and rule_kind='provider_product_id' and status='active'
