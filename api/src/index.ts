@@ -417,9 +417,10 @@ import {
   paypalDisputeContinuationCursor,
   paypalDisputeWindowBounds,
   parsePaypalDisputeListPage,
-  summarizeGatewayClassicActionsForDiagnostics,
+  gatewayClassicParentEvidenceFromTransactionXml,
+  parseGatewayClassicTransactionDiagnostic,
+  summarizeGatewayClassicTransactionDiagnostics,
   summarizePaypalDisputeNormalizationDiagnostics,
-  type GatewayClassicAction,
   type NormalizedChargebackEvent,
 } from "./chargebacks";
 import {
@@ -7701,30 +7702,6 @@ async function executePaypalChargebackIngestionTask(env: Env, job: ImportJobRow,
   };
 }
 
-function gatewayClassicActionsFromTransactionXml(tx: string): GatewayClassicAction[] {
-  const transactionId = xmlValue(tx, "transaction_id") || null;
-  const orderId = xmlValue(tx, "order_id") || xmlValue(tx, "orderid") || transactionId;
-  const condition = xmlValue(tx, "condition") || null;
-  const currency = xmlValue(tx, "currency") || "USD";
-  const actions = xmlBlocks(tx, "action");
-  return actions.map((action) => ({
-    transaction_id: transactionId,
-    order_id: orderId,
-    action_type: xmlValue(action, "action_type") || null,
-    action_date: xmlValue(action, "date") || null,
-    amount: xmlValue(action, "amount") || null,
-    requested_amount: xmlValue(action, "requested_amount") || null,
-    response_text: xmlValue(action, "response_text") || null,
-    condition,
-    currency,
-    raw: {
-      action_type: xmlValue(action, "action_type") || null,
-      date: xmlValue(action, "date") || null,
-      response_text: xmlValue(action, "response_text") || null,
-    },
-  }));
-}
-
 async function executeGatewayChargebackDiagnosticsTask(env: Env, job: ImportJobRow, task: ConnectorImportTaskRow, account: ChargebackProcessorAccount) {
   const progress = connectorRuntimeProgressFromJob(job);
   const from = String(task.payload?.from || progress.requested_from || job.from_date);
@@ -7753,12 +7730,43 @@ async function executeGatewayChargebackDiagnosticsTask(env: Env, job: ImportJobR
   const xml = await readTextSafe(res);
   if (!res.ok) throw new Error(`Gateway chargeback diagnostics query failed ${res.status}: ${xml.slice(0, 500)}`);
   const transactions = xmlBlocks(xml, "transaction");
-  const actions = transactions.flatMap(gatewayClassicActionsFromTransactionXml);
-  const diagnostics = summarizeGatewayClassicActionsForDiagnostics({
-    platform: account.platform,
-    processor_account_id: account.processor_account_id,
-    actions,
-  });
+  const originalTransactionIds = Array.from(new Set(transactions
+    .map((transaction) => String(xmlValue(transaction, "original_transaction_id") || "").trim())
+    .filter(Boolean)));
+  const parentEvidence = new Map<string, ReturnType<typeof gatewayClassicParentEvidenceFromTransactionXml>>();
+  if (originalTransactionIds.length) {
+    const db = getSupabase(env);
+    const { data: parentRows, error: parentError } = await db
+      .from("platform_orders")
+      .select("transaction_id,gross_amount,currency,status,order_ts,raw_json")
+      .eq("platform", account.platform)
+      .in("transaction_id", originalTransactionIds);
+    if (parentError) throw new Error(`Gateway diagnostic parent lookup failed: ${parentError.message}`);
+    for (const row of parentRows || []) {
+      const transactionId = String((row as any).transaction_id || "").trim();
+      if (!transactionId) continue;
+      const retainedXml = String((row as any).raw_json?.xml || "");
+      const parsed = retainedXml ? gatewayClassicParentEvidenceFromTransactionXml(retainedXml) : null;
+      parentEvidence.set(transactionId, parsed || {
+        transaction_id: transactionId,
+        amount: (row as any).gross_amount == null ? null : String((row as any).gross_amount),
+        currency: String((row as any).currency || "").trim() || null,
+        condition: String((row as any).status || "").trim() || null,
+        source_timestamp: (row as any).order_ts == null ? null : String((row as any).order_ts),
+        action_sequence: [],
+      });
+    }
+  }
+  const transactionDiagnostics = await Promise.all(transactions.map((transaction) => {
+    const parentId = String(xmlValue(transaction, "original_transaction_id") || "").trim();
+    return parseGatewayClassicTransactionDiagnostic({
+      platform: account.platform,
+      processor_account_id: account.processor_account_id,
+      transaction_xml: transaction,
+      parent: parentId ? parentEvidence.get(parentId) || null : null,
+    });
+  }));
+  const diagnosticSummary = await summarizeGatewayClassicTransactionDiagnostics({ diagnostics: transactionDiagnostics });
   const hasMore = transactions.length >= pageSize && page + 1 < maxPages;
   const boundReached = transactions.length >= pageSize && page + 1 >= maxPages;
   const accounts = chargebackProgressAccounts(progress);
@@ -7773,9 +7781,21 @@ async function executeGatewayChargebackDiagnosticsTask(env: Env, job: ImportJobR
     events_inserted: Number(accounts[account.account_key]?.events_inserted || 0),
     diagnostics: capChargebackDiagnosticList([
       ...(accounts[account.account_key]?.diagnostics || []),
-      ...diagnostics.slice(0, 10),
+      ...diagnosticSummary.ordinary_evidence,
       ...(boundReached ? [{ reason: "gateway_mapping_payload_bound_reached", page, max_pages: maxPages }] : []),
     ]),
+    classification_counts: Object.fromEntries(Object.entries(diagnosticSummary.classification_counts).map(([classification, count]) => [
+      classification,
+      Number(accounts[account.account_key]?.classification_counts?.[classification] || 0) + Number(count),
+    ])),
+    candidate_count: Number(accounts[account.account_key]?.candidate_count || 0) + diagnosticSummary.candidate_count,
+    candidate_ids: Array.from(new Set([...(accounts[account.account_key]?.candidate_ids || []), ...diagnosticSummary.candidate_ids])).sort(),
+    candidate_evidence: [
+      ...(accounts[account.account_key]?.candidate_evidence || []),
+      ...diagnosticSummary.candidates,
+    ].slice(0, 250),
+    candidate_evidence_truncated: Boolean(accounts[account.account_key]?.candidate_evidence_truncated)
+      || Number(accounts[account.account_key]?.candidate_evidence?.length || 0) + diagnosticSummary.candidates.length > 250,
     last_error: null,
   };
   const allCompleted = Object.values(accounts).every((state: any) => state.status === "completed");
@@ -7785,7 +7805,7 @@ async function executeGatewayChargebackDiagnosticsTask(env: Env, job: ImportJobR
     status: (allCompleted ? "completed" : "running") as ConnectorRuntimeProgress["status"],
     phase: CHARGEBACK_INGESTION_PHASE,
     records_processed: Number(progress.records_processed || 0) + transactions.length,
-    records_skipped: Number(progress.records_skipped || 0) + diagnostics.length,
+    records_skipped: Number(progress.records_skipped || 0) + diagnosticSummary.transactions_scanned,
     current_cursor: `${account.account_key}:${page}`,
     current_page: page,
     updated_at: now,
@@ -7823,8 +7843,8 @@ async function executeGatewayChargebackDiagnosticsTask(env: Env, job: ImportJobR
     page,
     page_size: pageSize,
     fetched: transactions.length,
-    actions_scanned: actions.length,
-    diagnostics: diagnostics.slice(0, 10),
+    actions_scanned: diagnosticSummary.actions_scanned,
+    diagnostic_summary: diagnosticSummary,
     events_inserted: 0,
     has_more: hasMore,
     next_page: hasMore ? page + 1 : null,
