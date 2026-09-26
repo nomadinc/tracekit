@@ -20,7 +20,7 @@ export async function POST(request:Request){const requestId=randomUUID();try{
  const result=await runGoogleAdsManualSyncCertification({organizationId:r.session.activeOrganization.id,requestedByUserId:r.session.user.id,accounts,since,until,
   createRun:async x=>{const row=await createGoogleSyncRun(x);const id=String((row as any).id||"");if(!id)throw new Error("google_ads_sync_run_missing_id");return{id};},fetchReport:x=>fetchGoogleAdDailyReport({...x,accessToken:token.accessToken}),
   persistRows:x=>persistGoogleAdDailyRows({...x,apiVersion:GOOGLE_ADS_API_VERSION}),
-  checkpoint:x=>completeGoogleSyncWindow(x),finishRun:x=>finishGoogleSyncRun(x),
+  checkpoint:async x=>{await completeGoogleSyncWindow(x);},finishRun:async x=>{await finishGoogleSyncRun(x);},
  });
  return NextResponse.json({ok:true,...result,requestId},{headers:h(requestId)});
 }catch(e:any){return NextResponse.json({ok:false,message:String(e?.message||"Google Ads manual sync failed."),requestId},{status:400,headers:h(requestId)});}}
