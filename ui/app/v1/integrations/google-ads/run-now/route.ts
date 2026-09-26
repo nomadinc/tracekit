@@ -18,7 +18,7 @@ export async function POST(request:Request){const requestId=randomUUID();try{
  const refreshToken=await resolveGoogleAdsRefreshToken({organizationId:r.session.activeOrganization.id,connectionId});
  const token=await refreshGoogleAccessToken({refreshToken,clientId:String(process.env.GOOGLE_ADS_CLIENT_ID||""),clientSecret:String(process.env.GOOGLE_ADS_CLIENT_SECRET||"")});
  const result=await runGoogleAdsManualSyncCertification({organizationId:r.session.activeOrganization.id,requestedByUserId:r.session.user.id,accounts,since,until,
-  createRun:x=>createGoogleSyncRun(x),fetchReport:x=>fetchGoogleAdDailyReport({...x,accessToken:token.accessToken}),
+  createRun:async x=>{const row=await createGoogleSyncRun(x);const id=String((row as any).id||"");if(!id)throw new Error("google_ads_sync_run_missing_id");return{id};},fetchReport:x=>fetchGoogleAdDailyReport({...x,accessToken:token.accessToken}),
   persistRows:x=>persistGoogleAdDailyRows({...x,apiVersion:GOOGLE_ADS_API_VERSION}),
   checkpoint:x=>completeGoogleSyncWindow(x),finishRun:x=>finishGoogleSyncRun(x),
  });
