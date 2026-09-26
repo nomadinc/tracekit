@@ -13,6 +13,7 @@ import {
   failedRefundFixture,
   fullRefundFixture,
   partialRefundFixture,
+  returnReferenceRefundFixture,
   sanitizedNmiTransactionXml,
 } from "./nmi-refunds.fixtures.ts";
 
@@ -157,4 +158,38 @@ test("success-shaped action without processor response evidence remains ambiguou
   const { decision } = await decide(partialRefundFixture({ actions: [{ ...SUCCESS_ACTION, processorResponseCode: undefined, processorResponseText: undefined }] }));
   assert.equal(decision.classification, "REFUND_AMBIGUOUS");
   assert.equal(decision.eventCreationEligible, false);
+});
+
+test("certifies only the retained RETURN reference family with exact settlement corroboration", async () => {
+  for (const response of ["RETURN DFYCXZ", "RETURN CAD11C", "RETURN R78641", "RETURN R86453", "RETURN R94232"]) {
+    const { evidence, decision } = await decide(returnReferenceRefundFixture(response));
+    assert.equal(decision.classification, "REFUND_SUCCEEDED", response);
+    assert.equal(decision.effectiveAmount, -59.48);
+    assert.equal(decision.eventCreationEligible, true);
+    assert.equal(evidence.settleActions[0].batchId, "867721287");
+  }
+});
+
+test("nearby or insufficiently corroborated RETURN evidence remains ambiguous", async () => {
+  const nearby = await decide(returnReferenceRefundFixture("RETURN 100"));
+  const noSettle = await decide(returnReferenceRefundFixture("RETURN ABC123", { actions: [{ type: "refund", date: "20260110143508", amount: "-59.48", responseCode: "100", responseText: "RETURN ABC123", processorResponseCode: "0", processorResponseText: "RETURN ABC123" }] }));
+  const mismatchedSettle = await decide(returnReferenceRefundFixture("RETURN ABC123", { actions: [
+    { type: "refund", date: "20260110143508", amount: "-59.48", responseCode: "100", responseText: "RETURN ABC123", processorResponseCode: "0", processorResponseText: "RETURN ABC123" },
+    { type: "settle", date: "20260110231147", amount: "-50.00", responseCode: "100", processorResponseCode: "0" },
+  ] }));
+  assert.equal(nearby.decision.classification, "REFUND_AMBIGUOUS");
+  assert.equal(noSettle.decision.classification, "REFUND_AMBIGUOUS");
+  assert.equal(mismatchedSettle.decision.classification, "REFUND_AMBIGUOUS");
+});
+
+test("RETURN reference replay fingerprint is stable and settlement changes are material", async () => {
+  const first = await decide(returnReferenceRefundFixture());
+  const replay = await decide(returnReferenceRefundFixture().replace("<response_text>RETURN DFYCXZ</response_text>", "<response_text>  RETURN DFYCXZ  </response_text>"));
+  const changed = await decide(returnReferenceRefundFixture("RETURN DFYCXZ", { actions: [
+    { type: "refund", date: "20260110143508", amount: "-59.48", responseCode: "100", responseText: "RETURN DFYCXZ", processorResponseCode: "0", processorResponseText: "RETURN DFYCXZ", batchId: "0" },
+    { type: "settle", date: "20260110231148", amount: "-59.48", responseCode: "100", processorResponseCode: "0", batchId: "867721287", processorBatchId: "8" },
+  ] }));
+  assert.equal(first.evidence.sourceEventId, replay.evidence.sourceEventId);
+  assert.equal(first.fingerprint, replay.fingerprint);
+  assert.notEqual(first.fingerprint, changed.fingerprint);
 });

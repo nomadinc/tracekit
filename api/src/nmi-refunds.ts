@@ -29,6 +29,10 @@ export interface NmiRefundActionEvidence {
   readonly processorResponseCode: string | null;
   readonly processorResponseTextRaw: string | null;
   readonly processorResponseText: string | null;
+  readonly batchIdRaw: string | null;
+  readonly batchId: string | null;
+  readonly processorBatchIdRaw: string | null;
+  readonly processorBatchId: string | null;
 }
 
 export interface NmiRefundEvidence {
@@ -124,6 +128,8 @@ function readAction(block: string, index: number): NmiRefundActionEvidence {
   const responseTextRaw = nmiXmlValue(block, "response_text");
   const processorResponseCodeRaw = nmiXmlValue(block, "processor_response_code");
   const processorResponseTextRaw = nmiXmlValue(block, "processor_response_text");
+  const batchIdRaw = nmiXmlValue(block, "batch_id");
+  const processorBatchIdRaw = nmiXmlValue(block, "processor_batch_id");
   return Object.freeze({
     index,
     rawXml: block,
@@ -143,6 +149,10 @@ function readAction(block: string, index: number): NmiRefundActionEvidence {
     processorResponseCode: normalizedUpper(processorResponseCodeRaw),
     processorResponseTextRaw,
     processorResponseText: normalizedUpper(processorResponseTextRaw),
+    batchIdRaw,
+    batchId: normalizedText(batchIdRaw),
+    processorBatchIdRaw,
+    processorBatchId: normalizedText(processorBatchIdRaw),
   });
 }
 
@@ -204,6 +214,17 @@ function isProcessorSuccess(action: NmiRefundActionEvidence) {
   return true;
 }
 
+function isCertifiedReturnReferenceSuccess(evidence: NmiRefundEvidence, refund: NmiRefundActionEvidence) {
+  if (!refund.responseText || !/^RETURN [A-Z0-9]{6}$/.test(refund.responseText)) return false;
+  if (refund.responseCode !== "100" || refund.processorResponseCode !== "0" || refund.processorResponseText !== refund.responseText) return false;
+  if (evidence.settleActions.length !== 1) return false;
+  const settle = evidence.settleActions[0];
+  if (settle.responseCode !== "100" || settle.processorResponseCode !== "0") return false;
+  if (refund.amount == null || settle.amount == null || settle.amount !== refund.amount) return false;
+  if (!refund.occurredAt || !settle.occurredAt || settle.occurredAt < refund.occurredAt) return false;
+  return true;
+}
+
 export function classifyNmiRefund(evidence: NmiRefundEvidence): NmiRefundDecision {
   const diagnostics: string[] = [];
   if (!evidence.sourceEventId) diagnostics.push("missing_source_identity");
@@ -218,7 +239,9 @@ export function classifyNmiRefund(evidence: NmiRefundEvidence): NmiRefundDecisio
   if (!evidence.currency || !/^[A-Z]{3}$/.test(evidence.currency)) diagnostics.push("invalid_currency");
   if (!action.occurredAt) diagnostics.push("invalid_timestamp");
 
-  const successResponse = action.responseCode === "100" && action.responseText === "APPROVED" && isProcessorSuccess(action);
+  const approvedSuccessResponse = action.responseCode === "100" && action.responseText === "APPROVED" && isProcessorSuccess(action);
+  const returnReferenceSuccess = isCertifiedReturnReferenceSuccess(evidence, action);
+  const successResponse = approvedSuccessResponse || returnReferenceSuccess;
   const failedResponse = (
     (action.responseCode === "200" && action.responseText === "DECLINED") ||
     (action.responseCode === "220" && action.responseText === "INVALID CARD #")
@@ -242,7 +265,7 @@ export function classifyNmiRefund(evidence: NmiRefundEvidence): NmiRefundDecisio
 
 export async function nmiRefundFinancialFingerprint(evidence: NmiRefundEvidence, decision = classifyNmiRefund(evidence)) {
   const action = evidence.refundActionCount === 1 ? evidence.refundActions[0] : null;
-  return sha256Hex(stableJson({
+  const material: Record<string, unknown> = {
     provider_account: evidence.providerAccount,
     refund_transaction_id: evidence.refundTransactionId,
     original_transaction_id: evidence.originalTransactionId,
@@ -258,7 +281,20 @@ export async function nmiRefundFinancialFingerprint(evidence: NmiRefundEvidence,
     processor_response_code: action?.processorResponseCode ?? null,
     processor_response_text: action?.processorResponseText ?? null,
     classification: decision.classification,
-  }));
+  };
+  if (action && isCertifiedReturnReferenceSuccess(evidence, action)) {
+    const settle = evidence.settleActions[0];
+    material.corroborating_settle = {
+      action_type: settle.actionType,
+      occurred_at: settle.occurredAt,
+      amount: settle.amount,
+      response_code: settle.responseCode,
+      processor_response_code: settle.processorResponseCode,
+      batch_id: settle.batchId,
+      processor_batch_id: settle.processorBatchId,
+    };
+  }
+  return sha256Hex(stableJson(material));
 }
 
 export function cumulativeSuccessfulRefundAmount(decisions: readonly NmiRefundDecision[]) {
