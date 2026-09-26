@@ -561,6 +561,7 @@ type Env = {
   TRACEKIT_TKID_HANDOFF_SECRET?: string;
   TRACEKIT_TKID_RELAY_ORIGIN?: string;
   TRACEKIT_TKID_RELAY_ENABLED?: string;
+  TRACEKIT_TKID_ERASURE_EXECUTOR_ENABLED?: string;
   TRACEKIT_MAINTENANCE_WRITE_GATE_ENABLED?: string;
   LIVE_WORKSPACE_PROJECTION_BATCH_SIZE?: string;
   LIVE_WORKSPACE_PROJECTION_MAX_EVENTS?: string;
@@ -15960,6 +15961,36 @@ async function recordTkidProofRejection(db:any,input:{source:any;origin:any;reas
 function proofFailure(decision:string){const code=decision==="unsupported_abuse_adapter"?"ingestion_configuration_invalid":decision==="ingestion_stopped"?"ingestion_stopped":"proof_unavailable";return json({ok:false,error:code,message:"TKID collection is unavailable."},decision==="proof_not_started"||decision==="proof_expired"||decision.endsWith("_exhausted")?409:503,{"cache-control":"no-store"})}
 function proofPreflightDecision(source:any,now:string){if(source.ingestion_state!=="enabled")return"ingestion_stopped";if(source.abuse_adapter!=="supabase_fixed_window_v1")return"unsupported_abuse_adapter";if(!source.proof_max_journeys||!source.proof_max_events||!source.proof_starts_at||!source.proof_ends_at)return"proof_disabled";const at=Date.parse(now);if(at<Date.parse(source.proof_starts_at))return"proof_not_started";if(at>=Date.parse(source.proof_ends_at))return"proof_expired";return null}
 
+async function runTkidPrivacyExecutor(env:Env){
+  if(env.TRACEKIT_TKID_ERASURE_EXECUTOR_ENABLED!=="true")return{status:"disabled",scheduled:0,completed:0,failed:0};
+  const db=getSupabase(env),workerId=`tkid-retention:${crypto.randomUUID()}`,now=new Date().toISOString();
+  const {data:scheduled,error:scheduleError}=await db.rpc("schedule_tkid_retention_v1",{p_worker_id:workerId,p_limit:25,p_now:now});
+  if(scheduleError)throw Object.assign(new Error("retention_scheduler_unavailable"),{code:"retention_scheduler_unavailable"});
+  let completed=0,failed=0;
+  for(let i=0;i<25;i++){
+    const claimAt=new Date().toISOString();
+    const {data:claims,error:claimError}=await db.rpc("claim_tkid_erasure_run_v1",{p_worker_id:workerId,p_now:claimAt});
+    if(claimError)throw Object.assign(new Error("erasure_claim_unavailable"),{code:"erasure_claim_unavailable"});
+    const run=Array.isArray(claims)?claims[0]:claims;if(!run?.run_id)break;
+    try{
+      const {data:objects,error:objectsError}=await db.from("tkid_erasure_objects").select("id").eq("organization_id",run.organization_id).eq("erasure_run_id",run.run_id).in("status",["pending","failed"]).order("id").limit(100);
+      if(objectsError)throw Object.assign(new Error("erasure_objects_unavailable"),{code:"erasure_objects_unavailable"});
+      for(const object of objects||[]){
+        const {data:erased,error}=await db.rpc("erase_tkid_erasure_object_v1",{p_run_id:run.run_id,p_object_id:object.id,p_worker_id:workerId,p_now:new Date().toISOString()});
+        if(error||erased!==true)throw Object.assign(new Error("erasure_object_failed"),{code:"erasure_object_failed"});
+      }
+      const {error:completeError}=await db.rpc("complete_tkid_erasure_run_v2",{p_run_id:run.run_id,p_worker_id:workerId,p_now:new Date().toISOString()});
+      if(completeError)throw Object.assign(new Error("erasure_database_failed"),{code:"erasure_database_failed"});
+      completed++;
+    }catch(error:any){
+      const code=String(error?.code||"executor_failure").replace(/[^a-z0-9_]/gi,"_").toLowerCase().slice(0,80)||"executor_failure";
+      await db.rpc("fail_tkid_erasure_run_v1",{p_run_id:run.run_id,p_worker_id:workerId,p_error_code:code,p_now:new Date().toISOString()}).catch(()=>{});
+      failed++;
+    }
+  }
+  return{status:"completed",scheduled:(scheduled||[]).reduce((n:number,row:any)=>n+Number(row.runs_created||0),0),completed,failed};
+}
+
 function relayOpaque(){const bytes=crypto.getRandomValues(new Uint8Array(32));let raw="";for(const byte of bytes)raw+=String.fromCharCode(byte);return btoa(raw).replace(/\+/g,"-").replace(/\//g,"_").replace(/=+$/g,"")}
 function relayRedirect(destination:string,status=303,headers:Record<string,string>={}){return new Response(null,{status,headers:{location:destination,...relaySecurityHeaders(),...headers}})}
 async function relayFlow(db:any,flowKey:string){const {data}=await db.from("tkid_relay_flows").select("*").eq("flow_key",flowKey).maybeSingle();return data}
@@ -24019,6 +24050,11 @@ if (path === "/v1/integrations/wowboost/import-job-status" && req.method === "GE
     ctx.waitUntil(runScheduledPaypalDisputeImport(env));
     ctx.waitUntil(runScheduledGatewayTransactionSnapshotImport(env));
     ctx.waitUntil(runScheduledWowBoostImport(env));
+    ctx.waitUntil(runTkidPrivacyExecutor(env).then((result)=>{
+      console.log("[TraceKit] TKID privacy executor cycle",{event:"tkid.privacy_executor.cycle",status:result.status,scheduled:result.scheduled,completed:result.completed,failed:result.failed});
+    }).catch((error:any)=>{
+      console.error("[TraceKit] TKID privacy executor failed",{event:"tkid.privacy_executor.failed",error_code:String(error?.code||"executor_failure").replace(/[^a-z0-9_]/gi,"_").toLowerCase().slice(0,80)});
+    }));
     ctx.waitUntil(runScheduledDomainEventProjectionReplay(getSupabase(env), {
       batch_size: Number(env.LIVE_WORKSPACE_PROJECTION_BATCH_SIZE || 0) || undefined,
       max_events: Number(env.LIVE_WORKSPACE_PROJECTION_MAX_EVENTS || 0) || undefined,
