@@ -11,6 +11,7 @@ export const GOOGLE_CUSTOMER_CLIENT_QUERY = [
   "customer_client.currency_code,",
   "customer_client.time_zone",
   "FROM customer_client",
+  "WHERE customer_client.level <= 1",
   "ORDER BY customer_client.level, customer_client.id",
 ].join(" ");
 
