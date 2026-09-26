@@ -1,3 +1,5 @@
+import { nmiXmlBlocks, nmiXmlValue, sha256Hex, stableJson } from "./nmi-refunds.ts";
+
 export type ChargebackLedgerType =
   | "chargeback"
   | "chargeback_fee"
@@ -61,10 +63,89 @@ export type GatewayClassicAction = {
   action_date: string | null;
   amount: string | null;
   requested_amount: string | null;
+  response_code?: string | null;
   response_text: string | null;
+  processor_response_code?: string | null;
+  processor_response_text?: string | null;
+  batch_id?: string | null;
+  processor_batch_id?: string | null;
   condition: string | null;
   currency: string | null;
   raw: Record<string, unknown>;
+};
+
+export type GatewayClassicParentEvidence = {
+  transaction_id: string;
+  amount: string | null;
+  currency: string | null;
+  condition: string | null;
+  source_timestamp: string | null;
+  action_sequence: string[];
+};
+
+export type GatewayClassicTransactionDiagnostic = {
+  platform: string;
+  processor_account_id: string;
+  transaction_id: string | null;
+  order_id: string | null;
+  original_transaction_id: string | null;
+  transaction_type: string | null;
+  condition: string | null;
+  currency: string | null;
+  batch_id: string | null;
+  processor_batch_id: string | null;
+  transaction_amount: string | null;
+  source_xml_hash: string;
+  action_sequence: string[];
+  actions: Array<{
+    index: number;
+    raw: {
+      action_type: string | null;
+      action_date: string | null;
+      amount: string | null;
+      requested_amount: string | null;
+      response_code: string | null;
+      response_text: string | null;
+      processor_response_code: string | null;
+      processor_response_text: string | null;
+      batch_id: string | null;
+      processor_batch_id: string | null;
+    };
+    normalized: {
+      action_type: string | null;
+      action_date: string | null;
+      amount: string | null;
+      requested_amount: string | null;
+      response_code: string | null;
+      response_text: string | null;
+      processor_response_code: string | null;
+      processor_response_text: string | null;
+      batch_id: string | null;
+      processor_batch_id: string | null;
+    };
+    classification: GatewayActionClassification;
+  }>;
+  classification: GatewayActionClassification;
+  classification_reason: string;
+  candidate: boolean;
+  parent_transaction_id: string | null;
+  parent_present: boolean;
+  parent: GatewayClassicParentEvidence | null;
+  inserted: false;
+};
+
+export type GatewayClassicDiagnosticSummary = {
+  transactions_scanned: number;
+  actions_scanned: number;
+  classification_counts: Record<GatewayActionClassification, number>;
+  candidate_count: number;
+  candidate_ids: string[];
+  candidates: GatewayClassicTransactionDiagnostic[];
+  candidate_truncated: false;
+  ordinary_evidence_retained: number;
+  ordinary_evidence_truncated: boolean;
+  ordinary_evidence: GatewayClassicTransactionDiagnostic[];
+  summary_hash: string;
 };
 
 export type GatewayClassicActionDiagnostic = {
@@ -704,8 +785,9 @@ export function classifyGatewayClassicAction(action: GatewayClassicAction): Gate
     action.action_type,
     action.response_text,
     action.condition,
-    (action.raw as any)?.processor_response_text,
-    (action.raw as any)?.response_code,
+    action.processor_response_text ?? (action.raw as any)?.processor_response_text,
+    action.response_code ?? (action.raw as any)?.response_code,
+    action.processor_response_code ?? (action.raw as any)?.processor_response_code,
   ].map(cleanLower).join(" ");
 
   if (/\bach\b/.test(text) && /\b(return|returned|r\d{2})\b/.test(text)) return "ach_return";
@@ -715,6 +797,183 @@ export function classifyGatewayClassicAction(action: GatewayClassicAction): Gate
   if (/\b(reversal|recovered|recovery|won|representment)\b/.test(text) && /\b(chargeback|dispute|return)\b/.test(text)) return "reversal_recovery";
   if (/\b(chargeback|dispute)\b/.test(text) && !/\bach\b/.test(text)) return "card_chargeback_dispute";
   return "unknown";
+}
+
+function nullableText(value: unknown) {
+  const text = chargebackText(value);
+  return text || null;
+}
+
+function normalizedDiagnosticAction(action: GatewayClassicAction, index: number) {
+  const raw = {
+    action_type: nullableText(action.action_type),
+    action_date: nullableText(action.action_date),
+    amount: nullableText(action.amount),
+    requested_amount: nullableText(action.requested_amount),
+    response_code: nullableText(action.response_code ?? (action.raw as any)?.response_code),
+    response_text: nullableText(action.response_text),
+    processor_response_code: nullableText(action.processor_response_code ?? (action.raw as any)?.processor_response_code),
+    processor_response_text: nullableText(action.processor_response_text ?? (action.raw as any)?.processor_response_text),
+    batch_id: nullableText(action.batch_id ?? (action.raw as any)?.batch_id),
+    processor_batch_id: nullableText(action.processor_batch_id ?? (action.raw as any)?.processor_batch_id),
+  };
+  return {
+    index,
+    raw,
+    normalized: {
+      action_type: raw.action_type?.toLowerCase() ?? null,
+      action_date: raw.action_date,
+      amount: raw.amount,
+      requested_amount: raw.requested_amount,
+      response_code: raw.response_code?.toUpperCase() ?? null,
+      response_text: raw.response_text?.replace(/\s+/g, " ").toUpperCase() ?? null,
+      processor_response_code: raw.processor_response_code?.toUpperCase() ?? null,
+      processor_response_text: raw.processor_response_text?.replace(/\s+/g, " ").toUpperCase() ?? null,
+      batch_id: raw.batch_id,
+      processor_batch_id: raw.processor_batch_id,
+    },
+    classification: classifyGatewayClassicAction(action),
+  };
+}
+
+function transactionClassification(actions: ReturnType<typeof normalizedDiagnosticAction>[]) {
+  const priority: GatewayActionClassification[] = [
+    "ach_return",
+    "refund",
+    "void",
+    "processor_fee",
+    "reversal_recovery",
+    "card_chargeback_dispute",
+  ];
+  return priority.find((classification) => actions.some((action) => action.classification === classification)) ?? "unknown";
+}
+
+export async function parseGatewayClassicTransactionDiagnostic(args: {
+  platform: string;
+  processor_account_id: string;
+  transaction_xml: string;
+  parent?: GatewayClassicParentEvidence | null;
+}): Promise<GatewayClassicTransactionDiagnostic> {
+  const tx = args.transaction_xml;
+  const transactionId = nullableText(nmiXmlValue(tx, "transaction_id"));
+  const orderId = nullableText(nmiXmlValue(tx, "order_id") ?? nmiXmlValue(tx, "orderid") ?? transactionId);
+  const originalTransactionId = nullableText(nmiXmlValue(tx, "original_transaction_id"));
+  const condition = nullableText(nmiXmlValue(tx, "condition"));
+  const currency = nullableText(nmiXmlValue(tx, "currency"));
+  const actionBlocks = nmiXmlBlocks(tx, "action");
+  const legacyActions: GatewayClassicAction[] = actionBlocks.map((block) => ({
+    transaction_id: transactionId,
+    order_id: orderId,
+    action_type: nmiXmlValue(block, "action_type"),
+    action_date: nmiXmlValue(block, "date"),
+    amount: nmiXmlValue(block, "amount"),
+    requested_amount: nmiXmlValue(block, "requested_amount"),
+    response_code: nmiXmlValue(block, "response_code"),
+    response_text: nmiXmlValue(block, "response_text"),
+    processor_response_code: nmiXmlValue(block, "processor_response_code"),
+    processor_response_text: nmiXmlValue(block, "processor_response_text"),
+    batch_id: nmiXmlValue(block, "batch_id"),
+    processor_batch_id: nmiXmlValue(block, "processor_batch_id"),
+    condition,
+    currency,
+    raw: {
+      response_code: nmiXmlValue(block, "response_code"),
+      processor_response_code: nmiXmlValue(block, "processor_response_code"),
+      processor_response_text: nmiXmlValue(block, "processor_response_text"),
+      batch_id: nmiXmlValue(block, "batch_id"),
+      processor_batch_id: nmiXmlValue(block, "processor_batch_id"),
+    },
+  }));
+  const actions = legacyActions.map(normalizedDiagnosticAction);
+  const classification = transactionClassification(actions);
+  const first = actions[0];
+  const negativeSettleChild = classification === "unknown"
+    && originalTransactionId != null
+    && actions.length === 1
+    && first?.normalized.action_type === "settle"
+    && Number(first.normalized.amount) < 0;
+  const candidate = (classification !== "unknown" && classification !== "refund") || negativeSettleChild;
+  const classificationReason = negativeSettleChild
+    ? "unclassified_negative_settle_with_original_transaction"
+    : classification === "unknown"
+      ? "no_certified_lifecycle_signal"
+      : classification === "refund"
+        ? "known_refund_action_not_dispute_evidence"
+        : "diagnostic_keyword_match_unverified_provider_semantics";
+  const parent = originalTransactionId && args.parent?.transaction_id === originalTransactionId ? args.parent : null;
+  return {
+    platform: args.platform,
+    processor_account_id: args.processor_account_id,
+    transaction_id: transactionId,
+    order_id: orderId,
+    original_transaction_id: originalTransactionId,
+    transaction_type: nullableText(nmiXmlValue(tx, "transaction_type")),
+    condition,
+    currency,
+    batch_id: nullableText(first?.raw.batch_id),
+    processor_batch_id: nullableText(first?.raw.processor_batch_id),
+    transaction_amount: nullableText(first?.raw.amount),
+    source_xml_hash: await sha256Hex(tx),
+    action_sequence: actions.map((action) => action.normalized.action_type ?? "unknown"),
+    actions,
+    classification,
+    classification_reason: classificationReason,
+    candidate,
+    parent_transaction_id: originalTransactionId,
+    parent_present: parent != null,
+    parent,
+    inserted: false,
+  };
+}
+
+export function gatewayClassicParentEvidenceFromTransactionXml(transactionXml: string): GatewayClassicParentEvidence | null {
+  const transactionId = nullableText(nmiXmlValue(transactionXml, "transaction_id"));
+  if (!transactionId) return null;
+  const actions = nmiXmlBlocks(transactionXml, "action").map((block) => ({
+    type: nullableText(nmiXmlValue(block, "action_type"))?.toLowerCase() ?? "unknown",
+    date: nullableText(nmiXmlValue(block, "date")),
+    amount: nullableText(nmiXmlValue(block, "amount")),
+  }));
+  return {
+    transaction_id: transactionId,
+    amount: actions[0]?.amount ?? null,
+    currency: nullableText(nmiXmlValue(transactionXml, "currency")),
+    condition: nullableText(nmiXmlValue(transactionXml, "condition")),
+    source_timestamp: actions[0]?.date ?? null,
+    action_sequence: actions.map((action) => action.type),
+  };
+}
+
+export async function summarizeGatewayClassicTransactionDiagnostics(args: {
+  diagnostics: GatewayClassicTransactionDiagnostic[];
+  ordinaryEvidenceLimit?: number;
+}): Promise<GatewayClassicDiagnosticSummary> {
+  const classifications: GatewayActionClassification[] = ["card_chargeback_dispute", "ach_return", "refund", "void", "processor_fee", "reversal_recovery", "unknown"];
+  const classificationCounts = Object.fromEntries(classifications.map((value) => [value, 0])) as Record<GatewayActionClassification, number>;
+  for (const diagnostic of args.diagnostics) classificationCounts[diagnostic.classification] += 1;
+  const candidates = args.diagnostics.filter((diagnostic) => diagnostic.candidate).sort((a, b) => String(a.transaction_id).localeCompare(String(b.transaction_id)));
+  const ordinary = args.diagnostics.filter((diagnostic) => !diagnostic.candidate).sort((a, b) => String(a.transaction_id).localeCompare(String(b.transaction_id)));
+  const ordinaryLimit = Math.max(0, Math.min(25, args.ordinaryEvidenceLimit ?? 10));
+  const hashInput = {
+    transactions_scanned: args.diagnostics.length,
+    actions_scanned: args.diagnostics.reduce((total, item) => total + item.actions.length, 0),
+    classification_counts: classificationCounts,
+    candidate_ids: candidates.map((item) => item.transaction_id),
+    candidate_hashes: candidates.map((item) => item.source_xml_hash),
+  };
+  return {
+    transactions_scanned: args.diagnostics.length,
+    actions_scanned: hashInput.actions_scanned,
+    classification_counts: classificationCounts,
+    candidate_count: candidates.length,
+    candidate_ids: candidates.map((item) => item.transaction_id).filter((value): value is string => value != null),
+    candidates,
+    candidate_truncated: false,
+    ordinary_evidence_retained: Math.min(ordinaryLimit, ordinary.length),
+    ordinary_evidence_truncated: ordinary.length > ordinaryLimit,
+    ordinary_evidence: ordinary.slice(0, ordinaryLimit),
+    summary_hash: await sha256Hex(stableJson(hashInput)),
+  };
 }
 
 export function summarizeGatewayClassicActionsForDiagnostics(args: {
