@@ -22,7 +22,7 @@ export async function buildGoogleAdsManagementState(input:{organizationId:string
 export async function setGoogleAdsAccountSelection(input:{organizationId:string;connectionId:string;selectedAccountIds:string[];transport?:GoogleManagementTransport}){
  const t=input.transport||marketingPersistenceRequest;const rows=await t(`marketing_provider_accounts?organization_id=eq.${encodeURIComponent(input.organizationId)}&connection_id=eq.${encodeURIComponent(input.connectionId)}&provider=eq.google_ads`);
  const byId=new Map(rows.map(r=>[String(r.id),r]));const selected=new Set(input.selectedAccountIds);
- for(const id of selected){const r=byId.get(id);if(!r||!r.eligible_for_spend_sync||r.is_manager||(r.status!=="active"&&r.status!=="degraded"))throw new Error("Only spend-eligible Google Ads client accounts can be selected.");}
+ for(const id of Array.from(selected)){const r=byId.get(id);if(!r||!r.eligible_for_spend_sync||r.is_manager||(r.status!=="active"&&r.status!=="degraded"))throw new Error("Only spend-eligible Google Ads client accounts can be selected.");}
  for(const r of rows){const desired=selected.has(String(r.id));if(Boolean(r.selected_for_sync)===desired)continue;await t(`marketing_provider_accounts?id=eq.${encodeURIComponent(String(r.id))}&organization_id=eq.${encodeURIComponent(input.organizationId)}&connection_id=eq.${encodeURIComponent(input.connectionId)}`,{method:"PATCH",body:JSON.stringify({selected_for_sync:desired,updated_at:new Date().toISOString()})});}
  return{selectedAccountIds:Array.from(selected)};
 }
