@@ -39,6 +39,9 @@ export function buildTrackingInvestigation(x:JourneyIntelligence):TrackingInvest
  return{scope:{customerId:x.customerId,journeyId:x.journeyId},observedConditions:[{type:"attribution_unresolved",status:established("attribution_established")?"not_observed":"observed",evidenceEventIds:events("attribution_established")},{type:"commerce_unlinked",status:established("commerce_linked")?"not_observed":"observed",evidenceEventIds:events("commerce_linked")},{type:"deterministic_identity_bridge_missing",status:established("deterministic_identity_bridge")?"not_observed":"observed",evidenceEventIds:events("deterministic_identity_bridge")},{type:"evidence_limited",status:x.evidenceLimits.length?"observed":"not_observed",evidenceEventIds:[]}],presentEvidence:{sourcePlatforms,connectors,identifierTypes,commerceOrders:x.commerce.map(o=>o.orderId)},missingEvidence:missing,boundaries:Array.from(boundaryMap.values()),inspectionTargets:inspectionTargets.slice(0,25),evidenceLimits:x.evidenceLimits};
 }
 export type DeviationInvestigation={deviation:CrossJourneyAnalysis["deviations"][number];affectedJourneys:number;investigations:Array<TrackingInvestigation>;journeysUnavailable:string[]};
+export function buildDeviationInvestigation(deviation:CrossJourneyAnalysis["deviations"][number],investigations:TrackingInvestigation[],requestedJourneyIds=deviation.supportingJourneyIds.slice(0,10)):DeviationInvestigation{
+ const resolved=new Set(investigations.map(i=>i.scope.journeyId).filter(Boolean));return{deviation,affectedJourneys:deviation.cohort.denominator,investigations:investigations.slice(0,10),journeysUnavailable:requestedJourneyIds.filter(id=>!resolved.has(id))};
+}
 export type CohortComparison={value:string;journeys:number;attributionEstablished:{count:number;denominator:number};commerceLinked:{count:number;denominator:number};deterministicIdentityBridge:{count:number;denominator:number};evidenceLimited:{count:number;denominator:number};sampleJourneyIds:string[]};
 export type CrossJourneyAnalysis={
  population:{customersRequested:number;customersScanned:number;journeysDiscovered:number;journeysAnalyzed:number;journeysSkippedByLimit:number;journeysFailed:number};
@@ -58,7 +61,7 @@ export const mcpJourneyRepository={
   const wanted=live.supportingJourneyIds.slice(0,10),investigations:TrackingInvestigation[]=[],journeysUnavailable:string[]=[];
   const list=await get(`/v1/customers?${qs(s,{limit:customerLimit})}`);const rows=Array.isArray(list.customers)?list.customers.slice(0,customerLimit):[];
   for(const row of rows){if(investigations.length>=wanted.length)break;const customerId=String(row?.customer?.id||"");if(!customerId)continue;try{const detail=await get(`/v1/customers/${encodeURIComponent(customerId)}?${qs(s)}`);for(const j of Array.isArray(detail.journeys)?detail.journeys:[]){const jid=String(j?.id||"");if(!wanted.includes(jid)||investigations.some(i=>i.scope.journeyId===jid))continue;const raw=await get(`/v1/customers/${encodeURIComponent(customerId)}/journeys/${encodeURIComponent(jid)}?${qs(s,{limit:100})}`);investigations.push(buildTrackingInvestigation(buildJourneyIntelligence(detail,raw,customerId,j)));}}catch{}}
-  for(const id of wanted)if(!investigations.some(i=>i.scope.journeyId===id))journeysUnavailable.push(id);return{deviation:live,affectedJourneys:live.cohort.denominator,investigations,journeysUnavailable};
+  return buildDeviationInvestigation(live,investigations,wanted);
  },
   async investigate(s:ProductionCustomerScope,customerId:string,journeyId?:string):Promise<TrackingInvestigation|null>{const x=await this.explain(s,customerId,journeyId);return x?buildTrackingInvestigation(x):null;},
   async analyze(s:ProductionCustomerScope,customerLimit=25,journeyLimit=50):Promise<CrossJourneyAnalysis>{
