@@ -10,6 +10,7 @@ const requestedRoot=flag>=0?process.argv[flag+1]:releaseRoot;
 if(!requestedRoot)throw new Error("--output-root requires a path");
 const sourceCommit=(process.env.TRACEKIT_SDK_SOURCE_COMMIT||execFileSync("git",["rev-parse","HEAD"],{cwd:root,encoding:"utf8"})).trim();
 if(!/^[0-9a-f]{40}$/.test(sourceCommit))throw new Error("TRACEKIT_SDK_SOURCE_COMMIT must be a full Git SHA");
+try{execFileSync("git",["cat-file","-e",`${sourceCommit}^{commit}`],{cwd:root,stdio:"ignore"})}catch{throw new Error("TRACEKIT_SDK_SOURCE_COMMIT must resolve to a Git commit")}
 const result=await build({entryPoints:[resolve(root,"sdk/tkid/browser-entry.ts")],bundle:true,write:false,format:"iife",platform:"browser",target:["es2020"],minify:true,legalComments:"none",sourcemap:false,charset:"ascii",treeShaking:true});
 const bytes=result.outputFiles[0].contents,sha256=createHash("sha256").update(bytes).digest("hex"),sri=`sha384-${createHash("sha384").update(bytes).digest("base64")}`;
 const manifest={artifactPath:`/sdk/tkid/${VERSION}/${FILE}`,byteSize:bytes.byteLength,canonicalApiEndpoint:"https://api.trace-kit.io",file:FILE,sha256,sourceCommit,sourceMap:"none",sri,version:VERSION};
