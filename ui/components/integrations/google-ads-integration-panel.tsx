@@ -5,7 +5,7 @@ import { GoogleAdsEvidenceViewer,type GoogleEvidenceItem } from "./google-ads-ev
 type Account={id:string;externalId:string;label:string|null;accountType:"manager"|"advertiser"|"hybrid"|"unknown";hierarchyDepth:number|null;eligibleForSpendSync:boolean;selectedForSync:boolean;status:string;evidence?:GoogleEvidenceItem[]};
 type Connection={id:string;displayName:string;status:string;accounts:Account[]};
 
-function AccountRow({account}:{account:Account}){
+function AccountRow({account,onToggle}:{account:Account;onToggle:(id:string,checked:boolean)=>void}){
  const [selected,setSelected]=React.useState(account.selectedForSync);
  const manager=account.accountType==="manager"||account.accountType==="hybrid";
  return <div className="flex items-center justify-between gap-3 rounded-md border p-3" style={{marginLeft:`${Math.max(0,account.hierarchyDepth||0)*16}px`}}>
