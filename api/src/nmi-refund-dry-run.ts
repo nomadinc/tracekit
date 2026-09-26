@@ -8,7 +8,7 @@ import {
   type NmiResponseEvidenceClassification,
 } from "./nmi-refunds.ts";
 
-export type NmiScopeClassification = "SCOPE_RESOLVED" | "SCOPE_PARTIAL" | "SCOPE_MISSING" | "SCOPE_AMBIGUOUS";
+export type NmiScopeClassification = "SCOPE_RESOLVED" | "SCOPE_PARTIAL" | "SCOPE_MISSING" | "SCOPE_AMBIGUOUS" | "BLOCKED_PENDING_CLIENT_TENANT_ONBOARDING";
 export type NmiRefundProposedAction = "ECONOMIC_INSERT" | "EVIDENCE_ONLY" | "QUARANTINE" | "BLOCKED_SCOPE";
 
 export interface NmiScopeEvidence {
@@ -22,6 +22,7 @@ export interface NmiScopeEvidence {
 
 export interface NmiScopeAuditInput {
   readonly platform: string;
+  readonly clientTenantOnboardingPending?: boolean;
   readonly platformOrderScopes: readonly {
     accountId: string | null;
     organizationId: string | null;
@@ -133,6 +134,9 @@ export function auditNmiScope(input: NmiScopeAuditInput): NmiScopeEvidence {
   );
   if (consistent) return Object.freeze({ classification: "SCOPE_RESOLVED", accountId, organizationId, connectionId, providerAccountId, evidence: Object.freeze([...evidence, "four_dimension_exact_join_verified"]) });
   if (dimensions > 0) return Object.freeze({ classification: "SCOPE_PARTIAL", accountId, organizationId, connectionId, providerAccountId, evidence: Object.freeze([...evidence, "incomplete_four_dimension_scope"]) });
+  if (input.clientTenantOnboardingPending) {
+    return Object.freeze({ classification: "BLOCKED_PENDING_CLIENT_TENANT_ONBOARDING", accountId: null, organizationId: null, connectionId: null, providerAccountId: null, evidence: Object.freeze([...evidence, "operator_approved_exact_platform_assignment", "client_tenant_not_onboarded"]) });
+  }
   return Object.freeze({ classification: "SCOPE_MISSING", accountId: null, organizationId: null, connectionId: null, providerAccountId: null, evidence: Object.freeze([...evidence, "no_deterministic_scope_fields"]) });
 }
 
@@ -210,6 +214,7 @@ export async function buildNmiRefundDryRun(args: {
     scope_partial: 0,
     scope_missing: 0,
     scope_ambiguous: 0,
+    blocked_pending_client_tenant_onboarding: 0,
     economic_inserts_proposed: 0,
     evidence_only_proposed: 0,
     quarantined: 0,
@@ -227,7 +232,14 @@ export async function buildNmiRefundDryRun(args: {
     const classificationKey = item.classification.replace("REFUND_", "").toLowerCase();
     counts[classificationKey] += 1;
     counts[item.parent_present ? "parent_resolved" : "parent_unresolved"] += 1;
-    counts[item.scope_classification.replace("SCOPE_", "scope_").toLowerCase()] += 1;
+    const scopeKey: Record<NmiScopeClassification, string> = {
+      SCOPE_RESOLVED: "scope_resolved",
+      SCOPE_PARTIAL: "scope_partial",
+      SCOPE_MISSING: "scope_missing",
+      SCOPE_AMBIGUOUS: "scope_ambiguous",
+      BLOCKED_PENDING_CLIENT_TENANT_ONBOARDING: "blocked_pending_client_tenant_onboarding",
+    };
+    counts[scopeKey[item.scope_classification]] += 1;
     const actionKey: Record<NmiRefundProposedAction, string> = { ECONOMIC_INSERT: "economic_inserts_proposed", EVIDENCE_ONLY: "evidence_only_proposed", QUARANTINE: "quarantined", BLOCKED_SCOPE: "blocked_by_scope" };
     counts[actionKey[item.proposed_future_action]] += 1;
     for (const diagnostic of item.diagnostics) {

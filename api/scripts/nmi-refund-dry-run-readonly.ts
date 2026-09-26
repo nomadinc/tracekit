@@ -63,6 +63,7 @@ async function main() {
   const scopes = Object.fromEntries(NAMED_NMI_PLATFORMS.map((platform) => {
     const input: NmiScopeAuditInput = {
       platform,
+      clientTenantOnboardingPending: true,
       platformOrderScopes: allOrders.filter((row) => row.platform === platform).map((row) => ({ accountId: row.account_id, organizationId: row.organization_id, connectionId: row.connection_id, providerAccountId: row.provider_account_id })),
       exactConnections: connections.filter((row) => exactConnectionMatch(platform, row)).map((row) => ({ id: row.id, accountId: row.account_id, organizationId: row.organization_id })),
       exactProviderAccounts: providerAccounts.filter((row) => exactProviderAccountMatch(platform, row)).map((row) => ({ id: row.id, connectionId: row.connection_id, organizationId: row.organization_id })),

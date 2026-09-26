@@ -15,6 +15,10 @@ test("scope audit requires a consistent exact four-dimension join", () => {
   const missing = auditNmiScope({ platform: "nmi:legacy", platformOrderScopes: [{ accountId: null, organizationId: null, connectionId: null, providerAccountId: null }], exactConnections: [], exactProviderAccounts: [] });
   assert.equal(missing.classification, "SCOPE_MISSING");
 
+  const pendingOnboarding = auditNmiScope({ platform: "nmi:approved-client", clientTenantOnboardingPending: true, platformOrderScopes: [{ accountId: null, organizationId: null, connectionId: null, providerAccountId: null }], exactConnections: [], exactProviderAccounts: [] });
+  assert.equal(pendingOnboarding.classification, "BLOCKED_PENDING_CLIENT_TENANT_ONBOARDING");
+  assert.deepEqual(pendingOnboarding.evidence.slice(-2), ["operator_approved_exact_platform_assignment", "client_tenant_not_onboarded"]);
+
   const ambiguous = auditNmiScope({ platform: "nmi:ambiguous", platformOrderScopes: [{ accountId: "a", organizationId: null, connectionId: null, providerAccountId: null }, { accountId: "b", organizationId: null, connectionId: null, providerAccountId: null }], exactConnections: [], exactProviderAccounts: [] });
   assert.equal(ambiguous.classification, "SCOPE_AMBIGUOUS");
 });
@@ -46,6 +50,18 @@ test("missing scope blocks otherwise valid future actions without creating write
     scopes: { "nmi:legacy": { classification: "SCOPE_MISSING", accountId: null, organizationId: null, connectionId: null, providerAccountId: null, evidence: ["none"] } },
   });
   assert.equal(report.manifest.items[0].proposed_future_action, "BLOCKED_SCOPE");
+  assert.equal(report.counts.blocked_by_scope, 1);
+  assert.equal(report.counts.economic_inserts_proposed, 0);
+});
+
+test("approved client ownership remains blocked until its tenant is onboarded", async () => {
+  const report = await buildNmiRefundDryRun({
+    rows: [{ platform: "nmi:approved-client", platformOrderId: "nmi:approved-client:refund-partial-001", transactionId: "refund-partial-001", orderId: null, canonicalOrderId: null, transactionXml: partialRefundFixture() }],
+    scopes: { "nmi:approved-client": { classification: "BLOCKED_PENDING_CLIENT_TENANT_ONBOARDING", accountId: null, organizationId: null, connectionId: null, providerAccountId: null, evidence: ["operator_approved_exact_platform_assignment", "client_tenant_not_onboarded"] } },
+  });
+  assert.equal(report.manifest.items[0].scope_classification, "BLOCKED_PENDING_CLIENT_TENANT_ONBOARDING");
+  assert.equal(report.manifest.items[0].proposed_future_action, "BLOCKED_SCOPE");
+  assert.equal(report.counts.blocked_pending_client_tenant_onboarding, 1);
   assert.equal(report.counts.blocked_by_scope, 1);
   assert.equal(report.counts.economic_inserts_proposed, 0);
 });
