@@ -4,7 +4,7 @@
   "canonicalApiEndpoint": "https://api.trace-kit.io",
   "file": "tracekit-journey.min.js",
   "sha256": "eda519b5d8585c4a46db36b3dabe5b603d7ce895145fdefffba3b3dc32ee0a83",
-  "sourceCommit": "1f7f8c731f0965905c80aca348909bdf8476f049",
+  "sourceCommit": "dd6036d0d4661415173390c7c4787205a23c2c9b",
   "sourceMap": "none",
   "sri": "sha384-w2HlRXLyX2NvTswRJSb/F584XCb5xJar9RgJ2wgBZzJKja4qqjzMzKDkrwVrP0MO",
   "version": "1.0.0"
