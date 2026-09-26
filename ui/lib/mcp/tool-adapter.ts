@@ -43,6 +43,11 @@ export const TRACEKIT_MCP_TOOLS = [
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   {
+    name:"tracekit.plan_actions",title:"Plan TraceKit actions",description:"Convert evidence-backed advisory recommendations into non-mutating governed action plans with eligibility state, target, permission, confirmation, prerequisites, expected postconditions, verification, rollback applicability, audit requirements, and evidence.",
+    inputSchema:{type:"object",properties:{customer_id:{type:"string",minLength:1,maxLength:512},journey_id:{type:"string",minLength:1,maxLength:512}},required:["customer_id"],additionalProperties:false},
+    annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
+  },
+  {
     name:"tracekit.recommend_actions",title:"Recommend TraceKit actions",description:"Return bounded advisory next steps derived from one authorized Journey investigation. Recommendations expose evidence, prerequisites, success evidence, affected boundaries, and uncertainty; they do not execute repairs.",
     inputSchema:{type:"object",properties:{customer_id:{type:"string",minLength:1,maxLength:512},journey_id:{type:"string",minLength:1,maxLength:512}},required:["customer_id"],additionalProperties:false},
     annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
@@ -146,6 +151,9 @@ export async function callTraceKitMcpTool(
     case "tracekit.explain_journey":
       assertKeys(args, ["customer_id", "journey_id"]);
       return service.explainJourney(text(args.customer_id, "customer_id", true)!, text(args.journey_id, "journey_id"));
+    case "tracekit.plan_actions":
+      assertKeys(args, ["customer_id","journey_id"]);
+      return service.planActions(text(args.customer_id,"customer_id",true)!,text(args.journey_id,"journey_id"));
     case "tracekit.recommend_actions":
       assertKeys(args, ["customer_id","journey_id"]);
       return service.recommendActions(text(args.customer_id,"customer_id",true)!,text(args.journey_id,"journey_id"));
