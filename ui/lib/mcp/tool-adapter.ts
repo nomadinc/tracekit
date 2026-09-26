@@ -43,6 +43,11 @@ export const TRACEKIT_MCP_TOOLS = [
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   {
+    name:"tracekit.investigate_tracking",title:"Investigate TraceKit tracking",description:"Investigate one authorized Journey using retained evidence. Returns observed conditions, present and missing evidence, source/connector boundaries, and deterministic inspection targets without asserting unsupported root cause.",
+    inputSchema:{type:"object",properties:{customer_id:{type:"string",minLength:1,maxLength:512},journey_id:{type:"string",minLength:1,maxLength:512}},required:["customer_id"],additionalProperties:false},
+    annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
+  },
+  {
     name: "tracekit.analyze_journeys",
     title: "Analyze TraceKit journeys",
     description: "Aggregate bounded, authorized Journey evidence across customers. Returns denominated conclusion coverage, retained source/connector/affiliate/offer breakdowns, evidence limits, and bounded supporting samples without causal or quality scoring.",
@@ -131,6 +136,9 @@ export async function callTraceKitMcpTool(
     case "tracekit.explain_journey":
       assertKeys(args, ["customer_id", "journey_id"]);
       return service.explainJourney(text(args.customer_id, "customer_id", true)!, text(args.journey_id, "journey_id"));
+    case "tracekit.investigate_tracking":
+      assertKeys(args, ["customer_id","journey_id"]);
+      return service.investigateTracking(text(args.customer_id,"customer_id",true)!,text(args.journey_id,"journey_id"));
     case "tracekit.analyze_journeys":
       assertKeys(args, ["customer_limit", "journey_limit"]);
       return service.analyzeJourneys({customerLimit:limit(args.customer_limit,50,25),journeyLimit:limit(args.journey_limit,100,50)});
