@@ -63,6 +63,10 @@ export function evaluateActionEligibility(input:ActionEligibilityInput):ActionEl
  const governanceSatisfied=planUnchanged&&checks.actionPermissionGranted&&checks.prerequisitesSatisfied&&humanConfirmationValid;const state:ActionEligibility["state"]=!governanceSatisfied?(checks.actionPermissionGranted&&checks.prerequisitesSatisfied&&planUnchanged?"confirmation_required":"blocked"):checks.executionCapabilityEnabled?"eligible":"blocked";
  return{state,eligible:state==="eligible",checks,reasons,confirmationAudit:{confirmationId:c.confirmationId,confirmedAt:c.confirmedAt,boundPlanIdentity:c.planIdentity},executionAvailable:false};
 }
+export type ActionEligibilityInspection={scope:GovernedActionPlanning["scope"];plans:Array<{plan:GovernedActionPlan;eligibility:ActionEligibility}>;evidenceLimits:string[]};
+export function inspectActionEligibility(planning:GovernedActionPlanning):ActionEligibilityInspection{
+ return{scope:planning.scope,plans:planning.plans.map(plan=>({plan,eligibility:evaluateActionEligibility({plan,planIdentity:`plan:${plan.recommendationId}:${planning.scope.customerId}:${planning.scope.journeyId||""}`,currentPlanIdentity:`plan:${plan.recommendationId}:${planning.scope.customerId}:${planning.scope.journeyId||""}`,actionPermissionGranted:false,prerequisitesSatisfied:false,humanConfirmation:{confirmed:false,planIdentity:null,targetCustomerId:null,targetJourneyId:null,confirmedAt:null,confirmationId:null},executionCapabilityEnabled:false})})),evidenceLimits:planning.evidenceLimits};
+}
 export type RecommendationPlanTransition={before:RecommendationIntelligence;after:RecommendationIntelligence;transitions:Array<{recommendationType:AdvisoryRecommendation["type"];from:"ready"|"blocked"|"informational"|"absent";to:"ready"|"blocked"|"informational"|"absent";reason:string}>};
 export function buildRecommendationPlanTransition(before:TrackingInvestigation,after:TrackingInvestigation):RecommendationPlanTransition{
  const a=buildRecommendations(before),b=buildRecommendations(after),types=Array.from(new Set([...a.recommendations.map(r=>r.type),...b.recommendations.map(r=>r.type)]));const state=(x:RecommendationIntelligence,t:AdvisoryRecommendation["type"])=>x.recommendations.find(r=>r.type===t)?.applicability||"absent";
@@ -86,7 +90,8 @@ export function buildObservedDeviations(comparisons:CrossJourneyAnalysis["compar
 }
 function add(map:Map<string,{count:number;ids:string[]}>,values:string[],journeyId:string){for(const v of Array.from(new Set(values.filter(Boolean)))){const x=map.get(v)||{count:0,ids:[]};x.count++;if(x.ids.length<10&&!x.ids.includes(journeyId))x.ids.push(journeyId);map.set(v,x);}}
 export const mcpJourneyRepository={
- async planActions(s:ProductionCustomerScope,customerId:string,journeyId?:string):Promise<GovernedActionPlanning|null>{const r=await this.recommend(s,customerId,journeyId);return r?buildGovernedActionPlans(r):null;},
+ async inspectEligibility(s:ProductionCustomerScope,customerId:string,journeyId?:string):Promise<ActionEligibilityInspection|null>{const p=await this.planActions(s,customerId,journeyId);return p?inspectActionEligibility(p):null;},
+  async planActions(s:ProductionCustomerScope,customerId:string,journeyId?:string):Promise<GovernedActionPlanning|null>{const r=await this.recommend(s,customerId,journeyId);return r?buildGovernedActionPlans(r):null;},
   async recommend(s:ProductionCustomerScope,customerId:string,journeyId?:string):Promise<RecommendationIntelligence|null>{const i=await this.investigate(s,customerId,journeyId);return i?buildRecommendations(i):null;},
   async investigateDeviation(s:ProductionCustomerScope,deviation:CrossJourneyAnalysis["deviations"][number],customerLimit=50,journeyLimit=100):Promise<DeviationInvestigation>{
   const analysis=await this.analyze(s,customerLimit,journeyLimit);const live=analysis.deviations.find(d=>d.dimension===deviation.dimension&&d.value===deviation.value&&d.metric===deviation.metric);if(!live)throw new Error("mcp_deviation_not_observed");

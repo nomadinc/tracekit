@@ -43,6 +43,11 @@ export const TRACEKIT_MCP_TOOLS = [
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   {
+    name:"tracekit.inspect_action_eligibility",title:"Inspect TraceKit action eligibility",description:"Read-only inspection of governed action-plan eligibility gates. Shows what blocks future execution without granting permission, confirming, enabling execution, or mutating anything.",
+    inputSchema:{type:"object",properties:{customer_id:{type:"string",minLength:1,maxLength:512},journey_id:{type:"string",minLength:1,maxLength:512}},required:["customer_id"],additionalProperties:false},
+    annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
+  },
+  {
     name:"tracekit.plan_actions",title:"Plan TraceKit actions",description:"Convert evidence-backed advisory recommendations into non-mutating governed action plans with eligibility state, target, permission, confirmation, prerequisites, expected postconditions, verification, rollback applicability, audit requirements, and evidence.",
     inputSchema:{type:"object",properties:{customer_id:{type:"string",minLength:1,maxLength:512},journey_id:{type:"string",minLength:1,maxLength:512}},required:["customer_id"],additionalProperties:false},
     annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
@@ -151,6 +156,9 @@ export async function callTraceKitMcpTool(
     case "tracekit.explain_journey":
       assertKeys(args, ["customer_id", "journey_id"]);
       return service.explainJourney(text(args.customer_id, "customer_id", true)!, text(args.journey_id, "journey_id"));
+    case "tracekit.inspect_action_eligibility":
+      assertKeys(args, ["customer_id","journey_id"]);
+      return service.inspectActionEligibility(text(args.customer_id,"customer_id",true)!,text(args.journey_id,"journey_id"));
     case "tracekit.plan_actions":
       assertKeys(args, ["customer_id","journey_id"]);
       return service.planActions(text(args.customer_id,"customer_id",true)!,text(args.journey_id,"journey_id"));
