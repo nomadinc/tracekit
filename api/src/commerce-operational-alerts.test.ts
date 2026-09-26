@@ -132,35 +132,44 @@ test("product mapping health failures preserve only sanitized PostgREST diagnost
   });
 });
 test("mapping health migration is read-only, security-invoker, scoped, and never infers a target", () => {
-  const migration = readFileSync(new URL("../../supabase/migrations/20260830033844_commerce_product_mapping_health.sql", import.meta.url), "utf8");
-  assert.match(migration, /with \(security_invoker = true\)/);
-  assert.match(migration, /p\.organization_id/); assert.match(migration, /p\.connection_id/); assert.match(migration, /p\.provider_account_id/);
-  assert.match(migration, /mapping_status in \('observed', 'proposed', 'review_required'\)/);
-  assert.doesNotMatch(migration, /insert into|update public|delete from/i);
-  assert.match(migration, /revoke all.*anon, authenticated/);
+  const migration = readFileSync(new URL("../../supabase/migrations/20260924053000_converge_operational_product_health_state.sql", import.meta.url), "utf8");
+  const view = migration.slice(
+    migration.indexOf("create or replace view public.commerce_product_mapping_health_v1"),
+    migration.indexOf("comment on view public.commerce_product_mapping_health_v1")
+  );
+  assert.match(view, /with \(security_invoker = true\)/);
+  assert.match(view, /p\.organization_id/); assert.match(view, /p\.connection_id/); assert.match(view, /p\.provider_account_id/);
+  assert.match(view, /mapping_status in \('observed', 'proposed', 'review_required'\)/);
+  assert.doesNotMatch(view, /insert into|update public|delete from/i);
+  assert.match(view, /revoke all.*anon, authenticated/);
 });
 test("mapping health performance migration pre-aggregates orders once and provides a scoped covering index", () => {
-  const migration = readFileSync(new URL("../../supabase/migrations/20260830041026_optimize_commerce_product_mapping_health.sql", import.meta.url), "utf8");
+  const migration = readFileSync(new URL("../../supabase/migrations/20260924053000_converge_operational_product_health_state.sql", import.meta.url), "utf8");
+  const view = migration.slice(
+    migration.indexOf("create or replace view public.commerce_product_mapping_health_v1"),
+    migration.indexOf("comment on view public.commerce_product_mapping_health_v1")
+  );
   assert.match(migration, /platform_orders_commas_product_health_idx[\s\S]*organization_id,[\s\S]*connection_id,[\s\S]*provider_account_id,[\s\S]*provider_product_id/);
   assert.match(migration, /include \(canonical_order_id, gross_amount\)/);
   assert.match(migration, /where platform = 'commas' and provider_product_id is not null/);
-  assert.match(migration, /with order_health as \([\s\S]*group by[\s\S]*o\.provider_product_id[\s\S]*left join order_health h/);
-  assert.equal((migration.match(/from public\.platform_orders/g) || []).length, 1);
-  assert.doesNotMatch(migration, /commerce_product_mapping_decisions/);
-  assert.match(migration, /coalesce\(h\.order_count, 0\)/);
+  assert.match(view, /with order_health as \([\s\S]*group by[\s\S]*o\.provider_product_id[\s\S]*left join order_health h/);
+  assert.equal((view.match(/from public\.platform_orders/g) || []).length, 1);
+  assert.doesNotMatch(view, /commerce_product_mapping_decisions/);
+  assert.match(view, /coalesce\(h\.order_count, 0\)/);
   assert.match(migration, /with \(security_invoker = true\)/);
   assert.match(migration, /grant select.*service_role/);
 });
 test("mapping health planner migration models correlated scope and matches the partial index predicate", () => {
-  const migration = readFileSync(new URL("../../supabase/migrations/20260830042825_improve_commerce_product_health_statistics.sql", import.meta.url), "utf8");
-  assert.match(migration, /create statistics if not exists platform_orders_commerce_scope_stats\s+\(dependencies, mcv\)/);
-  for (const column of ["platform", "organization_id", "connection_id", "provider_account_id", "provider_product_id"]) assert.match(migration, new RegExp(`\\b${column}\\b`));
-  assert.match(migration, /alter statistics public\.platform_orders_commerce_scope_stats\s+set statistics 500/);
-  assert.match(migration, /analyze public\.platform_orders/);
-  assert.match(migration, /where o\.platform = 'commas'\s+and o\.provider_product_id is not null/);
-  assert.doesNotMatch(migration, /create index/i);
-  assert.match(migration, /with \(security_invoker = true\)/);
-  assert.match(migration, /grant select.*service_role/);
+  const migration = readFileSync(new URL("../../supabase/migrations/20260924053000_converge_operational_product_health_state.sql", import.meta.url), "utf8");
+  const planner = migration.slice(migration.indexOf("-- These columns describe"));
+  assert.match(planner, /create statistics if not exists platform_orders_commerce_scope_stats\s+\(dependencies, mcv\)/);
+  for (const column of ["platform", "organization_id", "connection_id", "provider_account_id", "provider_product_id"]) assert.match(planner, new RegExp(`\\b${column}\\b`));
+  assert.match(planner, /alter statistics public\.platform_orders_commerce_scope_stats\s+set statistics 500/);
+  assert.doesNotMatch(planner, /analyze public\.platform_orders/);
+  assert.match(planner, /where o\.platform = 'commas'\s+and o\.provider_product_id is not null/);
+  assert.doesNotMatch(planner, /create index/i);
+  assert.match(planner, /with \(security_invoker = true\)/);
+  assert.match(planner, /grant select.*service_role/);
 });
 test("Commerce persistence keeps immutable identities, approved mappings, lines, and Refund links scoped", () => {
   const persistence = readFileSync(new URL("../../supabase/migrations/039_commerce_persistence_v1.sql", import.meta.url), "utf8");
