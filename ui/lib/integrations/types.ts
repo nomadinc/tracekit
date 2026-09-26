@@ -1,6 +1,7 @@
 export type IntegrationCategory =
   | "crm"
   | "gateway"
+  | "advertising"
   | "tracking"
   | "commerce"
   | "developer";
