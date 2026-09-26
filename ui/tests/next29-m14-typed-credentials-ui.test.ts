@@ -7,11 +7,13 @@ const root = path.resolve(process.cwd(), "..");
 const read = (relative: string) => fs.readFileSync(path.join(root, relative), "utf8");
 
 test("M14.1B permits one active commerce credential per connection and type", () => {
-  const migration = read("supabase/migrations/20260916190000_commerce_credentials_by_type.sql");
-  assert.match(migration, /drop index if exists public\.commerce_provider_credentials_active_connection_uidx/);
+  const migration = read("supabase/migrations/20260924053200_correct_typed_credential_rotation.sql");
+  assert.match(migration, /commerce_provider_credentials_active_type_uidx/);
+  assert.doesNotMatch(migration, /create unique index/i);
   assert.match(migration, /\(connection_id, credential_type\)/);
   assert.match(migration, /where revoked_at is null/);
   assert.match(migration, /credential_type = p_credential_type/);
+  assert.match(migration, /nullif\(btrim\(p_credential_type\), ''\) is null/);
 });
 
 test("M14.1B webhook secret resolver uses encrypted connection-scoped storage only", () => {

@@ -22,6 +22,10 @@ test("preserves the isolated Production-backed Next29 migration identities", () 
   assert.ok(BigInt(relevantVersions[3]) > BigInt(relevantVersions[0]));
   assert.ok(BigInt(relevantVersions[3]) > BigInt(relevantVersions[1]));
   assert.ok(BigInt(relevantVersions[3]) > BigInt(relevantVersions[2]));
+  assert.equal(existsSync(new URL("../../supabase/migrations/20260902030000_next29_incremental_scheduler_foundation.sql", import.meta.url)), false);
+  assert.equal(existsSync(new URL("../../supabase/migrations/20260902043000_next29_scheduler_dispatch_runtime.sql", import.meta.url)), false);
+  assert.equal(existsSync(new URL("../../supabase/history/non-deployable/migrations/20260902030000_next29_incremental_scheduler_foundation.sql", import.meta.url)), true);
+  assert.equal(existsSync(new URL("../../supabase/history/non-deployable/migrations/20260902043000_next29_scheduler_dispatch_runtime.sql", import.meta.url)), true);
   assert.equal(
     createHash("sha256").update(recovery).digest("hex"),
     "0878cd78d197ec33fae3bfaae326d089871c38926453ea1a93d63e5947fa3161",

@@ -5,7 +5,7 @@ import test from "node:test";
 const route = new URL("../app/api/next29/live-validation/route.ts", import.meta.url);
 const runtime = new URL("../lib/commerce/next29-live-validation.ts", import.meta.url);
 const detail = new URL("../components/connections/next29-connection-detail.tsx", import.meta.url);
-const migration = new URL("../../supabase/migrations/20260910060000_commerce_source_mapping_subscription_type.sql", import.meta.url);
+const migration = new URL("../../supabase/migrations/20260924053100_enable_subscription_source_mapping_type.sql", import.meta.url);
 
 test("29Next M12 operator surface is explicit bounded and non-production gated", async () => {
   const [routeSource, runtimeSource, detailSource] = await Promise.all([
