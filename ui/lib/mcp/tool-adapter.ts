@@ -43,6 +43,11 @@ export const TRACEKIT_MCP_TOOLS = [
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   {
+    name:"tracekit.recommend_actions",title:"Recommend TraceKit actions",description:"Return bounded advisory next steps derived from one authorized Journey investigation. Recommendations expose evidence, prerequisites, success evidence, affected boundaries, and uncertainty; they do not execute repairs.",
+    inputSchema:{type:"object",properties:{customer_id:{type:"string",minLength:1,maxLength:512},journey_id:{type:"string",minLength:1,maxLength:512}},required:["customer_id"],additionalProperties:false},
+    annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
+  },
+  {
     name:"tracekit.investigate_deviation",title:"Investigate TraceKit deviation",description:"Revalidate one observed cross-Journey deviation and return bounded Journey-level tracking investigations for its supporting evidence cohort.",
     inputSchema:{type:"object",properties:{dimension:{type:"string",enum:["affiliate","offer","source_platform","connector"]},value:{type:"string",minLength:1,maxLength:512},metric:{type:"string",enum:["attribution_established","commerce_linked","deterministic_identity_bridge","evidence_limited"]},customer_limit:{type:"integer",minimum:1,maximum:50,default:25},journey_limit:{type:"integer",minimum:1,maximum:100,default:50}},required:["dimension","value","metric"],additionalProperties:false},
     annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
@@ -141,6 +146,9 @@ export async function callTraceKitMcpTool(
     case "tracekit.explain_journey":
       assertKeys(args, ["customer_id", "journey_id"]);
       return service.explainJourney(text(args.customer_id, "customer_id", true)!, text(args.journey_id, "journey_id"));
+    case "tracekit.recommend_actions":
+      assertKeys(args, ["customer_id","journey_id"]);
+      return service.recommendActions(text(args.customer_id,"customer_id",true)!,text(args.journey_id,"journey_id"));
     case "tracekit.investigate_deviation":
       assertKeys(args, ["dimension","value","metric","customer_limit","journey_limit"]);
       return service.investigateDeviation({dimension:text(args.dimension,"dimension",true)! as "affiliate"|"offer"|"source_platform"|"connector",value:text(args.value,"value",true)!,metric:text(args.metric,"metric",true)! as "attribution_established"|"commerce_linked"|"deterministic_identity_bridge"|"evidence_limited",customerLimit:limit(args.customer_limit,50,25),journeyLimit:limit(args.journey_limit,100,50)});

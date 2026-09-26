@@ -8,7 +8,7 @@ import { productionCustomerRepository } from "@/lib/customers/production-reposit
 import { productionOrderRepository } from "@/lib/orders/production-repository";
 import { authorizeMcpRead, projectCustomerSummary, projectCustomerWorkspace, projectOrderSummary, projectOrderWorkspace } from "./governed-read-service";
 import { recordMcpToolAudit } from "./audit";
-import type { JourneyIntelligence, CrossJourneyAnalysis, TrackingInvestigation, DeviationInvestigation } from "./journey-repository";
+import type { JourneyIntelligence, CrossJourneyAnalysis, TrackingInvestigation, DeviationInvestigation, RecommendationIntelligence } from "./journey-repository";
 
 type McpCustomerRepository = Pick<
   CustomerRepository<ProductionCustomerScope>,
@@ -26,7 +26,7 @@ type McpOrderRepository = {
 export type McpReadRepositories = {
   customers: McpCustomerRepository;
   orders: McpOrderRepository;
-  journey: { explain(scope: ProductionCustomerScope, customerId: string, journeyId?: string): Promise<JourneyIntelligence | null>; analyze(scope: ProductionCustomerScope, customerLimit?: number, journeyLimit?: number): Promise<CrossJourneyAnalysis>; investigate(scope: ProductionCustomerScope, customerId: string, journeyId?: string): Promise<TrackingInvestigation | null>; investigateDeviation(scope: ProductionCustomerScope, deviation: CrossJourneyAnalysis["deviations"][number], customerLimit?:number, journeyLimit?:number): Promise<DeviationInvestigation> };
+  journey: { explain(scope: ProductionCustomerScope, customerId: string, journeyId?: string): Promise<JourneyIntelligence | null>; analyze(scope: ProductionCustomerScope, customerLimit?: number, journeyLimit?: number): Promise<CrossJourneyAnalysis>; investigate(scope: ProductionCustomerScope, customerId: string, journeyId?: string): Promise<TrackingInvestigation | null>; investigateDeviation(scope: ProductionCustomerScope, deviation: CrossJourneyAnalysis["deviations"][number], customerLimit?:number, journeyLimit?:number): Promise<DeviationInvestigation>; recommend(scope:ProductionCustomerScope,customerId:string,journeyId?:string):Promise<RecommendationIntelligence|null> };
   audit: Pick<IdentityTenancyRepository, "recordAuditEvent">;
 };
 
@@ -88,6 +88,10 @@ export class TraceKitMcpReadService {
       const value: CustomerWorkspaceSnapshot | null = await this.repositories.customers.loadWorkspace(scope, customerId);
       return value ? projectCustomerWorkspace(this.session, value) : null;
     });
+  }
+
+  recommendActions(customerId:string,journeyId?:string) {
+    return this.audited("recommend_actions","customers.view","customer",customerId,async()=>{const scope=authorizeMcpRead(this.session,"customers.view") as ProductionCustomerScope;return this.repositories.journey.recommend(scope,customerId,journeyId);});
   }
 
   investigateDeviation(input:{dimension:"affiliate"|"offer"|"source_platform"|"connector";value:string;metric:"attribution_established"|"commerce_linked"|"deterministic_identity_bridge"|"evidence_limited";customerLimit?:number;journeyLimit?:number}) {
