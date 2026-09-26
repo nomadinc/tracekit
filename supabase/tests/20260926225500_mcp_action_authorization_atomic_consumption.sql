@@ -1,0 +1,17 @@
+begin;
+select plan(12);
+select has_table('public','mcp_action_authorizations','authorization table exists');
+select has_function('public','consume_mcp_action_authorization',array['uuid','uuid','text','text','text','uuid','timestamp with time zone'],'atomic consume rpc exists');
+select is((select relrowsecurity from pg_class where oid='public.mcp_action_authorizations'::regclass),true,'RLS enabled');
+select isnt(has_table_privilege('authenticated','public.mcp_action_authorizations','INSERT'),true,'authenticated cannot insert');
+select isnt(has_function_privilege('authenticated','public.consume_mcp_action_authorization(uuid,uuid,text,text,text,uuid,timestamp with time zone)','EXECUTE'),true,'authenticated cannot execute consume rpc');
+insert into public.mcp_action_authorizations(authorization_id,organization_id,envelope_identity,idempotency_key,audit_correlation_id,expires_at) values('11111111-1111-1111-1111-111111111111','22222222-2222-2222-2222-222222222222','exec-1','idem-1','audit-1','2026-09-27');
+select is((select decision from public.consume_mcp_action_authorization('11111111-1111-1111-1111-111111111111','22222222-2222-2222-2222-222222222222','exec-1','idem-1','audit-1','33333333-3333-3333-3333-333333333333','2026-09-26')), 'consume','first exact request consumes');
+select is((select state from public.mcp_action_authorizations where authorization_id='11111111-1111-1111-1111-111111111111'),'consumed','row persisted consumed');
+select is((select decision from public.consume_mcp_action_authorization('11111111-1111-1111-1111-111111111111','22222222-2222-2222-2222-222222222222','exec-1','idem-1','audit-1','44444444-4444-4444-4444-444444444444','2026-09-26')), 'replay_same_result','exact retry replays');
+select is((select consumption_id::text from public.consume_mcp_action_authorization('11111111-1111-1111-1111-111111111111','22222222-2222-2222-2222-222222222222','exec-1','idem-1','audit-1','44444444-4444-4444-4444-444444444444','2026-09-26')), '33333333-3333-3333-3333-333333333333','retry preserves original consumption id');
+select is((select decision from public.consume_mcp_action_authorization('11111111-1111-1111-1111-111111111111','22222222-2222-2222-2222-222222222222','other','idem-1','audit-1','55555555-5555-5555-5555-555555555555','2026-09-26')), 'reject','consumed auth rejects different envelope');
+select is((select count(*)::int from public.mcp_action_authorizations where state='consumed'),1,'only one consumed authorization row exists');
+select is((select consumption_id::text from public.mcp_action_authorizations where authorization_id='11111111-1111-1111-1111-111111111111'),'33333333-3333-3333-3333-333333333333','stored winner remains first consumption');
+select * from finish();
+rollback;
