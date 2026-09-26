@@ -297,7 +297,7 @@ test("archived and superseded histories are not deployable", () => {
   }
 });
 
-test("applied recoveries are self-contained and the remote-only duplicate is not local", () => {
+test("applied recoveries are self-contained and the duplicate has a local compatibility identity", () => {
   const next29 = readFileSync(migration("20260918054652_restore_next29_scheduler_rpcs.sql"), "utf8");
   for (const name of ["ensure_next29_resource_schedules","claim_next29_resource_schedule","finish_next29_resource_schedule","list_due_next29_resource_schedules","heartbeat_next29_resource_schedule"]) assert.match(next29, new RegExp(`create or replace function public\\.${name}`));
   const webhook = readFileSync(migration("20260917222939_restore_commerce_webhook_receipts.sql"), "utf8");
@@ -307,7 +307,7 @@ test("applied recoveries are self-contained and the remote-only duplicate is not
   assert.match(subscription, /create table if not exists public\.commerce_provider_dispute_observations/);
   const lines = readFileSync(migration("20260918032437_restore_commerce_order_lines_id_default.sql"), "utf8");
   assert.match(lines, /alter table public\.commerce_order_lines[\s\S]*gen_random_uuid\(\)/);
-  assert.equal(existsSync(migration("20260922034633_fix_commas_journey_repair_status.sql")), false);
+  assert.equal(existsSync(migration("20260922034633_fix_commas_journey_repair_status.sql")), true);
 });
 
 test("three applied historical body exceptions are explicit and narrowly bounded", () => {
