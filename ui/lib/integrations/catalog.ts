@@ -6,6 +6,7 @@ import type {
 export const integrationCategoryLabels: Record<IntegrationCategory, string> = {
   crm: "CRMs",
   gateway: "Payment Gateways",
+  advertising: "Advertising",
   tracking: "Tracking Platforms",
   commerce: "Commerce",
   developer: "Developer Tools",
@@ -14,6 +15,7 @@ export const integrationCategoryLabels: Record<IntegrationCategory, string> = {
 export const integrationCategoryOrder: IntegrationCategory[] = [
   "crm",
   "gateway",
+  "advertising",
   "tracking",
   "commerce",
   "developer",
@@ -49,6 +51,42 @@ const wowSuiteBaseUrl = "https://public-api.tryemanagecrm.com";
 const shopifyApiVersion = "2026-07";
 
 export const integrationCatalog: IntegrationDefinition[] = [
+  {
+    id: "meta",
+    name: "Meta Ads",
+    category: "advertising",
+    description: "Connect one or more Meta advertising authorizations and select the ad accounts TraceKit should synchronize.",
+    primaryAction: "connect",
+    authType: "oauth",
+    credentialFields: [],
+    supportsWebhook: false,
+    supportsBackfill: false,
+    supportsTestConnection: false,
+    supportsTestEvents: false,
+    documentation: {
+      credentialInstructions: [
+        "OAuth activation is intentionally disabled while the provider-neutral marketing foundation is converged to current TraceKit.",
+      ],
+    },
+  },
+  {
+    id: "google-ads",
+    name: "Google Ads",
+    category: "advertising",
+    description: "Connect multiple Google Ads authorizations and discover manager, sub-manager, and client customer accounts.",
+    primaryAction: "connect",
+    authType: "oauth",
+    credentialFields: [],
+    supportsWebhook: false,
+    supportsBackfill: false,
+    supportsTestConnection: false,
+    supportsTestEvents: false,
+    documentation: {
+      credentialInstructions: [
+        "OAuth activation is intentionally disabled until Google account discovery and MCC hierarchy certification are complete.",
+      ],
+    },
+  },
   {
     id: "shopify",
     name: "Shopify",
