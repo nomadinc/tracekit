@@ -78,6 +78,8 @@ create table public.marketing_provider_accounts (
   metadata jsonb not null default '{}'::jsonb,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
+  constraint marketing_provider_accounts_scope_id_unique
+    unique (organization_id, connection_id, id),
   constraint marketing_provider_accounts_organization_account_fk
     foreign key (organization_id, account_id)
     references public.tracekit_organizations (id, owning_account_id),
