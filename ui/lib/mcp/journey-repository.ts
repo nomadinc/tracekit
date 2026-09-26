@@ -50,6 +50,11 @@ export function buildRecommendations(i:TrackingInvestigation):RecommendationInte
  
  return{scope:i.scope,recommendations:recommendations.slice(0,10),evidenceLimits:i.evidenceLimits};
 }
+export type RecommendationPlanTransition={before:RecommendationIntelligence;after:RecommendationIntelligence;transitions:Array<{recommendationType:AdvisoryRecommendation["type"];from:"ready"|"blocked"|"informational"|"absent";to:"ready"|"blocked"|"informational"|"absent";reason:string}>};
+export function buildRecommendationPlanTransition(before:TrackingInvestigation,after:TrackingInvestigation):RecommendationPlanTransition{
+ const a=buildRecommendations(before),b=buildRecommendations(after),types=Array.from(new Set([...a.recommendations.map(r=>r.type),...b.recommendations.map(r=>r.type)]));const state=(x:RecommendationIntelligence,t:AdvisoryRecommendation["type"])=>x.recommendations.find(r=>r.type===t)?.applicability||"absent";
+ return{before:a,after:b,transitions:types.map(t=>{const from=state(a,t),to=state(b,t);return{recommendationType:t,from,to,reason:from===to?"Recommendation applicability is unchanged by the evidence update.":`Recommendation applicability changed from ${from} to ${to} because the investigation evidence/dependencies changed.`};})};
+}
 export type DeviationInvestigation={deviation:CrossJourneyAnalysis["deviations"][number];affectedJourneys:number;investigations:Array<TrackingInvestigation>;journeysUnavailable:string[]};
 export function buildDeviationInvestigation(deviation:CrossJourneyAnalysis["deviations"][number],investigations:TrackingInvestigation[],requestedJourneyIds=deviation.supportingJourneyIds.slice(0,10)):DeviationInvestigation{
  const resolved=new Set(investigations.map(i=>i.scope.journeyId).filter(Boolean));return{deviation,affectedJourneys:deviation.cohort.denominator,investigations:investigations.slice(0,10),journeysUnavailable:requestedJourneyIds.filter(id=>!resolved.has(id))};
