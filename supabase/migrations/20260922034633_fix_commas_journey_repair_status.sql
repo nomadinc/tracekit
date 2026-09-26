@@ -1,0 +1,10 @@
+-- Migration-ledger compatibility placeholder only.
+--
+-- Production historically recorded this version as an accidental duplicate of
+-- 20260922034620_fix_commas_journey_repair_status. Both Production ledger
+-- entries contain the same stored migration body and SHA-256:
+-- fb5461bf6aa5bdcf853a7bbdb039123345a548bb3e80e86e931e51d0229896b3
+--
+-- The canonical repair SQL exists only in migration 20260922034620.
+-- This file intentionally contains no executable SQL so clean installations do
+-- not replay the historical Commas journey-repair operation.
