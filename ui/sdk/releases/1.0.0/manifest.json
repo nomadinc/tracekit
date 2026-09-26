@@ -1,0 +1,11 @@
+{
+  "artifactPath": "/sdk/tkid/1.0.0/tracekit-journey.min.js",
+  "byteSize": 7182,
+  "canonicalApiEndpoint": "https://api.trace-kit.io",
+  "file": "tracekit-journey.min.js",
+  "sha256": "eda519b5d8585c4a46db36b3dabe5b603d7ce895145fdefffba3b3dc32ee0a83",
+  "sourceCommit": "dd6036dd354ed0a19ecdf167353719fea24cae1f",
+  "sourceMap": "none",
+  "sri": "sha384-w2HlRXLyX2NvTswRJSb/F584XCb5xJar9RgJ2wgBZzJKja4qqjzMzKDkrwVrP0MO",
+  "version": "1.0.0"
+}
