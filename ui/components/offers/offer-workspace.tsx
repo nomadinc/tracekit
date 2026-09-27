@@ -129,6 +129,7 @@ function OfferWorkspaceSource() {
 }
 
 function PersistentOfferCatalog() {
+  const router = useRouter();
   const { session, organizations, setActiveBusinessContext } = useIdentity();
   const activeOrganization = organizations.find((organization) => organization.id === session.activeOrganizationId) || organizations[0] || null;
   const [offers, setOffers] = React.useState<CanonicalOffer[]>([]);
@@ -222,7 +223,10 @@ function PersistentOfferCatalog() {
               <div className="mt-auto pt-5">
                 <button
                   type="button"
-                  onClick={() => setActiveBusinessContext(offer.businessContextId)}
+                  onClick={() => {
+                    setActiveBusinessContext(offer.businessContextId);
+                    router.push(offerDeepLinkHref({ offerId: offer.businessContextId }));
+                  }}
                   className="tk-primary-action rounded-xl px-4 py-2.5 text-xs"
                 >
                   Open Offer Workspace
