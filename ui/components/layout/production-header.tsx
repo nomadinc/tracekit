@@ -19,7 +19,6 @@ export function ProductionHeader({ onMenuClick }: { onMenuClick: () => void }) {
   const drawer = useShellDrawer();
   const { session, organizations, businessContexts, variant, setActiveOrganization, setActiveBusinessContext } = useIdentity();
   const activeOrganization = organizations.find((organization) => organization.id === session.activeOrganizationId) || organizations[0] || null;
-  const activeBusinessContext = businessContexts.find((context) => context.id === session.activeBusinessContextId) || null;
   const [userMenuOpen, setUserMenuOpen] = React.useState(false);
   const closeUserMenu = React.useCallback(() => setUserMenuOpen(false), []);
   const command = useCommandPaletteController(closeUserMenu);
