@@ -15,6 +15,14 @@ const nextConfig = {
         source: "/sdk/tkid/1.0.0/manifest.json",
         headers: [...immutable, { key: "Content-Type", value: "application/json; charset=utf-8" }],
       },
+      {
+        source: "/sdk/tkid/1.1.0/tracekit.js",
+        headers: [...immutable, { key: "Content-Type", value: "application/javascript; charset=utf-8" }],
+      },
+      {
+        source: "/sdk/tkid/1.1.0/manifest.json",
+        headers: [...immutable, { key: "Content-Type", value: "application/json; charset=utf-8" }],
+      },
     ];
   },
 };
