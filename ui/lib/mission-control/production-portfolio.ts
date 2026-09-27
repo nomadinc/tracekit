@@ -34,7 +34,7 @@ function isoStart(days: number) {
   return date.toISOString();
 }
 
-function sum(rows: Record<string, unknown>[], field: string) {
+export function sumPortfolioRows(rows: Record<string, unknown>[], field: string) {
   return rows.reduce((total, row) => total + number(row[field]), 0);
 }
 
@@ -72,8 +72,8 @@ export async function readMissionControlPortfolio(
     (total, row) => total + number(row.amount ?? row.gross_amount),
     0,
   );
-  const refundAmount = Math.abs(sum(refunds, "amount"));
-  const chargebackAmount = Math.abs(sum(chargebacks, "amount"));
+  const refundAmount = Math.abs(sumPortfolioRows(refunds, "amount"));
+  const chargebackAmount = Math.abs(sumPortfolioRows(chargebacks, "amount"));
 
   return {
     generatedAt: new Date().toISOString(),
