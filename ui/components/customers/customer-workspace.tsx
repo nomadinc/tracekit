@@ -48,8 +48,9 @@ function CustomerWorkspaceContent() {
   const router = useRouter(),
     params = useSearchParams(),
     drawer = useShellDrawer();
-  const { session, setActiveOrganization, setActiveBusinessContext } =
+  const { session, organizations, setActiveOrganization, setActiveBusinessContext } =
     useIdentity();
+  const activeOrganization = organizations.find((organization) => organization.id === session.activeOrganizationId) || organizations[0] || null;
   const scope = React.useMemo(() => ({ authenticated: session.authenticated, workspaceId: session.activeOrganizationId || "", organizationId: session.activeOrganizationId, businessContextId: session.activeBusinessContextId, session }), [session]);
   const requested = React.useMemo(
     () => parseCustomerDeepLink(params),
@@ -197,7 +198,7 @@ function CustomerWorkspaceContent() {
   if (!snapshot && customers.length) return <State title="Customer not found" />;
   const active = snapshot?.journey[replayIndex] || null;
   return (
-    <div className="flex min-h-[calc(100dvh-8rem)] overflow-hidden rounded-xl border bg-white shadow-sm dark:border-white/10 dark:bg-ink">
+    <div className="flex min-h-[calc(100dvh-8rem)] overflow-hidden rounded-2xl border border-white/10 bg-[#0b0e14] text-slate-100 shadow-sm">
       <CustomerList
         customers={customers}
         selected={snapshot?.customer.id || ""}
@@ -237,7 +238,7 @@ function CustomerWorkspaceContent() {
               </span>
               <div>
                 <p className="text-[9px] uppercase tracking-[.14em] text-slate-400">
-                  Customer · Permanent Context
+                  Customer · {activeOrganization?.name || "Active Client"}
                 </p>
                 <h1 className="text-2xl font-semibold">
                   {snapshot.customer.name}
@@ -260,12 +261,12 @@ function CustomerWorkspaceContent() {
           </div>
           <div className="mt-5 grid gap-4 border-t pt-4 sm:grid-cols-3 lg:grid-cols-6 dark:border-white/10">
             {[
-              ["Lifetime revenue", money(snapshot.lifetimeRevenue)],
-              ["Customer since", snapshot.customerSince],
-              ["First touch", snapshot.firstTouch],
-              ["Last purchase", snapshot.lastPurchase],
-              ["Tracking Health", snapshot.customer.trackingHealth],
-              ["Journey ID", snapshot.journeyId],
+              ["Observed revenue", money(snapshot.lifetimeRevenue)],
+              ["First observed", snapshot.customerSince],
+              ["Attribution evidence", snapshot.firstTouch],
+              ["Last linked purchase", snapshot.lastPurchase],
+              ["Evidence coverage", snapshot.customer.trackingHealth],
+              ["Canonical Journey", snapshot.journeyId],
             ].map(([l, v]) => (
               <div key={l}>
                 <p className="text-[9px] uppercase text-slate-400">{l}</p>
@@ -277,9 +278,9 @@ function CustomerWorkspaceContent() {
         <section className="border-b p-5 dark:border-white/10">
           <div className="flex flex-wrap justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold">Customer Story</h2>
+              <h2 className="text-sm font-semibold">Customer Evidence Timeline</h2>
               <p className="text-[11px] text-slate-500">
-                Discovery, attribution, commerce, and financial outcome.
+                Retained Journey, attribution, commerce, and relationship evidence in observed order.
               </p>
             </div>
             <div className="flex gap-2">
@@ -351,7 +352,7 @@ function CustomerWorkspaceContent() {
         </section>
         <div className="grid gap-5 p-5 xl:grid-cols-2">
           <section className="rounded-xl border dark:border-white/10">
-            <Title text="Tracking Health" />
+            <Title text="Evidence Coverage" />
             <button
               onClick={() => inspect("tracking")}
               className="w-full p-5 text-left"
@@ -360,6 +361,7 @@ function CustomerWorkspaceContent() {
                 <ShieldCheck className="h-5 w-5" />
                 {snapshot.customer.trackingHealth}
               </strong>
+              <p className="mt-1 text-[10px] font-semibold uppercase tracking-[.12em] text-slate-500">Evidence state, not a customer score</p>
               <p className="mt-2 text-xs text-slate-500">
                 {snapshot.trackingExplanation}
               </p>
@@ -467,7 +469,7 @@ function CustomerList({
 }) {
   return (
     <aside
-      className={`${mobile ? "fixed inset-0 z-40 flex w-full" : "hidden w-[280px] lg:flex"} shrink-0 flex-col border-r bg-white dark:border-white/10 dark:bg-ink`}
+      className={`${mobile ? "fixed inset-0 z-40 flex w-full" : "hidden w-[280px] lg:flex"} shrink-0 flex-col border-r border-white/10 bg-[#0b0e14] text-slate-100`}
     >
       <div className="flex justify-between border-b p-4">
         <div>
@@ -496,8 +498,6 @@ function CustomerList({
           {[
             ["All", "all"],
             ["Repeat", "repeat"],
-            ["Refunded", "refunded"],
-            ["Interference", "interference"],
           ].map(([l, s]) => (
             <button
               key={l}
@@ -534,7 +534,7 @@ function CustomerList({
             </span>
             <p className="mt-1 text-[10px] text-slate-500">{c.lastActivity}</p>
             <p className="mt-1 text-[10px]">
-              {c.status} · {c.trackingHealth}
+              {c.status} · Evidence {c.trackingHealth}
             </p>
             <p className="mt-1 truncate text-[9px] text-slate-400">
               {c.journeyPreview}
@@ -549,7 +549,7 @@ const Title = ({ text }: { text: string }) => (
   <h2 className="border-b px-5 py-4 text-sm font-semibold">{text}</h2>
 );
 const State = ({ title, detail }: { title: string; detail?: string }) => (
-  <div className="rounded-xl border bg-white p-8">
+  <div className="rounded-2xl border border-white/10 bg-white/[.035] p-8 text-slate-100">
     <h2 className="font-semibold">{title}</h2>
     {detail ? <p className="mt-2 text-sm text-slate-500">{detail}</p> : null}
   </div>
