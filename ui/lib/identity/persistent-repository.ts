@@ -57,6 +57,7 @@ export interface IdentityTenancyRepository {
   accountById(accountId: string): Promise<PersistentAccount | null>;
   agencyByAccountId(accountId: string): Promise<PersistentAgency | null>;
   organizationsForMembership(membership: PersistentMembership, agency: PersistentAgency | null): Promise<PersistentOrganizationRecord[]>;
+  allActiveOrganizations(): Promise<PersistentOrganizationRecord[]>;
   permissionOverrides(membershipId: string): Promise<PermissionOverride[]>;
   businessContexts(membershipId: string, organizationId: string): Promise<BusinessContext[]>;
   recordAuditEvent(event: AuditEventInput): Promise<void>;
