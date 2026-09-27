@@ -88,6 +88,26 @@ export const integrationCatalog: IntegrationDefinition[] = [
     },
   },
   {
+    id: "tiktok-ads",
+    name: "TikTok Ads",
+    category: "advertising",
+    description: "Configure TikTok advertiser targets and controlled manual spend imports. Live provider certification requires TikTok developer-app access.",
+    primaryAction: "manage",
+    authType: "oauth",
+    credentialFields: [],
+    supportsWebhook: false,
+    supportsBackfill: false,
+    supportsTestConnection: false,
+    supportsTestEvents: false,
+    documentation: {
+      credentialInstructions: [
+        "Fixture certification is complete through controlled manual spend synchronization.",
+        "Live OAuth and reporting certification are blocked until TikTok developer-app access is available.",
+        "Automatic scheduling remains disabled until live certification passes.",
+      ],
+    },
+  },
+  {
     id: "shopify",
     name: "Shopify",
     category: "commerce",
