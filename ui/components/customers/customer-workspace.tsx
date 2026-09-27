@@ -534,7 +534,7 @@ function CustomerList({
             </span>
             <p className="mt-1 text-[10px] text-slate-500">{c.lastActivity}</p>
             <p className="mt-1 text-[10px]">
-              {c.status} · {c.trackingHealth}
+              {c.status} · Evidence {c.trackingHealth}
             </p>
             <p className="mt-1 truncate text-[9px] text-slate-400">
               {c.journeyPreview}
@@ -549,7 +549,7 @@ const Title = ({ text }: { text: string }) => (
   <h2 className="border-b px-5 py-4 text-sm font-semibold">{text}</h2>
 );
 const State = ({ title, detail }: { title: string; detail?: string }) => (
-  <div className="rounded-xl border bg-white p-8">
+  <div className="rounded-2xl border border-white/10 bg-white/[.035] p-8 text-slate-100">
     <h2 className="font-semibold">{title}</h2>
     {detail ? <p className="mt-2 text-sm text-slate-500">{detail}</p> : null}
   </div>
