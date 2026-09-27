@@ -11,6 +11,32 @@ node scripts/verify-tkid-sdk-release.mjs 1.0.0
 
 The pinned build emits no source map, timestamp, or random content and refuses to replace different bytes or metadata in an existing release directory. Behavioral changes require a new version and directory. Release CI may set `TRACEKIT_SDK_SOURCE_COMMIT` to a full Git SHA; otherwise the checked-out commit is recorded.
 
+## Universal declarative tag (1.1.0)
+
+Version 1.1.0 adds the universal tag. It fetches a source/origin-bound,
+immutable declarative definition and owns bootstrap, ordered page/funnel event
+delivery, trusted CTA delegation, bounded retry, and teardown. Merchants supply
+no behavioral JavaScript:
+
+```html
+<script src="https://app.trace-kit.io/sdk/tkid/1.1.0/tracekit.js"
+  data-source="PUBLIC_SOURCE_ID" async></script>
+```
+
+An optional `data-config-version` pins a numeric definition version. The tag
+defaults only the API origin (`https://api.trace-kit.io`); source, page, funnel,
+CTA, and selector values are delivered as approved configuration. Definitions
+allow exact path matching and at most 32 pages / 16 CTAs per page. CTA matching
+is limited to a safe semantic marker, one class, one ID, or an exact
+`data-tracekit-cta` selector. There are no combinators, wildcard selectors,
+pseudo-selectors, extraction rules, callbacks, or arbitrary event fields.
+
+Build without publishing:
+
+```sh
+npm run build:tkid-universal-sdk
+```
+
 ## Public API
 
 The script exposes `TraceKitJourney.version`, `TraceKitJourney.init(config)`, and `TraceKitJourney.TraceKitJourneyClient`. Clients support `startJourney`, `trackPageView`, `trackFunnelStep`, `viewOffer`, `trackCta`, `decideOffer`, `startCheckout`, `submitCheckout`, `confirmPurchase`, `confirmationViewed`, `receiptObserved`, `vslMilestone`, `clientError`, `handoffJourney`, `consumeHandoff`, and `flush`.

@@ -1,0 +1,24 @@
+{
+  "schema_version": 1,
+  "privacy_mode": "essential",
+  "pages": [
+    {
+      "match_type": "pathname_exact",
+      "pathname": "/",
+      "page_id": "ecowatt-main-landing-v1",
+      "funnel_step_id": "landing-primary-v1",
+      "emit_page_viewed": true,
+      "emit_funnel_step_viewed": true,
+      "ctas": [
+        {
+          "cta_id": "landing-primary-cta-v1",
+          "cta_version": "v1",
+          "funnel_step_id": "landing-primary-v1",
+          "action_type": "navigate",
+          "match_type": "selector",
+          "match_value": ".cta-btn"
+        }
+      ]
+    }
+  ]
+}

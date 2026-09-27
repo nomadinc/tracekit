@@ -1,0 +1,14 @@
+begin;
+select plan(10);
+select has_table('public','tkid_browser_instrumentation_configs','browser config registry exists');
+select col_is_pk('public','tkid_browser_instrumentation_configs','id','config identity is primary key');
+select ok(public.validate_tkid_browser_instrumentation_definition_v1('{"schema_version":1,"privacy_mode":"essential","pages":[{"match_type":"pathname_exact","pathname":"/proof","page_id":"merchant-proof-v1","funnel_step_id":"landing-v1","emit_page_viewed":true,"emit_funnel_step_viewed":true,"ctas":[{"cta_id":"primary-v1","cta_version":"v1","funnel_step_id":"landing-v1","action_type":"navigate","match_type":"marker","match_value":"primary"}]}]}'::jsonb),'valid definition accepted');
+select isnt(public.validate_tkid_browser_instrumentation_definition_v1('{"schema_version":1,"privacy_mode":"essential","pages":[],"callback":"alert(1)"}'::jsonb),true,'executable/extra configuration rejected');
+select isnt(public.validate_tkid_browser_instrumentation_definition_v1('{"schema_version":1,"privacy_mode":"essential","pages":[{"match_type":"pathname_exact","pathname":"/proof","page_id":"merchant-proof-v1","funnel_step_id":"landing-v1","emit_page_viewed":true,"emit_funnel_step_viewed":true,"ctas":[{"cta_id":"primary-v1","cta_version":"v1","funnel_step_id":"landing-v1","action_type":"navigate","match_type":"selector","match_value":"*"}]}]}'::jsonb),true,'wildcard selector rejected');
+select ok((select relrowsecurity from pg_class where oid='public.tkid_browser_instrumentation_configs'::regclass),'RLS enabled');
+select has_function('public','validate_tkid_browser_instrumentation_definition_v1',array['jsonb'],'validator exists');
+select function_privs_are('public','validate_tkid_browser_instrumentation_definition_v1',array['jsonb'],'service_role',array['EXECUTE'],'service role can validate');
+select function_privs_are('public','validate_tkid_browser_instrumentation_definition_v1',array['jsonb'],'anon',array[]::text[],'anon cannot validate');
+select table_privs_are('public','tkid_browser_instrumentation_configs','anon',array[]::text[],'anon cannot read registry');
+select * from finish();
+rollback;
