@@ -36,6 +36,8 @@ import { customerDeepLinkHref } from "@/lib/customers/deep-link";
 import { orderDeepLinkHref } from "@/lib/orders/deep-link";
 import { resolveMockRepositoryScope } from "@/lib/identity/mock-repository-scope";
 import { scopeMissionControlSnapshot } from "@/lib/mission-control/mock-repository";
+import type { MissionControlPortfolio } from "@/lib/mission-control/production-portfolio";
+import { PortfolioKpis } from "./portfolio-kpis";
 
 const money = (value: number) =>
   new Intl.NumberFormat("en-US", {
@@ -282,8 +284,10 @@ function BusinessTrend({
 
 export function MissionControl({
   snapshot,
+  portfolio,
 }: {
   snapshot: MissionControlSnapshot;
+  portfolio?: MissionControlPortfolio | null;
 }) {
   const router = useRouter();
   const drawer = useShellDrawer();
@@ -404,6 +408,7 @@ export function MissionControl({
           Business Health: {snapshot.businessHealth.label}
         </span>
       </section>
+      {portfolio ? <PortfolioKpis portfolio={portfolio} /> : null}
       <BusinessTrend trends={snapshot.trends} />
       <section className="rounded-xl border bg-white shadow-sm dark:border-white/10 dark:bg-ink">
         <div className="border-b px-5 py-3 dark:border-white/10">
