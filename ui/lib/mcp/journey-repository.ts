@@ -109,6 +109,13 @@ export function decideExecutionRecovery(verification:ExecutionVerificationResult
  if(policy.kind==="irreversible"||!policy.operation)return{status:"manual_intervention_required",verificationStatus:verification.status,policy,reason:"Verification failed and this operation has no governed rollback or compensation mapping.",supportingEvidenceEventIds:evidence,recoveryExecutionAvailable:false};
  return{status:"recovery_plan_required",verificationStatus:verification.status,policy,reason:`Verification failed; a governed ${policy.kind==="reversible"?"rollback":"compensation"} plan may be prepared, but requires separate authorization and human confirmation.`,supportingEvidenceEventIds:evidence,recoveryExecutionAvailable:false};
 }
+export type ExternalExecutionAdapterContract={adapterId:string;provider:string;operation:string;mutationClass:"reversible"|"compensatable"|"irreversible";allowedTargetKinds:string[];requiredPermission:"actions.execute";requiresConsumedAuthorization:true;requiresImmutableEnvelope:true;requiresHumanConfirmation:true;requiresIdempotency:true;requiresPostExecutionVerification:true;recoveryPolicy:RecoveryPolicy;enabled:false};
+export type ExternalExecutionReadiness={status:"disabled"|"blocked";contract:ExternalExecutionAdapterContract;blockers:string[];externalMutationAvailable:false};
+export function assessExternalExecutionAdapter(contract:ExternalExecutionAdapterContract):ExternalExecutionReadiness{
+ const blockers=["External provider mutation is disabled for M10 until a provider-specific adapter has bounded request/response schemas, credential scope, idempotency behavior, verification evidence, and recovery semantics proven independently."];
+ if(contract.mutationClass==="irreversible")blockers.push("Irreversible external mutations require an explicit higher-risk governance decision before enablement.");
+ return{status:contract.enabled?"blocked":"disabled",contract,blockers,externalMutationAvailable:false};
+}
 export type RecommendationPlanTransition={before:RecommendationIntelligence;after:RecommendationIntelligence;transitions:Array<{recommendationType:AdvisoryRecommendation["type"];from:"ready"|"blocked"|"informational"|"absent";to:"ready"|"blocked"|"informational"|"absent";reason:string}>};
 export function buildRecommendationPlanTransition(before:TrackingInvestigation,after:TrackingInvestigation):RecommendationPlanTransition{
  const a=buildRecommendations(before),b=buildRecommendations(after),types=Array.from(new Set([...a.recommendations.map(r=>r.type),...b.recommendations.map(r=>r.type)]));const state=(x:RecommendationIntelligence,t:AdvisoryRecommendation["type"])=>x.recommendations.find(r=>r.type===t)?.applicability||"absent";
