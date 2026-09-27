@@ -1,0 +1,6 @@
+import assert from"node:assert/strict";import test from"node:test";import{readFileSync}from"node:fs";
+const lib=readFileSync(new URL("../lib/commerce/shopify-webhook-registration.ts",import.meta.url),"utf8"),route=readFileSync(new URL("../app/api/actions/shopify/controlled-webhook-proof/route.ts",import.meta.url),"utf8");
+test("M11 Shopify proof-only topic is APP_UNINSTALLED and excluded from normal required topics",()=>{assert.match(lib,/SHOPIFY_PROOF_ONLY_TOPIC = "APP_UNINSTALLED"/);assert.match(lib,/SHOPIFY_WEBHOOK_TOPICS = \["ORDERS_CREATE", "REFUNDS_CREATE"\]/);});
+test("M11 proof readback includes proof-only topic but normal readiness still requires only business topics",()=>{assert.match(lib,/topics: \[\.\.\.SHOPIFY_WEBHOOK_TOPICS, SHOPIFY_PROOF_ONLY_TOPIC\]/);assert.match(lib,/ready: SHOPIFY_WEBHOOK_TOPICS\.every/);});
+test("M11 live proof uses only proof-only topic and refuses a preexisting one",()=>{assert.match(route,/selectedTopic=SHOPIFY_PROOF_ONLY_TOPIC/);assert.match(route,/proof_only_topic_already_exists/);assert.doesNotMatch(route,/find\(t=>!occupied/);});
+test("M11 proof-only topic remains bounded to exact callback and same-execution rollback",()=>{assert.match(route,/subscription:created\.subscription/);assert.match(route,/verifiedAbsent/);assert.match(route,/netProviderConfigurationMutation/);});
