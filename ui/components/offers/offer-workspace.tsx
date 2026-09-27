@@ -129,6 +129,8 @@ function OfferWorkspaceSource() {
 }
 
 function PersistentOfferCatalog() {
+  const { session, organizations, setActiveBusinessContext } = useIdentity();
+  const activeOrganization = organizations.find((organization) => organization.id === session.activeOrganizationId) || organizations[0] || null;
   const [offers, setOffers] = React.useState<CanonicalOffer[]>([]);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState(false);
@@ -186,39 +188,51 @@ function PersistentOfferCatalog() {
     );
 
   return (
-    <section className="rounded-xl border bg-white shadow-sm dark:border-white/10 dark:bg-ink">
-      <div className="border-b p-4 dark:border-white/10">
-        <div className="text-[9px] font-semibold uppercase tracking-[.14em] text-slate-400">
-          Canonical Offers
+    <div className="space-y-5">
+      <section className="flex flex-col justify-between gap-4 border-b border-white/10 pb-5 sm:flex-row sm:items-end">
+        <div>
+          <p className="tk-brand-eyebrow text-[10px] font-semibold uppercase tracking-[.16em]">Client offers</p>
+          <h1 className="mt-2 text-3xl font-semibold tracking-tight">
+            {activeOrganization?.name ? `${activeOrganization.name} Offers` : "Offers"}
+          </h1>
+          <p className="mt-2 max-w-2xl text-sm text-slate-500">
+            Open an authorized Offer Workspace for this Client Organization. TraceKit only surfaces financial and attribution conclusions when production evidence qualifies them.
+          </p>
         </div>
-        <h2 className="mt-1 text-sm font-semibold">Active Organization catalog</h2>
-      </div>
-      <div className="grid gap-3 p-4 md:grid-cols-2 xl:grid-cols-3">
-        {offers.map((offer) => (
-          <article key={offer.id} className="rounded-xl border p-4 dark:border-white/10">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <h3 className="font-semibold">{offer.name}</h3>
-                <p className="mt-1 text-xs text-slate-500">Canonical Offer</p>
+        <span className="self-start rounded-full border border-blue-400/20 bg-blue-400/10 px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[.12em] text-blue-100">
+          {offers.length} active {offers.length === 1 ? "offer" : "offers"}
+        </span>
+      </section>
+      <section>
+        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+          {offers.map((offer) => (
+            <article key={offer.id} className="flex min-h-48 flex-col rounded-2xl border border-white/10 bg-white/[.035] p-5">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex h-10 w-10 items-center justify-center rounded-xl border border-blue-400/20 bg-blue-400/10 text-xs font-black text-blue-100">
+                  {offer.name.slice(0, 2).toUpperCase()}
+                </div>
+                <span className="rounded-full border border-emerald-400/20 bg-emerald-400/5 px-2.5 py-1 text-[9px] font-semibold uppercase tracking-[.12em] text-emerald-300">
+                  {offer.status}
+                </span>
               </div>
-              <span className="rounded-full border px-2 py-1 text-[10px] font-semibold uppercase tracking-wide text-emerald-700 dark:text-emerald-300">
-                {offer.status}
-              </span>
-            </div>
-            <dl className="mt-4 space-y-2 text-xs">
-              <div>
-                <dt className="text-slate-500">Business context</dt>
-                <dd className="break-all font-mono">{offer.businessContextId}</dd>
+              <h2 className="mt-5 text-lg font-semibold">{offer.name}</h2>
+              <p className="mt-2 text-xs leading-5 text-slate-500">
+                Canonical Offer · scoped to {activeOrganization?.name || "the active Client Organization"}
+              </p>
+              <div className="mt-auto pt-5">
+                <button
+                  type="button"
+                  onClick={() => setActiveBusinessContext(offer.businessContextId)}
+                  className="tk-primary-action rounded-xl px-4 py-2.5 text-xs"
+                >
+                  Open Offer Workspace
+                </button>
               </div>
-              <div>
-                <dt className="text-slate-500">Offer ID</dt>
-                <dd className="break-all font-mono">{offer.id}</dd>
-              </div>
-            </dl>
-          </article>
-        ))}
-      </div>
-    </section>
+            </article>
+          ))}
+        </div>
+      </section>
+    </div>
   );
 }
 
