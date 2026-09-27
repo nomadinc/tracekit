@@ -6,16 +6,16 @@ import { getIntegrationDefinition, getIntegrationsByCategory, integrationCategor
 test("advertising is a first-class integration category", () => {
   assert.equal(integrationCategoryLabels.advertising, "Advertising");
   const ids = getIntegrationsByCategory("advertising").map((item) => item.id);
-  assert.deepEqual(ids, ["meta", "google-ads"]);
+  assert.deepEqual(ids, ["meta", "google-ads", "tiktok-ads"]);
 });
 
-test("Meta and Google Ads are registered as inactive OAuth advertising integrations", () => {
+test("Meta, Google Ads, and TikTok Ads are registered as OAuth advertising integrations", () => {
   const meta = getIntegrationDefinition("meta");
   const google = getIntegrationDefinition("google-ads");
   assert.ok(meta);
-  assert.ok(google);
+  assert.ok(google);\n  const tiktok = getIntegrationDefinition("tiktok-ads");\n  assert.ok(tiktok);
   assert.equal(meta?.authType, "oauth");
-  assert.equal(google?.authType, "oauth");
+  assert.equal(google?.authType, "oauth");\n  assert.equal(tiktok?.authType, "oauth");\n  assert.equal(tiktok?.primaryAction, "manage");\n  assert.equal(tiktok?.supportsWebhook, false);\n  assert.equal(tiktok?.supportsBackfill, false);\n  assert.equal(tiktok?.connectPath, undefined);
   assert.equal(meta?.supportsWebhook, false);
   assert.equal(google?.supportsWebhook, false);
   assert.equal(meta?.supportsBackfill, false);
