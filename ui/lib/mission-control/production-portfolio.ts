@@ -2,6 +2,7 @@ import "server-only";
 
 import { commercePersistenceCount, commercePersistenceRequest } from "@/lib/commerce/supabase-control-repository";
 import type { TraceKitSessionContext } from "@/lib/identity/persistent-types";
+import { sumPortfolioRows } from "./portfolio-math";
 
 export type PortfolioMetric = {
   value: number | null;
@@ -34,9 +35,6 @@ function isoStart(days: number) {
   return date.toISOString();
 }
 
-export function sumPortfolioRows(rows: Record<string, unknown>[], field: string) {
-  return rows.reduce((total, row) => total + number(row[field]), 0);
-}
 
 export async function readMissionControlPortfolio(
   session: TraceKitSessionContext,
