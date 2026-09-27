@@ -44,8 +44,9 @@ function OrderWorkspaceContent() {
   const router = useRouter(),
     params = useSearchParams(),
     drawer = useShellDrawer();
-  const { session, setActiveOrganization, setActiveBusinessContext } =
+  const { session, organizations, setActiveOrganization, setActiveBusinessContext } =
     useIdentity();
+  const activeOrganization = organizations.find((organization) => organization.id === session.activeOrganizationId) || organizations[0] || null;
   const scope = React.useMemo(() => ({ authenticated: session.authenticated, workspaceId: session.activeOrganizationId || "", organizationId: session.activeOrganizationId, businessContextId: session.activeBusinessContextId, session }), [session]);
   const requested = React.useMemo(() => parseOrderDeepLink(params), [params]);
   const [orders, setOrders] = React.useState<OrderSummary[]>([]),
@@ -177,7 +178,7 @@ function OrderWorkspaceContent() {
   if (!snap) return <State text="Order not found" />;
   const active = snap.timeline[replayIndex];
   return (
-    <div className="flex min-h-[calc(100dvh-8rem)] overflow-hidden rounded-xl border bg-white dark:border-white/10 dark:bg-ink">
+    <div className="flex min-h-[calc(100dvh-8rem)] overflow-hidden rounded-2xl border border-white/10 bg-[#0b0e14] text-slate-100">
       <OrderList
         orders={orders}
         selected={snap.order.id}
@@ -210,7 +211,7 @@ function OrderWorkspaceContent() {
               </button>
               <div>
                 <p className="text-[9px] uppercase tracking-[.14em] text-slate-400">
-                  Order · Permanent Context
+                  Order · {activeOrganization?.name || "Active Client"}
                 </p>
                 <h1 className="text-2xl font-semibold">
                   Order {snap.order.number}
@@ -238,10 +239,10 @@ function OrderWorkspaceContent() {
                   ? `${snap.order.customerName} · masked`
                   : snap.order.customerEmail,
               ],
-              ["Tracking Health", snap.order.trackingHealth],
-              ["Traffic Source", snap.attribution.trafficSource],
-              ["Attributed Offer", snap.attribution.offerUrl],
-              ["Click → Purchase", snap.attribution.clickPurchaseDelta],
+              ["Evidence coverage", snap.order.trackingHealth],
+              ["Attribution source", snap.attribution.trafficSource],
+              ["Attribution offer evidence", snap.attribution.offerUrl],
+              ["Observed click → purchase", snap.attribution.clickPurchaseDelta],
             ].map(([l, v]) => (
               <div key={l}>
                 <p className="text-[9px] uppercase text-slate-400">{l}</p>
@@ -352,7 +353,7 @@ function OrderWorkspaceContent() {
           </section>
         </div> : null}
         <section className="mx-5 mb-5 rounded-xl border">
-          <Title text="Attribution" />
+          <Title text="Attribution Evidence" />
           <div className="grid gap-3 p-5 sm:grid-cols-3">
             {Object.entries(snap.attribution).map(([k, v]) => (
               <button
@@ -395,7 +396,7 @@ function OrderWorkspaceContent() {
             <div>
               <h2 className="font-semibold">Order Timeline</h2>
               <p className="text-xs text-slate-500">
-                Attribution, commerce, payment, and financial outcome.
+                Retained attribution, commerce, payment, and financial evidence in observed order.
               </p>
             </div>
             <div className="flex gap-2">
@@ -510,20 +511,9 @@ function OrderList({
   mobile: boolean;
   close: () => void;
 }) {
-  const options = [
-    "all",
-    "profitable",
-    "low-margin",
-    "shipping-loss",
-    "refunded",
-    "chargeback",
-    "tracking",
-    "estimated",
-    "reconciled",
-  ] as const;
   return (
     <aside
-      className={`${mobile ? "fixed inset-0 z-40 flex w-full" : "hidden w-[280px] lg:flex"} shrink-0 flex-col border-r bg-white dark:bg-ink`}
+      className={`${mobile ? "fixed inset-0 z-40 flex w-full" : "hidden w-[280px] lg:flex"} shrink-0 flex-col border-r border-white/10 bg-[#0b0e14] text-slate-100`}
     >
       <div className="flex justify-between border-b p-4">
         <div>
@@ -548,17 +538,6 @@ function OrderList({
             className="min-w-0 flex-1 bg-transparent text-xs outline-none"
           />
         </label>
-        <div className="mt-2 flex gap-1 overflow-x-auto">
-          {options.map((s) => (
-            <button
-              key={s}
-              onClick={() => setFilter({ ...filter, state: s })}
-              className="shrink-0 rounded-full border px-2 py-1 text-[9px] capitalize"
-            >
-              {s.replace("-", " ")}
-            </button>
-          ))}
-        </div>
       </div>
       <div className="overflow-y-auto">
         {orders.map((o) => {
@@ -584,7 +563,7 @@ function OrderList({
             </p>
             <p className="mt-1 flex gap-1 text-[9px]">
               <ShieldCheck className="h-3 w-3" />
-              {displayed.trackingHealth}
+              Evidence {displayed.trackingHealth}
             </p>
           </button>
           );
@@ -597,7 +576,7 @@ const Title = ({ text }: { text: string }) => (
   <h2 className="border-b px-5 py-4 text-sm font-semibold">{text}</h2>
 );
 const State = ({ text }: { text: string }) => (
-  <div className="rounded-xl border p-8">
+  <div className="rounded-2xl border border-white/10 bg-white/[.035] p-8 text-slate-100">
     <h2 className="font-semibold">{text}</h2>
   </div>
 );
