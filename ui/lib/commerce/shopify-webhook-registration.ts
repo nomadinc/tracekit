@@ -8,7 +8,7 @@ export type ShopifyProofTopic = ShopifyWebhookTopic | typeof SHOPIFY_PROOF_ONLY_
 
 export type ShopifyWebhookSubscription = {
   id: string;
-  topic: ShopifyWebhookTopic;
+  topic: ShopifyProofTopic;
   uri: string;
 };
 
@@ -26,7 +26,7 @@ export async function listTraceKitShopifyWebhookSubscriptions(args: {
     query: `query TraceKitWebhookSubscriptions($topics: [WebhookSubscriptionTopic!]) {
       webhookSubscriptions(first: 20, topics: $topics) { nodes { id topic uri } }
     }`,
-    variables: { topics: SHOPIFY_WEBHOOK_TOPICS },
+    variables: { topics: [...SHOPIFY_WEBHOOK_TOPICS, SHOPIFY_PROOF_ONLY_TOPIC] },
   }, args.fetchImpl);
 
   const nodes = Array.isArray(payload?.data?.webhookSubscriptions?.nodes)
@@ -35,7 +35,7 @@ export async function listTraceKitShopifyWebhookSubscriptions(args: {
   return nodes
     .map((node: any) => ({ id: String(node?.id || ""), topic: String(node?.topic || ""), uri: String(node?.uri || "") }))
     .filter((node: any): node is ShopifyWebhookSubscription =>
-      Boolean(node.id) && SHOPIFY_WEBHOOK_TOPICS.includes(node.topic as ShopifyWebhookTopic) && node.uri === args.callbackUrl,
+      Boolean(node.id) && ([...SHOPIFY_WEBHOOK_TOPICS, SHOPIFY_PROOF_ONLY_TOPIC] as readonly string[]).includes(node.topic) && node.uri === args.callbackUrl,
     );
 }
 
