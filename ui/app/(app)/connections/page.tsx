@@ -1,6 +1,7 @@
 import { ConnectionsOverview } from "@/components/connections/connections-overview";
-import { loadConnectionExperiences } from "@/lib/commerce/integration-experience-server";
+import { loadConnectionsOverview } from "@/lib/commerce/integration-experience-server";
 
 export default async function ConnectionsPage() {
-  return <ConnectionsOverview connections={await loadConnectionExperiences()} />;
+  const overview = await loadConnectionsOverview();
+  return <ConnectionsOverview connections={overview.connections} organizationName={overview.organizationName} />;
 }

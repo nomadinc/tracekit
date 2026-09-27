@@ -20,6 +20,14 @@ async function authorizedSession(permission: "connectors.view" | "connectors.man
   return resolution.session;
 }
 
+export async function loadConnectionsOverview() {
+  const session = await authorizedSession("connectors.view");
+  const organization = session.activeOrganization!;
+  const connections = await commercePersistenceRequest(`commerce_provider_connections?organization_id=eq.${encodeURIComponent(organization.id)}&order=created_at.asc`) as Row[];
+  const experiences = await Promise.all(connections.map((row) => loadConnectionExperienceRow(organization.name, row, session.effectivePermissions.includes("connectors.manage"), canManageTkidOrigins(session))));
+  return { organizationName: organization.name, connections: experiences };
+}
+
 export async function loadConnectionExperiences(): Promise<ConnectionExperience[]> {
   const session = await authorizedSession("connectors.view");
   const organizationId = session.activeOrganization!.id;
