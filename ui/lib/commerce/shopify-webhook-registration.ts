@@ -75,6 +75,16 @@ export async function ensureTraceKitShopifyWebhookSubscriptions(args: {
   };
 }
 
+export async function deleteTraceKitShopifyWebhookSubscription(args:{credential:StoredShopifyCredential;subscription:ShopifyWebhookSubscription;callbackUrl:string;fetchImpl?:typeof fetch;}){
+ if(!SHOPIFY_WEBHOOK_TOPICS.includes(args.subscription.topic)||args.subscription.uri!==args.callbackUrl)throw new Error("Shopify webhook deletion target is outside the bounded TraceKit subscription contract.");
+ const payload=await shopifyGraphql(args.credential,{query:`mutation TraceKitWebhookSubscriptionDelete($id: ID!) { webhookSubscriptionDelete(id: $id) { deletedWebhookSubscriptionId userErrors { field message } } }`,variables:{id:args.subscription.id}},args.fetchImpl);
+ const result=payload?.data?.webhookSubscriptionDelete,errors=Array.isArray(result?.userErrors)?result.userErrors:[];
+ if(errors.length)throw new Error(`Shopify webhook deletion failed: ${String(errors[0]?.message||"unknown error")}`);
+ if(String(result?.deletedWebhookSubscriptionId||"")!==args.subscription.id)throw new Error("Shopify webhook deletion returned an unexpected subscription identity.");
+ const remaining=await listTraceKitShopifyWebhookSubscriptions({credential:args.credential,callbackUrl:args.callbackUrl,fetchImpl:args.fetchImpl});
+ return{deletedSubscriptionId:args.subscription.id,verifiedAbsent:!remaining.some(s=>s.id===args.subscription.id),remaining};
+}
+
 async function shopifyGraphql(
   credential: StoredShopifyCredential,
   body: { query: string; variables?: Record<string, unknown> },
