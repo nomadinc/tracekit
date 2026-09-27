@@ -100,6 +100,15 @@ export function verifyBoundedExecution(execution:BoundedExecutionResult,evidence
  const status:ExecutionVerificationResult["status"]=execution.status!=="completed"?"unresolved":checks.some(c=>c.status==="failed")?"failed":checks.length>0&&checks.every(c=>c.status==="verified")?"verified":"unresolved";
  return{status,executionStatus:execution.status,envelopeIdentity:execution.envelopeIdentity,checks,verifiedAt,providerMutation:false};
 }
+export type RecoveryPolicy={kind:"reversible"|"compensatable"|"irreversible";operation:{type:string;description:string}|null;requiredPermission:"actions.execute";confirmationRequired:true};
+export type RecoveryDecision={status:"not_required"|"recovery_plan_required"|"manual_intervention_required";verificationStatus:ExecutionVerificationResult["status"];policy:RecoveryPolicy;reason:string;supportingEvidenceEventIds:string[];recoveryExecutionAvailable:false};
+export function decideExecutionRecovery(verification:ExecutionVerificationResult,policy:RecoveryPolicy):RecoveryDecision{
+ const evidence=Array.from(new Set(verification.checks.flatMap(c=>c.evidenceEventIds)));
+ if(verification.status==="verified")return{status:"not_required",verificationStatus:verification.status,policy,reason:"Post-execution verification established the expected outcome; no recovery action is warranted.",supportingEvidenceEventIds:evidence,recoveryExecutionAvailable:false};
+ if(verification.status==="unresolved")return{status:"manual_intervention_required",verificationStatus:verification.status,policy,reason:"Verification is unresolved; do not attempt rollback or compensation without establishing what state actually exists.",supportingEvidenceEventIds:evidence,recoveryExecutionAvailable:false};
+ if(policy.kind==="irreversible"||!policy.operation)return{status:"manual_intervention_required",verificationStatus:verification.status,policy,reason:"Verification failed and this operation has no governed rollback or compensation mapping.",supportingEvidenceEventIds:evidence,recoveryExecutionAvailable:false};
+ return{status:"recovery_plan_required",verificationStatus:verification.status,policy,reason:`Verification failed; a governed ${policy.kind==="reversible"?"rollback":"compensation"} plan may be prepared, but requires separate authorization and human confirmation.`,supportingEvidenceEventIds:evidence,recoveryExecutionAvailable:false};
+}
 export type RecommendationPlanTransition={before:RecommendationIntelligence;after:RecommendationIntelligence;transitions:Array<{recommendationType:AdvisoryRecommendation["type"];from:"ready"|"blocked"|"informational"|"absent";to:"ready"|"blocked"|"informational"|"absent";reason:string}>};
 export function buildRecommendationPlanTransition(before:TrackingInvestigation,after:TrackingInvestigation):RecommendationPlanTransition{
  const a=buildRecommendations(before),b=buildRecommendations(after),types=Array.from(new Set([...a.recommendations.map(r=>r.type),...b.recommendations.map(r=>r.type)]));const state=(x:RecommendationIntelligence,t:AdvisoryRecommendation["type"])=>x.recommendations.find(r=>r.type===t)?.applicability||"absent";
