@@ -48,8 +48,9 @@ function CustomerWorkspaceContent() {
   const router = useRouter(),
     params = useSearchParams(),
     drawer = useShellDrawer();
-  const { session, setActiveOrganization, setActiveBusinessContext } =
+  const { session, organizations, setActiveOrganization, setActiveBusinessContext } =
     useIdentity();
+  const activeOrganization = organizations.find((organization) => organization.id === session.activeOrganizationId) || organizations[0] || null;
   const scope = React.useMemo(() => ({ authenticated: session.authenticated, workspaceId: session.activeOrganizationId || "", organizationId: session.activeOrganizationId, businessContextId: session.activeBusinessContextId, session }), [session]);
   const requested = React.useMemo(
     () => parseCustomerDeepLink(params),
@@ -197,7 +198,7 @@ function CustomerWorkspaceContent() {
   if (!snapshot && customers.length) return <State title="Customer not found" />;
   const active = snapshot?.journey[replayIndex] || null;
   return (
-    <div className="flex min-h-[calc(100dvh-8rem)] overflow-hidden rounded-xl border bg-white shadow-sm dark:border-white/10 dark:bg-ink">
+    <div className="flex min-h-[calc(100dvh-8rem)] overflow-hidden rounded-2xl border border-white/10 bg-[#0b0e14] text-slate-100 shadow-sm">
       <CustomerList
         customers={customers}
         selected={snapshot?.customer.id || ""}
@@ -237,7 +238,7 @@ function CustomerWorkspaceContent() {
               </span>
               <div>
                 <p className="text-[9px] uppercase tracking-[.14em] text-slate-400">
-                  Customer · Permanent Context
+                  Customer · {activeOrganization?.name || "Active Client"}
                 </p>
                 <h1 className="text-2xl font-semibold">
                   {snapshot.customer.name}
@@ -467,7 +468,7 @@ function CustomerList({
 }) {
   return (
     <aside
-      className={`${mobile ? "fixed inset-0 z-40 flex w-full" : "hidden w-[280px] lg:flex"} shrink-0 flex-col border-r bg-white dark:border-white/10 dark:bg-ink`}
+      className={`${mobile ? "fixed inset-0 z-40 flex w-full" : "hidden w-[280px] lg:flex"} shrink-0 flex-col border-r border-white/10 bg-[#0b0e14] text-slate-100`}
     >
       <div className="flex justify-between border-b p-4">
         <div>
@@ -496,8 +497,6 @@ function CustomerList({
           {[
             ["All", "all"],
             ["Repeat", "repeat"],
-            ["Refunded", "refunded"],
-            ["Interference", "interference"],
           ].map(([l, s]) => (
             <button
               key={l}
