@@ -9,6 +9,7 @@
     "test": "tsx --test tests/*.test.ts",
     "build": "node scripts/next-lifecycle.mjs build",
     "build:tkid-sdk": "node scripts/build-tkid-sdk.mjs",
+    "build:tkid-universal-sdk": "node scripts/build-tkid-universal-sdk.mjs",
     "test:tkid-sdk": "tsx --test tests/tkid-browser-sdk-release.test.ts",
     "start": "node scripts/next-lifecycle.mjs start",
     "review:check": "node scripts/next-lifecycle.mjs check",

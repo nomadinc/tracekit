@@ -372,6 +372,7 @@ import { matchTkidRoute, normalizeEvent, validateBatch, TkidError, opaqueId, jou
 import { clearRelayCookie, configuredCheckout, continuityDigest, destinationWithHandoff, parseRelayCookie, relayCookie, relayHost, relaySecurityHeaders, safeRedirect, TKID_RELAY_TTL_SECONDS } from "./tkid-relay";
 import { canonicalizeTkidOrigin } from "./tkid-origins";
 import { resolveEligibleTkidPreflightOrigin, tkidBrowserPreflightRoute, tkidCorsHeaders, tkidPreflightRequestAllowed, tkidPreflightResponseHeaders } from "./tkid-browser-cors";
+import { readTkidBrowserConfiguration } from "./tkid-browser-instrumentation";
 import { persistTkidEvent, safeTkidPersistenceFailureEvidence, TkidEventPersistenceError } from "./tkid-event-persistence";
 import {
   PaypalApiError,
@@ -15948,7 +15949,7 @@ async function resolveActiveTkidOrigin(db:any,publicSourceId:string,requestOrigi
   let canonicalOrigin:string;try{canonicalOrigin=canonicalizeTkidOrigin(requestOrigin||"")}catch{return null}
   const {data:source}=await db.from("tkid_sources").select("id,account_id,organization_id,business_context_id,public_source_id,status,capture_mode,rate_limit_per_minute,ingestion_state,abuse_adapter,proof_max_journeys,proof_max_events,proof_starts_at,proof_ends_at").eq("public_source_id",publicSourceId).in("status",["shadow","active"]).maybeSingle();
   if(!source)return null;
-  const {data:origin}=await db.from("tkid_source_origins").select("id,canonical_origin,role,lifecycle_status").eq("organization_id",source.organization_id).eq("source_id",source.id).eq("canonical_origin",canonicalOrigin).eq("lifecycle_status","active").maybeSingle();
+  const {data:origin}=await db.from("tkid_source_origins").select("id,canonical_origin,role,lifecycle_status,verification_state").eq("organization_id",source.organization_id).eq("source_id",source.id).eq("canonical_origin",canonicalOrigin).eq("lifecycle_status","active").eq("verification_state","verified").eq("role","frontend").maybeSingle();
   return origin?{source,origin,canonicalOrigin}:null;
 }
 
@@ -16279,6 +16280,19 @@ async function router(req: Request, env: Env): Promise<Response> {
       if(req.method!=="GET")return json({ok:false,error:"method_not_allowed"},405,{allow:"GET",...relaySecurityHeaders()});const destination=await relayDestination(db,flow);if(!destination)return json({ok:false,error:"relay_destination_unavailable",message:"The configured destination is unavailable."},503,relaySecurityHeaders());const fallback=()=>relayRedirect(safeRedirect(destination.canonical_origin),303,{"set-cookie":clearRelayCookie(flowKey,url.protocol==="https:")});
       try{const cookieValue=parseRelayCookie(req.headers.get("cookie"),flowKey);if(!cookieValue)return fallback();const digest=await continuityDigest(cookieValue),now=new Date().toISOString(),{data:continuity}=await db.from("tkid_relay_continuities").select("*").eq("organization_id",flow.organization_id).eq("flow_id",flow.id).eq("cookie_digest",digest).eq("state","outbound").gt("expires_at",now).maybeSingle();if(!continuity)return fallback();const {data:source}=await db.from("tkid_sources").select("*").eq("organization_id",flow.organization_id).eq("id",flow.source_id).in("status",["shadow","active"]).maybeSingle();if(!source||!env.TRACEKIT_TKID_HANDOFF_SECRET)return fallback();await enforceTkidDistributedRequest(env,req,source,"relay_return",Math.max(5,source.rate_limit_per_minute));const handoffId=opaqueId(),expiresAt=new Date(Date.now()+5*60_000).toISOString(),token=await issueHandoff({handoffId,journeyId:continuity.journey_id,browserSessionId:continuity.browser_session_id,sourceId:source.id,targetOrigin:destination.canonical_origin,expiresAt},env.TRACEKIT_TKID_HANDOFF_SECRET);const {error:handoffError}=await db.from("tkid_handoffs").insert({id:handoffId,organization_id:flow.organization_id,source_id:flow.source_id,journey_id:continuity.journey_id,browser_session_id:continuity.browser_session_id,issued_origin:configuredOrigin,target_origin:destination.canonical_origin,target_origin_id:destination.id,issued_at:now,expires_at:expiresAt,token_digest:await sha256(token)});if(handoffError)return fallback();const {data:claimed}=await db.from("tkid_relay_continuities").update({state:"handoff_issued",return_count:continuity.return_count+1,returned_at:now,handoff_id:handoffId,handoff_issued_at:now,updated_at:now}).eq("organization_id",flow.organization_id).eq("id",continuity.id).eq("state","outbound").select("id").maybeSingle();if(!claimed)return fallback();await relayEvidence(db,continuity,"external_checkout_returned");await relayEvidence(db,continuity,"cross_domain_handoff_issued");return relayRedirect(destinationWithHandoff(destination.canonical_origin,token),303,{"set-cookie":clearRelayCookie(flowKey,url.protocol==="https:")})}catch{return fallback()}
     }
+  }
+  if(path==="/v1/tkid/browser-config"){
+    if(req.method!=="GET")return json({ok:false,error:"method_not_allowed"},405,{allow:"GET"});
+    let trustedOrigin:string|null=null;
+    try{
+      const sourceId=url.searchParams.get("source")||"",requestedVersion=url.searchParams.get("version"),db=getSupabase(env),resolved=await resolveActiveTkidOrigin(db,sourceId,req.headers.get("origin"));
+      if(!resolved)throw new TkidError("configuration_unavailable","Browser instrumentation is unavailable.",404);
+      trustedOrigin=resolved.canonicalOrigin;
+      if(requestedVersion&&!/^[1-9][0-9]{0,5}$/.test(requestedVersion))throw new TkidError("configuration_unavailable","Browser instrumentation is unavailable.",404);
+      const config=await readTkidBrowserConfiguration(db,resolved,requestedVersion);
+      if(!config)throw new TkidError("configuration_unavailable","Browser instrumentation is unavailable.",404);
+      return json({ok:true,...config},200,{...tkidCorsHeaders(trustedOrigin),"cache-control":"private, max-age=300","content-security-policy":"default-src 'none'","x-content-type-options":"nosniff",etag:`\"${config.definition_sha256}\"`});
+    }catch(e:any){const x=e instanceof TkidError?e:new TkidError("configuration_unavailable","Browser instrumentation is unavailable.",503);return json({ok:false,error:x.code,message:x.message},x.status,{"cache-control":"no-store",...(trustedOrigin?tkidCorsHeaders(trustedOrigin):{})})}
   }
   const tkidRoute = matchTkidRoute(req.method, path);
   if (req.method === "OPTIONS" && path.startsWith("/v1/tkid/")) {
