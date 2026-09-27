@@ -3,7 +3,7 @@ import type { BrandConfiguration } from "./types";
 export const TRACEKIT_BRAND: BrandConfiguration = {
   productName: "TraceKit",
   logoMark: "TK",
-  accent: "#0f172a",
+  accent: "#3b82f6",
   loginPresentation: "tracekit",
   poweredByTraceKit: "always",
 };
