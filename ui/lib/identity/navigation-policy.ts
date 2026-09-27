@@ -14,7 +14,6 @@ export const NAVIGATION_POLICY: Record<ShellVariant, NavigationPolicyItem[]> = {
     { label: "Customers", href: "/customers", permission: "customers.view" },
     { label: "Orders", href: "/orders", permission: "orders.view" },
     { label: "Money", href: "/money", permission: "financials.view" },
-    { label: "Operations", href: "/operations", permission: ["imports.view", "connectors.view"] },
     { label: "Connections", href: "/connections", permission: "connectors.view" },
   ],
   agency: [
