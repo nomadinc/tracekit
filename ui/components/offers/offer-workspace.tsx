@@ -167,23 +167,23 @@ function PersistentOfferCatalog() {
 
   if (loading)
     return (
-      <div className="rounded-xl border bg-white p-8 text-sm text-slate-500 dark:border-white/10 dark:bg-ink">
+      <div className="rounded-2xl border border-white/10 bg-white/[.035] p-8 text-sm text-slate-500">
         Loading Offers…
       </div>
     );
   if (error)
     return (
-      <div role="alert" className="rounded-xl border border-red-300 bg-red-50 p-6">
+      <div role="alert" className="rounded-2xl border border-rose-400/20 bg-rose-400/5 p-6 text-rose-100">
         <h2 className="font-semibold">Offers unavailable</h2>
         <p className="mt-2 text-sm">The canonical Offer catalog could not be loaded.</p>
       </div>
     );
   if (!offers.length)
     return (
-      <div className="rounded-xl border bg-white p-8 dark:border-white/10 dark:bg-ink">
+      <div className="rounded-2xl border border-white/10 bg-white/[.035] p-8">
         <h2 className="font-semibold">No canonical Offers</h2>
         <p className="mt-2 text-sm text-slate-500">
-          The active Organization does not currently own an active canonical Offer.
+          The active Client Organization does not currently have an active canonical Offer.
         </p>
       </div>
     );
