@@ -3,6 +3,8 @@ import type { StoredShopifyCredential } from "./shopify-verifier";
 
 export const SHOPIFY_WEBHOOK_TOPICS = ["ORDERS_CREATE", "REFUNDS_CREATE"] as const;
 export type ShopifyWebhookTopic = typeof SHOPIFY_WEBHOOK_TOPICS[number];
+export const SHOPIFY_PROOF_ONLY_TOPIC = "APP_UNINSTALLED" as const;
+export type ShopifyProofTopic = ShopifyWebhookTopic | typeof SHOPIFY_PROOF_ONLY_TOPIC;
 
 export type ShopifyWebhookSubscription = {
   id: string;
@@ -75,8 +77,8 @@ export async function ensureTraceKitShopifyWebhookSubscriptions(args: {
   };
 }
 
-export async function createTraceKitShopifyWebhookSubscription(args:{credential:StoredShopifyCredential;callbackUrl:string;topic:ShopifyWebhookTopic;fetchImpl?:typeof fetch;}){
- if(!SHOPIFY_WEBHOOK_TOPICS.includes(args.topic))throw new Error("Shopify webhook creation topic is outside the bounded TraceKit contract.");
+export async function createTraceKitShopifyWebhookSubscription(args:{credential:StoredShopifyCredential;callbackUrl:string;topic:ShopifyProofTopic;fetchImpl?:typeof fetch;}){
+ if(!([...SHOPIFY_WEBHOOK_TOPICS,SHOPIFY_PROOF_ONLY_TOPIC] as readonly string[]).includes(args.topic))throw new Error("Shopify webhook creation topic is outside the bounded TraceKit contract.");
  const existing=await listTraceKitShopifyWebhookSubscriptions({credential:args.credential,callbackUrl:args.callbackUrl,fetchImpl:args.fetchImpl});
  const prior=existing.find(s=>s.topic===args.topic);if(prior)return{decision:"already_exists" as const,subscription:prior,verifiedPresent:true};
  const payload=await shopifyGraphql(args.credential,{query:`mutation TraceKitGovernedWebhookSubscriptionCreate($topic: WebhookSubscriptionTopic!, $webhookSubscription: WebhookSubscriptionInput!) { webhookSubscriptionCreate(topic: $topic, webhookSubscription: $webhookSubscription) { webhookSubscription { id topic uri } userErrors { field message } } }`,variables:{topic:args.topic,webhookSubscription:{uri:args.callbackUrl}}},args.fetchImpl);
@@ -88,7 +90,7 @@ export async function createTraceKitShopifyWebhookSubscription(args:{credential:
 }
 
 export async function deleteTraceKitShopifyWebhookSubscription(args:{credential:StoredShopifyCredential;subscription:ShopifyWebhookSubscription;callbackUrl:string;fetchImpl?:typeof fetch;}){
- if(!SHOPIFY_WEBHOOK_TOPICS.includes(args.subscription.topic)||args.subscription.uri!==args.callbackUrl)throw new Error("Shopify webhook deletion target is outside the bounded TraceKit subscription contract.");
+ if(!([...SHOPIFY_WEBHOOK_TOPICS,SHOPIFY_PROOF_ONLY_TOPIC] as readonly string[]).includes(args.subscription.topic)||args.subscription.uri!==args.callbackUrl)throw new Error("Shopify webhook deletion target is outside the bounded TraceKit subscription contract.");
  const payload=await shopifyGraphql(args.credential,{query:`mutation TraceKitWebhookSubscriptionDelete($id: ID!) { webhookSubscriptionDelete(id: $id) { deletedWebhookSubscriptionId userErrors { field message } } }`,variables:{id:args.subscription.id}},args.fetchImpl);
  const result=payload?.data?.webhookSubscriptionDelete,errors=Array.isArray(result?.userErrors)?result.userErrors:[];
  if(errors.length)throw new Error(`Shopify webhook deletion failed: ${String(errors[0]?.message||"unknown error")}`);
