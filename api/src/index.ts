@@ -15949,7 +15949,7 @@ async function resolveActiveTkidOrigin(db:any,publicSourceId:string,requestOrigi
   let canonicalOrigin:string;try{canonicalOrigin=canonicalizeTkidOrigin(requestOrigin||"")}catch{return null}
   const {data:source}=await db.from("tkid_sources").select("id,account_id,organization_id,business_context_id,public_source_id,status,capture_mode,rate_limit_per_minute,ingestion_state,abuse_adapter,proof_max_journeys,proof_max_events,proof_starts_at,proof_ends_at").eq("public_source_id",publicSourceId).in("status",["shadow","active"]).maybeSingle();
   if(!source)return null;
-  const {data:origin}=await db.from("tkid_source_origins").select("id,canonical_origin,role,lifecycle_status").eq("organization_id",source.organization_id).eq("source_id",source.id).eq("canonical_origin",canonicalOrigin).eq("lifecycle_status","active").maybeSingle();
+  const {data:origin}=await db.from("tkid_source_origins").select("id,canonical_origin,role,lifecycle_status,verification_state").eq("organization_id",source.organization_id).eq("source_id",source.id).eq("canonical_origin",canonicalOrigin).eq("lifecycle_status","active").eq("verification_state","verified").eq("role","frontend").maybeSingle();
   return origin?{source,origin,canonicalOrigin}:null;
 }
 
