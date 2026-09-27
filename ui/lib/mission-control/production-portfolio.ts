@@ -50,8 +50,8 @@ export async function readMissionControlPortfolio(
   const organizationId = organization.id;
   const from = isoStart(days);
   const organizationFilter = `organization_id=eq.${encodeURIComponent(organizationId)}`;
-  const timeFilter = `and=(created_at.gte.${encodeURIComponent(from)})`;
-  const ledgerTimeFilter = `and=(occurred_at.gte.${encodeURIComponent(from)})`;
+  const timeFilter = `order_ts=gte.${encodeURIComponent(from)}`;
+  const ledgerTimeFilter = `occurred_at=gte.${encodeURIComponent(from)}`;
 
   const [orders, conversionCount, refunds, chargebacks] = await Promise.all([
     commercePersistenceRequest(
@@ -93,8 +93,8 @@ export async function readMissionControlPortfolio(
       },
       conversions: {
         value: conversionCount,
-        state: "available",
-        detail: "Successful canonical conversion evidence retained in the financial event store.",
+        state: "partial",
+        detail: "Canonical conversion rows without a financial ledger subtype; provider-specific qualification remains visible elsewhere.",
       },
       refunds: {
         value: refundAmount,
