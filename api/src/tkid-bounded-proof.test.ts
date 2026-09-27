@@ -3,6 +3,7 @@ import test from "node:test";
 import { readFileSync } from "node:fs";
 
 const worker=readFileSync(new URL("./index.ts",import.meta.url),"utf8");
+const persistence=readFileSync(new URL("./tkid-event-persistence.ts",import.meta.url),"utf8");
 const migration=readFileSync(new URL("../../supabase/migrations/20260926060810_tkid_bounded_proof_enforcement_v1.sql",import.meta.url),"utf8");
 
 test("bootstrap uses a durable idempotency key and claims before returning identity",()=>{
@@ -16,10 +17,11 @@ test("event ingestion preserves abuse control and claims capacity before any per
   const abuse=ingest.indexOf("enforceTkidDistributedRequest");
   const preflight=ingest.indexOf("proofPreflightDecision");
   const claim=ingest.indexOf("claimTkidProof");
-  const journey=ingest.indexOf('from("tkid_journeys")');
-  const evidence=ingest.indexOf('from("tkid_event_evidence")');
-  const event=ingest.indexOf('from("tkid_events")');
-  assert.ok(preflight>=0&&abuse>preflight&&claim>abuse&&journey>claim&&evidence>claim&&event>claim);
+  const persist=ingest.indexOf("persistTkidEvent");
+  assert.ok(preflight>=0&&abuse>preflight&&claim>abuse&&persist>claim);
+  assert.match(persistence,/from\("tkid_journeys"\)/);
+  assert.match(persistence,/from\("tkid_event_evidence"\)/);
+  assert.match(persistence,/from\("tkid_events"\)/);
   assert.match(ingest,/claimed\.decision!=="accepted"\)return proofFailure/);
 });
 
@@ -44,6 +46,7 @@ test("database reservations are serialized, unique, and conservatively retained"
 });
 
 test("ordinary TKID event persistence has no alternate browser route",()=>{
-  assert.equal((worker.match(/from\("tkid_events"\)\.insert/g)||[]).length,1);
+  assert.equal((worker.match(/persistTkidEvent\(/g)||[]).length,1);
+  assert.equal((persistence.match(/from\("tkid_events"\)\.insert/g)||[]).length,1);
   assert.match(worker,/tkidRoute === "ingest"/);
 });

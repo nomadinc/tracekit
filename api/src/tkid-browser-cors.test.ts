@@ -141,7 +141,6 @@ test("stopped proof rejection remains before persistence and becomes browser-rea
   const ingest = worker.slice(worker.indexOf('if (tkidRoute === "ingest")'), worker.indexOf("const browserRoute"));
   const gate = ingest.indexOf("proofPreflightDecision");
   const failure = ingest.indexOf("proofFailure(preflight,trustedOrigin)");
-  const journey = ingest.indexOf('from("tkid_journeys")');
-  const event = ingest.indexOf('from("tkid_events")');
-  assert.ok(gate >= 0 && failure > gate && journey > failure && event > failure);
+  const persistence = ingest.indexOf("persistTkidEvent");
+  assert.ok(gate >= 0 && failure > gate && persistence > failure);
 });
