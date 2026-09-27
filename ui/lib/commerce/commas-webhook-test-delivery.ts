@@ -46,3 +46,13 @@ export async function sendCommasWebhookTestDelivery(args: {
   if (typeof data.response_status === "number") summary.responseStatus = data.response_status;
   return summary;
 }
+
+export type GovernedCommasTestDeliveryInput={authorization:{decision:"consume"|"replay_same_result"|"reject";consumptionId:string|null};envelope:{state:"authorized"|"expired"|"invalidated";provider:"commas";operation:"webhook_test_delivery";subscriptionId:string;eventType:string;idempotencyKey:string;auditCorrelationId:string};apiKey:string;fetchImpl?:typeof fetch;baseUrl?:string};
+export type GovernedCommasTestDeliveryResult={status:"completed"|"rejected";provider:"commas";operation:"webhook_test_delivery";consumptionId:string|null;providerResponse:WebhookTestSummary|null;verification:{status:"verified"|"failed"|"unresolved";reason:string};providerConfigurationMutation:false;audit:{idempotencyKey:string;auditCorrelationId:string}};
+export async function executeGovernedCommasTestDelivery(input:GovernedCommasTestDeliveryInput):Promise<GovernedCommasTestDeliveryResult>{
+ const accepted=input.authorization.decision==="consume"&&Boolean(input.authorization.consumptionId)&&input.envelope.state==="authorized";
+ if(!accepted)return{status:"rejected",provider:"commas",operation:"webhook_test_delivery",consumptionId:null,providerResponse:null,verification:{status:"unresolved",reason:"Execution requires an authorized envelope and the winning consumed authorization."},providerConfigurationMutation:false,audit:{idempotencyKey:input.envelope.idempotencyKey,auditCorrelationId:input.envelope.auditCorrelationId}};
+ const providerResponse=await sendCommasWebhookTestDelivery({apiKey:input.apiKey,subscriptionId:input.envelope.subscriptionId,eventType:input.envelope.eventType,baseUrl:input.baseUrl,fetchImpl:input.fetchImpl});
+ const verification=providerResponse.eventSent===true&&typeof providerResponse.responseStatus==="number"&&providerResponse.responseStatus>=200&&providerResponse.responseStatus<300?{status:"verified" as const,reason:"Commas reported the test event was sent and the target returned a 2xx response."}:providerResponse.eventSent===false||typeof providerResponse.responseStatus==="number"&&providerResponse.responseStatus>=400?{status:"failed" as const,reason:"Commas reported the test delivery failed or the target returned an error response."}:{status:"unresolved" as const,reason:"Provider response does not establish successful delivery."};
+ return{status:"completed",provider:"commas",operation:"webhook_test_delivery",consumptionId:input.authorization.consumptionId,providerResponse,verification,providerConfigurationMutation:false,audit:{idempotencyKey:input.envelope.idempotencyKey,auditCorrelationId:input.envelope.auditCorrelationId}};
+}
