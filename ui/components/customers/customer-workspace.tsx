@@ -261,12 +261,12 @@ function CustomerWorkspaceContent() {
           </div>
           <div className="mt-5 grid gap-4 border-t pt-4 sm:grid-cols-3 lg:grid-cols-6 dark:border-white/10">
             {[
-              ["Lifetime revenue", money(snapshot.lifetimeRevenue)],
-              ["Customer since", snapshot.customerSince],
-              ["First touch", snapshot.firstTouch],
-              ["Last purchase", snapshot.lastPurchase],
-              ["Tracking Health", snapshot.customer.trackingHealth],
-              ["Journey ID", snapshot.journeyId],
+              ["Observed revenue", money(snapshot.lifetimeRevenue)],
+              ["First observed", snapshot.customerSince],
+              ["Attribution evidence", snapshot.firstTouch],
+              ["Last linked purchase", snapshot.lastPurchase],
+              ["Evidence coverage", snapshot.customer.trackingHealth],
+              ["Canonical Journey", snapshot.journeyId],
             ].map(([l, v]) => (
               <div key={l}>
                 <p className="text-[9px] uppercase text-slate-400">{l}</p>
@@ -278,9 +278,9 @@ function CustomerWorkspaceContent() {
         <section className="border-b p-5 dark:border-white/10">
           <div className="flex flex-wrap justify-between gap-3">
             <div>
-              <h2 className="text-sm font-semibold">Customer Story</h2>
+              <h2 className="text-sm font-semibold">Customer Evidence Timeline</h2>
               <p className="text-[11px] text-slate-500">
-                Discovery, attribution, commerce, and financial outcome.
+                Retained Journey, attribution, commerce, and relationship evidence in observed order.
               </p>
             </div>
             <div className="flex gap-2">
@@ -352,7 +352,7 @@ function CustomerWorkspaceContent() {
         </section>
         <div className="grid gap-5 p-5 xl:grid-cols-2">
           <section className="rounded-xl border dark:border-white/10">
-            <Title text="Tracking Health" />
+            <Title text="Evidence Coverage" />
             <button
               onClick={() => inspect("tracking")}
               className="w-full p-5 text-left"
@@ -361,6 +361,7 @@ function CustomerWorkspaceContent() {
                 <ShieldCheck className="h-5 w-5" />
                 {snapshot.customer.trackingHealth}
               </strong>
+              <p className="mt-1 text-[10px] font-semibold uppercase tracking-[.12em] text-slate-500">Evidence state, not a customer score</p>
               <p className="mt-2 text-xs text-slate-500">
                 {snapshot.trackingExplanation}
               </p>
