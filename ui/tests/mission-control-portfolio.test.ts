@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { sumPortfolioRows } from "../lib/mission-control/production-portfolio";
+import { sumPortfolioRows } from "../lib/mission-control/portfolio-math";
 
 test("portfolio financial totals preserve signed ledger math before display normalization", () => {
   assert.equal(sumPortfolioRows([{ amount: -25 }, { amount: -10 }, { amount: 5 }], "amount"), -30);
