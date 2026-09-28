@@ -4,5 +4,5 @@ export function assessInspectEvidenceEnablementReadiness():M12EnablementReadines
  const c=resolveM12ActionCapability("inspect_evidence");
  const checks={registered:Boolean(c),planOnly:c?.exposure==="plan_only",nonMutating:c?.mutationClass==="none",permissionBound:c?.requiredPermission==="customers.view",confirmationRequired:c?.humanConfirmationRequired===true,verificationDefined:c?.verification==="retained_evidence",recoveryDefined:c?.recovery==="not_applicable",boundedTarget:c?.targetKind==="journey_evidence",adapterRegistryGated:true,authenticatedToolSurfaceImplemented:true,governedChainAcceptanceProven:true,callerSafeOrchestrationImplemented:true,durableAuthorizationImplemented:true,durableReplayImplemented:true};
  const blockers:string[]=[];for(const[k,v]of Object.entries(checks))if(!v)blockers.push(`Readiness check failed: ${k}.`);
- return{operation:"inspect_evidence",ready:blockers.length===0,executionAvailable:false,checks,blockers};
+ return{operation:"inspect_evidence",ready:blockers.length===0,executionAvailable:c?.executionAvailable===true,checks,blockers};
 }

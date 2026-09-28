@@ -1,0 +1,2 @@
+import assert from"node:assert/strict";import test from"node:test";import{assessInspectEvidenceEnablementReadiness}from"../lib/mcp/action-enablement-readiness";import{resolveM12ActionCapability}from"../lib/mcp/action-capability-registry";
+test("M13 readiness reports the same enabled state as the registry",()=>{const c=resolveM12ActionCapability("inspect_evidence"),x=assessInspectEvidenceEnablementReadiness();assert.equal(c?.executionAvailable,true);assert.equal(x.executionAvailable,c?.executionAvailable);assert.equal(x.ready,true);assert.deepEqual(x.blockers,[]);});
