@@ -34,3 +34,12 @@ ALTER TABLE public.tkid_commerce_links
   ALTER CONSTRAINT tkid_commerce_links_organization_id_provider_connection_id_fkey DEFERRABLE INITIALLY IMMEDIATE;
 ALTER TABLE public.tracekit_investigations
   ALTER CONSTRAINT tracekit_investigations_organization_id_connection_id_fkey DEFERRABLE INITIALLY IMMEDIATE;
+
+-- Identity rows also bind Organization to Person, Evidence, and Provider Account.
+-- These must move in the same explicit migration transaction as their Connection graph.
+ALTER TABLE public.person_source_identities
+  ALTER CONSTRAINT person_source_identities_evidence_fk DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE public.person_source_identities
+  ALTER CONSTRAINT person_source_identities_person_fk DEFERRABLE INITIALLY IMMEDIATE;
+ALTER TABLE public.person_source_identities
+  ALTER CONSTRAINT person_source_identities_provider_account_fk DEFERRABLE INITIALLY IMMEDIATE;
