@@ -1,5 +1,5 @@
 import type { ProductionCustomerScope } from "@/lib/customers/types";
-import { resolveM12PlanCapability } from "./action-capability-registry";
+import { resolveM12ActionCapability, resolveM12PlanCapability } from "./action-capability-registry";
 export type JourneyIntelligence={
  customerId:string; journeyId:string|null;
  chronology:Array<{eventId:string;eventType:string;occurredAt:string;sourcePlatform:string;role:string;observed:boolean;identifiers:Array<{type:string;value:string}>;relationships:Array<{type:string;id:string}>;provenance:{sourceConnector:string|null;sourceRecordId:string|null}}>;
@@ -91,7 +91,7 @@ export function evaluateAuthorizationConsumption(input:AuthorizationConsumptionR
 export type BoundedExecutionRequest={envelope:ExecutionEnvelope;consumption:AuthorizationConsumptionDecision;operation:"inspect_evidence"};
 export type BoundedExecutionResult={status:"completed"|"rejected";operation:"inspect_evidence";envelopeIdentity:string;consumptionId:string|null;observed:{target:ExecutionEnvelope["target"];supportingEventIds:string[];uncertainty:string[]};verification:Array<{expectation:string;status:"not_verified"}>;providerMutation:false;executionAudit:{auditCorrelationId:string;idempotencyKey:string}};
 export function executeBoundedInspection(input:BoundedExecutionRequest):BoundedExecutionResult{
- const accepted=input.envelope.state==="authorized"&&input.consumption.decision==="consume"&&input.consumption.next.state==="consumed"&&input.operation==="inspect_evidence";
+ const capability=resolveM12ActionCapability(input.operation),accepted=input.envelope.state==="authorized"&&input.consumption.decision==="consume"&&input.consumption.next.state==="consumed"&&input.operation==="inspect_evidence"&&capability?.exposure==="plan_only"&&capability.executionAvailable===true;
  return{status:accepted?"completed":"rejected",operation:"inspect_evidence",envelopeIdentity:input.envelope.envelopeIdentity,consumptionId:accepted?input.consumption.next.consumptionId:null,observed:{target:input.envelope.target,supportingEventIds:input.envelope.evidence.supportingEventIds,uncertainty:input.envelope.evidence.uncertainty},verification:input.envelope.verification.map(expectation=>({expectation,status:"not_verified"})),providerMutation:false,executionAudit:{auditCorrelationId:input.envelope.auditCorrelationId,idempotencyKey:input.envelope.idempotencyKey}};
 }
 export type ExecutionVerificationEvidence={expectation:string;observed:boolean|null;evidenceEventIds:string[];reason:string};
