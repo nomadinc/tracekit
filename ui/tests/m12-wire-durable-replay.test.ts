@@ -1,0 +1,6 @@
+import assert from"node:assert/strict";import test from"node:test";import{readFileSync}from"node:fs";
+const source=readFileSync(new URL("../lib/mcp/action-orchestration.ts",import.meta.url),"utf8");
+test("M12 replay branch reads durable result before bounded adapter",()=>{const replay=source.indexOf('durable.decision==="replay_same_result"'),read=source.indexOf("readMcpExecutionResult",replay),adapter=source.indexOf("executeBoundedInspection",replay);assert.ok(replay>0&&read>replay&&adapter>read);});
+test("M12 missing replay result fails closed instead of re-executing",()=>{assert.ok(source.includes('reason:"replay_result_unavailable"'));});
+test("M12 completed first execution persists exact result after adapter",()=>{const adapter=source.indexOf("executeBoundedInspection({envelope,consumption"),persist=source.indexOf("persistMcpExecutionResult({envelope");assert.ok(adapter>0&&persist>adapter);assert.ok(source.includes('execution.status==="completed"&&consumption.next.consumptionId'));});
+test("M12 replay returns prior execution object and remains non-provider-mutating",()=>{assert.ok(source.includes("execution:prior"));assert.ok(source.includes('reason:"replay_same_result"'));assert.ok(source.includes("providerMutation:false as const"));});
