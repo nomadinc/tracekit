@@ -59,6 +59,11 @@ export const TRACEKIT_MCP_TOOLS = [
     annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
   },
   {
+    name:"tracekit.accept_evidence_limit",title:"Accept TraceKit evidence limit",description:"Durably acknowledge one currently observed retained-evidence limitation for an exact customer Journey. This does not resolve, delete, or rewrite evidence; it permits dependent non-mutating diagnostic planning to proceed to human confirmation.",
+    inputSchema:{type:"object",properties:{customer_id:{type:"string",minLength:1,maxLength:512},journey_id:{type:"string",minLength:1,maxLength:512},evidence_limit:{type:"string",minLength:1,maxLength:1000}},required:["customer_id","journey_id","evidence_limit"],additionalProperties:false},
+    annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:false},
+  },
+  {
     name:"tracekit.investigate_deviation",title:"Investigate TraceKit deviation",description:"Revalidate one observed cross-Journey deviation and return bounded Journey-level tracking investigations for its supporting evidence cohort.",
     inputSchema:{type:"object",properties:{dimension:{type:"string",enum:["affiliate","offer","source_platform","connector"]},value:{type:"string",minLength:1,maxLength:512},metric:{type:"string",enum:["attribution_established","commerce_linked","deterministic_identity_bridge","evidence_limited"]},customer_limit:{type:"integer",minimum:1,maximum:50,default:25},journey_limit:{type:"integer",minimum:1,maximum:100,default:50}},required:["dimension","value","metric"],additionalProperties:false},
     annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
@@ -201,6 +206,9 @@ export async function callTraceKitMcpTool(
     case "tracekit.recommend_actions":
       assertKeys(args, ["customer_id","journey_id"]);
       return service.recommendActions(text(args.customer_id,"customer_id",true)!,text(args.journey_id,"journey_id"));
+    case "tracekit.accept_evidence_limit":
+      assertKeys(args,["customer_id","journey_id","evidence_limit"]);
+      return service.acceptEvidenceLimit(text(args.customer_id,"customer_id",true)!,text(args.journey_id,"journey_id",true)!,text(args.evidence_limit,"evidence_limit",true)!);
     case "tracekit.investigate_deviation":
       assertKeys(args, ["dimension","value","metric","customer_limit","journey_limit"]);
       return service.investigateDeviation({dimension:text(args.dimension,"dimension",true)! as "affiliate"|"offer"|"source_platform"|"connector",value:text(args.value,"value",true)!,metric:text(args.metric,"metric",true)! as "attribution_established"|"commerce_linked"|"deterministic_identity_bridge"|"evidence_limited",customerLimit:limit(args.customer_limit,50,25),journeyLimit:limit(args.journey_limit,100,50)});
