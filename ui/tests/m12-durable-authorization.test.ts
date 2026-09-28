@@ -1,0 +1,6 @@
+import assert from"node:assert/strict";import test from"node:test";import{readFileSync}from"node:fs";
+const repo=readFileSync(new URL("../lib/mcp/action-authorization-repository.ts",import.meta.url),"utf8"),orchestration=readFileSync(new URL("../lib/mcp/action-orchestration.ts",import.meta.url),"utf8");
+test("M12 durable authorization is service-role persistence backed",()=>{assert.match(repo,/SUPABASE_SERVICE_ROLE_KEY/);assert.match(repo,/mcp_action_authorizations/);assert.match(repo,/consume_mcp_action_authorization/);});
+test("M12 authorization issuance binds immutable envelope identity and audit keys",()=>{for(const token of["envelope_identity:envelope.envelopeIdentity","idempotency_key:envelope.idempotencyKey","audit_correlation_id:envelope.auditCorrelationId","organization_id:envelope.organizationId"])assert.match(repo,new RegExp(token.replace(/[.]/g,"\\.")));});
+test("M12 disabled capability rejects before durable authorization issuance",()=>{const gate=orchestration.indexOf("if(!capability.executionAvailable)"),issue=orchestration.indexOf("issueMcpActionAuthorization");assert.ok(gate>0&&issue>gate);});
+test("M12 consumption uses database atomic RPC rather than caller authorization state",()=>{assert.match(orchestration,/consumeMcpActionAuthorization/);assert.doesNotMatch(orchestration,/authorization:AuthorizationConsumptionRecord/);});
