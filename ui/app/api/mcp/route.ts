@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { resolveApplicationSession } from "@/lib/identity/application-session";
 import { SupabaseIdentityTenancyRepository } from "@/lib/identity/supabase-identity-repository";
-import { createTraceKitMcpReadService } from "@/lib/mcp/server";
+import { createTraceKitMcpServices } from "@/lib/mcp/server";
 import { handleTraceKitMcpMessage, TRACEKIT_MCP_PROTOCOL_VERSION } from "@/lib/mcp/protocol";
 import { bearerToken, mcpWwwAuthenticate, verifyMcpBearerToken } from "@/lib/mcp/bearer-auth";
 import { resolveMcpExternalSession } from "@/lib/mcp/external-session";
@@ -48,11 +48,12 @@ export async function POST(request: Request) {
 
   if (Array.isArray(body)) {
     if (!body.length) return json({ jsonrpc: "2.0", id: null, error: { code: -32600, message: "Invalid Request" } }, 400);
-    const service = createTraceKitMcpReadService(session);
-    const results = (await Promise.all(body.map((item) => handleTraceKitMcpMessage(service, item)))).filter(Boolean);
+    const services = createTraceKitMcpServices(session);
+    const results = (await Promise.all(body.map((item) => handleTraceKitMcpMessage(services.read, item, services.action)))).filter(Boolean);
     return results.length ? json(results) : new Response(null, { status: 202 });
   }
-  const result = await handleTraceKitMcpMessage(createTraceKitMcpReadService(session), body);
+  const services=createTraceKitMcpServices(session);
+  const result = await handleTraceKitMcpMessage(services.read, body, services.action);
   return result ? json(result) : new Response(null, { status: 202 });
 }
 export async function GET() { return unauthorized(); }

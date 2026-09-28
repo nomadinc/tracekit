@@ -1,4 +1,5 @@
 import type { TraceKitMcpReadService } from "./read-service";
+import type { TraceKitMcpActionService } from "./action-service";
 
 export const TRACEKIT_MCP_TOOLS = [
   {
@@ -117,6 +118,11 @@ export const TRACEKIT_MCP_TOOLS = [
     },
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
+  {
+    name:"tracekit.execute_inspect_evidence",title:"Execute bounded TraceKit evidence inspection",description:"Execute only the named non-provider-mutating inspect_evidence capability after exact plan binding, actions.execute permission, fresh human confirmation, durable authorization, atomic consumption, verification, audit, and idempotent replay gates. Currently unavailable while registry execution exposure is disabled.",
+    inputSchema:{type:"object",properties:{plan:{type:"object"},plan_identity:{type:"string",minLength:1,maxLength:512},confirmation:{type:"object",properties:{confirmation_id:{type:"string",minLength:1,maxLength:512},confirmed_at:{type:"string",minLength:1,maxLength:64},confirmed_plan_identity:{type:"string",minLength:1,maxLength:512},confirmed_customer_id:{type:"string",minLength:1,maxLength:512},confirmed_journey_id:{type:["string","null"],maxLength:512}},required:["confirmation_id","confirmed_at","confirmed_plan_identity","confirmed_customer_id","confirmed_journey_id"],additionalProperties:false},authorization_id:{type:"string",minLength:1,maxLength:512},requested_at:{type:"string",minLength:1,maxLength:64},consumption_id:{type:"string",minLength:1,maxLength:512},idempotency_key:{type:"string",minLength:1,maxLength:512},audit_correlation_id:{type:"string",minLength:1,maxLength:512},expires_at:{type:"string",minLength:1,maxLength:64},verification_evidence:{type:"array",maxItems:50}},required:["plan","plan_identity","confirmation","requested_at","consumption_id","idempotency_key","audit_correlation_id","expires_at","verification_evidence"],additionalProperties:false},
+    annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
+  },
 ] as const;
 
 export type TraceKitMcpToolName = (typeof TRACEKIT_MCP_TOOLS)[number]["name"];
@@ -144,9 +150,17 @@ export async function callTraceKitMcpTool(
   service: TraceKitMcpReadService,
   name: string,
   rawArguments: unknown,
+  actionService?: TraceKitMcpActionService,
 ) {
   const args = objectArgs(rawArguments ?? {});
   switch (name as TraceKitMcpToolName) {
+    case "tracekit.execute_inspect_evidence": {
+      assertKeys(args,["plan","plan_identity","confirmation","authorization_id","requested_at","consumption_id","idempotency_key","audit_correlation_id","expires_at","verification_evidence"]);
+      if(!actionService)throw new Error("action_service_unavailable");
+      const confirmation=objectArgs(args.confirmation),plan=objectArgs(args.plan);
+      assertKeys(confirmation,["confirmation_id","confirmed_at","confirmed_plan_identity","confirmed_customer_id","confirmed_journey_id"]);
+      return actionService.inspectEvidence({plan:plan as any,planIdentity:text(args.plan_identity,"plan_identity",true)!,confirmation:{confirmationId:text(confirmation.confirmation_id,"confirmation_id",true)!,confirmedAt:text(confirmation.confirmed_at,"confirmed_at",true)!,confirmedPlanIdentity:text(confirmation.confirmed_plan_identity,"confirmed_plan_identity",true)!,confirmedCustomerId:text(confirmation.confirmed_customer_id,"confirmed_customer_id",true)!,confirmedJourneyId:text(confirmation.confirmed_journey_id,"confirmed_journey_id")||null},authorizationId:text(args.authorization_id,"authorization_id"),requestedAt:text(args.requested_at,"requested_at",true)!,consumptionId:text(args.consumption_id,"consumption_id",true)!,idempotencyKey:text(args.idempotency_key,"idempotency_key",true)!,auditCorrelationId:text(args.audit_correlation_id,"audit_correlation_id",true)!,expiresAt:text(args.expires_at,"expires_at",true)!,verificationEvidence:Array.isArray(args.verification_evidence)?args.verification_evidence as any:[]});
+    }
     case "tracekit.list_customers":
       assertKeys(args, ["query", "limit"]);
       return service.listCustomers({ query: text(args.query, "query"), limit: limit(args.limit, 50, 25) });

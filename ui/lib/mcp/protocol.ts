@@ -1,5 +1,6 @@
 import { TRACEKIT_MCP_TOOLS, callTraceKitMcpTool, mcpToolResult } from "./tool-adapter";
 import type { TraceKitMcpReadService } from "./read-service";
+import type { TraceKitMcpActionService } from "./action-service";
 
 type JsonRpcId = string | number | null;
 type JsonRpcRequest = { jsonrpc?: unknown; id?: JsonRpcId; method?: unknown; params?: unknown };
@@ -13,7 +14,7 @@ function error(id: JsonRpcId, code: number, message: string) {
   return { jsonrpc: "2.0" as const, id, error: { code, message } };
 }
 
-export async function handleTraceKitMcpMessage(service: TraceKitMcpReadService, raw: unknown) {
+export async function handleTraceKitMcpMessage(service: TraceKitMcpReadService, raw: unknown, actionService?: TraceKitMcpActionService) {
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) return error(null, -32600, "Invalid Request");
   const request = raw as JsonRpcRequest;
   const id = request.id ?? null;
@@ -24,7 +25,7 @@ export async function handleTraceKitMcpMessage(service: TraceKitMcpReadService, 
       protocolVersion: PROTOCOL_VERSION,
       capabilities: { tools: { listChanged: false } },
       serverInfo: { name: "tracekit", version: "0.1.0" },
-      instructions: "Read-only TraceKit intelligence tools. Results are tenant-scoped and permission-projected.",
+      instructions: "TraceKit intelligence tools are tenant-scoped and permission-projected. Named action tools remain governed by explicit capability, permission, confirmation, authorization, verification, audit, and replay gates.",
     });
   }
   if (request.method === "ping") return response(id, {});
@@ -37,7 +38,7 @@ export async function handleTraceKitMcpMessage(service: TraceKitMcpReadService, 
     const record = params as Record<string, unknown>;
     if (typeof record.name !== "string") return error(id, -32602, "Invalid params");
     try {
-      const value = await callTraceKitMcpTool(service, record.name, record.arguments ?? {});
+      const value = await callTraceKitMcpTool(service, record.name, record.arguments ?? {}, actionService);
       return response(id, mcpToolResult(value));
     } catch (cause: unknown) {
       const message = String((cause as { message?: unknown } | null)?.message || "");
