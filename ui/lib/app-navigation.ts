@@ -55,6 +55,7 @@ export const WORKSPACE_SUMMARY = { name: "Default Workspace", website: "Primary 
 export function pageChromeForPath(pathname: string | null | undefined) {
   const path = String(pathname || "/");
   const shellChrome: Record<string, { title: string; description: string; group: string }> = {
+    "/platform": { title: "Control Center", description: "Client health, tenant scope, and operator attention across TraceKit.", group: "Platform" },
     "/offers": { title: "Offers", description: "Strategic Offer Workspaces within the active Business Context.", group: "Workspaces" },
     "/money": { title: "Money", description: "Qualified financial outcomes and reconciliation.", group: "Workspaces" },
     "/clients": { title: "Clients", description: "Assigned Client Organizations within the Agency Account.", group: "Agency" },
