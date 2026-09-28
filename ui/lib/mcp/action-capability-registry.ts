@@ -33,3 +33,10 @@ export function resolveM12PlanCapability(plan:M12PlanCapabilityInput){
  if(plan.confirmation.required!==capability.humanConfirmationRequired)return{bound:false,executionAvailable:false,reason:"Plan confirmation requirement does not match the registered capability."} as const;
  return{bound:true,executionAvailable:false,capability,reason:"Plan is bound to its exact governed capability; execution exposure remains disabled."} as const;
 }
+export type M12RegistryBackedEligibilityInput={plan:M12PlanCapabilityInput;planUnchanged:boolean;actionPermissionGranted:boolean;prerequisitesSatisfied:boolean;humanConfirmationValid:boolean};
+export function evaluateM12RegistryBackedEligibility(input:M12RegistryBackedEligibilityInput){
+ const binding=resolveM12PlanCapability(input.plan),checks={planUnchanged:input.planUnchanged,actionPermissionGranted:input.actionPermissionGranted,prerequisitesSatisfied:input.prerequisitesSatisfied,humanConfirmationValid:input.humanConfirmationValid,capabilityBound:binding.bound,executionCapabilityEnabled:binding.executionAvailable};
+ const governanceSatisfied=checks.planUnchanged&&checks.actionPermissionGranted&&checks.prerequisitesSatisfied&&checks.humanConfirmationValid&&checks.capabilityBound;
+ const reasons:string[]=[];if(!checks.planUnchanged)reasons.push("Plan identity changed.");if(!checks.actionPermissionGranted)reasons.push("Required action permission is not granted.");if(!checks.prerequisitesSatisfied)reasons.push("Plan prerequisites are not satisfied.");if(!checks.humanConfirmationValid)reasons.push("Fresh confirmation bound to the exact plan and target is required.");if(!checks.capabilityBound)reasons.push(binding.reason);if(!checks.executionCapabilityEnabled)reasons.push("Registered capability does not expose execution.");
+ return{state:governanceSatisfied&&checks.executionCapabilityEnabled?"eligible":"blocked" as const,eligible:false,checks,reasons,executionAvailable:false as const};
+}
