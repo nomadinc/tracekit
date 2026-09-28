@@ -119,6 +119,16 @@ export const TRACEKIT_MCP_TOOLS = [
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   {
+    name:"tracekit.prepare_inspect_evidence",title:"Prepare bounded TraceKit evidence inspection",description:"Persist one current server-generated inspect_evidence plan as an opaque, expiring action intent. This does not confirm or execute the action.",
+    inputSchema:{type:"object",properties:{customer_id:{type:"string",minLength:1,maxLength:512},journey_id:{type:"string",minLength:1,maxLength:512},recommendation_id:{type:"string",minLength:1,maxLength:512}},required:["customer_id","recommendation_id"],additionalProperties:false},
+    annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false},
+  },
+  {
+    name:"tracekit.confirm_inspect_evidence",title:"Confirm bounded TraceKit evidence inspection",description:"Record fresh human confirmation for one opaque prepared inspect_evidence intent. This does not execute the action.",
+    inputSchema:{type:"object",properties:{intent_id:{type:"string",minLength:1,maxLength:512}},required:["intent_id"],additionalProperties:false},
+    annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false},
+  },
+  {
     name:"tracekit.execute_inspect_evidence",title:"Execute bounded TraceKit evidence inspection",description:"Execute only the named non-provider-mutating inspect_evidence capability after exact plan binding, actions.execute permission, fresh human confirmation, durable authorization, atomic consumption, verification, audit, and idempotent replay gates. Currently unavailable while registry execution exposure is disabled.",
     inputSchema:{type:"object",properties:{confirmation_id:{type:"string",minLength:1,maxLength:512},authorization_id:{type:"string",minLength:1,maxLength:512},requested_at:{type:"string",minLength:1,maxLength:64},consumption_id:{type:"string",minLength:1,maxLength:512},idempotency_key:{type:"string",minLength:1,maxLength:512},verification_evidence:{type:"array",maxItems:50}},required:["confirmation_id","requested_at","consumption_id","idempotency_key","verification_evidence"],additionalProperties:false},
     annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
@@ -154,6 +164,14 @@ export async function callTraceKitMcpTool(
 ) {
   const args = objectArgs(rawArguments ?? {});
   switch (name as TraceKitMcpToolName) {
+    case "tracekit.prepare_inspect_evidence": {
+      assertKeys(args,["customer_id","journey_id","recommendation_id"]);if(!actionService)throw new Error("action_service_unavailable");
+      const customerId=text(args.customer_id,"customer_id",true)!,journeyId=text(args.journey_id,"journey_id"),recommendationId=text(args.recommendation_id,"recommendation_id",true)!,planning=await service.planActions(customerId,journeyId),plan=planning?.plans.find((p:any)=>p.recommendationId===recommendationId);
+      if(!plan||plan.proposedOperation?.type!=="inspect_evidence")throw new Error("action_plan_unavailable");
+      return actionService.prepareInspectEvidence(plan,`plan:${plan.recommendationId}:${customerId}:${journeyId||""}`);
+    }
+    case "tracekit.confirm_inspect_evidence":
+      assertKeys(args,["intent_id"]);if(!actionService)throw new Error("action_service_unavailable");return actionService.confirmInspectEvidence(text(args.intent_id,"intent_id",true)!);
     case "tracekit.execute_inspect_evidence": {
       assertKeys(args,["confirmation_id","authorization_id","requested_at","consumption_id","idempotency_key","verification_evidence"]);
       if(!actionService)throw new Error("action_service_unavailable");
