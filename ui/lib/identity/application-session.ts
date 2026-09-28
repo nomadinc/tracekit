@@ -170,6 +170,7 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
     },
     activeOrganizationId: activeOrganization?.id || null,
     activeBusinessContextId,
+    adminClientView: Boolean(adminViewOrganization),
   };
   await repository.recordAuditEvent({
     actorUserId: user.id,
