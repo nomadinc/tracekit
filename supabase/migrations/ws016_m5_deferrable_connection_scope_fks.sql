@@ -1,45 +1,40 @@
 -- WS-016 M5 tenancy canonicalization
--- Permit an existing canonical Connection and its complete tenant-scoped graph to
--- move between Organizations atomically without disabling referential integrity.
 --
--- Constraints remain INITIALLY IMMEDIATE. Normal application writes therefore
--- retain the same immediate FK behavior unless a migration transaction explicitly
--- executes SET CONSTRAINTS ... DEFERRED.
-
-ALTER TABLE public.commerce_connection_pauses
-  ALTER CONSTRAINT commerce_connection_pauses_organization_id_connection_id_fkey DEFERRABLE INITIALLY IMMEDIATE;
-ALTER TABLE public.commerce_dispute_reconciliations
-  ALTER CONSTRAINT commerce_dispute_reconciliations_connection_fk DEFERRABLE INITIALLY IMMEDIATE;
-ALTER TABLE public.commerce_provider_accounts
-  ALTER CONSTRAINT commerce_provider_accounts_connection_fk DEFERRABLE INITIALLY IMMEDIATE;
-ALTER TABLE public.commerce_provider_credentials
-  ALTER CONSTRAINT commerce_provider_credentials_connection_fk DEFERRABLE INITIALLY IMMEDIATE;
-ALTER TABLE public.commerce_repository_activation
-  ALTER CONSTRAINT commerce_repository_activation_connection_fk DEFERRABLE INITIALLY IMMEDIATE;
-ALTER TABLE public.conversions
-  ALTER CONSTRAINT conversions_connection_scope_fk DEFERRABLE INITIALLY IMMEDIATE;
-ALTER TABLE public.everflow_acquisition_journeys
-  ALTER CONSTRAINT everflow_acquisition_journeys_organization_id_connection_i_fkey DEFERRABLE INITIALLY IMMEDIATE;
-ALTER TABLE public.everflow_conversion_events
-  ALTER CONSTRAINT everflow_conversion_events_organization_id_connection_id_fkey DEFERRABLE INITIALLY IMMEDIATE;
-ALTER TABLE public.everflow_historical_imports
-  ALTER CONSTRAINT everflow_historical_imports_organization_id_connection_id_fkey DEFERRABLE INITIALLY IMMEDIATE;
-ALTER TABLE public.everflow_journey_order_links
-  ALTER CONSTRAINT everflow_journey_order_links_organization_id_connection_id_fkey DEFERRABLE INITIALLY IMMEDIATE;
-ALTER TABLE public.everflow_order_reconciliations
-  ALTER CONSTRAINT everflow_order_reconciliation_organization_id_connection_i_fkey DEFERRABLE INITIALLY IMMEDIATE;
-ALTER TABLE public.platform_orders
-  ALTER CONSTRAINT platform_orders_connection_scope_fk DEFERRABLE INITIALLY IMMEDIATE;
-ALTER TABLE public.tkid_commerce_links
-  ALTER CONSTRAINT tkid_commerce_links_organization_id_provider_connection_id_fkey DEFERRABLE INITIALLY IMMEDIATE;
-ALTER TABLE public.tracekit_investigations
-  ALTER CONSTRAINT tracekit_investigations_organization_id_connection_id_fkey DEFERRABLE INITIALLY IMMEDIATE;
-
--- Identity rows also bind Organization to Person, Evidence, and Provider Account.
--- These must move in the same explicit migration transaction as their Connection graph.
-ALTER TABLE public.person_source_identities
-  ALTER CONSTRAINT person_source_identities_evidence_fk DEFERRABLE INITIALLY IMMEDIATE;
-ALTER TABLE public.person_source_identities
-  ALTER CONSTRAINT person_source_identities_person_fk DEFERRABLE INITIALLY IMMEDIATE;
-ALTER TABLE public.person_source_identities
-  ALTER CONSTRAINT person_source_identities_provider_account_fk DEFERRABLE INITIALLY IMMEDIATE;
+-- TraceKit's canonical model uses Organization-scoped composite foreign keys to
+-- prevent cross-tenant relationships. Those constraints must remain enforced,
+-- but an existing graph cannot move atomically between Organizations when each
+-- composite FK is NOT DEFERRABLE.
+--
+-- Make every multi-column FK containing organization_id transaction-deferrable.
+-- They remain INITIALLY IMMEDIATE, so ordinary application transactions retain
+-- immediate FK enforcement. Only an explicit migration transaction using
+-- SET CONSTRAINTS ... DEFERRED may postpone validation until transaction end.
+DO $$
+DECLARE
+  r record;
+BEGIN
+  FOR r IN
+    SELECT DISTINCT
+      n.nspname AS schema_name,
+      c.relname AS table_name,
+      con.conname AS constraint_name
+    FROM pg_constraint con
+    JOIN pg_class c ON c.oid = con.conrelid
+    JOIN pg_namespace n ON n.oid = c.relnamespace
+    JOIN unnest(con.conkey) AS key(attnum) ON true
+    JOIN pg_attribute a ON a.attrelid = con.conrelid AND a.attnum = key.attnum
+    WHERE con.contype = 'f'
+      AND n.nspname = 'public'
+      AND array_length(con.conkey, 1) > 1
+      AND con.condeferrable = false
+    GROUP BY n.nspname, c.relname, con.conname
+    HAVING bool_or(a.attname = 'organization_id')
+  LOOP
+    EXECUTE format(
+      'ALTER TABLE %I.%I ALTER CONSTRAINT %I DEFERRABLE INITIALLY IMMEDIATE',
+      r.schema_name,
+      r.table_name,
+      r.constraint_name
+    );
+  END LOOP;
+END $$;
