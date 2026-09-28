@@ -1,0 +1,4 @@
+import assert from"node:assert/strict";import test from"node:test";import{readFileSync}from"node:fs";
+const adapter=readFileSync(new URL("../lib/mcp/tool-adapter.ts",import.meta.url),"utf8"),service=readFileSync(new URL("../lib/mcp/action-service.ts",import.meta.url),"utf8");
+test("M12 controlled proof preparation accepts zero caller target fields",()=>{const b=adapter.split('name:"tracekit.prepare_controlled_inspect_evidence_proof"')[1].split("annotations:")[0];assert.ok(b.includes("properties:{}"));assert.ok(b.includes("additionalProperties:false"));for(const x of["customer_id","journey_id","plan","target","proof_flag"])assert.equal(b.includes(x),false,x);});
+test("M12 controlled proof plan is derived only from server proof environment",()=>{assert.ok(service.includes("buildM12ControlledAcceptancePlan(process.env.TRACEKIT_M12_ACCEPTANCE_PROOF)"));assert.ok(service.includes('throw new Error("m12_acceptance_fixture_unavailable")'));});
