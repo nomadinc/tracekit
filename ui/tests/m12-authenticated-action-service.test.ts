@@ -1,0 +1,7 @@
+import assert from"node:assert/strict";import test from"node:test";import{TRACEKIT_MCP_TOOLS}from"../lib/mcp/tool-adapter";import{readFileSync}from"node:fs";
+const orchestration=readFileSync(new URL("../lib/mcp/action-orchestration.ts",import.meta.url),"utf8");
+test("M12 authenticated action service remains separate from read service",()=>{const server=readFileSync(new URL("../lib/mcp/server.ts",import.meta.url),"utf8");assert.match(server,/TraceKitMcpActionService/);assert.match(server,/read:createTraceKitMcpReadService/);assert.match(server,/action:new TraceKitMcpActionService/);});
+test("M12 does not prematurely expose inspect_evidence in public MCP tool list",()=>{assert.equal(TRACEKIT_MCP_TOOLS.some(x=>x.name==="tracekit.inspect_evidence"),false);});
+test("M12 action service delegates only through governed orchestration",()=>{const service=readFileSync(new URL("../lib/mcp/action-service.ts",import.meta.url),"utf8");assert.match(service,/orchestrateInspectEvidence/);assert.doesNotMatch(service,/executeBoundedInspection|consumeMcpActionAuthorization/);});
+test("M12 reconciled action service preserves permission and freshness gates",()=>{assert.match(orchestration,/actions\.execute/);assert.match(orchestration,/MAX_CONFIRMATION_AGE_MS=5\*60\*1000/);assert.match(orchestration,/confirmationFresh/);});
+test("M12 reconciled action service preserves durable replay boundary",()=>{assert.match(orchestration,/readMcpExecutionResult/);assert.match(orchestration,/persistMcpExecutionResult/);assert.match(orchestration,/replay_same_result/);});
