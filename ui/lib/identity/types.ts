@@ -42,6 +42,7 @@ export type IdentitySession = {
   identity: Identity;
   activeOrganizationId: string | null;
   activeBusinessContextId: string | null;
+  adminClientView?: boolean;
 };
 
 export type BrandConfiguration = {

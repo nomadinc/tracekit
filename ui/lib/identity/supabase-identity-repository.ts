@@ -115,6 +115,28 @@ export class SupabaseIdentityTenancyRepository implements IdentityTenancyReposit
     return rows.map((source) => source.tracekit_organizations || source).map((row): PersistentOrganizationRecord => ({ id: String(row.id), owningAccountId: String(row.owning_account_id), agencyId: row.agency_id ? String(row.agency_id) : null, workosOrganizationId: row.workos_organization_id ? String(row.workos_organization_id) : null, name: String(row.name), status: String(row.status) }));
   }
 
+  async allActiveAgencies() {
+    const rows = await rest("tracekit_agencies?status=eq.active&order=name.asc") as Row[];
+    return rows.map((row): PersistentAgency => ({
+      id: String(row.id),
+      accountId: String(row.account_id),
+      name: String(row.name),
+      status: String(row.status),
+    }));
+  }
+
+  async allActiveOrganizations() {
+    const rows = await rest("tracekit_organizations?status=eq.active&order=name.asc") as Row[];
+    return rows.map((row): PersistentOrganizationRecord => ({
+      id: String(row.id),
+      owningAccountId: String(row.owning_account_id),
+      agencyId: row.agency_id ? String(row.agency_id) : null,
+      workosOrganizationId: row.workos_organization_id ? String(row.workos_organization_id) : null,
+      name: String(row.name),
+      status: String(row.status),
+    }));
+  }
+
   async permissionOverrides(membershipId: string) {
     const rows = await rest(`tracekit_permission_overrides?membership_id=eq.${encodeURIComponent(membershipId)}`) as Row[];
     return rows.map((row) => ({ id: String(row.id), membershipId: String(row.membership_id), capability: row.capability as PermissionOverride["capability"], effect: row.effect as PermissionOverride["effect"], organizationId: row.organization_id ? String(row.organization_id) : null, resourceType: row.resource_type ? String(row.resource_type) : null, resourceId: row.resource_id ? String(row.resource_id) : null }));
@@ -128,6 +150,15 @@ export class SupabaseIdentityTenancyRepository implements IdentityTenancyReposit
       const name = String(context.name);
       const mark = name.split(/\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "BC";
       return [{ id: String(context.id), organizationId, name, mark }];
+    });
+  }
+
+  async activeBusinessContextsForOrganization(organizationId: string) {
+    const rows = await rest(`tracekit_business_contexts?organization_id=eq.${encodeURIComponent(organizationId)}&status=eq.active&order=created_at.asc,id.asc`) as Row[];
+    return rows.map((context) => {
+      const name = String(context.name);
+      const mark = name.split(/\\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "BC";
+      return { id: String(context.id), organizationId, name, mark };
     });
   }
 

@@ -1,7 +1,7 @@
 import { Activity, Building2, ClipboardList, ContactRound, CreditCard, FileClock, Flag, HeartPulse, Home, Import, Landmark, Megaphone, Package, Plug, Settings, ShieldCheck, ShoppingBag, Tags, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Permission } from "./permissions";
-import type { Identity } from "./types";
+import type { Identity, ShellVariant } from "./types";
 import { satisfiesPermissionRequirement, shellVariant } from "./authorization";
 import { NAVIGATION_POLICY } from "./navigation-policy";
 
@@ -39,8 +39,8 @@ const NAVIGATION_ICONS: Record<string, LucideIcon> = {
   Support: Package,
 };
 
-export function navigationForIdentity(identity: Identity): ShellNavigationItem[] {
-  return NAVIGATION_POLICY[shellVariant(identity)]
+export function navigationForIdentity(identity: Identity, variant: ShellVariant = shellVariant(identity)): ShellNavigationItem[] {
+  return NAVIGATION_POLICY[variant]
     .filter((item) => !item.permission || satisfiesPermissionRequirement(identity, item.permission))
     .map((item) => ({ ...item, icon: NAVIGATION_ICONS[item.label] || Home }));
 }

@@ -75,7 +75,7 @@ export function IdentityProvider({ children, initialSession, persistentOrganizat
 
   const organizations = React.useMemo(() => persistent ? persistentOrganizations : accessibleOrganizations(session.identity), [persistent, persistentOrganizations, session.identity]);
   const businessContexts = React.useMemo(() => persistent ? persistentBusinessContexts.filter((context) => context.organizationId === session.activeOrganizationId) : accessibleBusinessContexts(session.identity, session.activeOrganizationId), [persistent, persistentBusinessContexts, session.identity, session.activeOrganizationId]);
-  const value = React.useMemo<IdentityContextValue>(() => ({ session, organizations, businessContexts, variant: shellVariant(session.identity), setDevelopmentIdentity, setActiveOrganization, setActiveBusinessContext }), [session, organizations, businessContexts, setDevelopmentIdentity, setActiveOrganization, setActiveBusinessContext]);
+  const value = React.useMemo<IdentityContextValue>(() => ({ session, organizations, businessContexts, variant: session.adminClientView ? "client" : shellVariant(session.identity), setDevelopmentIdentity, setActiveOrganization, setActiveBusinessContext }), [session, organizations, businessContexts, setDevelopmentIdentity, setActiveOrganization, setActiveBusinessContext]);
 
   return (
     <IdentityContext.Provider value={value}>
