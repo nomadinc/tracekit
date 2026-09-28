@@ -1,0 +1,7 @@
+import{buildGovernedActionPlans,type AdvisoryRecommendation,type RecommendationIntelligence}from"./journey-repository";
+export function buildM12ControlledAcceptancePlan(serverProofFlag:string|undefined){
+ if(serverProofFlag!=="m12-inspect-evidence-v1")return null;
+ const recommendation:AdvisoryRecommendation={id:"m12-controlled-inspect-identifier-propagation",sequence:1,dependsOn:[],blockedByEvidenceLimits:false,applicability:"ready",applicabilityReason:"Controlled acceptance fixture has no unresolved dependency.",type:"inspect_identifier_propagation",mode:"advisory",reason:"Controlled acceptance fixture proves bounded retained-evidence inspection without modifying customer or provider evidence.",supportingEventIds:["m12-controlled-acquisition-event","m12-controlled-commerce-event"],affectedBoundaries:[{sourcePlatform:"everflow",connector:"m12-controlled-acquisition"},{sourcePlatform:"commerce",connector:"m12-controlled-commerce"}],prerequisites:["Use only the server-authorized M12 staging acceptance-proof path."],successEvidence:["Controlled retained evidence is inspected without provider mutation."],impact:"diagnostic",uncertainty:[]};
+ const intelligence:RecommendationIntelligence={scope:{customerId:"m12-controlled-customer",journeyId:"m12-controlled-journey"},recommendations:[recommendation],evidenceLimits:[]};
+ return buildGovernedActionPlans(intelligence).plans[0]||null;
+}
