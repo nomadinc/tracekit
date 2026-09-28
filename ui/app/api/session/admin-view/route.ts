@@ -66,6 +66,11 @@ export async function DELETE() {
   const resolution = await resolveApplicationSession();
   if (resolution.kind !== "authenticated")
     return NextResponse.json({ error: "The requested resource is unavailable." }, { status: 404 });
+  try {
+    requirePermission(resolution.session, "admin.impersonate");
+  } catch {
+    return NextResponse.json({ error: "The requested resource is unavailable." }, { status: 404 });
+  }
 
   const jar = await cookies();
   jar.delete(ADMIN_VIEW_COOKIE);
