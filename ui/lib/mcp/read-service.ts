@@ -110,12 +110,12 @@ export class TraceKitMcpReadService {
     return this.audited("investigate_tracking","customers.view","customer",customerId,async()=>{const scope=authorizeMcpRead(this.session,"customers.view") as ProductionCustomerScope;return this.repositories.journey.investigate(scope,customerId,journeyId);});
   }
 
-  analyzeJourneys(input:{customerLimit?:number;journeyLimit?:number}={}) {
+  analyzeJourneys(input:{customerLimit?:number;journeyLimit?:number;customerCursor?:string}={}) {
     return this.audited("analyze_journeys", "customers.view", null, null, async () => {
       const scope=authorizeMcpRead(this.session,"customers.view") as ProductionCustomerScope;
       const customerLimit=Math.max(1,Math.min(50,Math.trunc(input.customerLimit||25)));
       const journeyLimit=Math.max(1,Math.min(100,Math.trunc(input.journeyLimit||50)));
-      return this.repositories.journey.analyze(scope,customerLimit,journeyLimit);
+      return this.repositories.journey.analyze(scope,customerLimit,journeyLimit,input.customerCursor);
     });
   }
 
