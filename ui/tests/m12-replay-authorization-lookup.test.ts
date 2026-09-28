@@ -1,0 +1,5 @@
+import assert from"node:assert/strict";import test from"node:test";import{readFileSync}from"node:fs";
+const repo=readFileSync(new URL("../lib/mcp/action-authorization-repository.ts",import.meta.url),"utf8"),orchestration=readFileSync(new URL("../lib/mcp/action-orchestration.ts",import.meta.url),"utf8");
+test("M12 exact replay can resolve existing authorization by immutable envelope",()=>{assert.match(repo,/findMcpActionAuthorization/);for(const x of["organization_id","envelope_identity","idempotency_key","audit_correlation_id"])assert.ok(repo.includes(x),x);});
+test("M12 orchestration finds existing authorization before issuing a new one",()=>{const find=orchestration.indexOf("findMcpActionAuthorization(envelope)"),issue=orchestration.indexOf("issueMcpActionAuthorization(envelope)",find);assert.ok(find>0&&issue>find);});
+test("M12 replay path still requires atomic consumption decision and durable result read",()=>{assert.match(orchestration,/consumeMcpActionAuthorization/);assert.match(orchestration,/durable\.decision===\"replay_same_result\"/);assert.match(orchestration,/readMcpExecutionResult/);});
