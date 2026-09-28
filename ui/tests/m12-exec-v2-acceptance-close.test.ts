@@ -1,0 +1,3 @@
+import assert from"node:assert/strict";import test from"node:test";import{assessInspectEvidenceEnablementReadiness}from"../lib/mcp/action-enablement-readiness";import{resolveM12ActionCapability}from"../lib/mcp/action-capability-registry";
+test("M12 readiness closes after live exec-v2 same-result replay proof",()=>{const x=assessInspectEvidenceEnablementReadiness();assert.equal(x.ready,true);assert.equal(x.checks.durableReplayImplemented,true);assert.deepEqual(x.blockers,[]);});
+test("M12 proof completion remains separate from reusable M13 activation",()=>{const x=assessInspectEvidenceEnablementReadiness(),c=resolveM12ActionCapability("inspect_evidence");assert.equal(x.executionAvailable,false);assert.equal(c?.executionAvailable,false);});
