@@ -8,7 +8,7 @@ export type GovernedActionCapability={
  verification:"retained_evidence"|"provider_response"|"provider_read_back";
  recovery:"not_applicable"|"reversible";
  exposure:"plan_only"|"controlled_proof_only";
- executionAvailable:false;
+ executionAvailable:boolean;
  evidence:string[];
 };
 export const M12_ACTION_CAPABILITIES:readonly GovernedActionCapability[]=[
