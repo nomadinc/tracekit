@@ -115,6 +115,16 @@ export class SupabaseIdentityTenancyRepository implements IdentityTenancyReposit
     return rows.map((source) => source.tracekit_organizations || source).map((row): PersistentOrganizationRecord => ({ id: String(row.id), owningAccountId: String(row.owning_account_id), agencyId: row.agency_id ? String(row.agency_id) : null, workosOrganizationId: row.workos_organization_id ? String(row.workos_organization_id) : null, name: String(row.name), status: String(row.status) }));
   }
 
+  async allActiveAgencies() {
+    const rows = await rest("tracekit_agencies?status=eq.active&order=name.asc") as Row[];
+    return rows.map((row): PersistentAgency => ({
+      id: String(row.id),
+      accountId: String(row.account_id),
+      name: String(row.name),
+      status: String(row.status),
+    }));
+  }
+
   async allActiveOrganizations() {
     const rows = await rest("tracekit_organizations?status=eq.active&order=name.asc") as Row[];
     return rows.map((row): PersistentOrganizationRecord => ({
