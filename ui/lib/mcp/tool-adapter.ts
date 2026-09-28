@@ -119,6 +119,11 @@ export const TRACEKIT_MCP_TOOLS = [
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   {
+    name:"tracekit.prepare_m12_acceptance_fixture",title:"Prepare M12 synthetic acceptance fixture",description:"Staging-only acceptance tool. Runs a clearly synthetic Journey through the unchanged recommendation and governed-plan pipeline, then persists the resulting inspect_evidence plan as an opaque intent. Unavailable without the server-only M12 proof flag.",
+    inputSchema:{type:"object",properties:{},additionalProperties:false},
+    annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false},
+  },
+  {
     name:"tracekit.prepare_inspect_evidence",title:"Prepare bounded TraceKit evidence inspection",description:"Persist one current server-generated inspect_evidence plan as an opaque, expiring action intent. This does not confirm or execute the action.",
     inputSchema:{type:"object",properties:{customer_id:{type:"string",minLength:1,maxLength:512},journey_id:{type:"string",minLength:1,maxLength:512},recommendation_id:{type:"string",minLength:1,maxLength:512}},required:["customer_id","recommendation_id"],additionalProperties:false},
     annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false},
@@ -164,6 +169,7 @@ export async function callTraceKitMcpTool(
 ) {
   const args = objectArgs(rawArguments ?? {});
   switch (name as TraceKitMcpToolName) {
+    case "tracekit.prepare_m12_acceptance_fixture": assertKeys(args,[]);if(!actionService)throw new Error("action_service_unavailable");return actionService.prepareSyntheticAcceptanceFixture();
     case "tracekit.prepare_inspect_evidence": {
       assertKeys(args,["customer_id","journey_id","recommendation_id"]);if(!actionService)throw new Error("action_service_unavailable");
       const customerId=text(args.customer_id,"customer_id",true)!,journeyId=text(args.journey_id,"journey_id"),recommendationId=text(args.recommendation_id,"recommendation_id",true)!,planning=await service.planActions(customerId,journeyId),plan=planning?.plans.find((p:any)=>p.recommendationId===recommendationId);
