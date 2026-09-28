@@ -146,7 +146,7 @@ export const mcpJourneyRepository={
   async investigateDeviation(s:ProductionCustomerScope,deviation:CrossJourneyAnalysis["deviations"][number],customerLimit=50,journeyLimit=100):Promise<DeviationInvestigation>{
   const analysis=await this.analyze(s,customerLimit,journeyLimit);const live=analysis.deviations.find(d=>d.dimension===deviation.dimension&&d.value===deviation.value&&d.metric===deviation.metric);if(!live)throw new Error("mcp_deviation_not_observed");
   const wanted=live.supportingJourneyIds.slice(0,10),investigations:TrackingInvestigation[]=[],journeysUnavailable:string[]=[];
-  const list=await get(`/v1/customers?${qs(s,{limit:customerLimit,cursor:customerCursor})}`);const rows=Array.isArray(list.customers)?list.customers.slice(0,customerLimit):[];
+  const list=await get(`/v1/customers?${qs(s,{limit:customerLimit})}`);const rows=Array.isArray(list.customers)?list.customers.slice(0,customerLimit):[];
   for(const row of rows){if(investigations.length>=wanted.length)break;const customerId=String(row?.customer?.id||"");if(!customerId)continue;try{const detail=await get(`/v1/customers/${encodeURIComponent(customerId)}?${qs(s)}`);for(const j of Array.isArray(detail.journeys)?detail.journeys:[]){const jid=String(j?.id||"");if(!wanted.includes(jid)||investigations.some(i=>i.scope.journeyId===jid))continue;const raw=await get(`/v1/customers/${encodeURIComponent(customerId)}/journeys/${encodeURIComponent(jid)}?${qs(s,{limit:100})}`);investigations.push(buildTrackingInvestigation(buildJourneyIntelligence(detail,raw,customerId,j)));}}catch{}}
   return buildDeviationInvestigation(live,investigations,wanted);
  },
