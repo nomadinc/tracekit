@@ -47,7 +47,7 @@ export async function handleTraceKitMcpMessage(service: TraceKitMcpReadService, 
       if (message.includes("unavailable") || message.includes("access_denied")) {
         return response(id, { content: [{ type: "text", text: "The requested resource is unavailable." }], isError: true });
       }
-      return response(id, { content: [{ type: "text", text: "TraceKit could not complete the request." }], isError: true });
+      const diagnosticEnabled=process.env.TRACEKIT_M13_READ_DIAGNOSTIC==="bounded-v1";const code=/^customer_repository_(?:core_http_\\d{3}|core_fetch_failed|scope_unavailable|core_auth_unavailable)$/.test(message)?message:"mcp_read_failed";return response(id,{content:[{type:"text",text:"TraceKit could not complete the request."}],isError:true,...(diagnosticEnabled?{structuredContent:{diagnosticCode:code}}:{})});
     }
   }
   return error(id, -32601, "Method not found");
