@@ -9,6 +9,7 @@ import { LiveWorkspaceProvider } from "@/components/live/live-workspace-provider
 import { IdentityProvider } from "@/components/identity/identity-provider";
 import { ShellDrawerProvider } from "@/components/layout/shell-drawer";
 import { ShellRouteBoundary } from "@/components/identity/shell-route-boundary";
+import { AdminClientViewBanner } from "@/components/platform/admin-client-view-banner";
 import type { BusinessContext, IdentitySession, Organization } from "@/lib/identity/types";
 
 export default function AppShell({ children, initialSession, organizations, businessContexts }: { children: React.ReactNode; initialSession?: IdentitySession; organizations?: Organization[]; businessContexts?: BusinessContext[] }) {
@@ -53,6 +54,7 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
       <div className="lg:pl-72">
         <div className="sticky top-0 z-30">
           <ProductionHeader onMenuClick={() => setMobileNavOpen(true)} />
+          <AdminClientViewBanner />
         </div>
         <main className="tk-page">
           <ShellRouteBoundary>{children}</ShellRouteBoundary>
