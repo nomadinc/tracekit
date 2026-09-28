@@ -1,0 +1,3 @@
+import assert from"node:assert/strict";import test from"node:test";import{resolveM12ActionCapability}from"../lib/mcp/action-capability-registry";import{assessInspectEvidenceEnablementReadiness}from"../lib/mcp/action-enablement-readiness";
+test("M13 live replay failure restores inspect_evidence execution gate",()=>{assert.equal(resolveM12ActionCapability("inspect_evidence")?.executionAvailable,false);});
+test("M13 readiness records deterministic replay as unresolved",()=>{const x=assessInspectEvidenceEnablementReadiness();assert.equal(x.ready,false);assert.equal(x.executionAvailable,false);assert.equal(x.checks.durableReplayImplemented,false);assert.ok(x.blockers.some(b=>/timestamp serializations/.test(b)));});
