@@ -8,6 +8,7 @@ import { productionCustomerRepository } from "@/lib/customers/production-reposit
 import { productionOrderRepository } from "@/lib/orders/production-repository";
 import { authorizeMcpRead, projectCustomerSummary, projectCustomerWorkspace, projectOrderSummary, projectOrderWorkspace } from "./governed-read-service";
 import { recordMcpToolAudit } from "./audit";
+import{acceptMcpEvidenceLimit,evidenceLimitFingerprint,readMcpEvidenceLimitAcceptances}from"./evidence-limit-acceptance-repository";
 import type { JourneyIntelligence, CrossJourneyAnalysis, TrackingInvestigation, DeviationInvestigation, RecommendationIntelligence, GovernedActionPlanning, ActionEligibilityInspection } from "./journey-repository";
 
 type McpCustomerRepository = Pick<
@@ -95,7 +96,10 @@ export class TraceKitMcpReadService {
   }
 
   planActions(customerId:string,journeyId?:string) {
-    return this.audited("plan_action","customers.view","customer",customerId,async()=>{const scope=authorizeMcpRead(this.session,"customers.view") as ProductionCustomerScope;return this.repositories.journey.planActions(scope,customerId,journeyId);});
+    return this.audited("plan_action","customers.view","customer",customerId,async()=>{const scope=authorizeMcpRead(this.session,"customers.view") as ProductionCustomerScope;const planning=await this.repositories.journey.planActions(scope,customerId,journeyId);if(!planning||!planning.evidenceLimits.length)return planning;const accepted=await readMcpEvidenceLimitAcceptances(this.session,{customerId,journeyId:planning.scope.journeyId}),fingerprints=new Set(accepted.map(x=>x.evidence_limit_fingerprint)),allAccepted=planning.evidenceLimits.every(x=>fingerprints.has(evidenceLimitFingerprint(x)));if(!allAccepted)return planning;return{...planning,plans:planning.plans.map(p=>p.state==="blocked"&&p.evidence.uncertainty.length?{...p,state:"confirmation_required" as const,stateReason:"All current retained evidence limits were explicitly accepted for this exact Journey; diagnostic execution still requires human confirmation.",confirmation:{required:true,reason:"Human confirmation is required before any future action execution."}}:p),evidenceLimitAcceptance:{allCurrentLimitsAccepted:true,acceptedFingerprints:Array.from(fingerprints)}};});
+  }
+
+  acceptEvidenceLimit(customerId:string,journeyId:string,evidenceLimit:string){return this.audited("accept_evidence_limit","customers.view","customer",customerId,async()=>{const scope=authorizeMcpRead(this.session,"customers.view") as ProductionCustomerScope;const investigation=await this.repositories.journey.investigate(scope,customerId,journeyId);if(!investigation||!investigation.evidenceLimits.includes(evidenceLimit))throw new Error("mcp_evidence_limit_not_current");return acceptMcpEvidenceLimit(this.session,{customerId,journeyId:investigation.scope.journeyId,evidenceLimit,acceptedAt:new Date().toISOString(),auditCorrelationId:this.session.correlationId});});
   }
 
   recommendActions(customerId:string,journeyId?:string) {
