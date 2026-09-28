@@ -22,3 +22,14 @@ export function assessM12ActionBinding(operation:string){
  if(!capability)return{bound:false,executionAvailable:false,reason:"No governed operation-specific capability is registered."} as const;
  return{bound:true,executionAvailable:false,capability,reason:capability.exposure==="plan_only"?"Capability is bound for planning but execution exposure is not enabled.":"Capability is retained as controlled proof evidence and is not exposed as a reusable action."} as const;
 }
+export type M12PlanCapabilityInput={proposedOperation:{type:string}|null;requiredPermission:string;confirmation:{required:boolean}};
+export function resolveM12PlanCapability(plan:M12PlanCapabilityInput){
+ if(!plan.proposedOperation)return{bound:false,executionAvailable:false,reason:"Plan has no proposed operation."} as const;
+ const binding=assessM12ActionBinding(plan.proposedOperation.type);
+ if(!binding.bound)return binding;
+ const capability=binding.capability;
+ if(capability.exposure!=="plan_only")return{bound:false,executionAvailable:false,reason:"Controlled proof capabilities cannot be resolved from reusable action plans."} as const;
+ if(plan.requiredPermission!==capability.requiredPermission)return{bound:false,executionAvailable:false,reason:"Plan permission does not match the registered capability."} as const;
+ if(plan.confirmation.required!==capability.humanConfirmationRequired)return{bound:false,executionAvailable:false,reason:"Plan confirmation requirement does not match the registered capability."} as const;
+ return{bound:true,executionAvailable:false,capability,reason:"Plan is bound to its exact governed capability; execution exposure remains disabled."} as const;
+}
