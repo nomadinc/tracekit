@@ -24,6 +24,7 @@ export function PlatformControlCenter({
     const agencyMatch = agencyScope === "all" || (agencyScope === "direct" ? !organization.agencyId : organization.agencyId === agencyScope);
     return agencyMatch && organization.name.toLowerCase().includes(query.trim().toLowerCase());
   });
+  const agencyName = new Map(agencies.map((agency) => [agency.id, agency.name]));
   const agencyClients = organizations.filter((organization) => organization.agencyId).length;
   const directClients = organizations.length - agencyClients;
   const attentionClients = organizations.filter((organization) => organization.attentionCount > 0 || organization.connectionState !== "healthy").length;
@@ -89,7 +90,7 @@ export function PlatformControlCenter({
                   <p className="mt-1 text-[11px] text-slate-500">{organization.agencyId ? "Agency client / brand" : "Direct client / brand"}</p>
                 </div>
               </div>
-              <span className="text-xs text-slate-500">{organization.agencyId ? "Agency" : "Direct"}</span>
+              <span className="text-xs text-slate-500">{organization.agencyId ? agencyName.get(organization.agencyId) || "Agency" : "Direct"}</span>
               <span className={`text-xs font-semibold ${organization.connectionState === "healthy" ? "text-emerald-300" : organization.connectionState === "attention" ? "text-amber-200" : "text-slate-500"}`}>{organization.connectionState === "healthy" ? `${organization.connectionCount} connected` : organization.connectionState === "attention" ? "Connection attention" : "No connections"}</span>
               <span className="text-xs text-slate-500">{organization.latestConnectionSuccessAt ? `Last success ${new Date(organization.latestConnectionSuccessAt).toLocaleString()}` : "No successful connection activity"}</span>
               <span className={organization.unresolvedFinancialEvents ? "text-xs font-semibold text-amber-200" : "text-xs text-slate-500"}>{organization.unresolvedFinancialEvents} unresolved financial</span>
