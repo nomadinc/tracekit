@@ -27,7 +27,8 @@ export function PlatformControlCenter({
   const agencyName = new Map(agencies.map((agency) => [agency.id, agency.name]));
   const agencyClients = organizations.filter((organization) => organization.agencyId).length;
   const directClients = organizations.length - agencyClients;
-  const attentionClients = organizations.filter((organization) => organization.attentionCount > 0 || organization.connectionState !== "healthy").length;
+  const attentionRows = organizations.filter((organization) => organization.attentionCount > 0 || organization.connectionState !== "healthy").sort((a, b) => b.attentionCount - a.attentionCount || a.name.localeCompare(b.name));
+  const attentionClients = attentionRows.length;
 
   async function enter(organizationId: string) {
     if (!canEnterClientView || busy) return;
@@ -64,6 +65,19 @@ export function PlatformControlCenter({
         <Metric label="Needs attention" value={attentionClients} detail="Connection or reconciliation evidence requires review" />
         <Metric label="Agency clients" value={agencyClients} detail="Organizations attached to an Agency" />
         <Metric label="Direct clients" value={directClients} detail="Organizations outside an Agency" />
+      </section>
+
+      <section className="rounded-2xl border border-white/10 bg-white/[.025]">
+        <div className="border-b border-white/10 p-5">
+          <h2 className="text-lg font-semibold">Needs Attention</h2>
+          <p className="mt-1 text-xs text-slate-500">Explicit connection and financial-reconciliation evidence requiring operator review.</p>
+        </div>
+        {attentionRows.length ? <div className="divide-y divide-white/10">{attentionRows.slice(0, 8).map((organization) => (
+          <div key={`attention:${organization.id}`} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between">
+            <div><p className="text-sm font-semibold">{organization.name}</p><p className="mt-1 text-xs text-slate-500">{[organization.connectionState !== "healthy" ? organization.connectionState === "none" ? "No active connections" : "Connection requires attention" : null, organization.unresolvedFinancialEvents ? `${organization.unresolvedFinancialEvents} unresolved financial event${organization.unresolvedFinancialEvents === 1 ? "" : "s"}` : null].filter(Boolean).join(" · ")}</p></div>
+            <button type="button" disabled={!canEnterClientView || Boolean(busy)} onClick={() => enter(organization.id)} className="tk-brand-link inline-flex items-center gap-2 text-xs font-semibold disabled:opacity-40">Investigate client <ArrowRight className="h-3.5 w-3.5" /></button>
+          </div>
+        ))}</div> : <p className="p-5 text-sm text-slate-500">No current connection or reconciliation attention evidence.</p>}
       </section>
 
       <section className="rounded-2xl border border-white/10 bg-white/[.025]">

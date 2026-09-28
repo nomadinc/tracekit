@@ -26,16 +26,7 @@ export const NAVIGATION_POLICY: Record<ShellVariant, NavigationPolicyItem[]> = {
     { label: "Connections", href: "/connections", permission: "connectors.view" },
   ],
   "product-admin": [
+    { label: "Control Center", href: "/platform", permission: "admin.manage_tenants" },
     { label: "Investigations", href: "/investigations", permission: "admin.manage_feature_access" },
-    { label: "Organizations", href: "/platform/organizations", permission: "admin.manage_tenants" },
-    { label: "Agencies", href: "/platform/agencies", permission: "admin.manage_tenants" },
-    { label: "Users", href: "/platform/users", permission: "users.view" },
-    { label: "Connectors", href: "/platform/connectors", permission: "connectors.view" },
-    { label: "Imports", href: "/platform/imports", permission: "imports.view" },
-    { label: "System Health", href: "/platform/system-health", permission: "audit_logs.view" },
-    { label: "Billing", href: "/platform/billing", permission: "billing.view" },
-    { label: "Audit Logs", href: "/platform/audit-logs", permission: "audit_logs.view" },
-    { label: "Feature Access", href: "/platform/feature-access", permission: "admin.manage_feature_access" },
-    { label: "Support", href: "/platform/support", permission: "admin.manage_tenants" },
   ],
 };
