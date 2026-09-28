@@ -8,18 +8,22 @@ type OrganizationRow = { id: string; name: string; agencyId: string | null; acco
 
 export function PlatformControlCenter({
   organizations,
+  agencies,
   canEnterClientView,
 }: {
   organizations: OrganizationRow[];
+  agencies: Array<{ id: string; name: string }>;
   canEnterClientView: boolean;
 }) {
   const router = useRouter();
   const [query, setQuery] = React.useState("");
+  const [agencyScope, setAgencyScope] = React.useState("all");
   const [busy, setBusy] = React.useState<string | null>(null);
   const [error, setError] = React.useState<string | null>(null);
-  const visible = organizations.filter((organization) =>
-    organization.name.toLowerCase().includes(query.trim().toLowerCase()),
-  );
+  const visible = organizations.filter((organization) => {
+    const agencyMatch = agencyScope === "all" || (agencyScope === "direct" ? !organization.agencyId : organization.agencyId === agencyScope);
+    return agencyMatch && organization.name.toLowerCase().includes(query.trim().toLowerCase());
+  });
   const agencyClients = organizations.filter((organization) => organization.agencyId).length;
   const directClients = organizations.length - agencyClients;
   const attentionClients = organizations.filter((organization) => organization.attentionCount > 0 || organization.connectionState !== "healthy").length;
@@ -62,15 +66,15 @@ export function PlatformControlCenter({
       </section>
 
       <section className="rounded-2xl border border-white/10 bg-white/[.025]">
-        <div className="flex flex-col gap-3 border-b border-white/10 p-5 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex flex-col gap-3 border-b border-white/10 p-5 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <h2 className="text-lg font-semibold">Client / Brand portfolio</h2>
-            <p className="mt-1 text-xs text-slate-500">Choose a client to establish the global advertiser data scope.</p>
+            <p className="mt-1 text-xs text-slate-500">Choose an Agency first when applicable, then select one of its Client / Brand Organizations to establish the global advertiser data scope.</p>
           </div>
-          <label className="flex min-w-64 items-center gap-2 rounded-xl border border-white/10 bg-white/[.04] px-3 py-2">
+          <div className="flex flex-col gap-2 sm:flex-row"><select value={agencyScope} onChange={(event) => setAgencyScope(event.target.value)} className="rounded-xl border border-white/10 bg-[#10131a] px-3 py-2 text-sm text-slate-100"><option value="all">All clients / brands</option><option value="direct">Direct clients / brands</option>{agencies.map((agency) => <option key={agency.id} value={agency.id}>{agency.name}</option>)}</select><label className="flex min-w-64 items-center gap-2 rounded-xl border border-white/10 bg-white/[.04] px-3 py-2">
             <Search className="h-4 w-4 text-slate-500" />
             <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search clients" className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
-          </label>
+          </label></div>
         </div>
         {error ? <p className="m-4 rounded-xl border border-rose-400/20 bg-rose-400/5 p-3 text-xs text-rose-300">{error}</p> : null}
         <div className="divide-y divide-white/10">
