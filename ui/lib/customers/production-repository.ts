@@ -17,8 +17,21 @@ async function readJson(res: Response) {
   if (!res.ok) throw new Error(body?.message || body?.error || `Customer request failed (${res.status})`);
   return body;
 }
+function serverOrigin() {
+  const explicit = String(process.env.TRACEKIT_APP_BASE_URL || "").trim().replace(/\/+$/, "");
+  if (explicit) return explicit;
+  const vercel = String(process.env.VERCEL_URL || "").trim().replace(/\/+$/, "");
+  return vercel ? `https://${vercel}` : "";
+}
+function requestUrl(path: string) {
+  if (/^https?:\/\//i.test(path)) return path;
+  if (typeof window !== "undefined") return path;
+  const origin = serverOrigin();
+  if (!origin) throw new Error("customer_repository_server_origin_unavailable");
+  return `${origin}${path.startsWith("/") ? path : `/${path}`}`;
+}
 async function get(path: string) {
-  return readJson(await fetch(path, { method: "GET", cache: "no-store", headers: { accept: "application/json" } }));
+  return readJson(await fetch(requestUrl(path), { method: "GET", cache: "no-store", headers: { accept: "application/json" } }));
 }
 const n = (value: unknown) => {
   const parsed = Number(value);
