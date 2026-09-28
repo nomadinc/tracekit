@@ -1,0 +1,10 @@
+begin;select plan(8);
+select ok(to_regclass('public.mcp_action_execution_results') is not null,'execution result table exists');
+select ok((select relrowsecurity from pg_class where oid='public.mcp_action_execution_results'::regclass),'RLS enabled');
+select is((select count(*)::integer from information_schema.role_table_grants where table_schema='public' and table_name='mcp_action_execution_results' and grantee in('PUBLIC','anon','authenticated','authenticator')),0,'browser/user roles have no table grants');
+select ok((select count(*)>0 from information_schema.role_table_grants where table_schema='public' and table_name='mcp_action_execution_results' and grantee='service_role' and privilege_type='INSERT'),'service role may insert');
+select ok((select count(*)>0 from information_schema.role_table_grants where table_schema='public' and table_name='mcp_action_execution_results' and grantee='service_role' and privilege_type='SELECT'),'service role may read');
+select ok((select count(*)>=2 from pg_constraint where conrelid='public.mcp_action_execution_results'::regclass and contype='u'),'immutable replay and consumption uniqueness enforced');
+select ok(exists(select 1 from pg_trigger where tgrelid='public.mcp_action_execution_results'::regclass and tgname='guard_mcp_action_execution_result_immutability' and not tgisinternal),'immutability trigger exists');
+select ok(position('raise exception' in lower(pg_get_functiondef('public.guard_mcp_action_execution_result_immutability()'::regprocedure)))>0,'update/delete guard fails closed');
+select * from finish();rollback;
