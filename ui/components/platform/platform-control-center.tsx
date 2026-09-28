@@ -4,7 +4,7 @@ import * as React from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRight, Building2, Search, ShieldCheck } from "lucide-react";
 
-type OrganizationRow = { id: string; name: string; agencyId: string | null; accountId: string };
+type OrganizationRow = { id: string; name: string; agencyId: string | null; accountId: string; connectionCount: number; connectionState: "healthy" | "attention" | "none"; latestConnectionSuccessAt: string | null; unresolvedFinancialEvents: number; attentionCount: number };
 
 export function PlatformControlCenter({
   organizations,
@@ -22,6 +22,7 @@ export function PlatformControlCenter({
   );
   const agencyClients = organizations.filter((organization) => organization.agencyId).length;
   const directClients = organizations.length - agencyClients;
+  const attentionClients = organizations.filter((organization) => organization.attentionCount > 0 || organization.connectionState !== "healthy").length;
 
   async function enter(organizationId: string) {
     if (!canEnterClientView || busy) return;
@@ -53,8 +54,9 @@ export function PlatformControlCenter({
         </p>
       </section>
 
-      <section className="grid gap-3 sm:grid-cols-3">
+      <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Metric label="Active clients" value={organizations.length} detail="Canonical active Organizations" />
+        <Metric label="Needs attention" value={attentionClients} detail="Connection or reconciliation evidence requires review" />
         <Metric label="Agency clients" value={agencyClients} detail="Organizations attached to an Agency" />
         <Metric label="Direct clients" value={directClients} detail="Organizations outside an Agency" />
       </section>
@@ -73,7 +75,7 @@ export function PlatformControlCenter({
         {error ? <p className="m-4 rounded-xl border border-rose-400/20 bg-rose-400/5 p-3 text-xs text-rose-300">{error}</p> : null}
         <div className="divide-y divide-white/10">
           {visible.map((organization) => (
-            <div key={organization.id} className="grid gap-4 p-5 md:grid-cols-[1fr_10rem_12rem] md:items-center">
+            <div key={organization.id} className="grid gap-4 p-5 lg:grid-cols-[minmax(0,1.3fr)_8rem_9rem_10rem_7rem_12rem] lg:items-center">
               <div className="flex items-center gap-3">
                 <span className="flex h-10 w-10 items-center justify-center rounded-xl border border-blue-400/20 bg-blue-400/10 text-blue-100">
                   {organization.agencyId ? <ShieldCheck className="h-4 w-4" /> : <Building2 className="h-4 w-4" />}
@@ -84,6 +86,9 @@ export function PlatformControlCenter({
                 </div>
               </div>
               <span className="text-xs text-slate-500">{organization.agencyId ? "Agency" : "Direct"}</span>
+              <span className={`text-xs font-semibold ${organization.connectionState === "healthy" ? "text-emerald-300" : organization.connectionState === "attention" ? "text-amber-200" : "text-slate-500"}`}>{organization.connectionState === "healthy" ? `${organization.connectionCount} connected` : organization.connectionState === "attention" ? "Connection attention" : "No connections"}</span>
+              <span className="text-xs text-slate-500">{organization.latestConnectionSuccessAt ? `Last success ${new Date(organization.latestConnectionSuccessAt).toLocaleString()}` : "No successful connection activity"}</span>
+              <span className={organization.unresolvedFinancialEvents ? "text-xs font-semibold text-amber-200" : "text-xs text-slate-500"}>{organization.unresolvedFinancialEvents} unresolved financial</span>
               <button
                 type="button"
                 disabled={!canEnterClientView || Boolean(busy)}
@@ -99,11 +104,9 @@ export function PlatformControlCenter({
         </div>
       </section>
 
-      <section className="rounded-2xl border border-dashed border-white/10 bg-white/[.02] p-5">
-        <h2 className="text-sm font-semibold">Health signals — next M3 slice</h2>
-        <p className="mt-2 text-xs leading-5 text-slate-500">
-          Connection health, ingestion freshness, attribution coverage, financial reconciliation, and attention counts will populate this portfolio without changing the client-view authorization boundary.
-        </p>
+      <section className="rounded-2xl border border-white/10 bg-white/[.025] p-5">
+        <h2 className="text-sm font-semibold">Health interpretation</h2>
+        <p className="mt-2 text-xs leading-5 text-slate-500">This view does not calculate a synthetic client health score. Attention is derived only from explicit connection state/errors and unresolved refund or chargeback reconciliation evidence. Attribution coverage is intentionally omitted until TraceKit has a qualified cross-provider denominator.</p>
       </section>
     </div>
   );
