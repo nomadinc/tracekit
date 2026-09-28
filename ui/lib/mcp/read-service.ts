@@ -26,7 +26,7 @@ type McpOrderRepository = {
 export type McpReadRepositories = {
   customers: McpCustomerRepository;
   orders: McpOrderRepository;
-  journey: { explain(scope: ProductionCustomerScope, customerId: string, journeyId?: string): Promise<JourneyIntelligence | null>; analyze(scope: ProductionCustomerScope, customerLimit?: number, journeyLimit?: number): Promise<CrossJourneyAnalysis>; investigate(scope: ProductionCustomerScope, customerId: string, journeyId?: string): Promise<TrackingInvestigation | null>; investigateDeviation(scope: ProductionCustomerScope, deviation: CrossJourneyAnalysis["deviations"][number], customerLimit?:number, journeyLimit?:number): Promise<DeviationInvestigation>; recommend(scope:ProductionCustomerScope,customerId:string,journeyId?:string):Promise<RecommendationIntelligence|null>; planActions(scope:ProductionCustomerScope,customerId:string,journeyId?:string):Promise<GovernedActionPlanning|null>; inspectEligibility(scope:ProductionCustomerScope,customerId:string,journeyId?:string):Promise<ActionEligibilityInspection|null> };
+  journey: { explain(scope: ProductionCustomerScope, customerId: string, journeyId?: string): Promise<JourneyIntelligence | null>; analyze(scope: ProductionCustomerScope, customerLimit?: number, journeyLimit?: number, customerCursor?: string): Promise<CrossJourneyAnalysis>; investigate(scope: ProductionCustomerScope, customerId: string, journeyId?: string): Promise<TrackingInvestigation | null>; investigateDeviation(scope: ProductionCustomerScope, deviation: CrossJourneyAnalysis["deviations"][number], customerLimit?:number, journeyLimit?:number): Promise<DeviationInvestigation>; recommend(scope:ProductionCustomerScope,customerId:string,journeyId?:string):Promise<RecommendationIntelligence|null>; planActions(scope:ProductionCustomerScope,customerId:string,journeyId?:string):Promise<GovernedActionPlanning|null>; inspectEligibility(scope:ProductionCustomerScope,customerId:string,journeyId?:string):Promise<ActionEligibilityInspection|null> };
   audit: Pick<IdentityTenancyRepository, "recordAuditEvent">;
 };
 
@@ -110,12 +110,12 @@ export class TraceKitMcpReadService {
     return this.audited("investigate_tracking","customers.view","customer",customerId,async()=>{const scope=authorizeMcpRead(this.session,"customers.view") as ProductionCustomerScope;return this.repositories.journey.investigate(scope,customerId,journeyId);});
   }
 
-  analyzeJourneys(input:{customerLimit?:number;journeyLimit?:number}={}) {
+  analyzeJourneys(input:{customerLimit?:number;journeyLimit?:number;customerCursor?:string}={}) {
     return this.audited("analyze_journeys", "customers.view", null, null, async () => {
       const scope=authorizeMcpRead(this.session,"customers.view") as ProductionCustomerScope;
       const customerLimit=Math.max(1,Math.min(50,Math.trunc(input.customerLimit||25)));
       const journeyLimit=Math.max(1,Math.min(100,Math.trunc(input.journeyLimit||50)));
-      return this.repositories.journey.analyze(scope,customerLimit,journeyLimit);
+      return this.repositories.journey.analyze(scope,customerLimit,journeyLimit,input.customerCursor);
     });
   }
 
