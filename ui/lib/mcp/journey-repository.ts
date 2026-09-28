@@ -1,5 +1,5 @@
 import type { ProductionCustomerScope } from "@/lib/customers/types";
-import { resolveM12PlanCapability } from "./action-capability-registry";
+import { resolveM12ActionCapability, resolveM12PlanCapability } from "./action-capability-registry";
 export type JourneyIntelligence={
  customerId:string; journeyId:string|null;
  chronology:Array<{eventId:string;eventType:string;occurredAt:string;sourcePlatform:string;role:string;observed:boolean;identifiers:Array<{type:string;value:string}>;relationships:Array<{type:string;id:string}>;provenance:{sourceConnector:string|null;sourceRecordId:string|null}}>;
