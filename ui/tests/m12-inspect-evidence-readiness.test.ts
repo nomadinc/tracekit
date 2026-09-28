@@ -1,0 +1,4 @@
+import assert from"node:assert/strict";import test from"node:test";import{assessInspectEvidenceEnablementReadiness}from"../lib/mcp/action-enablement-readiness";
+test("M12 inspect_evidence satisfies bounded capability properties",()=>{const x=assessInspectEvidenceEnablementReadiness();for(const[key,value]of Object.entries(x.checks))assert.equal(value,true,key);});
+test("M12 does not enable inspect_evidence before caller-safe governed orchestration exists",()=>{const x=assessInspectEvidenceEnablementReadiness();assert.equal(x.ready,false);assert.equal(x.executionAvailable,false);assert.ok(x.blockers.some(b=>/authenticated MCP execution tool/.test(b)));});
+test("M12 readiness does not weaken non-mutating or confirmation boundaries",()=>{const x=assessInspectEvidenceEnablementReadiness();assert.equal(x.checks.nonMutating,true);assert.equal(x.checks.confirmationRequired,true);assert.equal(x.checks.adapterRegistryGated,true);});
