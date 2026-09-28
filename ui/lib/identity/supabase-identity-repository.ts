@@ -143,6 +143,15 @@ export class SupabaseIdentityTenancyRepository implements IdentityTenancyReposit
     });
   }
 
+  async activeBusinessContextsForOrganization(organizationId: string) {
+    const rows = await rest(`tracekit_business_contexts?organization_id=eq.${encodeURIComponent(organizationId)}&status=eq.active&order=created_at.asc,id.asc`) as Row[];
+    return rows.map((context) => {
+      const name = String(context.name);
+      const mark = name.split(/\\s+/).filter(Boolean).slice(0, 2).map((part) => part[0]).join("").toUpperCase() || "BC";
+      return { id: String(context.id), organizationId, name, mark };
+    });
+  }
+
   async recordAuditEvent(event: AuditEventInput) {
     await rest("tracekit_audit_events", { method: "POST", body: JSON.stringify({ actor_user_id: event.actorUserId, authenticated_identity_id: event.authenticatedIdentityId, account_id: event.accountId, organization_id: event.organizationId, action: event.action, target_type: event.targetType || null, target_id: event.targetId || null, result: event.result, permission_evaluated: event.permissionEvaluated || null, correlation_id: event.correlationId, metadata: redactAuditMetadata(event.metadata) }) });
   }
