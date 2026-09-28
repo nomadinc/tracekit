@@ -17,21 +17,16 @@ async function readJson(res: Response) {
   if (!res.ok) throw new Error(body?.message || body?.error || `Customer request failed (${res.status})`);
   return body;
 }
-function serverOrigin() {
-  const explicit = String(process.env.TRACEKIT_APP_BASE_URL || "").trim().replace(/\/+$/, "");
-  if (explicit) return explicit;
-  const vercel = String(process.env.VERCEL_URL || "").trim().replace(/\/+$/, "");
-  return vercel ? `https://${vercel}` : "";
-}
-function requestUrl(path: string) {
-  if (/^https?:\/\//i.test(path)) return path;
-  if (typeof window !== "undefined") return path;
-  const origin = serverOrigin();
-  if (!origin) throw new Error("customer_repository_server_origin_unavailable");
-  return `${origin}${path.startsWith("/") ? path : `/${path}`}`;
-}
-async function get(path: string) {
-  return readJson(await fetch(requestUrl(path), { method: "GET", cache: "no-store", headers: { accept: "application/json" } }));
+function coreBase(){return String(process.env.TRACEKIT_API_BASE_URL||process.env.NEXT_PUBLIC_API_BASE_URL||process.env.NEXT_PUBLIC_API_BASE||"http://127.0.0.1:8787").replace(/\/+$/,"");}
+function coreSecret(){return String(process.env.TK_SECRET_KEY||process.env.TRACEKIT_TK_SECRET||"").trim();}
+async function get(path:string,scope?:ProductionCustomerScope){
+  if(typeof window!=="undefined")return readJson(await fetch(path,{method:"GET",cache:"no-store",headers:{accept:"application/json"}}));
+  if(!scope?.authenticated||!scope.organizationId)throw new Error("customer_repository_scope_unavailable");
+  const secret=coreSecret();if(!secret)throw new Error("customer_repository_core_auth_unavailable");
+  const incoming=new URL(path,"http://tracekit.internal"),params=new URLSearchParams(incoming.searchParams);
+  params.set("workspace_id",scope.organizationId);
+  const internalPath=incoming.pathname.replace(/^\/api\/customers/,"/v1/customers");
+  return readJson(await fetch(`${coreBase()}${internalPath}?${params.toString()}`,{method:"GET",cache:"no-store",headers:{accept:"application/json","x-tk-secret":secret}}));
 }
 const n = (value: unknown) => {
   const parsed = Number(value);
@@ -158,7 +153,7 @@ function orderRow(row: any) {
 export class ProductionCustomerRepository implements CustomerRepository<ProductionCustomerScope> {
   async listCustomers(scope: ProductionCustomerScope, filter: CustomerListFilter = {}) {
     if (!scope.authenticated) return [];
-    const body = await get(`/api/customers?${qs(scope, { search: filter.query, limit: 50 })}`);
+    const body = await get(`/api/customers?${qs(scope, { search: filter.query, limit: 50 })}`,scope);
     let rows = (body.customers || []).map((row: any) => summary(row, scope));
     if (filter.state === "repeat") rows = rows.filter((row: CustomerSummary) => row.repeat);
     return rows;
@@ -166,17 +161,17 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
   async resolveCustomer(scope: ProductionCustomerScope, customerId: string) {
     if (!scope.authenticated || !customerId) return null;
     try {
-      await get(`/api/customers/${encodeURIComponent(customerId)}?${qs(scope)}`);
+      await get(`/api/customers/${encodeURIComponent(customerId)}?${qs(scope)}`,scope);
       return { organizationId: scope.organizationId || "", businessContextId: scope.businessContextId, customerId };
     } catch { return null; }
   }
   async loadWorkspace(scope: ProductionCustomerScope, customerId: string): Promise<CustomerWorkspaceSnapshot | null> {
     if (!scope.authenticated || !customerId) return null;
-    const detail = await get(`/api/customers/${encodeURIComponent(customerId)}?${qs(scope)}`);
+    const detail = await get(`/api/customers/${encodeURIComponent(customerId)}?${qs(scope)}`,scope);
     const journeys = Array.isArray(detail.journeys) ? detail.journeys : [];
     const selectedJourney = journeys[0] || null;
     let journeyDetail: any = null;
-    if (selectedJourney?.id) journeyDetail = await get(`/api/customers/${encodeURIComponent(customerId)}/journeys/${encodeURIComponent(selectedJourney.id)}?${qs(scope, { limit: 100 })}`);
+    if (selectedJourney?.id) journeyDetail = await get(`/api/customers/${encodeURIComponent(customerId)}/journeys/${encodeURIComponent(selectedJourney.id)}?${qs(scope, { limit: 100 })}`,scope);
     const listLike = {
       customer: detail.customer,
       last_activity_at: detail.summary?.last_seen_at,
