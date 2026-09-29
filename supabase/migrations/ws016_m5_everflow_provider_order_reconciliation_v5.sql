@@ -26,7 +26,7 @@ begin
         when exact_order.candidate_count>1 then 'provider_order_id_ambiguous'
         else 'v4_passthrough'
       end,
-      'provider_order_id',nullif(btrim(e.order_id),'')
+      'provider_order_id',nullif(btrim(e.order_id),''),\n      'confidence',case when exact_order.candidate_count=1 then 1.0 when exact_order.candidate_count>1 then 0.0 else coalesce((r.evidence_factors->>'confidence')::numeric,0.0) end
     ),
     v_now
   from public.everflow_order_reconciliations r
