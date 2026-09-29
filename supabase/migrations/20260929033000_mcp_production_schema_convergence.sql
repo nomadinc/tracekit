@@ -28,7 +28,7 @@ create table if not exists public.mcp_action_execution_results (
 alter table public.mcp_action_execution_results enable row level security;
 revoke all on table public.mcp_action_execution_results from public,anon,authenticated,authenticator,service_role;
 grant select,insert on table public.mcp_action_execution_results to service_role;
-create or replace function public.guard_mcp_action_execution_result_immutability() returns trigger language plpgsql security invoker set search_path=public,pg_temp as $ begin raise exception 'mcp action execution results are immutable'; end; $;
+create or replace function public.guard_mcp_action_execution_result_immutability() returns trigger language plpgsql security invoker set search_path=public,pg_temp as 'BEGIN RAISE EXCEPTION ''mcp action execution results are immutable''; END;';
 drop trigger if exists guard_mcp_action_execution_result_immutability on public.mcp_action_execution_results;
 create trigger guard_mcp_action_execution_result_immutability before update or delete on public.mcp_action_execution_results for each row execute function public.guard_mcp_action_execution_result_immutability();
 revoke all on function public.guard_mcp_action_execution_result_immutability() from public,anon,authenticated,authenticator;
