@@ -1,0 +1,6 @@
+import assert from"node:assert/strict";import test from"node:test";import{readFileSync}from"node:fs";
+const adapter=readFileSync(new URL("../lib/mcp/tool-adapter.ts",import.meta.url),"utf8"),resolver=readFileSync(new URL("../lib/mcp/m14-commas-target-resolver.ts",import.meta.url),"utf8"),service=readFileSync(new URL("../lib/mcp/action-service.ts",import.meta.url),"utf8");
+test("M14 prepare tool accepts no caller-controlled provider target",()=>{const b=adapter.split('name:"tracekit.prepare_commas_test_delivery"')[1].split("annotations:")[0];assert.match(b,/properties:\{\}/);assert.match(b,/additionalProperties:false/);});
+test("M14 target is exact server-derived approved webhook plus dispute.created",()=>{assert.match(resolver,/TARGET_URL/);assert.match(resolver,/EVENT="dispute\.created"/);assert.match(resolver,/matches\.length!==1/);assert.match(service,/resolveApprovedCommasTestDeliveryTarget/);});
+test("M14 confirm accepts only opaque intent id and no execution tool exists",()=>{const b=adapter.split('name:"tracekit.confirm_commas_test_delivery"')[1].split("annotations:")[0];assert.match(b,/intent_id/);assert.doesNotMatch(adapter,/tracekit\.execute_commas_test_delivery/);});
+test("M14 prepare and confirm descriptions explicitly do not send provider request",()=>{assert.match(adapter,/This does not send a provider request/);});
