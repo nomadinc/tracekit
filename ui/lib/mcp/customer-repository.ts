@@ -18,7 +18,7 @@ async function coreGet(path:string) {
   return body;
 }
 function qs(scope:ProductionCustomerScope,extra:Record<string,unknown>={}) {
-  const p=new URLSearchParams({workspace_id:scope.workspaceId});
+  const p=new URLSearchParams({workspace_id:scope.organizationId});
   for(const [k,v] of Object.entries(extra)) if(v!==null&&v!==undefined&&v!=="") p.set(k,String(v));
   return p.toString();
 }
