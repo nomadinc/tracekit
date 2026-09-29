@@ -79,6 +79,7 @@ crons = ["*/5 * * * *"] # cadence selection runs every five minutes; schedules d
 # Production must explicitly set INTEGRATIONS_ENC_WRITE_VERSION=2. The source
 # default remains 1 only for compatibility and is not a safe production fallback.
 # - TK_SECRET_KEY
+# - TK_SECRET_KEY_STAGING (additive staging-only admin credential; do not rotate or replace TK_SECRET_KEY)
 # - COMMAS_WEBHOOK_SECRET (secret_key returned by the Commas webhook subscription)
 # - EVERFLOW_FIREHOSE_SECRET (dedicated 256-bit bearer secret; never a plain var)
 # - TKID_HANDOFF_SIGNING_KEY_CURRENT (separate key; referenced by TKID handoff key metadata)
