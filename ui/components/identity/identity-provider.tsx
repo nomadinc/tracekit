@@ -70,8 +70,14 @@ export function IdentityProvider({ children, initialSession, persistentOrganizat
   }, [persistent]);
 
   const setActiveBusinessContext = React.useCallback((contextId: string) => {
+    if (persistent) {
+      void fetch("/api/session/business-context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ businessContextId: contextId }) })
+        .then((response) => { if (!response.ok) throw new Error("Business context switch denied"); return response.json(); })
+        .then(() => setSession((current) => normalizeSession({ ...current, activeBusinessContextId: contextId })));
+      return;
+    }
     setSession((current) => normalizeSession({ ...current, activeBusinessContextId: contextId }));
-  }, []);
+  }, [persistent]);
 
   const organizations = React.useMemo(() => persistent ? persistentOrganizations : accessibleOrganizations(session.identity), [persistent, persistentOrganizations, session.identity]);
   const businessContexts = React.useMemo(() => persistent ? persistentBusinessContexts.filter((context) => context.organizationId === session.activeOrganizationId) : accessibleBusinessContexts(session.identity, session.activeOrganizationId), [persistent, persistentBusinessContexts, session.identity, session.activeOrganizationId]);
