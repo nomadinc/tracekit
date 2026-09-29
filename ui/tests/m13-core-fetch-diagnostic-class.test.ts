@@ -1,0 +1,4 @@
+import assert from"node:assert/strict";import test from"node:test";import{readFileSync}from"node:fs";
+const repo=readFileSync(new URL("../lib/mcp/customer-repository.ts",import.meta.url),"utf8"),protocol=readFileSync(new URL("../lib/mcp/protocol.ts",import.meta.url),"utf8");
+test("M13 Core fetch diagnostics remain bounded categories",()=>{for(const x of["core_dns_failed","core_tls_failed","core_timeout","core_connection_failed"])assert.ok(repo.includes(`mcp_customer_repository_${x}`));assert.equal(repo.includes("error.message"),false);});
+test("M13 protocol allowlists transport categories only behind bounded-v1",()=>{for(const x of["core_dns_failed","core_tls_failed","core_timeout","core_connection_failed"])assert.ok(protocol.includes(x));assert.ok(protocol.includes('TRACEKIT_M13_READ_DIAGNOSTIC==="bounded-v1"'));});

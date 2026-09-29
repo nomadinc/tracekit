@@ -10,7 +10,7 @@ function adminSecret() {
 async function coreGet(path:string) {
   const secret=adminSecret();
   if(!secret) throw new Error("mcp_customer_repository_unavailable");
-  let res:Response;try{res=await fetch(`${apiBaseUrl()}${path}`,{method:"GET",cache:"no-store",headers:{accept:"application/json","x-tk-secret":secret}});}catch{throw new Error("mcp_customer_repository_core_fetch_failed");}
+  let res:Response;try{res=await fetch(`${apiBaseUrl()}${path}`,{method:"GET",cache:"no-store",headers:{accept:"application/json","x-tk-secret":secret}});}catch(error:unknown){const e=error as {name?:unknown;cause?:{code?:unknown}}|null,code=String(e?.cause?.code||"").toUpperCase(),name=String(e?.name||"");if(["ENOTFOUND","EAI_AGAIN"].includes(code))throw new Error("mcp_customer_repository_core_dns_failed");if(code.startsWith("CERT_")||code.includes("TLS")||code.includes("SSL"))throw new Error("mcp_customer_repository_core_tls_failed");if(["ETIMEDOUT","UND_ERR_CONNECT_TIMEOUT","UND_ERR_HEADERS_TIMEOUT"].includes(code)||name==="TimeoutError")throw new Error("mcp_customer_repository_core_timeout");throw new Error("mcp_customer_repository_core_connection_failed");}
   const text=await res.text();
   let body:any={};
   try{body=text?JSON.parse(text):{};}catch{body={};}
