@@ -4,6 +4,7 @@ import { resolveApplicationSession } from "@/lib/identity/application-session";
 import { authorizeOrganizationSwitch } from "@/lib/identity/organization-switching";
 import { SupabaseIdentityTenancyRepository } from "@/lib/identity/supabase-identity-repository";
 import { ACTIVE_ORGANIZATION_COOKIE, sealActiveOrganization } from "@/lib/identity/active-organization-cookie";
+import { ACTIVE_BUSINESS_CONTEXT_COOKIE } from "@/lib/identity/active-business-context-cookie";
 
 export async function POST(request: Request) {
   const resolution = await resolveApplicationSession();
@@ -13,6 +14,7 @@ export async function POST(request: Request) {
   try {
     const result = await authorizeOrganizationSwitch(resolution.session, body.organizationId, new SupabaseIdentityTenancyRepository());
     const jar = await cookies();
+    jar.delete(ACTIVE_BUSINESS_CONTEXT_COOKIE);
     jar.set(ACTIVE_ORGANIZATION_COOKIE, sealActiveOrganization({ userId: resolution.session.user.id, organizationId: result.organization.id, expiresAt: Date.now() + 60 * 60 * 24 * 30 * 1000 }), { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 60 * 60 * 24 * 30 });
     return NextResponse.json({ organizationId: result.organization.id, normalizeBusinessContext: true, clearInvestigationState: true });
   } catch {
