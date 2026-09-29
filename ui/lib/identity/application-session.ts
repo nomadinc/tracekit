@@ -10,6 +10,7 @@ import { SupabaseIdentityTenancyRepository } from "./supabase-identity-repositor
 import { cookies } from "next/headers";
 import { headers } from "next/headers";
 import { ACTIVE_ORGANIZATION_COOKIE, readActiveOrganization } from "./active-organization-cookie";
+import { ACTIVE_BUSINESS_CONTEXT_COOKIE, readActiveBusinessContext } from "./active-business-context-cookie";
 import { ADMIN_VIEW_COOKIE, readAdminView } from "./admin-view-cookie";
 import { MOCK_BUSINESS_CONTEXTS } from "./mock";
 import { resolveUnaffiliatedSessionState } from "./first-admin-bootstrap";
@@ -131,7 +132,8 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
       : await repository.businessContexts(membership.id, activeOrganization.id)
     : [];
   const businessContexts = persistentBusinessContextsWithDisplay(persistentContexts, MOCK_BUSINESS_CONTEXTS);
-  const activeBusinessContextId = businessContexts[0]?.id ?? null;
+  const requestedBusinessContextId=activeOrganization?readActiveBusinessContext(jar.get(ACTIVE_BUSINESS_CONTEXT_COOKIE)?.value,user.id,activeOrganization.id):null;
+  const activeBusinessContextId = businessContexts.find((context)=>context.id===requestedBusinessContextId)?.id ?? businessContexts[0]?.id ?? null;
   const session: TraceKitSessionContext = {
     user,
     externalWorkosUserId: auth.user.id,
