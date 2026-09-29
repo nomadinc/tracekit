@@ -1,7 +1,8 @@
 import type { OrderListFilter, OrderSearchResult, OrderSummary, OrderWorkspaceSnapshot } from "@/lib/orders/types";
+import { traceKitCoreAdminSecret } from "@/lib/core/admin-credential";
 type Scope={authenticated:boolean;workspaceId:string;organizationId:string|null;businessContextId:string|null;session:any};
 function base(){return String(process.env.TRACEKIT_API_BASE_URL||process.env.NEXT_PUBLIC_API_BASE_URL||process.env.NEXT_PUBLIC_API_BASE||"http://127.0.0.1:8787").replace(/\/+$/,"");}
-function secret(){return String(process.env.TK_SECRET_KEY||process.env.TRACEKIT_TK_SECRET||"").trim();}
+function secret(){return traceKitCoreAdminSecret();}
 async function get(path:string){const s=secret();if(!s)throw new Error("mcp_order_repository_unavailable");const r=await fetch(`${base()}${path}`,{cache:"no-store",headers:{accept:"application/json","x-tk-secret":s}});const t=await r.text();let b:any={};try{b=t?JSON.parse(t):{};}catch{}if(!r.ok)throw new Error("mcp_order_repository_failed");return b;}
 function qs(scope:Scope,x:Record<string,unknown>={}){const p=new URLSearchParams({workspace_id:scope.workspaceId});for(const[k,v]of Object.entries(x))if(v!==null&&v!==undefined&&v!=="")p.set(k,String(v));return p.toString();}
 const n=(v:any)=>Number.isFinite(Number(v))?Number(v):0;
