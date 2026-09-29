@@ -185,10 +185,10 @@ export async function callTraceKitMcpTool(
   const args = objectArgs(rawArguments ?? {});
   switch (name as TraceKitMcpToolName) {
     case "tracekit.prepare_commas_test_delivery":
-      assertKeys(args,[]);
+      assertKeys(args,[]);if(!actionService)throw new Error("action_service_unavailable");
       return actionService.prepareApprovedCommasTestDelivery();
     case "tracekit.confirm_commas_test_delivery":
-      assertKeys(args,["intent_id"]);
+      assertKeys(args,["intent_id"]);if(!actionService)throw new Error("action_service_unavailable");
       return actionService.confirmCommasTestDelivery(text(args.intent_id,"intent_id",true)!);
     case "tracekit.prepare_m12_acceptance_fixture": assertKeys(args,[]);if(!actionService)throw new Error("action_service_unavailable");return actionService.prepareSyntheticAcceptanceFixture();
     case "tracekit.prepare_inspect_evidence": {
