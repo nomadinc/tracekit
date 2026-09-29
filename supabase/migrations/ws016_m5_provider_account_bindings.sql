@@ -35,3 +35,30 @@ as $$
     and b.state='active' and c.status='connected' and pa.status='active'
   limit 1;
 $$;
+
+create or replace function public.commerce_provider_account_binding_scope_guard()
+returns trigger language plpgsql set search_path to 'public','pg_temp'
+as $$
+begin
+  if not exists (
+    select 1
+    from public.commerce_provider_accounts pa
+    join public.commerce_provider_connections c
+      on c.id=pa.connection_id and c.organization_id=pa.organization_id
+    where pa.id=new.provider_account_id
+      and pa.connection_id=new.connection_id
+      and pa.organization_id=new.organization_id
+      and c.account_id=new.account_id
+      and c.provider=new.provider
+      and pa.provider_account_external_id=new.external_account_id
+  ) then
+    raise exception 'provider account binding scope mismatch' using errcode='23514';
+  end if;
+  new.updated_at:=now();
+  return new;
+end $$;
+
+drop trigger if exists commerce_provider_account_bindings_scope_guard on public.commerce_provider_account_bindings;
+create trigger commerce_provider_account_bindings_scope_guard
+before insert or update on public.commerce_provider_account_bindings
+for each row execute function public.commerce_provider_account_binding_scope_guard();
