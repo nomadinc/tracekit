@@ -1,0 +1,4 @@
+import assert from"node:assert/strict";import test from"node:test";import{readFileSync}from"node:fs";
+const repo=readFileSync(new URL("../lib/customers/production-repository.ts",import.meta.url),"utf8"),protocol=readFileSync(new URL("../lib/mcp/protocol.ts",import.meta.url),"utf8");
+test("M13 Core read errors are reduced to bounded status/fetch classes",()=>{assert.ok(repo.includes("customer_repository_core_fetch_failed"));assert.ok(repo.includes("customer_repository_core_http_${status}"));});
+test("M13 diagnostic is exact server-flag gated and allowlisted",()=>{assert.ok(protocol.includes('TRACEKIT_M13_READ_DIAGNOSTIC==="bounded-v1"'));assert.ok(protocol.includes("diagnosticCode:code"));assert.ok(protocol.includes("mcp_read_failed"));assert.doesNotMatch(protocol,/structuredContent:\{diagnosticCode:message/);});

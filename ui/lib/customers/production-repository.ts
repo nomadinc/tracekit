@@ -19,6 +19,7 @@ async function readJson(res: Response) {
 }
 function coreBase(){return String(process.env.TRACEKIT_API_BASE_URL||process.env.NEXT_PUBLIC_API_BASE_URL||process.env.NEXT_PUBLIC_API_BASE||"http://127.0.0.1:8787").replace(/\/+$/,"");}
 function coreSecret(){return String(process.env.TK_SECRET_KEY||process.env.TRACEKIT_TK_SECRET||"").trim();}
+function coreFailure(status:number){return new Error(`customer_repository_core_http_${status}`);}
 async function get(path:string,scope?:ProductionCustomerScope){
   if(typeof window!=="undefined")return readJson(await fetch(path,{method:"GET",cache:"no-store",headers:{accept:"application/json"}}));
   if(!scope?.authenticated||!scope.organizationId)throw new Error("customer_repository_scope_unavailable");
@@ -26,7 +27,7 @@ async function get(path:string,scope?:ProductionCustomerScope){
   const incoming=new URL(path,"http://tracekit.internal"),params=new URLSearchParams(incoming.searchParams);
   params.set("workspace_id",scope.organizationId);
   const internalPath=incoming.pathname.replace(/^\/api\/customers/,"/v1/customers");
-  return readJson(await fetch(`${coreBase()}${internalPath}?${params.toString()}`,{method:"GET",cache:"no-store",headers:{accept:"application/json","x-tk-secret":secret}}));
+  let res:Response;try{res=await fetch(`${coreBase()}${internalPath}?${params.toString()}`,{method:"GET",cache:"no-store",headers:{accept:"application/json","x-tk-secret":secret}});}catch{throw new Error("customer_repository_core_fetch_failed");}if(!res.ok)throw coreFailure(res.status);return readJson(res);
 }
 const n = (value: unknown) => {
   const parsed = Number(value);
