@@ -1,0 +1,4 @@
+import assert from"node:assert/strict";import test from"node:test";import{readFileSync}from"node:fs";
+const repo=readFileSync(new URL("../lib/mcp/customer-repository.ts",import.meta.url),"utf8"),protocol=readFileSync(new URL("../lib/mcp/protocol.ts",import.meta.url),"utf8");
+test("M13 actual MCP customer repository classifies Core failures",()=>{assert.ok(repo.includes("mcp_customer_repository_core_fetch_failed"));assert.ok(repo.includes("mcp_customer_repository_core_http_${res.status}"));});
+test("M13 bounded diagnostic accepts actual MCP repository namespace",()=>{assert.ok(protocol.includes("mcp_customer_repository"));assert.ok(protocol.includes("diagnosticCode:code"));});

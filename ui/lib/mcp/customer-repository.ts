@@ -10,11 +10,11 @@ function adminSecret() {
 async function coreGet(path:string) {
   const secret=adminSecret();
   if(!secret) throw new Error("mcp_customer_repository_unavailable");
-  const res=await fetch(`${apiBaseUrl()}${path}`,{method:"GET",cache:"no-store",headers:{accept:"application/json","x-tk-secret":secret}});
+  let res:Response;try{res=await fetch(`${apiBaseUrl()}${path}`,{method:"GET",cache:"no-store",headers:{accept:"application/json","x-tk-secret":secret}});}catch{throw new Error("mcp_customer_repository_core_fetch_failed");}
   const text=await res.text();
   let body:any={};
   try{body=text?JSON.parse(text):{};}catch{body={};}
-  if(!res.ok) throw new Error("mcp_customer_repository_failed");
+  if(!res.ok) throw new Error(`mcp_customer_repository_core_http_${res.status}`);
   return body;
 }
 function qs(scope:ProductionCustomerScope,extra:Record<string,unknown>={}) {
