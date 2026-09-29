@@ -1,4 +1,5 @@
 import "server-only";
+import { traceKitCoreAdminSecret } from "@/lib/core/admin-credential";
 
 import { resolveApplicationSession } from "@/lib/identity/application-session";
 import { requirePermission } from "@/lib/identity/authorization-gateway";
@@ -14,7 +15,7 @@ function apiBaseUrl() {
 }
 
 function adminSecret() {
-  return String(process.env.TK_SECRET_KEY || process.env.TRACEKIT_TK_SECRET || "").trim();
+  return traceKitCoreAdminSecret();
 }
 
 async function readJsonSafe(res: Response) {
