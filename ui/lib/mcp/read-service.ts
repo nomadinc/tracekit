@@ -9,6 +9,7 @@ import { productionOrderRepository } from "@/lib/orders/production-repository";
 import { authorizeMcpRead, projectCustomerSummary, projectCustomerWorkspace, projectOrderSummary, projectOrderWorkspace } from "./governed-read-service";
 import { recordMcpToolAudit } from "./audit";
 import{acceptMcpEvidenceLimit,evidenceLimitFingerprint,readMcpEvidenceLimitAcceptances}from"./evidence-limit-acceptance-repository";
+import{inspectCommasTestDeliveryReadiness}from"./m14-commas-target-resolver";
 import type { JourneyIntelligence, CrossJourneyAnalysis, TrackingInvestigation, DeviationInvestigation, RecommendationIntelligence, GovernedActionPlanning, ActionEligibilityInspection } from "./journey-repository";
 
 type McpCustomerRepository = Pick<
@@ -182,4 +183,5 @@ export class TraceKitMcpReadService {
       return results.slice(0, limit);
     });
   }
+  inspectCommasTestDeliveryReadiness(){return this.audited("inspect_commas_test_delivery_readiness","customers.view","organization",this.session.activeOrganization!.id,async()=>inspectCommasTestDeliveryReadiness(this.session));}
 }
