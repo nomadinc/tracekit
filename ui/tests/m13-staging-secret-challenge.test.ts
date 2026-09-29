@@ -1,0 +1,4 @@
+import assert from"node:assert/strict";import test from"node:test";import{readFileSync}from"node:fs";
+const core=readFileSync(new URL("../../api/src/index.ts",import.meta.url),"utf8"),probe=readFileSync(new URL("../app/api/mcp/core-connectivity-probe/route.ts",import.meta.url),"utf8");
+test("M13 credential comparison uses nonce HMAC challenge rather than secret fingerprint",()=>{assert.ok(core.includes("/_diagnostics/m13-staging-credential-challenge"));assert.ok(core.includes('crypto.subtle.verify("HMAC"'));assert.ok(probe.includes('crypto.subtle.sign("HMAC"'));assert.equal(core.includes("createHash"),false);assert.equal(probe.includes("createHash"),false);});
+test("M13 challenge returns only configured and match booleans",()=>{assert.ok(core.includes("{ ok: true, configured: true, match }"));assert.ok(probe.includes("credentialChallenge"));assert.equal(probe.includes("directSecret,"),false);});
