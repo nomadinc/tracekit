@@ -1,11 +1,12 @@
 import type { CustomerListFilter, CustomerSearchResult, CustomerSummary, CustomerWorkspaceSnapshot, ProductionCustomerScope } from "@/lib/customers/types";
+import { traceKitCoreAdminSecret } from "@/lib/core/admin-credential";
 
 
 function apiBaseUrl() {
   return String(process.env.TRACEKIT_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE_URL || process.env.NEXT_PUBLIC_API_BASE || "http://127.0.0.1:8787").replace(/\/+$/, "");
 }
 function adminSecret() {
-  return String(process.env.TK_SECRET_KEY || process.env.TRACEKIT_TK_SECRET || "").trim();
+  return traceKitCoreAdminSecret();
 }
 async function coreGet(path:string) {
   const secret=adminSecret();
