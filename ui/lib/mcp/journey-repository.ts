@@ -1,4 +1,5 @@
 import type { ProductionCustomerScope } from "@/lib/customers/types";
+import { traceKitCoreAdminSecret } from "@/lib/core/admin-credential";
 import { resolveM12ActionCapability, resolveM12PlanCapability } from "./action-capability-registry";
 export type JourneyIntelligence={
  customerId:string; journeyId:string|null;
@@ -11,7 +12,7 @@ export type JourneyIntelligence={
  evidenceLimits:string[];
 };
 function base(){return String(process.env.TRACEKIT_API_BASE_URL||process.env.NEXT_PUBLIC_API_BASE_URL||process.env.NEXT_PUBLIC_API_BASE||"http://127.0.0.1:8787").replace(/\/+$/,"");}
-function secret(){return String(process.env.TK_SECRET_KEY||process.env.TRACEKIT_TK_SECRET||"").trim();}
+function secret(){return traceKitCoreAdminSecret();}
 async function get(path:string){const s=secret();if(!s)throw new Error("mcp_journey_repository_unavailable");const r=await fetch(`${base()}${path}`,{cache:"no-store",headers:{accept:"application/json","x-tk-secret":s}});const t=await r.text();let b:any={};try{b=t?JSON.parse(t):{};}catch{}if(!r.ok)throw new Error("mcp_journey_repository_failed");return b;}
 export function buildJourneyIntelligence(d:any,j:any,customerId:string,selected:any):JourneyIntelligence {
   const events=Array.isArray(j?.events)?j.events:Array.isArray(j?.activity)?j.activity:[];const credits=Array.isArray(j?.attribution)?j.attribution:[];const credit=credits.find((x:any)=>x?.status==="attributed")||null;

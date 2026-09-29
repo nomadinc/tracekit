@@ -1,0 +1,5 @@
+import assert from"node:assert/strict";import test from"node:test";import{traceKitCoreAdminSecret}from"../lib/core/admin-credential";
+test("production default keeps existing TK_SECRET_KEY behavior",()=>{assert.equal(traceKitCoreAdminSecret({TK_SECRET_KEY:"live-key"} as NodeJS.ProcessEnv),"live-key");});
+test("explicit staging mode selects only TK_SECRET_KEY_STAGING",()=>{assert.equal(traceKitCoreAdminSecret({TRACEKIT_USE_STAGING_CORE_CREDENTIAL:"enabled",TK_SECRET_KEY:"live-key",TK_SECRET_KEY_STAGING:"stage-key"} as NodeJS.ProcessEnv),"stage-key");});
+test("explicit staging mode never falls back to live TK_SECRET_KEY",()=>{assert.throws(()=>traceKitCoreAdminSecret({TRACEKIT_USE_STAGING_CORE_CREDENTIAL:"enabled",TK_SECRET_KEY:"live-key"} as NodeJS.ProcessEnv),/tracekit_staging_core_credential_unavailable/);});
+test("non-exact staging flag does not switch credentials",()=>{assert.equal(traceKitCoreAdminSecret({TRACEKIT_USE_STAGING_CORE_CREDENTIAL:"true",TK_SECRET_KEY:"live-key",TK_SECRET_KEY_STAGING:"stage-key"} as NodeJS.ProcessEnv),"live-key");});
