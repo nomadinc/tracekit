@@ -2,3 +2,4 @@ import assert from"node:assert/strict";import test from"node:test";import{readFi
 const source=readFileSync(new URL("../lib/mcp/customer-repository.ts",import.meta.url),"utf8");
 test("M13 MCP customer Core reads use authoritative organization tenant scope",()=>{assert.ok(source.includes('new URLSearchParams({workspace_id:scope.organizationId})'));assert.equal(source.includes('workspace_id:scope.workspaceId'),false);});
 test("M13 MCP customer repository remains direct server Core transport",()=>{assert.ok(source.includes("TRACEKIT_API_BASE_URL"));assert.ok(source.includes('"x-tk-secret":secret'));assert.ok(source.includes('/v1/customers'));});
+test("M13 MCP customer Core reads fail closed when organization scope is absent",()=>{assert.ok(source.includes('throw new Error("mcp_customer_repository_scope_unavailable")'));});
