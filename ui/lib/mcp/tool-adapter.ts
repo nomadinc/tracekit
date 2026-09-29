@@ -124,6 +124,11 @@ export const TRACEKIT_MCP_TOOLS = [
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   {
+    name:"tracekit.inspect_commas_test_delivery_readiness",title:"Inspect Commas test-delivery readiness",description:"Read-only diagnostic for the active Organization's bounded Commas test-delivery prerequisites. Reports only safe boundary states and counts; it does not expose credentials or subscription payloads, create an intent, confirm an action, or send a provider request.",
+    inputSchema:{type:"object",properties:{},additionalProperties:false},
+    annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
+  },
+  {
     name:"tracekit.prepare_commas_test_delivery",title:"Prepare bounded Commas webhook test delivery",description:"Resolve the Organization's single approved Commas dispute webhook target server-side and persist an opaque expiring intent for a test delivery. Callers cannot choose the subscription or event type. This does not send a provider request.",
     inputSchema:{type:"object",properties:{},additionalProperties:false},
     annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false},
@@ -184,6 +189,8 @@ export async function callTraceKitMcpTool(
 ) {
   const args = objectArgs(rawArguments ?? {});
   switch (name as TraceKitMcpToolName) {
+    case "tracekit.inspect_commas_test_delivery_readiness":
+      assertKeys(args,[]);return service.inspectCommasTestDeliveryReadiness();
     case "tracekit.prepare_commas_test_delivery":
       assertKeys(args,[]);if(!actionService)throw new Error("action_service_unavailable");
       return actionService.prepareApprovedCommasTestDelivery();
