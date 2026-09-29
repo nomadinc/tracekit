@@ -1,0 +1,6 @@
+import {NextResponse} from"next/server";
+export const runtime="nodejs";export const dynamic="force-dynamic";
+function enabled(){return process.env.TRACEKIT_M13_READ_DIAGNOSTIC==="bounded-v1";}
+function base(){return String(process.env.TRACEKIT_API_BASE_URL||process.env.NEXT_PUBLIC_API_BASE_URL||process.env.NEXT_PUBLIC_API_BASE||"").trim().replace(/\/+$/,"");}
+function failure(error:unknown){const e=error as{name?:unknown;cause?:{code?:unknown}}|null,code=String(e?.cause?.code||"").toUpperCase(),name=String(e?.name||"");if(["ENOTFOUND","EAI_AGAIN"].includes(code))return"dns_failed";if(code.startsWith("CERT_")||code.includes("TLS")||code.includes("SSL"))return"tls_failed";if(["ETIMEDOUT","UND_ERR_CONNECT_TIMEOUT","UND_ERR_HEADERS_TIMEOUT"].includes(code)||name==="TimeoutError")return"timeout";return"connection_failed";}
+export async function GET(){if(!enabled())return NextResponse.json({ok:false,error:"not_found"},{status:404});const origin=base();if(!origin)return NextResponse.json({ok:false,diagnostic:"base_unavailable"},{status:200});try{const res=await fetch(origin,{method:"GET",cache:"no-store",signal:AbortSignal.timeout(5000)});return NextResponse.json({ok:true,reachable:true,httpStatus:res.status},{status:200});}catch(error:unknown){return NextResponse.json({ok:true,reachable:false,diagnostic:failure(error)},{status:200});}}
