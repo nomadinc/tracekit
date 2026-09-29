@@ -71,3 +71,5 @@ test("production Worker configuration preserves route, cron, maintenance, and ke
     assert.match(source, new RegExp(`\\b${binding}\\b`));
   }
 });
+
+test("staging Core admin credential remains a secret-only production binding",()=>{const source=readFileSync(configUrl,"utf8");assert.match(source,/TK_SECRET_KEY_STAGING/);const config=productionConfig();assert.equal(config.vars?.TK_SECRET_KEY_STAGING,undefined);});
