@@ -18,7 +18,9 @@ async function coreGet(path:string) {
   return body;
 }
 function qs(scope:ProductionCustomerScope,extra:Record<string,unknown>={}) {
-  const p=new URLSearchParams({workspace_id:scope.organizationId});
+  const organizationId=String(scope.organizationId||"").trim();
+  if(!organizationId) throw new Error("mcp_customer_repository_scope_unavailable");
+  const p=new URLSearchParams({workspace_id:organizationId});
   for(const [k,v] of Object.entries(extra)) if(v!==null&&v!==undefined&&v!=="") p.set(k,String(v));
   return p.toString();
 }
