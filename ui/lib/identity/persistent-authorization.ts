@@ -2,7 +2,13 @@ import { ROLE_PERMISSIONS, type Permission } from "./permissions";
 import type { PermissionOverride, PersistentMembership } from "./persistent-types";
 
 export function selectSessionMembership(memberships: readonly PersistentMembership[]) {
-  return memberships.find((candidate) => candidate.organizationId) || memberships[0];
+  const active = memberships.filter((candidate) => candidate.status === "active");
+  const platform = active.find(
+    (candidate) =>
+      !candidate.organizationId &&
+      (candidate.role === "platform-owner" || candidate.role === "platform-admin"),
+  );
+  return platform || active.find((candidate) => candidate.organizationId) || active[0];
 }
 
 export function resolveEffectivePermissions(membership: PersistentMembership, overrides: readonly PermissionOverride[]) {
