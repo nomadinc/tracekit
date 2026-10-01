@@ -7,6 +7,7 @@ export const integrationCategoryLabels: Record<IntegrationCategory, string> = {
   crm: "CRMs",
   gateway: "Payment Gateways",
   tracking: "Tracking Platforms",
+  paid_media: "Paid Media",
   commerce: "Commerce",
   developer: "Developer Tools",
 };
@@ -15,6 +16,7 @@ export const integrationCategoryOrder: IntegrationCategory[] = [
   "crm",
   "gateway",
   "tracking",
+  "paid_media",
   "commerce",
   "developer",
 ];
@@ -49,6 +51,72 @@ const wowSuiteBaseUrl = "https://public-api.tryemanagecrm.com";
 const shopifyApiVersion = "2026-07";
 
 export const integrationCatalog: IntegrationDefinition[] = [
+  {
+    id: "meta-ads",
+    name: "Meta Ads",
+    category: "paid_media",
+    description:
+      "Authorize Meta advertising access and discover the ad accounts available to this customer.",
+    primaryAction: "connect",
+    authType: "oauth",
+    credentialFields: [],
+    supportsWebhook: false,
+    supportsBackfill: false,
+    supportsTestConnection: false,
+    supportsTestEvents: false,
+    connectPath: "/v1/integrations/meta/oauth/start",
+    statusPath: "/v1/integrations/meta/status",
+    documentation: {
+      credentialInstructions: [
+        "Authorize TraceKit with Meta using the provider-hosted OAuth flow.",
+        "Connection authorization does not imply that production data ingestion has been certified.",
+      ],
+    },
+  },
+  {
+    id: "google-ads",
+    name: "Google Ads",
+    category: "paid_media",
+    description:
+      "Authorize Google Ads access and discover the advertising accounts available to this customer.",
+    primaryAction: "connect",
+    authType: "oauth",
+    credentialFields: [],
+    supportsWebhook: false,
+    supportsBackfill: false,
+    supportsTestConnection: false,
+    supportsTestEvents: false,
+    connectPath: "/v1/integrations/google-ads/oauth/start",
+    statusPath: "/v1/integrations/google-ads/status",
+    documentation: {
+      credentialInstructions: [
+        "Authorize TraceKit with Google using the provider-hosted OAuth flow.",
+        "Connection authorization does not imply that production data ingestion has been certified.",
+      ],
+    },
+  },
+  {
+    id: "tiktok-ads",
+    name: "TikTok Ads",
+    category: "paid_media",
+    description:
+      "Authorize TikTok advertising access and discover the advertiser accounts available to this customer.",
+    primaryAction: "connect",
+    authType: "oauth",
+    credentialFields: [],
+    supportsWebhook: false,
+    supportsBackfill: false,
+    supportsTestConnection: false,
+    supportsTestEvents: false,
+    connectPath: "/v1/integrations/tiktok/oauth/start",
+    statusPath: "/v1/integrations/tiktok/status",
+    documentation: {
+      credentialInstructions: [
+        "Authorize TraceKit with TikTok using the provider-hosted OAuth flow.",
+        "Connection authorization does not imply that production data ingestion has been certified.",
+      ],
+    },
+  },
   {
     id: "shopify",
     name: "Shopify",
