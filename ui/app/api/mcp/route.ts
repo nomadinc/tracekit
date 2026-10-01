@@ -42,17 +42,18 @@ export async function POST(request: Request) {
   const auth=await authenticatedSession(request);
   if(!auth.session) return unauthorized();
   const session=auth.session;
+  const runtimeContext={appOrigin:new URL(request.url).origin};
   let body: unknown;
   try { body = await request.json(); }
   catch { return json({ jsonrpc: "2.0", id: null, error: { code: -32700, message: "Parse error" } }, 400); }
 
   if (Array.isArray(body)) {
     if (!body.length) return json({ jsonrpc: "2.0", id: null, error: { code: -32600, message: "Invalid Request" } }, 400);
-    const services = createTraceKitMcpServices(session);
+    const services = createTraceKitMcpServices(session,runtimeContext);
     const results = (await Promise.all(body.map((item) => handleTraceKitMcpMessage(services.read, item, services.action)))).filter(Boolean);
     return results.length ? json(results) : new Response(null, { status: 202 });
   }
-  const services=createTraceKitMcpServices(session);
+  const services=createTraceKitMcpServices(session,runtimeContext);
   const result = await handleTraceKitMcpMessage(services.read, body, services.action);
   return result ? json(result) : new Response(null, { status: 202 });
 }
