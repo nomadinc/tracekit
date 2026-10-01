@@ -143,7 +143,7 @@ begin
 
     update commerce_provider_products set mapping_status='approved',business_context_id=new_context,
       canonical_offer_id=new_offer,offer_step_id=rec.new_step_id,offer_variant_id=null,
-      mapping_version='pbs-tenancy-convergence-v2',mapping_confidence=100,
+      mapping_version='pbs-tenancy-convergence-v2',mapping_confidence=null,
       reviewed_by_user_id=p_actor_user_id,reviewed_at=now(),updated_at=now()
     where id=rec.provider_product_uuid and organization_id=new_org;
     mapped_count := mapped_count+1;
