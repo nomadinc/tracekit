@@ -432,6 +432,13 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
     const completedPages=checkpointRows.filter((row)=>String(row.state||"")==="completed").map((row)=>Number(row.page)).filter((page)=>Number.isInteger(page)&&page>0);
     const scheduledDeepResumePage=scheduledDeepSchedule&&completedPages.length?Math.max(...completedPages)+1:1;
     const queue:number[]=[recoveryPage??scheduledDeepResumePage]; const queued=new Set(queue); let queueIndex=0;
+    if(scheduledDeepSchedule&&!recoveryPage&&scheduledDeepResumePage>1){
+      const priorPage=scheduledDeepResumePage-1,priorEvidence=await replayEvidenceForPage({...scope,runId,page:priorPage,perPage});
+      if(!priorEvidence)throw new Error("Scheduled deep continuation Evidence is unavailable.");
+      const priorParsed=parseContinuousPage(priorEvidence.bytes),priorTimestamps=priorParsed.items.map((item)=>String(item.transaction_date)),priorNormalized=priorParsed.items.map((item)=>normalizeCommasTransaction(item,{connectionId:scope.connectionId,providerAccountId:scope.providerAccountId}));
+      orderingObserver=observeOrderingPage(initialOrderingObserver(),{page:priorPage,direction:detectProviderOrdering(priorTimestamps),firstTimestamp:priorTimestamps[0]??null,lastTimestamp:priorTimestamps.at(-1)??null,firstSourceId:priorNormalized[0]?.transaction_id??null,lastSourceId:priorNormalized.at(-1)?.transaction_id??null,ids:priorNormalized.map((item)=>item.transaction_id),fingerprint:contentFingerprint(priorParsed.items)});
+      ordering=orderingObserver.ordering;
+    }
     while(queueIndex<queue.length&&pagesScanned<maxPages) {
       if(scheduledDeepInvocationCeilingValue!==null&&providerRequests>=scheduledDeepInvocationCeilingValue){stoppingReason="scheduled_deep_chunk_boundary";deeperReconciliationRequired=true;break;}
       if(await commerceConnectionPaused(scope)){pausedDuringRun=true;stoppingReason="connection_paused";break}
