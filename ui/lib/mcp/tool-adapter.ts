@@ -139,6 +139,11 @@ export const TRACEKIT_MCP_TOOLS = [
     annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false},
   },
   {
+    name:"tracekit.execute_commas_test_delivery",title:"Execute bounded Commas webhook test delivery",description:"Execute the exact freshly confirmed, server-resolved Commas test delivery through durable authorization, atomic consumption, idempotent replay, provider-response verification, and audit gates. Callers cannot choose provider target, event, subscription, or credential.",
+    inputSchema:{type:"object",properties:{confirmation_id:{type:"string",minLength:1,maxLength:512},requested_at:{type:"string",minLength:1,maxLength:64},consumption_id:{type:"string",minLength:1,maxLength:512},idempotency_key:{type:"string",minLength:1,maxLength:512}},required:["confirmation_id","requested_at","consumption_id","idempotency_key"],additionalProperties:false},
+    annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:true,openWorldHint:true},
+  },
+  {
     name:"tracekit.prepare_m12_acceptance_fixture",title:"Prepare M12 synthetic acceptance fixture",description:"Staging-only acceptance tool. Runs a clearly synthetic Journey through the unchanged recommendation and governed-plan pipeline, then persists the resulting inspect_evidence plan as an opaque intent. Unavailable without the server-only M12 proof flag.",
     inputSchema:{type:"object",properties:{},additionalProperties:false},
     annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false},
@@ -197,6 +202,9 @@ export async function callTraceKitMcpTool(
     case "tracekit.confirm_commas_test_delivery":
       assertKeys(args,["intent_id"]);if(!actionService)throw new Error("action_service_unavailable");
       return actionService.confirmCommasTestDelivery(text(args.intent_id,"intent_id",true)!);
+    case "tracekit.execute_commas_test_delivery":
+      assertKeys(args,["confirmation_id","requested_at","consumption_id","idempotency_key"]);if(!actionService)throw new Error("action_service_unavailable");
+      return actionService.executeCommasTestDelivery({confirmationId:text(args.confirmation_id,"confirmation_id",true)!,requestedAt:text(args.requested_at,"requested_at",true)!,consumptionId:text(args.consumption_id,"consumption_id",true)!,idempotencyKey:text(args.idempotency_key,"idempotency_key",true)!});
     case "tracekit.prepare_m12_acceptance_fixture": assertKeys(args,[]);if(!actionService)throw new Error("action_service_unavailable");return actionService.prepareSyntheticAcceptanceFixture();
     case "tracekit.prepare_inspect_evidence": {
       assertKeys(args,["customer_id","journey_id","recommendation_id"]);if(!actionService)throw new Error("action_service_unavailable");
