@@ -440,7 +440,7 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
       ordering=orderingObserver.ordering;
     }
     while(queueIndex<queue.length&&pagesScanned<maxPages) {
-      if(scheduledDeepInvocationCeilingValue!==null&&providerRequests>=scheduledDeepInvocationCeilingValue){stoppingReason="scheduled_deep_chunk_boundary";deeperReconciliationRequired=true;break;}
+      if(scheduledDeepInvocationCeilingValue!==null&&providerRequests>=scheduledDeepInvocationCeilingValue){stoppingReason=scheduledDeepRequestLimit!==null&&providerRequests>=scheduledDeepRequestLimit?"bounded_deep_reconciliation_proof":"scheduled_deep_chunk_boundary";deeperReconciliationRequired=true;break;}
       if(await commerceConnectionPaused(scope)){pausedDuringRun=true;stoppingReason="connection_paused";break}
       const page=queue[queueIndex++],pageStarted=Date.now();
       const providerRequestsBeforePage=providerRequests;
@@ -514,7 +514,7 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
         if(mode==="deep_reconciliation"&&decision.reason==="stable_known_boundary") {
           decision=page>=maxPages?{stop:true,reason:"bounded_deep_reconciliation_proof",deeperReconciliationRequired:true}:parsed.totalPages!==null&&page>=parsed.totalPages?{stop:true,reason:"provider_history_boundary",deeperReconciliationRequired:false}:{stop:false,reason:null,deeperReconciliationRequired:false};
         }
-        if(mode==="deep_reconciliation"&&scheduledDeepInvocationCeilingValue!==null&&providerRequests>=scheduledDeepInvocationCeilingValue&&decision.reason!=="provider_history_boundary")decision={stop:true,reason:"scheduled_deep_chunk_boundary",deeperReconciliationRequired:true};
+        if(mode==="deep_reconciliation"&&scheduledDeepInvocationCeilingValue!==null&&providerRequests>=scheduledDeepInvocationCeilingValue&&decision.reason!=="provider_history_boundary")decision={stop:true,reason:scheduledDeepRequestLimit!==null&&providerRequests>=scheduledDeepRequestLimit?"bounded_deep_reconciliation_proof":"scheduled_deep_chunk_boundary",deeperReconciliationRequired:true};
         if(orderingObserver.paginationClassification === "pagination_instability") decision={stop:true,reason:"provider_ordering_unverified",deeperReconciliationRequired:true};
         // The terminal patch below carries the same durable counters plus the
         // final state. Avoid spending one more subrequest on a duplicate
