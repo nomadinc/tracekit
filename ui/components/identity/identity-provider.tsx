@@ -30,6 +30,11 @@ export function IdentityProvider({ children, initialSession, persistentOrganizat
   const [invalidExplicitIdentity, setInvalidExplicitIdentity] = React.useState<string | null>(null);
 
   React.useEffect(() => {
+    if (!persistent || !initialSession) return;
+    setSession(initialSession);
+  }, [persistent, initialSession]);
+
+  React.useEffect(() => {
     if (!initializeDevelopment) return;
     function syncFromLocation() {
       const params = new URLSearchParams(window.location.search);
