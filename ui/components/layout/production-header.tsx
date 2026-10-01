@@ -7,21 +7,37 @@ import { CommandPaletteButton, CommandPaletteDialog, useCommandPaletteController
 import { useIdentity } from "@/components/identity/identity-provider";
 import { useShellDrawer } from "./shell-drawer";
 import { ProductionUserMenu } from "./production-user-menu";
-import { pageChromeForPath } from "@/lib/app-navigation";\nimport type { Organization } from "@/lib/identity/types";
+import { pageChromeForPath } from "@/lib/app-navigation";
+import type { Organization } from "@/lib/identity/types";
 
 function SelectLabel({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="hidden min-w-0 md:block"><span className="block text-[8px] font-semibold uppercase tracking-[.12em] text-slate-400">{label}</span>{children}</label>;
 }
 
 export function ProductionHeader({ onMenuClick, platformOrganizations = [] }: { onMenuClick: () => void; platformOrganizations?: Organization[] }) {
-  const pathname = usePathname();\n  const router = useRouter();
+  const pathname = usePathname();
+  const router = useRouter();
   const chrome = pageChromeForPath(pathname);
   const drawer = useShellDrawer();
   const { session, organizations, businessContexts, variant, setActiveOrganization, setActiveBusinessContext } = useIdentity();
   const activeOrganization = organizations.find((organization) => organization.id === session.activeOrganizationId) || organizations[0] || null;
-  const [userMenuOpen, setUserMenuOpen] = React.useState(false);\n  const [adminViewBusy, setAdminViewBusy] = React.useState(false);
+  const [userMenuOpen, setUserMenuOpen] = React.useState(false);
+  const [adminViewBusy, setAdminViewBusy] = React.useState(false);
   const closeUserMenu = React.useCallback(() => setUserMenuOpen(false), []);
-  const command = useCommandPaletteController(closeUserMenu);\n\n  async function enterAdminClientView(organizationId: string) {\n    if (!organizationId || adminViewBusy) return;\n    setAdminViewBusy(true);\n    try {\n      const response = await fetch("/api/session/admin-view", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId }) });\n      if (!response.ok) throw new Error("Client view unavailable");\n      router.push("/connections");\n      router.refresh();\n    } finally {\n      setAdminViewBusy(false);\n    }\n  }
+  const command = useCommandPaletteController(closeUserMenu);
+
+  async function enterAdminClientView(organizationId: string) {
+    if (!organizationId || adminViewBusy) return;
+    setAdminViewBusy(true);
+    try {
+      const response = await fetch("/api/session/admin-view", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId }) });
+      if (!response.ok) throw new Error("Client view unavailable");
+      router.push("/connections");
+      router.refresh();
+    } finally {
+      setAdminViewBusy(false);
+    }
+  }
 
   return (
     <header className="border-b border-white/10 bg-[#0b0e14]/95 text-slate-100 backdrop-blur-xl">
