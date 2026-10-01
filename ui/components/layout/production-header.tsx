@@ -2,26 +2,26 @@
 
 import * as React from "react";
 import { Bell, Bot, Building2, Menu, ShieldCheck } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { CommandPaletteButton, CommandPaletteDialog, useCommandPaletteController } from "@/components/shared/command-palette";
 import { useIdentity } from "@/components/identity/identity-provider";
 import { useShellDrawer } from "./shell-drawer";
 import { ProductionUserMenu } from "./production-user-menu";
-import { pageChromeForPath } from "@/lib/app-navigation";
+import { pageChromeForPath } from "@/lib/app-navigation";\nimport type { Organization } from "@/lib/identity/types";
 
 function SelectLabel({ label, children }: { label: string; children: React.ReactNode }) {
   return <label className="hidden min-w-0 md:block"><span className="block text-[8px] font-semibold uppercase tracking-[.12em] text-slate-400">{label}</span>{children}</label>;
 }
 
-export function ProductionHeader({ onMenuClick }: { onMenuClick: () => void }) {
-  const pathname = usePathname();
+export function ProductionHeader({ onMenuClick, platformOrganizations = [] }: { onMenuClick: () => void; platformOrganizations?: Organization[] }) {
+  const pathname = usePathname();\n  const router = useRouter();
   const chrome = pageChromeForPath(pathname);
   const drawer = useShellDrawer();
   const { session, organizations, businessContexts, variant, setActiveOrganization, setActiveBusinessContext } = useIdentity();
   const activeOrganization = organizations.find((organization) => organization.id === session.activeOrganizationId) || organizations[0] || null;
-  const [userMenuOpen, setUserMenuOpen] = React.useState(false);
+  const [userMenuOpen, setUserMenuOpen] = React.useState(false);\n  const [adminViewBusy, setAdminViewBusy] = React.useState(false);
   const closeUserMenu = React.useCallback(() => setUserMenuOpen(false), []);
-  const command = useCommandPaletteController(closeUserMenu);
+  const command = useCommandPaletteController(closeUserMenu);\n\n  async function enterAdminClientView(organizationId: string) {\n    if (!organizationId || adminViewBusy) return;\n    setAdminViewBusy(true);\n    try {\n      const response = await fetch("/api/session/admin-view", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId }) });\n      if (!response.ok) throw new Error("Client view unavailable");\n      router.push("/connections");\n      router.refresh();\n    } finally {\n      setAdminViewBusy(false);\n    }\n  }
 
   return (
     <header className="border-b border-white/10 bg-[#0b0e14]/95 text-slate-100 backdrop-blur-xl">
@@ -37,7 +37,7 @@ export function ProductionHeader({ onMenuClick }: { onMenuClick: () => void }) {
             {organizations.length > 1 ? <SelectLabel label="Active Client"><select value={session.activeOrganizationId || ""} onChange={(event) => setActiveOrganization(event.target.value)} className="mt-0.5 h-9 max-w-[190px] rounded-lg border border-blue-400/30 bg-blue-400/10 px-2 text-xs font-semibold text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400"><option value="" disabled>Select Organization</option>{organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}</select></SelectLabel> : <div className="hidden items-center gap-2 rounded-lg border px-3 py-2 text-xs lg:flex"><Building2 className="h-3.5 w-3.5" /><span><span className="block text-[8px] uppercase text-slate-400">Active Client</span><strong className="text-blue-100">{activeOrganization?.name || "Unavailable"}</strong></span></div>}
             <SelectLabel label="Offer Workspace"><select value={session.activeBusinessContextId || ""} onChange={(event) => setActiveBusinessContext(event.target.value)} className="mt-0.5 h-9 max-w-[190px] rounded-lg border border-white/10 bg-white/5 px-2 text-xs font-semibold text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-400" disabled={!businessContexts.length}><option value="">{businessContexts.length ? "Portfolio / select offer" : "No accessible Offers"}</option>{businessContexts.map((context) => <option key={context.id} value={context.id}>{context.name}</option>)}</select></SelectLabel>
           </div>
-        ) : <div className="hidden items-center gap-2 rounded-lg border px-3 py-2 text-xs lg:flex"><ShieldCheck className="h-3.5 w-3.5" /><span><span className="block text-[8px] uppercase text-slate-400">Scope</span><strong>TraceKit Platform</strong></span></div>}
+        ) : <div className="hidden items-center gap-2 lg:flex"><SelectLabel label="View Client"><select defaultValue="" disabled={adminViewBusy || !platformOrganizations.length} onChange={(event) => { const id = event.target.value; if (id) void enterAdminClientView(id); }} className="mt-0.5 h-9 max-w-[210px] rounded-lg border border-blue-400/30 bg-blue-400/10 px-2 text-xs font-semibold text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400"><option value="" disabled>{adminViewBusy ? "Opening client…" : "Select client"}</option>{platformOrganizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}</select></SelectLabel><div className="hidden items-center gap-2 rounded-lg border px-3 py-2 text-xs xl:flex"><ShieldCheck className="h-3.5 w-3.5" /><span><span className="block text-[8px] uppercase text-slate-400">Scope</span><strong>TraceKit Platform</strong></span></div></div>}
         {variant === "product-admin" ? (
           <>
             <button type="button" onClick={() => drawer.openDrawer(<div className="space-y-4"><p className="text-sm">MCP Chat is an internal TraceKit platform entry point.</p></div>, "MCP Chat")} className="hidden h-10 items-center gap-2 rounded-xl border px-3 text-xs font-semibold sm:inline-flex focus:outline-none focus:ring-2 focus:ring-slate-400"><Bot className="h-4 w-4" />MCP</button>
