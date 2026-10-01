@@ -137,6 +137,10 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
   const activeOrganizationMembership = activeOrganization && !adminViewOrganization
     ? organizationMemberships.find((candidate) => candidate.organizationId === activeOrganization.id) || membership
     : membership;
+  const activeOverrides = activeOrganizationMembership.id === membership.id
+    ? overrides
+    : await repository.permissionOverrides(activeOrganizationMembership.id);
+  const activePermissions = Array.from(resolveEffectivePermissions(activeOrganizationMembership, activeOverrides));
 
   const persistentContexts = activeOrganization
     ? adminViewOrganization
@@ -153,10 +157,10 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
     activeAgency: agency,
     activeOrganization,
     availableOrganizations: effectiveOrganizations,
-    membership,
-    role: membership.role,
-    effectivePermissions: permissions,
-    permissionOverrides: overrides,
+    membership: activeOrganizationMembership,
+    role: activeOrganizationMembership.role,
+    effectivePermissions: activePermissions,
+    permissionOverrides: activeOverrides,
     accessibleBusinessContexts: businessContexts,
     activeBusinessContextId,
     assurance: { authenticationMethod: null, impersonated: Boolean(auth.impersonator) || Boolean(adminViewOrganization) },
@@ -169,17 +173,17 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
       id: user.id,
       name: user.displayName,
       email: user.primaryEmail,
-      title: membership.role,
+      title: activeOrganizationMembership.role,
       membership: {
-        id: membership.id,
+        id: activeOrganizationMembership.id,
         accountId: account.id,
         accountName: account.name,
         accountType: account.accountType,
-        role: membership.role,
+        role: activeOrganizationMembership.role,
         // Authorization uses persistent Organization IDs only. Mock repository
         // compatibility is resolved separately from the authorized Business Context.
         organizationIds: effectiveOrganizations.map((organization) => organization.id),
-        grants: permissions.filter((permission) => !ROLE_PERMISSIONS[membership.role].includes(permission as never)),
+        grants: activePermissions.filter((permission) => !ROLE_PERMISSIONS[activeOrganizationMembership.role].includes(permission as never)),
       },
     },
     activeOrganizationId: activeOrganization?.id || null,
@@ -193,10 +197,10 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
     organizationId: activeOrganization?.id ?? null,
     action: "membership.resolved",
     targetType: "membership",
-    targetId: membership.id,
+    targetId: activeOrganizationMembership.id,
     result: "success",
     correlationId,
-    metadata: { role: membership.role, accountType: account.accountType },
+    metadata: { role: activeOrganizationMembership.role, accountType: account.accountType },
   });
   return { kind: "authenticated", session, clientSession: serializeSessionForClient(session), legacySession };
 }
