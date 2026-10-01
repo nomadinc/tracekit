@@ -365,6 +365,32 @@ async function ensureReferenceInvestigationDependencies(scope:{accountId:string;
   }
 }
 
+export const M15_STRANDED_DEEP_RUN_ID="4d0c129a-da4d-47d1-b105-f1be961ca6d6";
+export const M15_STRANDED_DEEP_SCHEDULE_ID="b431e1f1-e62c-4475-bcfc-30ecdd1eeeb4";
+export const M15_STRANDED_DEEP_CONNECTION_ID="8030cf89-88f3-433f-99ec-c2083c4e5698";
+export const M15_STRANDED_DEEP_PROVIDER_ACCOUNT_ID="dd3506d5-3417-4086-8623-9f8ec6b81694";
+export const M15_STRANDED_DEEP_ORGANIZATION_ID="c98d44be-5f7f-41a2-a9d3-ae67a811a872";
+export const M15_STRANDED_DEEP_REQUEST_KEY="b431e1f1-e62c-4475-bcfc-30ecdd1eeeb4:v2:deep_reconciliation:497382";
+
+export async function runM15StrandedDeepEvidenceRecovery(options:{confirm:boolean}){
+  if(!options.confirm)throw new Error("M15 stranded deep recovery requires explicit confirmation.");
+  const scope=await scopedConnection({organizationId:M15_STRANDED_DEEP_ORGANIZATION_ID,connectionId:M15_STRANDED_DEEP_CONNECTION_ID,providerAccountId:M15_STRANDED_DEEP_PROVIDER_ACCOUNT_ID});
+  const runs=await db(`commerce_sync_runs?id=eq.${M15_STRANDED_DEEP_RUN_ID}&organization_id=eq.${scope.organizationId}&connection_id=eq.${scope.connectionId}&provider_account_id=eq.${scope.providerAccountId}&select=*&limit=1`);
+  const run=runs[0];
+  if(!run||run.status!=="running"||run.mode!=="deep_reconciliation"||run.sync_type!=="transactions"||run.scheduler_idempotency_key!==M15_STRANDED_DEEP_REQUEST_KEY)throw new Error("M15 stranded deep run identity mismatch.");
+  if(!run.lease_expires_at||Date.parse(String(run.lease_expires_at))>=Date.now())throw new Error("M15 stranded deep run lease is not expired.");
+  if(Number(run.pages_completed)!==190||Number(run.provider_request_count)!==190||Number(run.records_seen)!==19000)throw new Error("M15 stranded deep lifetime counters changed.");
+  const checkpoints=await db(`commerce_sync_checkpoints?sync_run_id=eq.${M15_STRANDED_DEEP_RUN_ID}&resource=eq.transactions&select=page,state,metadata&order=page.asc`);
+  const completed=checkpoints.filter((row)=>row.state==="completed"),running=checkpoints.filter((row)=>row.state==="running");
+  if(completed.length!==190||completed[0]?.page!==1||completed.at(-1)?.page!==190||running.length!==1||Number(running[0].page)!==191)throw new Error("M15 stranded deep checkpoint boundary changed.");
+  const evidence=await db(`commerce_evidence_records?sync_run_id=eq.${M15_STRANDED_DEEP_RUN_ID}&source_object_type=eq.transaction_page&source_object_id=eq.${encodeURIComponent("continuous:page:191:per_page:100")}&deleted_at=is.null&select=id,payload_hash,storage_reference&limit=2`);
+  if(evidence.length!==1||!evidence[0].payload_hash||!evidence[0].storage_reference)throw new Error("M15 stranded page 191 Evidence is unavailable.");
+  await db(`commerce_sync_schedules?id=eq.${M15_STRANDED_DEEP_SCHEDULE_ID}&organization_id=eq.${scope.organizationId}`,{method:"PATCH",body:JSON.stringify({activation_state:"paused",paused_at:new Date().toISOString(),pause_reason_code:"m15_stranded_deep_recovery_review"})});
+  const result=await runContinuousCommasSync({mode:"deep_reconciliation",maxProviderRequests:191,scheduledDeepSchedule:{scheduleId:M15_STRANDED_DEEP_SCHEDULE_ID,scheduleVersion:2},requestKey:M15_STRANDED_DEEP_REQUEST_KEY,expectedScope:{organizationId:scope.organizationId,connectionId:scope.connectionId,providerAccountId:scope.providerAccountId}});
+  if(result.providerRequests!==190||result.pagesScanned!==1||result.evidenceReuses!==1||result.stoppingReason!=="bounded_deep_reconciliation_proof"||result.status!=="completed_with_warnings")throw new Error("M15 stranded deep recovery postcondition failed.");
+  return result;
+}
+
 export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_reconciliation";maxPages?:number;maxProviderRequests?:number;scheduledDeepSchedule?:{scheduleId:string;scheduleVersion:number};overlapPages?:number;perPage?:number;paceMs?:number;requestKey?:string;bootstrap?:boolean;evidenceOnlyRecovery?:boolean;expectedScope?:{organizationId:string;connectionId:string;providerAccountId:string}}={}):Promise<ContinuousSyncResult> {
   const mode=options.mode??"continuous",bootstrap=options.bootstrap===true,evidenceOnlyRecovery=options.evidenceOnlyRecovery===true;
   const scheduledDeepRequestLimit=mode==="deep_reconciliation"?scheduledDeepProviderRequestLimit(options.maxProviderRequests):null;
