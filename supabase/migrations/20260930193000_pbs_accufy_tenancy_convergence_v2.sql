@@ -102,9 +102,9 @@ begin
   create temporary table _pbs_step_map(old_id uuid primary key,new_id uuid not null,catalog_key text not null) on commit drop;
   for old_step in select * from offer_steps where organization_id=old_org and canonical_offer_id=old_offer order by sequence,id loop
     insert into offer_steps(id,organization_id,canonical_offer_id,role,sequence,label,metadata)
-    values(uuid_generate_v5('ad767ac7-d729-51e7-9d67-47679a6cc36f'::uuid, old_step.metadata->>'catalog_key'),new_org,new_offer,old_step.role,old_step.sequence,old_step.label,
+    values((('x'||substr(md5('m14-pbs-accufy-v2:'||(old_step.metadata->>'catalog_key')),1,8)||'-'||substr(md5('m14-pbs-accufy-v2:'||(old_step.metadata->>'catalog_key')),9,4)||'-5'||substr(md5('m14-pbs-accufy-v2:'||(old_step.metadata->>'catalog_key')),14,3)||'-a'||substr(md5('m14-pbs-accufy-v2:'||(old_step.metadata->>'catalog_key')),18,3)||'-'||substr(md5('m14-pbs-accufy-v2:'||(old_step.metadata->>'catalog_key')),21,12))::uuid),new_org,new_offer,old_step.role,old_step.sequence,old_step.label,
       old_step.metadata || jsonb_build_object('identity_basis','tenancy_convergence_v2','historical_offer_step_id',old_step.id));
-    insert into _pbs_step_map values(old_step.id,uuid_generate_v5('ad767ac7-d729-51e7-9d67-47679a6cc36f'::uuid, old_step.metadata->>'catalog_key'),old_step.metadata->>'catalog_key');
+    insert into _pbs_step_map values(old_step.id,(('x'||substr(md5('m14-pbs-accufy-v2:'||(old_step.metadata->>'catalog_key')),1,8)||'-'||substr(md5('m14-pbs-accufy-v2:'||(old_step.metadata->>'catalog_key')),9,4)||'-5'||substr(md5('m14-pbs-accufy-v2:'||(old_step.metadata->>'catalog_key')),14,3)||'-a'||substr(md5('m14-pbs-accufy-v2:'||(old_step.metadata->>'catalog_key')),18,3)||'-'||substr(md5('m14-pbs-accufy-v2:'||(old_step.metadata->>'catalog_key')),21,12))::uuid),old_step.metadata->>'catalog_key');
     step_count := step_count+1;
   end loop;
 
