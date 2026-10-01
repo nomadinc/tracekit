@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { Bell, Bot, Building2, Menu, ShieldCheck } from "lucide-react";
+import { Bell, Bot, Building2, ChevronDown, Menu, ShieldCheck } from "lucide-react";
 import { usePathname, useRouter } from "next/navigation";
 import { CommandPaletteButton, CommandPaletteDialog, useCommandPaletteController } from "@/components/shared/command-palette";
 import { useIdentity } from "@/components/identity/identity-provider";
@@ -23,17 +23,23 @@ export function ProductionHeader({ onMenuClick, platformOrganizations = [] }: { 
   const activeOrganization = organizations.find((organization) => organization.id === session.activeOrganizationId) || organizations[0] || null;
   const [userMenuOpen, setUserMenuOpen] = React.useState(false);
   const [adminViewBusy, setAdminViewBusy] = React.useState(false);
+  const [clientMenuOpen, setClientMenuOpen] = React.useState(false);
+  const [adminViewError, setAdminViewError] = React.useState<string | null>(null);
   const closeUserMenu = React.useCallback(() => setUserMenuOpen(false), []);
   const command = useCommandPaletteController(closeUserMenu);
 
   async function enterAdminClientView(organizationId: string) {
     if (!organizationId || adminViewBusy) return;
     setAdminViewBusy(true);
+    setAdminViewError(null);
     try {
       const response = await fetch("/api/session/admin-view", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId }) });
       if (!response.ok) throw new Error("Client view unavailable");
+      setClientMenuOpen(false);
       router.push("/connections");
       router.refresh();
+    } catch {
+      setAdminViewError("Unable to open client view. Try again.");
     } finally {
       setAdminViewBusy(false);
     }
@@ -53,7 +59,7 @@ export function ProductionHeader({ onMenuClick, platformOrganizations = [] }: { 
             {organizations.length > 1 ? <SelectLabel label="Active Client"><select value={session.activeOrganizationId || ""} onChange={(event) => setActiveOrganization(event.target.value)} className="mt-0.5 h-9 max-w-[190px] rounded-lg border border-blue-400/30 bg-blue-400/10 px-2 text-xs font-semibold text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400"><option value="" disabled>Select Organization</option>{organizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}</select></SelectLabel> : <div className="hidden items-center gap-2 rounded-lg border px-3 py-2 text-xs lg:flex"><Building2 className="h-3.5 w-3.5" /><span><span className="block text-[8px] uppercase text-slate-400">Active Client</span><strong className="text-blue-100">{activeOrganization?.name || "Unavailable"}</strong></span></div>}
             <SelectLabel label="Offer Workspace"><select value={session.activeBusinessContextId || ""} onChange={(event) => setActiveBusinessContext(event.target.value)} className="mt-0.5 h-9 max-w-[190px] rounded-lg border border-white/10 bg-white/5 px-2 text-xs font-semibold text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-400" disabled={!businessContexts.length}><option value="">{businessContexts.length ? "Portfolio / select offer" : "No accessible Offers"}</option>{businessContexts.map((context) => <option key={context.id} value={context.id}>{context.name}</option>)}</select></SelectLabel>
           </div>
-        ) : <div className="hidden items-center gap-2 lg:flex"><SelectLabel label="View Client"><select defaultValue="" disabled={adminViewBusy || !platformOrganizations.length} onChange={(event) => { const id = event.target.value; if (id) void enterAdminClientView(id); }} className="mt-0.5 h-9 max-w-[210px] rounded-lg border border-blue-400/30 bg-blue-400/10 px-2 text-xs font-semibold text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400"><option value="" disabled>{adminViewBusy ? "Opening client…" : "Select client"}</option>{platformOrganizations.map((organization) => <option key={organization.id} value={organization.id}>{organization.name}</option>)}</select></SelectLabel><div className="hidden items-center gap-2 rounded-lg border px-3 py-2 text-xs xl:flex"><ShieldCheck className="h-3.5 w-3.5" /><span><span className="block text-[8px] uppercase text-slate-400">Scope</span><strong>TraceKit Platform</strong></span></div></div>}
+        ) : <div className="hidden items-center gap-2 lg:flex"><div className="relative hidden md:block"><span className="block text-[8px] font-semibold uppercase tracking-[.12em] text-slate-400">View Client</span><button type="button" disabled={adminViewBusy || !platformOrganizations.length} onClick={() => setClientMenuOpen((value) => !value)} className="mt-0.5 inline-flex h-9 min-w-[180px] items-center justify-between gap-3 rounded-lg border border-blue-400/30 bg-blue-400/10 px-3 text-xs font-semibold text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-50"><span>{adminViewBusy ? "Opening client…" : "Select client"}</span><ChevronDown className="h-3.5 w-3.5" /></button>{clientMenuOpen ? <div className="absolute right-0 z-50 mt-2 min-w-[220px] overflow-hidden rounded-xl border border-white/10 bg-[#111722] p-1 shadow-2xl">{platformOrganizations.filter((organization) => organization.name !== "TraceKit").map((organization) => <button key={organization.id} type="button" onClick={() => void enterAdminClientView(organization.id)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-slate-100 hover:bg-white/10"><Building2 className="h-3.5 w-3.5 text-blue-300" />{organization.name}</button>)}{adminViewError ? <div className="px-3 py-2 text-[11px] text-rose-300">{adminViewError}</div> : null}</div> : null}</div><div className="hidden items-center gap-2 rounded-lg border px-3 py-2 text-xs xl:flex"><ShieldCheck className="h-3.5 w-3.5" /><span><span className="block text-[8px] uppercase text-slate-400">Scope</span><strong>TraceKit Platform</strong></span></div></div>}
         {variant === "product-admin" ? (
           <>
             <button type="button" onClick={() => drawer.openDrawer(<div className="space-y-4"><p className="text-sm">MCP Chat is an internal TraceKit platform entry point.</p></div>, "MCP Chat")} className="hidden h-10 items-center gap-2 rounded-xl border px-3 text-xs font-semibold sm:inline-flex focus:outline-none focus:ring-2 focus:ring-slate-400"><Bot className="h-4 w-4" />MCP</button>
