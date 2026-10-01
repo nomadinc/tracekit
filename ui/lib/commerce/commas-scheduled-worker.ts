@@ -6,7 +6,6 @@ type Row=Record<string,unknown>;
 const rows=async(path:string,init:RequestInit={})=>commercePersistenceRequest(path,init) as Promise<Row[]>;
 const isoMinute=(value:Date)=>value.toISOString().slice(0,16);
 function intervalMinutes(value:unknown,fallback:number){const text=String(value||"");const match=text.match(/^(?:(\d+) days? )?(\d{2}):(\d{2}):(\d{2})$/);if(!match)return fallback;return Number(match[1]||0)*1440+Number(match[2])*60+Number(match[3])+Number(match[4])/60;}
-function intervalDays(value:unknown,fallback:number){return Math.max(1,Math.round(intervalMinutes(value,fallback*1440)/1440));}
 
 export async function runDueCommasSchedules(input:{limit?:number;now?:Date}={}){
   const now=input.now??new Date(),limit=Math.max(1,Math.min(input.limit??1,3));
