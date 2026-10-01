@@ -102,6 +102,15 @@ function toIntegrationItem(integration: IntegrationDefinition): IntegrationItem 
   };
 }
 
+const metaIntegration: IntegrationItem = {
+  key: "meta",
+  name: "Meta Ads",
+  subtitle: "Connect Meta Marketing API access, discover multiple advertising accounts, and choose which accounts TraceKit should ingest.",
+  status: "not_connected",
+  href: "/settings/integrations/meta",
+  primaryAction: "connect",
+};
+
 export default function IntegrationsHubPage() {
   const sections = getPopulatedIntegrationCategories();
 
@@ -110,15 +119,20 @@ export default function IntegrationsHubPage() {
       <Card title="Integrations">
         <div className="space-y-2 text-sm text-gray-600 dark:text-gray-300">
           <p>
-            Connect your CRMs, payment gateways, and tracking platforms. Once
+            Connect your CRMs, payment gateways, tracking platforms, and advertising accounts. Once
             connected, TraceKit will backfill and keep your reporting up to
-            date.
+            date as each connector is activated.
           </p>
 
           <p className="text-xs opacity-80">
-            Connection statuses are placeholders for now. Later they will be
-            loaded from the database.
+            Some connection statuses are placeholders while provider-specific status surfaces are being completed.
           </p>
+        </div>
+      </Card>
+
+      <Card title="Advertising">
+        <div className="space-y-3">
+          <IntegrationRow item={metaIntegration} />
         </div>
       </Card>
 
