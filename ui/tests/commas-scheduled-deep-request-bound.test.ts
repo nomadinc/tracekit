@@ -8,17 +8,17 @@ import {
 } from "../lib/commerce/scheduled-deep-contract";
 
 test("scheduled deep provider request limits are explicit and fail closed",()=>{
-  assert.equal(SCHEDULED_DEEP_PROVIDER_REQUEST_HARD_MAX,800);
-  assert.equal(scheduledDeepProviderRequestLimit(800),800);
-  for(const invalid of [undefined,null,0,-1,1.5,801,Number.MAX_SAFE_INTEGER,"800"])
+  assert.equal(SCHEDULED_DEEP_PROVIDER_REQUEST_HARD_MAX,1000);
+  assert.equal(scheduledDeepProviderRequestLimit(1000),1000);
+  for(const invalid of [undefined,null,0,-1,1.5,1001,Number.MAX_SAFE_INTEGER,"1000"])
     assert.throws(()=>scheduledDeepProviderRequestLimit(invalid),/invalid_scheduled_deep_provider_request_limit/);
 });
 
 test("retry allowance caps actual provider HTTP attempts at the reserved budget",()=>{
-  assert.equal(scheduledDeepAttemptAllowance(800,0),3);
-  assert.equal(scheduledDeepAttemptAllowance(800,798),2);
-  assert.equal(scheduledDeepAttemptAllowance(800,799),1);
-  assert.equal(scheduledDeepAttemptAllowance(800,800),0);
+  assert.equal(scheduledDeepAttemptAllowance(1000,0),3);
+  assert.equal(scheduledDeepAttemptAllowance(1000,998),2);
+  assert.equal(scheduledDeepAttemptAllowance(1000,999),1);
+  assert.equal(scheduledDeepAttemptAllowance(1000,1000),0);
 });
 
 test("scheduled deep bound survives scheduler, queue, runtime, and worker",()=>{

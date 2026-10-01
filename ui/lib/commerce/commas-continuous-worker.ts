@@ -4,7 +4,7 @@ import { decodeHex } from "./web-encoding.ts";
 import { decodeCommerceCredentialKey, decryptCommerceCredential } from "./credential-crypto";
 import { normalizeCommasTransaction } from "./commas-shadow-normalizer";
 import { SupabaseCommerceEvidenceStore } from "./supabase-evidence-store-core";
-import { scheduledDeepAttemptAllowance, scheduledDeepProviderRequestLimit } from "./scheduled-deep-contract";
+import { scheduledDeepAttemptAllowance, scheduledDeepInvocationCeiling, scheduledDeepProviderRequestLimit } from "./scheduled-deep-contract";
 import {
   COMMERCE_EVIDENCE_CONTRACT_VERSION, CONTINUOUS_NORMALIZER_VERSION, DEFAULT_OVERLAP_PAGES,
   advanceStability, appendNewestFirstAlignmentIds, classifySource, contentFingerprint, continuousRequestBounds, continuousStopDecision, detectProviderOrdering,
@@ -413,6 +413,7 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
   if(!claimed[0]) { console.log("[TraceKit] commerce lease acquisition failed",{event:"commerce.lease.acquire_failed",errorCode:"lease_unavailable"}); throw new Error("Continuous sync lease unavailable."); }
   console.log("[TraceKit] commerce lease acquired",{event:"commerce.lease.acquired"});
   const runMetadata=object(claimed[0].metadata)||{};
+  const scheduledDeepInvocationCeilingValue=scheduledDeepRequestLimit===null?null:scheduledDeepInvocationCeiling(scheduledDeepRequestLimit,number(claimed[0].provider_request_count)??0);
   if(bootstrap)await db(`commerce_sync_runs?id=eq.${runId}`,{method:"PATCH",body:JSON.stringify({metadata:{account_id:scope.accountId,quota_bootstrap_attempted:true,quota_bootstrap_state:"pending"}})});
   await audit(scope,mode==="deep_reconciliation"?"commerce.deep_reconciliation_started":"commerce.continuous_sync_started",runId,"success",{resource:"transactions",mode}).catch(()=>{});
   const priorState=(await db(`commerce_continuous_sync_state?connection_id=eq.${scope.connectionId}&provider_account_id=eq.${scope.providerAccountId}&resource=eq.transactions&select=*&limit=1`))[0];
@@ -428,9 +429,18 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
     const lifetimeProgress=evidenceOnlyRecovery?evidenceOnlyLifetimeProgress(claimed[0],summarizeContinuousCheckpointProgress(checkpointRows)):null;
     let durableProgress=lifetimeProgress||summarizeContinuousCheckpointProgress(checkpointRows);
     const recoveryPage=firstRecoverableContinuousPage(checkpointRows);
-    const queue:number[]=[recoveryPage??1]; const queued=new Set(queue); let queueIndex=0;
+    const completedPages=checkpointRows.filter((row)=>String(row.state||"")==="completed").map((row)=>Number(row.page)).filter((page)=>Number.isInteger(page)&&page>0);
+    const scheduledDeepResumePage=scheduledDeepSchedule&&completedPages.length?Math.max(...completedPages)+1:1;
+    const queue:number[]=[recoveryPage??scheduledDeepResumePage]; const queued=new Set(queue); let queueIndex=0;
+    if(scheduledDeepSchedule&&!recoveryPage&&scheduledDeepResumePage>1){
+      const priorPage=scheduledDeepResumePage-1,priorEvidence=await replayEvidenceForPage({...scope,runId,page:priorPage,perPage});
+      if(!priorEvidence)throw new Error("Scheduled deep continuation Evidence is unavailable.");
+      const priorParsed=parseContinuousPage(priorEvidence.bytes),priorTimestamps=priorParsed.items.map((item)=>String(item.transaction_date)),priorNormalized=priorParsed.items.map((item)=>normalizeCommasTransaction(item,{connectionId:scope.connectionId,providerAccountId:scope.providerAccountId}));
+      orderingObserver=observeOrderingPage(initialOrderingObserver(),{page:priorPage,direction:detectProviderOrdering(priorTimestamps),firstTimestamp:priorTimestamps[0]??null,lastTimestamp:priorTimestamps.at(-1)??null,firstSourceId:priorNormalized[0]?.transaction_id??null,lastSourceId:priorNormalized.at(-1)?.transaction_id??null,ids:priorNormalized.map((item)=>item.transaction_id),fingerprint:contentFingerprint(priorParsed.items)});
+      ordering=orderingObserver.ordering;
+    }
     while(queueIndex<queue.length&&pagesScanned<maxPages) {
-      if(scheduledDeepRequestLimit!==null&&providerRequests>=scheduledDeepRequestLimit){stoppingReason="bounded_deep_reconciliation_proof";deeperReconciliationRequired=true;break;}
+      if(scheduledDeepInvocationCeilingValue!==null&&providerRequests>=scheduledDeepInvocationCeilingValue){stoppingReason=scheduledDeepRequestLimit!==null&&providerRequests>=scheduledDeepRequestLimit?"bounded_deep_reconciliation_proof":"scheduled_deep_chunk_boundary";deeperReconciliationRequired=true;break;}
       if(await commerceConnectionPaused(scope)){pausedDuringRun=true;stoppingReason="connection_paused";break}
       const page=queue[queueIndex++],pageStarted=Date.now();
       const providerRequestsBeforePage=providerRequests;
@@ -438,7 +448,7 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
       try {
         const replayed=evidenceOnlyRecovery||String(checkpoint.state||"")==="running"?await replayEvidenceForPage({...scope,runId,page,perPage}):null;
         if(evidenceOnlyRecovery&&!replayed)throw new Error("Evidence-only recovery requires persisted page Evidence.");
-        const attemptAllowance=scheduledDeepRequestLimit===null?bootstrap?1:3:scheduledDeepAttemptAllowance(scheduledDeepRequestLimit,providerRequests);
+        const attemptAllowance=scheduledDeepRequestLimit===null?bootstrap?1:3:scheduledDeepAttemptAllowance(scheduledDeepInvocationCeilingValue!,providerRequests);
         const fetched=replayed?null:await fetchProviderPage(scope.secret,page,perPage,owner,attemptAllowance,scheduledDeepRequestLimit===null?undefined:()=>{providerRequests++;});
         if(fetched){ if(scheduledDeepRequestLimit===null)providerRequests++; retries+=fetched.attempts-1; rateLimitLimit=fetched.rateLimit.limit;rateLimitStart??=fetched.rateLimit.remaining;rateLimitEnd=fetched.rateLimit.remaining;rateLimitReset=fetched.rateLimit.reset; }
         const pageBytes=replayed?.bytes||fetched!.bytes;
@@ -504,7 +514,7 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
         if(mode==="deep_reconciliation"&&decision.reason==="stable_known_boundary") {
           decision=page>=maxPages?{stop:true,reason:"bounded_deep_reconciliation_proof",deeperReconciliationRequired:true}:parsed.totalPages!==null&&page>=parsed.totalPages?{stop:true,reason:"provider_history_boundary",deeperReconciliationRequired:false}:{stop:false,reason:null,deeperReconciliationRequired:false};
         }
-        if(mode==="deep_reconciliation"&&scheduledDeepRequestLimit!==null&&providerRequests>=scheduledDeepRequestLimit&&decision.reason!=="provider_history_boundary")decision={stop:true,reason:"bounded_deep_reconciliation_proof",deeperReconciliationRequired:true};
+        if(mode==="deep_reconciliation"&&scheduledDeepInvocationCeilingValue!==null&&providerRequests>=scheduledDeepInvocationCeilingValue&&decision.reason!=="provider_history_boundary")decision={stop:true,reason:scheduledDeepRequestLimit!==null&&providerRequests>=scheduledDeepRequestLimit?"bounded_deep_reconciliation_proof":"scheduled_deep_chunk_boundary",deeperReconciliationRequired:true};
         if(orderingObserver.paginationClassification === "pagination_instability") decision={stop:true,reason:"provider_ordering_unverified",deeperReconciliationRequired:true};
         // The terminal patch below carries the same durable counters plus the
         // final state. Avoid spending one more subrequest on a duplicate
@@ -522,19 +532,22 @@ export async function runContinuousCommasSync(options:{mode?:"continuous"|"deep_
       }
     }
     const now=new Date().toISOString(),latestTransactionAt=changedRows.map((item)=>item.transaction_at).sort().at(-1)??(priorState?.latest_provider_transaction_at?String(priorState.latest_provider_transaction_at):null);
-    const boundedDeepProof=mode==="deep_reconciliation"&&stoppingReason==="bounded_deep_reconciliation_proof";
+    const boundedDeepProof=mode==="deep_reconciliation"&&["bounded_deep_reconciliation_proof","scheduled_deep_chunk_boundary"].includes(stoppingReason);
     if(!(pausedDuringRun&&pagesScanned===0))await db("commerce_continuous_sync_state?on_conflict=connection_id,provider_account_id,resource",{method:"POST",headers:{Prefer:"resolution=merge-duplicates,return=representation"},body:JSON.stringify({account_id:scope.accountId,organization_id:scope.organizationId,connection_id:scope.connectionId,provider_account_id:scope.providerAccountId,resource:"transactions",last_attempted_at:now,last_successful_at:now,last_provider_observation_at:now,last_normalized_record_at:changedRows.length?now:priorState?.last_normalized_record_at??null,latest_provider_transaction_at:latestTransactionAt,provider_total_observed:providerTotalEnd,recent_source_ids:Array.from(new Set(recentIds)).slice(0,300),page_fingerprints:fingerprints,last_stability_boundary:boundedDeepProof?priorState?.last_stability_boundary??{}:{known_pages:stability.consecutiveStableKnownPages,pages_scanned:pagesScanned,page_shift_detected:stability.pageShiftDetected,ordering_state:orderingObserver.ordering,pagination_classification:orderingObserver.paginationClassification,boundary_overlap_count:orderingObserver.boundaryOverlapCount},last_stopping_reason:boundedDeepProof?priorState?.last_stopping_reason??null:stoppingReason,last_deep_reconciliation_at:mode==="deep_reconciliation"&&stoppingReason==="provider_history_boundary"&&!scheduledDeepSchedule?now:priorState?.last_deep_reconciliation_at??null,normalizer_version:CONTINUOUS_NORMALIZER_VERSION,evidence_contract_version:COMMERCE_EVIDENCE_CONTRACT_VERSION,status:boundedDeepProof?priorState?.status??"unknown":deeperReconciliationRequired?"degraded":"current",attribution_source_state:"unavailable",warnings:boundedDeepProof?priorState?.warnings??[]:deeperReconciliationRequired?[{code:"deep_reconciliation_required"}]:[],...(rateLimitEnd!==null?{quota_limit:rateLimitLimit,quota_remaining:rateLimitEnd,quota_reset:rateLimitReset,quota_observed_at:now,quota_source:"continuous_provider_response"}:{}),updated_at:now})});
     if(changedRows.length) {
       const newest=changedRows.map((item)=>item.transaction_at).sort().at(-1)!;
       await db("rpc/mark_investigation_new_evidence",{method:"POST",body:JSON.stringify({p_organization_id:scope.organizationId,p_resource_type:"transactions",p_entity_type:null,p_entity_id:null,p_observed_at:newest,p_reason:"new_or_changed_commerce_transaction"})});
       for(const productId of Array.from(changedProductIds))await db("rpc/mark_investigation_new_evidence",{method:"POST",body:JSON.stringify({p_organization_id:scope.organizationId,p_resource_type:"transactions",p_entity_type:"provider_product",p_entity_id:productId,p_observed_at:newest,p_reason:"product_commerce_evidence_changed"})});
     }
+    const scheduledDeepChunkBoundary=Boolean(scheduledDeepSchedule)&&stoppingReason==="scheduled_deep_chunk_boundary";
     const warnings=deeperReconciliationRequired?1:0,status=pausedDuringRun?"cancelled":warnings?"completed_with_warnings":"completed";
     await db(`commerce_sync_runs?id=eq.${runId}`,{method:"PATCH",body:JSON.stringify({source_total_items:providerTotalEnd,pages_planned:null,pages_completed:durableProgress.pagesCompleted,records_seen:durableProgress.recordsSeen,records_created:durableProgress.recordsCreated,records_updated:durableProgress.recordsUpdated,records_unchanged:durableProgress.recordsUnchanged,records_failed:evidenceOnlyRecovery?(number(claimed[0].records_failed)??0):recordsFailed,warnings_count:warnings,provider_request_count:durableProgress.providerRequests,evidence_writes:durableProgress.evidenceWrites,evidence_reuses:durableProgress.evidenceReuses,provider_total_start:providerTotalStart,provider_total_end:providerTotalEnd,stopping_reason:stoppingReason,overlap_pages_scanned:pagesScanned,page_shift_detected:stability.pageShiftDetected,deeper_reconciliation_required:deeperReconciliationRequired,freshness_result:changedRows.length?"changed":"current",metadata:{...runMetadata,scheduled_deep:scheduledDeepSchedule?true:undefined,schedule_id:scheduledDeepSchedule?.scheduleId,schedule_version:scheduledDeepSchedule?.scheduleVersion,max_provider_requests:scheduledDeepRequestLimit??undefined,normalizer_version:CONTINUOUS_NORMALIZER_VERSION,evidence_contract_version:COMMERCE_EVIDENCE_CONTRACT_VERSION,retries,rate_limit_start:rateLimitStart,rate_limit_end:rateLimitEnd,rate_limit_reset:rateLimitReset,quota_bootstrap_attempted:bootstrap,quota_bootstrap_state:bootstrap?(rateLimitEnd===null?"unknown":"observed"):undefined,refunds_new:refundsNew,refunds_updated:refundsUpdated,ordering,ordering_state:orderingObserver.ordering,pagination_classification:orderingObserver.paginationClassification,boundary_overlap_count:orderingObserver.boundaryOverlapCount,ordering_pages_observed:orderingObserver.pagesObserved,evidence_only_recovery_invocation:evidenceOnlyRecovery?{provider_requests:providerRequests,pages_scanned:pagesScanned,records_seen:recordsObserved,records_created:recordsNew,records_updated:recordsUpdated,records_unchanged:recordsUnchanged,evidence_reuses:evidenceReuses}:undefined}})});
     const trueScheduledDeepSuccess=Boolean(scheduledDeepSchedule)&&status==="completed"&&stoppingReason==="provider_history_boundary"&&!deeperReconciliationRequired&&warnings===0&&recordsFailed===0;
     const transitioned=trueScheduledDeepSuccess
       ? await db("rpc/complete_scheduled_commas_deep_reconciliation_v1",{method:"POST",body:JSON.stringify({p_organization_id:scope.organizationId,p_connection_id:scope.connectionId,p_provider_account_id:scope.providerAccountId,p_schedule_id:scheduledDeepSchedule!.scheduleId,p_expected_schedule_version:scheduledDeepSchedule!.scheduleVersion,p_run_id:runId,p_lease_owner:owner})})
-      : await db("rpc/transition_commerce_sync_run",{method:"POST",body:JSON.stringify({p_run_id:runId,p_organization_id:scope.organizationId,p_connection_id:scope.connectionId,p_lease_owner:owner,p_transition:status,p_error_code:null,p_error_summary:null})});
+      : scheduledDeepChunkBoundary
+        ? await db("rpc/pause_commerce_sync_run",{method:"POST",body:JSON.stringify({p_run_id:runId,p_organization_id:scope.organizationId,p_connection_id:scope.connectionId,p_lease_owner:owner,p_reason:"scheduled_deep_chunk_boundary"})})
+        : await db("rpc/transition_commerce_sync_run",{method:"POST",body:JSON.stringify({p_run_id:runId,p_organization_id:scope.organizationId,p_connection_id:scope.connectionId,p_lease_owner:owner,p_transition:status,p_error_code:null,p_error_summary:null})});
     const transitionApplied = trueScheduledDeepSuccess ? Array.isArray(transitioned)&&transitioned.length===1 : (transitioned as unknown as unknown[])[0] === true;
     console.log("[TraceKit] commerce run transition",{event:"commerce.run.transition",result:transitionApplied?"succeeded":"not_applied",status});
     await audit(scope,mode==="deep_reconciliation"?"commerce.deep_reconciliation_completed":"commerce.continuous_sync_completed",runId,"success",{resource:"transactions",mode,pages_scanned:pagesScanned,records_new:recordsNew,records_updated:recordsUpdated,records_unchanged:recordsUnchanged,stopping_reason:stoppingReason}).catch(()=>{});

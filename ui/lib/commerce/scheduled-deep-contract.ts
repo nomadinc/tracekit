@@ -1,4 +1,5 @@
-export const SCHEDULED_DEEP_PROVIDER_REQUEST_HARD_MAX = 800;
+export const SCHEDULED_DEEP_PROVIDER_REQUEST_HARD_MAX = 1000;
+export const SCHEDULED_DEEP_INVOCATION_REQUEST_MAX = 40;
 
 export function scheduledDeepProviderRequestLimit(value: unknown): number {
   if(typeof value!=="number")throw new Error("invalid_scheduled_deep_provider_request_limit");
@@ -13,4 +14,10 @@ export function scheduledDeepAttemptAllowance(limit:number,consumed:number,maxAt
   const validated=scheduledDeepProviderRequestLimit(limit);
   if(!Number.isInteger(consumed)||consumed<0)throw new Error("invalid_scheduled_deep_provider_request_count");
   return Math.max(0,Math.min(maxAttempts,validated-consumed));
+}
+
+export function scheduledDeepInvocationCeiling(totalLimit:number,consumed:number):number{
+  const validated=scheduledDeepProviderRequestLimit(totalLimit);
+  if(!Number.isInteger(consumed)||consumed<0||consumed>validated)throw new Error("invalid_scheduled_deep_provider_request_count");
+  return Math.min(validated,consumed+SCHEDULED_DEEP_INVOCATION_REQUEST_MAX);
 }

@@ -1058,9 +1058,9 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
         if (!connection || !isConnectedCommasConnection(connection)) continue;
         const { data: activeAccounts } = await schedulerQuery("provider_account_scope_read", db.from("commerce_provider_accounts").select("id,status").eq("organization_id", row.organization_id).eq("connection_id", row.connection_id).eq("status", "active"));
         if (!isEligibleCommasScheduleScope(connection, (activeAccounts || []).map((account: any) => account.id), row.provider_account_id)) continue;
-        if (!isSyncScheduleDue({ frequency: row.sync_frequency, lastEnqueuedAt: row.last_enqueued_at, now })) continue;
-        const overlapDue = !row.next_overlap_at || Date.parse(row.next_overlap_at) <= Date.parse(now);
-        const deepDue = row.next_deep_reconciliation_at && Date.parse(row.next_deep_reconciliation_at) <= Date.parse(now);
+        const overlapDue = (!row.next_overlap_at || Date.parse(row.next_overlap_at) <= Date.parse(now))
+          && isSyncScheduleDue({ frequency: row.sync_frequency, lastEnqueuedAt: row.last_enqueued_at, now });
+        const deepDue = Boolean(row.next_deep_reconciliation_at && Date.parse(row.next_deep_reconciliation_at) <= Date.parse(now));
         if (!overlapDue && !deepDue) continue;
         const mode = deepDue ? "deep_reconciliation" : "continuous";
         const { data: quotaState } = await schedulerQuery("quota_state_read", db.from("commerce_continuous_sync_state").select("quota_remaining,quota_observed_at").eq("organization_id", row.organization_id).eq("connection_id", row.connection_id).eq("provider_account_id", row.provider_account_id).eq("resource", row.resource).limit(1).maybeSingle());
@@ -1073,7 +1073,7 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
           ? scheduledDeepProviderRequestLimit(row.deep_request_budget)
           : undefined;
         const scheduleVersion=Number(row.schedule_version);
-        const schedulerIdentity=mode==="deep_reconciliation"?`${row.id}:v${scheduleVersion}:${mode}:${cadenceWindow}`:`${row.id}:${mode}:${cadenceWindow}`;
+        const schedulerIdentity=mode==="deep_reconciliation"?`${row.id}:v${scheduleVersion}:${mode}`:`${row.id}:${mode}:${cadenceWindow}`;
         jobs.push({ accountId: String(connection.account_id), organizationId: row.organization_id, connectionId: row.connection_id, providerAccountId: row.provider_account_id, resource: row.resource, mode, schedulerIdentity, quotaRemaining: Number.isFinite(quotaRemaining) ? quotaRemaining : null, quotaObservedAt: typeof quotaState?.quota_observed_at === "string" ? quotaState.quota_observed_at : null, quotaMaxAgeMs: scheduledQuotaMaxAgeMs(row.sync_frequency), requestBudget: scheduledDeepRequestLimit ?? 8, quotaFloor: row.quota_minimum_remaining, scheduleId: String(row.id), scheduleVersion, scheduledDeepRequestLimit });
       }
       return jobs;
@@ -1097,7 +1097,7 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
       const [{ data: schedule, error: scheduleError }, { data: quota, error: quotaError }, { count: activeRuns, error: activeError }, { count: liveActivation, error: activationError }, { count: activeAccounts, error: accountError }, { count: pauses, error: pauseError }] = await Promise.all([
         schedulerQuery("pre_dispatch_schedule_read", db.from("commerce_sync_schedules").select("id,sync_frequency,enabled,activation_state,quota_minimum_remaining,deep_request_budget,schedule_version").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1).maybeSingle()),
         schedulerQuery("pre_dispatch_quota_read", db.from("commerce_continuous_sync_state").select("quota_remaining,quota_observed_at").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1).maybeSingle()),
-        schedulerQuery("pre_dispatch_active_run_read", db.from("commerce_sync_runs").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).in("status", ["queued", "running", "paused"])),
+        schedulerQuery("pre_dispatch_active_run_read", (message.scheduled_deep===true?db.from("commerce_sync_runs").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).in("status", ["queued", "running", "paused"]).neq("scheduler_idempotency_key",message.scheduler_identity):db.from("commerce_sync_runs").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).in("status", ["queued", "running", "paused"]))),
         schedulerQuery("pre_dispatch_live_activation_read", db.from("commerce_repository_activation").select("organization_id", { count: "exact", head: true }).eq("organization_id", message.organization_id).in("mode", ["live", "live_beta"])),
         schedulerQuery("provider_account_scope_read", db.from("commerce_provider_accounts").select("id", { count: "exact", head: true }).eq("id", message.provider_account_id).eq("connection_id", message.connection_id).eq("organization_id", message.organization_id).eq("status", "active")),
         schedulerQuery("connection_permission_control_read", db.from("commerce_connection_pauses").select("connection_id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("paused", true)),
@@ -1257,6 +1257,11 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
         const { error } = await db.from("commerce_sync_runs").insert({ organization_id: message.organization_id, connection_id: message.connection_id, provider_account_id: message.provider_account_id, sync_type: message.resource, mode: "continuous", scheduler_idempotency_key: message.scheduler_identity, metadata: { account_id: message.account_id, quota_bootstrap_attempted: true, quota_bootstrap_state: "pending" } }).select("id").maybeSingle();
         if (error?.code === "23505") return "duplicate";
         if (error) throw error;
+        return "reserved";
+      }
+      if(message.scheduled_deep===true){
+        const { data: existing }=await schedulerQuery("scheduler_reservation_read",db.from("commerce_sync_runs").select("id,status").eq("organization_id",message.organization_id).eq("connection_id",message.connection_id).eq("scheduler_idempotency_key",message.scheduler_identity).limit(1).maybeSingle());
+        if(existing)return String(existing.status)==="paused"?"reserved":"duplicate";
         return "reserved";
       }
       const { count } = await schedulerQuery("scheduler_reservation_read", db.from("commerce_sync_runs").select("id", { count: "exact", head: true }).eq("connection_id", message.connection_id).eq("scheduler_idempotency_key", message.scheduler_identity));
