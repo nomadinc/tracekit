@@ -16,7 +16,9 @@ function configuration() {
 
 export async function commercePersistenceRequest(path: string, init: RequestInit = {}) {
   const { url, key } = configuration();
-  const response = await fetch(`${url}/rest/v1/${path}`, { ...init, cache: "no-store", headers: { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json", Prefer: "return=representation", ...init.headers } });
+  const headers: Record<string, string> = { apikey: key, "Content-Type": "application/json", Prefer: "return=representation" };
+  if (!key.startsWith("sb_secret_")) headers.Authorization = `Bearer ${key}`;
+  const response = await fetch(`${url}/rest/v1/${path}`, { ...init, cache: "no-store", headers: { ...headers, ...init.headers } });
   if (!response.ok) {
     const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
     const databaseCode = String(payload.code || "database_request_failed").replace(/[^a-z0-9_.-]/gi, "_").slice(0, 80);
