@@ -143,7 +143,7 @@ export class SupabaseIdentityTenancyRepository implements IdentityTenancyReposit
   }
 
   async businessContexts(membershipId: string, organizationId: string) {
-    const rows = await rest(`tracekit_business_context_access?membership_id=eq.${encodeURIComponent(membershipId)}&organization_id=eq.${encodeURIComponent(organizationId)}&status=eq.active&select=business_context_id,tracekit_business_contexts!inner(id,organization_id,name,status)&tracekit_business_contexts.organization_id=eq.${encodeURIComponent(organizationId)}&tracekit_business_contexts.status=eq.active&order=created_at.asc,business_context_id.asc`) as Array<Row & { tracekit_business_contexts?: Row }>;
+    const rows = await rest(`tracekit_business_context_access?membership_id=eq.${encodeURIComponent(membershipId)}&organization_id=eq.${encodeURIComponent(organizationId)}&status=eq.active&select=business_context_id,tracekit_business_contexts!tracekit_business_context_access_context_fk!inner(id,organization_id,name,status)&tracekit_business_contexts.organization_id=eq.${encodeURIComponent(organizationId)}&tracekit_business_contexts.status=eq.active&order=created_at.asc,business_context_id.asc`) as Array<Row & { tracekit_business_contexts?: Row }>;
     return rows.flatMap((row) => {
       const context = row.tracekit_business_contexts;
       if (!context || String(context.id) !== String(row.business_context_id) || String(context.organization_id) !== organizationId) return [];
