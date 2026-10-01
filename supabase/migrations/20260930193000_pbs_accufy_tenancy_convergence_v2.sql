@@ -134,12 +134,13 @@ begin
     insert into commerce_product_mapping_decisions(
       organization_id,connection_id,provider_account_id,provider_product_id,
       previous_state,resulting_state,business_context_id,canonical_offer_id,
-      offer_step_id,offer_variant_id,mapping_version,decided_by_user_id,reason
+      offer_step_id,offer_variant_id,mapping_version,decided_by_user_id,reason,correlation_id
     )
     select new_org,new_connection,new_provider_account,rec.provider_product_uuid,
       mapping_status,'approved',new_context,new_offer,rec.new_step_id,null,
       'pbs-tenancy-convergence-v2',p_actor_user_id,
-      'M14 PBS tenancy convergence from exact historical approved provider-product identity'
+      'M14 PBS tenancy convergence from exact historical approved provider-product identity',
+      btrim(p_correlation_id)||':'||rec.provider_product_uuid::text
     from commerce_provider_products where id=rec.provider_product_uuid and organization_id=new_org;
 
     update commerce_provider_products set mapping_status='approved',business_context_id=new_context,
@@ -152,12 +153,16 @@ begin
   if mapped_count <> 59 then raise exception 'PBS mapping projection count mismatch' using errcode='23514'; end if;
 
   -- Give the existing operator explicit Accufy organization access.
-  insert into tracekit_memberships(user_id,organization_id,role_id,status)
-  values(p_actor_user_id,new_org,owner_role,'active')
-  on conflict (user_id,organization_id) where organization_id is not null
-  do update set role_id=excluded.role_id,status='active',updated_at=now();
-
-  select id into actor_membership from tracekit_memberships where user_id=p_actor_user_id and organization_id=new_org and status='active';
+  select id into actor_membership from tracekit_memberships
+  where user_id=p_actor_user_id and organization_id=new_org
+  order by created_at desc limit 1;
+  if actor_membership is null then
+    insert into tracekit_memberships(user_id,organization_id,role_id,status)
+    values(p_actor_user_id,new_org,owner_role,'active') returning id into actor_membership;
+  else
+    update tracekit_memberships set role_id=owner_role,status='active',updated_at=now()
+    where id=actor_membership;
+  end if;
   insert into tracekit_business_context_access(membership_id,organization_id,business_context_id,status)
   values(actor_membership,new_org,new_context,'active')
   on conflict (membership_id,organization_id,business_context_id) do update set status='active';
