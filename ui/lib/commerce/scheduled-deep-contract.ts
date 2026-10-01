@@ -1,4 +1,4 @@
-export const SCHEDULED_DEEP_PROVIDER_REQUEST_HARD_MAX = 800;
+export const SCHEDULED_DEEP_PROVIDER_REQUEST_HARD_MAX = 1000;
 export const SCHEDULED_DEEP_INVOCATION_REQUEST_MAX = 40;
 
 export function scheduledDeepProviderRequestLimit(value: unknown): number {
