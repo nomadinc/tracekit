@@ -14,7 +14,7 @@ const bytes=(v:unknown)=>Uint8Array.from(Buffer.from(String(v).replace(/^\\x/,""
 
 export async function inspectShopifyControlledProofReadiness(session:TraceKitSessionContext,appOrigin?:string){
  const org=session.activeOrganization!;
- let normalizedOrigin="";try{const u=new URL(String(appOrigin||""));if(u.protocol==="https:"&&!u.username&&!u.password&&!u.pathname.replace(/\\/g,"/").replace(/^\\/$/,"")&&!u.search&&!u.hash)normalizedOrigin=u.origin;}catch{}
+ let normalizedOrigin="";try{const u=new URL(String(appOrigin||""));if(u.protocol==="https:"&&!u.username&&!u.password)normalizedOrigin=u.origin;}catch{}
  const callbackUrl=normalizedOrigin?`${normalizedOrigin}/api/webhooks/shopify`:"";
  const out={activeOrganizationId:org.id,activeOrganizationName:org.name||null,expectedOrganizationId:STEM_ORG,connectedApprovedShopifyConnections:0,activeCredentials:0,credentialEnvelopeMatched:false,credentialDecryptSucceeded:false,shopCredentialParsed:false,shopDomainMatched:false,approvedShop:SHOP,callbackUrlConfigured:Boolean(normalizedOrigin),approvedCallback:callbackUrl,subscriptionReadSucceeded:false,tracekitSubscriptionCount:0,proofOnlyTopic:SHOPIFY_PROOF_ONLY_TOPIC,proofOnlyTopicMatches:0,proofOnlyTopicAvailable:false,createReadBackPrimitive:true,deleteAbsencePrimitive:true,recoveryMode:"same_execution_exact_created_subscription",ready:false};
  if(org.id!==STEM_ORG)return out;
