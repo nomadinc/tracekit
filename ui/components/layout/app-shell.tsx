@@ -12,14 +12,14 @@ import { ShellRouteBoundary } from "@/components/identity/shell-route-boundary";
 import { AdminClientViewBanner } from "@/components/platform/admin-client-view-banner";
 import type { BusinessContext, IdentitySession, Organization } from "@/lib/identity/types";
 
-export default function AppShell({ children, initialSession, organizations, businessContexts }: { children: React.ReactNode; initialSession?: IdentitySession; organizations?: Organization[]; businessContexts?: BusinessContext[] }) {
+export default function AppShell({ children, initialSession, organizations, businessContexts, platformOrganizations = [] }: { children: React.ReactNode; initialSession?: IdentitySession; organizations?: Organization[]; businessContexts?: BusinessContext[]; platformOrganizations?: Organization[] }) {
   return (
     <IdentityProvider initialSession={initialSession} persistentOrganizations={organizations} persistentBusinessContexts={businessContexts}>
       <CommandProvider>
         <LiveWorkspaceProvider enabled={false}>
           <ShellDrawerProvider>
             <React.Suspense fallback={<div className="flex min-h-dvh items-center justify-center bg-slate-50 text-sm font-medium text-slate-600">Preparing TraceKit…</div>}>
-              <InvestigationProvider><ShellFrame>{children}</ShellFrame></InvestigationProvider>
+              <InvestigationProvider><ShellFrame platformOrganizations={platformOrganizations}>{children}</ShellFrame></InvestigationProvider>
             </React.Suspense>
           </ShellDrawerProvider>
         </LiveWorkspaceProvider>
@@ -28,7 +28,7 @@ export default function AppShell({ children, initialSession, organizations, busi
   );
 }
 
-function ShellFrame({ children }: { children: React.ReactNode }) {
+function ShellFrame({ children, platformOrganizations }: { children: React.ReactNode; platformOrganizations: Organization[] }) {
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
 
   return (
@@ -53,7 +53,7 @@ function ShellFrame({ children }: { children: React.ReactNode }) {
 
       <div className="lg:pl-72">
         <div className="sticky top-0 z-30">
-          <ProductionHeader onMenuClick={() => setMobileNavOpen(true)} />
+          <ProductionHeader onMenuClick={() => setMobileNavOpen(true)} platformOrganizations={platformOrganizations} />
           <AdminClientViewBanner />
         </div>
         <main className="tk-page">
