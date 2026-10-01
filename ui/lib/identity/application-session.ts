@@ -95,23 +95,28 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
     profilePictureUrl: auth.user.profilePictureUrl,
   });
   const memberships = await repository.membershipsForUser(user.id);
-  // An authenticated reviewer may hold an additional Account-level platform
-  // entitlement. Keep the tenant session anchored to its Organization
-  // membership; explicit capability overrides remain the narrow bridge for
-  // Product/Admin review inside that Organization.
-  const membership = selectSessionMembership(memberships);
+  const activeMemberships = memberships.filter((candidate) => candidate.status === "active");
+  const requestedOrganizationId = readActiveOrganization(jar.get(ACTIVE_ORGANIZATION_COOKIE)?.value, user.id);
+  const requestedOrganizationMembership = requestedOrganizationId
+    ? activeMemberships.find((candidate) => candidate.organizationId === requestedOrganizationId) || null
+    : null;
+  const membership = requestedOrganizationMembership || selectSessionMembership(memberships);
   if (!membership) return resolveUnaffiliatedSessionState(() => repository.isEmptyInstallation());
-  const directlyScopedOrganizations = membership.organizationId ? await repository.organizationsForMembership(membership, null) : [];
-  const accountId = membership.accountId || directlyScopedOrganizations[0]?.owningAccountId;
-  if (!accountId) return { kind: "no-membership" };
-  const account = await repository.accountById(accountId);
-  if (!account || account.status !== "active") return { kind: "no-membership" };
-  const agency = account.accountType === "agency" ? await repository.agencyByAccountId(account.id) : null;
-  const organizationRecords = directlyScopedOrganizations.length ? directlyScopedOrganizations : await repository.organizationsForMembership(membership, agency);
-  const organizations = organizationRecords.map((organization) => ({ id: organization.id, name: organization.name, mark: organization.name.slice(0, 2).toUpperCase(), accountId: organization.owningAccountId }));
+
+  const organizationMemberships = activeMemberships.filter((candidate) => Boolean(candidate.organizationId));
+  const organizationRecords = (
+    await Promise.all(organizationMemberships.map((candidate) => repository.organizationsForMembership(candidate, null)))
+  ).flat();
+  const organizationById = new Map(organizationRecords.map((organization) => [organization.id, organization]));
+  const organizations = Array.from(organizationById.values()).map((organization) => ({
+    id: organization.id,
+    name: organization.name,
+    mark: organization.name.slice(0, 2).toUpperCase(),
+    accountId: organization.owningAccountId,
+  }));
+
   const overrides = await repository.permissionOverrides(membership.id);
   const permissions = Array.from(resolveEffectivePermissions(membership, overrides));
-  const requestedOrganizationId = readActiveOrganization(jar.get(ACTIVE_ORGANIZATION_COOKIE)?.value, user.id);
   const requestedAdminViewId = permissions.includes("admin.impersonate")
     ? readAdminView(jar.get(ADMIN_VIEW_COOKIE)?.value, user.id)
     : null;
@@ -122,18 +127,28 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
     ? { id: adminViewRecord.id, name: adminViewRecord.name, mark: adminViewRecord.name.slice(0, 2).toUpperCase(), accountId: adminViewRecord.owningAccountId }
     : null;
   const effectiveOrganizations = adminViewOrganization ? [adminViewOrganization] : organizations;
-  const activeOrganization = adminViewOrganization || effectiveOrganizations.find((organization) => organization.id === requestedOrganizationId) || effectiveOrganizations[0] || null;
-  // Persistent access and catalog rows authorize the context. Platform-owner
-  // client view is separately authorized and audited; its Offer catalog is
-  // resolved from canonical active contexts for the selected Organization.
+  const activeOrganization = adminViewOrganization || effectiveOrganizations.find((organization) => organization.id === requestedOrganizationId) || effectiveOrganizations.find((organization) => organization.id === membership.organizationId) || effectiveOrganizations[0] || null;
+  const activeOrganizationMembership = activeOrganization && !adminViewOrganization
+    ? organizationMemberships.find((candidate) => candidate.organizationId === activeOrganization.id) || membership
+    : membership;
+  const activeOverrides = activeOrganizationMembership.id === membership.id
+    ? overrides
+    : await repository.permissionOverrides(activeOrganizationMembership.id);
+  const activePermissions = Array.from(resolveEffectivePermissions(activeOrganizationMembership, activeOverrides));
+  const activeAccountId = activeOrganization?.accountId || activeOrganizationMembership.accountId;
+  if (!activeAccountId) return { kind: "no-membership" };
+  const account = await repository.accountById(activeAccountId);
+  if (!account || account.status !== "active") return { kind: "no-membership" };
+  const agency = account.accountType === "agency" ? await repository.agencyByAccountId(account.id) : null;
+
   const persistentContexts = activeOrganization
     ? adminViewOrganization
       ? await repository.activeBusinessContextsForOrganization(activeOrganization.id)
-      : await repository.businessContexts(membership.id, activeOrganization.id)
+      : await repository.businessContexts(activeOrganizationMembership.id, activeOrganization.id)
     : [];
   const businessContexts = persistentBusinessContextsWithDisplay(persistentContexts, MOCK_BUSINESS_CONTEXTS);
-  const requestedBusinessContextId=activeOrganization?readActiveBusinessContext(jar.get(ACTIVE_BUSINESS_CONTEXT_COOKIE)?.value,user.id,activeOrganization.id):null;
-  const activeBusinessContextId = businessContexts.find((context)=>context.id===requestedBusinessContextId)?.id ?? businessContexts[0]?.id ?? null;
+  const requestedBusinessContextId = activeOrganization ? readActiveBusinessContext(jar.get(ACTIVE_BUSINESS_CONTEXT_COOKIE)?.value, user.id, activeOrganization.id) : null;
+  const activeBusinessContextId = businessContexts.find((context) => context.id === requestedBusinessContextId)?.id ?? businessContexts[0]?.id ?? null;
   const session: TraceKitSessionContext = {
     user,
     externalWorkosUserId: auth.user.id,
@@ -141,10 +156,10 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
     activeAgency: agency,
     activeOrganization,
     availableOrganizations: effectiveOrganizations,
-    membership,
-    role: membership.role,
-    effectivePermissions: permissions,
-    permissionOverrides: overrides,
+    membership: activeOrganizationMembership,
+    role: activeOrganizationMembership.role,
+    effectivePermissions: activePermissions,
+    permissionOverrides: activeOverrides,
     accessibleBusinessContexts: businessContexts,
     activeBusinessContextId,
     assurance: { authenticationMethod: null, impersonated: Boolean(auth.impersonator) || Boolean(adminViewOrganization) },
@@ -157,17 +172,17 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
       id: user.id,
       name: user.displayName,
       email: user.primaryEmail,
-      title: membership.role,
+      title: activeOrganizationMembership.role,
       membership: {
-        id: membership.id,
+        id: activeOrganizationMembership.id,
         accountId: account.id,
         accountName: account.name,
         accountType: account.accountType,
-        role: membership.role,
+        role: activeOrganizationMembership.role,
         // Authorization uses persistent Organization IDs only. Mock repository
         // compatibility is resolved separately from the authorized Business Context.
         organizationIds: effectiveOrganizations.map((organization) => organization.id),
-        grants: permissions.filter((permission) => !ROLE_PERMISSIONS[membership.role].includes(permission as never)),
+        grants: activePermissions.filter((permission) => !ROLE_PERMISSIONS[activeOrganizationMembership.role].includes(permission as never)),
       },
     },
     activeOrganizationId: activeOrganization?.id || null,
@@ -181,10 +196,10 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
     organizationId: activeOrganization?.id ?? null,
     action: "membership.resolved",
     targetType: "membership",
-    targetId: membership.id,
+    targetId: activeOrganizationMembership.id,
     result: "success",
     correlationId,
-    metadata: { role: membership.role, accountType: account.accountType },
+    metadata: { role: activeOrganizationMembership.role, accountType: account.accountType },
   });
   return { kind: "authenticated", session, clientSession: serializeSessionForClient(session), legacySession };
 }
