@@ -97,11 +97,15 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
   const memberships = await repository.membershipsForUser(user.id);
   const activeMemberships = memberships.filter((candidate) => candidate.status === "active");
   const requestedOrganizationId = readActiveOrganization(jar.get(ACTIVE_ORGANIZATION_COOKIE)?.value, user.id);
-  const requestedOrganizationMembership = requestedOrganizationId
+  const preferredMembership = selectSessionMembership(memberships);
+  if (!preferredMembership) return resolveUnaffiliatedSessionState(() => repository.isEmptyInstallation());
+  const platformMode =
+    !preferredMembership.organizationId &&
+    (preferredMembership.role === "platform-owner" || preferredMembership.role === "platform-admin");
+  const requestedOrganizationMembership = !platformMode && requestedOrganizationId
     ? activeMemberships.find((candidate) => candidate.organizationId === requestedOrganizationId) || null
     : null;
-  const membership = requestedOrganizationMembership || selectSessionMembership(memberships);
-  if (!membership) return resolveUnaffiliatedSessionState(() => repository.isEmptyInstallation());
+  const membership = requestedOrganizationMembership || preferredMembership;
 
   const organizationMemberships = activeMemberships.filter((candidate) => Boolean(candidate.organizationId));
   const organizationRecords = (
@@ -126,8 +130,8 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
   const adminViewOrganization = adminViewRecord
     ? { id: adminViewRecord.id, name: adminViewRecord.name, mark: adminViewRecord.name.slice(0, 2).toUpperCase(), accountId: adminViewRecord.owningAccountId }
     : null;
-  const effectiveOrganizations = adminViewOrganization ? [adminViewOrganization] : organizations;
-  const activeOrganization = adminViewOrganization || effectiveOrganizations.find((organization) => organization.id === requestedOrganizationId) || effectiveOrganizations.find((organization) => organization.id === membership.organizationId) || effectiveOrganizations[0] || null;
+  const effectiveOrganizations = adminViewOrganization ? [adminViewOrganization] : platformMode ? [] : organizations;
+  const activeOrganization = adminViewOrganization || (platformMode ? null : effectiveOrganizations.find((organization) => organization.id === requestedOrganizationId) || effectiveOrganizations.find((organization) => organization.id === membership.organizationId) || effectiveOrganizations[0] || null);
   const activeOrganizationMembership = activeOrganization && !adminViewOrganization
     ? organizationMemberships.find((candidate) => candidate.organizationId === activeOrganization.id) || membership
     : membership;
