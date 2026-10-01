@@ -1058,9 +1058,9 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
         if (!connection || !isConnectedCommasConnection(connection)) continue;
         const { data: activeAccounts } = await schedulerQuery("provider_account_scope_read", db.from("commerce_provider_accounts").select("id,status").eq("organization_id", row.organization_id).eq("connection_id", row.connection_id).eq("status", "active"));
         if (!isEligibleCommasScheduleScope(connection, (activeAccounts || []).map((account: any) => account.id), row.provider_account_id)) continue;
-        if (!isSyncScheduleDue({ frequency: row.sync_frequency, lastEnqueuedAt: row.last_enqueued_at, now })) continue;
-        const overlapDue = !row.next_overlap_at || Date.parse(row.next_overlap_at) <= Date.parse(now);
-        const deepDue = row.next_deep_reconciliation_at && Date.parse(row.next_deep_reconciliation_at) <= Date.parse(now);
+        const overlapDue = (!row.next_overlap_at || Date.parse(row.next_overlap_at) <= Date.parse(now))
+          && isSyncScheduleDue({ frequency: row.sync_frequency, lastEnqueuedAt: row.last_enqueued_at, now });
+        const deepDue = Boolean(row.next_deep_reconciliation_at && Date.parse(row.next_deep_reconciliation_at) <= Date.parse(now));
         if (!overlapDue && !deepDue) continue;
         const mode = deepDue ? "deep_reconciliation" : "continuous";
         const { data: quotaState } = await schedulerQuery("quota_state_read", db.from("commerce_continuous_sync_state").select("quota_remaining,quota_observed_at").eq("organization_id", row.organization_id).eq("connection_id", row.connection_id).eq("provider_account_id", row.provider_account_id).eq("resource", row.resource).limit(1).maybeSingle());
