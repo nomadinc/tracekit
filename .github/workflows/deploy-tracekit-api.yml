@@ -1,4 +1,4 @@
-name: Deploy TraceKit API Worker
+name: Deploy TraceKit Commerce Workers
 
 on:
   workflow_dispatch:
@@ -7,12 +7,19 @@ on:
         description: Git ref to deploy
         required: false
         default: main
+  push:
+    branches: [main]
+    paths:
+      - "api/**"
+      - "ui/lib/commerce/**"
+      - "supabase/migrations/**"
+      - ".github/workflows/deploy-tracekit-api.yml"
 
 permissions:
   contents: read
 
 concurrency:
-  group: tracekit-api-production
+  group: tracekit-commerce-workers-production
   cancel-in-progress: false
 
 jobs:
@@ -23,7 +30,7 @@ jobs:
       - name: Checkout requested ref
         uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.ref || github.sha }}
       - name: Setup Node
         uses: actions/setup-node@v4
         with:
@@ -33,6 +40,12 @@ jobs:
       - name: Install API dependencies
         working-directory: api
         run: npm ci
+      - name: Deploy tracekit-continuous-runtime
+        working-directory: api/continuous-runtime
+        run: npx wrangler deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
       - name: Deploy tracekit-api
         working-directory: api
         run: npx wrangler deploy
