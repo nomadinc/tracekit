@@ -45,3 +45,15 @@ test("pause RPC is lease-owner safe and non-terminal",()=>{
   assert.match(migration,/lease_owner=null/);
   assert.doesNotMatch(migration,/completed_at\s*=/);
 });
+
+
+test("derived investigation invalidation cannot fail a durably checkpointed chunk",()=>{
+  const start=worker.indexOf("if(changedRows.length)");
+  const end=worker.indexOf("const scheduledDeepChunkBoundary",start);
+  assert.ok(start>0&&end>start);
+  const block=worker.slice(start,end);
+  assert.match(block,/try\s*\{/);
+  assert.match(block,/mark_investigation_new_evidence/);
+  assert.match(block,/commerce\.investigation\.invalidation_failed/);
+  assert.match(block,/catch\s*\{/);
+});
