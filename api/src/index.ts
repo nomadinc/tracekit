@@ -22755,19 +22755,6 @@ async function runWowBoostImportPage(
     try {
       const url = new URL(req.url);
       const path = url.pathname;
-      if (path === "/_diagnostics/m13-staging-credential-challenge" && req.method === "POST") {
-        const stagingSecret = String(env.TK_SECRET_KEY_STAGING || "").trim();
-        if (!stagingSecret) return json({ ok: true, configured: false, match: false }, 200, { "cache-control": "no-store" });
-        const body = await readJsonBody(req);
-        const nonce = String(body.nonce || "").trim();
-        const signature = String(body.signature || "").trim().toLowerCase();
-        if (!/^[a-f0-9]{64}$/.test(nonce) || !/^[a-f0-9]{64}$/.test(signature)) return json({ ok: false, error: "bad_request" }, 400, { "cache-control": "no-store" });
-        const key = await crypto.subtle.importKey("raw", new TextEncoder().encode(stagingSecret), { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
-        const supplied = Uint8Array.from(signature.match(/../g) || [], (hex) => Number.parseInt(hex, 16));
-        const match = await crypto.subtle.verify("HMAC", key, supplied, new TextEncoder().encode(nonce));
-        return json({ ok: true, configured: true, match }, 200, { "cache-control": "no-store" });
-      }
-
       const maintenanceClass = classifyHttpMaintenanceRequest(req.method, path);
       if (!maintenanceWriteAllowed(env, maintenanceClass)) {
         if (maintenanceRequiresAdminAuthorization(maintenanceClass)) {
