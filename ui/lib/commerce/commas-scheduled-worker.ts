@@ -24,7 +24,7 @@ export async function runDueCommasSchedules(input:{limit?:number;now?:Date}={}){
     const scheduleVersion=Number(schedule.schedule_version||1),requestKey=`commas-schedule:${String(schedule.id)}:v${scheduleVersion}:continuous:${isoMinute(now)}`;
     try{
       const result=await runContinuousCommasSync({mode:"continuous",requestKey,expectedScope:{organizationId,connectionId,providerAccountId}});
-      const next=nextScheduleTimes({now,overlapMinutes:Math.max(1,Math.round(intervalMinutes(schedule.overlap_interval,15))),deepDays:intervalDays(schedule.deep_reconciliation_interval,7),completed:"continuous"});
+      const next=nextScheduleTimes({now,overlapMinutes:Math.max(1,Math.round(intervalMinutes(schedule.overlap_interval,15))),deepDays:7,completed:"continuous"});
       await rows(`commerce_sync_schedules?id=eq.${encodeURIComponent(String(schedule.id))}&organization_id=eq.${encodeURIComponent(organizationId)}`,{method:"PATCH",body:JSON.stringify({next_overlap_at:next.nextOverlapAt,last_enqueued_at:now.toISOString(),last_completed_at:new Date().toISOString(),last_error_code:null})});
       completed++;results.push({scheduleId:schedule.id,status:"completed",runId:result.runId,stoppingReason:result.stoppingReason,providerRequests:result.providerRequests,pagesScanned:result.pagesScanned,deepReconciliationDue:deepDue});
     }catch(error){
