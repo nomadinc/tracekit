@@ -126,7 +126,7 @@ export class SupabaseIdentityTenancyRepository implements IdentityTenancyReposit
   }
 
   async allActiveOrganizations() {
-    const rows = await rest("tracekit_organizations?status=eq.active&order=name.asc") as Row[];
+    const rows = await rest("rpc/list_tracekit_active_organizations", { method: "POST", body: "{}" }) as Row[];
     return rows.map((row): PersistentOrganizationRecord => ({
       id: String(row.id),
       owningAccountId: String(row.owning_account_id),
