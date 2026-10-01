@@ -33,12 +33,12 @@ declare
   pbs_origin constant uuid := '66fe24db-452e-4da1-baa7-973709ab8089';
   ecowatt_source constant uuid := 'b0d5abc3-0663-4586-bf8d-25f4b1b8362e';
 
-  new_offer uuid;
+  new_offer constant uuid := 'ad767ac7-d729-51e7-9d67-47679a6cc36f';
   actor_membership uuid;
   owner_role uuid;
   old_access uuid;
   old_step record;
-  new_step uuid;
+
   rec record;
   mapped_count integer := 0;
   step_count integer := 0;
@@ -94,7 +94,6 @@ begin
   values(new_context,new_account,new_org,'Push Button System','active','digital',
     jsonb_build_object('catalog_key','push-button-system','identity_basis','tenancy_convergence_v2','historical_context_id',old_context));
 
-  new_offer := gen_random_uuid();
   insert into canonical_offers(id,account_id,organization_id,business_context_id,name,status,metadata)
   select new_offer,new_account,new_org,new_context,name,status,
     metadata || jsonb_build_object('identity_basis','tenancy_convergence_v2','historical_canonical_offer_id',old_offer)
@@ -102,11 +101,10 @@ begin
 
   create temporary table _pbs_step_map(old_id uuid primary key,new_id uuid not null,catalog_key text not null) on commit drop;
   for old_step in select * from offer_steps where organization_id=old_org and canonical_offer_id=old_offer order by sequence,id loop
-    new_step := gen_random_uuid();
     insert into offer_steps(id,organization_id,canonical_offer_id,role,sequence,label,metadata)
-    values(new_step,new_org,new_offer,old_step.role,old_step.sequence,old_step.label,
+    values(uuid_generate_v5('ad767ac7-d729-51e7-9d67-47679a6cc36f'::uuid, old_step.metadata->>'catalog_key'),new_org,new_offer,old_step.role,old_step.sequence,old_step.label,
       old_step.metadata || jsonb_build_object('identity_basis','tenancy_convergence_v2','historical_offer_step_id',old_step.id));
-    insert into _pbs_step_map values(old_step.id,new_step,old_step.metadata->>'catalog_key');
+    insert into _pbs_step_map values(old_step.id,uuid_generate_v5('ad767ac7-d729-51e7-9d67-47679a6cc36f'::uuid, old_step.metadata->>'catalog_key'),old_step.metadata->>'catalog_key');
     step_count := step_count+1;
   end loop;
 
