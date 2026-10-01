@@ -115,12 +115,6 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
     accountId: organization.owningAccountId,
   }));
 
-  const accountId = membership.accountId || organizationById.get(membership.organizationId || "")?.owningAccountId;
-  if (!accountId) return { kind: "no-membership" };
-  const account = await repository.accountById(accountId);
-  if (!account || account.status !== "active") return { kind: "no-membership" };
-  const agency = account.accountType === "agency" ? await repository.agencyByAccountId(account.id) : null;
-
   const overrides = await repository.permissionOverrides(membership.id);
   const permissions = Array.from(resolveEffectivePermissions(membership, overrides));
   const requestedAdminViewId = permissions.includes("admin.impersonate")
@@ -141,6 +135,11 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
     ? overrides
     : await repository.permissionOverrides(activeOrganizationMembership.id);
   const activePermissions = Array.from(resolveEffectivePermissions(activeOrganizationMembership, activeOverrides));
+  const activeAccountId = activeOrganization?.accountId || activeOrganizationMembership.accountId;
+  if (!activeAccountId) return { kind: "no-membership" };
+  const account = await repository.accountById(activeAccountId);
+  if (!account || account.status !== "active") return { kind: "no-membership" };
+  const agency = account.accountType === "agency" ? await repository.agencyByAccountId(account.id) : null;
 
   const persistentContexts = activeOrganization
     ? adminViewOrganization
