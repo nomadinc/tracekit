@@ -1097,7 +1097,7 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
       const [{ data: schedule, error: scheduleError }, { data: quota, error: quotaError }, { count: activeRuns, error: activeError }, { count: liveActivation, error: activationError }, { count: activeAccounts, error: accountError }, { count: pauses, error: pauseError }] = await Promise.all([
         schedulerQuery("pre_dispatch_schedule_read", db.from("commerce_sync_schedules").select("id,sync_frequency,enabled,activation_state,quota_minimum_remaining,deep_request_budget,schedule_version").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1).maybeSingle()),
         schedulerQuery("pre_dispatch_quota_read", db.from("commerce_continuous_sync_state").select("quota_remaining,quota_observed_at").eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("provider_account_id", message.provider_account_id).eq("resource", message.resource).limit(1).maybeSingle()),
-        schedulerQuery("pre_dispatch_active_run_read", db.from("commerce_sync_runs").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).in("status", ["queued", "running", "paused"])),
+        schedulerQuery("pre_dispatch_active_run_read", (message.scheduled_deep===true?db.from("commerce_sync_runs").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).in("status", ["queued", "running", "paused"]).neq("scheduler_idempotency_key",message.scheduler_identity):db.from("commerce_sync_runs").select("id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).in("status", ["queued", "running", "paused"]))),
         schedulerQuery("pre_dispatch_live_activation_read", db.from("commerce_repository_activation").select("organization_id", { count: "exact", head: true }).eq("organization_id", message.organization_id).in("mode", ["live", "live_beta"])),
         schedulerQuery("provider_account_scope_read", db.from("commerce_provider_accounts").select("id", { count: "exact", head: true }).eq("id", message.provider_account_id).eq("connection_id", message.connection_id).eq("organization_id", message.organization_id).eq("status", "active")),
         schedulerQuery("connection_permission_control_read", db.from("commerce_connection_pauses").select("connection_id", { count: "exact", head: true }).eq("organization_id", message.organization_id).eq("connection_id", message.connection_id).eq("paused", true)),
@@ -1257,6 +1257,11 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
         const { error } = await db.from("commerce_sync_runs").insert({ organization_id: message.organization_id, connection_id: message.connection_id, provider_account_id: message.provider_account_id, sync_type: message.resource, mode: "continuous", scheduler_idempotency_key: message.scheduler_identity, metadata: { account_id: message.account_id, quota_bootstrap_attempted: true, quota_bootstrap_state: "pending" } }).select("id").maybeSingle();
         if (error?.code === "23505") return "duplicate";
         if (error) throw error;
+        return "reserved";
+      }
+      if(message.scheduled_deep===true){
+        const { data: existing }=await schedulerQuery("scheduler_reservation_read",db.from("commerce_sync_runs").select("id,status").eq("organization_id",message.organization_id).eq("connection_id",message.connection_id).eq("scheduler_idempotency_key",message.scheduler_identity).limit(1).maybeSingle());
+        if(existing)return String(existing.status)==="paused"?"reserved":"duplicate";
         return "reserved";
       }
       const { count } = await schedulerQuery("scheduler_reservation_read", db.from("commerce_sync_runs").select("id", { count: "exact", head: true }).eq("connection_id", message.connection_id).eq("scheduler_idempotency_key", message.scheduler_identity));
