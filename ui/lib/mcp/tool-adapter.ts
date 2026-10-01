@@ -134,6 +134,9 @@ export const TRACEKIT_MCP_TOOLS = [
     annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:true},
   },
   {
+    name:"tracekit.execute_shopify_controlled_proof",title:"Execute controlled Shopify reversible proof",description:"Execute the exact server-resolved, freshly confirmed Stem Labs Shopify proof. Creates one disposable APP_UNINSTALLED webhook, verifies it, deletes that exact webhook, verifies absence, and retains durable recovery evidence.",inputSchema:{type:"object",properties:{confirmation_id:{type:"string",minLength:1,maxLength:512},requested_at:{type:"string",minLength:1,maxLength:128},consumption_id:{type:"string",minLength:1,maxLength:512},idempotency_key:{type:"string",minLength:1,maxLength:512}},required:["confirmation_id","requested_at","consumption_id","idempotency_key"],additionalProperties:false},annotations:{readOnlyHint:false,destructiveHint:true,idempotentHint:true,openWorldHint:true},
+  },
+  {
     name:"tracekit.prepare_shopify_controlled_proof",title:"Prepare controlled Shopify webhook proof",description:"Prepare an opaque, server-targeted reversible Shopify webhook proof intent. Does not mutate Shopify.",inputSchema:{type:"object",properties:{},additionalProperties:false},annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:true},
   },
   {
@@ -213,6 +216,8 @@ export async function callTraceKitMcpTool(
       assertKeys(args,[]);if(!actionService)throw new Error("action_service_unavailable");return actionService.prepareApprovedShopifyControlledProof();
     case "tracekit.confirm_shopify_controlled_proof":
       assertKeys(args,["intent_id"]);if(!actionService)throw new Error("action_service_unavailable");return actionService.confirmShopifyControlledProof(text(args.intent_id,"intent_id",true)!);
+    case "tracekit.execute_shopify_controlled_proof":
+      assertKeys(args,["confirmation_id","requested_at","consumption_id","idempotency_key"]);if(!actionService)throw new Error("action_service_unavailable");return actionService.executeShopifyControlledProof({confirmationId:text(args.confirmation_id,"confirmation_id",true)!,requestedAt:text(args.requested_at,"requested_at",true)!,consumptionId:text(args.consumption_id,"consumption_id",true)!,idempotencyKey:text(args.idempotency_key,"idempotency_key",true)!});
     case "tracekit.prepare_commas_test_delivery":
       assertKeys(args,[]);if(!actionService)throw new Error("action_service_unavailable");
       return actionService.prepareApprovedCommasTestDelivery();
