@@ -11,7 +11,7 @@ export async function AuthenticatedAppShell({ children }: { children: React.Reac
   if (resolution.kind === "bootstrap") return <FirstAdminBootstrap />;
   if (resolution.kind === "no-membership") return <SessionState title="No TraceKit access" description="Your identity is verified, but no active TraceKit account membership is assigned." />;
   if (resolution.kind === "development") return <AppShell>{children}</AppShell>;
-  const platformOrganizations = resolution.session.effectivePermissions.includes("admin.impersonate") && !resolution.legacySession.adminClientView
+  const platformOrganizations = resolution.session.activeAccount.accountType === "platform" && (resolution.session.role === "platform-owner" || resolution.session.role === "platform-admin") && !resolution.legacySession.adminClientView
     ? (await new SupabaseIdentityTenancyRepository().allActiveOrganizations()).map((organization) => ({ id: organization.id, name: organization.name, mark: organization.name.slice(0, 2).toUpperCase(), accountId: organization.owningAccountId }))
     : [];
   return <AppShell initialSession={resolution.legacySession} organizations={resolution.session.availableOrganizations} businessContexts={resolution.session.accessibleBusinessContexts} platformOrganizations={platformOrganizations}>{children}</AppShell>;
