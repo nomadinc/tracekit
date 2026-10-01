@@ -134,6 +134,12 @@ export const TRACEKIT_MCP_TOOLS = [
     annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:true},
   },
   {
+    name:"tracekit.prepare_shopify_controlled_proof",title:"Prepare controlled Shopify webhook proof",description:"Prepare an opaque, server-targeted reversible Shopify webhook proof intent. Does not mutate Shopify.",inputSchema:{type:"object",properties:{},additionalProperties:false},annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:true},
+  },
+  {
+    name:"tracekit.confirm_shopify_controlled_proof",title:"Confirm controlled Shopify webhook proof",description:"Record fresh human confirmation for one opaque prepared Shopify proof intent. Does not mutate Shopify.",inputSchema:{type:"object",properties:{intent_id:{type:"string",minLength:1,maxLength:512}},required:["intent_id"],additionalProperties:false},annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false},
+  },
+  {
     name:"tracekit.prepare_commas_test_delivery",title:"Prepare bounded Commas webhook test delivery",description:"Resolve the Organization's single approved Commas dispute webhook target server-side and persist an opaque expiring intent for a test delivery. Callers cannot choose the subscription or event type. This does not send a provider request.",
     inputSchema:{type:"object",properties:{},additionalProperties:false},
     annotations:{readOnlyHint:false,destructiveHint:false,idempotentHint:false,openWorldHint:false},
@@ -203,6 +209,10 @@ export async function callTraceKitMcpTool(
       assertKeys(args,[]);return service.inspectCommasTestDeliveryReadiness();
     case "tracekit.inspect_shopify_controlled_proof_readiness":
       assertKeys(args,[]);return service.inspectShopifyControlledProofReadiness();
+    case "tracekit.prepare_shopify_controlled_proof":
+      assertKeys(args,[]);if(!actionService)throw new Error("action_service_unavailable");return actionService.prepareApprovedShopifyControlledProof();
+    case "tracekit.confirm_shopify_controlled_proof":
+      assertKeys(args,["intent_id"]);if(!actionService)throw new Error("action_service_unavailable");return actionService.confirmShopifyControlledProof(text(args.intent_id,"intent_id",true)!);
     case "tracekit.prepare_commas_test_delivery":
       assertKeys(args,[]);if(!actionService)throw new Error("action_service_unavailable");
       return actionService.prepareApprovedCommasTestDelivery();
