@@ -1073,7 +1073,7 @@ function getContinuousCommerceAdapterRepository(env: Env): CommerceAdapterReposi
           ? scheduledDeepProviderRequestLimit(row.deep_request_budget)
           : undefined;
         const scheduleVersion=Number(row.schedule_version);
-        const schedulerIdentity=mode==="deep_reconciliation"?`${row.id}:v${scheduleVersion}:${mode}:${cadenceWindow}`:`${row.id}:${mode}:${cadenceWindow}`;
+        const schedulerIdentity=mode==="deep_reconciliation"?`${row.id}:v${scheduleVersion}:${mode}`:`${row.id}:${mode}:${cadenceWindow}`;
         jobs.push({ accountId: String(connection.account_id), organizationId: row.organization_id, connectionId: row.connection_id, providerAccountId: row.provider_account_id, resource: row.resource, mode, schedulerIdentity, quotaRemaining: Number.isFinite(quotaRemaining) ? quotaRemaining : null, quotaObservedAt: typeof quotaState?.quota_observed_at === "string" ? quotaState.quota_observed_at : null, quotaMaxAgeMs: scheduledQuotaMaxAgeMs(row.sync_frequency), requestBudget: scheduledDeepRequestLimit ?? 8, quotaFloor: row.quota_minimum_remaining, scheduleId: String(row.id), scheduleVersion, scheduledDeepRequestLimit });
       }
       return jobs;
