@@ -15,4 +15,4 @@ export function createTraceKitMcpReadService(session:TraceKitSessionContext,runt
   },runtimeContext);
 }
 
-export function createTraceKitMcpServices(session:TraceKitSessionContext,runtimeContext:{appOrigin?:string}={}){return{read:createTraceKitMcpReadService(session,runtimeContext),action:new TraceKitMcpActionService(session)};}
+export function createTraceKitMcpServices(session:TraceKitSessionContext,runtimeContext:{appOrigin?:string}={}){return{read:createTraceKitMcpReadService(session,runtimeContext),action:new TraceKitMcpActionService(session,runtimeContext)};}
