@@ -162,6 +162,39 @@ export class SupabaseIdentityTenancyRepository implements IdentityTenancyReposit
     });
   }
 
+  async ensurePlatformOwner(userId: string, authenticatedIdentityId: string, correlationId: string) {
+    const accounts = await rest("tracekit_accounts?account_type=eq.platform&status=eq.active&order=created_at.asc") as Row[];
+    if (accounts.length > 1) throw new Error("Multiple active platform accounts require operator review.");
+    let account = accounts[0];
+    let createdAccount = false;
+    if (!account) {
+      const rows = await rest("tracekit_accounts", { method: "POST", body: JSON.stringify({ account_type: "platform", name: "TraceKit Platform", status: "active" }) }) as Row[];
+      account = rows[0];
+      createdAccount = true;
+    }
+    if (!account?.id) throw new Error("Platform account unavailable.");
+
+    const roles = await rest("tracekit_roles?role_key=eq.platform-owner&select=id&limit=1") as Row[];
+    const roleId = roles[0]?.id ? String(roles[0].id) : null;
+    if (!roleId) throw new Error("Platform owner role unavailable.");
+
+    const existing = await rest(`tracekit_memberships?user_id=eq.${encodeURIComponent(userId)}&account_id=eq.${encodeURIComponent(String(account.id))}&limit=1`) as Row[];
+    let membership = existing[0];
+    let createdMembership = false;
+    if (membership) {
+      const rows = await rest(`tracekit_memberships?id=eq.${encodeURIComponent(String(membership.id))}`, { method: "PATCH", body: JSON.stringify({ role_id: roleId, status: "active", effective_until: null, updated_at: new Date().toISOString() }) }) as Row[];
+      membership = rows[0] || membership;
+    } else {
+      const rows = await rest("tracekit_memberships", { method: "POST", body: JSON.stringify({ user_id: userId, account_id: String(account.id), organization_id: null, role_id: roleId, status: "active" }) }) as Row[];
+      membership = rows[0];
+      createdMembership = true;
+    }
+    if (!membership?.id) throw new Error("Platform owner membership unavailable.");
+
+    await this.recordAuditEvent({ actorUserId: userId, authenticatedIdentityId, accountId: String(account.id), organizationId: null, action: "platform.owner_membership.ensured", targetType: "membership", targetId: String(membership.id), result: "success", permissionEvaluated: "admin.manage_tenants", correlationId, metadata: { createdAccount, createdMembership } });
+    return { accountId: String(account.id), membershipId: String(membership.id), createdAccount, createdMembership };
+  }
+
   async recordAuditEvent(event: AuditEventInput) {
     await rest("tracekit_audit_events", { method: "POST", body: JSON.stringify({ actor_user_id: event.actorUserId, authenticated_identity_id: event.authenticatedIdentityId, account_id: event.accountId, organization_id: event.organizationId, action: event.action, target_type: event.targetType || null, target_id: event.targetId || null, result: event.result, permission_evaluated: event.permissionEvaluated || null, correlation_id: event.correlationId, metadata: redactAuditMetadata(event.metadata) }) });
   }
