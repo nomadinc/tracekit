@@ -2,6 +2,7 @@ import Link from "next/link";
 import AppShell from "@/components/layout/app-shell";
 import { resolveApplicationSession } from "@/lib/identity/application-session";
 import FirstAdminBootstrap from "./first-admin-bootstrap";
+import { SupabaseIdentityTenancyRepository } from "@/lib/identity/supabase-identity-repository";
 
 export async function AuthenticatedAppShell({ children }: { children: React.ReactNode }) {
   const resolution = await resolveApplicationSession();
@@ -10,7 +11,10 @@ export async function AuthenticatedAppShell({ children }: { children: React.Reac
   if (resolution.kind === "bootstrap") return <FirstAdminBootstrap />;
   if (resolution.kind === "no-membership") return <SessionState title="No TraceKit access" description="Your identity is verified, but no active TraceKit account membership is assigned." />;
   if (resolution.kind === "development") return <AppShell>{children}</AppShell>;
-  const platformOrganizations = resolution.session.effectivePermissions.includes("admin.impersonate") && !resolution.legacySession.adminClientView\n    ? (await new (await import("@/lib/identity/supabase-identity-repository")).SupabaseIdentityTenancyRepository().allActiveOrganizations()).map((organization) => ({ id: organization.id, name: organization.name, mark: organization.name.slice(0, 2).toUpperCase(), accountId: organization.owningAccountId }))\n    : [];\n  return <AppShell initialSession={resolution.legacySession} organizations={resolution.session.availableOrganizations} businessContexts={resolution.session.accessibleBusinessContexts} platformOrganizations={platformOrganizations}>{children}</AppShell>;
+  const platformOrganizations = resolution.session.effectivePermissions.includes("admin.impersonate") && !resolution.legacySession.adminClientView
+    ? (await new SupabaseIdentityTenancyRepository().allActiveOrganizations()).map((organization) => ({ id: organization.id, name: organization.name, mark: organization.name.slice(0, 2).toUpperCase(), accountId: organization.owningAccountId }))
+    : [];
+  return <AppShell initialSession={resolution.legacySession} organizations={resolution.session.availableOrganizations} businessContexts={resolution.session.accessibleBusinessContexts} platformOrganizations={platformOrganizations}>{children}</AppShell>;
 }
 
 function SessionState({ title, description, signIn = false }: { title: string; description: string; signIn?: boolean }) {
