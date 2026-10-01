@@ -37,6 +37,7 @@ export class TraceKitMcpReadService {
   constructor(
     private readonly session: TraceKitSessionContext,
     private readonly repositories: McpReadRepositories,
+    private readonly runtimeContext: { appOrigin?: string } = {},
   ) {}
 
   private async audited<T>(
@@ -185,5 +186,5 @@ export class TraceKitMcpReadService {
     });
   }
   inspectCommasTestDeliveryReadiness(){return this.audited("inspect_commas_test_delivery_readiness","customers.view","organization",this.session.activeOrganization!.id,async()=>inspectCommasTestDeliveryReadiness(this.session));}
-  inspectShopifyControlledProofReadiness(){return this.audited("inspect_shopify_controlled_proof_readiness","customers.view","organization",this.session.activeOrganization!.id,async()=>inspectShopifyControlledProofReadiness(this.session));}
+  inspectShopifyControlledProofReadiness(){return this.audited("inspect_shopify_controlled_proof_readiness","customers.view","organization",this.session.activeOrganization!.id,async()=>inspectShopifyControlledProofReadiness(this.session,this.runtimeContext.appOrigin));}
 }

@@ -6,13 +6,13 @@ import type { TraceKitSessionContext } from "@/lib/identity/persistent-types";
 import { TraceKitMcpReadService } from "./read-service";
 import { TraceKitMcpActionService } from "./action-service";
 
-export function createTraceKitMcpReadService(session:TraceKitSessionContext) {
+export function createTraceKitMcpReadService(session:TraceKitSessionContext,runtimeContext:{appOrigin?:string}={}) {
   return new TraceKitMcpReadService(session,{
     customers:mcpCustomerRepository,
     orders:mcpOrderRepository,
     journey:mcpJourneyRepository,
     audit:new SupabaseIdentityTenancyRepository(),
-  });
+  },runtimeContext);
 }
 
-export function createTraceKitMcpServices(session:TraceKitSessionContext){return{read:createTraceKitMcpReadService(session),action:new TraceKitMcpActionService(session)};}
+export function createTraceKitMcpServices(session:TraceKitSessionContext,runtimeContext:{appOrigin?:string}={}){return{read:createTraceKitMcpReadService(session,runtimeContext),action:new TraceKitMcpActionService(session)};}

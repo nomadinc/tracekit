@@ -12,10 +12,11 @@ function cfg(){const url=process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/,"")
 async function db(path:string){const{url,key}=cfg(),r=await fetch(`${url}/rest/v1/${path}`,{headers:supabaseAuthHeaders(key),cache:"no-store"});if(!r.ok)throw new Error("shopify_readiness_persistence_read_failed");const v=await r.json();return(Array.isArray(v)?v:[v])as Row[];}
 const bytes=(v:unknown)=>Uint8Array.from(Buffer.from(String(v).replace(/^\\x/,""),"hex"));
 
-export async function inspectShopifyControlledProofReadiness(session:TraceKitSessionContext){
+export async function inspectShopifyControlledProofReadiness(session:TraceKitSessionContext,appOrigin?:string){
  const org=session.activeOrganization!;
- const callbackUrl=`${process.env.NEXT_PUBLIC_APP_URL?.replace(/\/$/,"")||""}/api/webhooks/shopify`;
- const out={activeOrganizationId:org.id,activeOrganizationName:org.name||null,expectedOrganizationId:STEM_ORG,connectedApprovedShopifyConnections:0,activeCredentials:0,credentialEnvelopeMatched:false,credentialDecryptSucceeded:false,shopCredentialParsed:false,shopDomainMatched:false,approvedShop:SHOP,callbackUrlConfigured:Boolean(process.env.NEXT_PUBLIC_APP_URL),approvedCallback:callbackUrl,subscriptionReadSucceeded:false,tracekitSubscriptionCount:0,proofOnlyTopic:SHOPIFY_PROOF_ONLY_TOPIC,proofOnlyTopicMatches:0,proofOnlyTopicAvailable:false,createReadBackPrimitive:true,deleteAbsencePrimitive:true,recoveryMode:"same_execution_exact_created_subscription",ready:false};
+ let normalizedOrigin="";try{const u=new URL(String(appOrigin||""));if(u.protocol==="https:"&&!u.username&&!u.password)normalizedOrigin=u.origin;}catch{}
+ const callbackUrl=normalizedOrigin?`${normalizedOrigin}/api/webhooks/shopify`:"";
+ const out={activeOrganizationId:org.id,activeOrganizationName:org.name||null,expectedOrganizationId:STEM_ORG,connectedApprovedShopifyConnections:0,activeCredentials:0,credentialEnvelopeMatched:false,credentialDecryptSucceeded:false,shopCredentialParsed:false,shopDomainMatched:false,approvedShop:SHOP,callbackUrlConfigured:Boolean(normalizedOrigin),approvedCallback:callbackUrl,subscriptionReadSucceeded:false,tracekitSubscriptionCount:0,proofOnlyTopic:SHOPIFY_PROOF_ONLY_TOPIC,proofOnlyTopicMatches:0,proofOnlyTopicAvailable:false,createReadBackPrimitive:true,deleteAbsencePrimitive:true,recoveryMode:"same_execution_exact_created_subscription",ready:false};
  if(org.id!==STEM_ORG)return out;
  const connections=await db(`commerce_provider_connections?id=eq.${CONNECTION}&provider=eq.shopify&status=eq.connected&organization_id=eq.${encodeURIComponent(org.id)}&select=id,organization_id&limit=2`);
  out.connectedApprovedShopifyConnections=connections.length;if(connections.length!==1)return out;
