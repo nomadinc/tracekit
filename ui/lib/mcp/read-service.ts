@@ -188,5 +188,6 @@ export class TraceKitMcpReadService {
     });
   }
   inspectCommasTestDeliveryReadiness(){return this.audited("inspect_commas_test_delivery_readiness","customers.view","organization",this.session.activeOrganization!.id,async()=>inspectCommasTestDeliveryReadiness(this.session));}
-  inspectShopifyWebhookRemediation(){return this.audited("inspect_shopify_webhook_remediation","connectors.view","organization",this.session.activeOrganization!.id,async()=>inspectLiveShopifyWebhookRemediation(this.session,this.runtimeContext.appOrigin));}\n  inspectShopifyControlledProofReadiness(){return this.audited("inspect_shopify_controlled_proof_readiness","customers.view","organization",this.session.activeOrganization!.id,async()=>inspectShopifyControlledProofReadiness(this.session,this.runtimeContext.appOrigin));}
+  inspectShopifyWebhookRemediation(){return this.audited("inspect_shopify_webhook_remediation","connectors.view","organization",this.session.activeOrganization!.id,async()=>inspectLiveShopifyWebhookRemediation(this.session,this.runtimeContext.appOrigin));}
+  inspectShopifyControlledProofReadiness(){return this.audited("inspect_shopify_controlled_proof_readiness","customers.view","organization",this.session.activeOrganization!.id,async()=>inspectShopifyControlledProofReadiness(this.session,this.runtimeContext.appOrigin));}
 }
