@@ -162,8 +162,8 @@ export async function replaceMetaCredential(input: {
   token: MetaToken;
   grantedScopes: string[];
 }) {
-  const key = decodeCommerceCredentialKey(process.env.MARKETING_CREDENTIALS_ENC_KEY);
-  const keyId = String(process.env.MARKETING_CREDENTIALS_KEY_ID || "").trim();
+  const key = decodeCommerceCredentialKey(process.env.COMMERCE_CREDENTIALS_ENC_KEY);
+  const keyId = String(process.env.COMMERCE_CREDENTIALS_KEY_ID || "").trim();
   if (!keyId) throw new Error("Marketing credential encryption is unavailable.");
   const encrypted = await encryptCommerceCredential(input.token.accessToken, key, keyId, 1);
   const existing = await marketingPersistenceRequest(
