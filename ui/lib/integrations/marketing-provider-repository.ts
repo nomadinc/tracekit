@@ -191,7 +191,6 @@ export async function replaceMetaCredential(input: {
       secret_iv: bytea(encrypted.iv),
       secret_ciphertext: bytea(encrypted.ciphertext),
       public_metadata: {
-        tokenType: input.token.tokenType,
         grantedScopes: input.grantedScopes.slice().sort(),
         expiresAt,
         lastValidatedAt: now,
