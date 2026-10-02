@@ -36,9 +36,13 @@ export class MetaOAuthError extends Error {
   constructor(readonly code: string, message: string, readonly httpStatus = 400, readonly retryable = false) { super(message); }
 }
 
+function configurationError(detail: string) {
+  return new MetaOAuthError("meta_configuration_unavailable", `Meta connection configuration is unavailable (${detail}).`, 503, true);
+}
+
 function required(name: string) {
   const value = String(process.env[name] || "").trim();
-  if (!value) throw new MetaOAuthError("meta_configuration_unavailable", "Meta connection configuration is unavailable.", 503, true);
+  if (!value) throw configurationError(`${name} missing`);
   return value;
 }
 
@@ -51,9 +55,9 @@ export function getMetaConfiguration() {
   if (!/^\\d+$/.test(loginConfigId)) throw new MetaOAuthError("meta_configuration_unavailable", "Meta connection configuration is unavailable.", 503, true);
   let redirect: URL;
   try { redirect = new URL(redirectUri); }
-  catch { throw new MetaOAuthError("meta_configuration_unavailable", "Meta connection configuration is unavailable.", 503, true); }
-  if (redirect.protocol !== "https:" && redirect.hostname !== "localhost" && redirect.hostname !== "127.0.0.1") throw new MetaOAuthError("meta_configuration_unavailable", "Meta connection configuration is unavailable.", 503, true);
-  if (stateSecret.length < 32) throw new MetaOAuthError("meta_configuration_unavailable", "Meta connection configuration is unavailable.", 503, true);
+  catch { throw configurationError("META_OAUTH_REDIRECT_URI invalid"); }
+  if (redirect.protocol !== "https:" && redirect.hostname !== "localhost" && redirect.hostname !== "127.0.0.1") throw configurationError("META_OAUTH_REDIRECT_URI must use HTTPS");
+  if (stateSecret.length < 32) throw configurationError("META_OAUTH_STATE_SECRET too short");
   return { appId, appSecret, redirectUri: redirect.toString(), stateSecret, loginConfigId };
 }
 
