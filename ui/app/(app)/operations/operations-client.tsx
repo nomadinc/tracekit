@@ -40,7 +40,6 @@ import { useInvestigation } from "@/components/investigation/investigation-conte
 import { parseInspectValue } from "@/lib/entities";
 import { LIVE_WORKSPACE_UPDATE_EVENT, type WorkspaceUpdate } from "@/lib/live";
 import { AccessBoundary } from "@/components/identity/access-control";
-import { GovernedProviderActionsCard } from "./governed-provider-actions-card";
 
 const WORKSPACE_ID = "default";
 const STATUSES: Array<WorkItemStatus | "all"> = ["all", "open", "acknowledged", "in_progress", "resolved", "dismissed"];
@@ -566,7 +565,6 @@ function OperationsContent() {
       </div>
 
       <SummaryKpis summary={summary} />
-      <GovernedProviderActionsCard />
       <QueueCards summary={summary} onFilter={filterByCategory} />
 
       <Card>
