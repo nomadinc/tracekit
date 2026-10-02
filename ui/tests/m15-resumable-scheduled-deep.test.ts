@@ -70,3 +70,15 @@ test("scheduled deep chunk preserves normal continuous boundary state",()=>{
   assert.match(block,/status:boundedDeepProof\?priorState\?\.status/);
   assert.match(block,/warnings:boundedDeepProof\?priorState\?\.warnings/);
 });
+
+
+test("scheduled deep conservative stops remain resumable",()=>{
+  assert.match(worker,/scheduledDeepResumableStop=Boolean\(scheduledDeepSchedule\)&&deeperReconciliationRequired&&stoppingReason!=="bounded_deep_reconciliation_proof"/);
+  const start=worker.indexOf("const trueScheduledDeepSuccess");
+  const end=worker.indexOf("const transitionApplied",start);
+  assert.ok(start>0&&end>start);
+  const block=worker.slice(start,end);
+  assert.match(block,/scheduledDeepResumableStop/);
+  assert.match(block,/rpc\/pause_commerce_sync_run/);
+  assert.match(block,/p_reason:stoppingReason/);
+});
