@@ -6,6 +6,7 @@ import { SCHEDULED_DEEP_INVOCATION_REQUEST_MAX, scheduledDeepInvocationCeiling }
 const scheduler=readFileSync(new URL("../../api/src/index.ts",import.meta.url),"utf8");
 const worker=readFileSync(new URL("../lib/commerce/commas-continuous-worker.ts",import.meta.url),"utf8");
 const migration=readFileSync(new URL("../../supabase/migrations/20261001223000_resumable_scheduled_deep_chunks.sql",import.meta.url),"utf8");
+const completionIdentityMigration=readFileSync(new URL("../../supabase/migrations/20261002040000_fix_scheduled_deep_completion_identity.sql",import.meta.url),"utf8");
 
 test("M15 deep chunks have a strict per-invocation provider ceiling",()=>{
   assert.equal(SCHEDULED_DEEP_INVOCATION_REQUEST_MAX,40);
@@ -81,4 +82,12 @@ test("scheduled deep conservative stops remain resumable",()=>{
   assert.match(block,/scheduledDeepResumableStop/);
   assert.match(block,/rpc\/pause_commerce_sync_run/);
   assert.match(block,/p_reason:stoppingReason/);
+});
+
+
+test("deep completion accepts exactly the stable resumable scheduler identity",()=>{
+  assert.match(scheduler,/scheduleVersion\}:\$\{mode\}/);
+  assert.match(completionIdentityMigration,/v_expected_identity := p_schedule_id::text\|\|':v'\|\|p_expected_schedule_version::text\|\|':deep_reconciliation'/);
+  assert.match(completionIdentityMigration,/scheduler_idempotency_key is distinct from v_expected_identity/);
+  assert.doesNotMatch(completionIdentityMigration,/deep_reconciliation:'|v_expected_identity_prefix|like v_expected_identity/);
 });
