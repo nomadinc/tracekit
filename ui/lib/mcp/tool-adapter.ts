@@ -3,6 +3,11 @@ import type { TraceKitMcpActionService } from "./action-service";
 
 export const TRACEKIT_MCP_TOOLS = [
   {
+    name:"tracekit.discover_provider_actions",title:"Discover governed provider actions",description:"Read-only discovery of explicitly registered provider actions that are currently available for the active Organization. Availability requires matching governance contracts, action permission, and an exact server-resolved provider target; discovery never prepares, confirms, or executes an action.",
+    inputSchema:{type:"object",properties:{},additionalProperties:false},
+    annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
+  },
+  {
     name: "tracekit.list_customers",
     title: "List TraceKit customers",
     description: "List customers visible in the authenticated TraceKit Organization. Sensitive fields are permission-projected.",
@@ -208,6 +213,7 @@ export async function callTraceKitMcpTool(
 ) {
   const args = objectArgs(rawArguments ?? {});
   switch (name as TraceKitMcpToolName) {
+    case "tracekit.discover_provider_actions": assertKeys(args,[]);return service.discoverProviderActions();
     case "tracekit.inspect_commas_test_delivery_readiness":
       assertKeys(args,[]);return service.inspectCommasTestDeliveryReadiness();
     case "tracekit.inspect_shopify_controlled_proof_readiness":

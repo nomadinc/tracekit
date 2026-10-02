@@ -10,7 +10,7 @@ import { authorizeMcpRead, projectCustomerSummary, projectCustomerWorkspace, pro
 import { recordMcpToolAudit } from "./audit";
 import{acceptMcpEvidenceLimit,evidenceLimitFingerprint,readMcpEvidenceLimitAcceptances}from"./evidence-limit-acceptance-repository";
 import{inspectCommasTestDeliveryReadiness}from"./m14-commas-target-resolver";
-import{inspectShopifyControlledProofReadiness}from"./m15-shopify-controlled-proof-readiness";
+import{inspectShopifyControlledProofReadiness}from"./m15-shopify-controlled-proof-readiness";import{discoverGovernedProviderActions}from"./provider-action-discovery";
 import type { JourneyIntelligence, CrossJourneyAnalysis, TrackingInvestigation, DeviationInvestigation, RecommendationIntelligence, GovernedActionPlanning, ActionEligibilityInspection } from "./journey-repository";
 
 type McpCustomerRepository = Pick<
@@ -76,6 +76,8 @@ export class TraceKitMcpReadService {
       throw error;
     }
   }
+
+  discoverProviderActions(){return this.audited("discover_provider_actions","organizations.view",null,null,()=>discoverGovernedProviderActions(this.session,this.runtimeContext.appOrigin));}
 
   listCustomers(input: { query?: string; limit?: number } = {}) {
     return this.audited("list_customers", "customers.view", null, null, async () => {
