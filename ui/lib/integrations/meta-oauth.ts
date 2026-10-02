@@ -47,12 +47,14 @@ export function getMetaConfiguration() {
   const appSecret = required("META_APP_SECRET");
   const redirectUri = required("META_OAUTH_REDIRECT_URI");
   const stateSecret = required("META_OAUTH_STATE_SECRET");
+  const loginConfigId = required("META_LOGIN_CONFIG_ID");
+  if (!/^\\d+$/.test(loginConfigId)) throw new MetaOAuthError("meta_configuration_unavailable", "Meta connection configuration is unavailable.", 503, true);
   let redirect: URL;
   try { redirect = new URL(redirectUri); }
   catch { throw new MetaOAuthError("meta_configuration_unavailable", "Meta connection configuration is unavailable.", 503, true); }
   if (redirect.protocol !== "https:" && redirect.hostname !== "localhost" && redirect.hostname !== "127.0.0.1") throw new MetaOAuthError("meta_configuration_unavailable", "Meta connection configuration is unavailable.", 503, true);
   if (stateSecret.length < 32) throw new MetaOAuthError("meta_configuration_unavailable", "Meta connection configuration is unavailable.", 503, true);
-  return { appId, appSecret, redirectUri: redirect.toString(), stateSecret };
+  return { appId, appSecret, redirectUri: redirect.toString(), stateSecret, loginConfigId };
 }
 
 function signature(payload: string, secret: string) { return createHmac("sha256", secret).update(payload).digest("base64url"); }
@@ -88,7 +90,7 @@ export function buildMetaAuthorizationUrl(input: { organizationId: string; userI
   url.searchParams.set("redirect_uri", config.redirectUri);
   url.searchParams.set("state", createMetaOAuthState(input));
   url.searchParams.set("response_type", "code");
-  url.searchParams.set("scope", META_REQUIRED_SCOPES.join(","));
+  url.searchParams.set("config_id", config.loginConfigId);
   return url.toString();
 }
 
