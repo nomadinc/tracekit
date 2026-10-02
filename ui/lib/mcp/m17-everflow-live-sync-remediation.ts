@@ -1,0 +1,2 @@
+import{loadConnectionExperiences}from"@/lib/commerce/integration-experience-server";import{assessEverflowSyncRemediationEligibility}from"./m17-everflow-sync-remediation";
+export async function inspectLiveEverflowSyncRemediation(){const connections=await loadConnectionExperiences(),everflow=connections.filter(c=>c.provider==="everflow");return{provider:"everflow",connectionCount:everflow.length,connections:everflow.map(c=>({connectionId:c.id,displayName:c.displayName,...assessEverflowSyncRemediationEligibility(c)}))};}
