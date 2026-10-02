@@ -47,7 +47,7 @@ export async function GET(request: NextRequest) {
       : meta?.code === "meta_oauth_state_invalid" ? "state"
       : meta?.code === "meta_credential_encryption_configuration" ? "credential_config"
       : meta?.code === "meta_credential_encryption_resolution" ? "credential_crypto"
-      : meta?.code === "meta_credential_database_write" ? "credential_db"
+      : meta?.code?.startsWith("meta_credential_database_write_") ? `credential_db_${meta.code.slice("meta_credential_database_write_".length)}`
       : "failed";
     return clearState(NextResponse.redirect(returnUrl(request, { meta: code }), 303));
   }
