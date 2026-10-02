@@ -10,6 +10,7 @@ import {
   verifyMetaOAuthState,
 } from "./meta-oauth";
 import {
+  MarketingPersistenceError,
   listMetaAccounts,
   listMetaConnections,
   marketingPersistenceRequest,
@@ -79,8 +80,8 @@ export async function completeMetaOAuth(input: {
         ? "meta_credential_encryption_configuration"
         : raw === "commerce_credential_unavailable"
           ? "meta_credential_encryption_resolution"
-          : error instanceof Error && error.name === "MarketingPersistenceError"
-            ? "meta_credential_database_write"
+          : error instanceof MarketingPersistenceError
+            ? `meta_credential_database_write_${error.databaseCode}`
             : "meta_connection_persistence_failed";
       throw new MetaOAuthError(safeCode, "Meta connection persistence could not be completed.", 503, true);
     }
