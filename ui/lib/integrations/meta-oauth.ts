@@ -52,7 +52,7 @@ export function getMetaConfiguration() {
   const redirectUri = required("META_OAUTH_REDIRECT_URI");
   const stateSecret = required("META_OAUTH_STATE_SECRET");
   const loginConfigId = required("META_LOGIN_CONFIG_ID");
-  if (!/^\\d+$/.test(loginConfigId)) throw new MetaOAuthError("meta_configuration_unavailable", "Meta connection configuration is unavailable.", 503, true);
+  if (!/^\d+$/.test(loginConfigId)) throw configurationError("META_LOGIN_CONFIG_ID invalid");
   let redirect: URL;
   try { redirect = new URL(redirectUri); }
   catch { throw configurationError("META_OAUTH_REDIRECT_URI invalid"); }
