@@ -1,0 +1,3 @@
+import{NextResponse}from"next/server";import{resolveApplicationSession}from"@/lib/identity/application-session";import{createTraceKitMcpServices}from"@/lib/mcp/server";
+export const runtime="nodejs";export const dynamic="force-dynamic";
+export async function GET(request:Request){const resolution=await resolveApplicationSession();if(resolution.kind!=="authenticated")return NextResponse.json({ok:false,error:"unauthorized"},{status:401,headers:{"Cache-Control":"no-store"}});const services=createTraceKitMcpServices(resolution.session,{appOrigin:new URL(request.url).origin});const discovery=await services.read.discoverProviderActions();return NextResponse.json({ok:true,...discovery},{headers:{"Cache-Control":"no-store"}});}
