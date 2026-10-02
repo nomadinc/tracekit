@@ -6,3 +6,5 @@ test("stale snapshots are retained but cannot regress current projection",()=>{a
 test("Core rejects breaking versions and forbidden routing or private fields",()=>{assert.match(m,/schemaVersion' is distinct from '1\.0'/);for(const field of["routingDecision","rawIp","vaultRef","rawProviderResponse","email","paymentData"])assert.match(m,new RegExp(field));});
 test("Core keeps journey association separate and unresolved until deterministic linkage exists",()=>{assert.match(m,/edge_intelligence_journey_links/);assert.match(m,/'unresolved'/);assert.match(m,/sessionRef/);assert.match(m,/eventRef/);});
 test("ingestion is service-role only and transport remains absent",()=>{assert.match(m,/revoke all on function public\.ingest_edge_intelligence_v1/);assert.match(m,/grant execute on function public\.ingest_edge_intelligence_v1\(uuid,jsonb\) to service_role/);assert.doesNotMatch(m,/http|webhook|queue|fetch\(/i);});
+
+test("Edge Intelligence tenancy uses the canonical TraceKit organization table",()=>{assert.equal((m.match(/references public\.tracekit_organizations\(id\)/g)||[]).length,3);assert.doesNotMatch(m,/references public\.organizations\(id\)/);});
