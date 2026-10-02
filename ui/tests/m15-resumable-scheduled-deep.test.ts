@@ -57,3 +57,16 @@ test("derived investigation invalidation cannot fail a durably checkpointed chun
   assert.match(block,/commerce\.investigation\.invalidation_failed/);
   assert.match(block,/catch\s*\{/);
 });
+
+
+test("scheduled deep chunk preserves normal continuous boundary state",()=>{
+  const start=worker.indexOf('commerce_continuous_sync_state?on_conflict=connection_id,provider_account_id,resource');
+  const end=worker.indexOf('if(changedRows.length)',start);
+  assert.ok(start>0&&end>start);
+  const block=worker.slice(start,end);
+  assert.match(block,/recent_source_ids:boundedDeepProof\?priorState\?\.recent_source_ids\?\?\[\]/);
+  assert.match(block,/page_fingerprints:boundedDeepProof\?priorState\?\.page_fingerprints\?\?\{\}/);
+  assert.match(block,/last_stability_boundary:boundedDeepProof\?priorState\?\.last_stability_boundary/);
+  assert.match(block,/status:boundedDeepProof\?priorState\?\.status/);
+  assert.match(block,/warnings:boundedDeepProof\?priorState\?\.warnings/);
+});
