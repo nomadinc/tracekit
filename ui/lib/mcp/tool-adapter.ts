@@ -3,6 +3,11 @@ import type { TraceKitMcpActionService } from "./action-service";
 
 export const TRACEKIT_MCP_TOOLS = [
   {
+    name:"tracekit.inspect_remediation_signals",title:"Inspect TraceKit remediation signals",description:"Read-only active-Organization view of normalized provider remediation signals. Reports whether any currently observed condition actually requires governed action; never prepares or executes remediation.",
+    inputSchema:{type:"object",properties:{},additionalProperties:false},
+    annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
+  },
+  {
     name:"tracekit.inspect_everflow_sync_remediation",title:"Inspect Everflow sync remediation",description:"Read-only inspection of active-Organization Everflow connections for evidence-backed bounded manual-sync remediation eligibility. Does not start a sync.",
     inputSchema:{type:"object",properties:{},additionalProperties:false},
     annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
@@ -226,6 +231,7 @@ export async function callTraceKitMcpTool(
     case "tracekit.discover_provider_actions": assertKeys(args,[]);return service.discoverProviderActions();
     case "tracekit.inspect_commas_test_delivery_readiness":
       assertKeys(args,[]);return service.inspectCommasTestDeliveryReadiness();
+    case "tracekit.inspect_remediation_signals": assertKeys(args,[]);return service.inspectRemediationSignals();
     case "tracekit.inspect_everflow_sync_remediation": assertKeys(args,[]);return service.inspectEverflowSyncRemediation();
     case "tracekit.inspect_shopify_webhook_remediation": assertKeys(args,[]);return service.inspectShopifyWebhookRemediation();
     case "tracekit.inspect_shopify_controlled_proof_readiness":
