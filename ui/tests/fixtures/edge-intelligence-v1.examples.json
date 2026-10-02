@@ -1,0 +1,1840 @@
+{
+  "schemaVersion": "1.0",
+  "sanitized": true,
+  "scenarios": {
+    "normalResidential": {
+      "schemaVersion": "1.0",
+      "semanticsVersion": "m23-v1",
+      "derivationRuleVersion": "edge-derived-v1",
+      "observationId": "obs_normal_residential_00000000",
+      "tenantRef": "tenant_fixture_a",
+      "sessionRef": "session_fixture_a",
+      "eventRef": "event_fixture_a",
+      "revision": 1,
+      "observedAt": "2026-09-04T12:00:00.000Z",
+      "updatedAt": "2026-09-04T12:00:02.000Z",
+      "status": "COMPLETE",
+      "completedStages": [
+        "OWNED",
+        "NETWORK_LOCAL",
+        "NETWORK_LIVE",
+        "DERIVATION"
+      ],
+      "pendingStages": [],
+      "intelligence": {
+        "network": {
+          "networkType": {
+            "state": "KNOWN",
+            "value": "residential",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "hosting": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "vpn": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "proxy": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "residentialProxy": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "mobileProxy": {
+            "state": "UNKNOWN",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "tor": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "anonymous": {
+            "state": "UNKNOWN",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          }
+        }
+      },
+      "evidence": [
+        {
+          "id": "evidence_network_1",
+          "domain": "NETWORK",
+          "field": "proxy",
+          "sourceClass": "OWNED_OBSERVATION",
+          "provider": "tracekit",
+          "value": false,
+          "observedAt": "2026-09-04T12:00:00.000Z",
+          "freshness": "CURRENT",
+          "reasonCode": "NORMALIZED_NETWORK_OBSERVATION"
+        }
+      ],
+      "conflicts": [],
+      "explanations": [
+        {
+          "field": "proxy",
+          "state": "FALSE",
+          "supportingEvidenceRefs": [
+            "evidence_network_1"
+          ],
+          "conflictingEvidenceRefs": [],
+          "derivationRuleVersion": "edge-derived-v1",
+          "summaryCode": "EVIDENCE_PRECEDENCE_APPLIED"
+        }
+      ],
+      "errors": []
+    },
+    "directMobile": {
+      "schemaVersion": "1.0",
+      "semanticsVersion": "m23-v1",
+      "derivationRuleVersion": "edge-derived-v1",
+      "observationId": "obs_direct_mobile_00000000",
+      "tenantRef": "tenant_fixture_a",
+      "sessionRef": "session_fixture_a",
+      "eventRef": "event_fixture_a",
+      "revision": 1,
+      "observedAt": "2026-09-04T12:00:00.000Z",
+      "updatedAt": "2026-09-04T12:00:02.000Z",
+      "status": "COMPLETE",
+      "completedStages": [
+        "OWNED",
+        "NETWORK_LOCAL",
+        "NETWORK_LIVE",
+        "DERIVATION"
+      ],
+      "pendingStages": [],
+      "intelligence": {
+        "network": {
+          "networkType": {
+            "state": "KNOWN",
+            "value": "mobile",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "hosting": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "vpn": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "proxy": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "residentialProxy": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "mobileProxy": {
+            "state": "UNKNOWN",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "tor": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "anonymous": {
+            "state": "UNKNOWN",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          }
+        }
+      },
+      "evidence": [
+        {
+          "id": "evidence_network_1",
+          "domain": "NETWORK",
+          "field": "proxy",
+          "sourceClass": "OWNED_OBSERVATION",
+          "provider": "tracekit",
+          "value": false,
+          "observedAt": "2026-09-04T12:00:00.000Z",
+          "freshness": "CURRENT",
+          "reasonCode": "MOBILE_INFRASTRUCTURE_ONLY"
+        }
+      ],
+      "conflicts": [],
+      "explanations": [
+        {
+          "field": "proxy",
+          "state": "FALSE",
+          "supportingEvidenceRefs": [
+            "evidence_network_1"
+          ],
+          "conflictingEvidenceRefs": [],
+          "derivationRuleVersion": "edge-derived-v1",
+          "summaryCode": "EVIDENCE_PRECEDENCE_APPLIED"
+        }
+      ],
+      "errors": []
+    },
+    "vpn": {
+      "schemaVersion": "1.0",
+      "semanticsVersion": "m23-v1",
+      "derivationRuleVersion": "edge-derived-v1",
+      "observationId": "obs_vpn_00000000",
+      "tenantRef": "tenant_fixture_a",
+      "sessionRef": "session_fixture_a",
+      "eventRef": "event_fixture_a",
+      "revision": 1,
+      "observedAt": "2026-09-04T12:00:00.000Z",
+      "updatedAt": "2026-09-04T12:00:02.000Z",
+      "status": "COMPLETE",
+      "completedStages": [
+        "OWNED",
+        "NETWORK_LOCAL",
+        "NETWORK_LIVE",
+        "DERIVATION"
+      ],
+      "pendingStages": [],
+      "intelligence": {
+        "network": {
+          "networkType": {
+            "state": "KNOWN",
+            "value": "residential",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "hosting": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "vpn": {
+            "state": "TRUE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "proxy": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "residentialProxy": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "mobileProxy": {
+            "state": "UNKNOWN",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "tor": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "anonymous": {
+            "state": "TRUE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          }
+        }
+      },
+      "evidence": [
+        {
+          "id": "evidence_network_1",
+          "domain": "NETWORK",
+          "field": "proxy",
+          "sourceClass": "OWNED_OBSERVATION",
+          "provider": "tracekit",
+          "value": false,
+          "observedAt": "2026-09-04T12:00:00.000Z",
+          "freshness": "CURRENT",
+          "reasonCode": "NORMALIZED_NETWORK_OBSERVATION"
+        }
+      ],
+      "conflicts": [],
+      "explanations": [
+        {
+          "field": "proxy",
+          "state": "FALSE",
+          "supportingEvidenceRefs": [
+            "evidence_network_1"
+          ],
+          "conflictingEvidenceRefs": [],
+          "derivationRuleVersion": "edge-derived-v1",
+          "summaryCode": "EVIDENCE_PRECEDENCE_APPLIED"
+        }
+      ],
+      "errors": []
+    },
+    "datacenter": {
+      "schemaVersion": "1.0",
+      "semanticsVersion": "m23-v1",
+      "derivationRuleVersion": "edge-derived-v1",
+      "observationId": "obs_datacenter_00000000",
+      "tenantRef": "tenant_fixture_a",
+      "sessionRef": "session_fixture_a",
+      "eventRef": "event_fixture_a",
+      "revision": 1,
+      "observedAt": "2026-09-04T12:00:00.000Z",
+      "updatedAt": "2026-09-04T12:00:02.000Z",
+      "status": "COMPLETE",
+      "completedStages": [
+        "OWNED",
+        "NETWORK_LOCAL",
+        "NETWORK_LIVE",
+        "DERIVATION"
+      ],
+      "pendingStages": [],
+      "intelligence": {
+        "network": {
+          "networkType": {
+            "state": "KNOWN",
+            "value": "datacenter",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "hosting": {
+            "state": "TRUE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "vpn": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "proxy": {
+            "state": "UNKNOWN",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "residentialProxy": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "mobileProxy": {
+            "state": "UNKNOWN",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "tor": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "anonymous": {
+            "state": "UNKNOWN",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          }
+        }
+      },
+      "evidence": [
+        {
+          "id": "evidence_network_1",
+          "domain": "NETWORK",
+          "field": "proxy",
+          "sourceClass": "OWNED_OBSERVATION",
+          "provider": "tracekit",
+          "value": false,
+          "observedAt": "2026-09-04T12:00:00.000Z",
+          "freshness": "CURRENT",
+          "reasonCode": "DATACENTER_INFRASTRUCTURE_ONLY"
+        }
+      ],
+      "conflicts": [],
+      "explanations": [
+        {
+          "field": "proxy",
+          "state": "UNKNOWN",
+          "supportingEvidenceRefs": [
+            "evidence_network_1"
+          ],
+          "conflictingEvidenceRefs": [],
+          "derivationRuleVersion": "edge-derived-v1",
+          "summaryCode": "EVIDENCE_PRECEDENCE_APPLIED"
+        }
+      ],
+      "errors": []
+    },
+    "residentialProxy": {
+      "schemaVersion": "1.0",
+      "semanticsVersion": "m23-v1",
+      "derivationRuleVersion": "edge-derived-v1",
+      "observationId": "obs_residential_proxy_00000000",
+      "tenantRef": "tenant_fixture_a",
+      "sessionRef": "session_fixture_a",
+      "eventRef": "event_fixture_a",
+      "revision": 1,
+      "observedAt": "2026-09-04T12:00:00.000Z",
+      "updatedAt": "2026-09-04T12:00:02.000Z",
+      "status": "COMPLETE",
+      "completedStages": [
+        "OWNED",
+        "NETWORK_LOCAL",
+        "NETWORK_LIVE",
+        "DERIVATION"
+      ],
+      "pendingStages": [],
+      "intelligence": {
+        "network": {
+          "networkType": {
+            "state": "KNOWN",
+            "value": "residential",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "hosting": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "vpn": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "proxy": {
+            "state": "TRUE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ],
+            "conflictRefs": [
+              "conflict_proxy_1"
+            ]
+          },
+          "residentialProxy": {
+            "state": "TRUE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "mobileProxy": {
+            "state": "UNKNOWN",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "tor": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "anonymous": {
+            "state": "TRUE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          }
+        }
+      },
+      "evidence": [
+        {
+          "id": "evidence_network_1",
+          "domain": "NETWORK",
+          "field": "proxy",
+          "sourceClass": "LOCAL_SNAPSHOT",
+          "provider": "ipinfo_residential_proxy",
+          "value": true,
+          "observedAt": "2026-09-04T12:00:00.000Z",
+          "freshness": "CURRENT",
+          "reasonCode": "SPECIALIZED_DATASET_MEMBERSHIP"
+        }
+      ],
+      "conflicts": [
+        {
+          "id": "conflict_proxy_1",
+          "field": "proxy",
+          "evidenceRefs": [
+            "evidence_network_1"
+          ],
+          "values": [
+            true,
+            false
+          ],
+          "resolution": "UNRESOLVED",
+          "resolutionBasis": [
+            "PROVIDER_DISAGREEMENT_PRESERVED"
+          ]
+        }
+      ],
+      "explanations": [
+        {
+          "field": "proxy",
+          "state": "TRUE",
+          "supportingEvidenceRefs": [
+            "evidence_network_1"
+          ],
+          "conflictingEvidenceRefs": [],
+          "derivationRuleVersion": "edge-derived-v1",
+          "summaryCode": "PROVIDER_DISAGREEMENT_PRESERVED"
+        }
+      ],
+      "errors": []
+    },
+    "publicProxy": {
+      "schemaVersion": "1.0",
+      "semanticsVersion": "m23-v1",
+      "derivationRuleVersion": "edge-derived-v1",
+      "observationId": "obs_public_proxy_00000000",
+      "tenantRef": "tenant_fixture_a",
+      "sessionRef": "session_fixture_a",
+      "eventRef": "event_fixture_a",
+      "revision": 1,
+      "observedAt": "2026-09-04T12:00:00.000Z",
+      "updatedAt": "2026-09-04T12:00:02.000Z",
+      "status": "COMPLETE",
+      "completedStages": [
+        "OWNED",
+        "NETWORK_LOCAL",
+        "NETWORK_LIVE",
+        "DERIVATION"
+      ],
+      "pendingStages": [],
+      "intelligence": {
+        "network": {
+          "networkType": {
+            "state": "KNOWN",
+            "value": "residential",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "hosting": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "vpn": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "proxy": {
+            "state": "TRUE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "residentialProxy": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "mobileProxy": {
+            "state": "UNKNOWN",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "tor": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "anonymous": {
+            "state": "TRUE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "serviceOperators": [
+            {
+              "name": "SANITIZED_PROXY_SERVICE",
+              "category": "PROXY",
+              "state": "TRUE",
+              "evidenceRefs": [
+                "evidence_network_1"
+              ]
+            }
+          ]
+        }
+      },
+      "evidence": [
+        {
+          "id": "evidence_network_1",
+          "domain": "NETWORK",
+          "field": "proxy",
+          "sourceClass": "LIVE_PROVIDER",
+          "provider": "spur",
+          "value": true,
+          "observedAt": "2026-09-04T12:00:00.000Z",
+          "freshness": "CURRENT",
+          "reasonCode": "NORMALIZED_NETWORK_OBSERVATION"
+        }
+      ],
+      "conflicts": [],
+      "explanations": [
+        {
+          "field": "proxy",
+          "state": "TRUE",
+          "supportingEvidenceRefs": [
+            "evidence_network_1"
+          ],
+          "conflictingEvidenceRefs": [],
+          "derivationRuleVersion": "edge-derived-v1",
+          "summaryCode": "EVIDENCE_PRECEDENCE_APPLIED"
+        }
+      ],
+      "errors": []
+    },
+    "mobileProxyPartial": {
+      "schemaVersion": "1.0",
+      "semanticsVersion": "m23-v1",
+      "derivationRuleVersion": "edge-derived-v1",
+      "observationId": "obs_mobile_proxy_partial_00000000",
+      "tenantRef": "tenant_fixture_a",
+      "sessionRef": "session_fixture_a",
+      "eventRef": "event_fixture_a",
+      "revision": 1,
+      "observedAt": "2026-09-04T12:00:00.000Z",
+      "updatedAt": "2026-09-04T12:00:02.000Z",
+      "status": "PARTIAL",
+      "completedStages": [
+        "OWNED"
+      ],
+      "pendingStages": [
+        "NETWORK_LIVE"
+      ],
+      "intelligence": {
+        "network": {
+          "networkType": {
+            "state": "KNOWN",
+            "value": "mobile",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "hosting": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "vpn": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "proxy": {
+            "state": "UNKNOWN",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "residentialProxy": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "mobileProxy": {
+            "state": "UNKNOWN",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "tor": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "anonymous": {
+            "state": "UNKNOWN",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          }
+        }
+      },
+      "evidence": [
+        {
+          "id": "evidence_network_1",
+          "domain": "NETWORK",
+          "field": "proxy",
+          "sourceClass": "OWNED_OBSERVATION",
+          "provider": "tracekit",
+          "value": false,
+          "observedAt": "2026-09-04T12:00:00.000Z",
+          "freshness": "CURRENT",
+          "reasonCode": "CALLBACK_PROXY_ASSOCIATION_ONLY"
+        }
+      ],
+      "conflicts": [],
+      "explanations": [
+        {
+          "field": "proxy",
+          "state": "UNKNOWN",
+          "supportingEvidenceRefs": [
+            "evidence_network_1"
+          ],
+          "conflictingEvidenceRefs": [],
+          "derivationRuleVersion": "edge-derived-v1",
+          "summaryCode": "EVIDENCE_PRECEDENCE_APPLIED"
+        }
+      ],
+      "errors": []
+    },
+    "tor": {
+      "schemaVersion": "1.0",
+      "semanticsVersion": "m23-v1",
+      "derivationRuleVersion": "edge-derived-v1",
+      "observationId": "obs_tor_00000000",
+      "tenantRef": "tenant_fixture_a",
+      "sessionRef": "session_fixture_a",
+      "eventRef": "event_fixture_a",
+      "revision": 1,
+      "observedAt": "2026-09-04T12:00:00.000Z",
+      "updatedAt": "2026-09-04T12:00:02.000Z",
+      "status": "COMPLETE",
+      "completedStages": [
+        "OWNED",
+        "NETWORK_LOCAL",
+        "NETWORK_LIVE",
+        "DERIVATION"
+      ],
+      "pendingStages": [],
+      "intelligence": {
+        "network": {
+          "networkType": {
+            "state": "KNOWN",
+            "value": "residential",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "hosting": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "vpn": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "proxy": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "residentialProxy": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "mobileProxy": {
+            "state": "UNKNOWN",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "tor": {
+            "state": "TRUE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "anonymous": {
+            "state": "TRUE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          }
+        }
+      },
+      "evidence": [
+        {
+          "id": "evidence_network_1",
+          "domain": "NETWORK",
+          "field": "proxy",
+          "sourceClass": "OWNED_OBSERVATION",
+          "provider": "tracekit",
+          "value": false,
+          "observedAt": "2026-09-04T12:00:00.000Z",
+          "freshness": "CURRENT",
+          "reasonCode": "NORMALIZED_NETWORK_OBSERVATION"
+        }
+      ],
+      "conflicts": [],
+      "explanations": [
+        {
+          "field": "proxy",
+          "state": "FALSE",
+          "supportingEvidenceRefs": [
+            "evidence_network_1"
+          ],
+          "conflictingEvidenceRefs": [],
+          "derivationRuleVersion": "edge-derived-v1",
+          "summaryCode": "EVIDENCE_PRECEDENCE_APPLIED"
+        }
+      ],
+      "errors": []
+    },
+    "providerOutage": {
+      "schemaVersion": "1.0",
+      "semanticsVersion": "m23-v1",
+      "derivationRuleVersion": "edge-derived-v1",
+      "observationId": "obs_provider_outage_00000000",
+      "tenantRef": "tenant_fixture_a",
+      "sessionRef": "session_fixture_a",
+      "eventRef": "event_fixture_a",
+      "revision": 1,
+      "observedAt": "2026-09-04T12:00:00.000Z",
+      "updatedAt": "2026-09-04T12:00:02.000Z",
+      "status": "PARTIAL",
+      "completedStages": [
+        "OWNED"
+      ],
+      "pendingStages": [
+        "NETWORK_LIVE"
+      ],
+      "intelligence": {
+        "network": {
+          "networkType": {
+            "state": "KNOWN",
+            "value": "residential",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "hosting": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "vpn": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "proxy": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "residentialProxy": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "mobileProxy": {
+            "state": "UNKNOWN",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "tor": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "anonymous": {
+            "state": "UNKNOWN",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          }
+        }
+      },
+      "evidence": [
+        {
+          "id": "evidence_network_1",
+          "domain": "NETWORK",
+          "field": "proxy",
+          "sourceClass": "OWNED_OBSERVATION",
+          "provider": "tracekit",
+          "value": false,
+          "observedAt": "2026-09-04T12:00:00.000Z",
+          "freshness": "CURRENT",
+          "reasonCode": "NORMALIZED_NETWORK_OBSERVATION"
+        }
+      ],
+      "conflicts": [],
+      "explanations": [
+        {
+          "field": "proxy",
+          "state": "FALSE",
+          "supportingEvidenceRefs": [
+            "evidence_network_1"
+          ],
+          "conflictingEvidenceRefs": [],
+          "derivationRuleVersion": "edge-derived-v1",
+          "summaryCode": "EVIDENCE_PRECEDENCE_APPLIED"
+        }
+      ],
+      "errors": [
+        {
+          "stage": "NETWORK_LIVE",
+          "code": "PROVIDER_UNAVAILABLE",
+          "retryable": true
+        }
+      ]
+    },
+    "staleIpinfo": {
+      "schemaVersion": "1.0",
+      "semanticsVersion": "m23-v1",
+      "derivationRuleVersion": "edge-derived-v1",
+      "observationId": "obs_stale_ipinfo_00000000",
+      "tenantRef": "tenant_fixture_a",
+      "sessionRef": "session_fixture_a",
+      "eventRef": "event_fixture_a",
+      "revision": 1,
+      "observedAt": "2026-09-04T12:00:00.000Z",
+      "updatedAt": "2026-09-04T12:00:02.000Z",
+      "status": "COMPLETE",
+      "completedStages": [
+        "OWNED",
+        "NETWORK_LOCAL",
+        "NETWORK_LIVE",
+        "DERIVATION"
+      ],
+      "pendingStages": [],
+      "intelligence": {
+        "network": {
+          "networkType": {
+            "state": "KNOWN",
+            "value": "residential",
+            "freshness": "STALE",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "hosting": {
+            "state": "FALSE",
+            "freshness": "STALE",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "vpn": {
+            "state": "FALSE",
+            "freshness": "STALE",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "proxy": {
+            "state": "FALSE",
+            "freshness": "STALE",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "residentialProxy": {
+            "state": "FALSE",
+            "freshness": "STALE",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "mobileProxy": {
+            "state": "UNKNOWN",
+            "freshness": "STALE",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "tor": {
+            "state": "FALSE",
+            "freshness": "STALE",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "anonymous": {
+            "state": "UNKNOWN",
+            "freshness": "STALE",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          }
+        }
+      },
+      "evidence": [
+        {
+          "id": "evidence_network_1",
+          "domain": "NETWORK",
+          "field": "proxy",
+          "sourceClass": "LOCAL_STALE",
+          "provider": "ipinfo_plus",
+          "value": false,
+          "observedAt": "2026-09-04T12:00:00.000Z",
+          "freshness": "STALE",
+          "reasonCode": "NORMALIZED_NETWORK_OBSERVATION"
+        }
+      ],
+      "conflicts": [],
+      "explanations": [
+        {
+          "field": "proxy",
+          "state": "FALSE",
+          "supportingEvidenceRefs": [
+            "evidence_network_1"
+          ],
+          "conflictingEvidenceRefs": [],
+          "derivationRuleVersion": "edge-derived-v1",
+          "summaryCode": "EVIDENCE_PRECEDENCE_APPLIED"
+        }
+      ],
+      "errors": []
+    },
+    "providerConflict": {
+      "schemaVersion": "1.0",
+      "semanticsVersion": "m23-v1",
+      "derivationRuleVersion": "edge-derived-v1",
+      "observationId": "obs_provider_conflict_00000000",
+      "tenantRef": "tenant_fixture_a",
+      "sessionRef": "session_fixture_a",
+      "eventRef": "event_fixture_a",
+      "revision": 1,
+      "observedAt": "2026-09-04T12:00:00.000Z",
+      "updatedAt": "2026-09-04T12:00:02.000Z",
+      "status": "COMPLETE",
+      "completedStages": [
+        "OWNED",
+        "NETWORK_LOCAL",
+        "NETWORK_LIVE",
+        "DERIVATION"
+      ],
+      "pendingStages": [],
+      "intelligence": {
+        "network": {
+          "networkType": {
+            "state": "KNOWN",
+            "value": "residential",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "hosting": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "vpn": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "proxy": {
+            "state": "TRUE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ],
+            "conflictRefs": [
+              "conflict_proxy_1"
+            ]
+          },
+          "residentialProxy": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "mobileProxy": {
+            "state": "UNKNOWN",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "tor": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "anonymous": {
+            "state": "TRUE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          }
+        }
+      },
+      "evidence": [
+        {
+          "id": "evidence_network_1",
+          "domain": "NETWORK",
+          "field": "proxy",
+          "sourceClass": "OWNED_OBSERVATION",
+          "provider": "tracekit",
+          "value": true,
+          "observedAt": "2026-09-04T12:00:00.000Z",
+          "freshness": "CURRENT",
+          "reasonCode": "NORMALIZED_NETWORK_OBSERVATION"
+        }
+      ],
+      "conflicts": [
+        {
+          "id": "conflict_proxy_1",
+          "field": "proxy",
+          "evidenceRefs": [
+            "evidence_network_1"
+          ],
+          "values": [
+            true,
+            false
+          ],
+          "resolution": "UNRESOLVED",
+          "resolutionBasis": [
+            "PROVIDER_DISAGREEMENT_PRESERVED"
+          ]
+        }
+      ],
+      "explanations": [
+        {
+          "field": "proxy",
+          "state": "TRUE",
+          "supportingEvidenceRefs": [
+            "evidence_network_1"
+          ],
+          "conflictingEvidenceRefs": [],
+          "derivationRuleVersion": "edge-derived-v1",
+          "summaryCode": "PROVIDER_DISAGREEMENT_PRESERVED"
+        }
+      ],
+      "errors": []
+    },
+    "automationHeadless": {
+      "schemaVersion": "1.0",
+      "semanticsVersion": "m23-v1",
+      "derivationRuleVersion": "edge-derived-v1",
+      "observationId": "obs_automation_headless_00000000",
+      "tenantRef": "tenant_fixture_a",
+      "sessionRef": "session_fixture_a",
+      "eventRef": "event_fixture_a",
+      "revision": 1,
+      "observedAt": "2026-09-04T12:00:00.000Z",
+      "updatedAt": "2026-09-04T12:00:02.000Z",
+      "status": "COMPLETE",
+      "completedStages": [
+        "OWNED",
+        "NETWORK_LOCAL",
+        "NETWORK_LIVE",
+        "DERIVATION"
+      ],
+      "pendingStages": [],
+      "intelligence": {
+        "network": {
+          "networkType": {
+            "state": "KNOWN",
+            "value": "residential",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "hosting": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "vpn": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "proxy": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "residentialProxy": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "mobileProxy": {
+            "state": "UNKNOWN",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "tor": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "anonymous": {
+            "state": "UNKNOWN",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          }
+        },
+        "automation": {
+          "state": "EVALUATED",
+          "classification": "LIKELY_AUTOMATED",
+          "evidenceCategories": [
+            "webdriver"
+          ],
+          "reasonCodes": [
+            "AUTOMATION_WEBDRIVER_PRESENT"
+          ],
+          "evidenceRefs": [
+            "evidence_automation_1"
+          ],
+          "confidence": {
+            "value": 0.94,
+            "basis": "EDGE_DERIVED",
+            "derivationVersion": "automation-v1"
+          }
+        },
+        "browser": {
+          "state": "EVALUATED",
+          "family": "Chromium",
+          "deviceClass": "DESKTOP",
+          "javascript": "AVAILABLE",
+          "privacyRestrictions": "UNKNOWN",
+          "consistency": "UNKNOWN",
+          "evidenceRefs": []
+        }
+      },
+      "evidence": [
+        {
+          "id": "evidence_network_1",
+          "domain": "NETWORK",
+          "field": "proxy",
+          "sourceClass": "OWNED_OBSERVATION",
+          "provider": "tracekit",
+          "value": false,
+          "observedAt": "2026-09-04T12:00:00.000Z",
+          "freshness": "CURRENT",
+          "reasonCode": "NORMALIZED_NETWORK_OBSERVATION"
+        },
+        {
+          "id": "evidence_automation_1",
+          "domain": "AUTOMATION",
+          "field": "webdriver",
+          "sourceClass": "DERIVED",
+          "provider": "tracekit",
+          "value": true,
+          "observedAt": "2026-09-04T12:00:00.000Z",
+          "freshness": "CURRENT",
+          "confidence": {
+            "value": 0.94,
+            "basis": "EDGE_DERIVED",
+            "derivationVersion": "automation-v1"
+          },
+          "reasonCode": "AUTOMATION_WEBDRIVER_PRESENT"
+        }
+      ],
+      "conflicts": [],
+      "explanations": [
+        {
+          "field": "proxy",
+          "state": "FALSE",
+          "supportingEvidenceRefs": [
+            "evidence_network_1"
+          ],
+          "conflictingEvidenceRefs": [],
+          "derivationRuleVersion": "edge-derived-v1",
+          "summaryCode": "EVIDENCE_PRECEDENCE_APPLIED"
+        }
+      ],
+      "errors": []
+    },
+    "javascriptDisabled": {
+      "schemaVersion": "1.0",
+      "semanticsVersion": "m23-v1",
+      "derivationRuleVersion": "edge-derived-v1",
+      "observationId": "obs_javascript_disabled_00000000",
+      "tenantRef": "tenant_fixture_a",
+      "sessionRef": "session_fixture_a",
+      "eventRef": "event_fixture_a",
+      "revision": 1,
+      "observedAt": "2026-09-04T12:00:00.000Z",
+      "updatedAt": "2026-09-04T12:00:02.000Z",
+      "status": "PARTIAL",
+      "completedStages": [
+        "OWNED"
+      ],
+      "pendingStages": [
+        "NETWORK_LIVE"
+      ],
+      "intelligence": {
+        "network": {
+          "networkType": {
+            "state": "KNOWN",
+            "value": "residential",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "hosting": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "vpn": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "proxy": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "residentialProxy": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "mobileProxy": {
+            "state": "UNKNOWN",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "tor": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "anonymous": {
+            "state": "UNKNOWN",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          }
+        },
+        "browser": {
+          "state": "NOT_EVALUATED",
+          "family": "Chromium",
+          "deviceClass": "DESKTOP",
+          "javascript": "UNAVAILABLE",
+          "privacyRestrictions": "UNKNOWN",
+          "consistency": "UNKNOWN",
+          "evidenceRefs": []
+        }
+      },
+      "evidence": [
+        {
+          "id": "evidence_network_1",
+          "domain": "NETWORK",
+          "field": "proxy",
+          "sourceClass": "OWNED_OBSERVATION",
+          "provider": "tracekit",
+          "value": false,
+          "observedAt": "2026-09-04T12:00:00.000Z",
+          "freshness": "CURRENT",
+          "reasonCode": "NORMALIZED_NETWORK_OBSERVATION"
+        }
+      ],
+      "conflicts": [],
+      "explanations": [
+        {
+          "field": "proxy",
+          "state": "FALSE",
+          "supportingEvidenceRefs": [
+            "evidence_network_1"
+          ],
+          "conflictingEvidenceRefs": [],
+          "derivationRuleVersion": "edge-derived-v1",
+          "summaryCode": "EVIDENCE_PRECEDENCE_APPLIED"
+        }
+      ],
+      "errors": []
+    }
+  },
+  "revisionSequence": [
+    {
+      "schemaVersion": "1.0",
+      "semanticsVersion": "m23-v1",
+      "derivationRuleVersion": "edge-derived-v1",
+      "observationId": "obs_async_revision_00000000",
+      "tenantRef": "tenant_fixture_a",
+      "sessionRef": "session_fixture_a",
+      "eventRef": "event_fixture_a",
+      "revision": 1,
+      "observedAt": "2026-09-04T12:00:00.000Z",
+      "updatedAt": "2026-09-04T12:00:02.000Z",
+      "status": "OWNED_ONLY",
+      "completedStages": [
+        "OWNED"
+      ],
+      "pendingStages": [
+        "NETWORK_LIVE"
+      ],
+      "intelligence": {
+        "network": {
+          "networkType": {
+            "state": "KNOWN",
+            "value": "residential",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "hosting": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "vpn": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "proxy": {
+            "state": "UNKNOWN",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "residentialProxy": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "mobileProxy": {
+            "state": "UNKNOWN",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "tor": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "anonymous": {
+            "state": "UNKNOWN",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          }
+        }
+      },
+      "evidence": [
+        {
+          "id": "evidence_network_1",
+          "domain": "NETWORK",
+          "field": "proxy",
+          "sourceClass": "OWNED_OBSERVATION",
+          "provider": "tracekit",
+          "value": false,
+          "observedAt": "2026-09-04T12:00:00.000Z",
+          "freshness": "CURRENT",
+          "reasonCode": "NORMALIZED_NETWORK_OBSERVATION"
+        }
+      ],
+      "conflicts": [],
+      "explanations": [
+        {
+          "field": "proxy",
+          "state": "UNKNOWN",
+          "supportingEvidenceRefs": [
+            "evidence_network_1"
+          ],
+          "conflictingEvidenceRefs": [],
+          "derivationRuleVersion": "edge-derived-v1",
+          "summaryCode": "EVIDENCE_PRECEDENCE_APPLIED"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "schemaVersion": "1.0",
+      "semanticsVersion": "m23-v1",
+      "derivationRuleVersion": "edge-derived-v1",
+      "observationId": "obs_async_revision_00000000",
+      "tenantRef": "tenant_fixture_a",
+      "sessionRef": "session_fixture_a",
+      "eventRef": "event_fixture_a",
+      "revision": 2,
+      "previousRevision": 1,
+      "observedAt": "2026-09-04T12:00:00.000Z",
+      "updatedAt": "2026-09-04T12:00:02.000Z",
+      "status": "PARTIAL",
+      "completedStages": [
+        "OWNED"
+      ],
+      "pendingStages": [
+        "NETWORK_LIVE"
+      ],
+      "intelligence": {
+        "network": {
+          "networkType": {
+            "state": "KNOWN",
+            "value": "residential",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "hosting": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "vpn": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "proxy": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "residentialProxy": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "mobileProxy": {
+            "state": "UNKNOWN",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "tor": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "anonymous": {
+            "state": "UNKNOWN",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          }
+        }
+      },
+      "evidence": [
+        {
+          "id": "evidence_network_1",
+          "domain": "NETWORK",
+          "field": "proxy",
+          "sourceClass": "LOCAL_SNAPSHOT",
+          "provider": "ipinfo_plus",
+          "value": false,
+          "observedAt": "2026-09-04T12:00:00.000Z",
+          "freshness": "CURRENT",
+          "reasonCode": "NORMALIZED_NETWORK_OBSERVATION"
+        }
+      ],
+      "conflicts": [],
+      "explanations": [
+        {
+          "field": "proxy",
+          "state": "FALSE",
+          "supportingEvidenceRefs": [
+            "evidence_network_1"
+          ],
+          "conflictingEvidenceRefs": [],
+          "derivationRuleVersion": "edge-derived-v1",
+          "summaryCode": "EVIDENCE_PRECEDENCE_APPLIED"
+        }
+      ],
+      "errors": []
+    },
+    {
+      "schemaVersion": "1.0",
+      "semanticsVersion": "m23-v1",
+      "derivationRuleVersion": "edge-derived-v1",
+      "observationId": "obs_async_revision_00000000",
+      "tenantRef": "tenant_fixture_a",
+      "sessionRef": "session_fixture_a",
+      "eventRef": "event_fixture_a",
+      "revision": 3,
+      "previousRevision": 2,
+      "observedAt": "2026-09-04T12:00:00.000Z",
+      "updatedAt": "2026-09-04T12:00:02.000Z",
+      "completedAt": "2026-09-04T12:00:02.000Z",
+      "status": "COMPLETE",
+      "completedStages": [
+        "OWNED",
+        "NETWORK_LOCAL",
+        "NETWORK_LIVE",
+        "DERIVATION"
+      ],
+      "pendingStages": [],
+      "intelligence": {
+        "network": {
+          "networkType": {
+            "state": "KNOWN",
+            "value": "residential",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "hosting": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "vpn": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "proxy": {
+            "state": "TRUE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "residentialProxy": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "mobileProxy": {
+            "state": "UNKNOWN",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "tor": {
+            "state": "FALSE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          },
+          "anonymous": {
+            "state": "TRUE",
+            "freshness": "CURRENT",
+            "evidenceRefs": [
+              "evidence_network_1"
+            ]
+          }
+        }
+      },
+      "evidence": [
+        {
+          "id": "evidence_network_1",
+          "domain": "NETWORK",
+          "field": "proxy",
+          "sourceClass": "LIVE_PROVIDER",
+          "provider": "spur",
+          "value": true,
+          "observedAt": "2026-09-04T12:00:00.000Z",
+          "freshness": "CURRENT",
+          "reasonCode": "NORMALIZED_NETWORK_OBSERVATION"
+        }
+      ],
+      "conflicts": [],
+      "explanations": [
+        {
+          "field": "proxy",
+          "state": "TRUE",
+          "supportingEvidenceRefs": [
+            "evidence_network_1"
+          ],
+          "conflictingEvidenceRefs": [],
+          "derivationRuleVersion": "edge-derived-v1",
+          "summaryCode": "EVIDENCE_PRECEDENCE_APPLIED"
+        }
+      ],
+      "errors": []
+    }
+  ]
+}

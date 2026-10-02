@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tracekit.internal/contracts/intelligence-v1.schema.json",
+  "title": "TraceKit Edge Intelligence Contract v1",
+  "type": "object",
+  "propertyNames": { "not": { "enum": ["destination", "redirect", "redirectUrl", "moneyPage", "safePage", "route", "routingDecision", "policyDecision", "allow", "block", "challenge", "offer", "landingPage", "campaignDestination", "decisionDestination", "rawIp", "encryptedIp", "ciphertext", "vaultRef", "protectedIpRef", "networkObservationKey", "networkDigest", "r2Key", "storageKey", "cacheKey", "queuePayload", "rawProviderResponse", "rawFingerprint", "jobId", "internalId", "providerObservationId", "sessionAssociationKey", "freshnessEpoch", "datasetPath", "email", "phone", "customerName", "fullName", "postalAddress", "paymentData"] } },
+  "required": ["schemaVersion", "semanticsVersion", "derivationRuleVersion", "observationId", "tenantRef", "sessionRef", "revision", "observedAt", "updatedAt", "status", "completedStages", "pendingStages", "intelligence", "evidence", "conflicts", "explanations", "errors"],
+  "properties": {
+    "schemaVersion": { "const": "1.0" },
+    "semanticsVersion": { "type": "string", "minLength": 1 },
+    "derivationRuleVersion": { "type": "string", "minLength": 1 },
+    "observationId": { "$ref": "#/$defs/observationRef" },
+    "tenantRef": { "$ref": "#/$defs/tenantRef" },
+    "sessionRef": { "$ref": "#/$defs/sessionRef" },
+    "eventRef": { "$ref": "#/$defs/eventRef" },
+    "revision": { "type": "integer", "minimum": 1 },
+    "previousRevision": { "type": "integer", "minimum": 1 },
+    "observedAt": { "$ref": "#/$defs/timestamp" },
+    "updatedAt": { "$ref": "#/$defs/timestamp" },
+    "completedAt": { "$ref": "#/$defs/timestamp" },
+    "status": { "enum": ["COMPLETE", "PARTIAL", "OWNED_ONLY", "PROVIDER_UNAVAILABLE", "EXPIRED", "UNKNOWN"] },
+    "completedStages": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/stage" } },
+    "pendingStages": { "type": "array", "uniqueItems": true, "items": { "$ref": "#/$defs/stage" } },
+    "intelligence": {
+      "type": "object",
+      "propertyNames": { "not": { "enum": ["destination", "redirect", "redirectUrl", "moneyPage", "safePage", "route", "routingDecision", "policyDecision", "allow", "block", "challenge", "offer", "landingPage", "campaignDestination", "decisionDestination", "rawIp", "encryptedIp", "ciphertext", "vaultRef", "protectedIpRef", "networkObservationKey", "networkDigest", "r2Key", "storageKey", "cacheKey", "queuePayload", "rawProviderResponse", "rawFingerprint", "jobId", "internalId", "providerObservationId", "sessionAssociationKey", "freshnessEpoch", "datasetPath", "email", "phone", "customerName", "fullName", "postalAddress", "paymentData"] } },
+      "properties": {
+        "network": { "$ref": "#/$defs/network" },
+        "browser": { "$ref": "#/$defs/browser" },
+        "automation": { "$ref": "#/$defs/automation" },
+        "behavioral": { "$ref": "#/$defs/behavioral" }
+      },
+      "additionalProperties": true
+    },
+    "evidence": { "type": "array", "items": { "$ref": "#/$defs/evidence" } },
+    "conflicts": { "type": "array", "items": { "$ref": "#/$defs/conflict" } },
+    "explanations": { "type": "array", "items": { "$ref": "#/$defs/explanation" } },
+    "errors": { "type": "array", "items": { "$ref": "#/$defs/error" } }
+  },
+  "additionalProperties": true,
+  "$defs": {
+    "observationRef": { "type": "string", "pattern": "^obs_[A-Za-z0-9_-]{8,128}$" },
+    "tenantRef": { "type": "string", "pattern": "^tenant_[A-Za-z0-9_-]{8,128}$" },
+    "sessionRef": { "type": "string", "pattern": "^session_[A-Za-z0-9_-]{8,128}$" },
+    "eventRef": { "type": "string", "pattern": "^event_[A-Za-z0-9_-]{8,128}$" },
+    "timestamp": { "type": "string", "format": "date-time" },
+    "freshness": { "enum": ["CURRENT", "AGING", "STALE", "UNKNOWN"] },
+    "triState": { "enum": ["TRUE", "FALSE", "UNKNOWN"] },
+    "stage": { "enum": ["OWNED", "NETWORK_LOCAL", "NETWORK_LIVE", "BROWSER", "AUTOMATION", "BEHAVIORAL", "DERIVATION", "UNKNOWN"] },
+    "confidence": {
+      "type": "object",
+      "required": ["value", "basis"],
+      "properties": {
+        "value": { "type": "number", "minimum": 0, "maximum": 1 },
+        "basis": { "enum": ["SOURCE_REPORTED", "EDGE_DERIVED", "OBSERVATION_QUALITY"] },
+        "derivationVersion": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "stateAssertion": {
+      "type": "object",
+      "required": ["state", "freshness", "evidenceRefs"],
+      "properties": { "state": { "$ref": "#/$defs/triState" }, "freshness": { "$ref": "#/$defs/freshness" }, "evidenceRefs": { "type": "array", "items": { "type": "string" } }, "conflictRefs": { "type": "array", "items": { "type": "string" } }, "confidence": { "$ref": "#/$defs/confidence" } },
+      "additionalProperties": false
+    },
+    "scalarAssertion": {
+      "type": "object",
+      "required": ["state", "freshness", "evidenceRefs"],
+      "properties": { "state": { "enum": ["KNOWN", "UNKNOWN"] }, "value": { "type": ["string", "number"] }, "freshness": { "$ref": "#/$defs/freshness" }, "evidenceRefs": { "type": "array", "items": { "type": "string" } }, "conflictRefs": { "type": "array", "items": { "type": "string" } }, "confidence": { "$ref": "#/$defs/confidence" } },
+      "additionalProperties": false
+    },
+    "network": {
+      "type": "object",
+      "properties": {
+        "asn": { "$ref": "#/$defs/scalarAssertion" }, "organization": { "$ref": "#/$defs/scalarAssertion" }, "networkType": { "$ref": "#/$defs/scalarAssertion" }, "carrier": { "$ref": "#/$defs/scalarAssertion" }, "country": { "$ref": "#/$defs/scalarAssertion" }, "region": { "$ref": "#/$defs/scalarAssertion" },
+        "hosting": { "$ref": "#/$defs/stateAssertion" }, "vpn": { "$ref": "#/$defs/stateAssertion" }, "proxy": { "$ref": "#/$defs/stateAssertion" }, "residentialProxy": { "$ref": "#/$defs/stateAssertion" }, "mobileProxy": { "$ref": "#/$defs/stateAssertion" }, "tor": { "$ref": "#/$defs/stateAssertion" }, "anonymous": { "$ref": "#/$defs/stateAssertion" },
+        "serviceOperators": { "type": "array", "items": { "type": "object", "required": ["name", "category", "state", "evidenceRefs"], "properties": { "name": { "type": "string" }, "category": { "enum": ["VPN", "PROXY", "HOSTING", "CARRIER", "OTHER", "UNKNOWN"] }, "state": { "$ref": "#/$defs/triState" }, "evidenceRefs": { "type": "array", "items": { "type": "string" } } }, "additionalProperties": false } }
+      },
+      "additionalProperties": true
+    },
+    "browser": { "type": "object", "required": ["state", "javascript", "privacyRestrictions", "consistency", "evidenceRefs"], "additionalProperties": true },
+    "automation": { "type": "object", "required": ["state", "classification", "evidenceCategories", "reasonCodes", "evidenceRefs"], "additionalProperties": true },
+    "behavioral": { "type": "object", "required": ["state", "classification", "continuity", "interactionEvidence", "reasonCodes", "evidenceRefs"], "additionalProperties": true },
+    "evidence": {
+      "type": "object",
+      "required": ["id", "domain", "field", "sourceClass", "provider", "value", "observedAt", "freshness", "reasonCode"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^evidence_[A-Za-z0-9_-]+$" }, "domain": { "enum": ["NETWORK", "BROWSER", "AUTOMATION", "BEHAVIORAL", "UNKNOWN"] }, "field": { "type": "string" }, "sourceClass": { "enum": ["OWNED_AUTHORITATIVE", "OWNED_OBSERVATION", "LOCAL_SNAPSHOT", "LOCAL_STALE", "LIVE_PROVIDER", "DERIVED", "UNKNOWN"] }, "provider": { "type": "string", "minLength": 1 }, "value": { "type": ["string", "number", "boolean"] }, "observedAt": { "$ref": "#/$defs/timestamp" }, "sourceObservedAt": { "$ref": "#/$defs/timestamp" }, "snapshotAt": { "$ref": "#/$defs/timestamp" }, "freshness": { "$ref": "#/$defs/freshness" }, "confidence": { "$ref": "#/$defs/confidence" }, "reasonCode": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "conflict": { "type": "object", "required": ["id", "field", "evidenceRefs", "values", "resolution", "resolutionBasis"], "additionalProperties": false, "properties": { "id": { "type": "string" }, "field": { "type": "string" }, "evidenceRefs": { "type": "array", "items": { "type": "string" } }, "values": { "type": "array", "items": { "type": ["string", "number", "boolean"] } }, "resolution": { "enum": ["EDGE_DERIVED", "UNRESOLVED"] }, "resolutionBasis": { "type": "array", "items": { "type": "string" } } } },
+    "explanation": { "type": "object", "required": ["field", "state", "supportingEvidenceRefs", "conflictingEvidenceRefs", "derivationRuleVersion", "summaryCode"], "additionalProperties": false, "properties": { "field": { "type": "string" }, "state": { "type": ["string", "number"] }, "supportingEvidenceRefs": { "type": "array", "items": { "type": "string" } }, "conflictingEvidenceRefs": { "type": "array", "items": { "type": "string" } }, "derivationRuleVersion": { "type": "string" }, "summaryCode": { "type": "string" } } },
+    "error": { "type": "object", "required": ["stage", "code", "retryable"], "additionalProperties": false, "properties": { "stage": { "$ref": "#/$defs/stage" }, "code": { "enum": ["PROVIDER_UNAVAILABLE", "SNAPSHOT_UNAVAILABLE", "COLLECTION_INCOMPLETE", "EXPIRED", "UNKNOWN"] }, "retryable": { "type": "boolean" } } }
+  }
+}
