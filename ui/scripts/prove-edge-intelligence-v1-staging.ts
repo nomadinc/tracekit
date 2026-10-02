@@ -8,6 +8,7 @@ const fixture=JSON.parse(readFileSync(new URL("../tests/fixtures/edge-intelligen
 const headers={apikey:key,Authorization:"Bearer "+key,"Content-Type":"application/json"};
 async function rest(path:string,init:RequestInit={}){const r=await fetch(url+"/rest/v1/"+path,{...init,headers:{...headers,...init.headers}});const t=await r.text();if(!r.ok)throw new Error(path+" "+r.status+" "+t.slice(0,300));return t?JSON.parse(t):null}
 async function expectReject(label:string,fn:()=>Promise<any>){try{await fn();throw new Error(label+" unexpectedly accepted")}catch(e:any){if(String(e.message).includes("unexpectedly accepted"))throw e;return{label,rejected:true}}}
+async function main(){
 const orgs=await rest("tracekit_organizations?select=id&order=created_at.asc&limit=2");if(!Array.isArray(orgs)||orgs.length<2)throw new Error("Two Staging organizations required for tenant-isolation proof");
 const orgA=orgs[0].id,orgB=orgs[1].id,suffix=randomUUID().replaceAll("-","").slice(0,12),base={...fixture,tenantRef:"tenant_staging_"+suffix,observationId:"obs_staging_"+suffix,sessionRef:"session_staging_"+suffix,eventRef:"event_staging_"+suffix};
 const rpc=(org:string,payload:any)=>rest("rpc/ingest_edge_intelligence_v1",{method:"POST",body:JSON.stringify({p_organization_id:org,p_payload:payload})});
@@ -23,3 +24,6 @@ const rows=await rest("edge_intelligence_observations?select=organization_id,rev
 const pass=first.outcome==="accepted"&&duplicate.outcome==="duplicate"&&second.outcome==="accepted"&&stale.outcome==="duplicate"&&tenantB.outcome==="accepted"&&current.length===2&&rows.length===3&&current.find((x:any)=>x.organization_id===orgA)?.revision===2&&current.find((x:any)=>x.organization_id===orgB)?.revision===1;
 if(!pass)throw new Error("Acceptance assertions failed: "+JSON.stringify({first,duplicate,second,stale,tenantB,current,rows}));
 console.log(JSON.stringify({ok:true,project,first:first.outcome,duplicate:duplicate.outcome,newer:second.outcome,lateExistingRevision:stale.outcome,conflict,wrongVersion,forbidden,tenantIsolation:true,current,immutableRows:rows.length},null,2));
+
+}
+main().catch(error=>{console.error(error);process.exitCode=1});
