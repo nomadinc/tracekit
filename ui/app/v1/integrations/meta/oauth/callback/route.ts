@@ -43,7 +43,12 @@ export async function GET(request: NextRequest) {
     }), 303));
   } catch (error) {
     const meta = error instanceof MetaOAuthError ? error : null;
-    const code = meta?.code === "meta_required_permission_missing" ? "permission" : meta?.code === "meta_oauth_state_invalid" ? "state" : "failed";
+    const code = meta?.code === "meta_required_permission_missing" ? "permission"
+      : meta?.code === "meta_oauth_state_invalid" ? "state"
+      : meta?.code === "meta_credential_encryption_configuration" ? "credential_config"
+      : meta?.code === "meta_credential_encryption_resolution" ? "credential_crypto"
+      : meta?.code === "meta_credential_database_write" ? "credential_db"
+      : "failed";
     return clearState(NextResponse.redirect(returnUrl(request, { meta: code }), 303));
   }
 }
