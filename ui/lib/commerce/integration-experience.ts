@@ -63,4 +63,7 @@ export const PROVIDER_CATALOG = [
   { provider: "woocommerce", name: "WooCommerce", availability: "coming_soon" },
   { provider: "next29", name: "29Next", availability: "available" },
   { provider: "sticky_io", name: "Sticky.io", availability: "coming_soon" },
+  { provider: "meta_ads", name: "Meta Ads", availability: "available" },
+  { provider: "google_ads", name: "Google Ads", availability: "available" },
+  { provider: "tiktok_ads", name: "TikTok Ads", availability: "available" },
 ] as const;
