@@ -10,7 +10,7 @@ import { authorizeMcpRead, projectCustomerSummary, projectCustomerWorkspace, pro
 import { recordMcpToolAudit } from "./audit";
 import{acceptMcpEvidenceLimit,evidenceLimitFingerprint,readMcpEvidenceLimitAcceptances}from"./evidence-limit-acceptance-repository";
 import{inspectCommasTestDeliveryReadiness}from"./m14-commas-target-resolver";
-import{inspectShopifyControlledProofReadiness}from"./m15-shopify-controlled-proof-readiness";import{discoverGovernedProviderActions}from"./provider-action-discovery";import{inspectLiveShopifyWebhookRemediation}from"./m17-shopify-live-remediation-readiness";
+import{inspectShopifyControlledProofReadiness}from"./m15-shopify-controlled-proof-readiness";import{discoverGovernedProviderActions}from"./provider-action-discovery";import{inspectLiveShopifyWebhookRemediation}from"./m17-shopify-live-remediation-readiness";import{inspectLiveEverflowSyncRemediation}from"./m17-everflow-live-sync-remediation";
 import type { JourneyIntelligence, CrossJourneyAnalysis, TrackingInvestigation, DeviationInvestigation, RecommendationIntelligence, GovernedActionPlanning, ActionEligibilityInspection } from "./journey-repository";
 
 type McpCustomerRepository = Pick<
@@ -188,6 +188,7 @@ export class TraceKitMcpReadService {
     });
   }
   inspectCommasTestDeliveryReadiness(){return this.audited("inspect_commas_test_delivery_readiness","customers.view","organization",this.session.activeOrganization!.id,async()=>inspectCommasTestDeliveryReadiness(this.session));}
+  inspectEverflowSyncRemediation(){return this.audited("inspect_everflow_sync_remediation","connectors.view","organization",this.session.activeOrganization!.id,async()=>inspectLiveEverflowSyncRemediation());}
   inspectShopifyWebhookRemediation(){return this.audited("inspect_shopify_webhook_remediation","connectors.view","organization",this.session.activeOrganization!.id,async()=>inspectLiveShopifyWebhookRemediation(this.session,this.runtimeContext.appOrigin));}
   inspectShopifyControlledProofReadiness(){return this.audited("inspect_shopify_controlled_proof_readiness","customers.view","organization",this.session.activeOrganization!.id,async()=>inspectShopifyControlledProofReadiness(this.session,this.runtimeContext.appOrigin));}
 }
