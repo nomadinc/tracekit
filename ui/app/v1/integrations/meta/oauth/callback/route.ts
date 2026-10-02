@@ -6,7 +6,7 @@ import { MetaOAuthError } from "@/lib/integrations/meta-oauth";
 
 export const dynamic = "force-dynamic";
 const STATE_COOKIE = "tracekit_meta_oauth_state";
-const RETURN_PATH = "/settings/integrations";
+const RETURN_PATH = "/connections";
 
 function returnUrl(request: Request, params: Record<string, string>) {
   const url = new URL(RETURN_PATH, request.url);
