@@ -1,0 +1,5 @@
+import assert from"node:assert/strict";import test from"node:test";import{readFileSync}from"node:fs";
+const live=readFileSync(new URL("../lib/mcp/m17-shopify-live-remediation-readiness.ts",import.meta.url),"utf8"),adapter=readFileSync(new URL("../lib/mcp/tool-adapter.ts",import.meta.url),"utf8");
+test("M17 live remediation resolves approved target and reads provider state",()=>{assert.match(live,/resolveApprovedShopifyControlledProofExecution/);assert.match(live,/listTraceKitShopifyWebhookSubscriptions/);assert.match(live,/assessShopifyWebhookRemediation/);});
+test("M17 live remediation remains read only",()=>{assert.doesNotMatch(live,/createTraceKitShopifyWebhookSubscription|deleteTraceKitShopifyWebhookSubscription|ensureTraceKitShopifyWebhookSubscriptions/);assert.match(adapter,/tracekit\.inspect_shopify_webhook_remediation/);});
+test("M17 live remediation fails closed when target or provider read is unavailable",()=>{assert.match(live,/subscriptionReadSucceeded:false/);assert.match(live,/remediationAvailable:false/);assert.match(live,/could not be resolved and read safely/);});
