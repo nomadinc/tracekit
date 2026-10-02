@@ -73,7 +73,18 @@ export async function completeMetaOAuth(input: {
       `marketing_provider_connections?id=eq.${encodeURIComponent(connected.connection.id)}&organization_id=eq.${encodeURIComponent(organization.id)}`,
       { method: "PATCH", body: JSON.stringify({ status: "degraded", last_error_at: now, last_error_code: "meta_connection_persistence_failed", updated_at: now }) },
     ).catch(() => undefined);
-    throw error;
+    if (error && typeof error === "object" && "code" in error) {
+      const raw = String((error as { code?: unknown }).code || "");
+      const safeCode = raw === "commerce_credential_configuration_error"
+        ? "meta_credential_encryption_configuration"
+        : raw === "commerce_credential_unavailable"
+          ? "meta_credential_encryption_resolution"
+          : error instanceof Error && error.name === "MarketingPersistenceError"
+            ? "meta_credential_database_write"
+            : "meta_connection_persistence_failed";
+      throw new MetaOAuthError(safeCode, "Meta connection persistence could not be completed.", 503, true);
+    }
+    throw new MetaOAuthError("meta_connection_persistence_failed", "Meta connection persistence could not be completed.", 503, true);
   }
 }
 
