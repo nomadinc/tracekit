@@ -20,20 +20,22 @@ function configure() {
   process.env.META_APP_SECRET = "test-app-secret";
   process.env.META_OAUTH_REDIRECT_URI = "https://tracekit.example/v1/integrations/meta/oauth/callback";
   process.env.META_OAUTH_STATE_SECRET = "0123456789abcdef0123456789abcdef";
+  process.env.META_LOGIN_CONFIG_ID = "4471989606345881";
 }
 
 function json(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
 
-test("Meta adapter pins v26 and requests read-only ads permission by default", () => {
+test("Meta adapter uses the Facebook Login for Business configuration", () => {
   configure();
   assert.equal(META_GRAPH_VERSION, "v26.0");
   const url = new URL(buildMetaAuthorizationUrl({ organizationId: "org-1", userId: "user-1" }));
-  assert.equal(url.searchParams.get("scope"), "ads_read");
+  assert.equal(url.searchParams.get("config_id"), "4471989606345881");
   assert.equal(url.searchParams.get("response_type"), "code");
+  assert.equal(url.searchParams.has("scope"), false);
   assert.equal(url.searchParams.has("client_secret"), false);
-  assert.doesNotMatch(url.searchParams.get("scope") || "", /ads_management|business_management/);
+  assert.equal(META_GRAPH_VERSION, "v26.0");
 });
 
 test("OAuth state is signed, tenant/user bound, time bounded, and tamper evident", () => {
@@ -123,7 +125,7 @@ test("connection completion validates provider data before persistence and requi
 
 test("credentials are encrypted at connection scope and provider accounts default unselected", () => {
   const source = readFileSync(`${root}/lib/integrations/marketing-provider-repository.ts`, "utf8");
-  assert.match(source, /MARKETING_CREDENTIALS_ENC_KEY/);
+  assert.match(source, /COMMERCE_CREDENTIALS_ENC_KEY/);
   assert.match(source, /encryptCommerceCredential\(input\.token\.accessToken/);
   assert.match(source, /credential_type:\s*"oauth_access_token"/);
   assert.match(source, /connection_id:\s*input\.connectionId/);
