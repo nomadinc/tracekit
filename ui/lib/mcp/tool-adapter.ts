@@ -3,6 +3,11 @@ import type { TraceKitMcpActionService } from "./action-service";
 
 export const TRACEKIT_MCP_TOOLS = [
   {
+    name:"tracekit.inspect_shopify_webhook_remediation",title:"Inspect Shopify ingestion webhook remediation",description:"Read-only inspection of the active Organization's exact approved Shopify ingestion webhook state. Reports required, present, missing, and duplicate TraceKit topics and whether bounded remediation is available. Does not mutate Shopify.",
+    inputSchema:{type:"object",properties:{},additionalProperties:false},
+    annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:true},
+  },
+  {
     name:"tracekit.discover_provider_actions",title:"Discover governed provider actions",description:"Read-only discovery of explicitly registered provider actions that are currently available for the active Organization. Availability requires matching governance contracts, action permission, and an exact server-resolved provider target; discovery never prepares, confirms, or executes an action.",
     inputSchema:{type:"object",properties:{},additionalProperties:false},
     annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
@@ -216,6 +221,7 @@ export async function callTraceKitMcpTool(
     case "tracekit.discover_provider_actions": assertKeys(args,[]);return service.discoverProviderActions();
     case "tracekit.inspect_commas_test_delivery_readiness":
       assertKeys(args,[]);return service.inspectCommasTestDeliveryReadiness();
+    case "tracekit.inspect_shopify_webhook_remediation": assertKeys(args,[]);return service.inspectShopifyWebhookRemediation();
     case "tracekit.inspect_shopify_controlled_proof_readiness":
       assertKeys(args,[]);return service.inspectShopifyControlledProofReadiness();
     case "tracekit.prepare_shopify_controlled_proof":
