@@ -31,7 +31,8 @@
     "import:everflow-investigation": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/import-everflow-investigation.ts --confirm-protected-import",
     "materialize:accufy-investigation": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/materialize-accufy-investigation.ts",
     "materialize:oto2-child-investigation": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/materialize-oto2-child-investigation.ts",
-    "audit:commas:raw-readonly": "tsx scripts/audit-commas-raw-transactions-readonly.ts"
+    "audit:commas:raw-readonly": "tsx scripts/audit-commas-raw-transactions-readonly.ts",
+    "prove:edge-intelligence-staging": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/prove-edge-intelligence-v1-staging.ts --confirm-edge-intelligence-staging-proof"
   },
   "dependencies": {
     "@workos-inc/authkit-nextjs": "^4.3.1",
