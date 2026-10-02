@@ -3,7 +3,7 @@
 
 create table if not exists public.edge_intelligence_observations (
   id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null references public.organizations(id) on delete cascade,
+  organization_id uuid not null references public.tracekit_organizations(id) on delete cascade,
   tenant_ref text not null,
   observation_id text not null,
   revision integer not null check (revision >= 1),
@@ -25,7 +25,7 @@ create table if not exists public.edge_intelligence_observations (
 );
 
 create table if not exists public.edge_intelligence_current (
-  organization_id uuid not null references public.organizations(id) on delete cascade,
+  organization_id uuid not null references public.tracekit_organizations(id) on delete cascade,
   tenant_ref text not null,
   observation_id text not null,
   observation_row_id uuid not null references public.edge_intelligence_observations(id) on delete restrict,
@@ -36,7 +36,7 @@ create table if not exists public.edge_intelligence_current (
 
 create table if not exists public.edge_intelligence_journey_links (
   id uuid primary key default gen_random_uuid(),
-  organization_id uuid not null references public.organizations(id) on delete cascade,
+  organization_id uuid not null references public.tracekit_organizations(id) on delete cascade,
   observation_row_id uuid not null references public.edge_intelligence_observations(id) on delete cascade,
   journey_id uuid,
   linkage_basis text not null check(linkage_basis in ('session_ref','event_ref','unresolved')),
