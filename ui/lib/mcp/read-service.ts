@@ -77,7 +77,9 @@ export class TraceKitMcpReadService {
     }
   }
 
-  discoverProviderActions(){return this.audited("discover_provider_actions","organizations.view",null,null,()=>discoverGovernedProviderActions(this.session,this.runtimeContext.appOrigin));}\n\n  listCustomers(input: { query?: string; limit?: number } = {}) {
+  discoverProviderActions(){return this.audited("discover_provider_actions","organizations.view",null,null,()=>discoverGovernedProviderActions(this.session,this.runtimeContext.appOrigin));}
+
+  listCustomers(input: { query?: string; limit?: number } = {}) {
     return this.audited("list_customers", "customers.view", null, null, async () => {
       const scope = authorizeMcpRead(this.session, "customers.view") as ProductionCustomerScope;
       const limit = Math.max(1, Math.min(50, Math.trunc(input.limit || 25)));
