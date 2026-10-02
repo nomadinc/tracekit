@@ -2,9 +2,8 @@ import "server-only";
 import { decodeCommerceCredentialKey, encryptCommerceCredential } from "@/lib/commerce/credential-crypto";
 import type { GoogleDiscoveredAccount } from "./google-ads-account-discovery";
 import {
-  marketingConnectionFromRow,
   marketingPersistenceRequest,
-  type MarketingProviderConnection,
+  type MarketingConnectionRow,
 } from "./marketing-provider-repository";
 
 type Row = Record<string, unknown>;
@@ -24,7 +23,7 @@ export async function persistGoogleConnectionAuthorization(input: {
   transport?: MarketingRepositoryTransport;
   encryptionKey?: string;
   encryptionKeyId?: string;
-}): Promise<MarketingProviderConnection> {
+}): Promise<MarketingConnectionRow> {
   const transport = input.transport || marketingPersistenceRequest;
   const existing = await transport(
     `marketing_provider_connections?organization_id=eq.${encodeURIComponent(input.organizationId)}&provider=eq.google_ads&provider_identity_id=eq.${encodeURIComponent(input.providerIdentityId)}&status=neq.revoked&limit=1`,
@@ -54,7 +53,17 @@ export async function persistGoogleConnectionAuthorization(input: {
     }),
   });
   if (!rows[0]) throw new Error("Google Ads connection could not be persisted.");
-  const connection = marketingConnectionFromRow(rows[0]);
+  const row = rows[0];
+  const connection: MarketingConnectionRow = {
+    id: String(row.id),
+    organizationId: String(row.organization_id),
+    accountId: String(row.account_id),
+    providerIdentityId: row.provider_identity_id ? String(row.provider_identity_id) : null,
+    displayName: String(row.display_name || "Google Ads"),
+    status: String(row.status || "connected"),
+    reauthorizationRequired: Boolean(row.reauthorization_required),
+    capabilities: row.capabilities && typeof row.capabilities === "object" ? row.capabilities as Record<string, unknown> : {},
+  };
 
   const encodedKey = input.encryptionKey ?? process.env.COMMERCE_CREDENTIALS_ENC_KEY;
   const keyId = input.encryptionKeyId ?? String(process.env.COMMERCE_CREDENTIALS_KEY_ID || "").trim();
