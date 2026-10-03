@@ -1,6 +1,5 @@
 import "server-only";
 import { resolveApplicationSession } from "@/lib/identity/application-session";
-import type { TraceKitSessionContext } from "@/lib/identity/persistent-types";
 import { requirePermission } from "@/lib/identity/authorization-gateway";
 import { commercePersistenceRequest } from "./supabase-control-repository";
 import { COMMAS_CAPABILITIES, EVERFLOW_CAPABILITIES, SHOPIFY_CAPABILITIES, NEXT29_CAPABILITIES, type ConnectionExperience, type SafeReadinessGate, type SafeSyncRun, type SyncFrequency } from "./integration-experience";
@@ -27,14 +26,6 @@ export async function loadConnectionsOverview() {
   const connections = await commercePersistenceRequest(`commerce_provider_connections?organization_id=eq.${encodeURIComponent(organization.id)}&order=created_at.asc`) as Row[];
   const experiences = await Promise.all(connections.map((row) => loadConnectionExperienceRow(organization.name, row, session.effectivePermissions.includes("connectors.manage"), canManageTkidOrigins(session))));
   return { organizationName: organization.name, connections: experiences };
-}
-
-export async function loadConnectionExperiencesForSession(session:TraceKitSessionContext): Promise<ConnectionExperience[]> {
-  requirePermission(session, "connectors.view");
-  if (!session.activeOrganization) throw new Error("The requested resource is unavailable.");
-  const organizationId=session.activeOrganization.id;
-  const connections=await commercePersistenceRequest(`commerce_provider_connections?organization_id=eq.${encodeURIComponent(organizationId)}&order=created_at.asc`) as Row[];
-  return Promise.all(connections.map((row)=>loadConnectionExperienceRow(session.activeOrganization!.name,row,session.effectivePermissions.includes("connectors.manage"),canManageTkidOrigins(session))));
 }
 
 export async function loadConnectionExperiences(): Promise<ConnectionExperience[]> {

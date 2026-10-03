@@ -189,7 +189,7 @@ export class TraceKitMcpReadService {
   }
   inspectCommasTestDeliveryReadiness(){return this.audited("inspect_commas_test_delivery_readiness","customers.view","organization",this.session.activeOrganization!.id,async()=>inspectCommasTestDeliveryReadiness(this.session));}
   inspectRemediationSignals(){return this.audited("inspect_remediation_signals","connectors.view","organization",this.session.activeOrganization!.id,async()=>inspectLiveRemediationSignals(this.session,this.runtimeContext.appOrigin));}
-  inspectEverflowSyncRemediation(){return this.audited("inspect_everflow_sync_remediation","connectors.view","organization",this.session.activeOrganization!.id,async()=>inspectLiveEverflowSyncRemediation(this.session));}
+  inspectEverflowSyncRemediation(){return this.audited("inspect_everflow_sync_remediation","connectors.view","organization",this.session.activeOrganization!.id,async()=>inspectLiveEverflowSyncRemediation());}
   inspectShopifyWebhookRemediation(){return this.audited("inspect_shopify_webhook_remediation","connectors.view","organization",this.session.activeOrganization!.id,async()=>inspectLiveShopifyWebhookRemediation(this.session,this.runtimeContext.appOrigin));}
   inspectShopifyControlledProofReadiness(){return this.audited("inspect_shopify_controlled_proof_readiness","customers.view","organization",this.session.activeOrganization!.id,async()=>inspectShopifyControlledProofReadiness(this.session,this.runtimeContext.appOrigin));}
 }
