@@ -1,7 +1,7 @@
 import "server-only";
 import type { TraceKitSessionContext } from "@/lib/identity/persistent-types";
 import { buildGoogleAuthorizationUrl, createGoogleOAuthState, exchangeGoogleAuthorizationCode, GOOGLE_ADS_OAUTH_SCOPE, verifyGoogleOAuthState } from "./google-ads-oauth";
-import { listGoogleAccessibleCustomers } from "./google-ads-client";
+import { GoogleAdsApiError, listGoogleAccessibleCustomers } from "./google-ads-client";
 import { fetchGoogleCustomerClientHierarchy } from "./google-ads-customer-client";
 import { discoverGoogleCustomerHierarchy } from "./google-ads-hierarchy-client";
 import { persistGoogleConnectionAuthorization, persistGoogleDiscoveredAccounts } from "./google-ads-persistence";
@@ -29,7 +29,15 @@ export async function completeGoogleAdsOAuth(input:{session:TraceKitSessionConte
  if(state.organizationId!==org.id||state.accountId!==input.session.activeAccount.id||state.returnPath!=="/connections")throw new GoogleAdsConnectionError("google_ads_oauth_state_invalid","Google Ads authorization could not be verified.",403);
  const token=await exchangeGoogleAuthorizationCode({code:input.code,clientId:cfg.clientId,clientSecret:cfg.clientSecret,redirectUri:cfg.redirectUri});
  if(!token.scope.split(/\s+/).includes(GOOGLE_ADS_OAUTH_SCOPE))throw new GoogleAdsConnectionError("google_ads_required_permission_missing","Google did not grant Google Ads access.",403);
- const accessible=await listGoogleAccessibleCustomers({accessToken:token.accessToken});
+ let accessible: string[];
+ try {
+  accessible = await listGoogleAccessibleCustomers({accessToken:token.accessToken});
+ } catch (error) {
+  if (error instanceof GoogleAdsApiError) {
+   throw new GoogleAdsConnectionError(`google_ads_api_${error.operation}_${error.httpStatus}_${error.apiStatus}`, "Google Ads account discovery could not be completed.", 502);
+  }
+  throw error;
+ }
  const discovery=await discoverGoogleCustomerHierarchy({accessibleCustomerIds:accessible,fetchHierarchy:async({targetCustomerId,loginCustomerId})=>(await fetchGoogleCustomerClientHierarchy({accessToken:token.accessToken,targetCustomerId,loginCustomerId})).rows});
  const identity=accessible.slice().sort().join(",")||"no-accessible-customers";
  const connection=await persistGoogleConnectionAuthorization({accountId:input.session.activeAccount.id,organizationId:org.id,providerIdentityId:identity,displayName:"Google Ads",refreshToken:token.refreshToken,grantedScopes:token.scope.split(/\s+/).filter(Boolean)});

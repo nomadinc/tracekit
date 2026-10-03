@@ -1,7 +1,24 @@
 import { ConnectionsOverview } from "@/components/connections/connections-overview";
 import { loadConnectionsOverview } from "@/lib/commerce/integration-experience-server";
 
-export default async function ConnectionsPage() {
+function message(provider?: string, google?: string, meta?: string) {
+  if (provider === "google_ads" && google) {
+    if (google === "connected") return { tone: "success" as const, text: "Google Ads connected successfully." };
+    if (google === "cancelled") return { tone: "info" as const, text: "Google Ads authorization was cancelled." };
+    if (google === "permission") return { tone: "error" as const, text: "Google Ads did not grant the required permission." };
+    if (google === "state") return { tone: "error" as const, text: "Google Ads authorization could not be verified. Please try connecting again." };
+    if (google.startsWith("google_ads_api_")) return { tone: "error" as const, text: `Google Ads authorization succeeded, but account discovery failed (${google.replace("google_ads_api_", "")}).` };
+    if (google === "failed") return { tone: "error" as const, text: "Google Ads authorization returned, but TraceKit could not complete the connection." };
+  }
+  if (provider === "meta" && meta === "connected") return { tone: "success" as const, text: "Meta Ads connected successfully." };
+  return null;
+}
+
+export default async function ConnectionsPage({ searchParams }: { searchParams: Promise<Record<string, string | string[] | undefined>> }) {
   const overview = await loadConnectionsOverview();
-  return <ConnectionsOverview connections={overview.connections} organizationName={overview.organizationName} />;
+  const params = await searchParams;
+  const provider = typeof params.provider === "string" ? params.provider : undefined;
+  const google = typeof params.google === "string" ? params.google : undefined;
+  const meta = typeof params.meta === "string" ? params.meta : undefined;
+  return <ConnectionsOverview connections={overview.connections} organizationName={overview.organizationName} callbackNotice={message(provider, google, meta)} />;
 }
