@@ -9,7 +9,7 @@ export async function POST(request:Request){
  try{
   const base=process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/,""),key=process.env.SUPABASE_SERVICE_ROLE_KEY;
   if(!base||!key)return out({ok:false,code:"staging_environment_unavailable"},503);
-  const ref=new URL(base).hostname.split(".")[0];if(ref!==STAGING_REF)return out({ok:false,code:"wrong_staging_project"},409);
+  const ref=new URL(base).hostname.split(".")[0];if(ref!==STAGING_REF)return out({ok:false,code:"wrong_staging_project",expectedSupabaseRef:STAGING_REF,configuredSupabaseRef:ref},409);
   if(!sameOrigin(request))return out({ok:false,code:"request_verification_failed"},403);
   const resolution=await resolveApplicationSession();if(resolution.kind!=="authenticated"||!resolution.session.activeOrganization)return out({ok:false,code:"resource_unavailable"},404);requirePermission(resolution.session,"actions.execute");
   const body=await request.json().catch(()=>({})) as Record<string,unknown>;if(body.confirm!==true)return out({ok:false,code:"explicit_confirmation_required"},400);
