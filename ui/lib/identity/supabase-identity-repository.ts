@@ -24,11 +24,22 @@ async function rest(path: string, init: RequestInit = {}) {
   // can turn an otherwise valid service request into a 401. Legacy JWT
   // service-role keys still require the Bearer header.
   if (!key.startsWith("sb_secret_")) headers.Authorization = `Bearer ${key}`;
-  const response = await fetch(`${url}/rest/v1/${path}`, {
-    ...init,
-    cache: "no-store",
-    headers: { ...headers, ...init.headers },
-  });
+  let response: Response | null = null;
+  for (let attempt = 0; attempt < 2; attempt += 1) {
+    try {
+      response = await fetch(`${url}/rest/v1/${path}`, {
+        ...init,
+        cache: "no-store",
+        headers: { ...headers, ...init.headers },
+      });
+    } catch (error) {
+      response = null;
+    }
+    const transient = !response || response.status === 429 || response.status >= 500;
+    if (!transient || attempt === 1) break;
+    await new Promise((resolve) => setTimeout(resolve, 125));
+  }
+  if (!response) throw new Error("Persistent identity storage request failed.");
   if (!response.ok) throw new Error(`Persistent identity storage failed (${response.status}).`);
   return response.status === 204 ? [] : response.json();
 }
