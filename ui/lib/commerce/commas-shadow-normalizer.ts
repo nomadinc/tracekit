@@ -76,7 +76,7 @@ export function normalizeCommasTransaction(input: Json, scope: { connectionId: s
     product_internal_name: text(product?.internal_name), product_description: text(product?.description),
     product_price: decimal(product?.price), payment_link_hash: paymentLink ? sha256(paymentLink) : null,
     transaction_at: transactionAt, gross_amount: decimal(input.amount), provider_fee: decimal(input.fee_amount), provider_net: decimal(input.net_amount),
-    currency: null, payment_reference: text(payment?.id), payment_type: paymentType,
+    currency: null, payment_reference: text(payment?.id), payment_type: paymentType, relationship_state: "provider_not_observed",
     fund_release_on: text(payment?.fund_release_on), fund_released: fundReleased,
     payload_hash: sha256(stable(input)), refunds: normalizeRefunds(input,scope),
   };
