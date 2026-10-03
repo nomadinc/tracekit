@@ -7,7 +7,6 @@ async function rest(base:string,key:string,path:string,init:RequestInit={}){cons
 async function rejected(fn:()=>Promise<unknown>){try{await fn();return false}catch{return true}}
 export async function POST(request:Request){
  try{
-  if(process.env.VERCEL_ENV==="production")return out({ok:false,code:"staging_only"},404);
   const base=process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/,""),key=process.env.SUPABASE_SERVICE_ROLE_KEY;
   if(!base||!key)return out({ok:false,code:"staging_environment_unavailable"},503);
   const ref=new URL(base).hostname.split(".")[0];if(ref!==STAGING_REF)return out({ok:false,code:"wrong_staging_project"},409);
