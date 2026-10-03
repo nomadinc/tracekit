@@ -25,7 +25,6 @@ async function rest(path: string, init: RequestInit = {}) {
   // service-role keys still require the Bearer header.
   if (!key.startsWith("sb_secret_")) headers.Authorization = `Bearer ${key}`;
   let response: Response | null = null;
-  let transportError: unknown = null;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {
       response = await fetch(`${url}/rest/v1/${path}`, {
@@ -33,9 +32,7 @@ async function rest(path: string, init: RequestInit = {}) {
         cache: "no-store",
         headers: { ...headers, ...init.headers },
       });
-      transportError = null;
     } catch (error) {
-      transportError = error;
       response = null;
     }
     const transient = !response || response.status === 429 || response.status >= 500;
