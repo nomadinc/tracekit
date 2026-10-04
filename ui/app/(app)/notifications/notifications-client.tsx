@@ -292,7 +292,19 @@ export default function NotificationsClient() {
       const actionRows = Array.isArray(actionJson.notifications) ? actionJson.notifications : [];
       const rows = [...actionRows, ...healthRows].sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
       setNotifications((current) => append ? [...current, ...rows] : rows);
-      setCounts(json.counts || null);
+      const baseCounts = json.counts || { total: 0, unread: 0, read: 0, resolved: 0, dismissed: 0, critical: 0, warning: 0, info: 0, healthy: 0 };
+      setCounts({
+        ...baseCounts,
+        total: Number(baseCounts.total || 0) + actionRows.length,
+        unread: Number(baseCounts.unread || 0) + actionRows.filter((item: TraceKitNotification) => item.status === "unread").length,
+        read: Number(baseCounts.read || 0) + actionRows.filter((item: TraceKitNotification) => item.status === "read").length,
+        resolved: Number(baseCounts.resolved || 0) + actionRows.filter((item: TraceKitNotification) => item.status === "resolved").length,
+        dismissed: Number(baseCounts.dismissed || 0) + actionRows.filter((item: TraceKitNotification) => item.status === "dismissed").length,
+        critical: Number(baseCounts.critical || 0) + actionRows.filter((item: TraceKitNotification) => item.severity === "critical").length,
+        warning: Number(baseCounts.warning || 0) + actionRows.filter((item: TraceKitNotification) => item.severity === "warning").length,
+        info: Number(baseCounts.info || 0) + actionRows.filter((item: TraceKitNotification) => item.severity === "info").length,
+        healthy: Number(baseCounts.healthy || 0) + actionRows.filter((item: TraceKitNotification) => item.severity === "healthy").length,
+      });
       setNextCursor(json.next_cursor || null);
       setHasMore(Boolean(json.has_more));
       if (!append && !initialNotificationId && rows[0]) {
