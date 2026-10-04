@@ -1,4 +1,3 @@
-import{assessIntelligenceAction}from"./production-v1-policy";
 export type GovernedActionCapability={
  operation:"inspect_evidence"|"commas.webhook_test_delivery"|"shopify.controlled_webhook_create_delete_proof";
  provider:"tracekit"|"commas"|"shopify";
@@ -21,8 +20,7 @@ export function resolveM12ActionCapability(operation:string){return M12_ACTION_C
 export function assessM12ActionBinding(operation:string){
  const capability=resolveM12ActionCapability(operation);
  if(!capability)return{bound:false,executionAvailable:false,reason:"No governed operation-specific capability is registered."} as const;
- const policy=assessIntelligenceAction(operation);
- return{bound:true,executionAvailable:capability.exposure==="plan_only"&&capability.executionAvailable&&policy.allowed,capability,reason:!policy.allowed?policy.reason:capability.exposure!=="plan_only"?"Capability is retained as controlled proof evidence and is not exposed as a reusable action.":capability.executionAvailable?"Capability is bound and its named execution exposure is enabled.":"Capability is bound for planning but execution exposure is not enabled."} as const;
+ return{bound:true,executionAvailable:capability.exposure==="plan_only"&&capability.executionAvailable,capability,reason:capability.exposure!=="plan_only"?"Capability is retained as controlled proof evidence and is not exposed as a reusable action.":capability.executionAvailable?"Capability is bound and its named execution exposure is enabled.":"Capability is bound for planning but execution exposure is not enabled."} as const;
 }
 export type M12PlanCapabilityInput={proposedOperation:{type:string}|null;requiredPermission:string;confirmation:{required:boolean}};
 export function resolveM12PlanCapability(plan:M12PlanCapabilityInput){
