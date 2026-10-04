@@ -1,0 +1,538 @@
+{
+  "organizationId": "8f6bb14b-2126-49b8-bfdb-c60edbc3549b",
+  "actionOperation": "shopify.controlled_webhook_create_delete_proof",
+  "readinessCapture": {
+    "environment": "production",
+    "applicationOrigin": "https://app.trace-kit.io",
+    "captureStartedAt": "2026-10-04T05:20:01.582Z",
+    "captureCompletedAt": "2026-10-04T05:20:03.454Z",
+    "httpStatus": 200,
+    "mcpProtocolVersion": "2025-06-18",
+    "jsonRpcId": "ws019-m3-readiness",
+    "result": {
+      "activeOrganizationId": "8f6bb14b-2126-49b8-bfdb-c60edbc3549b",
+      "activeOrganizationName": "Stem Labs",
+      "expectedOrganizationId": "8f6bb14b-2126-49b8-bfdb-c60edbc3549b",
+      "connectedApprovedShopifyConnections": 1,
+      "activeCredentials": 1,
+      "credentialEnvelopeMatched": true,
+      "credentialDecryptSucceeded": true,
+      "shopCredentialParsed": true,
+      "shopDomainMatched": true,
+      "approvedShop": "izkfvg-k0.myshopify.com",
+      "callbackUrlConfigured": true,
+      "approvedCallback": "https://app.trace-kit.io/api/webhooks/shopify",
+      "subscriptionReadSucceeded": true,
+      "tracekitSubscriptionCount": 2,
+      "proofOnlyTopic": "APP_UNINSTALLED",
+      "proofOnlyTopicMatches": 0,
+      "proofOnlyTopicAvailable": true,
+      "createReadBackPrimitive": true,
+      "deleteAbsencePrimitive": true,
+      "recoveryMode": "same_execution_exact_created_subscription",
+      "ready": true
+    },
+    "audit": {
+      "eventId": "3e6f81d1-a2f0-4ce7-85db-2249fd980c2f",
+      "occurredAt": "2026-10-04T05:20:03.412435Z",
+      "correlationId": "52a65064-fd48-4a4d-a914-302996476640",
+      "actorUserId": "cbfaeaf7-fa83-4235-9011-af3ae7ce9101",
+      "actorDisplayName": "Anthony McCabe",
+      "organizationId": "8f6bb14b-2126-49b8-bfdb-c60edbc3549b",
+      "organizationName": "Stem Labs",
+      "targetType": "organization",
+      "targetId": "8f6bb14b-2126-49b8-bfdb-c60edbc3549b",
+      "action": "mcp.tool.inspect_shopify_controlled_proof_readiness",
+      "result": "success",
+      "permissionEvaluated": "customers.view",
+      "toolVersion": 1
+    },
+    "membershipEvent": {
+      "eventId": "a64408c7-e937-4fd6-834f-165471e47e2f",
+      "occurredAt": "2026-10-04T05:20:03.072172Z",
+      "correlationId": "52a65064-fd48-4a4d-a914-302996476640",
+      "actorUserId": "cbfaeaf7-fa83-4235-9011-af3ae7ce9101",
+      "actorDisplayName": "Anthony McCabe",
+      "organizationId": "8f6bb14b-2126-49b8-bfdb-c60edbc3549b",
+      "organizationName": "Stem Labs",
+      "targetType": "membership",
+      "targetId": "0a91c3d4-efaf-4bd8-a092-b0ea6a0853ac",
+      "action": "membership.resolved",
+      "result": "success",
+      "role": "platform-owner",
+      "accountType": "client"
+    },
+    "noActionIntent": true,
+    "noPreparation": true,
+    "noConfirmation": true,
+    "noProviderMutation": true
+  },
+  "tenantNegativeCapture": {
+    "captureStartedAt": "2026-10-04T05:24:00.049Z",
+    "captureCompletedAt": "2026-10-04T05:24:00.762Z",
+    "authenticatedContext": "Stem Labs Admin Client View",
+    "activeOrganizationId": "8f6bb14b-2126-49b8-bfdb-c60edbc3549b",
+    "endpoint": "POST /api/actions/provider-prepare",
+    "operation": "shopify.controlled_webhook_create_delete_proof",
+    "prohibitedInput": {
+      "organizationId": "11111111-1111-4111-8111-111111111111",
+      "fixtureType": "synthetic_non_tenant_uuid"
+    },
+    "httpStatus": 400,
+    "response": {
+      "ok": false,
+      "error": "invalid_operation"
+    },
+    "rejectionStage": "request_shape_validation_before_governed_action_discovery",
+    "lifecycleRowsInCaptureWindow": {
+      "mcpActionIntents": 0,
+      "mcpShopifyMutationRecovery": 0,
+      "mcpActionConfirmations": 0,
+      "mcpActionExecutionResults": 0
+    },
+    "audit": {
+      "governedActionOrExternalMutationEvents": 0,
+      "membershipEvent": {
+        "eventId": "74c464a4-15ca-4ccf-b08b-1524a3b61bbc",
+        "occurredAt": "2026-10-04T05:24:00.714079Z",
+        "correlationId": "340bd048-85c6-4cc9-b6f0-4ef61db690f0",
+        "actorUserId": "cbfaeaf7-fa83-4235-9011-af3ae7ce9101",
+        "actorDisplayName": "Anthony McCabe",
+        "organizationId": "8f6bb14b-2126-49b8-bfdb-c60edbc3549b",
+        "targetType": "membership",
+        "targetId": "0a91c3d4-efaf-4bd8-a092-b0ea6a0853ac",
+        "result": "success",
+        "role": "platform-owner",
+        "accountType": "client"
+      }
+    },
+    "shopifyConnection": {
+      "connectionId": "d69a93dd-98ed-46fd-b486-1a39fb8388dd",
+      "organizationId": "8f6bb14b-2126-49b8-bfdb-c60edbc3549b",
+      "provider": "shopify",
+      "status": "connected",
+      "persistedUpdatedAt": "2026-09-29T02:33:54.306352Z"
+    },
+    "providerRequestPerformed": false,
+    "shopifyMutationPerformed": false,
+    "tenantContextChanged": false,
+    "passed": true
+  },
+  "prepareOnlyCapture": {
+    "captureStartedAt": "2026-10-04T05:26:25.784Z",
+    "captureCompletedAt": "2026-10-04T05:26:27.905Z",
+    "httpStatus": 200,
+    "operation": "shopify.controlled_webhook_create_delete_proof",
+    "intentId": "7cbe1acf-f8b0-4c95-8c4e-2edd25c1bb66",
+    "planIdentity": "provider-plan:shopify.controlled_webhook_create_delete_proof:d69a93dd-98ed-46fd-b486-1a39fb8388dd:izkfvg-k0.myshopify.com:APP_UNINSTALLED",
+    "issuedAt": "2026-10-04T05:26:27.824Z",
+    "expiresAt": "2026-10-04T05:36:27.824Z",
+    "executionAvailable": false,
+    "confirmationRequired": true,
+    "derivedStatusAtObservation": "prepared_unconfirmed",
+    "observedAt": "2026-10-04T05:27:36.687346Z",
+    "organizationId": "8f6bb14b-2126-49b8-bfdb-c60edbc3549b",
+    "actorUserId": "cbfaeaf7-fa83-4235-9011-af3ae7ce9101",
+    "target": {
+      "targetKind": "shopify_webhook_subscription",
+      "connectionId": "d69a93dd-98ed-46fd-b486-1a39fb8388dd",
+      "shopDomain": "izkfvg-k0.myshopify.com",
+      "callbackUrl": "https://app.trace-kit.io/api/webhooks/shopify",
+      "topic": "APP_UNINSTALLED",
+      "requiredPermission": "actions.execute",
+      "recovery": "reversible"
+    },
+    "recovery": {
+      "recoveryId": "c61320a2-9609-4d52-9565-a0cd434bdd9e",
+      "state": "prepared",
+      "createdAt": "2026-10-04T05:26:27.868391Z",
+      "updatedAt": "2026-10-04T05:26:27.868391Z",
+      "createdExternalId": null,
+      "createdVerified": false,
+      "rollbackVerified": false
+    },
+    "confirmationRows": 0,
+    "authorizationRows": 0,
+    "executionResultRows": 0,
+    "providerMutationPerformed": false,
+    "audit": {
+      "correlationId": "adb0b326-8f04-4cd7-b8e9-42cfa5574731",
+      "membershipEvent": {
+        "eventId": "4f34a78e-31b4-468e-8d7d-f8af45913771",
+        "occurredAt": "2026-10-04T05:26:27.251187Z",
+        "actorDisplayName": "Anthony McCabe",
+        "organizationId": "8f6bb14b-2126-49b8-bfdb-c60edbc3549b",
+        "result": "success",
+        "membershipId": "0a91c3d4-efaf-4bd8-a092-b0ea6a0853ac",
+        "role": "platform-owner"
+      },
+      "discoveryEvent": {
+        "eventId": "3902b9cf-2d0d-4758-91cc-38a559442443",
+        "occurredAt": "2026-10-04T05:26:27.627278Z",
+        "actorDisplayName": "Anthony McCabe",
+        "organizationId": "8f6bb14b-2126-49b8-bfdb-c60edbc3549b",
+        "action": "mcp.tool.discover_provider_actions",
+        "result": "success",
+        "permissionEvaluated": "organizations.view",
+        "toolVersion": 1
+      },
+      "separatePrepareAuditEvent": false
+    },
+    "passed": true
+  },
+  "expiredIntentCapture": {
+    "observedAt": "2026-10-04T05:36:58.239938Z",
+    "intentId": "7cbe1acf-f8b0-4c95-8c4e-2edd25c1bb66",
+    "intentPresent": true,
+    "expiresAt": "2026-10-04T05:36:27.824Z",
+    "expired": true,
+    "derivedStatus": "expired_stale_unconfirmed",
+    "confirmationCount": 0,
+    "authorizationCount": 0,
+    "authorizationConsumedCount": 0,
+    "executionResultCount": 0,
+    "recovery": {
+      "recoveryId": "c61320a2-9609-4d52-9565-a0cd434bdd9e",
+      "state": "prepared",
+      "updatedAt": "2026-10-04T05:26:27.868391Z",
+      "createdExternalId": null,
+      "createdVerified": false,
+      "rollbackVerified": false
+    },
+    "externalMutationAuditCount": 0,
+    "providerObjectCreated": false,
+    "providerReadPerformed": false,
+    "providerMutationPerformed": false,
+    "confirmationContract": {
+      "wouldRejectExpiredIntentBeforeWrite": false,
+      "reason": "confirmShopifyControlledProof inserts a confirmation without reading or validating the referenced intent expiry",
+      "invoked": false,
+      "status": "source_established_gap"
+    },
+    "executionContract": {
+      "wouldRejectExpiredIntentBeforeProviderExecution": true,
+      "reason": "resolve_mcp_shopify_action_confirmation requires intent_expires_at and confirmation_expires_at to exceed requested_at; no confirmation also resolves unavailable",
+      "invoked": false,
+      "status": "source_established_fail_closed"
+    },
+    "passed": false,
+    "blocker": "expired_intent_confirmation_not_fail_closed"
+  },
+  "controlledExecutionCapture": {
+    "requestedAt": "2026-10-04T17:51:47.012Z",
+    "captureCompletedAt": "2026-10-04T17:51:50.834Z",
+    "databaseObservedAt": "2026-10-04T17:53:28.129418Z",
+    "httpStatus": 200,
+    "mcpProtocolVersion": "2025-06-18",
+    "intentId": "1c07429f-ccce-4b9f-9fa3-88b912fac422",
+    "confirmationId": "85295197-b001-4fc8-9410-137dff2a72f5",
+    "authorizationId": "00dcd8c9-5520-4a28-8feb-81465df6ea06",
+    "authorizationState": "consumed",
+    "authorizationCount": 1,
+    "authorizationConsumptionCount": 1,
+    "consumptionId": "7e6190bb-725d-4c46-b655-688d14673fc1",
+    "idempotencyKey": "ws019-m3-shopify-proof-20261004-001",
+    "envelopeIdentity": "shopify-exec-v1-f5e5f6859bb1",
+    "auditCorrelationId": "47efb033-2669-408a-915c-69a554f788cd",
+    "executionId": "2b921137-eb63-4465-a1e5-6cbac3392c28",
+    "executionResultCount": 1,
+    "executionResult": {
+      "status": "completed",
+      "provider": "shopify",
+      "operation": "controlled_webhook_create_delete_proof",
+      "createdExternalId": "gid://shopify/WebhookSubscription/2085074436310",
+      "createVerified": true,
+      "rollbackExternalId": "gid://shopify/WebhookSubscription/2085074436310",
+      "rollbackVerified": true,
+      "netProviderConfigurationMutation": false
+    },
+    "recovery": {
+      "state": "rollback_verified",
+      "createdExternalId": "gid://shopify/WebhookSubscription/2085074436310",
+      "createdVerified": true,
+      "rollbackExternalId": "gid://shopify/WebhookSubscription/2085074436310",
+      "rollbackVerified": true,
+      "updatedAt": "2026-10-04T17:51:50.632Z"
+    },
+    "externalMutationAudit": {
+      "count": 1,
+      "executedAt": "2026-10-04T17:51:50.668Z",
+      "provider": "shopify",
+      "operation": "controlled_webhook_create_delete_proof",
+      "controlledTarget": "izkfvg-k0.myshopify.com",
+      "createdExternalId": "gid://shopify/WebhookSubscription/2085074436310",
+      "rollbackExternalId": "gid://shopify/WebhookSubscription/2085074436310",
+      "createVerified": true,
+      "rollbackVerified": true,
+      "netProviderConfigurationMutation": false
+    },
+    "duplicateAuthorization": false,
+    "duplicateExecutionResult": false,
+    "duplicateExternalMutationAudit": false,
+    "executionBuiltInProviderAbsenceVerification": true,
+    "freshPostExecutionProviderList": {
+      "performed": true,
+      "captureStartedAt": "2026-10-04T17:55:30.339Z",
+      "captureCompletedAt": "2026-10-04T17:55:31.633Z",
+      "subscriptionReadSucceeded": true,
+      "createdObjectAbsent": true,
+      "proofOnlyTopicMatches": 0,
+      "tracekitSubscriptionCount": 2,
+      "ingestionSubscriptionsIntact": true,
+      "proofOnlyTopicAvailable": true,
+      "readiness": true
+    },
+    "replayPerformed": true,
+    "passed": true,
+    "blocker": null
+  },
+  "replayCapture": {
+    "captureStartedAt": "2026-10-04T18:47:32.600Z",
+    "captureCompletedAt": "2026-10-04T18:47:34.706Z",
+    "databaseObservedAt": "2026-10-04T18:49:20.508849Z",
+    "httpStatus": 200,
+    "mcpProtocolVersion": "2025-06-18",
+    "jsonRpcId": "ws019-m3-replay-001",
+    "result": {
+      "status": "completed",
+      "reason": "replay_same_result",
+      "organizationId": "8f6bb14b-2126-49b8-bfdb-c60edbc3549b",
+      "envelopeIdentity": "shopify-exec-v1-f5e5f6859bb1",
+      "idempotencyKey": "ws019-m3-shopify-proof-20261004-001",
+      "auditCorrelationId": "47efb033-2669-408a-915c-69a554f788cd",
+      "executionId": "2b921137-eb63-4465-a1e5-6cbac3392c28",
+      "consumptionId": "7e6190bb-725d-4c46-b655-688d14673fc1",
+      "createdExternalId": "gid://shopify/WebhookSubscription/2085074436310",
+      "rollbackExternalId": "gid://shopify/WebhookSubscription/2085074436310",
+      "createVerified": true,
+      "rollbackVerified": true,
+      "netProviderConfigurationMutation": false
+    },
+    "beforeAfter": {
+      "authorizationCountBefore": 1,
+      "authorizationCountAfter": 1,
+      "authorizationConsumptionCountBefore": 1,
+      "authorizationConsumptionCountAfter": 1,
+      "executionResultCountBefore": 1,
+      "executionResultCountAfter": 1,
+      "externalMutationAuditCountBefore": 1,
+      "externalMutationAuditCountAfter": 1,
+      "recoveryStateBefore": "rollback_verified",
+      "recoveryStateAfter": "rollback_verified",
+      "recoveryUpdatedAtBefore": "2026-10-04T17:51:50.632Z",
+      "recoveryUpdatedAtAfter": "2026-10-04T17:51:50.632Z",
+      "createdExternalIdUnchanged": true,
+      "rollbackEvidenceUnchanged": true,
+      "secondExecutionIdCreated": false,
+      "secondProviderObjectCreated": false
+    },
+    "providerAccess": {
+      "requestCount": 0,
+      "shopifyReads": 0,
+      "webhookSubscriptionListReads": 0,
+      "credentialOrProviderTargetResolution": 0,
+      "shopifyCreates": 0,
+      "shopifyDeletes": 0,
+      "evidence": [
+        "production runtime telemetry contains only the successful POST /api/mcp request in the exact capture window",
+        "deployed replay-first path returns the exact durable completed result before credential, target, readiness, recovery, or provider orchestration",
+        "authorization, result, external-mutation audit, and recovery rows retain their original timestamps and counts"
+      ]
+    },
+    "runtimeTelemetry": {
+      "deploymentId": "dpl_8jfYxMKNfNsZYzZ1vMRjLevS6nLE",
+      "requestMethod": "POST",
+      "requestPath": "/api/mcp",
+      "responseStatusCode": 200,
+      "environment": "production",
+      "branch": "main"
+    },
+    "audit": {
+      "membershipEvent": {
+        "eventId": "62610f21-59ec-4d9d-92e2-6a25eecd01f7",
+        "occurredAt": "2026-10-04T18:47:34.618657Z",
+        "correlationId": "da8bf2d7-9a7c-4c6f-942a-182e80addaf3",
+        "actorUserId": "cbfaeaf7-fa83-4235-9011-af3ae7ce9101",
+        "actorDisplayName": "Anthony McCabe",
+        "organizationId": "8f6bb14b-2126-49b8-bfdb-c60edbc3549b",
+        "action": "membership.resolved",
+        "result": "success",
+        "role": "platform-owner",
+        "accountType": "client"
+      },
+      "separateReplayToolAuditEvent": false,
+      "additionalExternalMutationAudit": false
+    },
+    "passed": true
+  },
+  "stages": {
+    "detection": [
+      "readinessCapture.result.ready",
+      "readinessCapture.result.proofOnlyTopicAvailable"
+    ],
+    "eligibility": [
+      "readinessCapture.result.credentialEnvelopeMatched",
+      "readinessCapture.result.ready"
+    ],
+    "preparation": [
+      "controlledExecutionCapture.intentId",
+      "controlledExecutionCapture.authorizationId"
+    ],
+    "exact_target": [
+      "prepareOnlyCapture.planIdentity",
+      "prepareOnlyCapture.target"
+    ],
+    "safe_failure": [
+      "tenantNegativeCapture.response",
+      "tenantNegativeCapture.lifecycleRowsInCaptureWindow",
+      "tenantNegativeCapture.audit",
+      "expiredIntentCapture.executionContract"
+    ],
+    "permission": [
+      "readinessCapture.audit",
+      "controlledExecutionCapture.authorizationState"
+    ],
+    "explicit_confirmation": [
+      "controlledExecutionCapture.confirmationId"
+    ],
+    "execution": [
+      "controlledExecutionCapture.authorizationId",
+      "controlledExecutionCapture.executionResult"
+    ],
+    "verification": [
+      "controlledExecutionCapture.executionResult.createVerified",
+      "controlledExecutionCapture.executionResult.rollbackVerified",
+      "controlledExecutionCapture.externalMutationAudit"
+    ],
+    "replay_idempotency": [
+      "replayCapture.result",
+      "replayCapture.beforeAfter",
+      "replayCapture.providerAccess"
+    ],
+    "durable_audit_history": [
+      "controlledExecutionCapture"
+    ]
+  },
+  "scenarios": [
+    {
+      "scenario": "organization_context",
+      "passed": true,
+      "evidenceRefs": [
+        "readinessCapture.result.activeOrganizationId",
+        "readinessCapture.membershipEvent"
+      ],
+      "observedAt": "2026-10-04T05:20:03.454Z"
+    },
+    {
+      "scenario": "current_evidence_evaluation",
+      "passed": true,
+      "evidenceRefs": [
+        "readinessCapture.result.subscriptionReadSucceeded",
+        "controlledExecutionCapture.freshPostExecutionProviderList"
+      ],
+      "observedAt": "2026-10-04T17:55:31.633Z"
+    },
+    {
+      "scenario": "healthy_no_action",
+      "passed": true,
+      "evidenceRefs": [
+        "controlledExecutionCapture.freshPostExecutionProviderList.proofOnlyTopicMatches",
+        "controlledExecutionCapture.freshPostExecutionProviderList.ingestionSubscriptionsIntact"
+      ],
+      "observedAt": "2026-10-04T17:55:31.633Z"
+    },
+    {
+      "scenario": "actionable_finding",
+      "passed": true,
+      "evidenceRefs": [
+        "readinessCapture.result.proofOnlyTopicAvailable",
+        "controlledExecutionCapture.intentId"
+      ],
+      "observedAt": "2026-10-04T17:50:44.632Z"
+    },
+    {
+      "scenario": "unsupported_action_suppression",
+      "passed": true,
+      "evidenceRefs": [
+        "tenantNegativeCapture.rejectionStage",
+        "readinessCapture.result.proofOnlyTopic"
+      ],
+      "observedAt": "2026-10-04T05:24:00.762Z"
+    },
+    {
+      "scenario": "confirmation_rbac",
+      "passed": true,
+      "evidenceRefs": [
+        "controlledExecutionCapture.confirmationId",
+        "readinessCapture.membershipEvent.role",
+        "controlledExecutionCapture.authorizationState"
+      ],
+      "observedAt": "2026-10-04T17:51:16.581041Z"
+    },
+    {
+      "scenario": "execute_exactly_once",
+      "passed": true,
+      "evidenceRefs": [
+        "controlledExecutionCapture.authorizationConsumptionCount",
+        "controlledExecutionCapture.executionResultCount",
+        "replayCapture.beforeAfter"
+      ],
+      "observedAt": "2026-10-04T18:49:20.508849Z"
+    },
+    {
+      "scenario": "verification",
+      "passed": true,
+      "evidenceRefs": [
+        "controlledExecutionCapture.executionResult",
+        "controlledExecutionCapture.freshPostExecutionProviderList"
+      ],
+      "observedAt": "2026-10-04T17:55:31.633Z"
+    },
+    {
+      "scenario": "durable_lifecycle_history",
+      "passed": true,
+      "evidenceRefs": [
+        "controlledExecutionCapture",
+        "replayCapture.beforeAfter"
+      ],
+      "observedAt": "2026-10-04T18:49:20.508849Z"
+    },
+    {
+      "scenario": "replay",
+      "passed": true,
+      "evidenceRefs": [
+        "replayCapture.result",
+        "replayCapture.providerAccess"
+      ],
+      "observedAt": "2026-10-04T18:47:34.706Z"
+    },
+    {
+      "scenario": "failure_path",
+      "passed": true,
+      "evidenceRefs": [
+        "tenantNegativeCapture.response",
+        "tenantNegativeCapture.lifecycleRowsInCaptureWindow"
+      ],
+      "observedAt": "2026-10-04T05:24:00.762Z"
+    },
+    {
+      "scenario": "tenant_negative_access",
+      "passed": true,
+      "evidenceRefs": [
+        "tenantNegativeCapture",
+        "tenantNegativeCapture.audit.membershipEvent"
+      ],
+      "observedAt": "2026-10-04T05:24:00.762Z"
+    },
+    {
+      "scenario": "operational_telemetry",
+      "passed": true,
+      "evidenceRefs": [
+        "replayCapture.runtimeTelemetry",
+        "replayCapture.audit.membershipEvent",
+        "controlledExecutionCapture.externalMutationAudit"
+      ],
+      "observedAt": "2026-10-04T18:49:20.508849Z"
+    }
+  ]
+}
