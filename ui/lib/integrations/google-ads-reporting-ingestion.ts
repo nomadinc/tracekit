@@ -13,7 +13,12 @@ export async function ingestGoogleAdsReportingBounded(input:{organizationId:stri
  const selected=await marketingPersistenceRequest(`marketing_provider_accounts?organization_id=eq.${encodeURIComponent(input.organizationId)}&connection_id=eq.${encodeURIComponent(input.connectionId)}&provider=eq.google_ads&selected_for_sync=eq.true&status=eq.active`) as Row[];
  if(selected.length!==1)throw new Error("Exactly one Google Ads account must be selected for bounded ingestion.");
  const providerAccount=selected[0];
- const proof=await runGoogleAdsReportingProof({organizationId:input.organizationId,connectionId:input.connectionId,days});
+ const now=new Date(),windowEnd=now.toISOString().slice(0,10),windowStart=new Date(now.getTime()-(days-1)*86400000).toISOString().slice(0,10);
+ const runs=await marketingPersistenceRequest("marketing_reporting_runs",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify({account_id:providerAccount.account_id,organization_id:input.organizationId,connection_id:input.connectionId,provider_account_id:providerAccount.id,provider:"google_ads",mode:"manual",window_start:windowStart,window_end:windowEnd,status:"running"})}) as Row[];
+ const runId=String(runs[0]?.id||"");if(!runId)throw new Error("Google Ads reporting run could not be created.");
+ let proof;
+ try{proof=await runGoogleAdsReportingProof({organizationId:input.organizationId,connectionId:input.connectionId,days});}
+ catch(error){await marketingPersistenceRequest(`marketing_reporting_runs?id=eq.${encodeURIComponent(runId)}&organization_id=eq.${encodeURIComponent(input.organizationId)}`,{method:"PATCH",body:JSON.stringify({status:"failed",error_code:"provider_read_failed",completed_at:new Date().toISOString()})});throw error;}
  let evidenceCreated=0,evidenceReused=0,factsCreated=0,factsUpdated=0,factsUnchanged=0;
  for(const row of proof.rows){
   if(!row.date||!row.campaignId)continue;
@@ -31,5 +36,11 @@ export async function ingestGoogleAdsReportingBounded(input:{organizationId:stri
   }else if(String(existing[0].source_observation_hash)===observationHash){factsUnchanged++;
   }else{await marketingPersistenceRequest(`marketing_campaign_daily_facts?id=eq.${encodeURIComponent(String(existing[0].id))}&organization_id=eq.${encodeURIComponent(input.organizationId)}`,{method:"PATCH",body:JSON.stringify(fact)});factsUpdated++;}
  }
- return {accountLabel:proof.accountLabel,days,providerRows:proof.rowCount,evidenceCreated,evidenceReused,factsCreated,factsUpdated,factsUnchanged};
+ const completedAt=new Date().toISOString();
+ await marketingPersistenceRequest(`marketing_reporting_runs?id=eq.${encodeURIComponent(runId)}&organization_id=eq.${encodeURIComponent(input.organizationId)}`,{method:"PATCH",body:JSON.stringify({status:"completed",provider_rows:proof.rowCount,evidence_created:evidenceCreated,evidence_reused:evidenceReused,facts_created:factsCreated,facts_updated:factsUpdated,facts_unchanged:factsUnchanged,completed_at:completedAt})});
+ const checkpoints=await marketingPersistenceRequest(`marketing_reporting_checkpoints?organization_id=eq.${encodeURIComponent(input.organizationId)}&connection_id=eq.${encodeURIComponent(input.connectionId)}&provider_account_id=eq.${encodeURIComponent(String(providerAccount.id))}&resource=eq.campaign_daily&limit=1`) as Row[];
+ const checkpoint={organization_id:input.organizationId,connection_id:input.connectionId,provider_account_id:providerAccount.id,provider:"google_ads",resource:"campaign_daily",last_successful_report_date:windowEnd,overlap_days:7,last_run_id:runId,last_success_at:completedAt,last_error_at:null,last_error_code:null,updated_at:completedAt};
+ if(checkpoints[0])await marketingPersistenceRequest(`marketing_reporting_checkpoints?organization_id=eq.${encodeURIComponent(input.organizationId)}&connection_id=eq.${encodeURIComponent(input.connectionId)}&provider_account_id=eq.${encodeURIComponent(String(providerAccount.id))}&resource=eq.campaign_daily`,{method:"PATCH",body:JSON.stringify(checkpoint)});
+ else await marketingPersistenceRequest("marketing_reporting_checkpoints",{method:"POST",body:JSON.stringify(checkpoint)});
+ return {runId,accountLabel:proof.accountLabel,days,providerRows:proof.rowCount,evidenceCreated,evidenceReused,factsCreated,factsUpdated,factsUnchanged};
 }
