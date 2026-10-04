@@ -24,7 +24,14 @@ function authErrorDiagnostic(value: unknown) {
 export const GET = handleAuth({
   returnPathname: "/",
   onSuccess: async ({ user }) => {
-    await recordAuthenticationSuccess({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, profilePictureUrl: user.profilePictureUrl });
+    try {
+      await recordAuthenticationSuccess({ id: user.id, email: user.email, firstName: user.firstName, lastName: user.lastName, profilePictureUrl: user.profilePictureUrl });
+    } catch (error) {
+      // WorkOS authentication succeeded. A persistence/audit outage must not
+      // invalidate the provider session; application-session resolution owns
+      // the downstream tenancy/storage availability boundary.
+      console.error("authentication_success_persistence_failed", authErrorDiagnostic(error));
+    }
   },
   onError: (...args: unknown[]) => {
     console.error("workos_auth_callback_failed", authErrorDiagnostic(args[0]));
