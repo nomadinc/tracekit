@@ -10,7 +10,8 @@ function message(provider?: string, google?: string, meta?: string) {
     if (google.startsWith("google_ads_api_")) return { tone: "error" as const, text: `Google Ads authorization succeeded, but account discovery failed (${google.replace("google_ads_api_", "")}).` };
     if (google.startsWith("google_ads_profile_query_")) return { tone: "error" as const, text: `Google Ads authorization succeeded and accessible customers were found, but the customer profile query failed (${google.replace("google_ads_profile_query_", "")}).` };
     if (google === "google_ads_hierarchy_discovery_failed") return { tone: "error" as const, text: "Google Ads authorization succeeded and customer profiles were read, but manager account hierarchy discovery failed." };
-    if (google === "google_ads_token_exchange_failed") return { tone: "error" as const, text: "Google returned from authorization, but TraceKit could not complete the Google token exchange." };\n    if (google === "google_ads_connection_persistence_failed") return { tone: "error" as const, text: "Google Ads authorization and discovery succeeded, but TraceKit could not persist the connection." };
+    if (google === "google_ads_token_exchange_failed") return { tone: "error" as const, text: "Google returned from authorization, but TraceKit could not complete the Google token exchange." };
+    if (google === "google_ads_connection_persistence_failed") return { tone: "error" as const, text: "Google Ads authorization and discovery succeeded, but TraceKit could not persist the connection." };
     if (google === "google_ads_account_persistence_failed") return { tone: "error" as const, text: "Google Ads authorization succeeded and the connection was created, but TraceKit could not persist the discovered accounts." };
     if (google === "failed") return { tone: "error" as const, text: "Google Ads authorization returned, but TraceKit could not complete the connection." };
   }
