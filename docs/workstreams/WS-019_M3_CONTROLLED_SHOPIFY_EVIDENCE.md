@@ -1,6 +1,6 @@
 # WS-019 M3 — Controlled Shopify Production Evidence
 
-Status: **BLOCKED BEFORE MUTATION** on 2026-10-03.
+Status: **OPEN / PARTIAL — GOVERNED READINESS CAPTURED; NO MUTATION AUTHORIZED** on 2026-10-04.
 
 Baseline: M2 `ebc263c308daea4b19320586d5dcf1411d9a6b7e`; `origin/main` `828c32225ad93899a5f0e974a2e3fc9964776558`.
 
@@ -15,18 +15,37 @@ Baseline: M2 `ebc263c308daea4b19320586d5dcf1411d9a6b7e`; `origin/main` `828c3222
 
 These are repository assertions, not current production evidence.
 
-## Blocking preflight facts
+## Production governed-readiness capture
 
-- The isolated worktree has no `.env.local` or other production runtime environment.
-- No production Vercel project is linked; project and production UI deployment identity cannot be verified without guessing.
-- No authenticated application browser session is available.
-- Therefore the current operator identity, active organization/workspace, effective `actions.execute` permission, live safe-disable values, current connection/credential state, current proof-topic absence, tenant-negative fixture, and production telemetry cannot be proven.
+The detailed read-only MCP inspection was invoked through the authenticated first-party WorkOS application session while Admin Client View was scoped to Stem Labs. The request completed from `2026-10-04T05:20:01.582Z` through `2026-10-04T05:20:03.454Z` with HTTP 200, MCP protocol `2025-06-18`, and JSON-RPC ID `ws019-m3-readiness`.
+
+- Active and expected organization: Stem Labs, `8f6bb14b-2126-49b8-bfdb-c60edbc3549b`.
+- Approved Shopify connections: `1`; active credentials: `1`.
+- Credential envelope match, decrypt, parse, and approved-shop match: all `true`.
+- Approved shop: `izkfvg-k0.myshopify.com`.
+- Approved callback: `https://app.trace-kit.io/api/webhooks/shopify`.
+- Shopify subscription read: succeeded; exact TraceKit callback subscriptions observed: `2`.
+- Controlled-proof topic: `APP_UNINSTALLED`; matching subscriptions: `0`; baseline available: `true`.
+- Create read-back and delete-absence primitives: both `true`.
+- Recovery mode: `same_execution_exact_created_subscription`; aggregate readiness: `true`.
+
+The corresponding immutable audit event is `3e6f81d1-a2f0-4ce7-85db-2249fd980c2f`, recorded at `2026-10-04T05:20:03.412435Z` with correlation ID `52a65064-fd48-4a4d-a914-302996476640`. It records actor Anthony McCabe (`cbfaeaf7-fa83-4235-9011-af3ae7ce9101`), organization and target Stem Labs (`8f6bb14b-2126-49b8-bfdb-c60edbc3549b`), action `mcp.tool.inspect_shopify_controlled_proof_readiness`, result `success`, evaluated permission `customers.view`, and `toolVersion: 1`.
+
+The normal `membership.resolved` event `a64408c7-e937-4fd6-834f-165471e47e2f` occurred at `2026-10-04T05:20:03.072172Z` with the same correlation ID, actor, and organization. Its target is membership `0a91c3d4-efaf-4bd8-a092-b0ea6a0853ac`; metadata records role `platform-owner` and account type `client`.
+
+This capture proves the read-only readiness gate and exact absence baseline. It did not create an action intent, prepare or confirm an action, perform the tenant-negative test, or mutate Shopify.
+
+## Remaining gates
+
+- Explicit authorization for preparation, confirmation, and the bounded Shopify mutation has not been granted.
+- A tenant-negative fixture has not been approved and the tenant-negative test has not been performed.
+- The remaining governed lifecycle evidence — intent, confirmation, exactly-once execution, verification, cleanup/net-zero state, replay, durable lifecycle/history, and safe failure — has not been produced.
 
 No Shopify request, action intent, confirmation, execution, provider mutation, or database mutation was performed.
 
 ## Acceptance manifest
 
-`evidence/WS-019_M3_SHOPIFY_PRODUCTION_ACCEPTANCE.incomplete.json` intentionally contains no qualifying production evidence. The M2 validator must reject it. It must be replaced by a fresh evidence-producing run only after every blocked prerequisite is established.
+`evidence/WS-019_M3_SHOPIFY_PRODUCTION_ACCEPTANCE.incomplete.json` now records this governed-readiness observation and its audit correlation. Its release stages and scenarios intentionally remain empty, so the M2 validator must continue to reject it until the separately authorized controlled-production lifecycle is complete.
 
 ## Regression baseline
 
