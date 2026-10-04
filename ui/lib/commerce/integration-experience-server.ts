@@ -23,9 +23,13 @@ async function authorizedSession(permission: "connectors.view" | "connectors.man
 export async function loadConnectionsOverview() {
   const session = await authorizedSession("connectors.view");
   const organization = session.activeOrganization!;
-  const connections = await commercePersistenceRequest(`commerce_provider_connections?organization_id=eq.${encodeURIComponent(organization.id)}&order=created_at.asc`) as Row[];
+  const [connections, marketingConnections] = await Promise.all([
+    commercePersistenceRequest(`commerce_provider_connections?organization_id=eq.${encodeURIComponent(organization.id)}&order=created_at.asc`) as Promise<Row[]>,
+    commercePersistenceRequest(`marketing_provider_connections?organization_id=eq.${encodeURIComponent(organization.id)}&status=neq.revoked&order=created_at.asc`) as Promise<Row[]>,
+  ]);
   const experiences = await Promise.all(connections.map((row) => loadConnectionExperienceRow(organization.name, row, session.effectivePermissions.includes("connectors.manage"), canManageTkidOrigins(session))));
-  return { organizationName: organization.name, connections: experiences };
+  const marketingExperiences = await Promise.all(marketingConnections.map((row) => loadMarketingConnectionExperienceRow(organization.name, row, session.effectivePermissions.includes("connectors.manage"))));
+  return { organizationName: organization.name, connections: [...experiences, ...marketingExperiences] };
 }
 
 export async function loadConnectionExperiences(): Promise<ConnectionExperience[]> {
@@ -122,4 +126,45 @@ async function loadConnectionExperienceRow(organizationName: string, row: Row, c
 
 export async function loadSyncRuns(): Promise<SafeSyncRun[]> {
   return (await loadConnectionExperiences()).flatMap((connection) => connection.syncRuns);
+}
+
+
+async function loadMarketingConnectionExperienceRow(organizationName: string, row: Row, canManage: boolean): Promise<ConnectionExperience> {
+  const id = String(row.id);
+  const organizationId = String(row.organization_id);
+  const provider = String(row.provider) === "meta" ? "meta_ads" : String(row.provider);
+  const [accounts, credentials] = await Promise.all([
+    optionalRows(`marketing_provider_accounts?connection_id=eq.${encodeURIComponent(id)}&organization_id=eq.${encodeURIComponent(organizationId)}&order=selected_for_sync.desc,created_at.asc`),
+    optionalRows(`marketing_provider_credentials?connection_id=eq.${encodeURIComponent(id)}&organization_id=eq.${encodeURIComponent(organizationId)}&select=id,created_at,rotated_at,revoked_at,encryption_version&order=created_at.desc`),
+  ]);
+  const activeCredential = credentials.find((credential) => !credential.revoked_at);
+  const selected = accounts.find((account) => Boolean(account.selected_for_sync));
+  const first = selected || accounts[0];
+  return {
+    id,
+    provider,
+    displayName: String(row.display_name || (provider === "google_ads" ? "Google Ads" : "Meta Ads")),
+    environment: String(row.environment || "production"),
+    status: String(row.status || "connected"),
+    organizationName,
+    syncFrequency: "manual",
+    nextSyncAt: null,
+    providerAccountLabel: first ? String(first.provider_account_label || first.provider_account_external_id) : null,
+    lastVerifiedAt: text(row.last_success_at),
+    lastSyncAt: null,
+    capabilities: [],
+    syncRuns: [],
+    credential: activeCredential
+      ? { status: "active", createdAt: text(activeCredential.created_at), rotatedAt: text(activeCredential.rotated_at), version: number(activeCredential.encryption_version) }
+      : { status: credentials.length ? "revoked" : "missing", createdAt: null, rotatedAt: null, version: null },
+    readiness: [
+      { id: "connection_verified", label: "Connection verified", status: String(row.status) === "connected" ? "passed" : "pending", explanation: "Provider OAuth connection is stored in the marketing connection domain.", evidenceAt: text(row.last_success_at) },
+      { id: "account_selection", label: "Advertising account selected", status: selected ? "passed" : "pending", explanation: selected ? "At least one discovered advertising account is explicitly selected." : "Select a discovered advertising account before provider data sync is enabled.", evidenceAt: selected ? text(selected.updated_at) : null },
+    ],
+    canManage,
+    productionReadiness: { schedulerState: "disabled", connectionPaused: false, quotaMinimumRemaining: null, deepRequestBudget: null, blockers: ["Paid-media ingestion scheduling is not enabled"] },
+    tkidOrigins: { sourceId: null, sourceState: "disabled", origins: [], blockers: [], canManage: false },
+    freshness: { status: "unknown", lastAttemptedAt: null, lastSuccessfulAt: null, lastProviderObservationAt: null, lastNormalizedRecordAt: null, latestProviderTransactionAt: null, providerTotal: null, lastDeepReconciliationAt: null, stoppingReason: null, attributionSourceState: "unavailable", deepReconciliationRequired: false },
+    diagnostics: { latestRequestStatus: row.last_error_at ? "failed" : row.last_success_at ? "succeeded" : null, latencyMs: null, providerRequestIdPresent: false, retryCount: 0, rateLimitRemaining: null, rateLimitReset: null, sanitizedError: text(row.last_error_code), activeRun: false, leaseOwnerPresent: false, heartbeatAge: null, stalled: false, pendingCheckpoints: 0, failedCheckpoints: 0, evidenceReferences: 0, missingEvidenceReferences: 0, hashState: "unavailable" },
+  };
 }
