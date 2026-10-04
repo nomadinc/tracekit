@@ -132,9 +132,11 @@ async function loadMarketingConnectionExperienceRow(organizationName: string, ro
   const id = String(row.id);
   const organizationId = String(row.organization_id);
   const provider = String(row.provider) === "meta" ? "meta_ads" : String(row.provider);
-  const [accounts, credentials] = await Promise.all([
+  const [accounts, credentials, schedules, checkpoints] = await Promise.all([
     optionalRows(`marketing_provider_accounts?connection_id=eq.${encodeURIComponent(id)}&organization_id=eq.${encodeURIComponent(organizationId)}&order=selected_for_sync.desc,created_at.asc`),
     optionalRows(`marketing_provider_credentials?connection_id=eq.${encodeURIComponent(id)}&organization_id=eq.${encodeURIComponent(organizationId)}&select=id,created_at,rotated_at,revoked_at,encryption_version&order=created_at.desc`),
+    optionalRows(`marketing_reporting_schedules?connection_id=eq.${encodeURIComponent(id)}&organization_id=eq.${encodeURIComponent(organizationId)}&provider=eq.${encodeURIComponent(provider)}&resource=eq.campaign_daily&limit=1`),
+    optionalRows(`marketing_reporting_checkpoints?connection_id=eq.${encodeURIComponent(id)}&organization_id=eq.${encodeURIComponent(organizationId)}&provider=eq.${encodeURIComponent(provider)}&resource=eq.campaign_daily&limit=1`),
   ]);
   const activeCredential = credentials.find((credential) => !credential.revoked_at);
   const selected = accounts.find((account) => Boolean(account.selected_for_sync));
@@ -146,8 +148,8 @@ async function loadMarketingConnectionExperienceRow(organizationName: string, ro
     environment: String(row.environment || "production"),
     status: String(row.status || "connected"),
     organizationName,
-    syncFrequency: "manual",
-    nextSyncAt: null,
+    syncFrequency: String(schedules[0]?.sync_frequency || "manual") as ConnectionExperience["syncFrequency"],
+    nextSyncAt: text(schedules[0]?.next_run_at),
     providerAccountLabel: first ? String(first.provider_account_label || first.provider_account_external_id) : null,
     lastVerifiedAt: text(row.last_success_at),
     lastSyncAt: null,
@@ -161,10 +163,10 @@ async function loadMarketingConnectionExperienceRow(organizationName: string, ro
       { id: "account_selection", label: "Advertising account selected", status: selected ? "passed" : "pending", explanation: selected ? "At least one discovered advertising account is explicitly selected." : "Select a discovered advertising account before provider data sync is enabled.", evidenceAt: selected ? text(selected.updated_at) : null },
     ],
     canManage,
-    productionReadiness: { schedulerState: "disabled", connectionPaused: false, quotaMinimumRemaining: null, deepRequestBudget: null, blockers: ["Paid-media ingestion scheduling is not enabled"] },
+    productionReadiness: { schedulerState: String(schedules[0]?.activation_state || "disabled") as ConnectionExperience["productionReadiness"]["schedulerState"], connectionPaused: false, quotaMinimumRemaining: null, deepRequestBudget: null, blockers: Boolean(schedules[0]?.enabled) ? [] : ["Paid-media ingestion scheduling is not enabled"] },
     tkidOrigins: { sourceId: null, sourceState: "disabled", origins: [], blockers: [], canManage: false },
     freshness: { status: "unknown", lastAttemptedAt: null, lastSuccessfulAt: null, lastProviderObservationAt: null, lastNormalizedRecordAt: null, latestProviderTransactionAt: null, providerTotal: null, lastDeepReconciliationAt: null, stoppingReason: null, attributionSourceState: "unavailable", deepReconciliationRequired: false },
-    diagnostics: { latestRequestStatus: row.last_error_at ? "failed" : row.last_success_at ? "succeeded" : null, latencyMs: null, providerRequestIdPresent: false, retryCount: 0, rateLimitRemaining: null, rateLimitReset: null, sanitizedError: text(row.last_error_code), activeRun: false, leaseOwnerPresent: false, heartbeatAge: null, stalled: false, pendingCheckpoints: 0, failedCheckpoints: 0, evidenceReferences: 0, missingEvidenceReferences: 0, hashState: "unavailable" },
+    diagnostics: { latestRequestStatus: row.last_error_at ? "failed" : row.last_success_at ? "succeeded" : null, latencyMs: null, providerRequestIdPresent: false, retryCount: 0, rateLimitRemaining: null, rateLimitReset: null, sanitizedError: text(row.last_error_code), activeRun: Boolean(schedules[0]?.lease_owner), leaseOwnerPresent: Boolean(schedules[0]?.lease_owner), heartbeatAge: text(schedules[0]?.lease_heartbeat_at), stalled: false, pendingCheckpoints: checkpoints[0]?.last_successful_report_date ? 0 : 1, failedCheckpoints: checkpoints[0]?.last_error_code ? 1 : 0, evidenceReferences: 0, missingEvidenceReferences: 0, hashState: "unavailable" },
   };
 }
 
