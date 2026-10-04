@@ -5,7 +5,7 @@ import { GoogleAdsApiError, listGoogleAccessibleCustomers } from "./google-ads-c
 import { fetchGoogleCustomerClientHierarchy } from "./google-ads-customer-client";
 import { fetchGoogleCustomerProfile, GoogleAdsProfileError } from "./google-ads-profile-client";
 import { discoverGoogleCustomerHierarchy } from "./google-ads-hierarchy-client";
-import { persistGoogleConnectionAuthorization, persistGoogleDiscoveredAccounts } from "./google-ads-persistence";
+import { persistGoogleConnectionAuthorization, persistGoogleDiscoveredAccounts, selectGoogleAccounts } from "./google-ads-persistence";
 
 export class GoogleAdsConnectionError extends Error {
   constructor(readonly code: string, message: string, readonly httpStatus = 400) { super(message); }
@@ -95,5 +95,9 @@ export async function completeGoogleAdsOAuth(input:{session:TraceKitSessionConte
  } catch {
   throw new GoogleAdsConnectionError("google_ads_account_persistence_failed", "Google Ads account discovery could not be persisted.", 503);
  }
- return {connectionId:connection.id,discoveredAccountCount:accounts.length};
+ const selectable = accounts.filter((row) => Boolean(row.eligible_for_spend_sync) && !Boolean(row.is_manager) && String(row.status || "active") === "active");
+ if (selectable.length === 1) {
+  await selectGoogleAccounts({ organizationId: org.id, connectionId: connection.id, selectedAccountIds: [String(selectable[0].id)] });
+ }
+ return {connectionId:connection.id,discoveredAccountCount:accounts.length,selectableAccountCount:selectable.length};
 }

@@ -25,5 +25,7 @@ export default async function ConnectionsPage({ searchParams }: { searchParams: 
   const provider = typeof params.provider === "string" ? params.provider : undefined;
   const google = typeof params.google === "string" ? params.google : undefined;
   const meta = typeof params.meta === "string" ? params.meta : undefined;
-  return <ConnectionsOverview connections={overview.connections} organizationName={overview.organizationName} callbackNotice={message(provider, google, meta)} />;
+  const connectionId = typeof params.connectionId === "string" ? params.connectionId : undefined;
+  const select = params.select === "1";
+  return <ConnectionsOverview connections={overview.connections} organizationName={overview.organizationName} callbackNotice={message(provider, google, meta)} googleSelectionConnectionId={provider === "google_ads" && google === "connected" && select ? connectionId : null} />;
 }

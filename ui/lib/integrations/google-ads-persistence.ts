@@ -158,3 +158,56 @@ export async function persistGoogleDiscoveredAccounts(input: {
   }
   return Array.from(persistedByExternal.values());
 }
+
+
+export type GooglePersistedAccount = {
+  id: string;
+  externalId: string;
+  label: string | null;
+  accountType: string;
+  isManager: boolean;
+  eligibleForSpendSync: boolean;
+  status: string;
+  selectedForSync: boolean;
+};
+
+function googlePersistedAccount(row: Row): GooglePersistedAccount {
+  return {
+    id: String(row.id),
+    externalId: String(row.provider_account_external_id),
+    label: row.provider_account_label ? String(row.provider_account_label) : null,
+    accountType: String(row.account_type || "advertiser"),
+    isManager: Boolean(row.is_manager),
+    eligibleForSpendSync: Boolean(row.eligible_for_spend_sync),
+    status: String(row.status || "active"),
+    selectedForSync: Boolean(row.selected_for_sync),
+  };
+}
+
+export async function listGoogleDiscoveredAccounts(input: { organizationId: string; connectionId: string; transport?: MarketingRepositoryTransport }) {
+  const transport = input.transport || marketingPersistenceRequest;
+  const rows = await transport(
+    `marketing_provider_accounts?organization_id=eq.${encodeURIComponent(input.organizationId)}&connection_id=eq.${encodeURIComponent(input.connectionId)}&provider=eq.google_ads&order=provider_account_label.asc`,
+  );
+  return rows.map(googlePersistedAccount);
+}
+
+export async function selectGoogleAccounts(input: { organizationId: string; connectionId: string; selectedAccountIds: string[]; transport?: MarketingRepositoryTransport }) {
+  const transport = input.transport || marketingPersistenceRequest;
+  const rows = await listGoogleDiscoveredAccounts({ organizationId: input.organizationId, connectionId: input.connectionId, transport });
+  const selectable = new Set(rows.filter((row) => row.status === "active" && row.eligibleForSpendSync && !row.isManager).map((row) => row.id));
+  const requested = new Set(input.selectedAccountIds);
+  if (!requested.size || requested.size !== input.selectedAccountIds.length || Array.from(requested).some((id) => !selectable.has(id))) {
+    throw new Error("One or more Google Ads accounts are unavailable.");
+  }
+  const now = new Date().toISOString();
+  for (const row of rows) {
+    const selected = requested.has(row.id);
+    if (row.selectedForSync === selected) continue;
+    await transport(
+      `marketing_provider_accounts?id=eq.${encodeURIComponent(row.id)}&organization_id=eq.${encodeURIComponent(input.organizationId)}&connection_id=eq.${encodeURIComponent(input.connectionId)}&provider=eq.google_ads`,
+      { method: "PATCH", body: JSON.stringify({ selected_for_sync: selected, updated_at: now }) },
+    );
+  }
+  return listGoogleDiscoveredAccounts({ organizationId: input.organizationId, connectionId: input.connectionId, transport });
+}
