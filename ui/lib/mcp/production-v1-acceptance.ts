@@ -10,7 +10,8 @@ export type AcceptanceEvidence={scenario:ProductionV1Scenario;passed:boolean;evi
 
 export const PRODUCTION_V1_RELEASE_REQUIREMENTS=[
   "authoritative_policy","safe_disable_controls","capability_suppression","permission_rbac",
-  "tenant_isolation","lifecycle_history_visibility","notification_contract","operational_health",
+  "tenant_isolation","tenant_negative_reads","tenant_negative_mutations","authorized_work_item_transitions",
+  "audit_visibility","lifecycle_history_visibility","notification_contract","operational_health",
   "migration_convergence","regression_gates",
 ]as const;
 export type ProductionV1ReleaseRequirement=typeof PRODUCTION_V1_RELEASE_REQUIREMENTS[number];
