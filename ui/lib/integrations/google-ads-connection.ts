@@ -45,7 +45,14 @@ export async function completeGoogleAdsOAuth(input:{session:TraceKitSessionConte
  try {
   let profiles;
   try {
-   profiles = await Promise.all(accessible.map((customerId) => fetchGoogleCustomerProfile({ accessToken: token.accessToken, customerId })));
+   profiles = (await Promise.all(accessible.map(async (customerId) => {
+    try {
+     return await fetchGoogleCustomerProfile({ accessToken: token.accessToken, customerId });
+    } catch (error) {
+     if (error instanceof GoogleAdsProfileError && error.apiStatus === "authorizationerror_customer_not_enabled") return null;
+     throw error;
+    }
+   }))).filter((profile): profile is NonNullable<typeof profile> => profile !== null);
   } catch (error) {
    if (error instanceof GoogleAdsProfileError) {
     throw new GoogleAdsConnectionError(`google_ads_profile_query_${error.httpStatus}_${error.apiStatus}`, "Google Ads customer profile discovery could not be completed.", 502);
