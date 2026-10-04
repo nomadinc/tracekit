@@ -71,11 +71,28 @@ The intent and recovery row share audit correlation ID `adb0b326-8f04-4cd7-b8e9-
 
 Preparation itself does not emit a separate audit event; durable intent and recovery rows carry the correlation. No provider read was repeated for this persistence verification. Prepare-only gate: **PASS**. Confirmation and execution remain incomplete.
 
+## Expired prepared-intent evidence
+
+At database observation time `2026-10-04T05:36:58.239938Z`, intent `7cbe1acf-f8b0-4c95-8c4e-2edd25c1bb66` remained durably present and its `2026-10-04T05:36:27.824Z` expiry had passed. Its derived state was `expired_stale_unconfirmed`.
+
+- Confirmations: `0`.
+- Action authorizations: `0`; consumed authorizations: `0`.
+- Execution results: `0`.
+- Recovery remained `prepared`, unchanged since `2026-10-04T05:26:27.868391Z`.
+- `created_external_id` remained null; `created_verified` and `rollback_verified` remained false.
+- External mutation/execute audit events for the intent correlation: `0`.
+- No provider object was created and no Shopify read or mutation was performed for this observation.
+
+The execution contract fails closed for this stale intent: `resolve_mcp_shopify_action_confirmation` returns a row only when both intent and confirmation expiries are later than the requested execution time. With no confirmation row, execution would return `confirmation_reference_unavailable`; even if a confirmation reference existed, the expired intent predicate would prevent resolution before target or provider execution.
+
+The confirmation contract has a gap: `confirmShopifyControlledProof` currently inserts directly into `mcp_action_confirmations`, and neither that writer nor the confirmation route validates the referenced intent's expiry. Presenting this expired intent for confirmation would therefore be expected to create a confirmation row rather than reject it. That path was not invoked. Expired execution is fail-closed, but expired confirmation is **not production-proven safe and is source-established defective**; M3 must not proceed through this intent.
+
 ## Remaining gates
 
 - Explicit authorization for preparation, confirmation, and the bounded Shopify mutation has not been granted.
 - The remaining governed lifecycle evidence — confirmation, exactly-once execution, verification, cleanup/net-zero state, replay, and completed durable lifecycle/history — has not been produced.
 - A separate execution-adjacent safe-failure case remains outstanding if required by the final acceptance scenario; the malformed tenant-target request already proves structural fail-closed behavior before preparation.
+- Expired-intent confirmation must be repaired to reject before lifecycle write, then regression-tested and production-validated before another governed proof intent is confirmed.
 
 No Shopify request, action intent, confirmation, execution, provider mutation, or database mutation was performed.
 

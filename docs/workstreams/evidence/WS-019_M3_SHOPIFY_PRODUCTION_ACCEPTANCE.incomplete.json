@@ -180,6 +180,44 @@
     },
     "passed": true
   },
+  "expiredIntentCapture": {
+    "observedAt": "2026-10-04T05:36:58.239938Z",
+    "intentId": "7cbe1acf-f8b0-4c95-8c4e-2edd25c1bb66",
+    "intentPresent": true,
+    "expiresAt": "2026-10-04T05:36:27.824Z",
+    "expired": true,
+    "derivedStatus": "expired_stale_unconfirmed",
+    "confirmationCount": 0,
+    "authorizationCount": 0,
+    "authorizationConsumedCount": 0,
+    "executionResultCount": 0,
+    "recovery": {
+      "recoveryId": "c61320a2-9609-4d52-9565-a0cd434bdd9e",
+      "state": "prepared",
+      "updatedAt": "2026-10-04T05:26:27.868391Z",
+      "createdExternalId": null,
+      "createdVerified": false,
+      "rollbackVerified": false
+    },
+    "externalMutationAuditCount": 0,
+    "providerObjectCreated": false,
+    "providerReadPerformed": false,
+    "providerMutationPerformed": false,
+    "confirmationContract": {
+      "wouldRejectExpiredIntentBeforeWrite": false,
+      "reason": "confirmShopifyControlledProof inserts a confirmation without reading or validating the referenced intent expiry",
+      "invoked": false,
+      "status": "source_established_gap"
+    },
+    "executionContract": {
+      "wouldRejectExpiredIntentBeforeProviderExecution": true,
+      "reason": "resolve_mcp_shopify_action_confirmation requires intent_expires_at and confirmation_expires_at to exceed requested_at; no confirmation also resolves unavailable",
+      "invoked": false,
+      "status": "source_established_fail_closed"
+    },
+    "passed": false,
+    "blocker": "expired_intent_confirmation_not_fail_closed"
+  },
   "stages": {
     "preparation": [
       "prepareOnlyCapture",
@@ -192,7 +230,8 @@
     "safe_failure": [
       "tenantNegativeCapture.response",
       "tenantNegativeCapture.lifecycleRowsInCaptureWindow",
-      "tenantNegativeCapture.audit"
+      "tenantNegativeCapture.audit",
+      "expiredIntentCapture.executionContract"
     ]
   },
   "scenarios": [
