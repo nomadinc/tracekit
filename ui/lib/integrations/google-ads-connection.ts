@@ -38,9 +38,24 @@ export async function completeGoogleAdsOAuth(input:{session:TraceKitSessionConte
   }
   throw error;
  }
- const discovery=await discoverGoogleCustomerHierarchy({accessibleCustomerIds:accessible,fetchHierarchy:async({targetCustomerId,loginCustomerId})=>(await fetchGoogleCustomerClientHierarchy({accessToken:token.accessToken,targetCustomerId,loginCustomerId})).rows});
+ let discovery;
+ try {
+  discovery = await discoverGoogleCustomerHierarchy({accessibleCustomerIds:accessible,fetchHierarchy:async({targetCustomerId,loginCustomerId})=>(await fetchGoogleCustomerClientHierarchy({accessToken:token.accessToken,targetCustomerId,loginCustomerId})).rows});
+ } catch {
+  throw new GoogleAdsConnectionError("google_ads_hierarchy_discovery_failed", "Google Ads account hierarchy discovery could not be completed.", 502);
+ }
  const identity=accessible.slice().sort().join(",")||"no-accessible-customers";
- const connection=await persistGoogleConnectionAuthorization({accountId:input.session.activeAccount.id,organizationId:org.id,providerIdentityId:identity,displayName:"Google Ads",refreshToken:token.refreshToken,grantedScopes:token.scope.split(/\s+/).filter(Boolean)});
- const accounts=await persistGoogleDiscoveredAccounts({accountId:input.session.activeAccount.id,organizationId:org.id,connectionId:connection.id,accounts:discovery.accounts});
+ let connection;
+ try {
+  connection = await persistGoogleConnectionAuthorization({accountId:input.session.activeAccount.id,organizationId:org.id,providerIdentityId:identity,displayName:"Google Ads",refreshToken:token.refreshToken,grantedScopes:token.scope.split(/\s+/).filter(Boolean)});
+ } catch {
+  throw new GoogleAdsConnectionError("google_ads_connection_persistence_failed", "Google Ads connection could not be persisted.", 503);
+ }
+ let accounts;
+ try {
+  accounts = await persistGoogleDiscoveredAccounts({accountId:input.session.activeAccount.id,organizationId:org.id,connectionId:connection.id,accounts:discovery.accounts});
+ } catch {
+  throw new GoogleAdsConnectionError("google_ads_account_persistence_failed", "Google Ads account discovery could not be persisted.", 503);
+ }
  return {connectionId:connection.id,discoveredAccountCount:accounts.length};
 }
