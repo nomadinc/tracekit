@@ -1,4 +1,4 @@
-import { TRACEKIT_MCP_TOOLS, callTraceKitMcpTool, mcpToolResult } from "./tool-adapter";
+import { listTraceKitMcpTools, callTraceKitMcpTool, mcpToolResult } from "./tool-adapter";
 import type { TraceKitMcpReadService } from "./read-service";
 import type { TraceKitMcpActionService } from "./action-service";
 
@@ -30,7 +30,7 @@ export async function handleTraceKitMcpMessage(service: TraceKitMcpReadService, 
   }
   if (request.method === "ping") return response(id, {});
   if (request.method === "notifications/initialized") return null;
-  if (request.method === "tools/list") return response(id, { tools: TRACEKIT_MCP_TOOLS });
+  if (request.method === "tools/list") return response(id, { tools: listTraceKitMcpTools() });
 
   if (request.method === "tools/call") {
     const params = request.params;

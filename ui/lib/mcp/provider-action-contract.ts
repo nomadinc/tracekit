@@ -1,4 +1,5 @@
 import type{GovernedActionCapability}from"./action-capability-registry";
+import{assessIntelligenceAction}from"./production-v1-policy";
 
 export type GovernedProviderActionContract={
  operation:GovernedActionCapability["operation"];
@@ -18,7 +19,7 @@ export type GovernedProviderActionContract={
 };
 
 export const M16_PROVIDER_ACTION_CONTRACTS:readonly GovernedProviderActionContract[]=[
- {operation:"commas.webhook_test_delivery",provider:"commas",targetKind:"commas_webhook_subscription",mutationClass:"external_side_effect",verification:"provider_response",recovery:"not_applicable",exposure:"controlled_proof_only",requiredPermission:"actions.execute",humanConfirmationRequired:true,executionAvailable:true,targetResolution:"server_resolved_exact_target",durableIntent:true,durableAuthorization:true,durableReplay:true},
+ {operation:"commas.webhook_test_delivery",provider:"commas",targetKind:"commas_webhook_subscription",mutationClass:"external_side_effect",verification:"provider_response",recovery:"not_applicable",exposure:"controlled_proof_only",requiredPermission:"actions.execute",humanConfirmationRequired:true,executionAvailable:false,targetResolution:"server_resolved_exact_target",durableIntent:true,durableAuthorization:true,durableReplay:true},
  {operation:"shopify.controlled_webhook_create_delete_proof",provider:"shopify",targetKind:"shopify_webhook_subscription",mutationClass:"provider_configuration",verification:"provider_read_back",recovery:"reversible",exposure:"controlled_proof_only",requiredPermission:"actions.execute",humanConfirmationRequired:true,executionAvailable:true,targetResolution:"server_resolved_exact_target",durableIntent:true,durableAuthorization:true,durableReplay:true},
 ] as const;
 
@@ -33,4 +34,4 @@ export function validateM16ProviderActionContract(capability:GovernedActionCapab
  return valid?{valid:true,contract} as const:{valid:false,reason:"provider_action_contract_capability_mismatch"} as const;
 }
 
-export function assessM16ProviderActionExposure(capability:GovernedActionCapability){const validation=validateM16ProviderActionContract(capability);if(!validation.valid)return{exposed:false,reason:validation.reason} as const;const contract=validation.contract;const exposed=contract.exposure==="controlled_proof_only"&&contract.executionAvailable&&contract.humanConfirmationRequired&&contract.targetResolution==="server_resolved_exact_target"&&contract.durableIntent&&contract.durableAuthorization&&contract.durableReplay;return exposed?{exposed:true,contract} as const:{exposed:false,reason:"provider_action_contract_governance_incomplete"} as const;}
+export function assessM16ProviderActionExposure(capability:GovernedActionCapability){const validation=validateM16ProviderActionContract(capability);if(!validation.valid)return{exposed:false,reason:validation.reason} as const;const contract=validation.contract,policy=assessIntelligenceAction(contract.operation);if(!policy.allowed)return{exposed:false,reason:policy.reason,contract}as const;const exposed=contract.exposure==="controlled_proof_only"&&contract.executionAvailable&&contract.humanConfirmationRequired&&contract.targetResolution==="server_resolved_exact_target"&&contract.durableIntent&&contract.durableAuthorization&&contract.durableReplay;return exposed?{exposed:true,contract} as const:{exposed:false,reason:"provider_action_contract_governance_incomplete",contract} as const;}

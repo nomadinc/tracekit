@@ -1,4 +1,5 @@
 import{randomUUID}from"node:crypto";import{NextResponse}from"next/server";import{resolveApplicationSession}from"@/lib/identity/application-session";import{AuthorizationDeniedError,requirePermission}from"@/lib/identity/authorization-gateway";import{decodeCommerceCredentialKey,decryptCommerceCredential}from"@/lib/commerce/credential-crypto";import{supabaseAuthHeaders}from"@/lib/commerce/supabase-auth";import{listCommasWebhookSubscriptions,TARGET_URL}from"@/scripts/inspect-commas-webhooks";import{executeGovernedCommasTestDelivery}from"@/lib/commerce/commas-webhook-test-delivery";
+import{assessIntelligenceAction}from"@/lib/mcp/production-v1-policy";
 type Row=Record<string,unknown>;const EVENT="dispute.created";
 function sameOrigin(r:Request){const o=r.headers.get("origin"),s=r.headers.get("sec-fetch-site");return(!o||o===new URL(r.url).origin)&&(!s||s==="same-origin");}
 function res(id:string,b:Record<string,unknown>,status:number){return NextResponse.json({...b,requestId:id},{status,headers:{"x-tracekit-request-id":id}});}
@@ -8,6 +9,7 @@ const bytes=(v:unknown)=>Uint8Array.from(Buffer.from(String(v).replace(/^\\x/,""
 export async function POST(request:Request){const id=randomUUID();try{
  if(!sameOrigin(request))return res(id,{ok:false,code:"request_verification_failed"},403);
  const resolution=await resolveApplicationSession();if(resolution.kind!=="authenticated"||!resolution.session.activeOrganization)return res(id,{ok:false,code:"resource_unavailable"},404);requirePermission(resolution.session,"actions.execute");
+ if(!assessIntelligenceAction("commas.webhook_test_delivery").allowed)return res(id,{ok:false,code:"action_not_available"},404);
  const body=await request.json().catch(()=>({}))as Row;if(body.confirm!==true)return res(id,{ok:false,code:"explicit_confirmation_required"},400);
  const org=resolution.session.activeOrganization.id,connections=await db(`commerce_provider_connections?provider=eq.commas&status=eq.connected&organization_id=eq.${encodeURIComponent(org)}&select=id,organization_id&limit=2`);if(connections.length!==1)return res(id,{ok:false,code:"commas_connection_unavailable"},409);
  const cid=String(connections[0].id),credentials=await db(`commerce_provider_credentials?connection_id=eq.${cid}&organization_id=eq.${encodeURIComponent(org)}&revoked_at=is.null&select=encryption_key_id,encryption_version,secret_iv,secret_ciphertext&limit=2`);if(credentials.length!==1)return res(id,{ok:false,code:"commas_credential_unavailable"},409);

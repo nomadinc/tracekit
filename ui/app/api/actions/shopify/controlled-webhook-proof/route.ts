@@ -1,13 +1,21 @@
-import{randomUUID}from"node:crypto";import{NextResponse}from"next/server";import{resolveApplicationSession}from"@/lib/identity/application-session";import{requirePermission,AuthorizationDeniedError}from"@/lib/identity/authorization-gateway";import{createCommerceControlPlane}from"@/lib/commerce/server-control-plane";import{MemoryCommerceEvidenceStore}from"@/lib/commerce/evidence-store";import{CommerceProviderConnectionVerifier}from"@/lib/commerce/provider-verifier";import{supabaseAuthHeaders}from"@/lib/commerce/supabase-auth";import{parseShopifyConnectionCredential}from"@/lib/commerce/shopify-verifier";import{createTraceKitShopifyWebhookSubscription,deleteTraceKitShopifyWebhookSubscription,listTraceKitShopifyWebhookSubscriptions,SHOPIFY_PROOF_ONLY_TOPIC}from"@/lib/commerce/shopify-webhook-registration";
-const CONTROLLED_DOMAIN="izkfvg-k0.myshopify.com",CONTROLLED_CONNECTION="ed3bb791-4cc2-4624-a887-3a6518018316";
-function sameOrigin(r:Request){const o=r.headers.get("origin"),s=r.headers.get("sec-fetch-site");return(!o||o===new URL(r.url).origin)&&(!s||s==="same-origin");}
-function out(b:Record<string,unknown>,s=200){return NextResponse.json(b,{status:s});}
-export async function POST(request:Request){try{if(!sameOrigin(request))return out({ok:false,code:"request_verification_failed"},403);const resolution=await resolveApplicationSession();if(resolution.kind!=="authenticated"||!resolution.session.activeOrganization)return out({ok:false,code:"resource_unavailable"},404);requirePermission(resolution.session,"actions.execute");const body=await request.json().catch(()=>({})) as Record<string,unknown>;if(body.confirm!==true||body.connectionId!==CONTROLLED_CONNECTION||body.shopDomain!==CONTROLLED_DOMAIN)return out({ok:false,code:"controlled_target_confirmation_required"},400);
- const plane=createCommerceControlPlane({evidenceStore:new MemoryCommerceEvidenceStore(),verifier:new CommerceProviderConnectionVerifier()}),connection=await plane.getConnection(resolution.session,CONTROLLED_CONNECTION);if(connection.provider!=="shopify")return out({ok:false,code:"resource_unavailable"},404);const credential=parseShopifyConnectionCredential(await plane.resolveCredentialForExecution(resolution.session,CONTROLLED_CONNECTION));if(credential.shopDomain!==CONTROLLED_DOMAIN)return out({ok:false,code:"controlled_target_mismatch"},409);
- const callbackUrl=`${new URL(request.url).origin}/api/webhooks/shopify`,auditCorrelationId=resolution.session.correlationId,idempotencyKey=randomUUID();
- const existing=await listTraceKitShopifyWebhookSubscriptions({credential,callbackUrl});const occupied=existing.map(s=>s.topic);if(occupied.includes(SHOPIFY_PROOF_ONLY_TOPIC))return out({ok:false,code:"proof_only_topic_already_exists",providerMutation:false},409);const selectedTopic=SHOPIFY_PROOF_ONLY_TOPIC;
- const created=await createTraceKitShopifyWebhookSubscription({credential,callbackUrl,topic:selectedTopic});if(created.decision!=="created")return out({ok:false,code:"controlled_topic_already_exists",topic:selectedTopic,providerMutation:false},409);
- const rollback=await deleteTraceKitShopifyWebhookSubscription({credential,subscription:created.subscription,callbackUrl});
- const executionId=randomUUID(),url=process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/,""),key=process.env.SUPABASE_SERVICE_ROLE_KEY;if(!url||!key)throw new Error("Mutation audit persistence unavailable.");const audit=await fetch(`${url}/rest/v1/rpc/record_mcp_external_mutation_audit`,{method:"POST",headers:{...supabaseAuthHeaders(key),"Content-Type":"application/json"},body:JSON.stringify({p_execution_id:executionId,p_organization_id:resolution.session.activeOrganization.id,p_provider:"shopify",p_operation:"controlled_webhook_create_delete_proof",p_controlled_target:CONTROLLED_DOMAIN,p_mutation_object_type:"webhook_subscription",p_created_external_id:created.subscription.id,p_rollback_external_id:rollback.deletedSubscriptionId,p_create_verified:created.verifiedPresent,p_rollback_verified:rollback.verifiedAbsent,p_net_provider_configuration_mutation:!rollback.verifiedAbsent,p_audit_correlation_id:auditCorrelationId,p_idempotency_key:idempotencyKey,p_executed_by:resolution.session.user.id,p_executed_at:new Date().toISOString(),p_evidence:{topic:selectedTopic,callbackUrl}})});if(!audit.ok)throw new Error("Mutation audit persistence failed.");
- return out({ok:rollback.verifiedAbsent,executionId,provider:"shopify",operation:"controlled_webhook_create_delete_proof",shopDomain:CONTROLLED_DOMAIN,topic:selectedTopic,createdSubscriptionId:created.subscription.id,verifiedPresent:created.verifiedPresent,rollback:{deletedSubscriptionId:rollback.deletedSubscriptionId,verifiedAbsent:rollback.verifiedAbsent},audit:{auditCorrelationId,idempotencyKey},netProviderConfigurationMutation:rollback.verifiedAbsent?false:true},rollback.verifiedAbsent?200:502);
- }catch(e){if(e instanceof AuthorizationDeniedError)return out({ok:false,code:"resource_unavailable"},404);return out({ok:false,code:"shopify_controlled_mutation_proof_failed"},500);}}
+import{NextResponse}from"next/server";
+import{resolveApplicationSession}from"@/lib/identity/application-session";
+import{AuthorizationDeniedError,requirePermission}from"@/lib/identity/authorization-gateway";
+
+function sameOrigin(request:Request){const origin=request.headers.get("origin"),site=request.headers.get("sec-fetch-site");return(!origin||origin===new URL(request.url).origin)&&(!site||site==="same-origin");}
+function response(body:Record<string,unknown>,status:number){return NextResponse.json(body,{status,headers:{"Cache-Control":"no-store"}});}
+
+export async function POST(request:Request){
+  try{
+    if(!sameOrigin(request))return response({ok:false,code:"request_verification_failed"},403);
+    const resolution=await resolveApplicationSession();
+    if(resolution.kind!=="authenticated"||!resolution.session.activeOrganization)return response({ok:false,code:"resource_unavailable"},404);
+    requirePermission(resolution.session,"actions.execute");
+    // Production V1 exposes this operation only through the governed, server-targeted
+    // intent -> confirmation -> atomic authorization -> execution boundary.
+    return response({ok:false,code:"governed_action_required"},404);
+  }catch(error){
+    if(error instanceof AuthorizationDeniedError)return response({ok:false,code:"resource_unavailable"},404);
+    return response({ok:false,code:"resource_unavailable"},404);
+  }
+}
