@@ -30,3 +30,14 @@ test("profile failure preserves bounded Google Ads authorization enum", async ()
     (error: unknown) => error instanceof Error && "apiStatus" in error && (error as { apiStatus: string }).apiStatus === "authorizationerror_user_permission_denied",
   );
 });
+
+
+test("CUSTOMER_NOT_ENABLED remains a bounded skippable profile error", async () => {
+  const fetcher: typeof fetch = async () => new Response(JSON.stringify({
+    error: { code: 403, status: "PERMISSION_DENIED", details: [{ errors: [{ errorCode: { authorizationError: "CUSTOMER_NOT_ENABLED" } }] }] },
+  }), { status: 403, headers: { "content-type": "application/json" } });
+  await assert.rejects(
+    fetchGoogleCustomerProfile({ accessToken: "access", customerId: "1234567890", fetcher }),
+    (error: unknown) => error instanceof Error && "apiStatus" in error && (error as { apiStatus: string }).apiStatus === "authorizationerror_customer_not_enabled",
+  );
+});
