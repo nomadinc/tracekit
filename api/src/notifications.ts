@@ -8,7 +8,7 @@ import {
   type HealthSeverity,
 } from "./health.ts";
 import {
-  syncHealthWorkItems,
+  WORK_ITEM_SELECT,
   workItemsByHealthFinding,
   type WorkItemRow,
 } from "./work-items.ts";
@@ -449,10 +449,20 @@ async function loadNotificationStates(supabase: any, workspaceId: string, notifi
 
 export async function getWorkspaceNotificationReport(supabase: any, params: NotificationQueryParams, now = new Date()): Promise<NotificationReport> {
   const health = await getWorkspaceHealthReport(supabase, { workspace_id: params.workspace_id }, now);
-  const workItems = await syncHealthWorkItems(supabase, health, now.toISOString());
+  const workItems = await loadPersistedHealthWorkItems(supabase, health.workspace_id);
   const notificationIds = health.findings.map((finding) => notificationIdForFinding(health.workspace_id, finding.id));
   const states = await loadNotificationStates(supabase, health.workspace_id, notificationIds);
   return buildNotificationReport({ health, states, work_items: workItems, params });
+}
+
+export async function loadPersistedHealthWorkItems(supabase: any, workspaceId: string): Promise<WorkItemRow[]> {
+  const { data, error } = await supabase
+    .from("work_items")
+    .select(WORK_ITEM_SELECT)
+    .eq("workspace_id", workspaceId)
+    .eq("source", "health");
+  if (error) throw new Error(`Persisted health Work Item lookup failed: ${error.message || JSON.stringify(error)}`);
+  return (data || []) as WorkItemRow[];
 }
 
 export async function getWorkspaceNotification(supabase: any, args: { workspace_id: string; notification_id: string }, now = new Date()) {

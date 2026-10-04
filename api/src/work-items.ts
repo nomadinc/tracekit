@@ -815,7 +815,9 @@ function applySort(rows: WorkItemRow[], sort: WorkItemQueryParams["sort"]) {
 }
 
 export async function listWorkItems(supabase: any, params: WorkItemQueryParams, options: { sync?: boolean } = {}) {
-  if (options.sync !== false) await syncWorkspaceWorkItems(supabase, { workspace_id: params.workspace_id });
+  // Reads are side-effect free by default. Materialization must be requested by
+  // an explicit operational caller rather than being triggered by opening a UI.
+  if (options.sync === true) await syncWorkspaceWorkItems(supabase, { workspace_id: params.workspace_id });
   let query = supabase.from("work_items").select(WORK_ITEM_SELECT).eq("workspace_id", params.workspace_id);
   const statuses = params.status.length ? params.status : ["open", "acknowledged", "in_progress"] as WorkItemStatus[];
   if (statuses.length) query = query.in("status", statuses);
@@ -930,7 +932,7 @@ export async function getWorkItemSummaryMetrics(supabase: any, workspaceId: stri
 }
 
 export async function getOperationsSummary(supabase: any, args: { workspace_id: string }, options: { sync?: boolean } = {}) {
-  if (options.sync !== false) await syncWorkspaceWorkItems(supabase, { workspace_id: args.workspace_id });
+  if (options.sync === true) await syncWorkspaceWorkItems(supabase, { workspace_id: args.workspace_id });
   const metrics = await getWorkItemSummaryMetrics(supabase, args.workspace_id);
   const categories: WorkItemCategory[] = ["identity", "attribution", "commissions", "refunds", "chargebacks", "integrations", "tracking", "system"];
   const queues = await Promise.all(categories.map(async (category) => {
