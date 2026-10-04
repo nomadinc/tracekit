@@ -45,7 +45,6 @@ export async function persistGoogleConnectionAuthorization(input: {
         googleAds: {
           grantedScopes: input.grantedScopes.slice().sort(),
           accountDiscovery: "accessible_customers_then_customer_client",
-          developerTokenRequired: false,
         },
       },
       reauthorization_required: false,
