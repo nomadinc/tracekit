@@ -12,6 +12,8 @@ import type { DomainEventInput, EntityReference } from "./domain-events.ts";
 export const WORK_ITEM_ENGINE_VERSION = "work_items_v1";
 export const WORK_ITEMS_ROUTE = "/v1/work-items";
 export const OPERATIONS_SUMMARY_ROUTE = "/v1/operations/summary";
+export const WS019_M42_ACCEPTANCE_FIXTURE_ROUTE = "/v1/work-items/acceptance-fixtures/ws019-m4-2";
+export const WS019_M42_ACCEPTANCE_SOURCE_KEY = "ws019.m4.2.phase_b";
 
 export const WORK_ITEM_STATUSES = ["open", "acknowledged", "in_progress", "resolved", "dismissed"] as const;
 export const WORK_ITEM_PRIORITIES = ["urgent", "high", "normal", "low"] as const;
@@ -25,6 +27,7 @@ export type WorkItemSource = "health" | "identity" | "attribution" | "commission
 export type WorkItemRouteMatch =
   | { kind: "list_work_items" }
   | { kind: "operations_summary" }
+  | { kind: "create_ws019_m42_acceptance_fixture" }
   | { kind: "get_work_item"; work_item_id: string }
   | { kind: "acknowledge"; work_item_id: string }
   | { kind: "start"; work_item_id: string }
@@ -225,6 +228,10 @@ export function healthWorkItemId(workspaceId: string, findingId: string) {
 export function matchWorkItemRoute(method: string, path: string): WorkItemRouteMatch | null {
   const cleanPath = normalizedPath(path);
   const upperMethod = String(method || "GET").toUpperCase();
+  if (cleanPath === WS019_M42_ACCEPTANCE_FIXTURE_ROUTE) {
+    if (upperMethod === "POST") return { kind: "create_ws019_m42_acceptance_fixture" };
+    return { kind: "method_not_allowed", path: WS019_M42_ACCEPTANCE_FIXTURE_ROUTE, allowed_methods: ["POST"] };
+  }
   if (cleanPath === WORK_ITEMS_ROUTE) {
     if (upperMethod === "GET") return { kind: "list_work_items" };
     return { kind: "method_not_allowed", path: WORK_ITEMS_ROUTE, allowed_methods: ["GET"] };
@@ -541,6 +548,151 @@ async function supabaseSingle<T = any>(query: any, label: string): Promise<T | n
 async function insertActivity(supabase: any, activity: WorkItemActivityRow) {
   const { error } = await supabase.from("work_item_activity").insert(activity);
   if (error) throw new Error(`Work Item activity insert failed: ${error.message || JSON.stringify(error)}`);
+}
+
+export function ws019M42AcceptanceFixtureId(workspaceId: string) {
+  return workItemIdForSource(workspaceId, "manual", WS019_M42_ACCEPTANCE_SOURCE_KEY);
+}
+
+export function buildWs019M42AcceptanceFixture(workspaceId: string, actorId: string, now = new Date().toISOString()): WorkItemRow {
+  return {
+    id: ws019M42AcceptanceFixtureId(workspaceId),
+    workspace_id: workspaceId,
+    type: "production_acceptance_fixture",
+    category: "system",
+    source: "manual",
+    source_key: WS019_M42_ACCEPTANCE_SOURCE_KEY,
+    title: "[ACCEPTANCE FIXTURE] WS-019 M4.2 transition proof",
+    summary: "Disposable tenant and actor transition acceptance evidence; not an operational finding.",
+    severity: "info",
+    priority: "low",
+    status: "open",
+    lifecycle_state: "not_applicable",
+    assigned_to: null,
+    related_person_id: null,
+    related_journey_id: null,
+    related_order_id: null,
+    related_conversion_id: null,
+    related_commission_id: null,
+    related_connector_id: null,
+    related_health_finding_id: null,
+    related_notification_id: null,
+    deep_link: `/operations?work_item_id=${encodeURIComponent(ws019M42AcceptanceFixtureId(workspaceId))}`,
+    evidence: {
+      acceptance_only: true,
+      workstream: "WS-019",
+      milestone: "M4.2",
+      phase: "B",
+    },
+    resolution: {},
+    first_detected_at: now,
+    last_detected_at: now,
+    acknowledged_at: null,
+    resolved_at: null,
+    dismissed_at: null,
+    resolution_code: null,
+    resolution_note: null,
+    resolved_by: null,
+    recurrence_count: 0,
+    metadata: {
+      synthetic: true,
+      production_acceptance_fixture: true,
+      external_side_effects_permitted: false,
+      workstream: "WS-019",
+      milestone: "M4.2",
+      phase: "B",
+      created_by_actor_id: actorId,
+      engine_version: WORK_ITEM_ENGINE_VERSION,
+    },
+    created_at: now,
+    updated_at: now,
+  };
+}
+
+function ws019M42FixtureCompatible(existing: WorkItemRow, expected: WorkItemRow) {
+  const fixedKeys: Array<keyof WorkItemRow> = [
+    "id", "workspace_id", "type", "category", "source", "source_key", "title", "summary",
+    "severity", "priority", "lifecycle_state", "deep_link", "related_person_id", "related_journey_id", "related_order_id",
+    "related_conversion_id", "related_commission_id", "related_connector_id", "related_health_finding_id",
+    "related_notification_id",
+  ];
+  if (fixedKeys.some((key) => existing[key] !== expected[key])) return false;
+  const metadata = existing.metadata || {};
+  const evidence = existing.evidence || {};
+  return evidence.acceptance_only === true
+    && evidence.workstream === "WS-019"
+    && evidence.milestone === "M4.2"
+    && evidence.phase === "B"
+    && metadata.synthetic === true
+    && metadata.production_acceptance_fixture === true
+    && metadata.external_side_effects_permitted === false
+    && metadata.workstream === "WS-019"
+    && metadata.milestone === "M4.2"
+    && metadata.phase === "B";
+}
+
+function acceptanceFixtureConflict() {
+  const error: any = new Error("The acceptance fixture identity is already occupied by an incompatible record.");
+  error.status = 409;
+  error.code = "acceptance_fixture_conflict";
+  return error;
+}
+
+async function loadWs019M42AcceptanceFixture(supabase: any, workspaceId: string) {
+  return supabaseSingle<WorkItemRow>(
+    supabase.from("work_items").select(WORK_ITEM_SELECT).eq("workspace_id", workspaceId).eq("source", "manual").eq("source_key", WS019_M42_ACCEPTANCE_SOURCE_KEY).maybeSingle(),
+    "Acceptance fixture lookup",
+  );
+}
+
+export async function createWs019M42AcceptanceFixture(supabase: any, args: {
+  workspace_id: string;
+  actor_id: string;
+  correlation_id: string;
+  now?: string;
+  on_domain_event?: (event: DomainEventInput) => Promise<void>;
+}) {
+  const now = args.now || new Date().toISOString();
+  const expected = buildWs019M42AcceptanceFixture(args.workspace_id, args.actor_id, now);
+  const existing = await loadWs019M42AcceptanceFixture(supabase, args.workspace_id);
+  if (existing) {
+    if (!ws019M42FixtureCompatible(existing, expected)) throw acceptanceFixtureConflict();
+    return { ok: true, workspace_id: args.workspace_id, created: false, idempotent: true, work_item: existing };
+  }
+
+  const { data, error } = await supabase.from("work_items").insert(expected).select(WORK_ITEM_SELECT).maybeSingle();
+  if (error) {
+    const raced = await loadWs019M42AcceptanceFixture(supabase, args.workspace_id);
+    if (!raced || !ws019M42FixtureCompatible(raced, expected)) throw acceptanceFixtureConflict();
+    return { ok: true, workspace_id: args.workspace_id, created: false, idempotent: true, work_item: raced };
+  }
+  const created = data as WorkItemRow;
+  await insertActivity(supabase, {
+    workspace_id: args.workspace_id,
+    work_item_id: created.id,
+    activity_type: "created",
+    actor_id: args.actor_id,
+    body: "WS-019 M4.2 production acceptance fixture created.",
+    metadata: { source: "manual", source_key: WS019_M42_ACCEPTANCE_SOURCE_KEY, synthetic: true },
+    created_at: now,
+  });
+  if (args.on_domain_event) {
+    await args.on_domain_event({
+      workspaceId: args.workspace_id,
+      type: "work_item.created",
+      version: 1,
+      occurredAt: now,
+      actor: { type: "user", id: args.actor_id },
+      subject: { type: "work_item", id: created.id, displayName: created.title },
+      relatedEntities: [],
+      source: { system: "work_items" },
+      severity: "info",
+      correlationId: args.correlation_id,
+      deduplicationKey: `work_item:${created.id}:created`,
+      payload: { schema_version: 1, action: "create", activity_type: "created", synthetic: true },
+    });
+  }
+  return { ok: true, workspace_id: args.workspace_id, created: true, idempotent: false, work_item: created };
 }
 
 async function loadExistingBySource(supabase: any, workspaceId: string, source: string, sourceKeys: string[]) {

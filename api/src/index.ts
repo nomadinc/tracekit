@@ -340,6 +340,7 @@ import {
   listWorkItems,
   matchWorkItemRoute,
   mutateWorkItem,
+  createWs019M42AcceptanceFixture,
   normalizeWorkItemParams,
   syncHealthWorkItems,
 } from "./work-items";
@@ -16480,6 +16481,27 @@ async function router(req: Request, env: Env): Promise<Response> {
       return json(await listWorkItems(getSupabase(env), params, { sync: false }));
     } catch (e: any) {
       return json({ ok: false, error: e?.code || "work_items_failed", message: e?.message || String(e) }, e?.status || 500);
+    }
+  }
+
+  if (workItemRoute?.kind === "create_ws019_m42_acceptance_fixture") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const body = await readJsonBody(req);
+      const allowed = new Set(["workspace_id", "actor_id", "correlation_id"]);
+      if (!body || Object.keys(body).some((key) => !allowed.has(key)) || !body.workspace_id || !body.actor_id || !body.correlation_id) {
+        return json({ ok: false, error: "invalid_acceptance_fixture_request" }, 400);
+      }
+      const supabase = getSupabase(env);
+      return json(await createWs019M42AcceptanceFixture(supabase, {
+        workspace_id: identityWorkspace(body.workspace_id),
+        actor_id: String(body.actor_id),
+        correlation_id: String(body.correlation_id),
+        on_domain_event: async (event) => publishDomainEvent(supabase, event),
+      }));
+    } catch (e: any) {
+      return json({ ok: false, error: e?.code || "acceptance_fixture_create_failed", message: e?.message || String(e) }, e?.status || 500);
     }
   }
 
