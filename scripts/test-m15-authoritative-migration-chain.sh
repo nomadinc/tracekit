@@ -80,6 +80,13 @@ begin
   ) is null then
     raise exception 'atomic confirmation RPC is absent';
   end if;
+  if to_regprocedure(
+    'public.resolve_completed_mcp_shopify_execution_replay(uuid,uuid,uuid,text,text,timestamptz,text)'
+  ) is null or to_regprocedure(
+    'public.authorize_mcp_shopify_execution_atomic(uuid,uuid,uuid,text,text,text,uuid,text,text,text,uuid,timestamptz)'
+  ) is null then
+    raise exception 'authoritative Shopify execution RPCs are absent';
+  end if;
 end
 $verification$;
 
