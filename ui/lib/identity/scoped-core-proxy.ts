@@ -87,7 +87,12 @@ export async function scopedCorePost(
   upstreamPath: string,
   request: Request,
   permission: Permission,
-  options: { includeActor?: boolean } = {},
+  options: {
+    includeActor?: boolean;
+    includeCorrelation?: boolean;
+    rejectCallerScopeHints?: boolean;
+    allowedCallerKeys?: readonly string[];
+  } = {},
 ) {
   const origin = request.headers.get("origin");
   if (origin && origin !== new URL(request.url).origin) {
@@ -103,11 +108,20 @@ export async function scopedCorePost(
     return { status: 400, body: { error: "Invalid request body." } };
   }
   const body = raw as Record<string, unknown>;
+  const suppliedScopeHints = [...TENANT_HINT_KEYS, ...ACTOR_HINT_KEYS].some((key) => Object.prototype.hasOwnProperty.call(body, key));
+  if (options.rejectCallerScopeHints && suppliedScopeHints) return unavailable();
   if (!bodyMatchesScope(body, scope.session, scope.workspaceId)) return unavailable();
+  if (options.allowedCallerKeys) {
+    const allowed = new Set(options.allowedCallerKeys);
+    if (Object.keys(body).some((key) => !allowed.has(key))) {
+      return { status: 400, body: { error: "Invalid request body." } };
+    }
+  }
   const sanitized = { ...body };
   for (const key of [...TENANT_HINT_KEYS, ...ACTOR_HINT_KEYS]) delete sanitized[key];
   sanitized.workspace_id = scope.workspaceId;
   if (options.includeActor) sanitized.actor_id = scope.session.user.id;
+  if (options.includeCorrelation) sanitized.correlation_id = scope.session.correlationId;
 
   const secret = adminSecret();
   if (!secret) {

@@ -103,6 +103,7 @@ test("work item routes are registered with deterministic method handling", () =>
   assert.deepEqual(matchWorkItemRoute("GET", "/v1/work-items/abc"), { kind: "get_work_item", work_item_id: "abc" });
   assert.deepEqual(matchWorkItemRoute("POST", "/v1/work-items/abc/acknowledge"), { kind: "acknowledge", work_item_id: "abc" });
   assert.deepEqual(matchWorkItemRoute("POST", "/v1/work-items/abc/notes"), { kind: "add_note", work_item_id: "abc" });
+  assert.deepEqual(matchWorkItemRoute("POST", "/v1/work-items/acceptance-fixtures/ws019-m4-2"), { kind: "create_ws019_m42_acceptance_fixture" });
   assert.deepEqual(matchWorkItemRoute("DELETE", "/v1/work-items"), {
     kind: "method_not_allowed",
     path: "/v1/work-items",
