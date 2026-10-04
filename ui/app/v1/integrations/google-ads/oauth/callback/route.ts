@@ -12,6 +12,6 @@ export async function GET(request:NextRequest){
   if(error)return clear(NextResponse.redirect(back(request,{google:"cancelled"}),303));
   if(!state||!code||!cookie||state!==cookie)throw new GoogleAdsConnectionError("google_ads_oauth_state_invalid","Google Ads authorization could not be verified.",403);
   const connected=await completeGoogleAdsOAuth({session:r.session,state,code});
-  return clear(NextResponse.redirect(back(request,{google:"connected",connectionId:connected.connectionId,accounts:String(connected.discoveredAccountCount)}),303));
+  return clear(NextResponse.redirect(back(request,{google:"connected",connectionId:connected.connectionId,accounts:String(connected.discoveredAccountCount),select:connected.selectableAccountCount>1?"1":"0"}),303));
  }catch(e){const x=e instanceof GoogleAdsConnectionError?e:null;const result=x?.code==="google_ads_required_permission_missing"?"permission":x?.code==="google_ads_oauth_state_invalid"?"state":x?.code?.startsWith("google_ads_")?x.code:"failed";return clear(NextResponse.redirect(back(request,{google:result}),303));}
 }
