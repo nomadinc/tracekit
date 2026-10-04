@@ -9,6 +9,14 @@ type WriterConfig = { url: string; serviceRoleKey: string; fetchImpl?: typeof fe
 type ConnectionContext = Scope & { accountId: string; shopDomain: string };
 type EvidenceMap = Map<string, ShopifyEvidence>;
 type SourceMapping = { id: string; canonicalObjectId: string };
+type PlatformOrderIdentityRow = {
+  platform_order_id: string;
+  canonical_order_id: string | null;
+  organization_id: string | null;
+  connection_id: string | null;
+  provider_account_id: string | null;
+  provider_order_id: string | null;
+};
 
 export function createShopifyNormalizedWriter(config: WriterConfig) {
   const request = createPostgrestRequest(config);
@@ -67,13 +75,14 @@ async function writeOrders(request: PostgrestRequest, context: ConnectionContext
       observedAt: record.providerUpdatedAt || order.order_ts,
       mappingVersion: "shopify-order-v1",
     });
+    const platformOrderId = await resolveShopifyOrderWriteIdentity(request, context, order, mapping);
 
-    await request("platform_orders?on_conflict=platform_order_id", {
+    await request("platform_orders?on_conflict=connection_id,provider_account_id,provider_order_id", {
       method: "POST",
       headers: { Prefer: "resolution=merge-duplicates,return=minimal" },
       body: JSON.stringify({
         platform: "shopify",
-        platform_order_id: order.platform_order_id,
+        platform_order_id: platformOrderId,
         platform_store_id: order.platform_store_id,
         provider_order_id: order.provider_order_id,
         order_id: order.order_id,
@@ -108,6 +117,46 @@ async function writeOrders(request: PostgrestRequest, context: ConnectionContext
     await writeOrderLines(request, context, record, proof, mapping.canonicalObjectId, order.currency);
     await writeRefunds(request, context, record, proof, mapping.canonicalObjectId, order.currency, order.order_id);
   }
+}
+
+export async function resolveShopifyOrderWriteIdentity(
+  request: PostgrestRequest,
+  context: ConnectionContext,
+  order: Pick<ReturnType<typeof normalizeShopifyOrderRecord>, "platform_order_id" | "provider_order_id">,
+  mapping: SourceMapping,
+): Promise<string> {
+  const scoped = await request<PlatformOrderIdentityRow[]>(
+    `platform_orders?connection_id=eq.${q(context.connectionId)}&provider_account_id=eq.${q(context.providerAccountId)}&provider_order_id=eq.${q(order.provider_order_id)}&select=platform_order_id,canonical_order_id,organization_id,connection_id,provider_account_id,provider_order_id&limit=2`,
+  );
+  if (scoped.length > 1) throw new Error("Shopify normalized persistence found ambiguous scoped Order ownership.");
+  if (scoped[0]) {
+    const existing = scoped[0];
+    if (
+      existing.organization_id !== context.organizationId
+      || existing.connection_id !== context.connectionId
+      || existing.provider_account_id !== context.providerAccountId
+      || existing.provider_order_id !== order.provider_order_id
+      || existing.canonical_order_id !== mapping.canonicalObjectId
+    ) throw new Error("Shopify normalized persistence refused inconsistent scoped Order ownership.");
+    return existing.platform_order_id;
+  }
+
+  const compatibilityRows = await request<PlatformOrderIdentityRow[]>(
+    `platform_orders?platform_order_id=eq.${q(order.platform_order_id)}&select=platform_order_id,canonical_order_id,organization_id,connection_id,provider_account_id,provider_order_id&limit=2`,
+  );
+  if (compatibilityRows.length > 1) throw new Error("Shopify normalized persistence found ambiguous legacy Order identity.");
+  const compatibility = compatibilityRows[0];
+  if (compatibility && (!compatibility.organization_id || !compatibility.connection_id || !compatibility.provider_account_id)) {
+    throw new Error("Shopify normalized persistence refused ambiguous legacy Order ownership.");
+  }
+  if (compatibility
+    && compatibility.organization_id === context.organizationId
+    && compatibility.connection_id === context.connectionId
+    && compatibility.provider_account_id === context.providerAccountId) {
+    throw new Error("Shopify normalized persistence refused an inconsistent same-scope Order identity.");
+  }
+
+  return `shopify:${context.connectionId}:${context.providerAccountId}:${order.provider_order_id}`;
 }
 
 async function writeTransactionRelationships(
