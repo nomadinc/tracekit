@@ -24,6 +24,7 @@ const NAVIGATION_ICONS: Record<string, LucideIcon> = {
   Operations: ClipboardList,
   Settings,
   Connections: Plug,
+  Activity: FileClock,
   Clients: Building2,
   Reports: Activity,
   Team: ContactRound,

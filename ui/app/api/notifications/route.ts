@@ -1,8 +1,8 @@
 import { NextResponse } from "next/server";
-import { resolveApplicationSession } from "@/lib/identity/application-session";
-import { requirePermission, AuthorizationDeniedError } from "@/lib/identity/authorization-gateway";
-function apiBaseUrl(){return String(process.env.TRACEKIT_API_BASE_URL||process.env.NEXT_PUBLIC_API_BASE_URL||process.env.NEXT_PUBLIC_API_BASE||"http://127.0.0.1:8787").replace(/\/+$/,"");}
-function adminSecret(){return String(process.env.TK_SECRET_KEY||process.env.TRACEKIT_TK_SECRET||"").trim();}
-async function readJsonSafe(res:Response){const text=await res.text().catch(()=>"");try{return text?JSON.parse(text):{};}catch{return{ok:false,error:"invalid_json"};}}
-async function notificationFetch(pathAndQuery:string){const secret=adminSecret();if(!secret)return{status:500,body:{ok:false,error:"admin_auth_not_configured"}};const res=await fetch(`${apiBaseUrl()}${pathAndQuery}`,{method:"GET",cache:"no-store",headers:{accept:"application/json","content-type":"application/json","x-tk-secret":secret}});return{status:res.status,body:await readJsonSafe(res)};}
-export async function GET(req:Request){try{const resolution=await resolveApplicationSession();if(resolution.kind!=="authenticated"||!resolution.session.activeOrganization)throw new AuthorizationDeniedError();requirePermission(resolution.session,"organizations.view");const url=new URL(req.url);url.searchParams.set("workspace_id",resolution.session.activeOrganization.id);const result=await notificationFetch(`/v1/notifications?${url.searchParams.toString()}`);return NextResponse.json(result.body,{status:result.status});}catch{return NextResponse.json({ok:false,error:"resource_unavailable"},{status:404});}}
+import { scopedCoreGet } from "@/lib/identity/scoped-core-proxy";
+import { OPERATIONAL_ACCESS_POLICY } from "@/lib/identity/operational-tenant-boundary";
+
+export async function GET(req: Request) {
+  const result = await scopedCoreGet("/v1/notifications", req.url, OPERATIONAL_ACCESS_POLICY.notificationRead);
+  return NextResponse.json(result.body, { status: result.status });
+}

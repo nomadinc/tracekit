@@ -1,11 +1,23 @@
 import { NextResponse } from "next/server";
-import { resolveApplicationSession } from "@/lib/identity/application-session";
-import { requirePermission, AuthorizationDeniedError } from "@/lib/identity/authorization-gateway";
-function apiBaseUrl(){return String(process.env.TRACEKIT_API_BASE_URL||process.env.NEXT_PUBLIC_API_BASE_URL||process.env.NEXT_PUBLIC_API_BASE||"http://127.0.0.1:8787").replace(/\/+$/,"");}
-function adminSecret(){return String(process.env.TK_SECRET_KEY||process.env.TRACEKIT_TK_SECRET||"").trim();}
-async function readJsonSafe(res:Response){const text=await res.text().catch(()=>"");try{return text?JSON.parse(text):{};}catch{return{ok:false,error:"invalid_json"};}}
-async function pathFrom(context:any){const params=await context?.params,parts=Array.isArray(params?.notificationPath)?params.notificationPath:[];return parts.map((part:string)=>encodeURIComponent(part)).join("/");}
-async function forward(path:string,init:RequestInit){const secret=adminSecret();if(!secret)return{status:500,body:{ok:false,error:"admin_auth_not_configured"}};const res=await fetch(`${apiBaseUrl()}${path}`,{...init,cache:"no-store",headers:{accept:"application/json","content-type":"application/json","x-tk-secret":secret}});return{status:res.status,body:await readJsonSafe(res)};}
-async function scope(permission:"organizations.view"|"actions.execute"){const r=await resolveApplicationSession();if(r.kind!=="authenticated"||!r.session.activeOrganization)throw new AuthorizationDeniedError();requirePermission(r.session,permission);return r.session.activeOrganization.id;}
-export async function GET(req:Request,context:any){try{const workspaceId=await scope("organizations.view"),path=await pathFrom(context);if(!path)return NextResponse.json({ok:false,error:"bad_request"},{status:400});const result=await forward(`/v1/notifications/${path}?workspace_id=${encodeURIComponent(workspaceId)}`,{method:"GET"});return NextResponse.json(result.body,{status:result.status});}catch{return NextResponse.json({ok:false,error:"resource_unavailable"},{status:404});}}
-export async function POST(_req:Request,context:any){try{const workspaceId=await scope("actions.execute"),path=await pathFrom(context);if(!path)return NextResponse.json({ok:false,error:"bad_request"},{status:400});const result=await forward(`/v1/notifications/${path}`,{method:"POST",body:JSON.stringify({workspace_id:workspaceId})});return NextResponse.json(result.body,{status:result.status});}catch{return NextResponse.json({ok:false,error:"resource_unavailable"},{status:404});}}
+import { scopedCoreGet, scopedCorePost } from "@/lib/identity/scoped-core-proxy";
+import { OPERATIONAL_ACCESS_POLICY } from "@/lib/identity/operational-tenant-boundary";
+
+async function notificationPathFromContext(context: any) {
+  const params = await context?.params;
+  const parts = Array.isArray(params?.notificationPath) ? params.notificationPath : [];
+  return parts.map((part: string) => encodeURIComponent(part)).join("/");
+}
+
+export async function GET(req: Request, context: any) {
+  const path = await notificationPathFromContext(context);
+  if (!path) return NextResponse.json({ ok: false, error: "bad_request", message: "notification id is required." }, { status: 400 });
+  const result = await scopedCoreGet(`/v1/notifications/${path}`, req.url, OPERATIONAL_ACCESS_POLICY.notificationRead);
+  return NextResponse.json(result.body, { status: result.status });
+}
+
+export async function POST(req: Request, context: any) {
+  const path = await notificationPathFromContext(context);
+  if (!path) return NextResponse.json({ ok: false, error: "bad_request", message: "notification id is required." }, { status: 400 });
+  const result = await scopedCorePost(`/v1/notifications/${path}`, req, OPERATIONAL_ACCESS_POLICY.notificationUpdate);
+  return NextResponse.json(result.body, { status: result.status });
+}
