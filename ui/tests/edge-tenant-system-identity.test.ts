@@ -1,0 +1,5 @@
+import assert from"node:assert/strict";import test from"node:test";import{edgeTenantRefForOrganization,isSystemManagedEdgeTenantRef}from"../lib/edge/tenant-identity";import{readFileSync}from"node:fs";
+const route=readFileSync(new URL("../app/api/admin/edge-tenant-bindings/route.ts",import.meta.url),"utf8");
+test("Edge tenant identity is deterministic, opaque, and organization specific",()=>{const a=edgeTenantRefForOrganization("5f1de64a-1b37-40bb-81c8-32197eda0b41"),again=edgeTenantRefForOrganization("5f1de64a-1b37-40bb-81c8-32197eda0b41"),b=edgeTenantRefForOrganization("fe164615-2db5-4c64-847a-a6c81fcc545c");assert.equal(a,again);assert.notEqual(a,b);assert.equal(isSystemManagedEdgeTenantRef(a),true);assert.doesNotMatch(a,/5f1de64a/);});
+test("control plane no longer accepts a caller-selected tenantRef on write",()=>{assert.match(route,/edgeTenantRefForOrganization\(body\.organizationId\)/);assert.doesNotMatch(route,/body\.tenantRef/);});
+test("invalid organization identifiers cannot derive Edge tenant identity",()=>assert.throws(()=>edgeTenantRefForOrganization("not-an-org"),/invalid_organization_id/));
