@@ -10,7 +10,7 @@ function bytes(value: unknown) {
   return new Uint8Array(Buffer.from(value.slice(2), "hex"));
 }
 export async function runGoogleAdsReportingProof(input:{organizationId:string;connectionId:string;days?:number;fetcher?:typeof fetch}) {
-  const days=Math.min(7,Math.max(1,input.days||7));
+  const days=Math.min(30,Math.max(1,input.days||7));
   const [accounts,credentials]=await Promise.all([
     marketingPersistenceRequest(`marketing_provider_accounts?organization_id=eq.${encodeURIComponent(input.organizationId)}&connection_id=eq.${encodeURIComponent(input.connectionId)}&provider=eq.google_ads&selected_for_sync=eq.true&status=eq.active`),
     marketingPersistenceRequest(`marketing_provider_credentials?organization_id=eq.${encodeURIComponent(input.organizationId)}&connection_id=eq.${encodeURIComponent(input.connectionId)}&credential_type=eq.oauth_refresh_token&revoked_at=is.null&limit=1`),
