@@ -1,4 +1,4 @@
-import{createHash,randomUUID}from"node:crypto";import{readFileSync}from"node:fs";import{NextResponse}from"next/server";import{resolveApplicationSession}from"@/lib/identity/application-session";import{requirePermission,AuthorizationDeniedError}from"@/lib/identity/authorization-gateway";
+import{createHash,randomUUID}from"node:crypto";import{fileURLToPath}from"node:url";import{readFileSync}from"node:fs";import{NextResponse}from"next/server";import{resolveApplicationSession}from"@/lib/identity/application-session";import{requirePermission,AuthorizationDeniedError}from"@/lib/identity/authorization-gateway";
 export const runtime="nodejs";
 const STAGING_REF="joahiwgidfbzwzyslrbq";
 function out(body:Record<string,unknown>,status=200){return NextResponse.json(body,{status});}
@@ -20,7 +20,7 @@ export async function POST(request:Request){
   if(!sameOrigin(request))return out({ok:false,code:"request_verification_failed"},403);
   const resolution=await resolveApplicationSession();if(resolution.kind!=="authenticated"||!resolution.session.activeOrganization)return out({ok:false,code:"resource_unavailable"},404);requirePermission(resolution.session,"actions.execute");
   if(body.confirm!==true)return out({ok:false,code:"explicit_confirmation_required"},400);
-  const fixture=JSON.parse(readFileSync(new URL("../../../../tests/fixtures/edge-intelligence-v1.examples.json",import.meta.url),"utf8")).scenarios.normalResidential;
+  const fixture=JSON.parse(readFileSync(fileURLToPath(new URL("../../../../tests/fixtures/edge-intelligence-v1.examples.json",import.meta.url)),"utf8")).scenarios.normalResidential;
   const orgs=await rest(base,key,"tracekit_organizations?select=id&order=created_at.asc&limit=2");if(!Array.isArray(orgs)||orgs.length<2)return out({ok:false,code:"two_staging_organizations_required"},409);
   const suffix=randomUUID().replaceAll("-","").slice(0,12),orgA=orgs[0].id,orgB=orgs[1].id,basePayload={...fixture,tenantRef:"tenant_staging_"+suffix,observationId:"obs_staging_"+suffix,sessionRef:"session_staging_"+suffix,eventRef:"event_staging_"+suffix};
   const rpc=(org:string,payload:any)=>rest(base,key,"rpc/ingest_edge_intelligence_v1",{method:"POST",body:JSON.stringify({p_organization_id:org,p_payload:payload})});
