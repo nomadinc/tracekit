@@ -9,6 +9,10 @@ export type GoogleCustomerProfile = {
   timeZone: string | null;
 };
 
+export class GoogleAdsProfileError extends Error {
+  constructor(readonly httpStatus: number, readonly apiStatus: string) { super("Google Ads customer profile query failed."); }
+}
+
 const QUERY = [
   "SELECT",
   "customer.id,",
@@ -21,6 +25,7 @@ const QUERY = [
 ].join(" ");
 
 function text(value: unknown) { return typeof value === "string" && value.trim() ? value.trim() : null; }
+function safe(value: unknown) { return String(value || "unknown").replace(/[^a-z0-9_.-]/gi, "_").slice(0, 80).toLowerCase(); }
 
 export async function fetchGoogleCustomerProfile(input: { accessToken: string; customerId: string; loginCustomerId?: string; fetcher?: typeof fetch }) {
   const customerId = normalizeGoogleCustomerId(input.customerId);
@@ -30,10 +35,10 @@ export async function fetchGoogleCustomerProfile(input: { accessToken: string; c
   const response = await fetcher(`https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers/${customerId}/googleAds:search`, {
     method: "POST", cache: "no-store", headers, body: JSON.stringify({ query: QUERY }),
   });
-  const payload = await response.json().catch(() => ({})) as { results?: Array<{ customer?: Record<string,unknown> }> };
-  if (!response.ok) throw new Error("google_ads_customer_profile_query_failed");
+  const payload = await response.json().catch(() => ({})) as { results?: Array<{ customer?: Record<string,unknown> }>; error?: { status?: unknown; code?: unknown } };
+  if (!response.ok) throw new GoogleAdsProfileError(response.status, safe(payload.error?.status || payload.error?.code));
   const row = payload.results?.[0]?.customer;
-  if (!row || typeof row.manager !== "boolean") throw new Error("google_ads_customer_profile_invalid");
+  if (!row || typeof row.manager !== "boolean") throw new GoogleAdsProfileError(502, "invalid_profile_response");
   return {
     customerId: normalizeGoogleCustomerId(String(row.id || customerId)),
     manager: row.manager,
