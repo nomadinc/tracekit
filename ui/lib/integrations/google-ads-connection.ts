@@ -3,6 +3,7 @@ import type { TraceKitSessionContext } from "@/lib/identity/persistent-types";
 import { buildGoogleAuthorizationUrl, createGoogleOAuthState, exchangeGoogleAuthorizationCode, GOOGLE_ADS_OAUTH_SCOPE, verifyGoogleOAuthState } from "./google-ads-oauth";
 import { GoogleAdsApiError, listGoogleAccessibleCustomers } from "./google-ads-client";
 import { fetchGoogleCustomerClientHierarchy } from "./google-ads-customer-client";
+import { fetchGoogleCustomerProfile } from "./google-ads-profile-client";
 import { discoverGoogleCustomerHierarchy } from "./google-ads-hierarchy-client";
 import { persistGoogleConnectionAuthorization, persistGoogleDiscoveredAccounts } from "./google-ads-persistence";
 
@@ -40,7 +41,26 @@ export async function completeGoogleAdsOAuth(input:{session:TraceKitSessionConte
  }
  let discovery;
  try {
-  discovery = await discoverGoogleCustomerHierarchy({accessibleCustomerIds:accessible,fetchHierarchy:async({targetCustomerId,loginCustomerId})=>(await fetchGoogleCustomerClientHierarchy({accessToken:token.accessToken,targetCustomerId,loginCustomerId})).rows});
+  const profiles = await Promise.all(accessible.map((customerId) => fetchGoogleCustomerProfile({ accessToken: token.accessToken, customerId })));
+  const directAdvertisers = profiles.filter((profile) => !profile.manager);
+  const managerIds = profiles.filter((profile) => profile.manager).map((profile) => profile.customerId);
+  const managerDiscovery = managerIds.length
+    ? await discoverGoogleCustomerHierarchy({accessibleCustomerIds:managerIds,fetchHierarchy:async({targetCustomerId,loginCustomerId})=>(await fetchGoogleCustomerClientHierarchy({accessToken:token.accessToken,targetCustomerId,loginCustomerId})).rows})
+    : { accounts: [] };
+  const directAccounts = directAdvertisers.map((profile) => ({
+    customerId: profile.customerId,
+    parentCustomerId: null,
+    accountType: "advertiser" as const,
+    hierarchyDepth: 0,
+    isManager: false,
+    eligibleForSpendSync: true,
+    descriptiveName: profile.descriptiveName,
+    currencyCode: profile.currencyCode,
+    timeZone: profile.timeZone,
+    loginCustomerIds: [profile.customerId],
+  }));
+  const byId = new Map([...managerDiscovery.accounts, ...directAccounts].map((account) => [account.customerId, account]));
+  discovery = { accounts: Array.from(byId.values()) };
  } catch {
   throw new GoogleAdsConnectionError("google_ads_hierarchy_discovery_failed", "Google Ads account hierarchy discovery could not be completed.", 502);
  }
