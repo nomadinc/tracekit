@@ -1,4 +1,4 @@
-import{randomUUID}from"node:crypto";import{readFileSync}from"node:fs";import{NextResponse}from"next/server";import{resolveApplicationSession}from"@/lib/identity/application-session";import{requirePermission,AuthorizationDeniedError}from"@/lib/identity/authorization-gateway";
+import{createHash,randomUUID}from"node:crypto";import{readFileSync}from"node:fs";import{NextResponse}from"next/server";import{resolveApplicationSession}from"@/lib/identity/application-session";import{requirePermission,AuthorizationDeniedError}from"@/lib/identity/authorization-gateway";
 export const runtime="nodejs";
 const STAGING_REF="joahiwgidfbzwzyslrbq";
 function out(body:Record<string,unknown>,status=200){return NextResponse.json(body,{status});}
@@ -10,9 +10,16 @@ export async function POST(request:Request){
   const base=process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/,""),key=process.env.SUPABASE_SERVICE_ROLE_KEY;
   if(!base||!key)return out({ok:false,code:"staging_environment_unavailable"},503);
   const ref=new URL(base).hostname.split(".")[0];if(ref!==STAGING_REF)return out({ok:false,code:"wrong_staging_project",expectedSupabaseRef:STAGING_REF,configuredSupabaseRef:ref},409);
+  const body=await request.json().catch(()=>({})) as Record<string,unknown>;
+  if(body.diagnostic===true){
+   if(!sameOrigin(request))return out({ok:false,code:"request_verification_failed"},403);
+   const fingerprint=createHash("sha256").update(key).digest("hex").slice(0,12);
+   const probe=await fetch(base+"/rest/v1/tracekit_users?select=id&limit=1",{headers:{apikey:key,Authorization:"Bearer "+key}});
+   return out({ok:true,code:"staging_supabase_runtime_diagnostic",supabaseRef:ref,serviceKeyPresent:true,serviceKeyLength:key.length,serviceKeySha256Prefix:fingerprint,supabaseProbeStatus:probe.status});
+  }
   if(!sameOrigin(request))return out({ok:false,code:"request_verification_failed"},403);
   const resolution=await resolveApplicationSession();if(resolution.kind!=="authenticated"||!resolution.session.activeOrganization)return out({ok:false,code:"resource_unavailable"},404);requirePermission(resolution.session,"actions.execute");
-  const body=await request.json().catch(()=>({})) as Record<string,unknown>;if(body.confirm!==true)return out({ok:false,code:"explicit_confirmation_required"},400);
+  if(body.confirm!==true)return out({ok:false,code:"explicit_confirmation_required"},400);
   const fixture=JSON.parse(readFileSync(new URL("../../../../tests/fixtures/edge-intelligence-v1.examples.json",import.meta.url),"utf8")).scenarios.normalResidential;
   const orgs=await rest(base,key,"tracekit_organizations?select=id&order=created_at.asc&limit=2");if(!Array.isArray(orgs)||orgs.length<2)return out({ok:false,code:"two_staging_organizations_required"},409);
   const suffix=randomUUID().replaceAll("-","").slice(0,12),orgA=orgs[0].id,orgB=orgs[1].id,basePayload={...fixture,tenantRef:"tenant_staging_"+suffix,observationId:"obs_staging_"+suffix,sessionRef:"session_staging_"+suffix,eventRef:"event_staging_"+suffix};
