@@ -287,7 +287,10 @@ export default function NotificationsClient() {
       });
       const json = (await res.json().catch(() => ({}))) as NotificationsResponse;
       if (!res.ok || json?.ok === false) throw new Error((json as any)?.message || "Notification Center failed to load.");
-      const rows = Array.isArray(json.notifications) ? json.notifications : [];
+      const healthRows = Array.isArray(json.notifications) ? json.notifications : [];
+      const actionJson = cursor ? { notifications: [] } : await fetch("/api/action-notifications", { cache: "no-store", headers: { accept: "application/json" } }).then((response) => response.ok ? response.json() : { notifications: [] }).catch(() => ({ notifications: [] }));
+      const actionRows = Array.isArray(actionJson.notifications) ? actionJson.notifications : [];
+      const rows = [...actionRows, ...healthRows].sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
       setNotifications((current) => append ? [...current, ...rows] : rows);
       setCounts(json.counts || null);
       setNextCursor(json.next_cursor || null);
@@ -303,7 +306,8 @@ export default function NotificationsClient() {
   }, [initialNotificationId, queryParams]);
 
   const fetchNotificationById = React.useCallback(async (notificationId: string) => {
-    const res = await fetch(`/api/notifications/${encodeURIComponent(notificationId)}?workspace_id=${encodeURIComponent(WORKSPACE_ID)}`, {
+    const action = notificationId.startsWith("action_notification:");
+    const res = await fetch(action ? `/api/action-notifications/${encodeURIComponent(notificationId)}` : `/api/notifications/${encodeURIComponent(notificationId)}?workspace_id=${encodeURIComponent(WORKSPACE_ID)}`, {
       cache: "no-store",
       headers: { accept: "application/json" },
     });
@@ -314,7 +318,8 @@ export default function NotificationsClient() {
 
   const markRead = React.useCallback(async (notification: TraceKitNotification) => {
     if (notification.status !== "unread") return notification;
-    const res = await fetch(`/api/notifications/${encodeURIComponent(notification.id)}/read`, {
+    const action = notification.id.startsWith("action_notification:");
+    const res = await fetch(action ? `/api/action-notifications/${encodeURIComponent(notification.id)}/read` : `/api/notifications/${encodeURIComponent(notification.id)}/read`, {
       method: "POST",
       cache: "no-store",
       headers: { accept: "application/json", "content-type": "application/json" },
@@ -343,7 +348,8 @@ export default function NotificationsClient() {
 
   const dismissNotification = React.useCallback(async (notification: TraceKitNotification) => {
     try {
-      const res = await fetch(`/api/notifications/${encodeURIComponent(notification.id)}/dismiss`, {
+      const action = notification.id.startsWith("action_notification:");
+      const res = await fetch(action ? `/api/action-notifications/${encodeURIComponent(notification.id)}/dismiss` : `/api/notifications/${encodeURIComponent(notification.id)}/dismiss`, {
         method: "POST",
         cache: "no-store",
         headers: { accept: "application/json", "content-type": "application/json" },
