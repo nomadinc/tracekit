@@ -26,9 +26,11 @@ export function startGoogleAdsOAuth(session:TraceKitSessionContext){
 }
 export async function completeGoogleAdsOAuth(input:{session:TraceKitSessionContext;state:string;code:string}){
  const org=manager(input.session),cfg=googleAdsConfiguration();
- const state=verifyGoogleOAuthState(input.state,cfg.stateSecret);
+ let state;
+ try { state=verifyGoogleOAuthState(input.state,cfg.stateSecret); } catch { throw new GoogleAdsConnectionError("google_ads_oauth_state_invalid","Google Ads authorization could not be verified.",403); }
  if(state.organizationId!==org.id||state.accountId!==input.session.activeAccount.id||state.returnPath!=="/connections")throw new GoogleAdsConnectionError("google_ads_oauth_state_invalid","Google Ads authorization could not be verified.",403);
- const token=await exchangeGoogleAuthorizationCode({code:input.code,clientId:cfg.clientId,clientSecret:cfg.clientSecret,redirectUri:cfg.redirectUri});
+ let token;
+ try { token=await exchangeGoogleAuthorizationCode({code:input.code,clientId:cfg.clientId,clientSecret:cfg.clientSecret,redirectUri:cfg.redirectUri}); } catch { throw new GoogleAdsConnectionError("google_ads_token_exchange_failed","Google Ads authorization token exchange could not be completed.",502); }
  if(!token.scope.split(/\s+/).includes(GOOGLE_ADS_OAUTH_SCOPE))throw new GoogleAdsConnectionError("google_ads_required_permission_missing","Google did not grant Google Ads access.",403);
  let accessible: string[];
  try {
