@@ -118,7 +118,77 @@
     "tenantContextChanged": false,
     "passed": true
   },
+  "prepareOnlyCapture": {
+    "captureStartedAt": "2026-10-04T05:26:25.784Z",
+    "captureCompletedAt": "2026-10-04T05:26:27.905Z",
+    "httpStatus": 200,
+    "operation": "shopify.controlled_webhook_create_delete_proof",
+    "intentId": "7cbe1acf-f8b0-4c95-8c4e-2edd25c1bb66",
+    "planIdentity": "provider-plan:shopify.controlled_webhook_create_delete_proof:d69a93dd-98ed-46fd-b486-1a39fb8388dd:izkfvg-k0.myshopify.com:APP_UNINSTALLED",
+    "issuedAt": "2026-10-04T05:26:27.824Z",
+    "expiresAt": "2026-10-04T05:36:27.824Z",
+    "executionAvailable": false,
+    "confirmationRequired": true,
+    "derivedStatusAtObservation": "prepared_unconfirmed",
+    "observedAt": "2026-10-04T05:27:36.687346Z",
+    "organizationId": "8f6bb14b-2126-49b8-bfdb-c60edbc3549b",
+    "actorUserId": "cbfaeaf7-fa83-4235-9011-af3ae7ce9101",
+    "target": {
+      "targetKind": "shopify_webhook_subscription",
+      "connectionId": "d69a93dd-98ed-46fd-b486-1a39fb8388dd",
+      "shopDomain": "izkfvg-k0.myshopify.com",
+      "callbackUrl": "https://app.trace-kit.io/api/webhooks/shopify",
+      "topic": "APP_UNINSTALLED",
+      "requiredPermission": "actions.execute",
+      "recovery": "reversible"
+    },
+    "recovery": {
+      "recoveryId": "c61320a2-9609-4d52-9565-a0cd434bdd9e",
+      "state": "prepared",
+      "createdAt": "2026-10-04T05:26:27.868391Z",
+      "updatedAt": "2026-10-04T05:26:27.868391Z",
+      "createdExternalId": null,
+      "createdVerified": false,
+      "rollbackVerified": false
+    },
+    "confirmationRows": 0,
+    "authorizationRows": 0,
+    "executionResultRows": 0,
+    "providerMutationPerformed": false,
+    "audit": {
+      "correlationId": "adb0b326-8f04-4cd7-b8e9-42cfa5574731",
+      "membershipEvent": {
+        "eventId": "4f34a78e-31b4-468e-8d7d-f8af45913771",
+        "occurredAt": "2026-10-04T05:26:27.251187Z",
+        "actorDisplayName": "Anthony McCabe",
+        "organizationId": "8f6bb14b-2126-49b8-bfdb-c60edbc3549b",
+        "result": "success",
+        "membershipId": "0a91c3d4-efaf-4bd8-a092-b0ea6a0853ac",
+        "role": "platform-owner"
+      },
+      "discoveryEvent": {
+        "eventId": "3902b9cf-2d0d-4758-91cc-38a559442443",
+        "occurredAt": "2026-10-04T05:26:27.627278Z",
+        "actorDisplayName": "Anthony McCabe",
+        "organizationId": "8f6bb14b-2126-49b8-bfdb-c60edbc3549b",
+        "action": "mcp.tool.discover_provider_actions",
+        "result": "success",
+        "permissionEvaluated": "organizations.view",
+        "toolVersion": 1
+      },
+      "separatePrepareAuditEvent": false
+    },
+    "passed": true
+  },
   "stages": {
+    "preparation": [
+      "prepareOnlyCapture",
+      "prepareOnlyCapture.recovery"
+    ],
+    "exact_target": [
+      "prepareOnlyCapture.planIdentity",
+      "prepareOnlyCapture.target"
+    ],
     "safe_failure": [
       "tenantNegativeCapture.response",
       "tenantNegativeCapture.lifecycleRowsInCaptureWindow",

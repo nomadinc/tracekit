@@ -54,10 +54,27 @@ The approved Shopify connection `d69a93dd-98ed-46fd-b486-1a39fb8388dd` remained 
 
 Tenant-negative and fail-closed gates: **PASS**. No other organization was entered, resolved, or read.
 
+## Production prepare-only persistence proof
+
+A valid authenticated Stem Labs prepare-only request completed from `2026-10-04T05:26:25.784Z` through `2026-10-04T05:26:27.905Z`. It returned HTTP 200 for `shopify.controlled_webhook_create_delete_proof`, intent `7cbe1acf-f8b0-4c95-8c4e-2edd25c1bb66`, expiry `2026-10-04T05:36:27.824Z`, `executionAvailable: false`, and `confirmationRequired: true`.
+
+The durable intent was issued at `2026-10-04T05:26:27.824Z` for Stem Labs and actor Anthony McCabe. Its stored plan and target bind connection `d69a93dd-98ed-46fd-b486-1a39fb8388dd`, shop `izkfvg-k0.myshopify.com`, callback `https://app.trace-kit.io/api/webhooks/shopify`, topic `APP_UNINSTALLED`, required permission `actions.execute`, reversible recovery, and target kind `shopify_webhook_subscription`. Its plan identity is:
+
+`provider-plan:shopify.controlled_webhook_create_delete_proof:d69a93dd-98ed-46fd-b486-1a39fb8388dd:izkfvg-k0.myshopify.com:APP_UNINSTALLED`
+
+At database observation time `2026-10-04T05:27:36.687346Z`, the derived lifecycle state was `prepared_unconfirmed`. The linked recovery row `c61320a2-9609-4d52-9565-a0cd434bdd9e` was created at `2026-10-04T05:26:27.868391Z` in state `prepared`, with `created_external_id: null`, `created_verified: false`, and `rollback_verified: false`. No confirmation, action authorization, execution result, provider mutation, or external provider object was recorded.
+
+The intent and recovery row share audit correlation ID `adb0b326-8f04-4cd7-b8e9-42cfa5574731`. Correlated audit events are:
+
+- `membership.resolved`, event `4f34a78e-31b4-468e-8d7d-f8af45913771`, at `2026-10-04T05:26:27.251187Z`, actor Anthony McCabe, organization Stem Labs, result `success`, membership target `0a91c3d4-efaf-4bd8-a092-b0ea6a0853ac`, role `platform-owner`.
+- `mcp.tool.discover_provider_actions`, event `3902b9cf-2d0d-4758-91cc-38a559442443`, at `2026-10-04T05:26:27.627278Z`, actor Anthony McCabe, organization Stem Labs, result `success`, evaluated permission `organizations.view`, `toolVersion: 1`.
+
+Preparation itself does not emit a separate audit event; durable intent and recovery rows carry the correlation. No provider read was repeated for this persistence verification. Prepare-only gate: **PASS**. Confirmation and execution remain incomplete.
+
 ## Remaining gates
 
 - Explicit authorization for preparation, confirmation, and the bounded Shopify mutation has not been granted.
-- The remaining governed lifecycle evidence — intent, confirmation, exactly-once execution, verification, cleanup/net-zero state, replay, durable lifecycle/history, and safe failure — has not been produced.
+- The remaining governed lifecycle evidence — confirmation, exactly-once execution, verification, cleanup/net-zero state, replay, and completed durable lifecycle/history — has not been produced.
 - A separate execution-adjacent safe-failure case remains outstanding if required by the final acceptance scenario; the malformed tenant-target request already proves structural fail-closed behavior before preparation.
 
 No Shopify request, action intent, confirmation, execution, provider mutation, or database mutation was performed.
