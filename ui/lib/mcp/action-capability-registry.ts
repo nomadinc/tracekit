@@ -1,3 +1,4 @@
+import{assessIntelligenceAction}from"./production-v1-policy";
 export type GovernedActionCapability={
  operation:"inspect_evidence"|"commas.webhook_test_delivery"|"shopify.controlled_webhook_create_delete_proof";
  provider:"tracekit"|"commas"|"shopify";
@@ -13,14 +14,15 @@ export type GovernedActionCapability={
 };
 export const M12_ACTION_CAPABILITIES:readonly GovernedActionCapability[]=[
  {operation:"inspect_evidence",provider:"tracekit",mutationClass:"none",targetKind:"journey_evidence",requiredPermission:"customers.view",humanConfirmationRequired:true,verification:"retained_evidence",recovery:"not_applicable",exposure:"plan_only",executionAvailable:true,evidence:["M9 plans map eligible diagnostic recommendations to inspect_evidence.","M10 bounded adapter proved execution and independent verification semantics.","M12 authenticated acceptance completed governed execution, verification, persistence, exact replay_same_result, and providerMutation:false."]},
- {operation:"commas.webhook_test_delivery",provider:"commas",mutationClass:"external_side_effect",targetKind:"commas_webhook_subscription",requiredPermission:"actions.execute",humanConfirmationRequired:true,verification:"provider_response",recovery:"not_applicable",exposure:"controlled_proof_only",executionAvailable:true,evidence:["M11 proved governed external transport execution without provider configuration mutation.","M14 proved Accufy tenancy, governed credential resolution, exact approved webhook target discovery, durable intent preparation, and explicit human confirmation."]},
+ {operation:"commas.webhook_test_delivery",provider:"commas",mutationClass:"external_side_effect",targetKind:"commas_webhook_subscription",requiredPermission:"actions.execute",humanConfirmationRequired:true,verification:"provider_response",recovery:"not_applicable",exposure:"controlled_proof_only",executionAvailable:false,evidence:["M11 proved governed external transport execution without provider configuration mutation.","M14 proved Accufy tenancy, governed credential resolution, exact approved webhook target discovery, durable intent preparation, and explicit human confirmation.","Production V1 remains suppressed until fresh controlled-production evidence is obtained."]},
  {operation:"shopify.controlled_webhook_create_delete_proof",provider:"shopify",mutationClass:"provider_configuration",targetKind:"shopify_webhook_subscription",requiredPermission:"actions.execute",humanConfirmationRequired:true,verification:"provider_read_back",recovery:"reversible",exposure:"controlled_proof_only",executionAvailable:true,evidence:["M11 Production proof verified create/read-back/delete/absence and durable net-zero audit evidence.","M15 proved current Stem Labs tenancy, governed credential readiness, exact disposable APP_UNINSTALLED target absence, opaque intent, fresh confirmation, and durable recovery contract."]}
 ] as const;
 export function resolveM12ActionCapability(operation:string){return M12_ACTION_CAPABILITIES.find(c=>c.operation===operation)||null;}
 export function assessM12ActionBinding(operation:string){
  const capability=resolveM12ActionCapability(operation);
  if(!capability)return{bound:false,executionAvailable:false,reason:"No governed operation-specific capability is registered."} as const;
- return{bound:true,executionAvailable:capability.exposure==="plan_only"&&capability.executionAvailable,capability,reason:capability.exposure!=="plan_only"?"Capability is retained as controlled proof evidence and is not exposed as a reusable action.":capability.executionAvailable?"Capability is bound and its named execution exposure is enabled.":"Capability is bound for planning but execution exposure is not enabled."} as const;
+ const policy=assessIntelligenceAction(operation);
+ return{bound:true,executionAvailable:capability.exposure==="plan_only"&&capability.executionAvailable&&policy.allowed,capability,reason:!policy.allowed?policy.reason:capability.exposure!=="plan_only"?"Capability is retained as controlled proof evidence and is not exposed as a reusable action.":capability.executionAvailable?"Capability is bound and its named execution exposure is enabled.":"Capability is bound for planning but execution exposure is not enabled."} as const;
 }
 export type M12PlanCapabilityInput={proposedOperation:{type:string}|null;requiredPermission:string;confirmation:{required:boolean}};
 export function resolveM12PlanCapability(plan:M12PlanCapabilityInput){

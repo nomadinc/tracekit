@@ -32,7 +32,8 @@
     "materialize:accufy-investigation": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/materialize-accufy-investigation.ts",
     "materialize:oto2-child-investigation": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/materialize-oto2-child-investigation.ts",
     "audit:commas:raw-readonly": "tsx scripts/audit-commas-raw-transactions-readonly.ts",
-    "prove:edge-intelligence-staging": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/prove-edge-intelligence-v1-staging.ts --confirm-edge-intelligence-staging-proof"
+    "prove:edge-intelligence-staging": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/prove-edge-intelligence-v1-staging.ts --confirm-edge-intelligence-staging-proof",
+    "verify:intelligence-production-v1": "tsx scripts/verify-production-v1-acceptance.ts"
   },
   "dependencies": {
     "@workos-inc/authkit-nextjs": "^4.3.1",
