@@ -168,3 +168,14 @@ async function loadMarketingConnectionExperienceRow(organizationName: string, ro
     diagnostics: { latestRequestStatus: row.last_error_at ? "failed" : row.last_success_at ? "succeeded" : null, latencyMs: null, providerRequestIdPresent: false, retryCount: 0, rateLimitRemaining: null, rateLimitReset: null, sanitizedError: text(row.last_error_code), activeRun: false, leaseOwnerPresent: false, heartbeatAge: null, stalled: false, pendingCheckpoints: 0, failedCheckpoints: 0, evidenceReferences: 0, missingEvidenceReferences: 0, hashState: "unavailable" },
   };
 }
+
+
+export async function loadMarketingConnectionExperience(connectionId: string) {
+  const session = await authorizedSession("connectors.view");
+  const organization = session.activeOrganization!;
+  const rows = await commercePersistenceRequest(
+    `marketing_provider_connections?id=eq.${encodeURIComponent(connectionId)}&organization_id=eq.${encodeURIComponent(organization.id)}&status=neq.revoked&limit=1`,
+  ) as Row[];
+  if (!rows[0]) throw new Error("The requested resource is unavailable.");
+  return loadMarketingConnectionExperienceRow(organization.name, rows[0], session.effectivePermissions.includes("connectors.manage"));
+}
