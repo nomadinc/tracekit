@@ -33,6 +33,7 @@ import {
 } from "./m15-shopify-target-resolver";
 import { orchestrateShopifyControlledProof } from "./m15-shopify-controlled-proof-orchestration";
 import { assessM16ProviderActionExposure } from "./provider-action-contract";
+import { assessIntelligenceAction } from "./production-v1-policy";
 export type InspectEvidenceReferenceInput = {
   confirmationId: string;
   requestedAt: string;
@@ -137,12 +138,16 @@ export class TraceKitMcpActionService {
     });
   }
   async prepareApprovedCommasTestDelivery() {
+    if(!assessIntelligenceAction("commas.webhook_test_delivery").allowed)
+      throw new Error("commas_test_delivery_disabled_by_production_v1_policy");
     const { plan } = await resolveApprovedCommasTestDeliveryTarget(
       this.session,
     );
     return this.prepareCommasTestDelivery(plan);
   }
   async prepareCommasTestDelivery(plan: CommasTestDeliveryPlan) {
+    if(!assessIntelligenceAction("commas.webhook_test_delivery").allowed)
+      throw new Error("commas_test_delivery_disabled_by_production_v1_policy");
     const capability = resolveM12ActionCapability(
         "commas.webhook_test_delivery",
       ),
@@ -183,6 +188,8 @@ export class TraceKitMcpActionService {
     };
   }
   async confirmCommasTestDelivery(intentId: string) {
+    if(!assessIntelligenceAction("commas.webhook_test_delivery").allowed)
+      throw new Error("commas_test_delivery_disabled_by_production_v1_policy");
     return confirmMcpActionIntent(this.session, {
       intentId,
       expectedOperation: "commas.webhook_test_delivery",
@@ -190,6 +197,8 @@ export class TraceKitMcpActionService {
     });
   }
   async prepareApprovedShopifyControlledProof(appOrigin?: string) {
+    if(!assessIntelligenceAction("shopify.controlled_webhook_create_delete_proof").allowed)
+      throw new Error("shopify_controlled_proof_disabled_by_production_v1_policy");
     return this.prepareShopifyControlledProof(
       await resolveApprovedShopifyControlledProofPlan(
         this.session,
@@ -198,6 +207,8 @@ export class TraceKitMcpActionService {
     );
   }
   async prepareShopifyControlledProof(plan: ShopifyControlledProofPlan) {
+    if(!assessIntelligenceAction("shopify.controlled_webhook_create_delete_proof").allowed)
+      throw new Error("shopify_controlled_proof_disabled_by_production_v1_policy");
     const capability = resolveM12ActionCapability(
         "shopify.controlled_webhook_create_delete_proof",
       ),
@@ -232,6 +243,8 @@ export class TraceKitMcpActionService {
     };
   }
   async confirmShopifyControlledProof(intentId: string) {
+    if(!assessIntelligenceAction("shopify.controlled_webhook_create_delete_proof").allowed)
+      throw new Error("shopify_controlled_proof_disabled_by_production_v1_policy");
     return confirmMcpActionIntent(this.session, {
       intentId,
       expectedOperation: "shopify.controlled_webhook_create_delete_proof",
@@ -244,6 +257,8 @@ export class TraceKitMcpActionService {
     consumptionId: string;
     idempotencyKey: string;
   }) {
+    const policy=assessIntelligenceAction("shopify.controlled_webhook_create_delete_proof");
+    if(!policy.allowed)return{status:"rejected"as const,reason:policy.reason,executionAvailable:false as const,netProviderConfigurationMutation:false as const};
     const replay = await resolveCompletedShopifyControlledProofReplay(
       this.session,
       {
@@ -349,6 +364,8 @@ export class TraceKitMcpActionService {
     consumptionId: string;
     idempotencyKey: string;
   }) {
+    const policy=assessIntelligenceAction("commas.webhook_test_delivery");
+    if(!policy.allowed)return{status:"rejected"as const,reason:policy.reason,executionAvailable:false as const,providerConfigurationMutation:false as const};
     const resolved = await resolveCommasTestDeliveryConfirmation(this.session, {
       confirmationId: input.confirmationId,
       requestedAt: input.requestedAt,

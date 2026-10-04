@@ -15,6 +15,7 @@ import {
   markShopifyRollbackVerified,
   readShopifyMutationRecovery,
 } from "./m15-shopify-recovery-repository";
+import{assessIntelligenceAction}from"./production-v1-policy";
 import {
   authorizeShopifyControlledProofExecution,
   type ShopifyControlledProofPlan,
@@ -76,6 +77,8 @@ export async function orchestrateShopifyControlledProof(
     createdAt: input.requestedAt,
     expiresAt: input.expiresAt,
   });
+  const policy=assessIntelligenceAction("shopify.controlled_webhook_create_delete_proof");
+  if(!policy.allowed)return{status:"rejected"as const,reason:policy.reason,envelope,execution:null,executionAvailable:false,netProviderConfigurationMutation:false as const};
   if (
     !input.executionEnabled ||
     !session.effectivePermissions.includes("actions.execute")
