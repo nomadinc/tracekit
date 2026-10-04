@@ -218,6 +218,69 @@
     "passed": false,
     "blocker": "expired_intent_confirmation_not_fail_closed"
   },
+  "controlledExecutionCapture": {
+    "requestedAt": "2026-10-04T17:51:47.012Z",
+    "captureCompletedAt": "2026-10-04T17:51:50.834Z",
+    "databaseObservedAt": "2026-10-04T17:53:28.129418Z",
+    "httpStatus": 200,
+    "mcpProtocolVersion": "2025-06-18",
+    "intentId": "1c07429f-ccce-4b9f-9fa3-88b912fac422",
+    "confirmationId": "85295197-b001-4fc8-9410-137dff2a72f5",
+    "authorizationId": "00dcd8c9-5520-4a28-8feb-81465df6ea06",
+    "authorizationState": "consumed",
+    "authorizationCount": 1,
+    "authorizationConsumptionCount": 1,
+    "consumptionId": "7e6190bb-725d-4c46-b655-688d14673fc1",
+    "idempotencyKey": "ws019-m3-shopify-proof-20261004-001",
+    "envelopeIdentity": "shopify-exec-v1-f5e5f6859bb1",
+    "auditCorrelationId": "47efb033-2669-408a-915c-69a554f788cd",
+    "executionId": "2b921137-eb63-4465-a1e5-6cbac3392c28",
+    "executionResultCount": 1,
+    "executionResult": {
+      "status": "completed",
+      "provider": "shopify",
+      "operation": "controlled_webhook_create_delete_proof",
+      "createdExternalId": "gid://shopify/WebhookSubscription/2085074436310",
+      "createVerified": true,
+      "rollbackExternalId": "gid://shopify/WebhookSubscription/2085074436310",
+      "rollbackVerified": true,
+      "netProviderConfigurationMutation": false
+    },
+    "recovery": {
+      "state": "rollback_verified",
+      "createdExternalId": "gid://shopify/WebhookSubscription/2085074436310",
+      "createdVerified": true,
+      "rollbackExternalId": "gid://shopify/WebhookSubscription/2085074436310",
+      "rollbackVerified": true,
+      "updatedAt": "2026-10-04T17:51:50.632Z"
+    },
+    "externalMutationAudit": {
+      "count": 1,
+      "executedAt": "2026-10-04T17:51:50.668Z",
+      "provider": "shopify",
+      "operation": "controlled_webhook_create_delete_proof",
+      "controlledTarget": "izkfvg-k0.myshopify.com",
+      "createdExternalId": "gid://shopify/WebhookSubscription/2085074436310",
+      "rollbackExternalId": "gid://shopify/WebhookSubscription/2085074436310",
+      "createVerified": true,
+      "rollbackVerified": true,
+      "netProviderConfigurationMutation": false
+    },
+    "duplicateAuthorization": false,
+    "duplicateExecutionResult": false,
+    "duplicateExternalMutationAudit": false,
+    "executionBuiltInProviderAbsenceVerification": true,
+    "freshPostExecutionProviderList": {
+      "performed": false,
+      "reason": "authenticated_first_party_browser_session_unavailable_during_evidence_recording",
+      "createdObjectAbsent": null,
+      "proofOnlyTopicMatches": null,
+      "ingestionSubscriptionsIntact": null
+    },
+    "replayPerformed": false,
+    "passed": false,
+    "blocker": "fresh_post_execution_provider_list_and_replay_outstanding"
+  },
   "stages": {
     "preparation": [
       "prepareOnlyCapture",
@@ -232,6 +295,21 @@
       "tenantNegativeCapture.lifecycleRowsInCaptureWindow",
       "tenantNegativeCapture.audit",
       "expiredIntentCapture.executionContract"
+    ],
+    "confirmation": [
+      "controlledExecutionCapture.confirmationId"
+    ],
+    "execution": [
+      "controlledExecutionCapture.authorizationId",
+      "controlledExecutionCapture.executionResult"
+    ],
+    "verification": [
+      "controlledExecutionCapture.executionResult.createVerified",
+      "controlledExecutionCapture.executionResult.rollbackVerified",
+      "controlledExecutionCapture.externalMutationAudit"
+    ],
+    "durable_history": [
+      "controlledExecutionCapture"
     ]
   },
   "scenarios": [

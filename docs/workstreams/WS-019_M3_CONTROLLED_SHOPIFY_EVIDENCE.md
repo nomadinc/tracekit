@@ -1,6 +1,6 @@
 # WS-019 M3 — Controlled Shopify Production Evidence
 
-Status: **OPEN / PARTIAL — GOVERNED READINESS CAPTURED; NO MUTATION AUTHORIZED** on 2026-10-04.
+Status: **OPEN / PARTIAL — CONTROLLED EXECUTION CAPTURED; REPLAY AND FRESH POST-EXECUTION PROVIDER LIST REMAIN** on 2026-10-04.
 
 Baseline: M2 `ebc263c308daea4b19320586d5dcf1411d9a6b7e`; `origin/main` `828c32225ad93899a5f0e974a2e3fc9964776558`.
 
@@ -89,12 +89,13 @@ The confirmation contract has a gap: `confirmShopifyControlledProof` currently i
 
 ## Remaining gates
 
-- Explicit authorization for preparation, confirmation, and the bounded Shopify mutation has not been granted.
-- The remaining governed lifecycle evidence — confirmation, exactly-once execution, verification, cleanup/net-zero state, replay, and completed durable lifecycle/history — has not been produced.
+- A separately authorized controlled production lifecycle completed for intent `1c07429f-ccce-4b9f-9fa3-88b912fac422`, confirmation `85295197-b001-4fc8-9410-137dff2a72f5`, and execution `2b921137-eb63-4465-a1e5-6cbac3392c28`. At read-only database observation `2026-10-04T17:53:28.129418Z`, exactly one authorization was consumed with consumption ID `7e6190bb-725d-4c46-b655-688d14673fc1`, exactly one completed execution result existed, and exactly one bounded external-mutation audit existed. All share idempotency key `ws019-m3-shopify-proof-20261004-001`, envelope `shopify-exec-v1-f5e5f6859bb1`, and audit correlation `47efb033-2669-408a-915c-69a554f788cd`.
+- Durable recovery is `rollback_verified`: created ID `gid://shopify/WebhookSubscription/2085074436310`, creation verified, rollback verified, and the execution result records the same ID as `rollbackExternalId` with `netProviderConfigurationMutation: false`. This is machine-verifiable evidence that the execution's built-in provider read-back and exact deletion/absence verification succeeded.
+- A fresh, separate post-execution Shopify webhook-list observation was not obtained during the evidence-recording pass because no authenticated browser session was available to the supported first-party read boundary. Therefore current provider list state and preservation of the two ordinary TraceKit ingestion subscriptions remain outstanding rather than inferred from database state alone.
+- Replay evidence remains outstanding and was not invoked.
 - A separate execution-adjacent safe-failure case remains outstanding if required by the final acceptance scenario; the malformed tenant-target request already proves structural fail-closed behavior before preparation.
-- Expired-intent confirmation must be repaired to reject before lifecycle write, then regression-tested and production-validated before another governed proof intent is confirmed.
 
-No Shopify request, action intent, confirmation, execution, provider mutation, or database mutation was performed.
+This documentation pass performed no confirmation, execution replay, provider mutation, or database mutation.
 
 ## Acceptance manifest
 
