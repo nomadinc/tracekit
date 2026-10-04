@@ -2,10 +2,11 @@ import {NextResponse} from "next/server";
 import {resolveApplicationSession} from "@/lib/identity/application-session";
 import {getEdgeTenantBinding,upsertEdgeTenantBinding} from "@/lib/edge/tenant-binding-repository";
 import {edgeTenantRefForOrganization} from "@/lib/edge/tenant-identity";
+import {requirePermission} from "@/lib/identity/authorization-gateway";
 
 const tenantPattern=/^tenant_[A-Za-z0-9_-]{8,128}$/;
 function unavailable(){return NextResponse.json({error:"The requested resource is unavailable."},{status:404});}
-async function authorized(){const r=await resolveApplicationSession();if(r.kind!=="authenticated"||!r.session.effectivePermissions.includes("admin.manage_tenants"))return null;return r.session;}
+async function authorized(){const r=await resolveApplicationSession();if(r.kind!=="authenticated")return null;try{requirePermission(r.session,"admin.manage_tenants");return r.session;}catch{return null;}}
 
 export async function GET(request:Request){
  const session=await authorized();if(!session)return unavailable();
