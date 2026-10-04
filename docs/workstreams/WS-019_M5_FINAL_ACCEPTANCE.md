@@ -59,7 +59,7 @@ Conclusion: exact-action safe-disable is live-proven to suppress and restore the
 | tenant_isolation | PASS | Live production foreign-scope reads and mutations fail non-disclosing; authorized reads remain active-Organization scoped. |
 | tenant_negative_reads | PASS | Authorized Work Items/Notifications reads returned 200; foreign workspace hints and foreign Work Item object returned non-disclosing 404 in Production. |
 | tenant_negative_mutations | PASS | Foreign workspace Work Item mutation, spoofed actor mutation, and foreign Notification mutation each returned non-disclosing 404 in Production. |
-| authorized_work_item_transitions | OUT OF SCOPE | Production Stem Labs organization returned zero Work Items (open=0); no safe disposable fixture exists. Acceptance plan forbids manufacturing/mutating a real finding solely for proof. |
+| authorized_work_item_transitions | PASS | A fixed-purpose synthetic Stem Labs fixture exercised create → acknowledge → resolve → reopen → final resolve with authenticated actor, tenant-scoped activity/domain-event history, recurrence `1`, and zero provider/external effects. |
 | audit_visibility | PASS | Live Production: Admin Client View returned scope=active_organization; official DELETE /api/session/admin-view returned 200; after refresh Platform context returned scope=platform_account. Both returned bounded 10-event pages. |
 | lifecycle_history_visibility | PASS | Work Item activity plus tenant-scoped Audit History and M5B governed-action projections are customer/operator visible. |
 | notification_contract | PASS WITH DOCUMENTED LIMITATION | Production V1 is explicitly in-app Notification Center only. Health/recurrence/provider-health findings plus awaiting-approval, execution-failure and Shopify verification-failure projections are implemented. |
@@ -69,7 +69,7 @@ Conclusion: exact-action safe-disable is live-proven to suppress and restore the
 
 ## Final-production evidence disposition
 
-The bounded M4.2 production acceptance sequence is complete for every safely exercisable gate. Active-Organization reads, foreign read negatives, foreign/spoofed mutation negatives, and both Audit History contexts were live-proven. The authorized Work Item transition scenario is explicitly OUT OF SCOPE because the approved Stem Labs organization has zero Work Items and therefore no disposable fixture; no production finding was manufactured merely to satisfy acceptance.
+The bounded M4.2 production acceptance sequence is complete. Active-Organization reads, foreign read negatives, foreign/spoofed mutation negatives, both Audit History contexts, and an authorized fixed-purpose Work Item lifecycle were live-proven. The synthetic fixture remains resolved as retained certification history; no customer or operational finding was repurposed.
 
 ## Provider posture
 
