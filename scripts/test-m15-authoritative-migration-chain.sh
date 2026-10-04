@@ -64,7 +64,7 @@ begin
   if not exists (
     select 1 from supabase_migrations.schema_migrations where version = '20261001210000'
   ) or not exists (
-    select 1 from supabase_migrations.schema_migrations where version = '20261004060000'
+    select 1 from supabase_migrations.schema_migrations where version = '20261004063517'
   ) then
     raise exception 'required migration ledger entries are absent';
   end if;

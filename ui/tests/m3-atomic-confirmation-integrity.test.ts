@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const migration = readFileSync(
-  new URL("../../supabase/migrations/20261004060000_atomic_governed_action_confirmation.sql", import.meta.url),
+  new URL("../../supabase/migrations/20261004063517_20261004060000_atomic_governed_action_confirmation.sql", import.meta.url),
   "utf8",
 );
 const repository = readFileSync(new URL("../lib/mcp/action-intent-repository.ts", import.meta.url), "utf8");
