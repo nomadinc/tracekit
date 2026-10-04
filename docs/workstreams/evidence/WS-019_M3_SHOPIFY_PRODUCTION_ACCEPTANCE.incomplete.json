@@ -67,6 +67,82 @@
     "noConfirmation": true,
     "noProviderMutation": true
   },
-  "stages": {},
-  "scenarios": []
+  "tenantNegativeCapture": {
+    "captureStartedAt": "2026-10-04T05:24:00.049Z",
+    "captureCompletedAt": "2026-10-04T05:24:00.762Z",
+    "authenticatedContext": "Stem Labs Admin Client View",
+    "activeOrganizationId": "8f6bb14b-2126-49b8-bfdb-c60edbc3549b",
+    "endpoint": "POST /api/actions/provider-prepare",
+    "operation": "shopify.controlled_webhook_create_delete_proof",
+    "prohibitedInput": {
+      "organizationId": "11111111-1111-4111-8111-111111111111",
+      "fixtureType": "synthetic_non_tenant_uuid"
+    },
+    "httpStatus": 400,
+    "response": {
+      "ok": false,
+      "error": "invalid_operation"
+    },
+    "rejectionStage": "request_shape_validation_before_governed_action_discovery",
+    "lifecycleRowsInCaptureWindow": {
+      "mcpActionIntents": 0,
+      "mcpShopifyMutationRecovery": 0,
+      "mcpActionConfirmations": 0,
+      "mcpActionExecutionResults": 0
+    },
+    "audit": {
+      "governedActionOrExternalMutationEvents": 0,
+      "membershipEvent": {
+        "eventId": "74c464a4-15ca-4ccf-b08b-1524a3b61bbc",
+        "occurredAt": "2026-10-04T05:24:00.714079Z",
+        "correlationId": "340bd048-85c6-4cc9-b6f0-4ef61db690f0",
+        "actorUserId": "cbfaeaf7-fa83-4235-9011-af3ae7ce9101",
+        "actorDisplayName": "Anthony McCabe",
+        "organizationId": "8f6bb14b-2126-49b8-bfdb-c60edbc3549b",
+        "targetType": "membership",
+        "targetId": "0a91c3d4-efaf-4bd8-a092-b0ea6a0853ac",
+        "result": "success",
+        "role": "platform-owner",
+        "accountType": "client"
+      }
+    },
+    "shopifyConnection": {
+      "connectionId": "d69a93dd-98ed-46fd-b486-1a39fb8388dd",
+      "organizationId": "8f6bb14b-2126-49b8-bfdb-c60edbc3549b",
+      "provider": "shopify",
+      "status": "connected",
+      "persistedUpdatedAt": "2026-09-29T02:33:54.306352Z"
+    },
+    "providerRequestPerformed": false,
+    "shopifyMutationPerformed": false,
+    "tenantContextChanged": false,
+    "passed": true
+  },
+  "stages": {
+    "safe_failure": [
+      "tenantNegativeCapture.response",
+      "tenantNegativeCapture.lifecycleRowsInCaptureWindow",
+      "tenantNegativeCapture.audit"
+    ]
+  },
+  "scenarios": [
+    {
+      "scenario": "failure_path",
+      "passed": true,
+      "evidenceRefs": [
+        "tenantNegativeCapture.response",
+        "tenantNegativeCapture.lifecycleRowsInCaptureWindow"
+      ],
+      "observedAt": "2026-10-04T05:24:00.762Z"
+    },
+    {
+      "scenario": "tenant_negative_access",
+      "passed": true,
+      "evidenceRefs": [
+        "tenantNegativeCapture",
+        "tenantNegativeCapture.audit.membershipEvent"
+      ],
+      "observedAt": "2026-10-04T05:24:00.762Z"
+    }
+  ]
 }

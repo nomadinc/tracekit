@@ -35,11 +35,30 @@ The normal `membership.resolved` event `a64408c7-e937-4fd6-834f-165471e47e2f` oc
 
 This capture proves the read-only readiness gate and exact absence baseline. It did not create an action intent, prepare or confirm an action, perform the tenant-negative test, or mutate Shopify.
 
+## Production tenant-negative proof
+
+An authenticated Stem Labs Admin Client View request was made from `2026-10-04T05:24:00.049Z` through `2026-10-04T05:24:00.762Z` to `POST /api/actions/provider-prepare`. It named the valid operation `shopify.controlled_webhook_create_delete_proof` but also supplied the prohibited caller-controlled `organizationId` value `11111111-1111-4111-8111-111111111111`. This UUID was deliberately synthetic and was not attributed to any production tenant.
+
+The endpoint returned HTTP 400 with `{"ok":false,"error":"invalid_operation"}`. Request-shape validation rejects any key other than `operation`, so the request stopped before action discovery, target resolution, readiness/provider access, or intent creation.
+
+Read-only production verification over the exact capture window found:
+
+- `mcp_action_intents`: `0` rows for the authenticated actor and Stem Labs.
+- `mcp_shopify_mutation_recovery`: `0` Stem Labs rows.
+- `mcp_action_confirmations`: `0` rows for the authenticated actor and Stem Labs.
+- `mcp_action_execution_results`: `0` Stem Labs rows.
+- No governed-action, execution, or external-mutation audit event.
+- One normal `membership.resolved` event, `74c464a4-15ca-4ccf-b08b-1524a3b61bbc`, at `2026-10-04T05:24:00.714079Z`, correlation ID `340bd048-85c6-4cc9-b6f0-4ef61db690f0`, for Anthony McCabe and Stem Labs. Its target is membership `0a91c3d4-efaf-4bd8-a092-b0ea6a0853ac`; metadata records `platform-owner` and account type `client`.
+
+The approved Shopify connection `d69a93dd-98ed-46fd-b486-1a39fb8388dd` remained `connected`, provider `shopify`, and exclusively owned by Stem Labs. Its persisted `updated_at` remained `2026-09-29T02:33:54.306352Z`, predating the test. Because rejection preceded target resolution and provider access, no Shopify request or webhook mutation was possible; the detailed provider baseline captured at `2026-10-04T05:20:01.582Z`–`2026-10-04T05:20:03.454Z` remains the governing baseline without another provider read.
+
+Tenant-negative and fail-closed gates: **PASS**. No other organization was entered, resolved, or read.
+
 ## Remaining gates
 
 - Explicit authorization for preparation, confirmation, and the bounded Shopify mutation has not been granted.
-- A tenant-negative fixture has not been approved and the tenant-negative test has not been performed.
 - The remaining governed lifecycle evidence — intent, confirmation, exactly-once execution, verification, cleanup/net-zero state, replay, durable lifecycle/history, and safe failure — has not been produced.
+- A separate execution-adjacent safe-failure case remains outstanding if required by the final acceptance scenario; the malformed tenant-target request already proves structural fail-closed behavior before preparation.
 
 No Shopify request, action intent, confirmation, execution, provider mutation, or database mutation was performed.
 
