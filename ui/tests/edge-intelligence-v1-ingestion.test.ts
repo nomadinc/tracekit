@@ -1,5 +1,5 @@
 import assert from"node:assert/strict";import test from"node:test";import{readFileSync}from"node:fs";
-const m=readFileSync(new URL("../../supabase/migrations/20261002050000_edge_intelligence_v1_ingestion.sql",import.meta.url),"utf8");
+const m=readFileSync(new URL("../../supabase/migrations/20261004204330_edge_intelligence_v1_ingestion.sql",import.meta.url),"utf8");
 test("Edge Intelligence v1 receiving boundary is revisioned and tenant scoped",()=>{assert.match(m,/unique\(organization_id,tenant_ref,observation_id,revision\)/);assert.match(m,/pg_advisory_xact_lock/);assert.match(m,/excluded\.revision>public\.edge_intelligence_current\.revision/);});
 test("duplicate revisions are idempotent while conflicting same revisions fail closed",()=>{assert.match(m,/'outcome','duplicate'/);assert.match(m,/conflicting edge intelligence revision/);assert.match(m,/payload_hash/);});
 test("stale snapshots are retained but cannot regress current projection",()=>{assert.match(m,/v_outcome:='stale'/);assert.match(m,/insert into public\.edge_intelligence_observations/);});

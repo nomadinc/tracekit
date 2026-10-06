@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
 
-const sql = readFileSync(new URL("../../supabase/migrations/20261001210000_m15_stem_labs_workspace_authorization.sql", import.meta.url), "utf8");
+const sql = readFileSync(new URL("../../supabase/migrations/20261001210243_m15_stem_labs_workspace_authorization.sql", import.meta.url), "utf8");
 
 test("M15 workspace provisioning is bound to current Stem Labs Shopify tenancy", () => {
   assert.match(sql, /8f6bb14b-2126-49b8-bfdb-c60edbc3549b/);
