@@ -287,24 +287,9 @@ export default function NotificationsClient() {
       });
       const json = (await res.json().catch(() => ({}))) as NotificationsResponse;
       if (!res.ok || json?.ok === false) throw new Error((json as any)?.message || "Notification Center failed to load.");
-      const healthRows = Array.isArray(json.notifications) ? json.notifications : [];
-      const actionJson = cursor ? { notifications: [] } : await fetch("/api/action-notifications", { cache: "no-store", headers: { accept: "application/json" } }).then((response) => response.ok ? response.json() : { notifications: [] }).catch(() => ({ notifications: [] }));
-      const actionRows = Array.isArray(actionJson.notifications) ? actionJson.notifications : [];
-      const rows = [...actionRows, ...healthRows].sort((a, b) => String(b.created_at || "").localeCompare(String(a.created_at || "")));
+      const rows = Array.isArray(json.notifications) ? json.notifications : [];
       setNotifications((current) => append ? [...current, ...rows] : rows);
-      const baseCounts = json.counts || { total: 0, unread: 0, read: 0, resolved: 0, dismissed: 0, critical: 0, warning: 0, info: 0, healthy: 0 };
-      setCounts({
-        ...baseCounts,
-        total: Number(baseCounts.total || 0) + actionRows.length,
-        unread: Number(baseCounts.unread || 0) + actionRows.filter((item: TraceKitNotification) => item.status === "unread").length,
-        read: Number(baseCounts.read || 0) + actionRows.filter((item: TraceKitNotification) => item.status === "read").length,
-        resolved: Number(baseCounts.resolved || 0) + actionRows.filter((item: TraceKitNotification) => item.status === "resolved").length,
-        dismissed: Number(baseCounts.dismissed || 0) + actionRows.filter((item: TraceKitNotification) => item.status === "dismissed").length,
-        critical: Number(baseCounts.critical || 0) + actionRows.filter((item: TraceKitNotification) => item.severity === "critical").length,
-        warning: Number(baseCounts.warning || 0) + actionRows.filter((item: TraceKitNotification) => item.severity === "warning").length,
-        info: Number(baseCounts.info || 0) + actionRows.filter((item: TraceKitNotification) => item.severity === "info").length,
-        healthy: Number(baseCounts.healthy || 0) + actionRows.filter((item: TraceKitNotification) => item.severity === "healthy").length,
-      });
+      setCounts(json.counts || { total: 0, unread: 0, read: 0, resolved: 0, dismissed: 0, critical: 0, warning: 0, info: 0, healthy: 0 });
       setNextCursor(json.next_cursor || null);
       setHasMore(Boolean(json.has_more));
       if (!append && !initialNotificationId && rows[0]) {
@@ -335,7 +320,7 @@ export default function NotificationsClient() {
       method: "POST",
       cache: "no-store",
       headers: { accept: "application/json", "content-type": "application/json" },
-      body: JSON.stringify({ workspace_id: WORKSPACE_ID }),
+      body: JSON.stringify(action ? {} : { workspace_id: WORKSPACE_ID }),
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok || json?.ok === false) throw new Error(json?.message || "Failed to mark notification read.");
@@ -365,7 +350,7 @@ export default function NotificationsClient() {
         method: "POST",
         cache: "no-store",
         headers: { accept: "application/json", "content-type": "application/json" },
-        body: JSON.stringify({ workspace_id: WORKSPACE_ID }),
+        body: JSON.stringify(action ? {} : { workspace_id: WORKSPACE_ID }),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || json?.ok === false) throw new Error(json?.message || "Failed to dismiss notification.");

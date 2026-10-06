@@ -63,11 +63,15 @@ export function assessIntelligenceAction(operation:string,env:IntelligenceRuntim
   return{allowed:true,reason:"production_v1_action_enabled",entry}as const;
 }
 
+export const PRODUCTION_V1_GOVERNED_NOTIFICATION_CONTRACT = [
+  { event:"awaiting_approval",channel:"notification_center",dedupe:"action_intent_id",priority:"high" },
+  { event:"execution_failure",channel:"notification_center",dedupe:"execution_result_identity",priority:"urgent" },
+  { event:"verification_failure",channel:"notification_center",dedupe:"recovery_or_intent_identity",priority:"urgent" },
+] as const;
+
 export const PRODUCTION_V1_NOTIFICATION_CONTRACT = [
   { event:"important_new_finding",channel:"notification_center",dedupe:"work_item_source_key",priority:"severity" },
-  { event:"awaiting_approval",channel:"notification_center",dedupe:"action_intent_id",priority:"high" },
-  { event:"execution_failure",channel:"notification_center",dedupe:"execution_or_intent_id",priority:"urgent" },
-  { event:"verification_failure",channel:"notification_center",dedupe:"execution_id",priority:"urgent" },
+  ...PRODUCTION_V1_GOVERNED_NOTIFICATION_CONTRACT,
   { event:"recurrence",channel:"notification_center",dedupe:"work_item_source_key",priority:"severity" },
   { event:"important_evidence_or_provider_health_failure",channel:"notification_center",dedupe:"provider_finding_key",priority:"high" },
 ] as const;

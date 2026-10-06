@@ -87,6 +87,20 @@ begin
   ) is null then
     raise exception 'authoritative Shopify execution RPCs are absent';
   end if;
+  if not exists (
+    select 1 from supabase_migrations.schema_migrations
+    where version = '20261004202000' and name = 'm5b_action_notification_state'
+  ) or to_regclass('public.mcp_action_notification_states') is null then
+    raise exception 'governed notification presentation-state migration is absent';
+  end if;
+  if not (select relrowsecurity from pg_class where oid='public.mcp_action_notification_states'::regclass) then
+    raise exception 'governed notification presentation state must enforce RLS';
+  end if;
+  if has_table_privilege('anon','public.mcp_action_notification_states','select')
+     or has_table_privilege('authenticated','public.mcp_action_notification_states','select')
+     or not has_table_privilege('service_role','public.mcp_action_notification_states','select,insert,update') then
+    raise exception 'governed notification presentation-state ACL is invalid';
+  end if;
 end
 $verification$;
 

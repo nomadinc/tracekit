@@ -128,6 +128,28 @@ export async function orchestrateShopifyControlledProof(
       executionAvailable: false,
       netProviderConfigurationMutation: false,
     };
+  const persistTerminalFailure = async (
+    status: "failed" | "recovery_required",
+    reason: string,
+    netProviderConfigurationMutation: boolean,
+    createdExternalId: string | null = null,
+  ) => {
+    const result = {
+      status,
+      provider: "shopify" as const,
+      operation: "controlled_webhook_create_delete_proof" as const,
+      consumptionId: durable.consumptionId,
+      failureReason: reason,
+      createdExternalId,
+      createVerified: Boolean(createdExternalId),
+      rollbackVerified: false,
+      netProviderConfigurationMutation,
+      audit: { idempotencyKey: input.idempotencyKey, auditCorrelationId: input.auditCorrelationId },
+    };
+    await persistMcpExecutionResult({ envelope, consumptionId: durable.consumptionId!, result });
+    return { status, reason, envelope, execution: result, executionAvailable: false as const, netProviderConfigurationMutation };
+  };
+  try {
   let subscription: ShopifyWebhookSubscription;
   if (recovery.state === "created" && recovery.created_external_id) {
     subscription = {
@@ -150,14 +172,7 @@ export async function orchestrateShopifyControlledProof(
         externalId: subscription.id,
       });
     } else if (proof.length > 1)
-      return {
-        status: "rejected" as const,
-        reason: "ambiguous_proof_topic_state",
-        envelope,
-        execution: null,
-        executionAvailable: false,
-        netProviderConfigurationMutation: true,
-      };
+      return persistTerminalFailure("failed", "ambiguous_proof_topic_state", false);
     else {
       const created = await createTraceKitShopifyWebhookSubscription({
         credential: input.credential,
@@ -166,14 +181,7 @@ export async function orchestrateShopifyControlledProof(
         fetchImpl: input.fetchImpl,
       });
       if (created.decision !== "created")
-        return {
-          status: "rejected" as const,
-          reason: "proof_topic_not_disposable",
-          envelope,
-          execution: null,
-          executionAvailable: false,
-          netProviderConfigurationMutation: false,
-        };
+        return persistTerminalFailure("failed", "proof_topic_not_disposable", false);
       subscription = created.subscription;
       await markShopifyMutationCreated({
         organizationId: envelope.organizationId,
@@ -181,15 +189,7 @@ export async function orchestrateShopifyControlledProof(
         externalId: subscription.id,
       });
     }
-  } else
-    return {
-      status: "rejected" as const,
-      reason: "recovery_state_invalid",
-      envelope,
-      execution: null,
-      executionAvailable: false,
-      netProviderConfigurationMutation: false,
-    };
+  } else return persistTerminalFailure("failed", "recovery_state_invalid", false);
   const rollback = await deleteTraceKitShopifyWebhookSubscription({
     credential: input.credential,
     subscription,
@@ -197,14 +197,7 @@ export async function orchestrateShopifyControlledProof(
     fetchImpl: input.fetchImpl,
   });
   if (!rollback.verifiedAbsent)
-    return {
-      status: "recovery_required" as const,
-      reason: "rollback_not_verified",
-      envelope,
-      execution: { createdExternalId: subscription.id },
-      executionAvailable: false,
-      netProviderConfigurationMutation: true,
-    };
+    return persistTerminalFailure("recovery_required", "rollback_not_verified", true, subscription.id);
   await markShopifyRollbackVerified({
     organizationId: envelope.organizationId,
     intentId: input.intentId,
@@ -277,4 +270,7 @@ export async function orchestrateShopifyControlledProof(
     executionAvailable: true,
     netProviderConfigurationMutation: false,
   };
+  } catch {
+    return persistTerminalFailure("recovery_required", "provider_execution_failed", true);
+  }
 }
