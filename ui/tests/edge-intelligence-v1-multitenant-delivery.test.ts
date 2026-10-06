@@ -3,7 +3,7 @@ import test from "node:test";
 import {readFileSync} from "node:fs";
 
 const route=readFileSync(new URL("../app/api/edge/intelligence-v1/route.ts",import.meta.url),"utf8");
-const migration=readFileSync(new URL("../../supabase/migrations/20261004183000_edge_intelligence_multitenant_delivery.sql",import.meta.url),"utf8");
+const migration=readFileSync(new URL("../../supabase/migrations/20261004204342_edge_intelligence_multitenant_delivery.sql",import.meta.url),"utf8");
 
 test("Edge service authentication is independent from organization ownership",()=>{
   assert.match(migration,/edge_intelligence_service_credentials/);
