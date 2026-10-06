@@ -1,6 +1,6 @@
 import assert from"node:assert/strict";import test from"node:test";import{readFileSync}from"node:fs";import{validateEdgeIntelligenceV1}from"../lib/edge/intelligence-v1-validator";
 const fixtures=JSON.parse(readFileSync(new URL("./fixtures/edge-intelligence-v1.examples.json",import.meta.url),"utf8"));
-const values=Array.isArray(fixtures)?fixtures:Object.values(fixtures);
+const values=Array.isArray(fixtures)?fixtures:Object.values(fixtures.scenarios??{});
 test("Core validator accepts every pinned canonical Edge v1 fixture",()=>{assert.ok(values.length>0);for(const value of values){const r=validateEdgeIntelligenceV1(value);assert.equal(r.ok,true,JSON.stringify(r));}});
 test("Core validator rejects breaking version tenant mismatch and routing fields",()=>{const base=structuredClone(values[0]) as any;assert.equal(validateEdgeIntelligenceV1({...base,schemaVersion:"2.0"}).ok,false);assert.equal(validateEdgeIntelligenceV1(base,{tenantRef:"tenant_not_the_fixture"}).ok,false);assert.equal(validateEdgeIntelligenceV1({...base,intelligence:{...base.intelligence,routingDecision:"money"}}).ok,false);});
 test("Core validator preserves unknown provider identifiers",()=>{const base=structuredClone(values[0]) as any;if(!base.evidence?.length)return; base.evidence[0].provider="future_provider_x";assert.equal(validateEdgeIntelligenceV1(base).ok,true);});
