@@ -3,7 +3,7 @@ const obj=(v:unknown):Json|null=>v&&typeof v==="object"&&!Array.isArray(v)?v as 
 const text=(v:unknown)=>String(v??"").trim();
 
 const RELATIONSHIP=/parent|order|checkout|session|purchase|invoice|subscription|rebill|upsell|downsell|funnel|reference/i;
-const ATTRIBUTION=/tkid|everflow|affiliate|affid|click|transaction.?id|sub[1-9]|utm|source|campaign|custom/i;
+const ATTRIBUTION=/tkid|everflow|affiliate|affid|click|sub[1-9]|utm|source|campaign|custom/i;
 const SENSITIVE=/email|phone|name|address|ip|card|password|token|secret/i;
 
 export function auditCommasRawTransaction(transaction:Json){
