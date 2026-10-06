@@ -1,0 +1,62 @@
+{
+  "organizationId": "8f6bb14b-2126-49b8-bfdb-c60edbc3549b",
+  "actionOperation": "shopify.controlled_webhook_create_delete_proof",
+  "evidenceProducedAt": "2026-10-06T05:57:14.635807Z",
+  "controlledActionEvidence": "docs/workstreams/evidence/WS-019_M3_SHOPIFY_PRODUCTION_ACCEPTANCE.json",
+  "m4_2Evidence": "docs/workstreams/evidence/WS-019_M4_2_PRODUCTION_ACCEPTANCE.json",
+  "m4_3Evidence": "docs/workstreams/WS-019_M4_3_PRODUCTION_PROOF_PLAN.md",
+  "m4_3ProductionCapture": {
+    "deployment": "dpl_UAp9P9Xmp5rKjNF7eM1ieMamG929",
+    "authoritativeMain": "270ef18d1509438fbe4a3122bbea6d41d1f3a788",
+    "intentId": "1c07429f-ccce-4b9f-9fa3-88b912fac422",
+    "positiveWindow": "2026-10-06T05:55:33.390Z/2026-10-06T05:55:34.266Z",
+    "negativeWindow": "2026-10-06T05:56:03.802Z/2026-10-06T05:56:04.519Z",
+    "afterSnapshotAt": "2026-10-06T05:57:14.635807Z",
+    "finalStatus": "rollback_verified",
+    "executionCount": 1,
+    "readinessAvailability": "partial",
+    "providerReadBackAvailability": "certification_artifact_only",
+    "observedReplayAvailability": "certification_artifact_only",
+    "syntheticNegativeStatus": 404,
+    "redactionPassed": true,
+    "businessStateDelta": 0,
+    "providerRequestCount": 0,
+    "uiVerified": true
+  },
+  "stages": {
+    "detection": ["M3 controlled-action manifest"],
+    "eligibility": ["M3 controlled-action manifest"],
+    "preparation": ["M3 controlled-action manifest"],
+    "exact_target": ["M3 controlled-action manifest", "M4.3 exact deterministic target projection"],
+    "permission": ["M3 controlled-action manifest", "M4.2 authenticated acceptance", "M4.3 audit_logs.view production boundary"],
+    "explicit_confirmation": ["M3 controlled-action manifest", "M4.3 confirmation projection"],
+    "execution": ["M3 controlled-action manifest", "M4.3 single durable execution projection"],
+    "verification": ["M3 controlled-action manifest", "M4.3 create/rollback/net-zero projection"],
+    "replay_idempotency": ["M3 controlled-action manifest", "M4.3 truthful certification-artifact replay representation"],
+    "durable_audit_history": ["M3 controlled-action manifest", "M4.2 five-event Work Item lifecycle", "M4.3 first-party API and /activity lifecycle visibility"],
+    "safe_failure": ["M3 controlled-action manifest", "M4.2 tenant/actor spoof rejection", "M4.3 synthetic lifecycle 404"]
+  },
+  "scenarios": [
+    {"scenario":"organization_context","passed":true,"evidenceRefs":["M3 manifest","M4.2 Stem Labs ApplicationSession","M4.3 Stem Labs Admin Client View"],"observedAt":"2026-10-06T05:56:04.442852Z"},
+    {"scenario":"current_evidence_evaluation","passed":true,"evidenceRefs":["M3 manifest","M4.3 readiness represented as partial/unlinked"],"observedAt":"2026-10-06T05:55:34.266Z"},
+    {"scenario":"healthy_no_action","passed":true,"evidenceRefs":["M3 manifest"],"observedAt":"2026-10-04T17:55:31.633Z"},
+    {"scenario":"actionable_finding","passed":true,"evidenceRefs":["M3 manifest"],"observedAt":"2026-10-04T17:50:44.632Z"},
+    {"scenario":"unsupported_action_suppression","passed":true,"evidenceRefs":["M3 manifest","M4.1 release policy"],"observedAt":"2026-10-04T18:49:20.508849Z"},
+    {"scenario":"confirmation_rbac","passed":true,"evidenceRefs":["M3 manifest","M4.2 actions.execute production cycle","M4.3 audit_logs.view production read"],"observedAt":"2026-10-06T05:55:34.266Z"},
+    {"scenario":"execute_exactly_once","passed":true,"evidenceRefs":["M3 manifest","M4.3 execution count one"],"observedAt":"2026-10-06T05:55:34.266Z"},
+    {"scenario":"verification","passed":true,"evidenceRefs":["M3 manifest","M4.3 verification and rollback projection"],"observedAt":"2026-10-06T05:55:34.266Z"},
+    {"scenario":"durable_lifecycle_history","passed":true,"evidenceRefs":["M3 manifest","M4.2 retained fixture history","M4.3 production API and UI visibility"],"observedAt":"2026-10-06T05:57:14.635807Z"},
+    {"scenario":"replay","passed":true,"evidenceRefs":["M3 manifest","M4.3 certification_artifact_only observed replay"],"observedAt":"2026-10-06T05:55:34.266Z"},
+    {"scenario":"failure_path","passed":true,"evidenceRefs":["M3 manifest","M4.2 mutation negatives","M4.3 synthetic history negative"],"observedAt":"2026-10-06T05:56:04.519Z"},
+    {"scenario":"tenant_negative_access","passed":true,"evidenceRefs":["M3 manifest","M4.2 Phase A/B negatives","M4.3 synthetic lifecycle 404"],"observedAt":"2026-10-06T05:56:04.519Z"},
+    {"scenario":"operational_telemetry","passed":true,"evidenceRefs":["M3 manifest","M4.3 exact-window zero-provider telemetry"],"observedAt":"2026-10-06T05:57:14.635807Z"}
+  ],
+  "releaseRequirements": {
+    "permission_rbac": {"status":"pass","evidenceRefs":["M4.2 authenticated reads/transitions and M4.3 audit_logs.view lifecycle read"]},
+    "tenant_negative_reads": {"status":"pass","evidenceRefs":["M4.2 production negatives and M4.3 synthetic lifecycle 404"]},
+    "tenant_negative_mutations": {"status":"pass","evidenceRefs":["M4.2 tenant-spoof and actor-spoof rejection"]},
+    "authorized_work_item_transitions": {"status":"pass","evidenceRefs":["M4.2 retained five-activity/five-event fixture lifecycle"]},
+    "audit_visibility": {"status":"pass","evidenceRefs":["M4.2 tenant-scoped audit reads and M4.3 durable audit projection"]},
+    "lifecycle_history_visibility": {"status":"pass","evidenceRefs":["M4.3 production first-party API reconstruction","M4.3 authenticated /activity operator verification","M4.3 zero-delta and zero-provider evidence"]}
+  }
+}
