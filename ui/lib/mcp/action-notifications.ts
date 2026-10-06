@@ -8,7 +8,7 @@ type NotificationKind = "awaiting_approval" | "execution_failure" | "verificatio
 export type GovernedNotificationQuery = { status?: string | null; severity?: string | null; search?: string | null; limit?: number; cursor?: number };
 
 function cfg() { const url=process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/,"");const key=process.env.SUPABASE_SERVICE_ROLE_KEY;if(!url||!key)throw new Error("action_notification_storage_unavailable");return{url,key}; }
-async function rest(path:string,init:RequestInit={}){const{url,key}=cfg();const response=await fetch(`${url}/rest/v1/${path}`,{...init,cache:"no-store",headers:{...supabaseAuthHeaders(key),...(init.headers||{})}});if(!response.ok)throw new Error("action_notification_storage_failed");return response.status===204?null:response.json();}
+async function rest(path:string,init:RequestInit={}){const{url,key}=cfg();const response=await fetch(`${url}/rest/v1/${path}`,{...init,cache:"no-store",headers:{...supabaseAuthHeaders(key),...(init.headers||{})}});if(!response.ok)throw new Error("action_notification_storage_failed");const body=await response.text();return body?JSON.parse(body):null;}
 const notificationId=(kind:NotificationKind,id:string)=>`action_notification:${kind}:${id}`;
 const lifecycleLink=(intentId:string)=>`/activity?intent_id=${encodeURIComponent(intentId)}`;
 
