@@ -1,16 +1,26 @@
+(node:5) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
 npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
 
 > tracekit-ui@0.1.0 build
 > node scripts/next-lifecycle.mjs build
 
+(node:18) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
 lsof: WARNING: can't stat() mqueue file system /dev/mqueue
       Output information may be incomplete.
+(node:28) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
    ▲ Next.js 15.5.23
 
    Creating an optimized production build ...
+(node:43) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
 [baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+(node:64) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
 <w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (312kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
- ⚠ Compiled with warnings in 1871ms
+ ⚠ Compiled with warnings in 1909ms
 
 ./node_modules/@workos-inc/node/lib/factory-BdXIrbcU.mjs
 A Node.js API is used (process.release at line: 4669) which is not supported in the Edge Runtime.
@@ -44,12 +54,18 @@ Import trace for requested module:
 ./node_modules/@workos-inc/authkit-nextjs/dist/esm/workos.js
 ./node_modules/@workos-inc/authkit-nextjs/dist/esm/index.js
 
+(node:87) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
 [baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
 Browserslist: browsers data (caniuse-lite) is 11 months old. Please run:
   npx update-browserslist-db@latest
   Why you should do it regularly: https://github.com/browserslist/update-db#readme
- ✓ Compiled successfully in 44s
+ ✓ Compiled successfully in 52s
    Linting and checking validity of types ...
+(node:109) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:108) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
 
 ./components/connections/everflow-admin-controls.tsx
 26:206  Warning: React Hook useEffect has a missing dependency: 'refreshStatus'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
@@ -62,7 +78,39 @@ Browserslist: browsers data (caniuse-lite) is 11 months old. Please run:
 
 info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/app/api-reference/config/eslint#disabling-rules
    Collecting page data ...
+(node:132) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:133) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:149) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:157) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:148) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:150) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:168) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:154) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
    Generating static pages (0/82) ...
+(node:204) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:205) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:207) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:217) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:223) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:231) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:237) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:244) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
    Generating static pages (20/82)
    Generating static pages (40/82)
    Generating static pages (61/82)
@@ -192,7 +240,7 @@ Route (app)                                                                  Siz
 ├ ƒ /connections/marketing/[connectionId]                                  5.6 kB         111 kB
 ├ ƒ /connections/readiness                                                  167 B         116 kB
 ├ ƒ /connections/sync-runs                                                  166 B         116 kB
-├ ƒ /customers                                                            9.63 kB         119 kB
+├ ƒ /customers                                                            9.62 kB         119 kB
 ├ ƒ /customers/[person_id]                                                22.3 kB         238 kB
 ├ ƒ /dashboard                                                            1.31 kB         104 kB
 ├ ƒ /dashboard/chargebacks                                                5.09 kB         111 kB
@@ -205,37 +253,37 @@ Route (app)                                                                  Siz
 ├ ƒ /investigations                                                         129 B         110 kB
 ├ ƒ /investigations/[investigationId]                                       129 B         110 kB
 ├ ○ /invitations                                                            177 B         106 kB
-├ ƒ /invitations/[id]                                                       648 B         103 kB
+├ ƒ /invitations/[id]                                                       650 B         103 kB
 ├ ƒ /journeys                                                             1.61 kB         107 kB
 ├ ƒ /journeys/[tkid]                                                      1.81 kB         111 kB
 ├ ƒ /money                                                                2.51 kB         112 kB
 ├ ƒ /notifications                                                        7.81 kB         114 kB
 ├ ƒ /offers                                                               15.4 kB         245 kB
 ├ ƒ /operations                                                           8.91 kB         118 kB
-├ ƒ /orders                                                               9.68 kB         119 kB
+├ ƒ /orders                                                               9.67 kB         119 kB
 ├ ƒ /orders/[platform_order_id]                                             177 B         106 kB
 ├ ƒ /overview                                                              8.3 kB         114 kB
-├ ƒ /platform                                                             3.82 kB         110 kB
+├ ƒ /platform                                                             3.81 kB         110 kB
 ├ ƒ /platform/[section]                                                   1.23 kB         110 kB
 ├ ƒ /platform/clients                                                     2.53 kB         108 kB
 ├ ƒ /platform/clients/[accountId]                                         1.51 kB         107 kB
 ├ ƒ /platform/connectors                                                  1.45 kB         107 kB
 ├ ƒ /platform/users                                                       1.45 kB         107 kB
 ├ ƒ /platforms                                                              409 B         103 kB
-├ ƒ /reports                                                              1.81 kB         111 kB
+├ ƒ /reports                                                               1.8 kB         111 kB
 ├ ƒ /reports/commas-attribution                                           2.33 kB         108 kB
 ├ ƒ /scrubber                                                               409 B         103 kB
 ├ ƒ /settings                                                              1.8 kB         108 kB
 ├ ƒ /settings/integrations                                                  177 B         106 kB
-├ ƒ /settings/integrations/[integration]                                    190 B         116 kB
-├ ƒ /settings/integrations/everflow                                         190 B         116 kB
+├ ƒ /settings/integrations/[integration]                                    189 B         116 kB
+├ ƒ /settings/integrations/everflow                                         189 B         116 kB
 ├ ƒ /settings/integrations/gateway-wizard                                 2.85 kB         105 kB
-├ ƒ /settings/integrations/konnektive                                       190 B         116 kB
-├ ƒ /settings/integrations/manual-postback                                  190 B         116 kB
-├ ƒ /settings/integrations/shopify                                          190 B         116 kB
-├ ƒ /settings/integrations/wowboost                                         190 B         116 kB
-├ ƒ /settings/integrations/wowpay                                           190 B         116 kB
-├ ƒ /settings/integrations/wowsuite                                       2.89 kB         118 kB
+├ ƒ /settings/integrations/konnektive                                       189 B         116 kB
+├ ƒ /settings/integrations/manual-postback                                  189 B         116 kB
+├ ƒ /settings/integrations/shopify                                          189 B         116 kB
+├ ƒ /settings/integrations/wowboost                                         189 B         116 kB
+├ ƒ /settings/integrations/wowpay                                           189 B         116 kB
+├ ƒ /settings/integrations/wowsuite                                       2.88 kB         118 kB
 ├ ƒ /settings/product-costs                                               5.06 kB         107 kB
 ├ ƒ /setup                                                                10.3 kB         113 kB
 ├ ƒ /team                                                                  1.8 kB         108 kB

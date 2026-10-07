@@ -901,10 +901,43 @@
     },
     "next": {
       "name": "next",
-      "severity": "moderate",
+      "severity": "critical",
       "isDirect": true,
       "via": [
-        "postcss"
+        {
+          "source": 1193677,
+          "name": "next",
+          "dependency": "next",
+          "title": "Next.js: Unauthenticated Remote Code Execution on windows-hosted servers",
+          "url": "https://github.com/advisories/GHSA-p293-qw3h-jr36",
+          "severity": "critical",
+          "cwe": [
+            "CWE-22"
+          ],
+          "cvss": {
+            "score": 9,
+            "vectorString": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:C/C:H/I:H/A:H"
+          },
+          "range": ">=13.4.0 <15.5.24"
+        },
+        {
+          "source": 1193733,
+          "name": "next",
+          "dependency": "next",
+          "title": "Next.js: Unauthenticated Remote Code Execution in Image Optimization API when AVIF files are used",
+          "url": "https://github.com/advisories/GHSA-2xp9-vwfh-vxw4",
+          "severity": "critical",
+          "cwe": [
+            "CWE-1395"
+          ],
+          "cvss": {
+            "score": 0,
+            "vectorString": null
+          },
+          "range": ">=10.0.0 <15.5.24"
+        },
+        "postcss",
+        "sharp"
       ],
       "effects": [],
       "range": "9.3.4-canary.0 - 16.3.0-preview.10",
@@ -913,8 +946,8 @@
       ],
       "fixAvailable": {
         "name": "next",
-        "version": "16.4.0",
-        "isSemVerMajor": true
+        "version": "15.5.27",
+        "isSemVerMajor": false
       }
     },
     "picomatch": {
@@ -1077,8 +1110,8 @@
       ],
       "fixAvailable": {
         "name": "next",
-        "version": "16.4.0",
-        "isSemVerMajor": true
+        "version": "15.5.27",
+        "isSemVerMajor": false
       }
     },
     "postcss-selector-parser": {
@@ -1182,12 +1215,18 @@
           "range": "<0.35.5"
         }
       ],
-      "effects": [],
+      "effects": [
+        "next"
+      ],
       "range": "<=0.35.5-rc.1",
       "nodes": [
         "node_modules/sharp"
       ],
-      "fixAvailable": true
+      "fixAvailable": {
+        "name": "next",
+        "version": "15.5.27",
+        "isSemVerMajor": false
+      }
     },
     "source-map-js": {
       "name": "source-map-js",
@@ -1243,9 +1282,9 @@
     "vulnerabilities": {
       "info": 0,
       "low": 0,
-      "moderate": 4,
+      "moderate": 3,
       "high": 23,
-      "critical": 0,
+      "critical": 1,
       "total": 27
     },
     "dependencies": {

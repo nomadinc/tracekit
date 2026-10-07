@@ -1,0 +1,723 @@
+(node:5) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> tracekit-ui@0.1.0 test
+> node scripts/run-tests.mjs tests/application-session-business-context.test.ts tests/identity-authorization.test.ts tests/auth-return-url.test.ts tests/m3-authoritative-shopify-execution-replay.test.ts tests/m3-atomic-confirmation-integrity.test.ts tests/m4-production-v1-release-control.test.ts tests/m4-permission-tenant-audit-acceptance.test.ts tests/m4-work-item-acceptance-fixture.test.ts tests/m4-governed-action-history.test.ts tests/m5b-governed-action-notifications.test.ts tests/m5b-phase-b-acceptance-fixture.test.ts tests/m5b-presentation-state-acl-migration.test.ts tests/m5b-notification-center-ui-repair.test.ts tests/m4-4-production-acceptance.test.ts tests/platform-admin-recovery.test.ts tests/ws020-mcp-customer-boundary.test.ts tests/ws020-provider-action-boundary.test.ts tests/m5-policy-negative-proof-plan.test.ts
+
+(node:18) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:26) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+TAP version 13
+# (node:33) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: persistent context absent from mock metadata remains authorized and active
+ok 1 - persistent context absent from mock metadata remains authorized and active
+  ---
+  duration_ms: 1.629378
+  type: 'test'
+  ...
+# Subtest: mock metadata may decorate but cannot change persistent identity or tenant scope
+ok 2 - mock metadata may decorate but cannot change persistent identity or tenant scope
+  ---
+  duration_ms: 0.210628
+  type: 'test'
+  ...
+# (node:34) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: production logout supplies an absolute same-origin signed-out destination
+ok 3 - production logout supplies an absolute same-origin signed-out destination
+  ---
+  duration_ms: 0.718374
+  type: 'test'
+  ...
+# Subtest: preview authentication keeps its explicitly configured deployment origin
+ok 4 - preview authentication keeps its explicitly configured deployment origin
+  ---
+  duration_ms: 0.178769
+  type: 'test'
+  ...
+# Subtest: untrusted origins, credentials and protocol downgrade cannot become return destinations
+ok 5 - untrusted origins, credentials and protocol downgrade cannot become return destinations
+  ---
+  duration_ms: 0.373103
+  type: 'test'
+  ...
+# Subtest: local development remains available without authorizing production localhost
+ok 6 - local development remains available without authorizing production localhost
+  ---
+  duration_ms: 0.136456
+  type: 'test'
+  ...
+# Subtest: a stale preview callback configuration cannot redirect a production logout
+ok 7 - a stale preview callback configuration cannot redirect a production logout
+  ---
+  duration_ms: 0.204558
+  type: 'test'
+  ...
+# (node:35) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: default roles resolve to typed permission collections
+ok 8 - default roles resolve to typed permission collections
+  ---
+  duration_ms: 1.061972
+  type: 'test'
+  ...
+# Subtest: shell variants follow Account type rather than role labels
+ok 9 - shell variants follow Account type rather than role labels
+  ---
+  duration_ms: 0.224839
+  type: 'test'
+  ...
+# Subtest: Agency and Client Organization access remains membership scoped
+ok 10 - Agency and Client Organization access remains membership scoped
+  ---
+  duration_ms: 0.899176
+  type: 'test'
+  ...
+# Subtest: Business Contexts are restricted to the active allowed Organization
+ok 11 - Business Contexts are restricted to the active allowed Organization
+  ---
+  duration_ms: 0.261354
+  type: 'test'
+  ...
+# Subtest: session normalization removes inaccessible Organization and Business Context state
+ok 12 - session normalization removes inaccessible Organization and Business Context state
+  ---
+  duration_ms: 0.316878
+  type: 'test'
+  ...
+# Subtest: route authorization checks permission, Organization scope, and shell variant
+ok 13 - route authorization checks permission, Organization scope, and shell variant
+  ---
+  duration_ms: 0.261644
+  type: 'test'
+  ...
+# Subtest: persistent Organization UUIDs are authorized from membership scope without consulting mock IDs
+ok 14 - persistent Organization UUIDs are authorized from membership scope without consulting mock IDs
+  ---
+  duration_ms: 0.263877
+  type: 'test'
+  ...
+# Subtest: each representative identity resolves the permissions that drive its navigation
+ok 15 - each representative identity resolves the permissions that drive its navigation
+  ---
+  duration_ms: 0.21932
+  type: 'test'
+  ...
+# (node:41) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: M3 confirmation validity and insertion share one locked database transaction
+ok 16 - M3 confirmation validity and insertion share one locked database transaction
+  ---
+  duration_ms: 1.815898
+  type: 'test'
+  ...
+# Subtest: M3 atomic confirmation binds tenant actor operation target and immutable plan identity
+ok 17 - M3 atomic confirmation binds tenant actor operation target and immutable plan identity
+  ---
+  duration_ms: 0.226702
+  type: 'test'
+  ...
+# Subtest: M3 stale missing cross-tenant actor and contract mismatches all reject before insertion
+ok 18 - M3 stale missing cross-tenant actor and contract mismatches all reject before insertion
+  ---
+  duration_ms: 0.391911
+  type: 'test'
+  ...
+# Subtest: M3 replay is serialized and returns only the same still-valid confirmation
+ok 19 - M3 replay is serialized and returns only the same still-valid confirmation
+  ---
+  duration_ms: 0.351581
+  type: 'test'
+  ...
+# Subtest: M3 all confirmation paths use the shared RPC with operation-specific target contracts
+not ok 20 - M3 all confirmation paths use the shared RPC with operation-specific target contracts
+  ---
+  duration_ms: 1.894497
+  type: 'test'
+  location: '/workspace/scratch/61a85fe6297b/tracekit-ws022/ui/tests/m3-atomic-confirmation-integrity.test.ts:1:3272'
+  failureType: 'testCodeFailure'
+  error: 'expectedOperation:"inspect_evidence"'
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: true
+  actual: false
+  operator: '=='
+  stack: |-
+    TestContext.<anonymous> (/workspace/scratch/61a85fe6297b/tracekit-ws022/ui/tests/m3-atomic-confirmation-integrity.test.ts:72:13)
+    Test.runInAsyncScope (node:async_hooks:214:14)
+    Test.run (node:internal/test_runner/test:1047:25)
+    Test.processPendingSubtests (node:internal/test_runner/test:744:18)
+    Test.postRun (node:internal/test_runner/test:1173:19)
+    Test.run (node:internal/test_runner/test:1101:12)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async Test.processPendingSubtests (node:internal/test_runner/test:744:7)
+  ...
+# Subtest: M3 failed confirmation cannot create authorization or access a provider
+ok 21 - M3 failed confirmation cannot create authorization or access a provider
+  ---
+  duration_ms: 0.269697
+  type: 'test'
+  ...
+# Subtest: M3 execution retains independent stale tenant actor operation and target defenses
+ok 22 - M3 execution retains independent stale tenant actor operation and target defenses
+  ---
+  duration_ms: 0.247873
+  type: 'test'
+  ...
+# (node:45) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: completed replay is resolved before confirmation and provider target resolution
+ok 23 - completed replay is resolved before confirmation and provider target resolution
+  ---
+  duration_ms: 2.225276
+  type: 'test'
+  ...
+# Subtest: completed replay returns the durable result without orchestration
+ok 24 - completed replay returns the durable result without orchestration
+  ---
+  duration_ms: 0.271149
+  type: 'test'
+  ...
+# Subtest: requested_at is metadata while database time owns validity
+ok 25 - requested_at is metadata while database time owns validity
+  ---
+  duration_ms: 0.217197
+  type: 'test'
+  ...
+# Subtest: replay is tenant actor confirmation operation and immutable-result bound
+ok 26 - replay is tenant actor confirmation operation and immutable-result bound
+  ---
+  duration_ms: 0.164438
+  type: 'test'
+  ...
+# Subtest: only service role can invoke the new execution RPCs
+ok 27 - only service role can invoke the new execution RPCs
+  ---
+  duration_ms: 0.288955
+  type: 'test'
+  ...
+# (node:48) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: M4.4 production evidence closes notification contract without overclaiming Production V1
+ok 28 - M4.4 production evidence closes notification contract without overclaiming Production V1
+  ---
+  duration_ms: 3.731027
+  type: 'test'
+  ...
+# (node:54) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: M4.3 reconstructs the exact M3 lifecycle without a duplicate execution
+ok 29 - M4.3 reconstructs the exact M3 lifecycle without a duplicate execution
+  ---
+  duration_ms: 7.919223
+  type: 'test'
+  ...
+# Subtest: M4.3 is truthful about supplemental and unlinked evidence
+ok 30 - M4.3 is truthful about supplemental and unlinked evidence
+  ---
+  duration_ms: 2.1083
+  type: 'test'
+  ...
+# Subtest: M4.3 endpoint is tenant-bound permission-gated and side-effect free
+ok 31 - M4.3 endpoint is tenant-bound permission-gated and side-effect free
+  ---
+  duration_ms: 0.445041
+  type: 'test'
+  ...
+# Subtest: M4.3 response is allowlisted and does not expose raw plans or secrets
+ok 32 - M4.3 response is allowlisted and does not expose raw plans or secrets
+  ---
+  duration_ms: 0.334875
+  type: 'test'
+  ...
+# Subtest: M4.3 UI remains under the audit permission boundary
+ok 33 - M4.3 UI remains under the audit permission boundary
+  ---
+  duration_ms: 0.193531
+  type: 'test'
+  ...
+# Subtest: M4.3 validator records production-proven lifecycle visibility without declaring Production V1 ready
+ok 34 - M4.3 validator records production-proven lifecycle visibility without declaring Production V1 ready
+  ---
+  duration_ms: 0.570159
+  type: 'test'
+  ...
+# (node:93) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: M4.2 preserves the authoritative execution and audit role policy
+ok 35 - M4.2 preserves the authoritative execution and audit role policy
+  ---
+  duration_ms: 0.779896
+  type: 'test'
+  ...
+# Subtest: M4.2 operational permissions are explicit and do not broaden provider execution
+ok 36 - M4.2 operational permissions are explicit and do not broaden provider execution
+  ---
+  duration_ms: 0.567226
+  type: 'test'
+  ...
+# Subtest: M4.2 rejects foreign malformed tenant and spoofed actor hints
+ok 37 - M4.2 rejects foreign malformed tenant and spoofed actor hints
+  ---
+  duration_ms: 0.188084
+  type: 'test'
+  ...
+# Subtest: M4.2 Work Item and Notification routes derive scope and actor before the admin-secret boundary
+ok 38 - M4.2 Work Item and Notification routes derive scope and actor before the admin-secret boundary
+  ---
+  duration_ms: 0.432833
+  type: 'test'
+  ...
+# Subtest: M4.2 foreign object IDs remain non-disclosing under server workspace scope
+ok 39 - M4.2 foreign object IDs remain non-disclosing under server workspace scope
+  ---
+  duration_ms: 0.276166
+  type: 'test'
+  ...
+# Subtest: M4.2 Work Item transitions retain graph checks and authenticated activity actor
+ok 40 - M4.2 Work Item transitions retain graph checks and authenticated activity actor
+  ---
+  duration_ms: 2.085184
+  type: 'test'
+  ...
+# Subtest: M4.2 audit view is permission bounded paginated and Admin Client View tenant-scoped
+ok 41 - M4.2 audit view is permission bounded paginated and Admin Client View tenant-scoped
+  ---
+  duration_ms: 0.446974
+  type: 'test'
+  ...
+# Subtest: M4.2 release evaluator exposes each production evidence gate independently
+ok 42 - M4.2 release evaluator exposes each production evidence gate independently
+  ---
+  duration_ms: 0.111257
+  type: 'test'
+  ...
+# (node:112) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: M4 freezes the Production V1 provider/action matrix and unknown operations fail closed
+ok 43 - M4 freezes the Production V1 provider/action matrix and unknown operations fail closed
+  ---
+  duration_ms: 1.417528
+  type: 'test'
+  ...
+# Subtest: M4 safe-disable hierarchy defaults certified Shopify on and fails closed on disables or invalid values
+ok 44 - M4 safe-disable hierarchy defaults certified Shopify on and fails closed on disables or invalid values
+  ---
+  duration_ms: 0.359202
+  type: 'test'
+  ...
+# Subtest: M4 exposes Shopify and suppresses Commas in capability and MCP discovery
+ok 45 - M4 exposes Shopify and suppresses Commas in capability and MCP discovery
+  ---
+  duration_ms: 0.343228
+  type: 'test'
+  ...
+# Subtest: M4 mutation, provider and action disables remove Shopify mutation tools
+ok 46 - M4 mutation, provider and action disables remove Shopify mutation tools
+  ---
+  duration_ms: 0.31868
+  type: 'test'
+  ...
+# Subtest: M4 Commas prepare, confirm and execute fail before persistence or provider access
+ok 47 - M4 Commas prepare, confirm and execute fail before persistence or provider access
+  ---
+  duration_ms: 0.246341
+  type: 'test'
+  ...
+# Subtest: M4 direct and shared Commas mutation routes reject before target/provider work
+ok 48 - M4 direct and shared Commas mutation routes reject before target/provider work
+  ---
+  duration_ms: 0.219842
+  type: 'test'
+  ...
+# Subtest: M4 suppresses the legacy direct Shopify bypass while retaining governed exposure
+ok 49 - M4 suppresses the legacy direct Shopify bypass while retaining governed exposure
+  ---
+  duration_ms: 0.237978
+  type: 'test'
+  ...
+# Subtest: M4 evaluation disable preserves the finding but prevents actionable remediation
+ok 50 - M4 evaluation disable preserves the finding but prevents actionable remediation
+  ---
+  duration_ms: 1.335384
+  type: 'test'
+  ...
+# Subtest: M4 policy gates do not gate historical lifecycle repositories
+ok 51 - M4 policy gates do not gate historical lifecycle repositories
+  ---
+  duration_ms: 0.354244
+  type: 'test'
+  ...
+# Subtest: M4 evaluator certifies M3's bounded proof without declaring Production V1 ready
+ok 52 - M4 evaluator certifies M3's bounded proof without declaring Production V1 ready
+  ---
+  duration_ms: 1.016332
+  type: 'test'
+  ...
+# Subtest: M4 evaluator requires every controlled-action and cross-cutting release gate
+ok 53 - M4 evaluator requires every controlled-action and cross-cutting release gate
+  ---
+  duration_ms: 0.323348
+  type: 'test'
+  ...
+# (node:113) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: M4.2b first-party route derives tenant and actor and rejects all caller fields
+ok 54 - M4.2b first-party route derives tenant and actor and rejects all caller fields
+  ---
+  duration_ms: 0.876231
+  type: 'test'
+  ...
+# Subtest: M4.2b exposes no general Work Item creation route and keeps production transition evidence incomplete
+ok 55 - M4.2b exposes no general Work Item creation route and keeps production transition evidence incomplete
+  ---
+  duration_ms: 0.221865
+  type: 'test'
+  ...
+# (node:125) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: M5 policy negative plan covers every bypass class without authorizing execution
+ok 56 - M5 policy negative plan covers every bypass class without authorizing execution
+  ---
+  duration_ms: 1.084055
+  type: 'test'
+  ...
+# Subtest: M5 plan preserves WS-022 ownership and validator separation
+ok 57 - M5 plan preserves WS-022 ownership and validator separation
+  ---
+  duration_ms: 0.151238
+  type: 'test'
+  ...
+# (node:137) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: M5B projects only the declared governed-action notification classes
+ok 58 - M5B projects only the declared governed-action notification classes
+  ---
+  duration_ms: 1.317217
+  type: 'test'
+  ...
+# Subtest: M5B derives lifecycle truth from existing durable action records
+ok 59 - M5B derives lifecycle truth from existing durable action records
+  ---
+  duration_ms: 0.16533
+  type: 'test'
+  ...
+# Subtest: M5B stores presentation state separately from immutable lifecycle evidence
+ok 60 - M5B stores presentation state separately from immutable lifecycle evidence
+  ---
+  duration_ms: 0.239721
+  type: 'test'
+  ...
+# Subtest: M5B action notification routes preserve tenant and RBAC boundaries
+ok 61 - M5B action notification routes preserve tenant and RBAC boundaries
+  ---
+  duration_ms: 0.195885
+  type: 'test'
+  ...
+# Subtest: M5B Notification Center merges governed rows before unified filtering and pagination
+ok 62 - M5B Notification Center merges governed rows before unified filtering and pagination
+  ---
+  duration_ms: 0.144558
+  type: 'test'
+  ...
+# Subtest: M5B keeps Production V1 delivery in app only
+ok 63 - M5B keeps Production V1 delivery in app only
+  ---
+  duration_ms: 0.171248
+  type: 'test'
+  ...
+# Subtest: M4.4 hardens tenant hints, mutation bodies, same-origin, and source failure
+ok 64 - M4.4 hardens tenant hints, mutation bodies, same-origin, and source failure
+  ---
+  duration_ms: 0.133211
+  type: 'test'
+  ...
+# Subtest: M4.4 uses exact durable execution identities and fails closed on ambiguity
+ok 65 - M4.4 uses exact durable execution identities and fails closed on ambiguity
+  ---
+  duration_ms: 0.133862
+  type: 'test'
+  ...
+# Subtest: M4.4 persists sanitized terminal failures without widening completed replay
+ok 66 - M4.4 persists sanitized terminal failures without widening completed replay
+  ---
+  duration_ms: 0.336287
+  type: 'test'
+  ...
+# Subtest: M4.4 makes awaiting approval durable and explicitly confirmable
+ok 67 - M4.4 makes awaiting approval durable and explicitly confirmable
+  ---
+  duration_ms: 0.296207
+  type: 'test'
+  ...
+# Subtest: M4.4 applies governed filters and never hides governed-source failure
+ok 68 - M4.4 applies governed filters and never hides governed-source failure
+  ---
+  duration_ms: 0.167483
+  type: 'test'
+  ...
+# (node:154) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: client and agency production navigation expose Notifications under organizations.view only
+ok 69 - client and agency production navigation expose Notifications under organizations.view only
+  ---
+  duration_ms: 1.27327
+  type: 'test'
+  ...
+# Subtest: production header, account menu, and command palette navigate without notification mutations
+ok 70 - production header, account menu, and command palette navigate without notification mutations
+  ---
+  duration_ms: 0.597772
+  type: 'test'
+  ...
+# Subtest: exact authenticated production response renders six health rows and correct counts
+ok 71 - exact authenticated production response renders six health rows and correct counts
+  ---
+  duration_ms: 0.237528
+  type: 'test'
+  ...
+# Subtest: successful governed-available empty response renders a genuine empty state
+ok 72 - successful governed-available empty response renders a genuine empty state
+  ---
+  duration_ms: 0.125769
+  type: 'test'
+  ...
+# Subtest: source failure is degraded and cannot become false healthy
+ok 73 - source failure is degraded and cannot become false healthy
+  ---
+  duration_ms: 0.494856
+  type: 'test'
+  ...
+# Subtest: page load uses server-derived tenant scope and performs no notification mutation
+ok 74 - page load uses server-derived tenant scope and performs no notification mutation
+  ---
+  duration_ms: 0.271019
+  type: 'test'
+  ...
+# (node:155) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: Phase B manifest is deterministic, Stem Labs scoped, and projection compatible
+ok 75 - Phase B manifest is deterministic, Stem Labs scoped, and projection compatible
+  ---
+  duration_ms: 0.989872
+  type: 'test'
+  ...
+# Subtest: Phase B first-party route derives tenant and actor and accepts exact empty bodies only
+ok 76 - Phase B first-party route derives tenant and actor and accepts exact empty bodies only
+  ---
+  duration_ms: 0.909301
+  type: 'test'
+  ...
+# Subtest: Phase B persistence is atomic, idempotent, and fails closed on incompatible state
+ok 77 - Phase B persistence is atomic, idempotent, and fails closed on incompatible state
+  ---
+  duration_ms: 0.390549
+  type: 'test'
+  ...
+# Subtest: Phase B provider firewall has no credential, orchestration, delivery, or external audit path
+ok 78 - Phase B provider firewall has no credential, orchestration, delivery, or external audit path
+  ---
+  duration_ms: 3.566068
+  type: 'test'
+  ...
+# Subtest: Phase B lifecycle and presentation operations remain separated
+ok 79 - Phase B lifecycle and presentation operations remain separated
+  ---
+  duration_ms: 0.236687
+  type: 'test'
+  ...
+# Subtest: Phase B applied migration remains byte-stable and initially installs invoker-rights functions
+ok 80 - Phase B applied migration remains byte-stable and initially installs invoker-rights functions
+  ---
+  duration_ms: 0.180643
+  type: 'test'
+  ...
+# Subtest: Phase B confirmation repair elevates only fixed confirmation writers and preserves M3 direct-insert denial
+ok 81 - Phase B confirmation repair elevates only fixed confirmation writers and preserves M3 direct-insert denial
+  ---
+  duration_ms: 0.388176
+  type: 'test'
+  ...
+# (node:181) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: the already-applied M4.4 migration remains byte-identical
+ok 82 - the already-applied M4.4 migration remains byte-identical
+  ---
+  duration_ms: 0.630811
+  type: 'test'
+  ...
+# Subtest: the forward migration removes default grants before granting the exact runtime contract
+ok 83 - the forward migration removes default grants before granting the exact runtime contract
+  ---
+  duration_ms: 0.373483
+  type: 'test'
+  ...
+# Subtest: the repair is ACL-only and does not change global defaults or table semantics
+ok 84 - the repair is ACL-only and does not change global defaults or table semantics
+  ---
+  duration_ms: 0.288145
+  type: 'test'
+  ...
+# (node:182) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: advertiser and agency users cannot read platform catalog even with injected admin grants
+ok 85 - advertiser and agency users cannot read platform catalog even with injected admin grants
+  ---
+  duration_ms: 1.042742
+  type: 'test'
+  ...
+# Subtest: platform support can inspect but cannot provision or invite
+ok 86 - platform support can inspect but cannot provision or invite
+  ---
+  duration_ms: 0.148984
+  type: 'test'
+  ...
+# Subtest: suspended membership and explicit permission denial fail closed
+ok 87 - suspended membership and explicit permission denial fail closed
+  ---
+  duration_ms: 0.132089
+  type: 'test'
+  ...
+# Subtest: privileged mutations require same origin
+ok 88 - privileged mutations require same origin
+  ---
+  duration_ms: 1.586973
+  type: 'test'
+  ...
+# Subtest: client provisioning cannot create platform accounts
+ok 89 - client provisioning cannot create platform accounts
+  ---
+  duration_ms: 0.903212
+  type: 'test'
+  ...
+# Subtest: only the governed admin endpoint bypasses the legacy real-data proxy block
+ok 90 - only the governed admin endpoint bypasses the legacy real-data proxy block
+  ---
+  duration_ms: 0.122635
+  type: 'test'
+  ...
+# Subtest: canonical provisioning transactions and tenant-safe membership administration
+    # Subtest: advertiser creates account plus organization; agency creates account plus agency
+    ok 1 - advertiser creates account plus organization; agency creates account plus agency
+      ---
+      duration_ms: 1.520703
+      type: 'test'
+      ...
+    # Subtest: authenticated browser role cannot execute server provisioning RPC
+    ok 2 - authenticated browser role cannot execute server provisioning RPC
+      ---
+      duration_ms: 2.35356
+      type: 'test'
+      ...
+    # Subtest: service role can execute with authorized actor
+    ok 3 - service role can execute with authorized actor
+      ---
+      duration_ms: 2.882868
+      type: 'test'
+      ...
+    # Subtest: normal customer actor cannot create clients
+    ok 4 - normal customer actor cannot create clients
+      ---
+      duration_ms: 1.572721
+      type: 'test'
+      ...
+    # Subtest: invalid account type and actor identity cannot provision
+    ok 5 - invalid account type and actor identity cannot provision
+      ---
+      duration_ms: 2.196953
+      type: 'test'
+      ...
+    # Subtest: membership change rejects foreign tenant and platform role
+    ok 6 - membership change rejects foreign tenant and platform role
+      ---
+      duration_ms: 2.869037
+      type: 'test'
+      ...
+    # Subtest: final owner cannot be removed or demoted
+    ok 7 - final owner cannot be removed or demoted
+      ---
+      duration_ms: 2.690898
+      type: 'test'
+      ...
+    # Subtest: explicit permission denial fails in database
+    ok 8 - explicit permission denial fails in database
+      ---
+      duration_ms: 2.458127
+      type: 'test'
+      ...
+    # Subtest: audit failure rolls back account and organization creation
+    ok 9 - audit failure rolls back account and organization creation
+      ---
+      duration_ms: 2.692621
+      type: 'test'
+      ...
+    1..9
+ok 91 - canonical provisioning transactions and tenant-safe membership administration
+  ---
+  duration_ms: 915.547347
+  type: 'test'
+  ...
+# Subtest: canonical platform membership periods reject expired, future and malformed dates
+ok 92 - canonical platform membership periods reject expired, future and malformed dates
+  ---
+  duration_ms: 0.448887
+  type: 'test'
+  ...
+1..92
+# tests 101
+# suites 0
+# pass 100
+# fail 1
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 1555.617223
+(node:225) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+TAP version 13
+# (node:232) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: client-read-only MCP customer serialization removes detailed money and nested contact evidence
+ok 1 - client-read-only MCP customer serialization removes detailed money and nested contact evidence
+  ---
+  duration_ms: 2.41407
+  type: 'test'
+  ...
+# Subtest: expired membership and missing permission deny before customer persistence
+ok 2 - expired membership and missing permission deny before customer persistence
+  ---
+  duration_ms: 0.664712
+  type: 'test'
+  ...
+# Subtest: server MCP repository scopes Core to authorized organization and fails closed before fetch without it
+ok 3 - server MCP repository scopes Core to authorized organization and fails closed before fetch without it
+  ---
+  duration_ms: 2.808786
+  type: 'test'
+  ...
+# (node:233) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: client-read-only cannot reach persistence or provider calls through any MCP action method
+ok 4 - client-read-only cannot reach persistence or provider calls through any MCP action method
+  ---
+  duration_ms: 2.163042
+  type: 'test'
+  ...
+# Subtest: forged action permission cannot bypass expired membership or unavailable organization
+ok 5 - forged action permission cannot bypass expired membership or unavailable organization
+  ---
+  duration_ms: 0.914989
+  type: 'test'
+  ...
+1..5
+# tests 5
+# suites 0
+# pass 5
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 151.334417

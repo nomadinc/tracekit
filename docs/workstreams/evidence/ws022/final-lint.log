@@ -1,8 +1,12 @@
+(node:13) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
 npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
 
 > tracekit-ui@0.1.0 lint
 > next lint
 
+(node:26) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
 `next lint` is deprecated and will be removed in Next.js 16.
 For new projects, use create-next-app to choose your preferred linter.
 For existing projects, migrate to the ESLint CLI:

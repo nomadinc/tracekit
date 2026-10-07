@@ -1,99 +1,144 @@
 # WS-022 — Dependency Security Remediation
 
-**Status: BLOCKED / PARTIAL. Bounded Next.js patch complete; dependency remediation and release certification incomplete.**
+**Status: PARTIAL / REVIEW. Production dependency audits are clean. Final regression/migration certification remains on HOLD.**
 
-Observed 2026-10-07. No push, PR, merge, deployment, provider mutation, credential/configuration change, migration change, or application behavior change. WS-019 evidence is unchanged.
+Observed 2026-10-07. Current main was fetched and the isolated WS-022 branch rebased onto `4f65ca1a6ec349671373210a8ac6d55beca905a1`. Main’s intervening changes were documentation and a test, with no overlapping dependency upgrades. No other workstream branch, WS-019 acceptance evidence, production provider, database, credential, or business configuration was changed. The sole CI setting change is the explicitly authorized build-host Node 20 → Node 22 migration.
 
-## Baseline and isolation
+## Completion record
 
-- Fetched `origin/main`: `8436004def0cad5dcf70493a9d91a7cb0b000e17`, matching the requested last verified main.
-- Branch: `workstream/ws-022-dependency-security`.
-- Worktree: `/workspace/scratch/61a85fe6297b/tracekit-ws022`.
-- Recent WS-020/WS-021 manifest changes added test tooling/runners; no overlapping Next.js remediation found. No other workstream branch modified.
+| Required field | Result |
+|---|---|
+| STATUS | PARTIAL / REVIEW; final acceptance HOLD |
+| CURRENT MAIN | `4f65ca1a6ec349671373210a8ac6d55beca905a1` |
+| BRANCH / WORKTREE | `workstream/ws-022-dependency-security`; `/workspace/scratch/61a85fe6297b/tracekit-ws022` |
+| BASELINE AUDIT | UI 1 critical / 23 high / 3 moderate; additional package boundaries below |
+| DEPENDENCY INVENTORY | Four independent packages; complete direct/transitive inventories retained |
+| CRITICAL FINDINGS | Next direct critical advisories resolved; two remaining affected development packages arise from Tinypool advisories |
+| HIGH FINDINGS | All remediable production high findings resolved; seven UI development affected packages propagate the unpatched braces advisory |
+| MODERATE FINDINGS | Two UI CSS-tool affected packages and one nested test-tool package remain |
+| NEXT.JS REMEDIATION | Next/eslint-config-next 15.5.27, safe PostCSS override, patched Sharp and other compatible transitive fixes |
+| FILES CHANGED | Four manifests/locks, Node CI setting, config-test helper, WS-022 assessment/evidence |
+| BEFORE / AFTER COUNTS | Per-boundary full/production counts below; all production-only counts zero |
+| REMAINING ADVISORIES | braces, selector parser, Tinypool, Vitest mocker and propagated paths; development only |
+| PRODUCTION EXPOSURE | Zero current npm production findings; audit scope is not proof against unknown vulnerabilities |
+| REGRESSION TESTS | UI 1,357 / API 1,112; identical baseline failure titles, no new failures after test-helper compatibility fix |
+| M3 / M4 SECURITY GATES | 105/106 pass; one unchanged M3 confirmation-path assertion fails |
+| MIGRATION CHAIN | BLOCKED: disposable Supabase/Postgres unavailable; no production DB used |
+| BUILD | Baseline, patched local and Vercel-mode production builds PASS |
+| VERCEL COMPATIBILITY | Local Vercel build mode PASS; remote deployment/runtime not independently certified |
+| CLOUDFLARE COMPATIBILITY | API, continuous-runtime and relay dry-run builds PASS; relay smoke tests 2/2 PASS |
+| ROLLBACK PLAN | Revert both WS-022 commits and revalidate; no schema rollback |
+| COMMIT | This continuation commit plus rebased initial patch `748cee56`; obtain exact final SHA with `git log` |
+| PUSH STATUS | Not pushed; no PR, merge or deployment |
+| BLOCKERS | Complete migration chain; existing regression failures; separate dev-framework risk/major review |
+| SAFE TO INTEGRATE? | Not certified as completed remediation; bounded production fixes are review-ready subject to outstanding gates |
+| WS-019 REGRESSION_GATES IMPACT | No production-proven upgrade; WS-019 owns acceptance |
+| NEXT ACTION | Run complete disposable Supabase chain; review baseline failures and residual development advisories separately |
 
-## Dependency inventory
+## Dependency inventory and actual install compatibility
 
-Four independent npm packages; no declared npm workspaces or root package. All four lockfiles are version 3 and root dependency declarations agree with their manifests. Manifests declare no Node/npm engines. Actual pinned CI versions and full direct/transitive inventories are in [dependency-inventory.json](evidence/ws022/dependency-inventory.json).
+Four independent npm boundaries: `ui`, `api`, outer relay, nested relay. No npm workspaces or root manifest. All use lockfile v3. Root dependency declarations match their manifests. The untouched nested relay lockfile failed clean installation because workerd platform entries were missing; the regenerated WS-022 lock passes. Root-only comparison in the initial assessment was insufficient to certify transitive reproducibility.
 
-| Package boundary | Direct production dependencies | Development dependencies |
+[dependency-inventory.json](evidence/ws022/dependency-inventory.json) includes baseline/final manifests, production/dev flags, exact locked versions, engines and every transitive node. Clean installs ran with lifecycle scripts enabled on Node 22.23.3/npm 10.9.4, as well as npm 11.9.0 checks. The CI workflow now selects Node 22. Manifests require Node >=22.11.0, matching existing WorkOS AuthKit minimum requirements; npm engines are not separately declared. Remote CI/Vercel settings were not changed or inspected.
+
+`@workos-inc/authkit-nextjs` remains 4.3.1, React/react-dom remain 18.3.1, API Supabase JS remains 2.81.1. Authentication, session propagation, tenancy, RBAC, cache configuration, notification contracts and commerce/Edge source remain unchanged.
+
+## Implemented changes
+
+| Boundary | Package | Baseline installed | Final installed |
+|---|---|---|---|
+| ui | next | 15.5.23 | 15.5.27 |
+| ui | eslint-config-next | 15.5.23 | 15.5.27 |
+| ui | postcss | 8.5.6 | 8.5.29 |
+| ui | sharp | 0.34.5 | 0.35.5 |
+| ui | nanoid | 3.3.11 | 3.3.20 |
+| api | sharp | 0.34.5 | 0.35.5 |
+| api | ws | 8.18.3 | 8.21.0 |
+| api | wrangler | 4.63.0 | 4.148.0 |
+| api | @cloudflare/workers-types | 4.20260702.1 | 5.20261007.1 |
+| relay | sharp | 0.33.5 | 0.35.5 |
+| relay | ws | 8.18.0 | 8.21.0 |
+| relay | wrangler | 4.50.0 | 4.148.0 |
+| relay-worker | postcss | 8.5.6 | 8.5.29 |
+| relay-worker | sharp | 0.33.5 | 0.35.5 |
+| relay-worker | nanoid | 3.3.11 | 3.3.20 |
+| relay-worker | ws | 8.18.0 | 8.21.0 |
+| relay-worker | wrangler | 4.50.0 | 4.148.0 |
+| relay-worker | vitest | 3.2.4 | 3.2.7 |
+| relay-worker | vite | 7.2.4 | 7.3.7 |
+
+- Next/eslint-config-next 15.5.23 → 15.5.27. The direct critical Windows RCE GHSA-p293-qw3h-jr36 and AVIF image optimizer RCE GHSA-2xp9-vwfh-vxw4 first have a Next 15 fix in 15.5.24; selected 15.5.27 includes later maintenance security releases. Current production audit has no Next finding.
+- Next’s pinned PostCSS is overridden to 8.5.29 within major 8. A stale nested lock node was removed and regenerated by npm; clean install/tree validation verifies actual resolution, not just a declaration.
+- Glob 10.5.0 receives minimatch 9.0.7 within its existing major. Other compatible transitive updates close brace-expansion, nanoid, source-map-js and related findings without forcing major frameworks.
+- API Wrangler 4.148.0 and matching workers-types 5.20261007.1 install on the authorized Node 22 host. Explicit prerelease-qualified Miniflare overrides ensure npm 10 applies Sharp 0.35.5 consistently. Stable upstream Wrangler currently includes Miniflare 5 alpha internally; this is build/development tooling and not bundled production application code.
+- Outer relay had no source importing its 31 production tooling declarations; nested relay source is dependency-free Hello World scaffolding. Those unused outer declarations were removed. Its Wrangler tool remains a dev dependency. No relay source/test was removed to hide findings.
+- Nested relay retains Vitest 3, patched to 3.2.7, and worker-pool 0.8.71. Vite updates remain within baseline major 7. Scoped Miniflare Sharp/ws/undici patches and worker-pool Wrangler 4.59.1 remove high development findings while preserving the declared framework major.
+- `worker-production-config.test.ts` normalizes Wrangler’s null-prototype TOML records using structuredClone. All exact queue, route, cron and control value assertions remain intact. No Worker config value changes.
+
+No `npm audit fix --force`, advisory suppression, framework-major upgrade, auth redesign, RBAC broadening, migration, credential change, governed action, provider mutation, notification change, or business feature change.
+
+Primary framework sources: [August Next security release](https://nextjs.org/blog/august-2026-security-release), [September release](https://nextjs.org/blog/september-2026-security-release), [September upstream hardening](https://nextjs.org/blog/nextjs-security-update-september-22-2026). Individual GHSA URLs and ranges are retained verbatim in audit evidence. September’s Next 16 ImageResponse RCE must not be misclassified as applying to this Next 15 baseline.
+
+## Fresh before / after security audits
+
+Counts are affected npm packages, not unique CVEs. Propagated findings and duplicate packages across boundaries must not be summed as unique advisories. Columns are critical / high / moderate / low.
+
+| Boundary / scope | Before | After |
 |---|---|---|
-| ui | @workos-inc/authkit-nextjs ^4.3.1, date-fns ^4.1.0, exceljs ^4.4.0, fast-csv ^4.3.6, lucide-react ^0.461.0, next 15.5.27, next-themes ^0.2.1, react 18.3.1, react-dom 18.3.1, recharts ^3.6.0 | @electric-sql/pglite 0.3.14, @types/node ^20.12.12, @types/react ^18.2.79, @types/react-dom ^18.2.25, autoprefixer ^10.4.19, esbuild 0.25.10, eslint ^8.57.0, eslint-config-next 15.5.27, postcss ^8.4.38, tailwindcss ^3.4.10, tsx ^4.23.1, typescript ^5.4.5 |
-| api | @supabase/supabase-js ^2.81.1, exceljs ^4.4.0, fast-csv ^4.3.6 | @cloudflare/workers-types ^4.20260702.1, tsx ^4.23.15, typescript ^5.4.5, wrangler ^4.63.0 |
-| api/konnektive-relay | acorn ^8.14.0, acorn-walk ^8.3.2, blake3-wasm ^2.1.5, color ^4.2.3, color-convert ^2.0.1, color-name ^1.1.4, color-string ^1.9.1, cookie ^1.0.2, detect-libc ^2.1.2, error-stack-parser-es ^1.0.5, esbuild ^0.25.4, exit-hook ^2.2.1, glob-to-regexp ^0.4.1, is-arrayish ^0.3.4, kleur ^4.1.5, mime ^3.0.0, miniflare ^4.20251118.1, path-to-regexp ^6.3.0, pathe ^2.0.3, semver ^7.7.3, sharp ^0.33.5, simple-swizzle ^0.2.4, stoppable ^1.1.0, supports-color ^10.2.2, undici ^7.14.0, unenv ^2.0.0-rc.24, workerd ^1.20251118.0, ws ^8.18.0, youch ^4.1.0-beta.10, youch-core ^0.3.3, zod ^3.22.3 | wrangler ^4.50.0 |
-| api/konnektive-relay/konnektive-relay |  | @cloudflare/vitest-pool-workers ^0.8.19, vitest ~3.2.0, wrangler ^4.50.0 |
+| ui / full | 1 / 23 / 3 / 0 | 0 / 7 / 2 / 0 |
+| ui / prod | 1 / 6 / 0 / 0 | 0 / 0 / 0 / 0 |
+| api / full | 0 / 5 / 1 / 0 | 0 / 0 / 0 / 0 |
+| api / prod | 0 / 2 / 0 / 0 | 0 / 0 / 0 / 0 |
+| relay / full | 0 / 5 / 0 / 0 | 0 / 0 / 0 / 0 |
+| relay / prod | 0 / 4 / 0 / 0 | 0 / 0 / 0 / 0 |
+| relay-worker / full | 2 / 14 / 1 / 0 | 2 / 0 / 1 / 0 |
+| relay-worker / prod | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 |
 
-CI deploys API/continuous workers on Node 20 using `npm ci` against `api/package-lock.json`. UI uses Next.js/Vercel build scripts; remote Vercel Node configuration was not inspected. Local verification used Node 24.19.0/npm 11.9.0. WorkOS AuthKit 4.3.1 already requires Node >=22.11.0. Next.js 15.5.27 retains Node ^18.18.0 / ^19.8.0 / >=20 support. Existing API undici requires Node >=20.18.1.
+All four production-only audits are clean. API and outer relay full-tree audits are also clean. Remaining UI and nested relay findings are development-only in their lockfiles and absent from production-only audit. This distinction does not automatically certify every development vulnerability as harmless.
 
-## Stop / compatibility decision
+## Advisory dispositions and residual risks
 
-Further dependency expansion stopped for explicit deployment compatibility review. API `npm audit fix --dry-run` fails ERESOLVE: latest Wrangler 4.148.0 requires workers-types ^5.20261006.1, while main declares ^4.20260702.1. Registry metadata for Wrangler 4.94.0 (the first version outside the audit aggregate <=4.93.0 range) requires Node >=22, whereas deployment CI selects Node 20. This proves the examined upstream remediation paths are incompatible with current CI; it does not prove every alternative bounded override is impossible. No forced resolution or runtime/CI upgrade was attempted.
+[advisory-inventory.json](evidence/ws022/advisory-inventory.json) records every baseline finding and current residual: installed versions, independent GHSA versus propagated path, severity, vulnerable range, selected patch or removal, exposure, reachability, remediation and breaking-change risk. Reachability was not proven by exploitation.
 
-Additionally, braces GHSA-vfj7-8cjw-p6xm affects <=3.0.3, and registry latest is 3.0.3. Audit proposes major Tailwind 4 to remove the dependency path. This remains a build-chain risk requiring separate major-framework review or an upstream patch. Nested Cloudflare test-pool remediation also proposes a semver-breaking 0.x update. These have not been applied.
-
-## Implemented bounded fix
-
-- `ui/package.json`: Next.js 15.5.23 → 15.5.27; eslint-config-next 15.5.23 → 15.5.27.
-- `ui/package-lock.json`: corresponding Next environment, SWC and ESLint packages. No other direct dependency version changes.
-- No source, auth, tenancy, permissions, governed-action, notification, commerce, worker-routing or migration edits.
-
-The reproduced audit identifies GHSA-p293-qw3h-jr36 (Windows-hosted RCE) and GHSA-2xp9-vwfh-vxw4 (AVIF image optimization RCE), both fixed starting at 15.5.24 on the 15.x line. Selected 15.5.27 incorporates subsequent maintenance security releases and is the audit-recommended non-major target. The two direct critical advisories disappear after upgrade. Next.js remains an aggregate moderate finding through its pinned vulnerable PostCSS dependency: this patch does not clean the production tree.
-
-Primary sources: [August security release](https://nextjs.org/blog/august-2026-security-release), [September security release](https://nextjs.org/blog/september-2026-security-release), [September upstream hardening](https://nextjs.org/blog/nextjs-security-update-september-22-2026). The September ImageResponse RCE described in the last link applies to Next 16, not this Next 15 baseline.
-
-## Before / after audits
-
-Counts are npm affected-package counts, not unique CVEs. Shared packages are counted within each boundary; do not sum rows as unique repository advisories. All after full-tree audits were freshly run; production-only rows classify omitted dev dependencies separately.
-
-| Boundary / exposure | Before critical / high / moderate / low | After critical / high / moderate / low |
+| Independent residual | Exposure and condition | Disposition |
 |---|---|---|
-| ui, full tree | 1 / 23 / 3 / 0 | 0 / 23 / 4 / 0 |
-| ui, production only | 1 / 6 / 0 / 0 | 0 / 6 / 1 / 0 |
-| api, full tree | 0 / 5 / 1 / 0 | 0 / 5 / 1 / 0 |
-| api, production only | 0 / 2 / 0 / 0 | 0 / 2 / 0 / 0 |
-| relay, full tree | 0 / 5 / 0 / 0 | 0 / 5 / 0 / 0 |
-| relay, production only | 0 / 4 / 0 / 0 | 0 / 4 / 0 / 0 |
-| relay-worker, full tree | 2 / 14 / 1 / 0 | 2 / 14 / 1 / 0 |
-| relay-worker, production only | 0 / 0 / 0 / 0 | 0 / 0 / 0 / 0 |
+| GHSA-vfj7-8cjw-p6xm, braces | UI build/lint glob patterns; seven affected-package paths propagate one high advisory. No runtime dependency finding. | Latest braces 3.0.3 is affected. Wait for upstream patch or separately review a supported Tailwind/path-removal upgrade. No major Tailwind change applied. |
+| GHSA-rj75-hqrm-r3gf, selector parser | CSS build parsing; two moderate affected packages. Current Tailwind 3 tree uses parser major 6. | Patch is 7.1.6; a parser/framework compatibility review is required before crossing its major. |
+| GHSA-5gmw-xhrv-c9v3 and GHSA-85c8-ppgw-ccpr, Tinypool | Nested relay test tooling: attacker-influenced worker options/prototype pollution can reach execution. Two critical affected packages (Tinypool and propagated Vitest), not two deployed services. | Both close at Tinypool 2.1.2. Current Vitest 3 depends on ^1.1.1. Do not force a cross-major pool override; separately review a supported Vitest major and matching Cloudflare test pool. |
+| GHSA-82fw-gwwq-j7x9, Vitest mocker | Development redirect/mock server file-read path; no such server exposed during `vitest run`. | Patched at 4.1.11; separate Vitest-major review. |
 
-Production API and relay counts remain unchanged; their manifests/locks were not edited. Relay worker production-only audit is clean, but its development tree retains two critical findings (vitest/tinypool). Those are test-tool exposure, not demonstrated deployed worker vulnerabilities. Full-tree minus production-only affected counts are not necessarily an additive dev-only count because package severity/path aggregation can change when omitted. See advisory nodes and lockfile dev flags for exact exposure.
+CI deployment installs `api`, not nested relay test tooling. No caller-supplied CSS/glob/pool options or malicious input was exercised; trusted repository tests/builds are the observed scope. Keep development/test servers local and inputs trusted pending reviewed remediation. These are recommended compensating practices, not production-proven controls or advisory suppression.
 
-## Advisory inventory and residual risk
+## Regression results against untouched refreshed main
 
-[advisory-inventory.json](evidence/ws022/advisory-inventory.json) records every reproduced finding/advisory, exact installed versions, vulnerable ranges, identifiers, severity, direct/transitive classification, production/dev classification, patch/disposition, reachability and risk. Propagated package rows explicitly distinguish dependency-path effects from independent advisories. Patch targets other than the applied Next fix and no-patch braces were not fully established before the compatibility stop; those fields are explicitly unresolved, not silently certified.
-
-Remaining production exposure: UI brace-expansion/minimatch (ExcelJS/archive tooling paths), nanoid/PostCSS/source-map-js (Next/build-related production dependency paths), sharp (image processing); API brace-expansion and ws; outer relay sharp/undici/ws/miniflare. Package presence does not prove request reachability. No exploit was attempted. No advisory suppressed. No compensating control has been production-proven here. Build tooling should handle only trusted repository inputs and local test services should not be exposed; these recommendations do not close the release risk.
-
-## Regression and security gates
-
-| Check | Untouched current main | Patched Next.js |
+| Gate | Baseline | Patched |
 |---|---|---|
-| Full UI suite | 1,355 tests; 1,262 pass; 93 fail | Identical counts and failure titles; zero new titles |
-| Full API suite | 1,112 tests; 1,099 pass; 9 fail; 4 skipped | Dependencies unchanged; baseline result retained, not claimed green |
-| Standalone `tsc --noEmit` | 60 diagnostic locations, predominantly existing test typing/target issues | Same 60 diagnostic locations |
-| Configured `npm run lint` | PASS with warnings | PASS; identical output |
-| Production Next build | PASS | PASS on retry after transient Google Fonts download failure |
-| Clean `npm ci` | PASS (`--ignore-scripts`) | PASS (`--ignore-scripts`); lockfile reproducible with lifecycle-script limitation |
-| Named auth/tenancy/M3/M4/Phase B gates | All included in full baseline suite | 104 tests; 103 pass; 1 pre-existing M3 confirmation-path failure |
+| Full UI | 1,357 tests; 1,264 pass; 93 fail | Same counts/failure titles |
+| Full API, concurrency 4 | 1,112 tests; 1,099 pass; 9 fail; 4 skipped | Same counts/failure titles |
+| Standalone TypeScript | 60 diagnostic locations | Identical 60 diagnostics, no new locations |
+| Configured ESLint | PASS with three existing hook warnings | PASS; same warnings |
+| Production build | PASS on Node 22 | Local + Vercel-style builds PASS |
+| Named auth/tenancy/M3/M4/Phase B gates | Included in full baseline | 105/106 pass; unchanged M3 confirmation-path assertion |
+| Nested relay | Untouched clean install fails from incomplete workerd lock entries | Clean install and two worker smoke tests PASS |
 
-The named gate set includes ApplicationSession, identity authorization/WorkOS boundary coverage, return URLs, M3 authoritative Shopify execution/replay and atomic confirmation, M4.1 release policy/safe-disable, M4.2 tenant transitions/fixtures, M4.3 history, M4.4 notification presentation/contracts, Phase B fixture/ACL security, platform-admin PGlite transactions, and WS-020 MCP/provider customer boundaries. The only targeted failure is `M3 all confirmation paths use the shared RPC with operation-specific target contracts`, also failing unchanged on main. No live WorkOS login, provider action/replay, or customer production session was exercised. Full suites also include commerce ingestion and Edge Intelligence regressions; their existing failures remain disclosed in [regression-summary.json](evidence/ws022/regression-summary.json).
+Named gates include ApplicationSession, identity/WorkOS authorization boundary, return URLs, M3 authoritative Shopify execution/replay and atomic confirmation, M4.1 policy/safe-disable, M4.2 tenant/transition fixtures, M4.3 history, M4.4 notifications, Phase B fixture/ACL security, platform-admin transactions, WS-020 MCP/provider customer boundaries, and the current M5 policy-negative proof-plan contract. The sole targeted failure is `M3 all confirmation paths use the shared RPC with operation-specific target contracts`, unchanged on main. Full suites include commerce ingestion and Edge Intelligence tests. No production WorkOS session, Shopify action, replay or provider proof was exercised.
 
-## Migration chain
+[regression-summary.json](evidence/ws022/regression-summary.json) preserves normalized failure titles, diagnostics and counts. Existing failures were not attributed to dependency upgrades or hidden. The initial new parser-prototype assertions were fixed only in the compatibility test helper; completed API reruns match baseline.
 
-BLOCKED. Complete chain not run: no psql, Supabase CLI, Docker or disposable local database available. Existing `scripts/test-m15-authoritative-migration-chain.sh` requires a disposable localhost Supabase instance and explicit test attestation, and discovers the current final migration dynamically. Existing static ledger/migration tests ran as part of the UI suite; they are not a substitute for complete database application. All migrations remain byte-identical to main. No production database accessed.
+## Migration chain and deployment compatibility
 
-## Deployment compatibility
+**Complete Supabase chain: BLOCKED.** The existing script’s disposable-local-database guard exited 2. This environment has no disposable Supabase/Postgres instance, psql/Supabase CLI or Docker daemon. No extension/schema stubs, skipped migrations or remote production database were substituted. Static ledger/migration tests ran in the UI suite but cannot replace real complete-chain application. All migrations and WS-019 evidence remain byte-identical to main.
 
-- Local production Next build passes with existing App Router/Server Components/API/middleware structure and the same WorkOS Edge warnings as baseline. No request/session/cache contract edits. Runtime production behavior remains unproven.
-- Vercel-style `VERCEL=1 npm run build`: PASS (exit 0). This checks existing `.next` output selection locally, not a remote staging deployment or remote environment.
-- Cloudflare source, lockfiles, compatibility dates and nodejs_compat flags unchanged. No upgraded Worker bundle or deployment certified. Wrangler remediation compatibility blocker described above.
-- No environment-variable files, credentials, database schema, Vercel config or Cloudflare config changed.
+Run the existing `scripts/test-m15-authoritative-migration-chain.sh` in a disposable local Supabase environment with `TRACEKIT_MIGRATION_TEST_DB_URL` pointing to localhost and `TRACEKIT_MIGRATION_TEST_DISPOSABLE=1`. Its final migration target is discovered from current main. Do not use production connection details.
 
-## Rollback
+Vercel: `VERCEL=1 npm run build` passes locally on Node 22 with existing App Router, Server Components, API routes and middleware; remote project runtime/staging deployment is not independently certified. Local normal production build also passes.
 
-Before any integration, abandon the isolated branch to discard the patch. If separately approved and integrated later, revert the WS-022 commit, run clean install/build/regression checks, and follow WS-019 release controls. Reverting restores known vulnerable Next.js 15.5.23, so it is an emergency regression rollback, not an acceptable long-term security disposition. No database rollback needed.
+Cloudflare: latest Wrangler dry-run compiles API, continuous-runtime and relay without uploads. Worker source, routes, bindings, cron schedules, secrets and compatibility dates are unchanged. The old test-pool runtime falls back from relay’s 2025-11-21 date to 2025-09-06; its two smoke tests are not production runtime certification. Tests/config invariants preserve all existing production controls. No environment/credential file changed.
 
-## WS-019 M5 recommendation
+## Rollback and recommendation for WS-019 M5
 
-**Do not integrate as completed remediation; do not close the Production V1 security blocker.** Direct Next critical patch is isolated and locally validated, but remediable production high findings remain, Cloudflare toolchain remediation requires compatibility review, standalone TypeScript/full suites are not green, and the mandatory migration chain is unverified. `regression_gates` must not be marked production-proven on this evidence. WS-019 retains acceptance/release ownership.
+If not integrated, discard the isolated WS-022 branch. If separately approved/integrated later, revert the continuation commit and initial patch `748cee56`, restoring manifests/locks, Node CI setting and test helper, then rerun install/build/security gates. Rollback restores known vulnerable dependencies and Node 20; it is emergency regression recovery, not a security-ready long-term state. No database rollback required.
 
-Next action: review Node 22 / workers-types compatibility or a safely bounded alternate Wrangler transitive remediation; review the unpatched braces/major Tailwind path separately; continue production-tree fixes on this same isolated branch after resolving the stop condition; rerun all mandatory gates in a disposable Supabase-capable environment. Push/PR/merge/deploy require separate authorization.
+**Production dependency remediation is locally review-ready, but final WS-022 acceptance is not certified.** Require complete-chain execution, independent disposition of existing failing regression gates and explicit residual-development risk review before WS-019 closes its release blocker. Production-only audit improvement must not mark `regression_gates` production-proven. Do not mark overall Production V1 ready.
+
+Next action: run the disposable migration chain; separately review a supported Vitest 4.1.11/Cloudflare test-pool 0.23.0 combination, verifying that Tinypool is removed or patched to >=2.1.2, and the Tailwind/parser major or upstream-backport path. Those framework majors were not installed in this workstream. Push, PR, merge and deployment still require separate authorization.
