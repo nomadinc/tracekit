@@ -2,19 +2,26 @@ import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { resolveApplicationSession } from "@/lib/identity/application-session";
-import { requirePermission } from "@/lib/identity/authorization-gateway";
+import { requirePersistedPlatformAccess } from "@/lib/identity/platform-catalog-access";
 import { SupabaseIdentityTenancyRepository } from "@/lib/identity/supabase-identity-repository";
 import { ADMIN_VIEW_COOKIE, sealAdminView } from "@/lib/identity/admin-view-cookie";
+
+function sameOrigin(request: Request) {
+  const origin = request.headers.get("origin");
+  return origin === new URL(request.url).origin;
+}
 
 const MAX_AGE = 60 * 60 * 8;
 
 export async function POST(request: Request) {
+  if (!sameOrigin(request)) return NextResponse.json({ error: "Request verification failed." }, { status: 403 });
   const resolution = await resolveApplicationSession();
   if (resolution.kind !== "authenticated")
     return NextResponse.json({ error: "The requested resource is unavailable." }, { status: 404 });
 
+  const repository = new SupabaseIdentityTenancyRepository();
   try {
-    requirePermission(resolution.session, "admin.impersonate");
+    await requirePersistedPlatformAccess(resolution.session, repository, "admin.impersonate");
   } catch {
     return NextResponse.json({ error: "The requested resource is unavailable." }, { status: 404 });
   }
@@ -23,7 +30,6 @@ export async function POST(request: Request) {
   if (typeof body?.organizationId !== "string")
     return NextResponse.json({ error: "The requested resource is unavailable." }, { status: 404 });
 
-  const repository = new SupabaseIdentityTenancyRepository();
   const organizations = await repository.allActiveOrganizations();
   const organization = organizations.find((candidate) => candidate.id === body.organizationId);
   if (!organization)
@@ -62,12 +68,14 @@ export async function POST(request: Request) {
   return NextResponse.json({ organizationId: organization.id });
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
+  if (!sameOrigin(request)) return NextResponse.json({ error: "Request verification failed." }, { status: 403 });
   const resolution = await resolveApplicationSession();
   if (resolution.kind !== "authenticated")
     return NextResponse.json({ error: "The requested resource is unavailable." }, { status: 404 });
+  const repository = new SupabaseIdentityTenancyRepository();
   try {
-    requirePermission(resolution.session, "admin.impersonate");
+    await requirePersistedPlatformAccess(resolution.session, repository, "admin.impersonate");
   } catch {
     return NextResponse.json({ error: "The requested resource is unavailable." }, { status: 404 });
   }
@@ -75,7 +83,6 @@ export async function DELETE() {
   const jar = await cookies();
   jar.delete(ADMIN_VIEW_COOKIE);
 
-  const repository = new SupabaseIdentityTenancyRepository();
   await repository.recordAuditEvent({
     actorUserId: resolution.session.user.id,
     authenticatedIdentityId: resolution.session.externalWorkosUserId,

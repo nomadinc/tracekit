@@ -1,3 +1,4 @@
+import { requirePersistedPlatformAccess } from "@/lib/identity/platform-catalog-access";
 import { redirect } from "next/navigation";
 import { resolveApplicationSession } from "@/lib/identity/application-session";
 import { SupabaseIdentityTenancyRepository } from "@/lib/identity/supabase-identity-repository";
@@ -7,8 +8,9 @@ import { readClientHealth } from "@/lib/platform/client-health";
 export default async function PlatformPage() {
   const resolution = await resolveApplicationSession();
   if (resolution.kind !== "authenticated") redirect("/");
-  if (!resolution.session.effectivePermissions.includes("admin.manage_tenants")) redirect("/");
   const repository = new SupabaseIdentityTenancyRepository();
+  try { await requirePersistedPlatformAccess(resolution.session, repository, "admin.manage_tenants"); }
+  catch { redirect("/"); }
   const [organizations, agencies] = await Promise.all([repository.allActiveOrganizations(), repository.allActiveAgencies()]);
   const catalog = organizations.map((organization) => ({ id: organization.id, name: organization.name, agencyId: organization.agencyId, accountId: organization.owningAccountId }));
   const health = await readClientHealth(catalog);

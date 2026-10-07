@@ -6,7 +6,7 @@ import { spawnSync } from "node:child_process";
 const serverSuites = new Set([
   "m11-shopify-webhook-rollback.test.ts", "m17-shopify-webhook-remediation.test.ts",
   "mcp-read-service.test.ts", "meta-oauth-foundation.test.ts",
-  "ws020-mcp-customer-boundary.test.ts",
+  "ws020-mcp-customer-boundary.test.ts", "ws020-provider-action-boundary.test.ts",
 ]);
 const files = readdirSync("tests").filter(name => name.endsWith(".test.ts")).sort();
 const requested = process.argv.slice(2);

@@ -1,3 +1,4 @@
+import { requirePersistedPlatformAccess } from "./platform-catalog-access";
 import { randomUUID } from "node:crypto";
 import { withAuth } from "@workos-inc/authkit-nextjs";
 import { identityMode, resolveIdentitySource } from "./identity-mode";
@@ -124,8 +125,14 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
   const requestedAdminViewId = permissions.includes("admin.impersonate")
     ? readAdminView(jar.get(ADMIN_VIEW_COOKIE)?.value, user.id)
     : null;
-  const adminViewRecord = requestedAdminViewId
-    ? (await repository.allActiveOrganizations()).find((organization) => organization.id === requestedAdminViewId) || null
+  let authorizedAdminViewId = requestedAdminViewId;
+  if (authorizedAdminViewId) {
+    try {
+      await requirePersistedPlatformAccess({ user, membership, effectivePermissions: permissions } as TraceKitSessionContext, repository, "admin.impersonate");
+    } catch { authorizedAdminViewId = null; }
+  }
+  const adminViewRecord = authorizedAdminViewId
+    ? (await repository.allActiveOrganizations()).find((organization) => organization.id === authorizedAdminViewId) || null
     : null;
   const adminViewOrganization = adminViewRecord
     ? { id: adminViewRecord.id, name: adminViewRecord.name, mark: adminViewRecord.name.slice(0, 2).toUpperCase(), accountId: adminViewRecord.owningAccountId }
