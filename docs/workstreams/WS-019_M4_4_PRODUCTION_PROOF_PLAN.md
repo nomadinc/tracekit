@@ -1,6 +1,6 @@
 # WS-019 M4.4 Production Proof Plan
 
-Status: **PHASE A CLOSED / PHASE B FIXTURE PRODUCTION EVIDENCE REQUIRED**
+Status: **CLOSED / PASS — PRODUCTION PROVEN**
 
 The frozen governed-action Notification Center contract contains exactly three abnormal or action-required conditions:
 
@@ -40,7 +40,7 @@ Production currently has no safe active-awaiting, terminal-failure, or incomplet
 8. Capture identical AFTER snapshots and require only the explicitly authorized presentation-state change.
 9. Correlate telemetry and require zero Shopify, Everflow, Commas, credential, readiness, or external-delivery access.
 
-Phase A is closed and production-proven. `notification_contract` remains blocked until the Phase B fixture mechanism is integrated and its separately authorized authenticated production evidence is complete.
+Phase A and Phase B are closed and production-proven. The fixed acceptance sequence proved the three governed abnormal conditions, authenticated API/UI projection, create idempotency, presentation-only read/dismiss behavior, deterministic condition resolution, retained evidence, tenant isolation, and zero attributable provider/credential/external-delivery activity. `notification_contract` is **PRODUCTION PROVEN**. This does not by itself declare overall Production V1 ready.
 
 ## Phase B retained evidence contract
 

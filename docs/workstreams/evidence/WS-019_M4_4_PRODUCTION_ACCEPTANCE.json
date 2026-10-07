@@ -1,0 +1,63 @@
+{
+  "organizationId": "8f6bb14b-2126-49b8-bfdb-c60edbc3549b",
+  "actionOperation": "shopify.controlled_webhook_create_delete_proof",
+  "evidenceProducedAt": "2026-10-07T20:16:03.452693Z",
+  "authoritativeMain": "89eeb1f7167cc020ea55ad57a9485753a0b95ceb",
+  "namespace": "ws019.m4.4.phase_b",
+  "phaseB": {
+    "creationAt": "2026-10-07T18:31:36.239620Z",
+    "intentIds": ["b4400000-0000-4000-8000-000000000001", "b4400000-0000-4000-8000-000000000002", "b4400000-0000-4000-8000-000000000003"],
+    "initialGovernedNotifications": 3,
+    "idempotencyReplayCreated": false,
+    "awaitingReadAt": "2026-10-07T19:17:44.011Z",
+    "failureDismissedAt": "2026-10-07T19:31:00.365Z",
+    "awaitingConfirmedAt": "2026-10-07T20:04:29.118521Z",
+    "recoveryResolvedAt": "2026-10-07T20:13:34.757754Z",
+    "finalActiveGovernedNotifications": 0,
+    "retainedDismissedGovernedNotifications": 1,
+    "presentationRows": 2,
+    "providerRequests": 0,
+    "credentialAccesses": 0,
+    "externalDeliveries": 0,
+    "workItemDelta": 0,
+    "externalActionAuditDelta": 0,
+    "externalMutationAuditDelta": 0
+  },
+  "stages": {
+    "detection": ["M3 production acceptance", "M4.4 governed notification projection"],
+    "eligibility": ["M3 production acceptance", "M4.4 fixed acceptance fixture"],
+    "preparation": ["M3 production acceptance"],
+    "exact_target": ["M3 deterministic target", "M4.4 fixed deterministic identities"],
+    "permission": ["M4.2 production RBAC", "M4.4 authenticated Stem Labs sessions"],
+    "explicit_confirmation": ["M3 atomic confirmation", "M4.4 Fixture A deterministic confirmation"],
+    "execution": ["M3 exactly-once execution", "M4.4 immutable synthetic failure evidence"],
+    "verification": ["M3 rollback proof", "M4.4 rollback-verified recovery transition"],
+    "replay_idempotency": ["M3 replay evidence", "M4.4 create replay created=false"],
+    "durable_audit_history": ["M4.3 lifecycle history", "M4.4 retained fixture and presentation evidence"],
+    "safe_failure": ["M4.2 tenant negatives", "M4.4 non-disclosing tenant-negative read"]
+  },
+  "scenarios": [
+    {"scenario":"organization_context","passed":true,"evidenceRefs":["authenticated Stem Labs ApplicationSession"],"observedAt":"2026-10-07T20:13:34.716582Z"},
+    {"scenario":"current_evidence_evaluation","passed":true,"evidenceRefs":["final durable snapshot"],"observedAt":"2026-10-07T20:16:03.452693Z"},
+    {"scenario":"healthy_no_action","passed":true,"evidenceRefs":["Phase A truthful empty governed projection"],"observedAt":"2026-10-07T04:44:47.044Z"},
+    {"scenario":"actionable_finding","passed":true,"evidenceRefs":["three Phase B governed notifications"],"observedAt":"2026-10-07T18:41:18.660Z"},
+    {"scenario":"unsupported_action_suppression","passed":true,"evidenceRefs":["Phase A suppression specimens"],"observedAt":"2026-10-07T04:44:47.044Z"},
+    {"scenario":"confirmation_rbac","passed":true,"evidenceRefs":["fixed SECURITY DEFINER confirmation boundary"],"observedAt":"2026-10-07T20:04:29.118521Z"},
+    {"scenario":"execute_exactly_once","passed":true,"evidenceRefs":["M3 production acceptance"],"observedAt":"2026-10-04T17:55:31.633Z"},
+    {"scenario":"verification","passed":true,"evidenceRefs":["Fixture C rollback-verified transition"],"observedAt":"2026-10-07T20:13:34.757754Z"},
+    {"scenario":"durable_lifecycle_history","passed":true,"evidenceRefs":["retained final fixture state"],"observedAt":"2026-10-07T20:16:03.452693Z"},
+    {"scenario":"replay","passed":true,"evidenceRefs":["production create replay returned created=false"],"observedAt":"2026-10-07T19:10:40.977Z"},
+    {"scenario":"failure_path","passed":true,"evidenceRefs":["immutable terminal failure and dismissed presentation"],"observedAt":"2026-10-07T19:31:00.365Z"},
+    {"scenario":"tenant_negative_access","passed":true,"evidenceRefs":["non-disclosing governed notification 404"],"observedAt":"2026-10-07T05:10:20.916Z"},
+    {"scenario":"operational_telemetry","passed":true,"evidenceRefs":["exact-window zero-provider and zero-audit deltas"],"observedAt":"2026-10-07T20:16:03.452693Z"}
+  ],
+  "releaseRequirements": {
+    "permission_rbac": {"status":"pass","evidenceRefs":["M4.2 production acceptance","M4.4 authenticated actions.execute boundaries"]},
+    "tenant_negative_reads": {"status":"pass","evidenceRefs":["M4.4 non-disclosing tenant-negative read"]},
+    "tenant_negative_mutations": {"status":"pass","evidenceRefs":["M4.2 production acceptance","M4.4 server-derived tenant and actor"]},
+    "authorized_work_item_transitions": {"status":"pass","evidenceRefs":["M4.2 production acceptance"]},
+    "audit_visibility": {"status":"pass","evidenceRefs":["M4.2 production acceptance","M4.4 request correlations"]},
+    "lifecycle_history_visibility": {"status":"pass","evidenceRefs":["M4.3 production acceptance"]},
+    "notification_contract": {"status":"pass","evidenceRefs":["M4.4 Phase A and Phase B production acceptance"]}
+  }
+}
