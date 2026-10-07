@@ -78,7 +78,40 @@ export type NotificationsResponse = {
   notifications?: TraceKitNotification[];
   next_cursor?: string | null;
   has_more?: boolean;
+  governed_source?: "available";
 };
+
+const EMPTY_NOTIFICATION_COUNTS = { total: 0, unread: 0, read: 0, resolved: 0, dismissed: 0, critical: 0, warning: 0, info: 0, healthy: 0 };
+
+export function normalizeNotificationsResponse(value: unknown): NotificationsResponse & {
+  workspace_id: string;
+  counts: NonNullable<NotificationsResponse["counts"]>;
+  notifications: TraceKitNotification[];
+  next_cursor: string | null;
+  has_more: boolean;
+  governed_source: "available";
+} {
+  if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error("Notification Center failed to load.");
+  const response = value as NotificationsResponse;
+  if (response.ok === false || typeof response.workspace_id !== "string" || !response.workspace_id || response.governed_source !== "available" || !Array.isArray(response.notifications)) throw new Error("Notification Center failed to load.");
+  const rawCounts = response.counts;
+  if (!rawCounts || Object.keys(EMPTY_NOTIFICATION_COUNTS).some((key) => !Number.isFinite(Number(rawCounts[key as keyof typeof rawCounts])))) throw new Error("Notification Center failed to load.");
+  return {
+    ...response,
+    workspace_id: response.workspace_id,
+    governed_source: response.governed_source,
+    counts: Object.fromEntries(Object.keys(EMPTY_NOTIFICATION_COUNTS).map((key) => [key, Number(rawCounts[key as keyof typeof rawCounts])])) as NonNullable<NotificationsResponse["counts"]>,
+    notifications: response.notifications,
+    next_cursor: typeof response.next_cursor === "string" ? response.next_cursor : null,
+    has_more: response.has_more === true,
+  };
+}
+
+export function notificationListState(input: { loading: boolean; error: string | null; notificationCount: number }) {
+  if (input.error) return "error" as const;
+  if (input.loading) return "loading" as const;
+  return input.notificationCount > 0 ? "populated" as const : "empty" as const;
+}
 
 export const NOTIFICATION_CATEGORY_LABELS: Record<NotificationCategory, string> = {
   tracking: "Tracking",

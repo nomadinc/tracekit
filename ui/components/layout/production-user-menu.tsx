@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { Bell, CircleHelp, Command, LogOut, Palette, UserRound } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import { useIdentity } from "@/components/identity/identity-provider";
 import { useShellDrawer } from "./shell-drawer";
 import { runUserMenuSignOut, shouldShowDevelopmentIdentityNotice, userMenuContext, userMenuSignOutAction } from "@/lib/shell/user-menu-context";
@@ -16,6 +16,7 @@ type ProductionUserMenuProps = {
 
 export function ProductionUserMenu({ open, onToggle, onClose, onBeforeOpen }: ProductionUserMenuProps) {
   const pathname = usePathname();
+  const router = useRouter();
   const drawer = useShellDrawer();
   const { session, organizations, businessContexts, variant } = useIdentity();
   const triggerRef = React.useRef<HTMLButtonElement | null>(null);
@@ -76,11 +77,11 @@ export function ProductionUserMenu({ open, onToggle, onClose, onBeforeOpen }: Pr
   }
 
   const actions = [
-    { label: "Profile", icon: UserRound, description: "Profile management will be connected after production identity is approved." },
-    { label: "Notifications", icon: Bell, description: "Notification preferences and history remain production placeholders in Phase 1." },
-    { label: "Keyboard Shortcuts", icon: Command, description: "Use Command+K on macOS or Control+K elsewhere to open Universal Search." },
-    { label: "Appearance / Theme", icon: Palette, description: "Appearance and Color Vision Optimized preferences will be connected in a later phase." },
-    { label: "Help & Support", icon: CircleHelp, description: "Support entry points will be connected after account routing is approved." },
+    { label: "Profile", icon: UserRound, description: "Profile management will be connected after production identity is approved.", href: null },
+    { label: "Notifications", icon: Bell, description: "Open the workspace Notification Center.", href: "/notifications" },
+    { label: "Keyboard Shortcuts", icon: Command, description: "Use Command+K on macOS or Control+K elsewhere to open Universal Search.", href: null },
+    { label: "Appearance / Theme", icon: Palette, description: "Appearance and Color Vision Optimized preferences will be connected in a later phase.", href: null },
+    { label: "Help & Support", icon: CircleHelp, description: "Support entry points will be connected after account routing is approved.", href: null },
   ];
 
   return (
@@ -117,7 +118,7 @@ export function ProductionUserMenu({ open, onToggle, onClose, onBeforeOpen }: Pr
           <div className="py-2">
             {actions.map((action, index) => {
               const Icon = action.icon;
-              return <button key={action.label} ref={index === 0 ? firstItemRef : undefined} type="button" role="menuitem" onClick={() => selectAction(action.label, action.description)} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:hover:bg-white/10"><Icon className="h-4 w-4 text-slate-500" /><span>{action.label}</span></button>;
+              return <button key={action.label} ref={index === 0 ? firstItemRef : undefined} type="button" role="menuitem" onClick={() => { if (action.href) { requestClose(false); router.push(action.href); return; } selectAction(action.label, action.description); }} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:hover:bg-white/10"><Icon className="h-4 w-4 text-slate-500" /><span>{action.label}</span></button>;
             })}
             <button
               type="button"
