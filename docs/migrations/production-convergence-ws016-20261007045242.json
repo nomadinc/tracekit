@@ -1,0 +1,35 @@
+{
+  "schema_version": 1,
+  "authoritative_main": "fe9917f6cd870de81e08bab5af62ab9d1e640680",
+  "production_project": "uoeosoiegatlqtzemsfv",
+  "mapping": {
+    "repository_original": {
+      "version": "20261007043500",
+      "name": "ws016_google_ads_daily_canary_activation",
+      "path": "supabase/migrations/20261007043500_ws016_google_ads_daily_canary_activation.sql"
+    },
+    "production_authoritative": {
+      "version": "20261007045242",
+      "name": "ws016_google_ads_daily_canary_activation",
+      "path": "supabase/migrations/20261007045242_ws016_google_ads_daily_canary_activation.sql"
+    },
+    "mapping_type": "rename_to_production_identity",
+    "classification": "same_migration_generated_production_identity",
+    "sql_sha256": "2c687192836e4eee2f6d565ba2a74de765c4bdad6e8884537cbf3aa05c894de8",
+    "normalized_sql_sha256": "404ccd408459ed5fa69ee8e96e197937daa1bde2a57219993390481283f219d4",
+    "schema_effect_verification": "Production function body, SECURITY INVOKER behavior, fixed search_path, comment, and service_role-only execute ACL match the repository SQL.",
+    "production_application_provenance": {
+      "applied_at": "2026-10-07T04:52:42Z",
+      "path": "authenticated_supabase_management_mcp",
+      "version_generation": "to_char(current_timestamp, 'YYYYMMDDHH24MISS')"
+    },
+    "repository_provenance": {
+      "introduction_commit": "686fd986b99f831af87e588a2bb3605d028b7d43",
+      "introduction_time": "2026-10-07T04:30:46Z",
+      "pull_request": 535,
+      "merge_commit": "0756e3af66a4308d5e18974853f853574bca72e0"
+    },
+    "repository_action": "Rename only; preserve SQL bytes exactly.",
+    "confidence": "deterministic_byte_exact"
+  }
+}
