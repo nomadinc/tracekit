@@ -10,5 +10,7 @@ export function signedOutReturnUrl(requestUrl: string, env: NodeJS.ProcessEnv = 
   trusted.add("https://app.trace-kit.io");
   const local = env.NODE_ENV !== "production" && ["localhost", "127.0.0.1", "[::1]"].includes(request.hostname) && ["http:", "https:"].includes(request.protocol);
   if (request.username || request.password || (!trusted.has(request.origin) && !local)) throw new Error("Untrusted authentication return origin");
-  return new URL("/auth/signed-out", request.origin).toString();
+  // WorkOS registers the production signed-out page and the existing preview root.
+  const pathname = request.origin === "https://app.trace-kit.io" || local ? "/auth/signed-out" : "/";
+  return new URL(pathname, request.origin).toString();
 }

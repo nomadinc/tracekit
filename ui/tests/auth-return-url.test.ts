@@ -7,7 +7,7 @@ test("production logout supplies an absolute same-origin signed-out destination"
 });
 test("preview authentication keeps its explicitly configured deployment origin", () => {
   const host = "tracekit-git-feature-tenancy-team-invitations-tracekit.vercel.app";
-  assert.equal(signedOutReturnUrl(`https://${host}/auth/sign-out`, { ...production, VERCEL_BRANCH_URL: host }), `https://${host}/auth/signed-out`);
+  assert.equal(signedOutReturnUrl(`https://${host}/auth/sign-out`, { ...production, VERCEL_BRANCH_URL: host }), `https://${host}/`);
 });
 test("untrusted origins, credentials and protocol downgrade cannot become return destinations", () => {
   for (const url of ["https://evil.example/auth/sign-out", "https://tracekit-evil.vercel.app/auth/sign-out", "https://user:password@app.trace-kit.io/auth/sign-out", "http://app.trace-kit.io/auth/sign-out"]) assert.throws(() => signedOutReturnUrl(url, production));
