@@ -338,7 +338,8 @@ test("production routes are protected while auth and static assets remain public
 test("the sign-out route delegates active and missing sessions to AuthKit's safe cookie and provider flow", () => {
   const route = readFileSync(new URL("../app/auth/sign-out/route.ts", import.meta.url), "utf8");
   assert.match(route, /resolution\.kind === "authenticated"/);
-  assert.match(route, /signOut\(\{ returnTo: "\/auth\/signed-out" \}\)/);
+  assert.match(route, /const returnTo = signedOutReturnUrl\(request\.url\)/);
+  assert.match(route, /signOut\(\{ returnTo \}\)/);
   assert.doesNotMatch(route, /dev_identity|developmentOnly/);
   assert.equal(isPublicAuthenticationPath("/auth/sign-out"), true);
   assert.equal(isPublicAuthenticationPath("/auth/signed-out"), true);
