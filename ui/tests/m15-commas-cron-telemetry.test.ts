@@ -3,7 +3,7 @@ import { readFileSync } from "node:fs";
 import test from "node:test";
 
 const route=readFileSync(new URL("../app/api/cron/commas-scheduler/route.ts",import.meta.url),"utf8");
-const migration=readFileSync(new URL("../../supabase/migrations/20261001220000_commerce_cron_runtime_telemetry.sql",import.meta.url),"utf8");
+const migration=readFileSync(new URL("../../supabase/migrations/20261001220612_m15_commerce_cron_runtime_telemetry.sql",import.meta.url),"utf8");
 
 test("Commas cron persists an invocation row before authorization branching",()=>{
   assert.match(route,/commercePersistenceRequest\("commerce_cron_runs"/);

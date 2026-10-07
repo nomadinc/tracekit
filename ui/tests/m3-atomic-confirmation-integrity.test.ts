@@ -9,7 +9,7 @@ const migration = readFileSync(
 const repository = readFileSync(new URL("../lib/mcp/action-intent-repository.ts", import.meta.url), "utf8");
 const service = readFileSync(new URL("../lib/mcp/action-service.ts", import.meta.url), "utf8");
 const shopifyResolver = readFileSync(
-  new URL("../../supabase/migrations/20261002002500_m15_shopify_confirmation_resolver.sql", import.meta.url),
+  new URL("../../supabase/migrations/20261002002800_m15_shopify_confirmation_resolver.sql", import.meta.url),
   "utf8",
 );
 

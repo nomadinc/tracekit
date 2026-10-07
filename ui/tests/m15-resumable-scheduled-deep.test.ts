@@ -5,8 +5,8 @@ import { SCHEDULED_DEEP_INVOCATION_REQUEST_MAX, scheduledDeepInvocationCeiling }
 
 const scheduler=readFileSync(new URL("../../api/src/index.ts",import.meta.url),"utf8");
 const worker=readFileSync(new URL("../lib/commerce/commas-continuous-worker.ts",import.meta.url),"utf8");
-const migration=readFileSync(new URL("../../supabase/migrations/20261001223000_resumable_scheduled_deep_chunks.sql",import.meta.url),"utf8");
-const completionIdentityMigration=readFileSync(new URL("../../supabase/migrations/20261002040000_fix_scheduled_deep_completion_identity.sql",import.meta.url),"utf8");
+const migration=readFileSync(new URL("../../supabase/migrations/20261001222109_m15_resumable_scheduled_deep_chunks.sql",import.meta.url),"utf8");
+const completionIdentityMigration=readFileSync(new URL("../../supabase/migrations/20261002040259_fix_scheduled_deep_completion_identity.sql",import.meta.url),"utf8");
 
 test("M15 deep chunks have a strict per-invocation provider ceiling",()=>{
   assert.equal(SCHEDULED_DEEP_INVOCATION_REQUEST_MAX,40);

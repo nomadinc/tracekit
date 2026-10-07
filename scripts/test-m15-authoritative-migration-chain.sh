@@ -8,7 +8,7 @@ set -euo pipefail
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 database_url="${TRACEKIT_MIGRATION_TEST_DB_URL:-}"
 fixture="$repo_root/supabase/tests/fixtures/m15_stem_labs_workspace_prerequisites.sql"
-pre_m15_version="20260930193000"
+pre_m15_version="20261001061138"
 expected_final_version="$(find "$repo_root/supabase/migrations" -maxdepth 1 -type f -name '[0-9]*.sql' -exec basename {} \; | sort | tail -1 | sed 's/_.*//')"
 
 case "$database_url" in
@@ -62,7 +62,7 @@ begin
     raise exception 'migration ledger ended at %, expected %', v_final, v_expected;
   end if;
   if not exists (
-    select 1 from supabase_migrations.schema_migrations where version = '20261001210000'
+    select 1 from supabase_migrations.schema_migrations where version = '20261001210243'
   ) or not exists (
     select 1 from supabase_migrations.schema_migrations where version = '20261004063517'
   ) then
