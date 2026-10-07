@@ -105,7 +105,7 @@ test("business contexts come from active persistent access and catalog rows", as
   });
   assert.match(requestedUrl, /tracekit_business_context_access\?/);
   assert.match(requestedUrl, /status=eq\.active/);
-  assert.match(requestedUrl, /tracekit_business_contexts!inner/);
+  assert.match(requestedUrl, /tracekit_business_contexts!tracekit_business_context_access_context_fk!inner/);
   assert.match(requestedUrl, /tracekit_business_contexts\.status=eq\.active/);
   assert.match(requestedUrl, /order=created_at\.asc,business_context_id\.asc/);
 });

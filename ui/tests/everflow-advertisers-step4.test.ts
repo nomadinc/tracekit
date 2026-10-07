@@ -19,7 +19,7 @@ test("Everflow advertiser list uses the documented bounded read-only table searc
 
 test("advertiser source identity is network scoped and never globally unique", () => {
   const source = advertiserSource();
-  const migration = readFileSync(`${root}/../supabase/migrations/082_everflow_advertisers_v1.sql`, "utf8");
+  const migration = readFileSync(`${root}/../supabase/migrations/090_everflow_advertisers_v1.sql`, "utf8");
   assert.match(source, /networkAdvertiserId/);
   assert.match(source, /providerAccountId: account\.id/);
   assert.match(source, /advertiser\.networkId.*account\.externalId/);
@@ -35,7 +35,7 @@ test("advertiser normalization excludes verification tokens, revenue snapshots, 
 
 test("advertiser persistence is idempotent and browser access is denied", () => {
   const source = advertiserSource();
-  const migration = readFileSync(`${root}/../supabase/migrations/082_everflow_advertisers_v1.sql`, "utf8");
+  const migration = readFileSync(`${root}/../supabase/migrations/090_everflow_advertisers_v1.sql`, "utf8");
   assert.match(source, /everflow_advertisers\?on_conflict=connection_id,provider_account_id,network_advertiser_id/);
   assert.match(source, /resolution=merge-duplicates/);
   assert.match(migration, /enable row level security/);

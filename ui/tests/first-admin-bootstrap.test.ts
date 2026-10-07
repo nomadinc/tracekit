@@ -73,7 +73,7 @@ test("empty installations render setup while existing no-membership remains dist
 });
 
 test("top-level unaffiliated session resolution selects bootstrap only for an empty installation", async () => {
-  assert.match(applicationSession, /if \(!membership\) return resolveUnaffiliatedSessionState/);
+  assert.match(applicationSession, /if \(!preferredMembership\) return resolveUnaffiliatedSessionState/);
   assert.match(shell, /const resolution = await resolveApplicationSession\(\);/);
   assert.deepEqual(
     await resolveUnaffiliatedSessionState(async () => true),

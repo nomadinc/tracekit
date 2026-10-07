@@ -117,7 +117,10 @@ const JOURNEY_EVENT_SELECT = [
 
 const PLATFORM_ORDER_SELECT = [
   "workspace_id",
-  "person_id",
+  "person_id:resolved_person_id",
+  "source_person_id:person_id",
+  "resolved_person_id",
+  "identity_resolution",
   "platform",
   "platform_order_id",
   "platform_store_id",
@@ -214,6 +217,7 @@ const COMMISSION_SELECT = [
 
 export type CustomerExplorerRouteMatch =
   | { kind: "customer_list" }
+  | { kind: "customer_orders" }
   | { kind: "customer_detail"; person_id: string }
   | { kind: "customer_journey_detail"; person_id: string; journey_id: string }
   | { kind: "method_not_allowed"; path: string; allowed_methods: string[] };
@@ -353,6 +357,10 @@ function normalizedPath(path: string) {
 export function matchCustomerExplorerRoute(method: string, path: string): CustomerExplorerRouteMatch | null {
   const cleanPath = normalizedPath(path);
   const upperMethod = String(method || "GET").toUpperCase();
+  if (cleanPath === "/v1/customer-orders") {
+    if (upperMethod === "GET") return { kind: "customer_orders" };
+    return { kind: "method_not_allowed", path: "/v1/customer-orders", allowed_methods: ["GET"] };
+  }
   if (cleanPath === "/v1/customers") {
     if (upperMethod === "GET") return { kind: "customer_list" };
     return { kind: "method_not_allowed", path: "/v1/customers", allowed_methods: ["GET"] };
@@ -1313,10 +1321,10 @@ async function findPersonIdsBySearch(supabase: any, params: CustomerListParams) 
   const exactOrderSearch = Boolean(search.email || uuidSearch || /^\d+$/.test(search.text) || search.text.length >= 12);
   const orderRows = exactOrderSearch ? await supabaseRows(
     supabase
-      .from("platform_orders")
-      .select("person_id,platform_order_id,order_id,transaction_id,everflow_transaction_id,commerce_reference,affiliate_id,customer_email_normalized")
+      .from("tracekit_customer_order_read_model")
+      .select("person_id:resolved_person_id,platform_order_id,order_id,transaction_id,everflow_transaction_id,commerce_reference,affiliate_id,customer_email_normalized")
       .eq("workspace_id", params.workspace_id)
-      .not("person_id", "is", null)
+      .not("resolved_person_id", "is", null)
       .or(orderOrParts.join(","))
       .limit(100),
     "Customer order search",
@@ -1359,10 +1367,10 @@ async function findPersonIdsByFilters(supabase: any, params: CustomerListParams)
   const needsOrders = params.has_purchase !== null || params.source_platform || params.affiliate_id || params.from || params.to_exclusive;
   if (needsOrders) {
     let query = supabase
-      .from("platform_orders")
-      .select("person_id")
-      .eq("workspace_id", params.workspace_id)
-      .not("person_id", "is", null)
+      .from("tracekit_customer_order_read_model")
+      .select("person_id:resolved_person_id")
+      .eq("workspace_id", params.workspace_id).eq("organization_id", params.workspace_id)
+      .not("resolved_person_id", "is", null)
       .order("order_ts", { ascending: false })
       .limit(1000);
     if (params.source_platform) query = query.eq("platform", params.source_platform);
@@ -1491,7 +1499,7 @@ async function loadCustomerSummaryRows(supabase: any, workspaceId: string, perso
       "Customer journey summary lookup",
     ),
     supabaseRows(
-      supabase.from("platform_orders").select(PLATFORM_ORDER_SELECT).eq("workspace_id", workspaceId).in("person_id", ids).order("order_ts", { ascending: false }).limit(2000),
+      supabase.from("tracekit_customer_order_read_model").select(PLATFORM_ORDER_SELECT).eq("workspace_id", workspaceId).eq("organization_id", workspaceId).in("resolved_person_id", ids).order("order_ts", { ascending: false }).limit(2000),
       "Customer order summary lookup",
     ),
     supabaseRows(
@@ -1569,7 +1577,7 @@ export async function listCustomers(supabase: any, params: CustomerListParams) {
   const summaryRows = await loadCustomerSummaryRows(supabase, params.workspace_id, ids);
   const identifiersByPerson = groupBy(summaryRows.identifiers, (row: any) => cleanText(row.person_id));
   const journeysByPerson = groupBy(summaryRows.journeys, (row: any) => cleanText(row.person_id));
-  const ordersByPerson = groupBy(summaryRows.orders, (row: any) => cleanText(row.person_id));
+  const ordersByPerson = groupBy(summaryRows.orders, (row: any) => cleanText(row.resolved_person_id || row.person_id));
   const creditsByPerson = groupBy(summaryRows.credits, (row: any) => cleanText(row.person_id));
   const commissionsByPerson = groupBy(summaryRows.commissions, (row: any) => cleanText(row.person_id));
   const customers = page.map((person: any) => summarizeCustomer(person, {
@@ -1629,7 +1637,7 @@ export async function getCustomerDetail(supabase: any, args: { workspace_id: str
       "Customer journeys lookup",
     ),
     supabaseRows(
-      supabase.from("platform_orders").select(PLATFORM_ORDER_SELECT).eq("workspace_id", args.workspace_id).eq("person_id", args.person_id).order("order_ts", { ascending: false }).limit(500),
+      supabase.from("tracekit_customer_order_read_model").select(PLATFORM_ORDER_SELECT).eq("workspace_id", args.workspace_id).eq("organization_id", args.workspace_id).eq("resolved_person_id", args.person_id).order("order_ts", { ascending: false }).limit(500),
       "Customer orders lookup",
     ),
     supabaseRows(
@@ -1751,10 +1759,10 @@ export async function getCustomerJourneyDetail(supabase: any, params: CustomerJo
   if (journey.ended_at) identityQuery = identityQuery.lte("created_at", journey.ended_at);
 
   let orderQuery = supabase
-    .from("platform_orders")
+    .from("tracekit_customer_order_read_model")
     .select(PLATFORM_ORDER_SELECT)
     .eq("workspace_id", params.workspace_id)
-    .eq("person_id", params.person_id)
+    .eq("organization_id", params.workspace_id).eq("resolved_person_id", params.person_id)
     .order("order_ts", { ascending: true })
     .limit(100);
   if (journey.started_at) orderQuery = orderQuery.gte("order_ts", journey.started_at);
@@ -1831,4 +1839,21 @@ export async function getCustomerJourneyDetail(supabase: any, params: CustomerJo
       has_more: eventRows.length > params.limit,
     },
   };
+}
+
+
+// Commerce evidence belongs to a tenant even while person resolution is pending.
+// Do not manufacture people or attach orders using name/email similarity.
+export async function listCustomerOrders(supabase: any, args: { workspace_id: string; offset: number; limit: number; order_id?: string; person_id?: string }) {
+  const limit = Math.max(1, Math.min(100, Math.floor(args.limit || 50)));
+  const offset = Math.max(0, Math.floor(args.offset || 0));
+  let query = supabase.from("tracekit_customer_order_read_model")
+    .select("workspace_id,organization_id,person_id,resolved_person_id,identity_resolution,platform,platform_order_id,order_id,order_ts,status,status_norm,gross_amount,currency,evidence_id")
+    .eq("workspace_id", args.workspace_id).eq("organization_id", args.workspace_id);
+  if (args.order_id) query = query.eq("platform_order_id", args.order_id);
+  if (args.person_id) query = query.eq("resolved_person_id", args.person_id);
+  const { data, error } = await query.order("order_ts", { ascending: false }).order("platform_order_id", { ascending: false }).range(offset, offset + limit);
+  if (error) throw new Error("Customer order evidence is unavailable.");
+  const rows = (data || []).slice(0, limit);
+  return { ok: true, orders: rows.map((order: any) => ({ order, customer: order.resolved_person_id ? { id: order.resolved_person_id } : null, identity_state: order.identity_resolution || "unresolved" })), next_offset: (data || []).length > limit ? offset + limit : null };
 }

@@ -19,7 +19,7 @@ test("Everflow affiliate client is bounded, paginated, and read-only", () => {
 
 test("affiliate source identity is network scoped and never globally unique", () => {
   const source = affiliateSource();
-  const migration = readFileSync(`${root}/../supabase/migrations/081_everflow_affiliates_v1.sql`, "utf8");
+  const migration = readFileSync(`${root}/../supabase/migrations/089_everflow_affiliates_v1.sql`, "utf8");
   assert.match(source, /networkAffiliateId/);
   assert.match(source, /providerAccountId: account\.id/);
   assert.match(source, /affiliate\.networkId.*account\.externalId/);
@@ -41,7 +41,7 @@ test("affiliate persistence is an idempotent source-resource upsert", () => {
 });
 
 test("affiliate migration denies direct browser access", () => {
-  const migration = readFileSync(`${root}/../supabase/migrations/081_everflow_affiliates_v1.sql`, "utf8");
+  const migration = readFileSync(`${root}/../supabase/migrations/089_everflow_affiliates_v1.sql`, "utf8");
   assert.match(migration, /enable row level security/);
   assert.match(migration, /revoke all on table public\.everflow_affiliates from anon, authenticated/);
   assert.match(migration, /grant select, insert, update on table public\.everflow_affiliates to service_role/);

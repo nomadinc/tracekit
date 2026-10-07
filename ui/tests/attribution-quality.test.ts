@@ -74,7 +74,7 @@ test("report request path is GET only and cannot mutate attribution state", () =
   assert.match(route, /export async function GET/);
   assert.match(route, /requirePermission\(resolution\.session, "connectors\.view"\)/);
   assert.match(repository, /organization_id=eq\.\$\{organizationId\}/);
-  const sql = readFileSync(new URL("../../supabase/migrations/20260914034800_commas_attribution_quality_read_v1.sql", import.meta.url), "utf8");
+  const sql = readFileSync(new URL("../../supabase/migrations/20260914043837_commas_attribution_quality_read_v1.sql", import.meta.url), "utf8");
   assert.match(repository, /rpc\/read_commas_attribution_quality_v1/);
   assert.match(repository, /rpc\/read_commas_attribution_conflicts_v1/);
   assert.doesNotMatch(route + repository, /journey_attribution_credits|method:\s*["'](?:POST|PATCH|PUT|DELETE)["']/);
@@ -85,7 +85,7 @@ test("report request path is GET only and cannot mutate attribution state", () =
 
 test("database aggregation is scoped and has no 5,000-observation application bound", () => {
   const repository = readFileSync(new URL("../lib/commerce/attribution-quality-repository.ts", import.meta.url), "utf8");
-  const sql = readFileSync(new URL("../../supabase/migrations/20260914034800_commas_attribution_quality_read_v1.sql", import.meta.url), "utf8");
+  const sql = readFileSync(new URL("../../supabase/migrations/20260914043837_commas_attribution_quality_read_v1.sql", import.meta.url), "utf8");
   assert.doesNotMatch(repository, /MAX_ROWS|scopedRows|observations\.map/);
   assert.match(sql, /o\.organization_id=p_organization_id and o\.connection_id=p_connection_id/);
   assert.match(sql, /o\.provider_account_id=p_provider_account_id/);
@@ -94,7 +94,7 @@ test("database aggregation is scoped and has no 5,000-observation application bo
 });
 
 test("measurement epoch and healthy days require durable scoped evidence", () => {
-  const sql = readFileSync(new URL("../../supabase/migrations/20260914034700_commas_attribution_measurement_epoch_v1.sql", import.meta.url), "utf8");
+  const sql = readFileSync(new URL("../../supabase/migrations/20260914043832_commas_attribution_measurement_epoch_v1.sql", import.meta.url), "utf8");
   assert.match(sql, /source_evidence_id uuid not null/);
   assert.match(sql, /first_verified_post_cutover_delivery/);
   assert.match(sql, /endpoint_healthy and provider_transaction_parity and ingestion_current/);
@@ -104,7 +104,7 @@ test("measurement epoch and healthy days require durable scoped evidence", () =>
 });
 
 test("stored comparison, pending identity, unavailable latency and payment path are explicit", () => {
-  const sql = readFileSync(new URL("../../supabase/migrations/20260914034800_commas_attribution_quality_read_v1.sql", import.meta.url), "utf8");
+  const sql = readFileSync(new URL("../../supabase/migrations/20260914043837_commas_attribution_quality_read_v1.sql", import.meta.url), "utf8");
   for (const required of ["'everflow'", "'currentEverflow'", "'comparisonFreshness'", "'pending_identity'", "'ord_mapping_absent'", "'identityLatency','UNAVAILABLE'", "'paymentPathAvailability','UNAVAILABLE'", "'initialMatchState','UNKNOWN'"]) assert.ok(sql.includes(required), required);
   assert.match(sql, /'classification'[\s\S]*'FIELD_LEVEL_CONFLICT'/);
   assert.match(sql, /'transactionIdentity'[\s\S]*'affiliateId'[\s\S]*'sub1'[\s\S]*'sub4'/);
@@ -112,7 +112,7 @@ test("stored comparison, pending identity, unavailable latency and payment path 
 });
 
 test("conflict drill-down compares Everflow once per scoped transaction cohort", () => {
-  const sql = readFileSync(new URL("../../supabase/migrations/20260914044200_commas_attribution_conflicts_set_based_v2.sql", import.meta.url), "utf8");
+  const sql = readFileSync(new URL("../../supabase/migrations/20260914045641_commas_attribution_conflicts_set_based_v2.sql", import.meta.url), "utf8");
   assert.match(sql, /with base as materialized/);
   assert.match(sql, /ef_raw as materialized/);
   assert.match(sql, /where organization_id=p_organization_id and transaction_id in \(select observed_tid from base/);

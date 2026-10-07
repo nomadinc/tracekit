@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 
 const root = fileURLToPath(new URL("..", import.meta.url));
 const source = () => readFileSync(`${root}/lib/integrations/everflow-conversions.ts`, "utf8");
-const migration = () => readFileSync(`${root}/../supabase/migrations/084_everflow_conversion_api_ingestion.sql`, "utf8");
+const migration = () => readFileSync(`${root}/../supabase/migrations/092_everflow_conversion_api_ingestion.sql`, "utf8");
 
 test("Everflow conversion client uses the bounded Network reporting endpoint and URL pagination", () => {
   const text = source();

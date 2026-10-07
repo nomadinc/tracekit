@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
 
-const migration=readFileSync(new URL("../../supabase/migrations/20260831045228_commas_deep_reconciliation_cadence_lifecycle.sql",import.meta.url),"utf8");
+const migration=readFileSync(new URL("../../supabase/migrations/20260831054841_commas_deep_reconciliation_cadence_lifecycle.sql",import.meta.url),"utf8");
 const scheduler=readFileSync(new URL("../../api/src/index.ts",import.meta.url),"utf8");
 const queue=readFileSync(new URL("../../api/src/continuous-commerce-cloudflare.ts",import.meta.url),"utf8");
 const runtime=readFileSync(new URL("../../api/continuous-runtime/src/index.ts",import.meta.url),"utf8");

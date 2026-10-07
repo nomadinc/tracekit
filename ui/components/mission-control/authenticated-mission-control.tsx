@@ -1,6 +1,8 @@
 import Link from "next/link";
 import AppShell from "@/components/layout/app-shell";
 import FirstAdminBootstrap from "@/components/identity/first-admin-bootstrap";
+import { authorizedMissionControlContext } from "@/lib/mission-control/persistent-context";
+import { PersistentMissionControl } from "./persistent-mission-control";
 import { MissionControl } from "./mission-control";
 import { missionControlRepository } from "@/lib/mission-control/mock-repository";
 import { readMissionControlPortfolio } from "@/lib/mission-control/production-portfolio";
@@ -8,7 +10,6 @@ import { resolveApplicationSession } from "@/lib/identity/application-session";
 
 export async function AuthenticatedMissionControl() {
   const resolution = await resolveApplicationSession();
-  const snapshot = await missionControlRepository.getMissionControl();
 
   if (resolution.kind === "provider-unavailable")
     return <SessionState title="Authentication unavailable" description="WorkOS and persistent identity configuration are required for authenticated TraceKit operation." />;
@@ -19,6 +20,7 @@ export async function AuthenticatedMissionControl() {
     return <SessionState title="No TraceKit access" description="Your identity is verified, but no active TraceKit account membership is assigned." />;
 
   if (resolution.kind === "development") {
+    const snapshot = await missionControlRepository.getMissionControl();
     return (
       <AppShell>
         <MissionControl snapshot={snapshot} portfolio={null} />
@@ -26,14 +28,17 @@ export async function AuthenticatedMissionControl() {
     );
   }
 
-  const portfolio = await readMissionControlPortfolio(resolution.session).catch(() => null);
+  const scope = authorizedMissionControlContext(resolution.session);
+  const portfolio = scope && resolution.session.effectivePermissions.includes("financials.view")
+    ? await readMissionControlPortfolio(resolution.session).catch(() => null) : null;
   return (
     <AppShell
       initialSession={resolution.legacySession}
       organizations={resolution.session.availableOrganizations}
       businessContexts={resolution.session.accessibleBusinessContexts}
     >
-      <MissionControl snapshot={snapshot} portfolio={portfolio} />
+      {scope ? <PersistentMissionControl organization={scope.organization} context={scope.context} portfolio={portfolio} />
+        : <p className="p-6 text-sm text-slate-500">No accessible Business Context is available for Mission Control.</p>}
     </AppShell>
   );
 }

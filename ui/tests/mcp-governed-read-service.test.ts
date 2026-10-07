@@ -23,7 +23,7 @@ test("customer projection masks sensitive data without sensitive permission",()=
  assert.equal(out.email,"••••"); assert.equal(out.phone,"••••"); assert.equal(out.sensitiveMasked,true);
 });
 test("order projection removes financial and sensitive fields without capabilities",()=>{
- const s=session("customer-support");
+ const s=session("client-read-only");
  const out=projectOrderSummary(s,{id:"o",organizationId:"org-a",offerId:"",customerId:"c",number:"1",customerName:"Person",customerEmail:"person@example.test",customerPhone:"555",sensitiveMasked:false,scenario:"",date:"",status:"Paid",profitStatus:"Estimated",profit:10,revenue:100,trackingHealth:"Unknown",shippingLoss:false,highFee:false,highAffiliate:false});
  assert.equal(out.customerEmail,"••••"); assert.equal(out.revenue,0); assert.equal(out.profit,null);
 });

@@ -1,3 +1,4 @@
+import { projectCoreCustomerRead } from "@/lib/identity/core-read-projection";
 import { NextResponse } from "next/server";
 import { scopedCoreGet } from "@/lib/identity/scoped-core-proxy";
 
@@ -12,6 +13,7 @@ export async function GET(
     `/v1/customers/${encodeURIComponent(customerId)}/journeys/${encodeURIComponent(journeyId)}`,
     req.url,
     "customers.view",
+    projectCoreCustomerRead,
   );
   return NextResponse.json(result.body, { status: result.status });
 }

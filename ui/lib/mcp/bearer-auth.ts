@@ -46,9 +46,9 @@ export async function verifyMcpBearerToken(token:string) {
   if(!payload.sub) reject("missing_sub");
 
   const now=Math.floor(Date.now()/1000);
-  if(!payload.exp) reject("missing_exp");
+  if(typeof payload.exp !== "number" || !Number.isFinite(payload.exp)) reject("missing_exp");
   if(payload.exp<=now) reject("expired");
-  if(payload.nbf && payload.nbf>now+60) reject("not_yet_valid");
+  if(payload.nbf !== undefined && (typeof payload.nbf !== "number" || !Number.isFinite(payload.nbf) || payload.nbf>now+60)) reject("not_yet_valid");
   const jwk=await jwkFor(issuer,header.kid);
   const key=await crypto.subtle.importKey("jwk",jwk,{name:"RSASSA-PKCS1-v1_5",hash:"SHA-256"},false,["verify"]);
   const ok=await crypto.subtle.verify("RSASSA-PKCS1-v1_5",key,b64url(parts[2]),Buffer.from(`${parts[0]}.${parts[1]}`));

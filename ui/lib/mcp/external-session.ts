@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import type { IdentityTenancyRepository } from "@/lib/identity/persistent-repository";
 import type { TraceKitSessionContext } from "@/lib/identity/persistent-types";
-import { resolveEffectivePermissions } from "@/lib/identity/persistent-authorization";
+import { isMembershipEffective, resolveEffectivePermissions } from "@/lib/identity/persistent-authorization";
 import { persistentBusinessContextsWithDisplay } from "@/lib/identity/business-context-resolution";
 import { MOCK_BUSINESS_CONTEXTS } from "@/lib/identity/mock";
 
@@ -19,7 +19,7 @@ export async function resolveMcpExternalSession(
   const user = await repository.userByWorkOSId(identity.workosUserId);
   if (!user || user.status !== "active") return null;
 
-  const memberships = (await repository.membershipsForUser(user.id)).filter((candidate) => candidate.status === "active");
+  const memberships = (await repository.membershipsForUser(user.id)).filter((candidate) => isMembershipEffective(candidate));
   let membership = null as (typeof memberships)[number] | null;
   let organizationRecord = null as Awaited<ReturnType<IdentityTenancyRepository["organizationByWorkOSId"]>>;
 

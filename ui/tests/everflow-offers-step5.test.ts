@@ -19,7 +19,7 @@ test("Everflow offer client uses bounded paginated read/search endpoint", () => 
 
 test("offer source identity is connection scoped and advertiser ownership is retained", () => {
   const text = source();
-  const migration = readFileSync(`${root}/../supabase/migrations/083_everflow_offers_v1.sql`, "utf8");
+  const migration = readFileSync(`${root}/../supabase/migrations/091_everflow_offers_v1.sql`, "utf8");
   assert.match(text, /networkOfferId/);
   assert.match(text, /networkAdvertiserId/);
   assert.match(text, /providerAccountId: account\.id/);
@@ -42,7 +42,7 @@ test("offer persistence is idempotent and network guarded", () => {
 });
 
 test("offer migration denies direct browser access", () => {
-  const migration = readFileSync(`${root}/../supabase/migrations/083_everflow_offers_v1.sql`, "utf8");
+  const migration = readFileSync(`${root}/../supabase/migrations/091_everflow_offers_v1.sql`, "utf8");
   assert.match(migration, /enable row level security/);
   assert.match(migration, /revoke all on table public\.everflow_offers from anon, authenticated/);
   assert.match(migration, /grant select, insert, update on table public\.everflow_offers to service_role/);

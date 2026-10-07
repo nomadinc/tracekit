@@ -79,7 +79,11 @@ test("returns complete without restarting a matching completed run", async () =>
   assert.equal(result.records, 77);
 });
 
-test("rejects an unavailable persisted Shopify bulk operation", async () => {
+test("persists an unavailable bulk operation as failed without downloading or writing", async () => {
   const state = stateStore({ id: "run-1", status: "running", metadata: { bulk_operation_id: "gid://shopify/BulkOperation/1", historical_cutoff: "2026-01-01T00:00:00.000Z" } });
-  await assert.rejects(() => advanceShopifyBulkBackfill({ ...scope, reader: { async start() { throw new Error("should not start"); }, async get() { return null; }, async download() { return ""; } }, store: state.store, writer: async () => {} }), /no longer available/);
+  const result = await advanceShopifyBulkBackfill({ ...scope, reader: { async start() { throw new Error("should not start"); }, async get() { return null; }, async download() { throw new Error("should not download"); } }, store: state.store, writer: async () => { throw new Error("should not write"); } });
+  assert.equal(result.outcome, "failed");
+  assert.equal(result.status, "UNAVAILABLE");
+  assert.equal(state.updates[0].body.status, "failed");
+  assert.equal(state.updates[0].body.last_error_code, "shopify_bulk_operation_unavailable");
 });

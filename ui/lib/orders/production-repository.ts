@@ -41,7 +41,7 @@ function status(v: unknown): OrderSummary["status"] {
   if (/pending|open/.test(s)) return "Pending";
   return "Paid";
 }
-function orderId(row: any) { return String(row?.order_id || row?.platform_order_id || row?.id || ""); }
+function orderId(row: any) { return String(row?.platform_order_id || row?.order_id || row?.id || ""); }
 function summary(row: any, customer: any, scope: ProductionScope): OrderSummary {
   const id = orderId(row);
   return {
@@ -50,16 +50,17 @@ function summary(row: any, customer: any, scope: ProductionScope): OrderSummary 
     offerId: String(row?.everflow_offer_id || row?.offer_id || ""),
     customerId: String(customer?.id || ""),
     number: String(row?.order_id || row?.platform_order_id || id),
-    customerName: String(customer?.display_name || customer?.primary_email || customer?.id || "Customer"),
+    customerName: String(customer?.display_name || customer?.primary_email || customer?.id || "Customer identity unresolved"),
     customerEmail: String(customer?.primary_email || ""),
     customerPhone: String(customer?.primary_phone || ""),
-    sensitiveMasked: false,
+    sensitiveMasked: true,
     scenario: "Production order",
     date: when(row?.created_at || row?.order_ts),
-    status: status(row?.status),
+    status: status(row?.status_norm || row?.status),
     profitStatus: "Estimated",
     profit: null,
     revenue: num(row?.amount ?? row?.gross_amount),
+    revenueAvailable: row?.amount !== undefined || row?.gross_amount !== undefined,
     trackingHealth: "Unknown",
     shippingLoss: false, highFee: false, highAffiliate: false,
   };
@@ -118,9 +119,15 @@ export class ProductionOrderRepository {
       if (filter.query) { const q=filter.query.toLowerCase(); rows=rows.filter((r:OrderSummary)=>`${r.number} ${r.customerName} ${r.customerEmail}`.toLowerCase().includes(q)); }
       return rows;
     }
-    const list = await get(`/api/customers?${qs(scope,{limit:25})}`);
-    const details = await Promise.all((list.customers || []).slice(0,25).map((r:any)=>customerDetail(scope,String(r?.customer?.id||"")).catch(()=>null)));
-    let rows = details.filter(Boolean).flatMap((d:any)=>(d.orders||[]).map((r:any)=>summary(r,d.customer,scope)));
+    let offset: number | null = 0;
+    let rows: OrderSummary[] = [];
+    while (offset !== null) {
+      const page = await get(`/api/customer-orders?${qs(scope,{limit:100,offset})}`);
+      rows.push(...(page.orders || []).map((entry:any)=>summary(entry.order,entry.customer,scope)));
+      if (page.next_offset !== null && (!Number.isInteger(page.next_offset) || page.next_offset <= offset)) throw new Error("Order pagination is unavailable.");
+      offset = page.next_offset;
+    }
+    if (filter.query) { const q=filter.query.toLowerCase(); rows=rows.filter(r=>`${r.number} ${r.customerName}`.toLowerCase().includes(q)); }
     if (filter.offerId) rows = rows.filter((r:OrderSummary)=>r.offerId === filter.offerId);
     return rows;
   }
@@ -130,14 +137,11 @@ export class ProductionOrderRepository {
     return r ? { organizationId:r.organizationId, businessContextId:r.offerId || scope.businessContextId || "", orderId:r.id } : null;
   }
   async loadWorkspace(scope: ProductionScope, id: string): Promise<OrderWorkspaceSnapshot|null> {
-    const list = await get(`/api/customers?${qs(scope,{limit:50})}`);
-    let detail:any=null, raw:any=null;
-    for (const item of (list.customers||[])) {
-      const cid=String(item?.customer?.id||""); if(!cid) continue;
-      const d=await customerDetail(scope,cid).catch(()=>null); if(!d) continue;
-      const found=(d.orders||[]).find((r:any)=>orderId(r)===id || String(r?.order_id||"")===id);
-      if(found){detail=d;raw=found;break;}
-    }
+    const result = await get(`/api/customer-orders?${qs(scope,{order_id:id,limit:1})}`);
+    const entry = result.orders?.[0];
+    const raw:any=entry?.order;
+    let detail:any=raw ? {customer:entry.customer,orders:[raw],journeys:[]} : null;
+    if (entry?.customer?.id) detail=await customerDetail(scope,entry.customer.id);
     if(!detail||!raw) return null;
     const o=summary(raw,detail.customer,scope);
     const journeys=Array.isArray(detail.journeys)?detail.journeys:[];

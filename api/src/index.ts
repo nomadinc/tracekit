@@ -289,6 +289,7 @@ import {
   getCustomerDetail,
   getCustomerJourneyDetail,
   listCustomers,
+  listCustomerOrders,
   matchCustomerExplorerRoute,
   normalizeCustomerJourneyDetailParams,
   normalizeCustomerListParams,
@@ -17014,6 +17015,17 @@ async function router(req: Request, env: Env): Promise<Response> {
       message: `${customerExplorerRoute.path} requires ${customerExplorerRoute.allowed_methods.join(", ")}.`,
       allowed_methods: customerExplorerRoute.allowed_methods,
     }, 405, { Allow: customerExplorerRoute.allowed_methods.join(", ") });
+  }
+
+  if (customerExplorerRoute?.kind === "customer_orders") {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    try {
+      const workspaceId = identityWorkspace(url.searchParams.get("workspace_id"));
+      if (!url.searchParams.get("workspace_id")) return json({ error: "Workspace required." }, 400);
+      const result = await listCustomerOrders(getSupabase(env), { workspace_id: workspaceId, offset: Number(url.searchParams.get("offset") || 0), limit: Number(url.searchParams.get("limit") || 50), order_id: url.searchParams.get("order_id") || undefined, person_id: url.searchParams.get("person_id") || undefined });
+      return json(result);
+    } catch { return json({ error: "Customer order evidence is unavailable." }, 503); }
   }
 
   if (customerExplorerRoute?.kind === "customer_list") {

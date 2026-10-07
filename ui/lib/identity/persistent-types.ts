@@ -19,6 +19,8 @@ export type PersistentMembership = {
   organizationId: string | null;
   role: Role;
   status: "invited" | "active" | "suspended" | "removed";
+  effectiveFrom?: string;
+  effectiveUntil?: string | null;
 };
 export type PermissionOverride = {
   id: string;

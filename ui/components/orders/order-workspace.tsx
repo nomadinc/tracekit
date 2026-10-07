@@ -232,7 +232,7 @@ function OrderWorkspaceContent() {
           </div>
           <div className="mt-5 grid gap-4 border-t pt-4 sm:grid-cols-3 lg:grid-cols-6">
             {[
-              ["Revenue", `$${snap.order.revenue.toFixed(2)}`],
+              ["Revenue", snap.order.revenueAvailable === false ? "Unavailable" : `$${snap.order.revenue.toFixed(2)}`],
               [
                 "Customer",
                 snap.order.sensitiveMasked

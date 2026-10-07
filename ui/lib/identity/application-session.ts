@@ -5,7 +5,7 @@ import { ROLE_PERMISSIONS } from "./permissions";
 import type { IdentitySession } from "./types";
 import type { SafeClientSession, TraceKitSessionContext, WorkOSIdentityInput } from "./persistent-types";
 import { serializeSessionForClient } from "./persistent-types";
-import { resolveEffectivePermissions, selectSessionMembership } from "./persistent-authorization";
+import { isMembershipEffective, resolveEffectivePermissions, selectSessionMembership } from "./persistent-authorization";
 import { SupabaseIdentityTenancyRepository } from "./supabase-identity-repository";
 import { cookies } from "next/headers";
 import { headers } from "next/headers";
@@ -59,7 +59,7 @@ export async function resolveAuthenticatedPersistentIdentity() {
     lastName: auth.user.lastName,
     profilePictureUrl: auth.user.profilePictureUrl,
   });
-  return { user, externalWorkosUserId: auth.user.id, repository };
+  return { user, externalWorkosUserId: auth.user.id, emailVerified: auth.user.emailVerified === true, repository };
 }
 
 export async function resolveApplicationSession(): Promise<ApplicationSessionResolution> {
@@ -95,7 +95,7 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
     profilePictureUrl: auth.user.profilePictureUrl,
   });
   const memberships = await repository.membershipsForUser(user.id);
-  const activeMemberships = memberships.filter((candidate) => candidate.status === "active");
+  const activeMemberships = memberships.filter((candidate) => isMembershipEffective(candidate));
   const requestedOrganizationId = readActiveOrganization(jar.get(ACTIVE_ORGANIZATION_COOKIE)?.value, user.id);
   const preferredMembership = selectSessionMembership(memberships);
   if (!preferredMembership) return resolveUnaffiliatedSessionState(() => repository.isEmptyInstallation());

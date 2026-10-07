@@ -1,3 +1,4 @@
+import { isMembershipEffective } from "./persistent-authorization";
 import type { Permission } from "./permissions";
 import type { TraceKitSessionContext } from "./persistent-types";
 
@@ -12,7 +13,7 @@ export function requireAuthenticatedUser(session: TraceKitSessionContext | null)
 
 export function requireActiveMembership(session: TraceKitSessionContext) {
   requireAuthenticatedUser(session);
-  if (session.membership.status !== "active") throw new AuthorizationDeniedError();
+  if (!isMembershipEffective(session.membership)) throw new AuthorizationDeniedError();
   return session.membership;
 }
 

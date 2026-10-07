@@ -57,6 +57,7 @@ export async function scopedCoreGet(
   upstreamPath: string,
   requestUrl: string,
   permission: Permission,
+  project?: (body: any, session: TraceKitSessionContext) => unknown,
 ) {
   const scope = await authorizedScope(permission);
   if (!scope) return unavailable();
@@ -80,7 +81,8 @@ export async function scopedCoreGet(
     cache: "no-store",
     headers: { accept: "application/json", "x-tk-secret": secret },
   });
-  return { status: res.status, body: await readJsonSafe(res) };
+  const body = await readJsonSafe(res);
+  return { status: res.status, body: res.ok && project ? project(body, scope.session) : body };
 }
 
 export async function scopedCorePost(

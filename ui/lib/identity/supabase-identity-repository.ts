@@ -47,6 +47,10 @@ async function rest(path: string, init: RequestInit = {}) {
 const user = (row: Row): PersistentUser => ({ id: String(row.id), workosUserId: String(row.workos_user_id), primaryEmail: String(row.primary_email), displayName: String(row.display_name), avatarUrl: row.avatar_url ? String(row.avatar_url) : null, status: row.status as PersistentUser["status"] });
 
 export class SupabaseIdentityTenancyRepository implements IdentityTenancyRepository {
+  async customerInvitation(input: Record<string, unknown>): Promise<{ ok: boolean; reason: string | null; id: string | null; organizationId: string | null }> {
+    return rest("rpc/tracekit_customer_invitation", { method: "POST", body: JSON.stringify(input) });
+  }
+
   async userByWorkOSId(workosUserId: string) {
     const rows = await rest(`tracekit_users?workos_user_id=eq.${encodeURIComponent(workosUserId)}&status=eq.active&limit=1`) as Row[];
     return rows[0] ? user(rows[0]) : null;
@@ -72,7 +76,7 @@ export class SupabaseIdentityTenancyRepository implements IdentityTenancyReposit
 
   async membershipsForUser(userId: string) {
     const rows = await rest(`tracekit_memberships?user_id=eq.${encodeURIComponent(userId)}&status=eq.active&select=*,tracekit_roles(role_key)`) as Array<Row & { tracekit_roles?: { role_key?: string } }>;
-    return rows.map((row) => ({ id: String(row.id), userId: String(row.user_id), accountId: row.account_id ? String(row.account_id) : null, organizationId: row.organization_id ? String(row.organization_id) : null, role: String(row.tracekit_roles?.role_key) as Role, status: row.status as PersistentMembership["status"] }));
+    return rows.map((row) => ({ id: String(row.id), userId: String(row.user_id), accountId: row.account_id ? String(row.account_id) : null, organizationId: row.organization_id ? String(row.organization_id) : null, role: String(row.tracekit_roles?.role_key) as Role, status: row.status as PersistentMembership["status"], effectiveFrom: String(row.effective_from), effectiveUntil: row.effective_until == null ? null : String(row.effective_until) }));
   }
 
   async isEmptyInstallation() {

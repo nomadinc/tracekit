@@ -241,10 +241,11 @@ test("role permissions are capabilities and an explicit deny wins", () => {
   assert.equal(permissionDecision(membership, allowAfterDeny, "offers.view").allowed, false);
 });
 
-test("an additional Product/Admin Account membership cannot displace the Organization session", () => {
+test("a platform administrator keeps support context while a customer-only identity selects its Organization", () => {
   const platform = { ...membership, id: "membership-platform", accountId: "account-platform", organizationId: null, role: "platform-admin" as const };
-  assert.equal(selectSessionMembership([platform, membership])?.id, membership.id);
+  assert.equal(selectSessionMembership([platform, membership])?.id, platform.id);
   assert.equal(selectSessionMembership([platform])?.id, platform.id);
+  assert.equal(selectSessionMembership([membership])?.id, membership.id);
 });
 
 test("suspended membership has no permissions", () => {
@@ -367,4 +368,14 @@ test("MCP OAuth discovery and resource routes bypass interactive AuthKit middlew
   const mcpRoute = readFileSync(new URL("../app/api/mcp/route.ts", import.meta.url), "utf8");
   assert.match(mcpRoute, /verifyMcpBearerToken/);
   assert.match(mcpRoute, /WWW-Authenticate/);
+});
+
+test("expired, future and malformed membership periods cannot grant session permissions", () => {
+  for (const period of [{ effectiveUntil: "2000-01-01T00:00:00Z" }, { effectiveFrom: "2099-01-01T00:00:00Z" }, { effectiveUntil: "invalid" }, { effectiveFrom: "invalid" }]) {
+    const invalid = { ...membership, ...period };
+    assert.equal(selectSessionMembership([invalid]), undefined);
+    assert.equal(resolveEffectivePermissions(invalid, []).size, 0);
+    assert.equal(permissionDecision(invalid, [], "offers.view").allowed, false);
+    assert.throws(() => requireActiveMembership({ ...session(), membership: invalid }), /unavailable/);
+  }
 });

@@ -18,8 +18,8 @@ const files = {
 } as const;
 
 test("uses the Production-backed identities in dependency order", () => {
-  assert.equal(existsSync(migration("20260915054500_shopify_order_person_link.sql")), false);
-  assert.equal(existsSync(migration("20260915054500_commas_refund_forward_ownership_v1.sql")), false);
+  assert.equal(existsSync(migration("20260915054632_shopify_order_person_link.sql")), false);
+  assert.equal(existsSync(migration("20260917175606_commas_refund_forward_ownership_v1.sql")), false);
 
   for (const file of Object.values(files)) assert.equal(existsSync(migration(file)), true);
 

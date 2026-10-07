@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 const root = fileURLToPath(new URL("..", import.meta.url));
 const source = () => readFileSync(`${root}/lib/integrations/everflow-event-reversals.ts`, "utf8");
 const route = () => readFileSync(`${root}/app/v1/integrations/everflow/conversions/sync/route.ts`, "utf8");
-const migration = () => readFileSync(`${root}/../supabase/migrations/085_everflow_event_reversal_history.sql`, "utf8");
+const migration = () => readFileSync(`${root}/../supabase/migrations/093_everflow_event_reversal_history.sql`, "utf8");
 
 test("Step 8 preserves distinct Everflow provider states in a protected history table", () => {
   const sql = migration();
