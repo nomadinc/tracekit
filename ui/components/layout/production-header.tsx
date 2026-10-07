@@ -8,6 +8,7 @@ import { useIdentity } from "@/components/identity/identity-provider";
 import { useShellDrawer } from "./shell-drawer";
 import { ProductionUserMenu } from "./production-user-menu";
 import { pageChromeForPath } from "@/lib/app-navigation";
+import { hasPermission } from "@/lib/identity/authorization";
 import type { Organization } from "@/lib/identity/types";
 
 function SelectLabel({ label, children }: { label: string; children: React.ReactNode }) {
@@ -25,6 +26,7 @@ export function ProductionHeader({ onMenuClick, platformOrganizations = [] }: { 
   const [adminViewBusy, setAdminViewBusy] = React.useState(false);
   const [clientMenuOpen, setClientMenuOpen] = React.useState(false);
   const [adminViewError, setAdminViewError] = React.useState<string | null>(null);
+  const canViewNotifications = Boolean(session.activeOrganizationId) && hasPermission(session.identity, "organizations.view");
   const closeUserMenu = React.useCallback(() => setUserMenuOpen(false), []);
   const command = useCommandPaletteController(closeUserMenu);
 
@@ -59,12 +61,8 @@ export function ProductionHeader({ onMenuClick, platformOrganizations = [] }: { 
             <SelectLabel label="Offer Workspace"><select value={session.activeBusinessContextId || ""} onChange={(event) => setActiveBusinessContext(event.target.value)} className="mt-0.5 h-9 max-w-[190px] rounded-lg border border-white/10 bg-white/5 px-2 text-xs font-semibold text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-400" disabled={!businessContexts.length}><option value="">{businessContexts.length ? "Portfolio / select offer" : "No accessible Offers"}</option>{businessContexts.map((context) => <option key={context.id} value={context.id}>{context.name}</option>)}</select></SelectLabel>
           </div>
         ) : <div className="hidden items-center gap-2 lg:flex"><div className="relative hidden md:block"><span className="block text-[8px] font-semibold uppercase tracking-[.12em] text-slate-400">View Client</span><button type="button" disabled={adminViewBusy} onClick={() => setClientMenuOpen((value) => !value)} className="mt-0.5 inline-flex h-9 min-w-[180px] items-center justify-between gap-3 rounded-lg border border-blue-400/30 bg-blue-400/10 px-3 text-xs font-semibold text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-50"><span>{adminViewBusy ? "Opening client…" : session.adminClientView ? activeOrganization?.name || "Selected client" : `Select client (${platformOrganizations.length})`}</span><ChevronDown className="h-3.5 w-3.5" /></button>{clientMenuOpen ? <div className="absolute right-0 z-50 mt-2 min-w-[220px] overflow-hidden rounded-xl border border-white/10 bg-[#111722] p-1 shadow-2xl">{platformOrganizations.length === 0 ? <div className="px-3 py-2 text-[11px] text-amber-300">No clients loaded from server.</div> : null}{platformOrganizations.filter((organization) => organization.name !== "TraceKit").map((organization) => <button key={organization.id} type="button" onClick={() => void enterAdminClientView(organization.id)} className="flex w-full items-center gap-2 rounded-lg px-3 py-2 text-left text-xs font-semibold text-slate-100 hover:bg-white/10"><Building2 className="h-3.5 w-3.5 text-blue-300" />{organization.name}</button>)}{adminViewError ? <div className="px-3 py-2 text-[11px] text-rose-300">{adminViewError}</div> : null}</div> : null}</div><div className="hidden items-center gap-2 rounded-lg border px-3 py-2 text-xs xl:flex"><ShieldCheck className="h-3.5 w-3.5" /><span><span className="block text-[8px] uppercase text-slate-400">Scope</span><strong>{session.adminClientView ? activeOrganization?.name || "Client View" : "TraceKit Platform"}</strong></span></div></div>}
-        {variant === "product-admin" && !session.adminClientView ? (
-          <>
-            <button type="button" onClick={() => drawer.openDrawer(<div className="space-y-4"><p className="text-sm">MCP Chat is an internal TraceKit platform entry point.</p></div>, "MCP Chat")} className="hidden h-10 items-center gap-2 rounded-xl border px-3 text-xs font-semibold sm:inline-flex focus:outline-none focus:ring-2 focus:ring-slate-400"><Bot className="h-4 w-4" />MCP</button>
-            <button type="button" onClick={() => drawer.openDrawer(<div className="rounded-lg border border-white/10 bg-white/5 p-4 text-sm">Platform notifications are not part of the advertiser demo surface.</div>, "Notifications")} className="inline-flex h-10 w-10 items-center justify-center rounded-xl border focus:outline-none focus:ring-2 focus:ring-slate-400" aria-label="Open notifications"><Bell className="h-4 w-4" /></button>
-          </>
-        ) : null}
+        {variant === "product-admin" && !session.adminClientView ? <button type="button" onClick={() => drawer.openDrawer(<div className="space-y-4"><p className="text-sm">MCP Chat is an internal TraceKit platform entry point.</p></div>, "MCP Chat")} className="hidden h-10 items-center gap-2 rounded-xl border px-3 text-xs font-semibold sm:inline-flex focus:outline-none focus:ring-2 focus:ring-slate-400"><Bot className="h-4 w-4" />MCP</button> : null}
+        {canViewNotifications ? <button type="button" onClick={() => router.push("/notifications")} className="inline-flex h-10 w-10 items-center justify-center rounded-xl border focus:outline-none focus:ring-2 focus:ring-slate-400" aria-label="Open notifications"><Bell className="h-4 w-4" /></button> : null}
         <ProductionUserMenu open={userMenuOpen} onToggle={() => setUserMenuOpen((value) => !value)} onClose={closeUserMenu} onBeforeOpen={() => command.closePalette(false)} />
       </div>
       <div className="border-t px-4 py-3 dark:border-white/10 xl:hidden"><CommandPaletteButton onOpen={command.openPalette} compact className="inline-flex h-10 w-full items-center gap-2 rounded-xl border bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300 dark:bg-white/5" /></div>

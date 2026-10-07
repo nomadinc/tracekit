@@ -1,4 +1,4 @@
-import { Activity, Building2, ClipboardList, ContactRound, CreditCard, FileClock, Flag, HeartPulse, Home, Import, Landmark, Megaphone, Package, Plug, Settings, ShieldCheck, ShoppingBag, Tags, Users } from "lucide-react";
+import { Activity, Bell, Building2, ClipboardList, ContactRound, CreditCard, FileClock, Flag, HeartPulse, Home, Import, Landmark, Megaphone, Package, Plug, Settings, ShieldCheck, ShoppingBag, Tags, Users } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type { Permission } from "./permissions";
 import type { Identity, ShellVariant } from "./types";
@@ -22,6 +22,7 @@ const NAVIGATION_ICONS: Record<string, LucideIcon> = {
   Money: Landmark,
   Chargebacks: CreditCard,
   Operations: ClipboardList,
+  Notifications: Bell,
   Settings,
   Connections: Plug,
   Activity: FileClock,

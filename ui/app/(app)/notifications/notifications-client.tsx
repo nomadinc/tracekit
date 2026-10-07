@@ -23,6 +23,8 @@ import {
   NOTIFICATION_CATEGORY_LABELS,
   notificationLifecycleLabel,
   notificationLifecycleState,
+  notificationListState,
+  normalizeNotificationsResponse,
   notificationQuery,
   notificationSeverityLabel,
   notificationStatusLabel,
@@ -34,7 +36,6 @@ import {
   type TraceKitNotification,
 } from "@/lib/notifications";
 
-const WORKSPACE_ID = "default";
 const SEVERITIES: Array<NotificationSeverity | "all"> = ["all", "critical", "warning", "info", "healthy"];
 const CATEGORIES: Array<NotificationCategory | "all"> = ["all", "tracking", "identity", "journeys", "attribution", "revenue", "commissions", "integrations", "platform"];
 const STATUSES: Array<NotificationStatus | "all"> = ["all", "unread", "read", "resolved", "dismissed"];
@@ -194,8 +195,8 @@ function DetailDrawer({ notification, onDismiss }: {
         <div className="flex flex-wrap gap-2">
           {notification.work_item_id ? (
             <EntityLink
-              target={{ type: "work_item", id: notification.work_item_id, label: notification.title, query: { workspace_id: WORKSPACE_ID } }}
-              href={`/operations?workspace_id=${encodeURIComponent(WORKSPACE_ID)}&inspect=${encodeURIComponent(`work_item:${notification.work_item_id}`)}`}
+              target={{ type: "work_item", id: notification.work_item_id, label: notification.title, query: { workspace_id: notification.workspace_id } }}
+              href={`/operations?workspace_id=${encodeURIComponent(notification.workspace_id)}&inspect=${encodeURIComponent(`work_item:${notification.work_item_id}`)}`}
               className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:bg-white dark:text-slate-950"
             >
               Open Work Item
@@ -266,9 +267,9 @@ export default function NotificationsClient() {
   const [hasMore, setHasMore] = React.useState(false);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
+  const [workspaceId, setWorkspaceId] = React.useState<string | null>(null);
 
   const queryParams = React.useMemo(() => ({
-    workspace_id: WORKSPACE_ID,
     limit: 25,
     severity: severity === "all" ? null : severity,
     category: category === "all" ? null : category,
@@ -285,11 +286,13 @@ export default function NotificationsClient() {
         cache: "no-store",
         headers: { accept: "application/json" },
       });
-      const json = (await res.json().catch(() => ({}))) as NotificationsResponse;
-      if (!res.ok || json?.ok === false) throw new Error((json as any)?.message || "Notification Center failed to load.");
-      const rows = Array.isArray(json.notifications) ? json.notifications : [];
+      const body = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error((body as any)?.message || "Notification Center failed to load.");
+      const json = normalizeNotificationsResponse(body);
+      const rows = json.notifications;
       setNotifications((current) => append ? [...current, ...rows] : rows);
-      setCounts(json.counts || { total: 0, unread: 0, read: 0, resolved: 0, dismissed: 0, critical: 0, warning: 0, info: 0, healthy: 0 });
+      setCounts(json.counts);
+      setWorkspaceId(json.workspace_id);
       setNextCursor(json.next_cursor || null);
       setHasMore(Boolean(json.has_more));
       if (!append && !initialNotificationId && rows[0]) {
@@ -297,6 +300,11 @@ export default function NotificationsClient() {
       }
     } catch (err: any) {
       setError(err?.message || "Notification Center failed to load.");
+      setNotifications([]);
+      setCounts(null);
+      setSelected(null);
+      setNextCursor(null);
+      setHasMore(false);
     } finally {
       setLoading(false);
     }
@@ -304,7 +312,7 @@ export default function NotificationsClient() {
 
   const fetchNotificationById = React.useCallback(async (notificationId: string) => {
     const action = notificationId.startsWith("action_notification:");
-    const res = await fetch(action ? `/api/action-notifications/${encodeURIComponent(notificationId)}` : `/api/notifications/${encodeURIComponent(notificationId)}?workspace_id=${encodeURIComponent(WORKSPACE_ID)}`, {
+    const res = await fetch(action ? `/api/action-notifications/${encodeURIComponent(notificationId)}` : `/api/notifications/${encodeURIComponent(notificationId)}`, {
       cache: "no-store",
       headers: { accept: "application/json" },
     });
@@ -320,7 +328,7 @@ export default function NotificationsClient() {
       method: "POST",
       cache: "no-store",
       headers: { accept: "application/json", "content-type": "application/json" },
-      body: JSON.stringify(action ? {} : { workspace_id: WORKSPACE_ID }),
+      body: JSON.stringify({}),
     });
     const json = await res.json().catch(() => ({}));
     if (!res.ok || json?.ok === false) throw new Error(json?.message || "Failed to mark notification read.");
@@ -350,7 +358,7 @@ export default function NotificationsClient() {
         method: "POST",
         cache: "no-store",
         headers: { accept: "application/json", "content-type": "application/json" },
-        body: JSON.stringify(action ? {} : { workspace_id: WORKSPACE_ID }),
+        body: JSON.stringify({}),
       });
       const json = await res.json().catch(() => ({}));
       if (!res.ok || json?.ok === false) throw new Error(json?.message || "Failed to dismiss notification.");
@@ -370,14 +378,14 @@ export default function NotificationsClient() {
   React.useEffect(() => {
     function onWorkspaceUpdate(event: Event) {
       const update = (event as CustomEvent<WorkspaceUpdate>).detail;
-      if (!update || update.workspaceId !== WORKSPACE_ID) return;
+      if (!update || !workspaceId || update.workspaceId !== workspaceId) return;
       if (update.type === "notification.created" || update.type === "health.changed" || update.type === "work_item.changed") {
         void load(null, false);
       }
     }
     window.addEventListener(LIVE_WORKSPACE_UPDATE_EVENT, onWorkspaceUpdate);
     return () => window.removeEventListener(LIVE_WORKSPACE_UPDATE_EVENT, onWorkspaceUpdate);
-  }, [load]);
+  }, [load, workspaceId]);
 
   React.useEffect(() => {
     if (!initialNotificationId) return;
@@ -398,6 +406,7 @@ export default function NotificationsClient() {
   }, [fetchNotificationById, initialNotificationId, notifications, openNotification]);
 
   const groupedCounts = counts || { critical: 0, warning: 0, info: 0, healthy: 0, unread: 0, read: 0, resolved: 0, dismissed: 0, total: 0 };
+  const listState = notificationListState({ loading, error, notificationCount: notifications.length });
 
   return (
     <div className="grid gap-6 xl:grid-cols-[18rem_1fr_28rem]">
@@ -488,17 +497,19 @@ export default function NotificationsClient() {
         ) : null}
 
         <div className="space-y-3">
-          {notifications.length ? notifications.map((notification) => (
+          {listState === "populated" ? notifications.map((notification) => (
             <NotificationRow
               key={notification.id}
               notification={notification}
               selected={selected?.id === notification.id}
               onOpen={openNotification}
             />
-          )) : loading ? (
+          )) : listState === "loading" ? (
             <div className="space-y-3">
               {[1, 2, 3].map((item) => <div key={item} className="h-32 animate-pulse rounded-2xl bg-slate-200 dark:bg-white/10" />)}
             </div>
+          ) : listState === "error" ? (
+            <div className="rounded-2xl border border-red-200 bg-red-50 p-6 text-sm text-red-800 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-100">Notification source unavailable. No healthy-state conclusion was made.</div>
           ) : (
             <EmptyState title="Everything looks healthy" body="No active notifications. Your marketing operation is running normally." />
           )}

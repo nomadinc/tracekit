@@ -15,6 +15,7 @@ export const NAVIGATION_POLICY: Record<ShellVariant, NavigationPolicyItem[]> = {
     { label: "Orders", href: "/orders", permission: "orders.view" },
     { label: "Money", href: "/money", permission: "financials.view" },
     { label: "Connections", href: "/connections", permission: "connectors.view" },
+    { label: "Notifications", href: "/notifications", permission: "organizations.view" },
     { label: "Activity", href: "/activity", permission: "audit_logs.view" },
   ],
   agency: [
@@ -25,6 +26,7 @@ export const NAVIGATION_POLICY: Record<ShellVariant, NavigationPolicyItem[]> = {
     { label: "Orders", href: "/orders", permission: "orders.view" },
     { label: "Money", href: "/money", permission: "financials.view" },
     { label: "Connections", href: "/connections", permission: "connectors.view" },
+    { label: "Notifications", href: "/notifications", permission: "organizations.view" },
     { label: "Activity", href: "/activity", permission: "audit_logs.view" },
   ],
   "product-admin": [
