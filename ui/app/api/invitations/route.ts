@@ -1,3 +1,5 @@
+import { completeInvitationDelivery } from "@/lib/identity/invitation-email-delivery";
+import { sendWorkOSInvitation } from "@/lib/identity/workos-invitation-delivery";
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { resolveApplicationSession, resolveAuthenticatedPersistentIdentity } from "@/lib/identity/application-session";
@@ -33,9 +35,17 @@ export async function POST(request: Request) {
         await repository.recordAuditEvent({ actorUserId: session.user.id, authenticatedIdentityId: session.externalWorkosUserId, accountId: session.activeAccount.id, organizationId: session.activeOrganization?.id || null, action: "invitation.issue", result: "denied", permissionEvaluated: "users.invite", correlationId: session.correlationId, metadata: { reason: "unavailable" } });
         return unavailable();
       }
-      const id = randomUUID();
-      const result = await repository.customerInvitation({ ...base, p_operation: "issue", p_invitation_id: id, p_organization_id: input.organizationId, p_email: input.intendedEmail, p_context_ids: input.businessContextIds });
-      return result.ok ? NextResponse.json({ ok: true, invitationId: id, acceptancePath: `/invitations/${id}`, expiresInDays: 7, role: input.role }, { status: 201 }) : unavailable();
+      const claim = await repository.invitationDelivery({ ...base, p_operation: "issue", p_invitation_id: randomUUID(), p_organization_id: input.organizationId, p_email: input.intendedEmail, p_context_ids: input.businessContextIds });
+      if (!claim.ok) return unavailable();
+      const delivery = await completeInvitationDelivery(claim, sendWorkOSInvitation, parameters => repository.invitationDelivery({ ...base, p_organization_id: input.organizationId, ...parameters }));
+      return NextResponse.json({ ok: true, invitationId: claim.id, acceptancePath: `/invitations/${claim.id}`, role: input.role, delivery }, { status: delivery.sendAccepted ? 201 : 202 });
+    }
+    if (["deliver", "delivery-status"].includes(body.operation) && typeof body.invitationId === "string" && typeof body.organizationId === "string") {
+      requireResourceScope(session, body.organizationId, "users.invite");
+      const claim = await repository.invitationDelivery({ ...base, p_operation: body.operation === "deliver" ? "claim" : "status", p_invitation_id: body.invitationId, p_organization_id: body.organizationId });
+      if (!claim.ok) return unavailable();
+      const delivery = await completeInvitationDelivery(claim, sendWorkOSInvitation, parameters => repository.invitationDelivery({ ...base, p_organization_id: body.organizationId, ...parameters }));
+      return NextResponse.json({ ok: true, delivery }, { status: delivery.sendAccepted ? 200 : 202 });
     }
     if (body.operation === "revoke" && typeof body.invitationId === "string" && typeof body.organizationId === "string") {
       requireResourceScope(session, body.organizationId, "users.invite");

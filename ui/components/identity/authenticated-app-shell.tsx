@@ -10,12 +10,12 @@ export async function AuthenticatedAppShell({ children }: { children: React.Reac
   if (resolution.kind === "provider-unavailable") return <SessionState title="Authentication unavailable" description="WorkOS and persistent identity configuration are required for authenticated TraceKit operation." />;
   if (resolution.kind === "unauthenticated") return <SessionState title="Sign in required" description="Authenticate to continue." signIn />;
   if (resolution.kind === "bootstrap") return <FirstAdminBootstrap />;
-  if (resolution.kind === "no-membership") return <SessionState title="No TraceKit access" description="Your identity is verified, but no active TraceKit account membership is assigned." />;
+  if (resolution.kind === "no-membership") return <SessionState title="No TraceKit access" description="Your identity is verified, but no active TraceKit account membership is assigned. Review a pending customer invitation to complete access." invitations />;
   if (resolution.kind === "development") return <AppShell>{children}</AppShell>;
   const platformOrganizations = await readAuthorizedPlatformCatalog(resolution.session, new SupabaseIdentityTenancyRepository());
   return <AppShell initialSession={resolution.legacySession} organizations={resolution.session.availableOrganizations} businessContexts={resolution.session.accessibleBusinessContexts} platformOrganizations={platformOrganizations}>{children}</AppShell>;
 }
 
-function SessionState({ title, description, signIn = false }: { title: string; description: string; signIn?: boolean }) {
-  return <main className="mx-auto flex min-h-dvh max-w-lg flex-col items-center justify-center gap-4 p-6 text-center"><p className="text-xs font-semibold uppercase tracking-widest text-slate-500">TraceKit identity</p><h1 className="text-2xl font-semibold">{title}</h1><p className="text-sm text-slate-600">{description}</p>{signIn ? <Link className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-semibold text-white" href="/auth/sign-in">Sign in</Link> : null}</main>;
+function SessionState({ title, description, signIn = false, invitations = false }: { title: string; description: string; signIn?: boolean; invitations?: boolean }) {
+  return <main className="mx-auto flex min-h-dvh max-w-lg flex-col items-center justify-center gap-4 p-6 text-center"><p className="text-xs font-semibold uppercase tracking-widest text-slate-500">TraceKit identity</p><h1 className="text-2xl font-semibold">{title}</h1><p className="text-sm text-slate-600">{description}</p>{invitations ? <Link className="underline" href="/invitations">Review pending invitations</Link> : null}{signIn ? <Link className="rounded-lg bg-slate-950 px-4 py-2 text-sm font-semibold text-white" href="/auth/sign-in">Sign in</Link> : null}</main>;
 }
