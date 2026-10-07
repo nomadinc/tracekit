@@ -16,7 +16,7 @@ export async function runDueGoogleAdsReportingSchedules(input:{organizationId?:s
   const rows=await marketingPersistenceRequest("rpc/claim_google_ads_campaign_daily_schedule",{method:"POST",body:JSON.stringify({p_schedule_id:scheduleId,p_now:new Date().toISOString(),p_lease_owner:owner,p_lease_seconds:900})}) as Row[];
   if(!rows[0])continue;claimed++;
   try{
-   await ingestGoogleAdsReportingBounded({organizationId:String(schedule.organization_id),connectionId:String(schedule.connection_id),days:7});
+   await ingestGoogleAdsReportingBounded({organizationId:String(schedule.organization_id),connectionId:String(schedule.connection_id),days:7,mode:"scheduled"});
    await marketingPersistenceRequest("rpc/finish_google_ads_campaign_daily_schedule",{method:"POST",body:JSON.stringify({p_schedule_id:scheduleId,p_lease_owner:owner,p_now:new Date().toISOString(),p_outcome:"completed"})});completed++;
   }catch{
    await marketingPersistenceRequest("rpc/finish_google_ads_campaign_daily_schedule",{method:"POST",body:JSON.stringify({p_schedule_id:scheduleId,p_lease_owner:owner,p_now:new Date().toISOString(),p_outcome:"failed"})}).catch(()=>null);failed++;
