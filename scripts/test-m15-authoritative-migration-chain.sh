@@ -93,12 +93,35 @@ begin
   ) or to_regclass('public.mcp_action_notification_states') is null then
     raise exception 'governed notification presentation-state migration is absent';
   end if;
+  if not exists (
+    select 1 from supabase_migrations.schema_migrations
+    where version = '20261007033258' and name = 'm5b_action_notification_state_acl_hardening'
+  ) then
+    raise exception 'governed notification presentation-state ACL hardening is absent';
+  end if;
   if not (select relrowsecurity from pg_class where oid='public.mcp_action_notification_states'::regclass) then
     raise exception 'governed notification presentation state must enforce RLS';
   end if;
-  if has_table_privilege('anon','public.mcp_action_notification_states','select')
-     or has_table_privilege('authenticated','public.mcp_action_notification_states','select')
-     or not has_table_privilege('service_role','public.mcp_action_notification_states','select,insert,update') then
+  if exists (
+       select 1
+       from pg_class c
+       cross join lateral aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) acl
+       where c.oid = 'public.mcp_action_notification_states'::regclass
+         and (
+           acl.grantee = 0
+           or acl.grantee in (
+             'anon'::regrole::oid,
+             'authenticated'::regrole::oid,
+             'authenticator'::regrole::oid
+           )
+           or (
+             acl.grantee = 'service_role'::regrole::oid
+             and acl.privilege_type not in ('SELECT','INSERT','UPDATE')
+           )
+         )
+     )
+     or not has_table_privilege('service_role','public.mcp_action_notification_states','select,insert,update')
+     or has_table_privilege('service_role','public.mcp_action_notification_states','delete,truncate,references,trigger') then
     raise exception 'governed notification presentation-state ACL is invalid';
   end if;
 end
