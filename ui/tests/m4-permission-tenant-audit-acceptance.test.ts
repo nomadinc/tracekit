@@ -28,7 +28,7 @@ test("M4.2 rejects foreign malformed tenant and spoofed actor hints", () => {
 });
 
 test("M4.2 Work Item and Notification routes derive scope and actor before the admin-secret boundary", () => {
-  const proxy = source("lib/identity/scoped-core-proxy.ts");
+  const proxy = source("lib/identity/scoped-core-proxy.ts") + source("lib/identity/scoped-core-runtime.ts");
   for (const route of ["app/api/work-items/route.ts", "app/api/work-items/[...workItemPath]/route.ts", "app/api/notifications/route.ts", "app/api/notifications/[...notificationPath]/route.ts"]) {
     assert.match(source(route), /scopedCore(Get|Post)/);
   }
@@ -37,8 +37,8 @@ test("M4.2 Work Item and Notification routes derive scope and actor before the a
   assert.match(proxy, /params\.set\("workspace_id", scope\.workspaceId\)/);
   assert.match(proxy, /sanitized\.workspace_id = scope\.workspaceId/);
   assert.match(proxy, /sanitized\.actor_id = scope\.session\.user\.id/);
-  assert.ok(proxy.indexOf("queryMatchesScope(params") < proxy.indexOf("const secret = adminSecret()"));
-  assert.ok(proxy.lastIndexOf("bodyMatchesScope") < proxy.lastIndexOf("const secret = adminSecret()"));
+  assert.ok(proxy.indexOf("queryMatchesScope(params") < proxy.indexOf("const secret = dependencies.adminSecret()"));
+  assert.ok(proxy.lastIndexOf("bodyMatchesScope") < proxy.lastIndexOf("const secret = dependencies.adminSecret()"));
 });
 
 test("M4.2 foreign object IDs remain non-disclosing under server workspace scope", () => {

@@ -92,8 +92,13 @@ test("Mission Control owns root while legacy Home API and overview compatibility
   const proxy = readRepoFile("ui/app/api/home/route.ts");
   const navigation = readRepoFile("ui/lib/app-navigation.ts");
 
-  assert.match(root, /<MissionControl snapshot=\{snapshot\} \/>/);
-  assert.match(root, /missionControlRepository\.getMissionControl\(\)/);
+  assert.match(root, /<AuthenticatedMissionControl \/>/);
+  const authenticatedMissionControl = readRepoFile("ui/components/mission-control/authenticated-mission-control.tsx");
+  assert.match(authenticatedMissionControl, /resolveApplicationSession\(\)/);
+  assert.match(authenticatedMissionControl, /authorizedMissionControlContext\(resolution\.session\)/);
+  assert.match(authenticatedMissionControl, /if \(resolution.kind === "development"\)/);
+  assert.match(authenticatedMissionControl, /<PersistentMissionControl/);
+  assert.match(authenticatedMissionControl, /organizations=\{resolution.session.availableOrganizations\}/);
   assert.match(overview, /<HomeCommandCenter \/>/);
   assert.match(proxy, /\/v1\/home/);
   assert.match(navigation, /label: "Mission Control"/);

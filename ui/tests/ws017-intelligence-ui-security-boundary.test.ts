@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 
 const root = new URL("..", import.meta.url);
 const source = (path: string) => readFileSync(new URL(path, root), "utf8");
-const proxy = source("lib/identity/scoped-core-proxy.ts");
+const proxy = source("lib/identity/scoped-core-proxy.ts") + source("lib/identity/scoped-core-runtime.ts");
 const policy = source("lib/identity/operational-tenant-boundary.ts");
 const routes = [
   source("app/api/work-items/route.ts"),
@@ -17,7 +17,7 @@ test("WS-017 Intelligence browser proxies resolve authenticated organization sco
   for (const route of routes) assert.match(route, /scopedCore(Get|Post)/);
   assert.match(proxy, /resolveApplicationSession/);
   assert.match(proxy, /activeOrganization/);
-  assert.match(proxy, /requirePermission/);
+  assert.match(proxy, /requireResourceScope/);
 });
 
 test("WS-017 read routes reject conflicting scope and inject active organization", () => {

@@ -119,7 +119,7 @@ test("customer explorer is wired through read-only authenticated backend routes"
   assert.doesNotMatch(migration.toLowerCase(), /drop table|truncate table|delete from|update public|alter table/);
   assert.match(uiProxy, /\/v1\/customers/);
   assert.match(uiProxy, /scopedCoreGet\("\/v1\/customers", req.url, "customers.view", projectCoreCustomerRead\)/);
-  const scopedProxy = readFileSync(new URL("../../ui/lib/identity/scoped-core-proxy.ts", import.meta.url), "utf8");
+  const scopedProxy = readFileSync(new URL("../../ui/lib/identity/scoped-core-runtime.ts", import.meta.url), "utf8");
   assert.match(scopedProxy, /"x-tk-secret": secret/);
   assert.match(uiProxyDetail, /\/v1\/customers\/\$\{path\}/);
   assert.match(uiList, /Customer Journey Explorer/);

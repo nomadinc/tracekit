@@ -7,12 +7,13 @@
     "deploy": "wrangler deploy",
     "discover:commas": "node --env-file-if-exists=.dev.vars --disable-warning=MODULE_TYPELESS_PACKAGE_JSON src/connectors/commas/discovery-cli.ts",
     "dry-run:nmi-refunds": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON scripts/nmi-refund-dry-run-readonly.ts",
-    "test": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/*.test.ts",
+    "test": "node --import tsx --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/*.test.ts",
     "test:wowboost-runtime-regression": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/wowboost-runtime-regression.test.ts",
     "test:identity-backfill-runtime": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/identity-backfill-runtime.test.ts"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260702.1",
+    "tsx": "^4.23.15",
     "typescript": "^5.4.5",
     "wrangler": "^4.63.0"
   },

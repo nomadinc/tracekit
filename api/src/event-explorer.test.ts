@@ -116,8 +116,10 @@ test("event explorer source uses existing backend surfaces and keeps admin secre
   assert.match(worker, /matchEventExplorerRoute/);
   assert.match(worker, /adminAuthError\(req, env\)/);
   assert.match(apiRoute, /\/v1\/events/);
-  assert.match(apiRoute, /"x-tk-secret": secret/);
-  assert.match(detailRoute, /encodeURIComponent\(eventKey\)/);
+  assert.match(apiRoute, /scopedCoreGet/);
+  assert.match(apiRoute, /"customers.view"/);
+  assert.match(detailRoute, /encodeURIComponent\(parts.join\("\/"\)\)/);
+  assert.match(detailRoute, /scopedCoreGet/);
   assert.doesNotMatch(page, /TK_SECRET_KEY|x-tk-secret|TRACEKIT_TK_SECRET/);
   assert.match(page, /EventDetailDrawer/);
   assert.match(page, /Raw Payload/);

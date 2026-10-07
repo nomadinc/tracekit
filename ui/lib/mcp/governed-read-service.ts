@@ -1,3 +1,4 @@
+import { projectCoreCustomerRead } from "../identity/core-read-projection";
 import { canAccessFinancialData, canAccessSensitiveCustomerData, requireResourceScope } from "@/lib/identity/authorization-gateway";
 import type { Permission } from "@/lib/identity/permissions";
 import type { TraceKitSessionContext } from "@/lib/identity/persistent-types";
@@ -58,14 +59,14 @@ export function projectCustomerSummary(session: TraceKitSessionContext, input: C
   return { ...structuredClone(input), name: input.name || "Customer", email: mask(input.email), phone: mask(input.phone), sensitiveMasked: true };
 }
 
-export function projectCustomerWorkspace(session: TraceKitSessionContext, input: CustomerWorkspaceSnapshot): CustomerWorkspaceSnapshot {
+export function projectCustomerWorkspace(session: TraceKitSessionContext, input: CustomerWorkspaceSnapshot) {
   const output = structuredClone(input);
   output.customer = projectCustomerSummary(session, output.customer);
-  if (!canAccessFinancialData(session)) {
+  if (!session.effectivePermissions.includes("orders.view_financials") || !canAccessFinancialData(session)) {
     output.lifetimeRevenue = 0;
     output.orders = output.orders.map((order) => ({ ...order, amount: 0, profit: null, profitAvailable: false }));
   }
-  return output;
+  return projectCoreCustomerRead({ ...output, financialDetailsAvailable: session.effectivePermissions.includes("orders.view_financials") && canAccessFinancialData(session) }, session);
 }
 
 export function projectOrderSummary(session: TraceKitSessionContext, input: OrderSummary): OrderSummary {
@@ -77,6 +78,7 @@ export function projectOrderSummary(session: TraceKitSessionContext, input: Orde
   }
   if (!session.effectivePermissions.includes("orders.view_financials") || !canAccessFinancialData(session)) {
     output.revenue = 0;
+    output.revenueAvailable = false;
     output.profit = null;
   }
   return output;

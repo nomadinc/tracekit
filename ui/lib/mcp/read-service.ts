@@ -1,3 +1,5 @@
+import { projectCoreCustomerRead } from "../identity/core-read-projection";
+import { requireResourceScope } from "../identity/authorization-gateway";
 import type { TraceKitSessionContext } from "@/lib/identity/persistent-types";
 import type { IdentityTenancyRepository } from "@/lib/identity/persistent-repository";
 import type { CustomerRepository } from "@/lib/customers/repository";
@@ -42,12 +44,13 @@ export class TraceKitMcpReadService {
 
   private async audited<T>(
     tool: string,
-    permission: Parameters<typeof recordMcpToolAudit>[0]["permission"],
+    permission: NonNullable<Parameters<typeof recordMcpToolAudit>[0]["permission"]>,
     targetType: string | null,
     targetId: string | null,
     run: () => Promise<T>,
   ): Promise<T> {
     try {
+      requireResourceScope(this.session, this.session.activeOrganization?.id || "", permission);
       const value = await run();
       await recordMcpToolAudit({
         repository: this.repositories.audit,
@@ -58,7 +61,8 @@ export class TraceKitMcpReadService {
         targetType,
         targetId,
       });
-      return value;
+      // All tool reads, including nested Journey evidence, cross this serialization boundary.
+      return projectCoreCustomerRead(value, this.session) as T;
     } catch (error: unknown) {
       const record = error as { code?: unknown; message?: unknown } | null;
       const denied =

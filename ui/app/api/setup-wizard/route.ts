@@ -1,3 +1,6 @@
+import { resolveApplicationSession } from "@/lib/identity/application-session";
+import { requireResourceScope, requirePermission } from "@/lib/identity/authorization-gateway";
+import { TENANT_HINT_KEYS, ACTOR_HINT_KEYS, callerHintsMatch } from "@/lib/identity/operational-tenant-boundary";
 import { NextResponse } from "next/server";
 
 function apiBaseUrl() {
@@ -54,9 +57,19 @@ async function workerFetch(path: string, init: RequestInit = {}, options: { admi
   return { ok: res.ok, status: res.status, body: await readJsonSafe(res) };
 }
 
-function workspaceIdFromRequest(req: Request, body?: any) {
-  const url = new URL(req.url);
-  return String(body?.workspace_id || body?.workspaceId || url.searchParams.get("workspace_id") || "default").trim() || "default";
+async function workspaceIdFromRequest(req: Request, body?: Record<string, unknown>) {
+  const resolution = await resolveApplicationSession();
+  if (resolution.kind !== "authenticated" || !resolution.session.activeOrganization) return null;
+  const session = resolution.session;
+  const id = session.activeOrganization!.id;
+  try {
+    requireResourceScope(session, id, "organizations.manage");
+    if (body?.action === "configure_browser") requirePermission(session, "admin.manage_tenants");
+  } catch { return null; }
+  const query = new URL(req.url).searchParams;
+  if (TENANT_HINT_KEYS.some(key => query.getAll(key).some(value => value !== id))) return null;
+  if (body && (!callerHintsMatch(body, TENANT_HINT_KEYS, id) || !callerHintsMatch(body, ACTOR_HINT_KEYS, session.user.id))) return null;
+  return id;
 }
 
 function todayYmd() {
@@ -122,12 +135,13 @@ async function getSetupSnapshot(workspaceId: string, includeValidation = true) {
 }
 
 export async function GET(req: Request) {
-  const workspaceId = workspaceIdFromRequest(req);
+  const workspaceId = await workspaceIdFromRequest(req);
+  if (!workspaceId) return NextResponse.json({ error: "The requested resource is unavailable." }, { status: 404 });
   const snapshot = await getSetupSnapshot(workspaceId).catch((error: any) => ({
     ok: false,
     workspace_id: workspaceId,
     error: "setup_snapshot_failed",
-    message: error?.message || String(error),
+    message: "Setup services are temporarily unavailable.",
   }));
   return NextResponse.json(snapshot, { status: snapshot.ok === false ? 500 : 200 });
 }
@@ -135,7 +149,10 @@ export async function GET(req: Request) {
 export async function POST(req: Request) {
   const body = await req.json().catch(() => ({}));
   const action = String(body?.action || "").trim();
-  const workspaceId = workspaceIdFromRequest(req, body);
+  const origin = req.headers.get("origin");
+  if (origin !== new URL(req.url).origin) return NextResponse.json({ error: "Request verification failed." }, { status: 403 });
+  const workspaceId = await workspaceIdFromRequest(req, body);
+  if (!workspaceId) return NextResponse.json({ error: "The requested resource is unavailable." }, { status: 404 });
   let result;
 
   if (action === "save_workspace") {

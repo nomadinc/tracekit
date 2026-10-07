@@ -4,6 +4,7 @@
 
 import { createClient } from "@supabase/supabase-js";
 import { adminAuthError } from "./admin-auth";
+import { isProtectedCustomerReadPath } from "./customer-read-boundary";
 import { queryCheckoutChampTransactions } from "./connectors/checkoutchamp/client";
 import { createCheckoutChampTransactionEvidenceStore } from "./connectors/checkoutchamp/evidence-store";
 import {
@@ -16011,6 +16012,11 @@ async function relayEvidence(db:any,continuity:any,eventName:string){await db.fr
 async function router(req: Request, env: Env): Promise<Response> {
   const url = new URL(req.url);
   const path = url.pathname;
+  if (isProtectedCustomerReadPath(path)) {
+    const auth = adminAuthError(req, env);
+    if (auth) return auth;
+    if (req.method === "GET" && !url.searchParams.get("workspace_id")?.trim()) return json({ error: "Workspace scope is required." }, 400);
+  }
   if (path === "/v1/connectors/commas/webhooks") {
     if (req.method !== "POST") return json({ ok: false, error: "method_not_allowed" }, 405, { Allow: "POST" });
     try { return await handleCommasDisputeWebhook(req, env); }

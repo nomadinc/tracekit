@@ -8,14 +8,14 @@ const source = (path: string) => readFileSync(new URL(path, root), "utf8");
 
 test("M4.2b first-party route derives tenant and actor and rejects all caller fields", () => {
   const route = source("app/api/work-items/acceptance-fixtures/ws019-m4-2/route.ts");
-  const proxy = source("lib/identity/scoped-core-proxy.ts");
+  const proxy = source("lib/identity/scoped-core-proxy.ts") + source("lib/identity/scoped-core-runtime.ts");
   assert.match(route, /OPERATIONAL_ACCESS_POLICY\.workItemTransition/);
   assert.match(route, /includeActor: true/);
   assert.match(route, /includeCorrelation: true/);
   assert.match(route, /rejectCallerScopeHints: true/);
   assert.match(route, /allowedCallerKeys: \[\]/);
   assert.match(proxy, /resolveApplicationSession/);
-  assert.match(proxy, /requirePermission\(resolution\.session, permission\)/);
+  assert.match(proxy, /requireResourceScope\(resolution\.session, resolution\.session\.activeOrganization\.id, capability\)/);
   assert.match(proxy, /sanitized\.workspace_id = scope\.workspaceId/);
   assert.match(proxy, /sanitized\.actor_id = scope\.session\.user\.id/);
   assert.match(proxy, /sanitized\.correlation_id = scope\.session\.correlationId/);

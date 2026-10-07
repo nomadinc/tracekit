@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "node scripts/next-lifecycle.mjs dev",
     "lint": "next lint",
-    "test": "tsx --test tests/*.test.ts",
+    "test": "node scripts/run-tests.mjs",
     "build": "node scripts/next-lifecycle.mjs build",
     "build:tkid-sdk": "node scripts/build-tkid-sdk.mjs",
     "build:tkid-universal-sdk": "node scripts/build-tkid-universal-sdk.mjs",

@@ -29,8 +29,8 @@ test("application shell reorganizes existing routes around business navigation",
   assert.match(appLayout, /<AuthenticatedAppShell>{children}<\/AuthenticatedAppShell>/);
   assert.match(authenticatedShell, /resolveApplicationSession\(\)/);
   assert.match(authenticatedShell, /<AppShell/);
-  assert.match(rootPage, /<MissionControl snapshot=\{snapshot\} \/>/);
-  assert.match(rootPage, /missionControlRepository\.getMissionControl\(\)/);
+  assert.match(rootPage, /<AuthenticatedMissionControl \/>/);
+  assert.match(readRepoFile("ui/components/mission-control/authenticated-mission-control.tsx"), /authorizedMissionControlContext\(resolution\.session\)/);
   assert.doesNotMatch(rootPage, /redirect\("\/overview"\)/);
 });
 
@@ -40,9 +40,14 @@ test("Mission Control owns the approved root while the legacy overview compatibi
   const home = readRepoFile("ui/components/home/home-command-center.tsx");
   const proxy = readRepoFile("ui/app/api/home/route.ts");
 
-  assert.match(root, /<AuthenticatedAppShell>/);
-  assert.match(root, /<MissionControl snapshot=\{snapshot\} \/>/);
-  assert.match(root, /missionControlRepository\.getMissionControl\(\)/);
+  assert.match(root, /<AuthenticatedMissionControl \/>/);
+  assert.match(root, /<AuthenticatedMissionControl \/>/);
+  const authenticatedMissionControl = readRepoFile("ui/components/mission-control/authenticated-mission-control.tsx");
+  assert.match(authenticatedMissionControl, /resolveApplicationSession\(\)/);
+  assert.match(authenticatedMissionControl, /authorizedMissionControlContext\(resolution\.session\)/);
+  assert.match(authenticatedMissionControl, /if \(resolution.kind === "development"\)/);
+  assert.match(authenticatedMissionControl, /<PersistentMissionControl/);
+  assert.match(authenticatedMissionControl, /organizations=\{resolution.session.availableOrganizations\}/);
   assert.match(overview, /<HomeCommandCenter \/>/);
   assert.match(home, /homeQuery\(\{ workspace_id: WORKSPACE_ID, window: windowKey \}\)/);
   assert.match(home, /PriorityWorkItems/);
@@ -83,7 +88,8 @@ test("dashboard renders executive dashboard modules from the dedicated endpoint"
   assert.doesNotMatch(dashboard, /Net Profit/);
   assert.doesNotMatch(dashboard, /diagnostic-only/);
   assert.match(proxy, /\/v1\/executive-dashboard/);
-  assert.match(proxy, /x-tk-secret/);
+  assert.match(proxy, /scopedCoreGet/);
+  assert.match(readRepoFile("ui/lib/identity/scoped-core-runtime.ts"), /"x-tk-secret": secret/);
   assert.match(worker, /path === "\/v1\/executive-dashboard"/);
   assert.match(worker, /EXECUTIVE_DASHBOARD_PLATFORM_ORDER_SELECT/);
   assert.doesNotMatch(dashboard, /\/v1\/revenue-spend/);
@@ -290,14 +296,16 @@ test("financial import monitor route uses an authenticated server-side proxy", (
   assert.doesNotMatch(lib, /\/v1\/financial-import-monitor/);
   assert.match(sameOriginApi, /fetch\(pathAndQuery/);
   assert.doesNotMatch(sameOriginApi, /NEXT_PUBLIC_API_BASE|TK_SECRET_KEY|TRACEKIT_TK_SECRET|x-tk-secret/);
-  assert.match(proxy, /process\.env\.TK_SECRET_KEY/);
-  assert.match(proxy, /process\.env\.TRACEKIT_TK_SECRET/);
-  assert.match(proxy, /x-tk-secret/);
-  assert.match(proxy, /\/v1\/financial-import-monitor\$\{search \? `\?\$\{search\}` : ""\}/);
-  assert.match(proxy, /url\.searchParams\.toString\(\)/);
-  assert.match(proxy, /NextResponse\.json\(await readJsonSafe\(res\), \{ status: res\.status \}\)/);
-  assert.match(proxy, /admin_auth_not_configured/);
-  assert.match(proxy, /Worker returned a non-JSON response/);
+  assert.match(proxy, /scopedCoreGet/);
+  assert.match(proxy, /orders.view_financials/);
+  assert.match(readRepoFile("ui/lib/core/admin-credential.ts"), /TK_SECRET_KEY.*TRACEKIT_TK_SECRET/);
+  assert.match(proxy, /scopedCoreGet/);
+  assert.match(readRepoFile("ui/lib/identity/scoped-core-runtime.ts"), /"x-tk-secret": secret/);
+  assert.match(proxy, /\/v1\/financial-import-monitor/);
+  assert.match(readRepoFile("ui/lib/identity/scoped-core-runtime.ts"), /params\.set\("workspace_id", scope\.workspaceId\)/);
+  assert.match(proxy, /NextResponse\.json\(result.body, \{ status: result.status/);
+  assert.match(readRepoFile("ui/lib/identity/scoped-core-runtime.ts"), /admin_auth_not_configured/);
+  assert.match(readRepoFile("ui/lib/identity/scoped-core-runtime.ts"), /invalid_json/);
   assert.doesNotMatch(proxy, /console\.log|console\.error|NEXT_PUBLIC_TK_SECRET_KEY/);
   assert.match(worker, /FINANCIAL_IMPORT_MONITOR_PATH/);
   assert.match(worker, /getFinancialImportMonitorReport/);
@@ -386,20 +394,18 @@ test("financial reconciliation center routes, UI, and migration are wired safely
   assert.match(sameOriginApi, /JSON\.stringify\(body\)/);
   assert.doesNotMatch(sameOriginApi, /NEXT_PUBLIC_API_BASE|TK_SECRET_KEY|TRACEKIT_TK_SECRET|x-tk-secret/);
   for (const route of [proxy, matchesProxy]) {
-    assert.match(route, /process\.env\.TK_SECRET_KEY/);
-    assert.match(route, /process\.env\.TRACEKIT_TK_SECRET/);
-    assert.match(route, /x-tk-secret/);
-    assert.match(route, /NextResponse\.json\(await readJsonSafe\(res\), \{ status: res\.status \}\)/);
-    assert.match(route, /admin_auth_not_configured/);
-    assert.match(route, /Worker returned a non-JSON response/);
+    assert.match(route, /scopedCore(Get|Post)/);
+    assert.match(route, /orders.view_financials/);
+    assert.match(route, /NextResponse\.json\(result.body/);
     assert.doesNotMatch(route, /console\.log|console\.error|NEXT_PUBLIC_TK_SECRET_KEY/);
   }
-  assert.match(proxy, /\/v1\/financial-reconciliation\$\{search \? `\?\$\{search\}` : ""\}/);
-  assert.match(proxy, /url\.searchParams\.toString\(\)/);
-  assert.match(matchesProxy, /\/v1\/financial-reconciliation\/matches/);
-  assert.match(matchesProxy, /method: "POST"/);
-  assert.match(matchesProxy, /"content-type": "application\/json"/);
-  assert.match(matchesProxy, /body: body \|\| "\{\}"/);
+  assert.match(proxy, /financials.view/);
+  assert.match(matchesProxy, /financials.reconcile/);
+  assert.match(matchesProxy, /includeActor: true/);
+  const scopedRuntime = readRepoFile("ui/lib/identity/scoped-core-runtime.ts");
+  assert.match(scopedRuntime, /requireResourceScope/);
+  assert.match(scopedRuntime, /bodyMatchesScope/);
+  assert.match(scopedRuntime, /"x-tk-secret": secret/);
   assert.match(worker, /FINANCIAL_RECONCILIATION_PATH/);
   assert.match(worker, /FINANCIAL_RECONCILIATION_MATCHES_PATH/);
   assert.match(worker, /getFinancialReconciliationReport\(getSupabase\(env\), params\)/);

@@ -570,5 +570,6 @@ test("health engine source remains read-only and Worker route is registered befo
   assert.match(worker, /getWorkspaceHealthReport\(getSupabase\(env\), params\)/);
   assert.match(worker, /adminAuthError\(req, env\)/);
   assert.match(proxy, /\/v1\/health/);
-  assert.match(proxy, /"x-tk-secret": secret/);
+  assert.match(proxy, /scopedCoreGet/);
+  assert.match(proxy, /"connectors.view"/);
 });
