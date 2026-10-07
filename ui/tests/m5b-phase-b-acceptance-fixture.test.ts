@@ -5,6 +5,7 @@ import test from "node:test";
 const root = new URL("..", import.meta.url);
 const source = (path: string) => readFileSync(new URL(path, root), "utf8");
 const migration = source("../supabase/migrations/20261007052825_ws019_m44_phase_b_acceptance_fixture.sql");
+const repair = source("../supabase/migrations/20261007175026_ws019_m44_phase_b_confirmation_boundary_repair.sql");
 const route = source("app/api/action-notifications/acceptance-fixtures/ws019-m4-4/[operation]/route.ts");
 const repository = source("lib/mcp/m44-phase-b-acceptance.ts");
 const projection = source("lib/mcp/action-notifications.ts");
@@ -67,9 +68,22 @@ test("Phase B lifecycle and presentation operations remain separated", () => {
   assert.match(projection, /mcp_action_notification_states/);
 });
 
-test("Phase B functions are invoker-rights and service-role-only", () => {
+test("Phase B applied migration remains byte-stable and initially installs invoker-rights functions", () => {
   assert.equal((migration.match(/security invoker/g) || []).length, 3);
   assert.equal((migration.match(/grant execute on function/g) || []).length, 3);
   assert.equal((migration.match(/to service_role/g) || []).length, 3);
   assert.match(migration, /from public,anon,authenticated,authenticator/g);
+});
+
+test("Phase B confirmation repair elevates only fixed confirmation writers and preserves M3 direct-insert denial", () => {
+  assert.match(repair, /alter function public\.create_ws019_m44_phase_b_fixture\(uuid, uuid\)\s+security definer/);
+  assert.match(repair, /alter function public\.resolve_ws019_m44_phase_b_awaiting\(uuid, uuid\)\s+security definer/);
+  assert.doesNotMatch(repair, /resolve_ws019_m44_phase_b_recovery\(uuid, uuid\)\s+security definer/);
+  assert.equal((repair.match(/set search_path = public, pg_temp/g) || []).length, 2);
+  assert.equal((repair.match(/owner to postgres/g) || []).length, 2);
+  assert.equal((repair.match(/from public, anon, authenticated, authenticator/g) || []).length, 2);
+  assert.equal((repair.match(/to service_role/g) || []).length, 2);
+  assert.match(repair, /revoke insert on table public\.mcp_action_confirmations from service_role/);
+  assert.doesNotMatch(repair, /grant\s+insert\s+on\s+(table\s+)?public\.mcp_action_confirmations/i);
+  assert.doesNotMatch(repair, /execute\s+format|\bdynamic\s+sql\b/i);
 });

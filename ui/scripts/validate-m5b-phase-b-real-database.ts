@@ -51,8 +51,17 @@ async function rpc(name: string) {
   return api(`rpc/${name}`, "POST", { p_organization_id: org, p_actor_user_id: actor });
 }
 
+async function rejectedRpc(name: string, organizationId: string) {
+  await assert.rejects(
+    api(`rpc/${name}`, "POST", { p_organization_id: organizationId, p_actor_user_id: actor }),
+    /acceptance fixture unavailable/,
+  );
+}
+
 async function main() {
   const before = await snapshot();
+  await rejectedRpc("create_ws019_m44_phase_b_fixture", "11111111-1111-4111-8111-111111111111");
+  assert.deepEqual(await snapshot(), before, "non-Stem rejection changed state");
   const created = await rpc("create_ws019_m44_phase_b_fixture");
   assert.equal(created.created, true);
   const createdSnapshot = await snapshot();
@@ -108,6 +117,11 @@ async function main() {
   assert.equal(active[0].status, "dismissed");
   const finalQuery = await queryGovernedActionNotifications(org);
   assert.deepEqual(finalQuery.counts, { total: 1, unread: 0, read: 0, resolved: 0, dismissed: 1, critical: 1, warning: 0, info: 0, healthy: 0 });
+
+  const resolvedSnapshot = await snapshot();
+  const resolvedReplay = await rpc("create_ws019_m44_phase_b_fixture");
+  assert.equal(resolvedReplay.created, false);
+  assert.deepEqual(await snapshot(), resolvedSnapshot, "create reset resolved fixture state");
 
   const final = await snapshot();
   assert.equal(final.intents.count - before.intents.count, 3);
