@@ -3,6 +3,9 @@ import { commercePersistenceRequest as request } from "../commerce/supabase-cont
 import type { TraceKitSessionContext } from "../identity/persistent-types";
 import { assertCanonicalPlatformMembership } from "./platform-access";
 import { requirePlatformAdmin } from "./admin-policy";
+import { resolveInvitationTargetAccess } from "../identity/invitation-target-access";
+import { SupabaseIdentityTenancyRepository } from "../identity/supabase-identity-repository";
+import { AuthorizationDeniedError } from "../identity/authorization-gateway";
 
 export type Row = Record<string, unknown>;
 async function all(path: string): Promise<Row[]> {
@@ -83,6 +86,13 @@ export async function loadClientDetail(
       const filter = organizationId
         ? `organization_id=eq.${encodeURIComponent(organizationId)}`
         : `account_id=eq.${encodeURIComponent(accountId)}`;
+      let invitationContexts: Array<{ id: string; name: string }> | null = null;
+      if (organizationId && session.effectivePermissions.includes("users.invite")) {
+        try {
+          const target = await resolveInvitationTargetAccess(session, new SupabaseIdentityTenancyRepository(), organizationId);
+          invitationContexts = target.accessibleBusinessContexts.map(context => ({ id: context.id, name: context.name }));
+        } catch (error) { if (!(error instanceof AuthorizationDeniedError)) throw error; }
+      }
       const [memberships, invitations, contexts, offers, connections] =
         await Promise.all([
           session.effectivePermissions.includes("users.view")
@@ -117,6 +127,7 @@ export async function loadClientDetail(
           : String(account.name),
         memberships,
         invitations,
+        invitationContexts,
         contexts,
         offers,
         connections,

@@ -112,10 +112,8 @@ export default async function ClientDetailPage({
             </section>
             <section>
               <h3 className="mb-3 font-semibold">Invitations</h3>
-              {writable && orgActive && group.organizationId && session.effectivePermissions.includes("users.invite") ? (
-                <InviteClientUser organizationId={group.organizationId} contexts={(group.contexts || [])
-                  .filter(row => row.status === "active" && session.accessibleBusinessContexts.some(context => context.id === row.id && context.organizationId === group.organizationId))
-                  .map(row => ({ id: String(row.id), name: String(row.name) }))} />
+              {writable && orgActive && group.organizationId && group.invitationContexts !== null ? (
+                <InviteClientUser organizationId={group.organizationId} contexts={group.invitationContexts} />
               ) : null}
               {group.invitations === null ? (
                 <p>Access required.</p>
@@ -135,7 +133,7 @@ export default async function ClientDetailPage({
                       · Expires{" "}
                       {new Date(String(row.expires_at)).toLocaleDateString()}
                     </p>
-                    {writable && orgActive && group.organizationId && session.effectivePermissions.includes("users.invite") && row.status === "pending" && Date.parse(String(row.expires_at)) > Date.now() ? (
+                    {writable && orgActive && group.organizationId && group.invitationContexts !== null && row.status === "pending" && Date.parse(String(row.expires_at)) > Date.now() ? (
                       <PendingInvitationActions organizationId={group.organizationId} invitationId={String(row.id)} />
                     ) : null}
                   </article>
