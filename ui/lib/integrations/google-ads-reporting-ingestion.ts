@@ -8,13 +8,13 @@ function stablePayload(row:{date:string;campaignId:string;campaignName:string;ca
  return {date:row.date,campaignId:row.campaignId,campaignName:row.campaignName,campaignStatus:row.campaignStatus,impressions:row.impressions,clicks:row.clicks,costMicros:row.costMicros,conversions:row.conversions,conversionValue:row.conversionValue};
 }
 function hash(payload:unknown){return createHash("sha256").update(JSON.stringify(payload)).digest("hex")}
-export async function ingestGoogleAdsReportingBounded(input:{organizationId:string;connectionId:string;days?:number}){
- const days=Math.min(7,Math.max(1,input.days||7));
+export async function ingestGoogleAdsReportingBounded(input:{organizationId:string;connectionId:string;days?:number;mode?:"manual"|"scheduled"}){
+ const days=Math.min(7,Math.max(1,input.days||7)),mode=input.mode||"manual";
  const selected=await marketingPersistenceRequest(`marketing_provider_accounts?organization_id=eq.${encodeURIComponent(input.organizationId)}&connection_id=eq.${encodeURIComponent(input.connectionId)}&provider=eq.google_ads&selected_for_sync=eq.true&status=eq.active`) as Row[];
  if(selected.length!==1)throw new Error("Exactly one Google Ads account must be selected for bounded ingestion.");
  const providerAccount=selected[0];
  const now=new Date(),windowEnd=now.toISOString().slice(0,10),windowStart=new Date(now.getTime()-(days-1)*86400000).toISOString().slice(0,10);
- const runs=await marketingPersistenceRequest("marketing_reporting_runs",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify({account_id:providerAccount.account_id,organization_id:input.organizationId,connection_id:input.connectionId,provider_account_id:providerAccount.id,provider:"google_ads",mode:"manual",window_start:windowStart,window_end:windowEnd,status:"running"})}) as Row[];
+ const runs=await marketingPersistenceRequest("marketing_reporting_runs",{method:"POST",headers:{Prefer:"return=representation"},body:JSON.stringify({account_id:providerAccount.account_id,organization_id:input.organizationId,connection_id:input.connectionId,provider_account_id:providerAccount.id,provider:"google_ads",mode,window_start:windowStart,window_end:windowEnd,status:"running"})}) as Row[];
  const runId=String(runs[0]?.id||"");if(!runId)throw new Error("Google Ads reporting run could not be created.");
  let proof;
  try{proof=await runGoogleAdsReportingProof({organizationId:input.organizationId,connectionId:input.connectionId,days});}
