@@ -16,6 +16,10 @@
     {
       "path": "/api/cron/commas-scheduler",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/google-ads-scheduler",
+      "schedule": "17 8 * * *"
     }
   ]
 }
