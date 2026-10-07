@@ -62,6 +62,7 @@ export function pageChromeForPath(pathname: string | null | undefined) {
     "/team": { title: "Team", description: "Agency membership and permission administration.", group: "Agency" },
     "/branding": { title: "Branding", description: "Accessible Agency identity and white-label configuration.", group: "Agency" },
     "/dashboard/chargebacks": { title: "Chargebacks", description: "Review disputes, lifecycle status, match authority, and related commerce evidence.", group: "Revenue" },
+    "/platform/clients": { title: "Clients", description: "Advertiser and Agency account operations.", group: "Platform" },
     "/platform/organizations": { title: "Organizations", description: "Platform tenant operations.", group: "Platform" },
     "/platform/agencies": { title: "Agencies", description: "Agency Account operations.", group: "Platform" },
     "/platform/users": { title: "Users", description: "Platform identity and membership operations.", group: "Platform" },

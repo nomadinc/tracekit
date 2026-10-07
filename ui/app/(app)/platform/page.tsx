@@ -4,8 +4,10 @@ import { resolveApplicationSession } from "@/lib/identity/application-session";
 import { SupabaseIdentityTenancyRepository } from "@/lib/identity/supabase-identity-repository";
 import { PlatformControlCenter } from "@/components/platform/platform-control-center";
 import { readClientHealth } from "@/lib/platform/client-health";
+import { platformSession } from "@/lib/platform/admin-server";
 
 export default async function PlatformPage() {
+  await platformSession();
   const resolution = await resolveApplicationSession();
   if (resolution.kind !== "authenticated") redirect("/");
   const repository = new SupabaseIdentityTenancyRepository();

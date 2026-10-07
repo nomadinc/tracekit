@@ -17,5 +17,8 @@ export function isProtectedApplicationPath(pathname: string) {
 }
 
 export function shouldBlockLegacyRealDataProxy(pathname: string, realDataEnabled: boolean) {
+  // This exact route resolves platform membership and capability before using
+  // canonical provisioning RPCs; it is not a legacy unscoped data proxy.
+  if (pathname === "/api/platform/admin") return false;
   return realDataEnabled && pathname.startsWith("/api/") && pathname !== "/api/health" && !pathname.startsWith("/api/session/");
 }
