@@ -1,0 +1,7 @@
+{
+  "error": {
+    "code": "ERESOLVE",
+    "summary": "could not resolve",
+    "detail": "While resolving: wrangler@4.148.0\nFound: @cloudflare/workers-types@4.20260702.1\nnode_modules/@cloudflare/workers-types\n  dev @cloudflare/workers-types@\"^4.20260702.1\" from the root project\n\nCould not resolve dependency:\npeerOptional @cloudflare/workers-types@\"^5.20261006.1\" from wrangler@4.148.0\nnode_modules/wrangler\n  dev wrangler@\"^4.63.0\" from the root project\n\nConflicting peer dependency: @cloudflare/workers-types@5.20261007.1\nnode_modules/@cloudflare/workers-types\n  peerOptional @cloudflare/workers-types@\"^5.20261006.1\" from wrangler@4.148.0\n  node_modules/wrangler\n    dev wrangler@\"^4.63.0\" from the root project\n\nFix the upstream dependency conflict, or retry\nthis command with --force or --legacy-peer-deps\nto accept an incorrect (and potentially broken) dependency resolution.\n\n\nFor a full report see:\n/root/.npm/_logs/2026-10-07T20_56_51_777Z-eresolve-report.txt"
+  }
+}

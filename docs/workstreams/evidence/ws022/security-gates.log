@@ -1,0 +1,146 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> tracekit-ui@0.1.0 test
+> node scripts/run-tests.mjs tests/application-session-business-context.test.ts tests/identity-authorization.test.ts tests/auth-return-url.test.ts tests/m3-authoritative-shopify-execution-replay.test.ts tests/m3-atomic-confirmation-integrity.test.ts tests/m4-production-v1-release-control.test.ts tests/m4-permission-tenant-audit-acceptance.test.ts tests/m4-work-item-acceptance-fixture.test.ts tests/m4-governed-action-history.test.ts tests/m5b-governed-action-notifications.test.ts tests/m5b-phase-b-acceptance-fixture.test.ts tests/m5b-presentation-state-acl-migration.test.ts tests/m5b-notification-center-ui-repair.test.ts tests/m4-4-production-acceptance.test.ts tests/platform-admin-recovery.test.ts tests/ws020-mcp-customer-boundary.test.ts tests/ws020-provider-action-boundary.test.ts
+
+✔ persistent context absent from mock metadata remains authorized and active (1.164336ms)
+✔ mock metadata may decorate but cannot change persistent identity or tenant scope (0.191318ms)
+✔ production logout supplies an absolute same-origin signed-out destination (1.120359ms)
+✔ preview authentication keeps its explicitly configured deployment origin (0.274714ms)
+✔ untrusted origins, credentials and protocol downgrade cannot become return destinations (0.431921ms)
+✔ local development remains available without authorizing production localhost (0.290709ms)
+✔ a stale preview callback configuration cannot redirect a production logout (0.216977ms)
+✔ default roles resolve to typed permission collections (0.809791ms)
+✔ shell variants follow Account type rather than role labels (0.156086ms)
+✔ Agency and Client Organization access remains membership scoped (0.665924ms)
+✔ Business Contexts are restricted to the active allowed Organization (0.176596ms)
+✔ session normalization removes inaccessible Organization and Business Context state (0.193993ms)
+✔ route authorization checks permission, Organization scope, and shell variant (0.184498ms)
+✔ persistent Organization UUIDs are authorized from membership scope without consulting mock IDs (0.107522ms)
+✔ each representative identity resolves the permissions that drive its navigation (0.177778ms)
+✔ M3 confirmation validity and insertion share one locked database transaction (1.380281ms)
+✔ M3 atomic confirmation binds tenant actor operation target and immutable plan identity (0.235084ms)
+✔ M3 stale missing cross-tenant actor and contract mismatches all reject before insertion (0.347685ms)
+✔ M3 replay is serialized and returns only the same still-valid confirmation (0.319812ms)
+✖ M3 all confirmation paths use the shared RPC with operation-specific target contracts (2.409513ms)
+✔ M3 failed confirmation cannot create authorization or access a provider (0.297188ms)
+✔ M3 execution retains independent stale tenant actor operation and target defenses (0.220683ms)
+✔ completed replay is resolved before confirmation and provider target resolution (0.983974ms)
+✔ completed replay returns the durable result without orchestration (0.255716ms)
+✔ requested_at is metadata while database time owns validity (0.205309ms)
+✔ replay is tenant actor confirmation operation and immutable-result bound (0.263898ms)
+✔ only service role can invoke the new execution RPCs (0.302446ms)
+✔ M4.4 production evidence closes notification contract without overclaiming Production V1 (1.776729ms)
+✔ M4.3 reconstructs the exact M3 lifecycle without a duplicate execution (8.899187ms)
+✔ M4.3 is truthful about supplemental and unlinked evidence (1.12718ms)
+✔ M4.3 endpoint is tenant-bound permission-gated and side-effect free (0.59085ms)
+✔ M4.3 response is allowlisted and does not expose raw plans or secrets (0.345671ms)
+✔ M4.3 UI remains under the audit permission boundary (0.277299ms)
+✔ M4.3 validator records production-proven lifecycle visibility without declaring Production V1 ready (0.714297ms)
+✔ M4.2 preserves the authoritative execution and audit role policy (1.270716ms)
+✔ M4.2 operational permissions are explicit and do not broaden provider execution (0.603971ms)
+✔ M4.2 rejects foreign malformed tenant and spoofed actor hints (0.536809ms)
+✔ M4.2 Work Item and Notification routes derive scope and actor before the admin-secret boundary (0.70992ms)
+✔ M4.2 foreign object IDs remain non-disclosing under server workspace scope (0.37822ms)
+✔ M4.2 Work Item transitions retain graph checks and authenticated activity actor (0.281514ms)
+✔ M4.2 audit view is permission bounded paginated and Admin Client View tenant-scoped (0.483189ms)
+✔ M4.2 release evaluator exposes each production evidence gate independently (0.115574ms)
+✔ M4 freezes the Production V1 provider/action matrix and unknown operations fail closed (1.986525ms)
+✔ M4 safe-disable hierarchy defaults certified Shopify on and fails closed on disables or invalid values (0.452412ms)
+✔ M4 exposes Shopify and suppresses Commas in capability and MCP discovery (0.463058ms)
+✔ M4 mutation, provider and action disables remove Shopify mutation tools (0.422186ms)
+✔ M4 Commas prepare, confirm and execute fail before persistence or provider access (0.369767ms)
+✔ M4 direct and shared Commas mutation routes reject before target/provider work (0.568497ms)
+✔ M4 suppresses the legacy direct Shopify bypass while retaining governed exposure (0.294704ms)
+✔ M4 evaluation disable preserves the finding but prevents actionable remediation (3.308047ms)
+✔ M4 policy gates do not gate historical lifecycle repositories (0.441025ms)
+✔ M4 evaluator certifies M3's bounded proof without declaring Production V1 ready (1.366941ms)
+✔ M4 evaluator requires every controlled-action and cross-cutting release gate (0.435987ms)
+✔ M4.2b first-party route derives tenant and actor and rejects all caller fields (1.161331ms)
+✔ M4.2b exposes no general Work Item creation route and keeps production transition evidence incomplete (0.315736ms)
+✔ M5B projects only the declared governed-action notification classes (1.335554ms)
+✔ M5B derives lifecycle truth from existing durable action records (0.21942ms)
+✔ M5B stores presentation state separately from immutable lifecycle evidence (0.26488ms)
+✔ M5B action notification routes preserve tenant and RBAC boundaries (0.197438ms)
+✔ M5B Notification Center merges governed rows before unified filtering and pagination (0.189356ms)
+✔ M5B keeps Production V1 delivery in app only (0.19893ms)
+✔ M4.4 hardens tenant hints, mutation bodies, same-origin, and source failure (0.168634ms)
+✔ M4.4 uses exact durable execution identities and fails closed on ambiguity (0.218119ms)
+✔ M4.4 persists sanitized terminal failures without widening completed replay (0.349677ms)
+✔ M4.4 makes awaiting approval durable and explicitly confirmable (0.406412ms)
+✔ M4.4 applies governed filters and never hides governed-source failure (0.230277ms)
+✔ client and agency production navigation expose Notifications under organizations.view only (1.431849ms)
+✔ production header, account menu, and command palette navigate without notification mutations (0.758394ms)
+✔ exact authenticated production response renders six health rows and correct counts (0.380774ms)
+✔ successful governed-available empty response renders a genuine empty state (0.191799ms)
+✔ source failure is degraded and cannot become false healthy (0.578842ms)
+✔ page load uses server-derived tenant scope and performs no notification mutation (0.288214ms)
+✔ Phase B manifest is deterministic, Stem Labs scoped, and projection compatible (1.134631ms)
+✔ Phase B first-party route derives tenant and actor and accepts exact empty bodies only (0.989793ms)
+✔ Phase B persistence is atomic, idempotent, and fails closed on incompatible state (0.326892ms)
+✔ Phase B provider firewall has no credential, orchestration, delivery, or external audit path (0.244359ms)
+✔ Phase B lifecycle and presentation operations remain separated (0.1988ms)
+✔ Phase B applied migration remains byte-stable and initially installs invoker-rights functions (0.155284ms)
+✔ Phase B confirmation repair elevates only fixed confirmation writers and preserves M3 direct-insert denial (0.296256ms)
+✔ the already-applied M4.4 migration remains byte-identical (1.086769ms)
+✔ the forward migration removes default grants before granting the exact runtime contract (0.526053ms)
+✔ the repair is ACL-only and does not change global defaults or table semantics (0.313222ms)
+✔ advertiser and agency users cannot read platform catalog even with injected admin grants (1.11445ms)
+✔ platform support can inspect but cannot provision or invite (0.151228ms)
+✔ suspended membership and explicit permission denial fail closed (0.128244ms)
+✔ privileged mutations require same origin (1.496817ms)
+✔ client provisioning cannot create platform accounts (0.633495ms)
+✔ only the governed admin endpoint bypasses the legacy real-data proxy block (0.121533ms)
+▶ canonical provisioning transactions and tenant-safe membership administration
+  ✔ advertiser creates account plus organization; agency creates account plus agency (1.681665ms)
+  ✔ authenticated browser role cannot execute server provisioning RPC (2.257544ms)
+  ✔ service role can execute with authorized actor (3.582932ms)
+  ✔ normal customer actor cannot create clients (1.786884ms)
+  ✔ invalid account type and actor identity cannot provision (2.19516ms)
+  ✔ membership change rejects foreign tenant and platform role (3.238092ms)
+  ✔ final owner cannot be removed or demoted (2.531246ms)
+  ✔ explicit permission denial fails in database (2.348671ms)
+  ✔ audit failure rolls back account and organization creation (2.596064ms)
+✔ canonical provisioning transactions and tenant-safe membership administration (870.575215ms)
+✔ canonical platform membership periods reject expired, future and malformed dates (0.526965ms)
+ℹ tests 99
+ℹ suites 0
+ℹ pass 98
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1426.94411
+
+✖ failing tests:
+
+test at tests/m3-atomic-confirmation-integrity.test.ts:1:3272
+✖ M3 all confirmation paths use the shared RPC with operation-specific target contracts (2.409513ms)
+  AssertionError [ERR_ASSERTION]: expectedOperation:"inspect_evidence"
+      at TestContext.<anonymous> (/workspace/scratch/61a85fe6297b/tracekit-ws022/ui/tests/m3-atomic-confirmation-integrity.test.ts:72:13)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
+✔ client-read-only MCP customer serialization removes detailed money and nested contact evidence (3.032362ms)
+✔ expired membership and missing permission deny before customer persistence (0.893227ms)
+✔ server MCP repository scopes Core to authorized organization and fails closed before fetch without it (4.158109ms)
+✔ client-read-only cannot reach persistence or provider calls through any MCP action method (2.964109ms)
+✔ forged action permission cannot bypass expired membership or unavailable organization (1.487913ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 183.493155
