@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { ShellPlaceholder } from "@/components/layout/shell-placeholder";
 import type { Permission } from "@/lib/identity/permissions";
 import { AuditHistoryWorkspace } from "@/components/identity/audit-history";
+import { platformSession } from "@/lib/platform/admin-server";
 
 const SECTIONS: Record<string, { title: string; purpose: string; permission: Permission; manage?: Permission }> = {
   organizations: { title: "Organizations", purpose: "Platform tenant inventory and controlled Organization operations.", permission: "admin.manage_tenants" },
@@ -20,6 +21,7 @@ export default async function PlatformSectionPage({ params }: { params: Promise<
   const { section } = await params;
   const config = SECTIONS[section];
   if (!config) notFound();
+  await platformSession(config.permission);
   if (section === "audit-logs") return <AuditHistoryWorkspace />;
   return <ShellPlaceholder title={config.title} purpose={config.purpose} permission={config.permission} variants={["product-admin"]} managementPermission={config.manage} />;
 }

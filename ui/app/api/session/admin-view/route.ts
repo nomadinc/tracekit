@@ -5,6 +5,8 @@ import { resolveApplicationSession } from "@/lib/identity/application-session";
 import { requirePermission } from "@/lib/identity/authorization-gateway";
 import { SupabaseIdentityTenancyRepository } from "@/lib/identity/supabase-identity-repository";
 import { ADMIN_VIEW_COOKIE, sealAdminView } from "@/lib/identity/admin-view-cookie";
+import { assertCanonicalPlatformMembership } from "@/lib/platform/platform-access";
+import { requirePlatformAdmin, requireSameOrigin } from "@/lib/platform/admin-policy";
 
 const MAX_AGE = 60 * 60 * 8;
 
@@ -14,6 +16,9 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "The requested resource is unavailable." }, { status: 404 });
 
   try {
+    requireSameOrigin(request);
+    requirePlatformAdmin(resolution.session);
+    await assertCanonicalPlatformMembership(resolution.session);
     requirePermission(resolution.session, "admin.impersonate");
   } catch {
     return NextResponse.json({ error: "The requested resource is unavailable." }, { status: 404 });
@@ -62,11 +67,14 @@ export async function POST(request: Request) {
   return NextResponse.json({ organizationId: organization.id });
 }
 
-export async function DELETE() {
+export async function DELETE(request: Request) {
   const resolution = await resolveApplicationSession();
   if (resolution.kind !== "authenticated")
     return NextResponse.json({ error: "The requested resource is unavailable." }, { status: 404 });
   try {
+    requireSameOrigin(request);
+    requirePlatformAdmin(resolution.session);
+    await assertCanonicalPlatformMembership(resolution.session);
     requirePermission(resolution.session, "admin.impersonate");
   } catch {
     return NextResponse.json({ error: "The requested resource is unavailable." }, { status: 404 });

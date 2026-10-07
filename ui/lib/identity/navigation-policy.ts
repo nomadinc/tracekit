@@ -31,6 +31,9 @@ export const NAVIGATION_POLICY: Record<ShellVariant, NavigationPolicyItem[]> = {
   ],
   "product-admin": [
     { label: "Control Center", href: "/platform", permission: "admin.manage_tenants" },
+    { label: "Clients", href: "/platform/clients", permission: "admin.manage_tenants" },
+    { label: "Users", href: "/platform/users", permission: ["admin.manage_tenants", "users.view"] },
+    { label: "Connections", href: "/platform/connectors", permission: ["admin.manage_tenants", "connectors.view"] },
     { label: "Investigations", href: "/investigations", permission: "admin.manage_feature_access" },
   ],
 };
