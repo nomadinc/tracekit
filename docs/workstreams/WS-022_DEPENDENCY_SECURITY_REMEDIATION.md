@@ -2,7 +2,7 @@
 
 **Status: REVIEW / P0. See the current-main integration refresh below. Production dependency audits are clean; remaining baseline and development-risk dispositions are not waived.**
 
-Observed 2026-10-07. Current main was fetched and the isolated WS-022 branch rebased onto `4f65ca1a6ec349671373210a8ac6d55beca905a1`. Main’s intervening changes were documentation and a test, with no overlapping dependency upgrades. No other workstream branch, WS-019 acceptance evidence, production provider, database, credential, or business configuration was changed. The sole CI setting change is the explicitly authorized build-host Node 20 → Node 22 migration.
+Authoritative current-main baseline: `c2051ae1ff4d856a5bd79b3b9296c592655f1018`. The isolated candidate is rebased onto this main. See [the new current-main completion report](WS-022_CURRENT_MAIN_COMPLETION.md) for the executed rerun. References below to `4f65ca1a` describe historical remediation and migration provenance, not the current regression baseline.
 
 ## Completion record
 

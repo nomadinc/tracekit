@@ -1,0 +1,34 @@
+{
+  "ui": {
+    "ci": 0,
+    "audit": 0,
+    "full-audit": 1,
+    "tests": 1,
+    "types": 2
+  },
+  "api": {
+    "ci": 0,
+    "audit": 0,
+    "full-audit": 0,
+    "tests": 1
+  },
+  "relay": {
+    "ci": 0,
+    "audit": 0,
+    "full-audit": 0
+  },
+  "relay-worker": {
+    "ci": 0,
+    "audit": 0,
+    "full-audit": 1
+  },
+  "baseline-ui": {
+    "ci": 0,
+    "tests": 1,
+    "types": 2
+  },
+  "baseline-api": {
+    "ci": 0,
+    "tests": 1
+  }
+}
