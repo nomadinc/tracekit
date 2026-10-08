@@ -1,6 +1,6 @@
 # WS-022 — Dependency Security Remediation
 
-**Status: PARTIAL / REVIEW. Production dependency audits are clean. Final regression/migration certification remains on HOLD.**
+**Status: REVIEW / P0. See the current-main integration refresh below. Production dependency audits are clean; remaining baseline and development-risk dispositions are not waived.**
 
 Observed 2026-10-07. Current main was fetched and the isolated WS-022 branch rebased onto `4f65ca1a6ec349671373210a8ac6d55beca905a1`. Main’s intervening changes were documentation and a test, with no overlapping dependency upgrades. No other workstream branch, WS-019 acceptance evidence, production provider, database, credential, or business configuration was changed. The sole CI setting change is the explicitly authorized build-host Node 20 → Node 22 migration.
 
@@ -8,8 +8,8 @@ Observed 2026-10-07. Current main was fetched and the isolated WS-022 branch reb
 
 | Required field | Result |
 |---|---|
-| STATUS | PARTIAL / REVIEW; final acceptance HOLD |
-| CURRENT MAIN | `4f65ca1a6ec349671373210a8ac6d55beca905a1` |
+| STATUS | REVIEW / P0; residual baseline/security dispositions and staging acceptance HOLD |
+| CURRENT MAIN | `c2051ae1ff4d856a5bd79b3b9296c592655f1018` |
 | BRANCH / WORKTREE | `workstream/ws-022-dependency-security`; `/workspace/scratch/61a85fe6297b/tracekit-ws022` |
 | BASELINE AUDIT | UI 1 critical / 23 high / 3 moderate; additional package boundaries below |
 | DEPENDENCY INVENTORY | Four independent packages; complete direct/transitive inventories retained |
@@ -21,19 +21,19 @@ Observed 2026-10-07. Current main was fetched and the isolated WS-022 branch reb
 | BEFORE / AFTER COUNTS | Per-boundary full/production counts below; all production-only counts zero |
 | REMAINING ADVISORIES | braces, selector parser, Tinypool, Vitest mocker and propagated paths; development only |
 | PRODUCTION EXPOSURE | Zero current npm production findings; audit scope is not proof against unknown vulnerabilities |
-| REGRESSION TESTS | UI 1,357 / API 1,112; identical baseline failure titles, no new failures after test-helper compatibility fix |
-| M3 / M4 SECURITY GATES | 105/106 pass; one unchanged M3 confirmation-path assertion fails |
-| MIGRATION CHAIN | BLOCKED: disposable Supabase/Postgres unavailable; no production DB used |
+| REGRESSION TESTS | Current-main UI 1,359: 93 baseline failures / 90 patched; API 1,112: 9 failures / 4 skipped unchanged; no new failures |
+| M3 / M4 SECURITY GATES | Named M3 assertion reconciled; focused M3/eligibility/new M5 suites 11/11 PASS; no new full-suite failure |
+| MIGRATION CHAIN | User-reported local PASS through `20261007175026` on PostgreSQL 17.6; exact chain inputs unchanged on new main |
 | BUILD | Baseline, patched local and Vercel-mode production builds PASS |
 | VERCEL COMPATIBILITY | Local Vercel build mode PASS; remote deployment/runtime not independently certified |
 | CLOUDFLARE COMPATIBILITY | API, continuous-runtime and relay dry-run builds PASS; relay smoke tests 2/2 PASS |
 | ROLLBACK PLAN | Revert both WS-022 commits and revalidate; no schema rollback |
-| COMMIT | This continuation commit plus rebased initial patch `748cee56`; obtain exact final SHA with `git log` |
+| COMMIT | Rebased implementation `820eeb72` / `82dc6412`; handoff `719ccdec`; current reconciliation commit via `git log` |
 | PUSH STATUS | Not pushed; no PR, merge or deployment |
-| BLOCKERS | Complete migration chain; existing regression failures; separate dev-framework risk/major review |
+| BLOCKERS | Remaining existing failures/TypeScript gate; explicit development-risk dispositions; patched staging acceptance |
 | SAFE TO INTEGRATE? | Not certified as completed remediation; bounded production fixes are review-ready subject to outstanding gates |
 | WS-019 REGRESSION_GATES IMPACT | No production-proven upgrade; WS-019 owns acceptance |
-| NEXT ACTION | Run complete disposable Supabase chain; review baseline failures and residual development advisories separately |
+| NEXT ACTION | Review current-main refresh; separately authorize PR; resolve residual gate/risk/staging prerequisites before merge |
 
 ## Dependency inventory and actual install compatibility
 
@@ -142,3 +142,150 @@ If not integrated, discard the isolated WS-022 branch. If separately approved/in
 **Production dependency remediation is locally review-ready, but final WS-022 acceptance is not certified.** Require complete-chain execution, independent disposition of existing failing regression gates and explicit residual-development risk review before WS-019 closes its release blocker. Production-only audit improvement must not mark `regression_gates` production-proven. Do not mark overall Production V1 ready.
 
 Next action: run the disposable migration chain; separately review a supported Vitest 4.1.11/Cloudflare test-pool 0.23.0 combination, verifying that Tinypool is removed or patched to >=2.1.2, and the Tailwind/parser major or upstream-backport path. Those framework majors were not installed in this workstream. Push, PR, merge and deployment still require separate authorization.
+
+## Production integration refresh — 2026-10-08 UTC
+
+This section supersedes the earlier current-main, migration and named-gate
+status. WS-019's acceptance window is closed. Freshly fetched authoritative
+main is `c2051ae1ff4d856a5bd79b3b9296c592655f1018` (PR #543). The only changes
+since `4f65ca1a` are WS-019's final acceptance document, its policy-negative
+production evidence, and two new tests in
+`ui/tests/m5-policy-negative-production-acceptance.test.ts`. There are no
+manifest/lock, configuration, runtime, Worker, authentication, tenancy,
+RBAC, governed-action or migration collisions. Both merged WS-019 evidence
+files and the new acceptance test remain unchanged by WS-022.
+
+Workspace maintenance removed the unpublished cloud checkout. Recovery used
+the user-supplied complete-history `ws022.bundle`, verified at `85071d4b`.
+That bundle includes the validated remediation `eb2a85b9` and initial patch;
+it does not include later cloud-only documentation commits `60b83b73` and
+`07bc6174`. Their earlier observations are historical conversation evidence,
+not restored Git objects. The restored implementation was rebased cleanly
+onto current main. All eight manifests/locks remain byte-identical to
+`eb2a85b9`; dependency upgrades were not reconstructed from memory.
+
+| Original commit | Rebased commit | Purpose |
+|---|---|---|
+| `748cee56` | `820eeb72` | Initial Next patch |
+| `eb2a85b9` | `82dc6412` | Reviewed dependency/Node/tooling remediation |
+| `85071d4b` | `719ccdec` | Acceptance handoff |
+
+### Focused gate reconciliation
+
+Only two existing test files changed, with no application-source change:
+
+- M3's atomic confirmation test now normalizes whitespace before checking its
+  five exact operation/target contracts. It still checks the shared RPC,
+  absence of direct confirmation writes, failed confirmation isolation and
+  independent stale/tenant/actor/operation/target execution defenses.
+- Eligibility inspection tests distinguish current registry/policy capability
+  availability from eligibility to execute. The old global JSON prohibition
+  rejected the legitimate nested capability metadata. Tests now explicitly
+  require blocked state, no execution eligibility, missing action permission,
+  prerequisites and human confirmation, and null confirmation identities/times.
+  They retain the prohibition on grant/enable/provider-write/mutation-token
+  operations. They do not change registry, policy, permissions or execution.
+
+The focused M3/eligibility/new M5 evidence suites pass 11/11. Refreshed-main UI
+has 1,359 tests: 1,266 pass, 93 fail. Patched UI has 1,359 tests: 1,269 pass,
+90 fail. Exactly those three reconciled failure titles disappear; no new
+failure title appears. API baseline and patched both have 1,112 tests:
+1,099 pass, 9 fail, 4 skipped. All 60 TypeScript diagnostics match exactly
+and remain test-only. ESLint passes. These results distinguish baseline
+failures from dependency regressions; they do not silently waive remaining
+failures or certify Production V1 regression gates.
+
+Remaining failure dispositions: historical capability/tool/envelope assertions
+and literal UI/source assertions need Core/governed-action ownership;
+obsolete migration/component paths need migration/commerce/Meta ownership;
+the Edge fixture-wrapper loader needs WS-004/Core interface ownership;
+the scheduled queue test's 800 ceiling differs from the current shared 1000
+hard maximum and needs commerce-owner acceptance; four TKID persistence
+integration tests skip without a disposable test environment. Standalone
+TypeScript target/fixture typing failures remain owned by Core test/build.
+None is a new dependency-induced failure. Security-relevant stale assertions
+remain an acceptance coverage gap until their owner resolves or explicitly
+accepts their disposition. WS-019's merged manifest correctly retains
+`regression_gates` as blocked; this work does not rewrite that evidence.
+
+### Security and compatibility
+
+All four packages pass clean `npm ci` with lifecycle scripts enabled on
+Node 22.23.3/npm 10.9.4. Fresh production audits have zero critical, high,
+moderate and low findings in every boundary. Next remains exactly 15.5.27.
+API and outer relay full audits are clean. UI full audit remains 7 high /
+2 moderate; nested relay remains 2 critical / 1 moderate, all development-only.
+
+Residual dispositions remain conditional and require a named release-risk
+owner; they have not been silently accepted:
+
+- UI braces 3.0.3, GHSA-vfj7-8cjw-p6xm: no published patch in the fresh audit;
+  seven propagated high findings. Fixed repository globs and trusted lint/build
+  input reduce observed reachability. Review untrusted build inputs in isolated
+  jobs without release credentials; track upstream patch/removal. Tailwind major
+  review must also address ESLint's glob dependency path.
+- UI selector parser 6.1.4, GHSA-rj75-hqrm-r3gf: patched 7.1.6 crosses the
+  installed library major. Two moderate affected packages are CSS build tools;
+  no request-time untrusted CSS parsing path was established. Separate
+  compatibility review or explicit trusted-build risk acceptance required.
+- Nested Tinypool 1.1.1, GHSA-5gmw-xhrv-c9v3 and GHSA-85c8-ppgw-ccpr: worker
+  prototype-pollution gadgets can become host-process RCE if an upstream
+  pollution primitive is present. Both advisories require >=2.1.2 or removal;
+  do not force its major override under Vitest 3. Run only trusted tests in
+  isolated, credential-free jobs pending separately authorized Vitest 4 review.
+- Nested @vitest/mocker 3.2.7, GHSA-82fw-gwwq-j7x9: patched 4.1.11; reachable
+  mocker dev-server redirect paths can read files. No public mocker/browser
+  server is configured in the tested worker suite. Keep test servers private;
+  use the same separately authorized major review.
+
+Previously reviewed candidate Vitest 4.1.11 with peer-compatible Cloudflare
+pool 0.23.0 removes direct Tinypool and patches mocker. Current Cloudflare plugin
+replacement should be evaluated as part of that migration. No major candidate
+was installed here. Its clean audit, worker bindings/isolation/configuration,
+smoke tests and dry run must be proven before adopting it. Organization-wide
+CI secret isolation is a proposed compensating control, not a verified fact.
+
+Fresh API, continuous-runtime and relay dry runs pass without uploads; nested
+relay smoke tests pass 2/2. Fresh production and Vercel-mode builds both exit 0; results are
+recorded in the attached refresh evidence. A local Vercel-mode build does not
+certify the patched deployment's authenticated staging behavior. Main's READY
+staging/production deployments are coordination context and do not prove
+WS-022 has been deployed. Before release, staging must validate WorkOS/session
+propagation, App Router/middleware, server-derived tenancy/RBAC, request caching,
+Notifications and policy-negative action routes, without provider execution.
+
+### Migration evidence and rollback
+
+User-reported local migration validation remains PASS: baseline `4f65ca1a` and
+remediation `eb2a85b9` both exit 0 through `20261007175026` on disposable Supabase
+PostgreSQL 17.6 with Storage initialized. Report/log provenance:
+`/Users/nomadm/Documents/Codex/2026-10-06/before-doing-any-ws-020-work/outputs/ws022/acceptance-report.txt`.
+Those local logs are not accessible or independently inspected in this cloud
+checkout. Migrations, local DB configuration, historical prerequisite fixture
+and authoritative chain script are unchanged from the validated tree through
+current main and WS-022. Reusing that exact-tree evidence is appropriate;
+no production DB access or migration was performed. Re-run the disposable
+chain if those inputs change before integration.
+
+The production Worker workflow still triggers on main changes to `api/**`,
+commerce code, migrations or the workflow and runs actual Wrangler deployments.
+WS-022's Node 20→22 workflow setting and API dependency changes will match that
+trigger. The closed WS-019 window removes the timing blocker, but merge is
+still a deployment-affecting action requiring separate authorization and
+Vercel/Cloudflare automation coordination.
+
+After authorized integration, rollback restores the reviewed implementation
+by reverting `82dc6412` then `820eeb72` (or the integration squash), with focused
+test reconciliation reverted separately if needed. Re-run installs/builds/gates.
+No schema rollback is needed. A main rollback also may auto-deploy. Restoring
+old dependencies restores known vulnerabilities, so it is emergency regression
+recovery rather than a security-ready release posture.
+
+### Integration recommendation
+
+Review-only PR preparation is technically ready once validation results are
+reviewed and opening/pushing is separately authorized. Merge and deployment
+remain HOLD for explicit residual-development risk dispositions, remaining
+baseline gate ownership/acceptance, and patched staging certification. Do not
+mark the overall release ready. Re-fetch main immediately before integration,
+preserve all merged WS-019 evidence, and coordinate the automatic deployments.
