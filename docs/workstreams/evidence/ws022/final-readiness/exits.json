@@ -1,0 +1,22 @@
+{
+  "ui": {
+    "ci": 0,
+    "prod-audit": 0,
+    "full-audit": 1
+  },
+  "api": {
+    "ci": 0,
+    "prod-audit": 0,
+    "full-audit": 0
+  },
+  "relay": {
+    "ci": 0,
+    "prod-audit": 0,
+    "full-audit": 0
+  },
+  "relay-worker": {
+    "ci": 0,
+    "prod-audit": 0,
+    "full-audit": 1
+  }
+}

@@ -289,3 +289,106 @@ remain HOLD for explicit residual-development risk dispositions, remaining
 baseline gate ownership/acceptance, and patched staging certification. Do not
 mark the overall release ready. Re-fetch main immediately before integration,
 preserve all merged WS-019 evidence, and coordinate the automatic deployments.
+
+## Final integration-readiness reconciliation — 2026-10-08 UTC
+
+Fetched origin/main again: `c2051ae1ff4d856a5bd79b3b9296c592655f1018`.
+Candidate implementation is `fa411ef9586769d19db3e5f92616caacd18d338c`,
+built on the recovered/rebased reviewed `85071d4b` lineage shown above.
+No semantic collisions or new main changes appeared. No dependency changes
+were made during this final review. WS-019 evidence and migration inputs are
+unchanged. This section supersedes historical blocked migration/gate entries.
+
+Fresh lifecycle-enabled npm ci passes in all four boundaries on Node 22.23.3 /
+npm 10.9.4. Fresh production audits are zero at every severity in every
+boundary. Installed Next is 15.5.27. Full audits retain UI 7 high / 2 moderate
+and nested relay 2 critical / 1 moderate. Evidence is under
+[evidence/ws022/final-readiness](evidence/ws022/final-readiness/).
+The path trees there identify actual installed advisory dependency paths;
+full audit JSON records each advisory and propagated affected package.
+UI paths originate in Tailwind CSS and Next ESLint tooling, through
+chokidar/fast-glob/micromatch to braces, and postcss-nested to selector-parser.
+Nested paths originate in Vitest, including its mocker and Tinypool.
+Production-only audits exclude these paths; build/test exposure remains real.
+The earlier bounded controls and separate major-upgrade options still apply.
+No residual advisory has been accepted by this workstream.
+
+### Proposed baseline dispositions for WS-019
+
+[failure-dispositions.json](evidence/ws022/final-readiness/failure-dispositions.json)
+records all 93 UI and 9 API baseline failure titles with baseline evidence,
+proposed ownership, resolved status and explicit unresolved security review.
+It deliberately does not label every source assertion harmless: identical
+baseline/candidate failure is evidence against a dependency regression, not
+proof that the underlying production contract is correct. The original full
+comparison remains valid for unchanged source and main; it was not rerun
+merely to duplicate the completed gate after identical clean installs.
+
+| Category | Classification and proposed disposition |
+|---|---|
+| M3 confirmation-path assertion | Pre-existing whitespace-sensitive test issue; focused reconciliation PASS, exact five contracts retained. No functional change. |
+| Two eligibility assertions | Pre-existing registry-metadata versus execution-eligibility assertion mismatch; explicit blocked execution/confirmation assertions PASS. No permission or capability change. |
+| Remaining UI 90 / API 9 | Pre-existing failures. Missing historical paths and several layout assertions are test/source-layout issues. Remaining behavioral/security assertions require owner reconciliation; genuine underlying defects have not been ruled out. No new dependency-induced failure. |
+| Historical governed-action assertions | Registry/tool/envelope expectations differ from current contracts; Core/governed-action owner must approve replacements preserving negative authorization and tenant tests. WS-019 coverage decision required. |
+| Edge fixture wrapper | Test loader iterates metadata as fixtures; privacy-negative coverage still needs WS-004/Core correction. |
+| Queue quota mismatch | Test expects 800, current shared maximum is 1000; commerce owner must approve the intended resource bound. Treat as unresolved functional contract risk. |
+| Four skipped API tests | Environment/setup: disposable TKID DB URL/service-role credentials absent. Run in isolated test DB or record explicit coverage disposition; never substitute production credentials. |
+| TypeScript 60 diagnostics | Identical test-only diagnostics: 31 target/downlevel and 29 fixture typing. Core test/build owner; standalone type gate remains failing, not waived. |
+
+UI is 1269 pass / 90 fail versus baseline 1266 pass / 93 fail (1359 total).
+API remains 1099 pass / 9 fail / 4 skipped (1112 total). Focused M3,
+eligibility and current M5 suites pass 11/11. No new failure title or type
+diagnostic. Existing production/Vercel-mode builds, lint, three Worker dry
+runs and two nested Worker tests PASS in current-main-refresh evidence.
+These are local compatibility results, not authenticated staging acceptance.
+
+### Safe staging acceptance plan (prepared, not executed)
+
+Use the existing staging project after separate authorization for a candidate
+preview/staging deployment. First record the exact deployed Git SHA, Next and
+Node versions, deployment ID and isolation from production aliases, credentials,
+queues and provider bindings. A current-main READY deployment cannot validate
+the candidate. If isolation cannot be established, stop before exercising it.
+Use pre-provisioned two-tenant test identities and authorized read-only fixture
+records. No production configuration change, database write, provider request,
+prepare/confirm/execute action or credentials rotation is part of this plan.
+
+| Check | Procedure and required evidence |
+|---|---|
+| Startup / App Router | Load approved public and authenticated read pages; check middleware redirects, server component rendering and read API responses. Record deployment SHA and sanitized errors. |
+| Authentication/session | Signed-out protected requests deny/redirect; valid test session resolves ApplicationSession; expired/invalid session denies. Verify callback/return URL restrictions using staging identities. Redact cookies and tokens. |
+| Tenant isolation / RBAC | Read the same fixture using tenant A, tenant B and insufficient-role identities. Server-derived tenancy must deny cross-tenant IDs, caller-supplied tenant overrides and unauthorized roles without leaking data. |
+| Cache/session separation | Repeat authenticated reads across users/tenants, then signed out, using independent cookie jars. No cross-user/tenant cached response or session propagation. |
+| MCP discovery | Read tools/list under approved credentials; compare current registry contract, auth requirements and metadata. No invocation of provider actions. |
+| Read-only governed discovery | Inspect capability/eligibility metadata through the documented read-only routes. Missing permission/confirmation/prerequisites must remain blocked; policy-negative state must be represented consistently. Never prepare, confirm, execute or replay. |
+| Notifications | Read list/history and verify tenant scoping and response contract; no acknowledge/update mutation. |
+| Cloudflare compatibility | Require Node 22 CI, clean installs and API/continuous/relay dry-run artifacts for the candidate SHA. Runtime reads only if existing staging bindings are independently verified isolated. |
+| Stop/rollback | Stop on auth bypass, tenant leak, action enablement or provider traffic; preserve sanitized evidence and request deployment-owner rollback. No automatic production promotion. |
+
+Authentication may use the staging identity service's normal login flow; no
+application/provider mutation is authorized by this acceptance plan. Existing
+staging infrastructure/bindings have not been independently inspected here.
+Deployment and identity-test execution need separately scoped authorization.
+
+### Migration and integration decision
+
+Migration chain remains user-reported PASS through `20261007175026` on local
+Supabase PostgreSQL 17.6 with Storage. Exact chain inputs are unchanged;
+original local logs remain external and were not independently inspected.
+No rerun is warranted by this documentation-only review.
+
+**Safe to open PR:** technically ready for a review PR; push/opening requires
+separate authorization. Include the baseline ledger and do not advertise green
+full regression/type gates. **Safe to merge:** HOLD until WS-019 and named owners
+dispose of remaining failures and development risks, and deployment automation
+is coordinated. **Safe to deploy:** HOLD until separately authorized candidate
+staging acceptance and rollback ownership are complete. Main merge itself
+triggers production Worker deployment; approval must account for that effect.
+**Production V1 ready:** not determined by WS-022; WS-019 retains authority.
+
+Rollback procedure above remains applicable; deployment owner must verify a
+known-good artifact and restoration path for both Vercel and Workers before
+release. This work verifies the checked-in workflow trigger, not provider-side
+rollback access or Vercel project settings. Next action is WS-019 review of the
+explicit dispositions and separate authorization for a review PR and isolated
+staging acceptance. No push, PR, merge, deployment or production mutation occurred.
