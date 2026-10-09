@@ -1,0 +1,273 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> tracekit-ui@0.1.0 build
+> node scripts/next-lifecycle.mjs build
+
+lsof: WARNING: can't stat() mqueue file system /dev/mqueue
+      Output information may be incomplete.
+   ▲ Next.js 15.5.23
+
+   Creating an optimized production build ...
+[baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+<w> [webpack.cache.PackFileCacheStrategy] Serializing big strings (312kiB) impacts deserialization performance (consider using Buffer instead and decode when needed)
+ ⚠ Compiled with warnings in 1658ms
+
+./node_modules/@workos-inc/node/lib/factory-BdXIrbcU.mjs
+A Node.js API is used (process.release at line: 4669) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+./node_modules/@workos-inc/node/lib/factory-BdXIrbcU.mjs
+./node_modules/@workos-inc/node/lib/index.worker.mjs
+./node_modules/@workos-inc/authkit-nextjs/dist/esm/workos.js
+./node_modules/@workos-inc/authkit-nextjs/dist/esm/index.js
+
+./node_modules/@workos-inc/node/lib/webapi-BgpV54gi.mjs
+A Node.js API is used (CompressionStream at line: 1632) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+./node_modules/@workos-inc/node/lib/webapi-BgpV54gi.mjs
+./node_modules/@workos-inc/node/lib/factory-BdXIrbcU.mjs
+./node_modules/@workos-inc/node/lib/index.worker.mjs
+./node_modules/@workos-inc/authkit-nextjs/dist/esm/workos.js
+./node_modules/@workos-inc/authkit-nextjs/dist/esm/index.js
+
+./node_modules/@workos-inc/node/lib/webapi-BgpV54gi.mjs
+A Node.js API is used (DecompressionStream at line: 1647) which is not supported in the Edge Runtime.
+Learn more: https://nextjs.org/docs/api-reference/edge-runtime
+
+Import trace for requested module:
+./node_modules/@workos-inc/node/lib/webapi-BgpV54gi.mjs
+./node_modules/@workos-inc/node/lib/factory-BdXIrbcU.mjs
+./node_modules/@workos-inc/node/lib/index.worker.mjs
+./node_modules/@workos-inc/authkit-nextjs/dist/esm/workos.js
+./node_modules/@workos-inc/authkit-nextjs/dist/esm/index.js
+
+[baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+Browserslist: browsers data (caniuse-lite) is 11 months old. Please run:
+  npx update-browserslist-db@latest
+  Why you should do it regularly: https://github.com/browserslist/update-db#readme
+ ✓ Compiled successfully in 32.9s
+   Linting and checking validity of types ...
+
+./components/connections/everflow-admin-controls.tsx
+26:206  Warning: React Hook useEffect has a missing dependency: 'refreshStatus'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./components/customers/customer-workspace.tsx
+118:6  Warning: React Hook React.useEffect has missing dependencies: 'session.activeBusinessContextId' and 'session.activeOrganizationId'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+
+./components/offers/commerce-product-mapping-review.tsx
+116:166  Warning: React Hook React.useEffect has a missing dependency: 'group.products'. Either include it or remove the dependency array. If 'setSelected' needs the current value of 'group.products', you can also switch to useReducer instead of useState and read 'group.products' in the reducer.  react-hooks/exhaustive-deps
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/app/api-reference/config/eslint#disabling-rules
+   Collecting page data ...
+   Generating static pages (0/82) ...
+   Generating static pages (20/82) 
+   Generating static pages (40/82) 
+   Generating static pages (61/82) 
+The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+The width(-1) and height(-1) of chart should be greater than 0,
+       please check the style of container, or the props width(100%) and height(100%),
+       or add a minWidth(0) or minHeight(undefined) or use aspect(undefined) to control the
+       height and width.
+ ✓ Generating static pages (82/82)
+   Finalizing page optimization ...
+   Collecting build traces ...
+
+Route (app)                                                                  Size  First Load JS
+┌ ƒ /                                                                     7.91 kB         277 kB
+├ ○ /_not-found                                                              1 kB         103 kB
+├ ƒ /.well-known/oauth-protected-resource                                   409 B         103 kB
+├ ƒ /activity                                                               168 B         109 kB
+├ ƒ /api/action-notifications                                               409 B         103 kB
+├ ƒ /api/action-notifications/[...actionNotificationPath]                   409 B         103 kB
+├ ƒ /api/action-notifications/acceptance-fixtures/ws019-m4-4/[operation]    409 B         103 kB
+├ ƒ /api/actions/commas/m15-stranded-deep-recovery                          409 B         103 kB
+├ ƒ /api/actions/commas/webhook-test-delivery                               409 B         103 kB
+├ ƒ /api/actions/provider-confirm                                           409 B         103 kB
+├ ƒ /api/actions/provider-discovery                                         409 B         103 kB
+├ ƒ /api/actions/provider-prepare                                           409 B         103 kB
+├ ƒ /api/actions/shopify/controlled-webhook-proof                           409 B         103 kB
+├ ƒ /api/actions/shopify/webhook-remediation-readiness                      409 B         103 kB
+├ ƒ /api/admin/edge-tenant-bindings                                         409 B         103 kB
+├ ƒ /api/audit-events                                                       409 B         103 kB
+├ ƒ /api/chargebacks                                                        409 B         103 kB
+├ ƒ /api/chargebacks/[id]                                                   409 B         103 kB
+├ ƒ /api/chargebacks/exposure                                               409 B         103 kB
+├ ƒ /api/chargebacks/portfolio                                              409 B         103 kB
+├ ƒ /api/commerce/[...commercePath]                                         409 B         103 kB
+├ ƒ /api/commerce/attribution-quality                                       409 B         103 kB
+├ ƒ /api/commerce/commas/raw-evidence-audit                                 409 B         103 kB
+├ ƒ /api/commerce/connections/[connectionId]/historical-import              409 B         103 kB
+├ ƒ /api/commerce/connections/[connectionId]/sync-now                       409 B         103 kB
+├ ƒ /api/commerce/create-push-button-system-catalog                         409 B         103 kB
+├ ƒ /api/commerce/diagnostics-build                                         409 B         103 kB
+├ ƒ /api/commerce/normal-continuous-acceptance                              409 B         103 kB
+├ ƒ /api/commerce/one-shot-shadow                                           409 B         103 kB
+├ ƒ /api/commerce/ordering-verification                                     409 B         103 kB
+├ ƒ /api/commerce/product-mappings                                          409 B         103 kB
+├ ƒ /api/commerce/product-mappings/bulk                                     409 B         103 kB
+├ ƒ /api/commerce/recover-ordering-evidence-only                            409 B         103 kB
+├ ƒ /api/commerce/recover-stranded-one-shot                                 409 B         103 kB
+├ ƒ /api/commerce/redeliver-normal-continuous-acceptance                    409 B         103 kB
+├ ƒ /api/commerce/resume-ordering-evidence-only                             409 B         103 kB
+├ ƒ /api/cron/commas-scheduler                                              409 B         103 kB
+├ ƒ /api/cron/everflow-scheduler                                            409 B         103 kB
+├ ƒ /api/cron/google-ads-scheduler                                          409 B         103 kB
+├ ƒ /api/cron/next29-scheduler                                              409 B         103 kB
+├ ƒ /api/cron/shopify-scheduler                                             409 B         103 kB
+├ ƒ /api/customer-orders                                                    409 B         103 kB
+├ ƒ /api/customers                                                          409 B         103 kB
+├ ƒ /api/customers/[...customerPath]                                        409 B         103 kB
+├ ƒ /api/customers/[customerId]                                             409 B         103 kB
+├ ƒ /api/customers/[customerId]/journeys/[journeyId]                        409 B         103 kB
+├ ƒ /api/edge/intelligence-v1                                               409 B         103 kB
+├ ƒ /api/entities/[...entityPath]                                           409 B         103 kB
+├ ƒ /api/events                                                             409 B         103 kB
+├ ƒ /api/events/[...eventKey]                                               409 B         103 kB
+├ ƒ /api/events/stream                                                      409 B         103 kB
+├ ƒ /api/executive-dashboard                                                409 B         103 kB
+├ ƒ /api/financial-import-monitor                                           409 B         103 kB
+├ ƒ /api/financial-reconciliation                                           409 B         103 kB
+├ ƒ /api/financial-reconciliation/matches                                   409 B         103 kB
+├ ƒ /api/gateway-classic/[operation]                                        409 B         103 kB
+├ ƒ /api/health                                                             409 B         103 kB
+├ ƒ /api/home                                                               409 B         103 kB
+├ ƒ /api/identity/bootstrap                                                 409 B         103 kB
+├ ƒ /api/intelligence/action-history/[intentId]                             409 B         103 kB
+├ ƒ /api/internal/edge-intelligence-v1-staging-proof                        409 B         103 kB
+├ ƒ /api/investigations/[...investigationPath]                              409 B         103 kB
+├ ƒ /api/invitations                                                        409 B         103 kB
+├ ƒ /api/mcp                                                                409 B         103 kB
+├ ƒ /api/next29/connect                                                     409 B         103 kB
+├ ƒ /api/next29/live-validation                                             409 B         103 kB
+├ ƒ /api/next29/webhook-canary/[connectionId]                               409 B         103 kB
+├ ƒ /api/next29/webhook-characterize/[connectionId]                         409 B         103 kB
+├ ƒ /api/next29/webhook/[connectionId]                                      409 B         103 kB
+├ ƒ /api/notifications                                                      409 B         103 kB
+├ ƒ /api/notifications/[...notificationPath]                                409 B         103 kB
+├ ƒ /api/offers                                                             409 B         103 kB
+├ ƒ /api/operations/summary                                                 409 B         103 kB
+├ ƒ /api/platform/admin                                                     409 B         103 kB
+├ ƒ /api/platform/bootstrap-owner                                           409 B         103 kB
+├ ƒ /api/search                                                             409 B         103 kB
+├ ƒ /api/session/admin-view                                                 409 B         103 kB
+├ ƒ /api/session/business-context                                           409 B         103 kB
+├ ƒ /api/session/organization                                               409 B         103 kB
+├ ƒ /api/setup-wizard                                                       409 B         103 kB
+├ ƒ /api/shopify/backfill                                                   409 B         103 kB
+├ ƒ /api/shopify/incremental                                                409 B         103 kB
+├ ƒ /api/shopify/ingest                                                     409 B         103 kB
+├ ƒ /api/shopify/oauth/callback                                             409 B         103 kB
+├ ƒ /api/shopify/oauth/start                                                409 B         103 kB
+├ ƒ /api/shopify/smoke                                                      409 B         103 kB
+├ ƒ /api/shopify/webhook-secret                                             409 B         103 kB
+├ ƒ /api/shopify/webhook-subscriptions                                      409 B         103 kB
+├ ƒ /api/staging/schema-readiness                                           409 B         103 kB
+├ ƒ /api/tkid/origins/[...originPath]                                       409 B         103 kB
+├ ƒ /api/tkid/sources/[...sourcePath]                                       409 B         103 kB
+├ ƒ /api/webhooks/shopify                                                   409 B         103 kB
+├ ƒ /api/work-items                                                         409 B         103 kB
+├ ƒ /api/work-items/[...workItemPath]                                       409 B         103 kB
+├ ƒ /api/work-items/acceptance-fixtures/ws019-m4-2                          409 B         103 kB
+├ ƒ /auth/callback                                                          409 B         103 kB
+├ ƒ /auth/sign-in                                                           409 B         103 kB
+├ ƒ /auth/sign-out                                                          409 B         103 kB
+├ ○ /auth/signed-out                                                        177 B         106 kB
+├ ƒ /branding                                                              1.8 kB         108 kB
+├ ƒ /clients                                                               1.8 kB         108 kB
+├ ○ /concepts/customer-workspace                                          13.2 kB         116 kB
+├ ○ /concepts/mission-control                                             8.19 kB         228 kB
+├ ○ /concepts/offer-workspace                                             17.5 kB         234 kB
+├ ○ /concepts/order-workspace                                             18.5 kB         121 kB
+├ ƒ /connections                                                            166 B         114 kB
+├ ƒ /connections/commerce                                                   177 B         117 kB
+├ ƒ /connections/commerce/[connectionId]                                  1.73 kB         121 kB
+├ ƒ /connections/commerce/[connectionId]/diagnostics                        170 B         116 kB
+├ ƒ /connections/commerce/[connectionId]/readiness                          170 B         116 kB
+├ ƒ /connections/marketing/[connectionId]                                  5.6 kB         111 kB
+├ ƒ /connections/readiness                                                  167 B         116 kB
+├ ƒ /connections/sync-runs                                                  166 B         116 kB
+├ ƒ /customers                                                            9.63 kB         119 kB
+├ ƒ /customers/[person_id]                                                22.3 kB         238 kB
+├ ƒ /dashboard                                                            1.31 kB         104 kB
+├ ƒ /dashboard/chargebacks                                                5.09 kB         111 kB
+├ ƒ /dashboard/chargebacks/exposure                                       2.84 kB         109 kB
+├ ƒ /dashboard/financial-import-monitor                                     11 kB         117 kB
+├ ƒ /dashboard/financial-reconciliation                                   14.9 kB         121 kB
+├ ƒ /dashboard/refunds                                                    5.94 kB         112 kB
+├ ƒ /events                                                                6.3 kB         109 kB
+├ ƒ /integrations                                                           409 B         103 kB
+├ ƒ /investigations                                                         127 B         110 kB
+├ ƒ /investigations/[investigationId]                                       127 B         110 kB
+├ ○ /invitations                                                            177 B         106 kB
+├ ƒ /invitations/[id]                                                       651 B         103 kB
+├ ƒ /journeys                                                             1.61 kB         107 kB
+├ ƒ /journeys/[tkid]                                                      1.81 kB         111 kB
+├ ƒ /money                                                                2.51 kB         112 kB
+├ ƒ /notifications                                                        7.81 kB         114 kB
+├ ƒ /offers                                                               15.4 kB         245 kB
+├ ƒ /operations                                                           8.91 kB         118 kB
+├ ƒ /orders                                                               9.67 kB         119 kB
+├ ƒ /orders/[platform_order_id]                                             177 B         106 kB
+├ ƒ /overview                                                              8.3 kB         114 kB
+├ ƒ /platform                                                             3.82 kB         110 kB
+├ ƒ /platform/[section]                                                   1.23 kB         110 kB
+├ ƒ /platform/clients                                                     2.53 kB         108 kB
+├ ƒ /platform/clients/[accountId]                                         2.44 kB         108 kB
+├ ƒ /platform/connectors                                                  1.45 kB         107 kB
+├ ƒ /platform/users                                                       1.45 kB         107 kB
+├ ƒ /platforms                                                              409 B         103 kB
+├ ƒ /reports                                                              1.81 kB         111 kB
+├ ƒ /reports/commas-attribution                                           2.33 kB         108 kB
+├ ƒ /scrubber                                                               409 B         103 kB
+├ ƒ /settings                                                              1.8 kB         108 kB
+├ ƒ /settings/integrations                                                  177 B         106 kB
+├ ƒ /settings/integrations/[integration]                                    190 B         116 kB
+├ ƒ /settings/integrations/everflow                                         190 B         116 kB
+├ ƒ /settings/integrations/gateway-wizard                                 2.85 kB         105 kB
+├ ƒ /settings/integrations/konnektive                                       190 B         116 kB
+├ ƒ /settings/integrations/manual-postback                                  190 B         116 kB
+├ ƒ /settings/integrations/shopify                                          190 B         116 kB
+├ ƒ /settings/integrations/wowboost                                         190 B         116 kB
+├ ƒ /settings/integrations/wowpay                                           190 B         116 kB
+├ ƒ /settings/integrations/wowsuite                                       2.88 kB         118 kB
+├ ƒ /settings/product-costs                                               5.06 kB         107 kB
+├ ƒ /setup                                                                10.3 kB         113 kB
+├ ƒ /team                                                                  1.8 kB         108 kB
+├ ƒ /v1/integrations/everflow/advertisers                                   409 B         103 kB
+├ ƒ /v1/integrations/everflow/advertisers/sync                              409 B         103 kB
+├ ƒ /v1/integrations/everflow/affiliates                                    409 B         103 kB
+├ ƒ /v1/integrations/everflow/affiliates/sync                               409 B         103 kB
+├ ƒ /v1/integrations/everflow/connect                                       409 B         103 kB
+├ ƒ /v1/integrations/everflow/conversions/incremental                       409 B         103 kB
+├ ƒ /v1/integrations/everflow/conversions/sync                              409 B         103 kB
+├ ƒ /v1/integrations/everflow/offers                                        409 B         103 kB
+├ ƒ /v1/integrations/everflow/offers/sync                                   409 B         103 kB
+├ ƒ /v1/integrations/everflow/order-linkage/resolve                         409 B         103 kB
+├ ƒ /v1/integrations/everflow/scheduler/run                                 409 B         103 kB
+├ ƒ /v1/integrations/everflow/status                                        409 B         103 kB
+├ ƒ /v1/integrations/google-ads/accounts                                    409 B         103 kB
+├ ƒ /v1/integrations/google-ads/oauth/callback                              409 B         103 kB
+├ ƒ /v1/integrations/google-ads/oauth/start                                 409 B         103 kB
+├ ƒ /v1/integrations/google-ads/reporting-ingest                            409 B         103 kB
+├ ƒ /v1/integrations/google-ads/reporting-proof                             409 B         103 kB
+├ ƒ /v1/integrations/google-ads/scheduler/one-shot                          409 B         103 kB
+├ ƒ /v1/integrations/google-ads/scheduler/run                               409 B         103 kB
+├ ƒ /v1/integrations/meta/oauth/callback                                    409 B         103 kB
+└ ƒ /v1/integrations/meta/oauth/start                                       409 B         103 kB
++ First Load JS shared by all                                              102 kB
+  ├ chunks/1255-d3668eefd1b4a69b.js                                       46.1 kB
+  ├ chunks/4bd1b696-100b9d70ed4e49c1.js                                   54.2 kB
+  └ other shared chunks (total)                                           2.11 kB
+
+
+ƒ Middleware                                                               100 kB
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+

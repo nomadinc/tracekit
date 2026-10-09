@@ -1,0 +1,41 @@
+✔ advertiser and agency users cannot read platform catalog even with injected admin grants (1.610568ms)
+✔ platform support can inspect but cannot provision or invite (0.153097ms)
+✔ suspended membership and explicit permission denial fail closed (0.205986ms)
+✔ privileged mutations require same origin (1.678868ms)
+✔ client provisioning cannot create platform accounts (0.773256ms)
+✔ only the governed admin endpoint bypasses the legacy real-data proxy block (0.12152ms)
+▶ canonical provisioning transactions and tenant-safe membership administration
+  ✔ advertiser creates account plus organization; agency creates account plus agency (2.291567ms)
+  ✔ authenticated browser role cannot execute server provisioning RPC (3.253011ms)
+  ✔ service role can execute with authorized actor (4.503986ms)
+  ✔ normal customer actor cannot create clients (2.484763ms)
+  ✔ invalid account type and actor identity cannot provision (3.102088ms)
+  ✔ membership change rejects foreign tenant and platform role (7.628267ms)
+  ✔ final owner cannot be removed or demoted (3.807745ms)
+  ✔ explicit permission denial fails in database (3.326631ms)
+  ✔ audit failure rolls back account and organization creation (3.823337ms)
+✔ canonical provisioning transactions and tenant-safe membership administration (1097.685629ms)
+✔ canonical platform membership periods reject expired, future and malformed dates (0.638647ms)
+✔ successful provider send is durably settled without exposing provider tokens or granting membership (0.855478ms)
+✔ already claimed, sent or ambiguous attempts never make another provider request (0.152276ms)
+✔ known rejection is retryable but network/provider uncertainty remains ambiguous (0.286404ms)
+✔ lost persistence acknowledgement does not report a successful delivery or resend (0.173768ms)
+✔ provider result with foreign email or organization grant fails closed (0.261217ms)
+✔ no-membership landing provides verified-email discovery outside the membership shell (0.377419ms)
+✔ customer issuance permits only scoped existing least-privilege role (1.279767ms)
+✔ minimum customer role covers requested reads without platform or mutation powers (0.228349ms)
+✔ acceptance validation fails closed for invalid expiry and replays (0.299024ms)
+✔ combined platform routes use canonical persisted capability checks (1.177525ms)
+✔ combined Admin Client View retains separate impersonation authorization and support label (0.306304ms)
+✔ platform invitation scope is persisted and request-only (3.162788ms)
+✔ persisted denial and ineffective memberships prevent catalog reads (0.987434ms)
+✔ unknown and inactive target organizations or accounts fail closed (0.911161ms)
+✔ customer scopes never expand or query platform catalog (0.252214ms)
+ℹ tests 32
+ℹ suites 0
+ℹ pass 32
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1405.842935
