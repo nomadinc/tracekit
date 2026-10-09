@@ -1,0 +1,92 @@
+(node:5) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> tracekit-ui@0.1.0 test
+> node scripts/run-tests.mjs m3-atomic-confirmation-integrity.test.ts mcp-action-eligibility-inspection.test.ts m5-policy-negative-production-acceptance.test.ts
+
+(node:18) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:26) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+TAP version 13
+# (node:33) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: M3 confirmation validity and insertion share one locked database transaction
+ok 1 - M3 confirmation validity and insertion share one locked database transaction
+  ---
+  duration_ms: 1.127326
+  type: 'test'
+  ...
+# Subtest: M3 atomic confirmation binds tenant actor operation target and immutable plan identity
+ok 2 - M3 atomic confirmation binds tenant actor operation target and immutable plan identity
+  ---
+  duration_ms: 0.256546
+  type: 'test'
+  ...
+# Subtest: M3 stale missing cross-tenant actor and contract mismatches all reject before insertion
+ok 3 - M3 stale missing cross-tenant actor and contract mismatches all reject before insertion
+  ---
+  duration_ms: 0.301744
+  type: 'test'
+  ...
+# Subtest: M3 replay is serialized and returns only the same still-valid confirmation
+ok 4 - M3 replay is serialized and returns only the same still-valid confirmation
+  ---
+  duration_ms: 0.216395
+  type: 'test'
+  ...
+# Subtest: M3 all confirmation paths use the shared RPC with operation-specific target contracts
+ok 5 - M3 all confirmation paths use the shared RPC with operation-specific target contracts
+  ---
+  duration_ms: 0.657609
+  type: 'test'
+  ...
+# Subtest: M3 failed confirmation cannot create authorization or access a provider
+ok 6 - M3 failed confirmation cannot create authorization or access a provider
+  ---
+  duration_ms: 0.207703
+  type: 'test'
+  ...
+# Subtest: M3 execution retains independent stale tenant actor operation and target defenses
+ok 7 - M3 execution retains independent stale tenant actor operation and target defenses
+  ---
+  duration_ms: 0.188824
+  type: 'test'
+  ...
+# (node:34) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: M5 production policy negatives retain all fourteen correlated zero-delta cases
+ok 8 - M5 production policy negatives retain all fourteen correlated zero-delta cases
+  ---
+  duration_ms: 2.010003
+  type: 'test'
+  ...
+# Subtest: M5 restoration is exact and does not overclaim Production V1
+ok 9 - M5 restoration is exact and does not overclaim Production V1
+  ---
+  duration_ms: 0.855767
+  type: 'test'
+  ...
+# (node:40) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: M9 live-safe eligibility inspection reports every unsatisfied future execution gate
+ok 10 - M9 live-safe eligibility inspection reports every unsatisfied future execution gate
+  ---
+  duration_ms: 1.14956
+  type: 'test'
+  ...
+# Subtest: M9 eligibility inspection cannot grant confirm enable or execute
+ok 11 - M9 eligibility inspection cannot grant confirm enable or execute
+  ---
+  duration_ms: 0.643078
+  type: 'test'
+  ...
+1..11
+# tests 11
+# suites 0
+# pass 11
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 206.699601

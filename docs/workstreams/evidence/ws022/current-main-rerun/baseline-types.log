@@ -1,0 +1,95 @@
+(node:5464) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+tests/commas-deep-reconciliation-cadence-lifecycle.test.ts(20,91): error TS1501: This regular expression flag is only available when targeting 'es2018' or later.
+tests/commas-economic-allocation.test.ts(27,32): error TS2802: Type 'Map<number, number>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
+tests/commas-final-catalog.test.ts(64,86): error TS1501: This regular expression flag is only available when targeting 'es2018' or later.
+tests/commas-webhook-test-delivery.test.ts(13,19): error TS2322: Type 'URL | RequestInfo' is not assignable to type 'string'.
+  Type 'Request' is not assignable to type 'string'.
+tests/commas-webhook-test-delivery.test.ts(13,24): error TS2322: Type 'RequestInit | undefined' is not assignable to type 'RequestInit'.
+  Type 'undefined' is not assignable to type 'RequestInit'.
+tests/commas-webhook-test-delivery.test.ts(17,25): error TS2339: Property 'url' does not exist on type 'never'.
+tests/commas-webhook-test-delivery.test.ts(18,26): error TS2339: Property 'init' does not exist on type 'never'.
+tests/commas-webhook-test-delivery.test.ts(19,47): error TS2339: Property 'init' does not exist on type 'never'.
+tests/commerce-control-plane.test.ts(213,82): error TS1501: This regular expression flag is only available when targeting 'es2018' or later.
+tests/commerce-migration-identity-reconciliation.test.ts(28,5): error TS2737: BigInt literals are not available when targeting lower than ES2020.
+tests/commerce-migration-identity-reconciliation.test.ts(29,5): error TS2737: BigInt literals are not available when targeting lower than ES2020.
+tests/commerce-migration-identity-reconciliation.test.ts(30,5): error TS2737: BigInt literals are not available when targeting lower than ES2020.
+tests/commerce-migration-identity-reconciliation.test.ts(31,5): error TS2737: BigInt literals are not available when targeting lower than ES2020.
+tests/commerce-migration-identity-reconciliation.test.ts(32,5): error TS2737: BigInt literals are not available when targeting lower than ES2020.
+tests/commerce-product-mapping-workflow.test.ts(122,92): error TS1501: This regular expression flag is only available when targeting 'es2018' or later.
+tests/commerce-product-mapping-workflow.test.ts(125,66): error TS1501: This regular expression flag is only available when targeting 'es2018' or later.
+tests/connections-marketing-resilience.test.ts(9,114): error TS1501: This regular expression flag is only available when targeting 'es2018' or later.
+tests/continuous-commerce-intelligence.test.ts(40,59): error TS2345: Argument of type '{ page: (number: number, first: string, last: string, ids: string[]) => ...; direction: "oldest_first"; firstTimestamp: string; lastTimestamp: string; firstSourceId: string | null; lastSourceId: string | null; ids: string[]; }' is not assignable to parameter of type 'OrderingPageObservation'.
+  Types of property 'page' are incompatible.
+    Type '(number: number, first: string, last: string, ids: string[]) => { page: ...; direction: "oldest_first"; firstTimestamp: string; lastTimestamp: string; firstSourceId: string | null; lastSourceId: string | null; ids: string[]; }' is not assignable to type 'number'.
+tests/continuous-commerce-intelligence.test.ts(41,35): error TS2345: Argument of type '{ page: (number: number, first: string, last: string, ids: string[]) => ...; direction: "oldest_first"; firstTimestamp: string; lastTimestamp: string; firstSourceId: string | null; lastSourceId: string | null; ids: string[]; }' is not assignable to parameter of type 'OrderingPageObservation'.
+  Types of property 'page' are incompatible.
+    Type '(number: number, first: string, last: string, ids: string[]) => { page: ...; direction: "oldest_first"; firstTimestamp: string; lastTimestamp: string; firstSourceId: string | null; lastSourceId: string | null; ids: string[]; }' is not assignable to type 'number'.
+tests/continuous-commerce-intelligence.test.ts(102,28): error TS2802: Type 'ArrayIterator<[number, string[]]>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
+tests/continuous-commerce-intelligence.test.ts(105,27): error TS7006: Parameter 'id' implicitly has an 'any' type.
+tests/everflow-conversions-step7.test.ts(37,49): error TS1501: This regular expression flag is only available when targeting 'es2018' or later.
+tests/everflow-conversions-step7.test.ts(38,52): error TS1501: This regular expression flag is only available when targeting 'es2018' or later.
+tests/everflow-financial-projection-step9.test.ts(51,68): error TS1501: This regular expression flag is only available when targeting 'es2018' or later.
+tests/everflow-order-linkage-step6.test.ts(14,51): error TS1501: This regular expression flag is only available when targeting 'es2018' or later.
+tests/m12-adapter-capability-gate.test.ts(2,79): error TS2322: Type '1' is not assignable to type '2'.
+tests/m12-authenticated-action-service.test.ts(4,126): error TS2367: This comparison appears to be unintentional because the types '"tracekit.prepare_shopify_controlled_proof" | "tracekit.inspect_remediation_signals" | "tracekit.inspect_everflow_sync_remediation" | "tracekit.inspect_shopify_webhook_remediation" | ... 21 more ... | "tracekit.execute_inspect_evidence"' and '"tracekit.inspect_evidence"' have no overlap.
+tests/m13-staging-core-credential-selector.test.ts(2,107): error TS2352: Conversion of type '{ TK_SECRET_KEY: string; }' to type 'ProcessEnv' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Property 'NODE_ENV' is missing in type '{ TK_SECRET_KEY: string; }' but required in type 'ProcessEnv'.
+tests/m13-staging-core-credential-selector.test.ts(3,107): error TS2352: Conversion of type '{ TRACEKIT_USE_STAGING_CORE_CREDENTIAL: string; TK_SECRET_KEY: string; TK_SECRET_KEY_STAGING: string; }' to type 'ProcessEnv' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Property 'NODE_ENV' is missing in type '{ TRACEKIT_USE_STAGING_CORE_CREDENTIAL: string; TK_SECRET_KEY: string; TK_SECRET_KEY_STAGING: string; }' but required in type 'ProcessEnv'.
+tests/m13-staging-core-credential-selector.test.ts(4,116): error TS2352: Conversion of type '{ TRACEKIT_USE_STAGING_CORE_CREDENTIAL: string; TK_SECRET_KEY: string; }' to type 'ProcessEnv' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Property 'NODE_ENV' is missing in type '{ TRACEKIT_USE_STAGING_CORE_CREDENTIAL: string; TK_SECRET_KEY: string; }' but required in type 'ProcessEnv'.
+tests/m13-staging-core-credential-selector.test.ts(5,101): error TS2352: Conversion of type '{ TRACEKIT_USE_STAGING_CORE_CREDENTIAL: string; TK_SECRET_KEY: string; TK_SECRET_KEY_STAGING: string; }' to type 'ProcessEnv' may be a mistake because neither type sufficiently overlaps with the other. If this was intentional, convert the expression to 'unknown' first.
+  Property 'NODE_ENV' is missing in type '{ TRACEKIT_USE_STAGING_CORE_CREDENTIAL: string; TK_SECRET_KEY: string; TK_SECRET_KEY_STAGING: string; }' but required in type 'ProcessEnv'.
+tests/m14-commas-test-delivery-orchestration.test.ts(3,138): error TS2345: Argument of type '{ organizationId: string; plan: any; idempotencyKey: string; auditCorrelationId: string; }' is not assignable to parameter of type '{ organizationId: string; plan: CommasTestDeliveryPlan; idempotencyKey: string; auditCorrelationId: string; createdAt: string; expiresAt: string; }'.
+  Type '{ organizationId: string; plan: any; idempotencyKey: string; auditCorrelationId: string; }' is missing the following properties from type '{ organizationId: string; plan: CommasTestDeliveryPlan; idempotencyKey: string; auditCorrelationId: string; createdAt: string; expiresAt: string; }': createdAt, expiresAt
+tests/m14-commas-test-delivery-orchestration.test.ts(3,252): error TS2345: Argument of type '{ organizationId: string; plan: any; idempotencyKey: string; auditCorrelationId: string; }' is not assignable to parameter of type '{ organizationId: string; plan: CommasTestDeliveryPlan; idempotencyKey: string; auditCorrelationId: string; createdAt: string; expiresAt: string; }'.
+  Type '{ organizationId: string; plan: any; idempotencyKey: string; auditCorrelationId: string; }' is missing the following properties from type '{ organizationId: string; plan: CommasTestDeliveryPlan; idempotencyKey: string; auditCorrelationId: string; createdAt: string; expiresAt: string; }': createdAt, expiresAt
+tests/m5b-phase-b-acceptance-fixture.test.ts(38,24): error TS2802: Type 'RegExpStringIterator<RegExpExecArray>' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
+tests/m5b-phase-b-acceptance-fixture.test.ts(46,59): error TS1501: This regular expression flag is only available when targeting 'es2018' or later.
+tests/mcp-authorization-consumption.test.ts(2,35): error TS2322: Type '1' is not assignable to type '2'.
+tests/mcp-bounded-execution-adapter.test.ts(2,35): error TS2322: Type '1' is not assignable to type '2'.
+tests/mcp-governed-action-planning.test.ts(3,113): error TS2322: Type '{ id: any; sequence: number; dependsOn: any; blockedByEvidenceLimits: boolean; applicability: any; applicabilityReason: any; type: any; mode: string; reason: string; supportingEventIds: string[]; ... 4 more ...; uncertainty: any; }[]' is not assignable to type 'AdvisoryRecommendation[]'.
+  Type '{ id: any; sequence: number; dependsOn: any; blockedByEvidenceLimits: boolean; applicability: any; applicabilityReason: any; type: any; mode: string; reason: string; supportingEventIds: string[]; ... 4 more ...; uncertainty: any; }' is not assignable to type 'AdvisoryRecommendation'.
+    Types of property 'mode' are incompatible.
+      Type 'string' is not assignable to type '"advisory"'.
+tests/meta-oauth-foundation.test.ts(146,75): error TS1501: This regular expression flag is only available when targeting 'es2018' or later.
+tests/migration-ledger-full-convergence.test.ts(343,5): error TS2737: BigInt literals are not available when targeting lower than ES2020.
+tests/migration-ledger-full-convergence.test.ts(343,22): error TS2737: BigInt literals are not available when targeting lower than ES2020.
+tests/migration-ledger-full-convergence.test.ts(343,39): error TS2737: BigInt literals are not available when targeting lower than ES2020.
+tests/migration-ledger-full-convergence.test.ts(343,56): error TS2737: BigInt literals are not available when targeting lower than ES2020.
+tests/push-button-system-catalog.test.ts(47,91): error TS1501: This regular expression flag is only available when targeting 'es2018' or later.
+tests/push-button-system-catalog.test.ts(57,81): error TS1501: This regular expression flag is only available when targeting 'es2018' or later.
+tests/shopify-bulk-runtime.test.ts(54,614): error TS2322: Type 'Promise<number>' is not assignable to type 'Promise<void>'.
+  Type 'number' is not assignable to type 'void'.
+tests/shopify-refund-ledger-upsert.test.ts(18,87): error TS1501: This regular expression flag is only available when targeting 'es2018' or later.
+tests/shopify-refund-status-normalization.test.ts(22,45): error TS2345: Argument of type '{ organizationId: string; connectionId: string; providerAccountId: string; resource: "orders"; providerObjectId: string; providerUpdatedAt: string; payload: Record<string, unknown>; }' is not assignable to parameter of type 'ShopifyPersistedRecord'.
+  Types of property 'payload' are incompatible.
+    Property 'id' is missing in type 'Record<string, unknown>' but required in type 'ShopifyResourceNode'.
+tests/shopify-refund-status-normalization.test.ts(43,45): error TS2345: Argument of type '{ organizationId: string; connectionId: string; providerAccountId: string; resource: "orders"; providerObjectId: string; providerUpdatedAt: string; payload: Record<string, unknown>; }' is not assignable to parameter of type 'ShopifyPersistedRecord'.
+  Types of property 'payload' are incompatible.
+    Property 'id' is missing in type 'Record<string, unknown>' but required in type 'ShopifyResourceNode'.
+tests/shopify-refund-status-normalization.test.ts(58,45): error TS2345: Argument of type '{ organizationId: string; connectionId: string; providerAccountId: string; resource: "orders"; providerObjectId: string; providerUpdatedAt: string; payload: Record<string, unknown>; }' is not assignable to parameter of type 'ShopifyPersistedRecord'.
+  Types of property 'payload' are incompatible.
+    Property 'id' is missing in type 'Record<string, unknown>' but required in type 'ShopifyResourceNode'.
+tests/shopify-scheduled-worker.test.ts(14,72): error TS1501: This regular expression flag is only available when targeting 'es2018' or later.
+tests/tkid-browser-sdk-release.test.ts(17,154): error TS2345: Argument of type '(url: string, init: any) => Promise<{ ok: boolean; json: () => Promise<{ journey_id: string; browser_session_id: string; journey_expires_at: string; browser_session_expires_at: string; }>; } | { ...; }>' is not assignable to parameter of type '() => Promise<any>'.
+  Target signature provides too few arguments. Expected 2 or more, but got 0.
+tests/tkid-universal-browser-sdk.test.ts(12,1430): error TS2349: This expression is not callable.
+  Type 'never' has no call signatures.
+tests/ws020-core-read-projection.test.ts(12,35): error TS2345: Argument of type '"orders.view_financials"' is not assignable to parameter of type '"organizations.view" | "offers.view" | "customers.view" | "orders.view" | "financials.view" | "connectors.view" | "imports.view"'.
+tests/ws020-mcp-customer-boundary.test.ts(11,444): error TS2802: Type 'Set<"organizations.view" | "organizations.manage" | "users.view" | "users.invite" | "users.remove" | "users.manage_permissions" | "offers.view" | "offers.manage" | "customers.view" | ... 19 more ... | "admin.manage_feature_access">' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
+tests/ws020-provider-action-boundary.test.ts(9,165): error TS2802: Type 'Set<"organizations.view" | "organizations.manage" | "users.view" | "users.invite" | "users.remove" | "users.manage_permissions" | "offers.view" | "offers.manage" | "customers.view" | ... 19 more ... | "admin.manage_feature_access">' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
+tests/ws020-scoped-core-gateway.test.ts(11,168): error TS2802: Type 'Set<"organizations.view" | "organizations.manage" | "users.view" | "users.invite" | "users.remove" | "users.manage_permissions" | "offers.view" | "offers.manage" | "customers.view" | ... 19 more ... | "admin.manage_feature_access">' can only be iterated through when using the '--downlevelIteration' flag or with a '--target' of 'es2015' or higher.
+tests/ws020-scoped-core-gateway.test.ts(48,55): error TS2345: Argument of type '{ effectivePermissions: string[]; user: PersistentUser; externalWorkosUserId: string; activeAccount: PersistentAccount; ... 9 more ...; correlationId: string; }' is not assignable to parameter of type 'TraceKitSessionContext'.
+  Types of property 'effectivePermissions' are incompatible.
+    Type 'string[]' is not assignable to type '("organizations.view" | "organizations.manage" | "users.view" | "users.invite" | "users.remove" | "users.manage_permissions" | "offers.view" | "offers.manage" | "customers.view" | ... 19 more ... | "admin.manage_feature_access")[]'.
+      Type 'string' is not assignable to type '"organizations.view" | "organizations.manage" | "users.view" | "users.invite" | "users.remove" | "users.manage_permissions" | "offers.view" | "offers.manage" | "customers.view" | ... 19 more ... | "admin.manage_feature_access"'.
+tests/ws020-scoped-core-gateway.test.ts(49,55): error TS2345: Argument of type '{ effectivePermissions: string[]; user: PersistentUser; externalWorkosUserId: string; activeAccount: PersistentAccount; ... 9 more ...; correlationId: string; }' is not assignable to parameter of type 'TraceKitSessionContext'.
+  Types of property 'effectivePermissions' are incompatible.
+    Type 'string[]' is not assignable to type '("organizations.view" | "organizations.manage" | "users.view" | "users.invite" | "users.remove" | "users.manage_permissions" | "offers.view" | "offers.manage" | "customers.view" | ... 19 more ... | "admin.manage_feature_access")[]'.
+      Type 'string' is not assignable to type '"organizations.view" | "organizations.manage" | "users.view" | "users.invite" | "users.remove" | "users.manage_permissions" | "offers.view" | "offers.manage" | "customers.view" | ... 19 more ... | "admin.manage_feature_access"'.
+tests/ws020-scoped-core-gateway.test.ts(50,55): error TS2345: Argument of type '{ membership: { effectiveUntil: string; id: string; userId: string; accountId: string | null; organizationId: string | null; role: Role; status: "invited" | "active" | "suspended" | "removed"; effectiveFrom?: string; }; ... 12 more ...; correlationId: string; }' is not assignable to parameter of type 'TraceKitSessionContext'.
+  Types of property 'effectivePermissions' are incompatible.
+    Type 'string[]' is not assignable to type '("organizations.view" | "organizations.manage" | "users.view" | "users.invite" | "users.remove" | "users.manage_permissions" | "offers.view" | "offers.manage" | "customers.view" | ... 19 more ... | "admin.manage_feature_access")[]'.
+      Type 'string' is not assignable to type '"organizations.view" | "organizations.manage" | "users.view" | "users.invite" | "users.remove" | "users.manage_permissions" | "offers.view" | "offers.manage" | "customers.view" | ... 19 more ... | "admin.manage_feature_access"'.
