@@ -20,7 +20,9 @@ export async function runGoogleAdsReportingProof(input:{organizationId:string;co
   const key=decodeCommerceCredentialKey(process.env.COMMERCE_CREDENTIALS_ENC_KEY);
   const refreshToken=await decryptCommerceCredential({keyId:String(credential.encryption_key_id),encryptionVersion:Number(credential.encryption_version),iv:bytes(credential.secret_iv),ciphertext:bytes(credential.secret_ciphertext)},key);
   const cfg=googleAdsConfiguration();
-  const access=await refreshGoogleAccessToken({refreshToken,clientId:cfg.clientId,clientSecret:cfg.clientSecret,fetcher:input.fetcher});
+  let access;
+  try { access=await refreshGoogleAccessToken({refreshToken,clientId:cfg.clientId,clientSecret:cfg.clientSecret,fetcher:input.fetcher}); }
+  catch { throw new Error("google_ads_oauth_refresh_failed"); }
   const customerId=String(accounts[0].provider_account_external_id);
   const query=[
     "SELECT segments.date, campaign.id, campaign.name, campaign.status, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.conversions_value",
@@ -30,7 +32,14 @@ export async function runGoogleAdsReportingProof(input:{organizationId:string;co
   ].join(" ");
   const response=await (input.fetcher||fetch)(`https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers/${customerId}/googleAds:searchStream`,{method:"POST",cache:"no-store",headers:{Authorization:`Bearer ${access.accessToken}`,"Content-Type":"application/json"},body:JSON.stringify({query})});
   const payload=await response.json().catch(()=>null) as Array<{results?:Array<{segments?:{date?:string};campaign?:{id?:string;name?:string;status?:string};metrics?:Record<string,unknown>}>}>|null;
-  if(!response.ok||!Array.isArray(payload))throw new Error("Google Ads bounded reporting proof failed.");
+  if(!response.ok||!Array.isArray(payload)){
+    const errorBody=payload as unknown as {error?:{status?:string;code?:number;details?:Array<{errors?:Array<{errorCode?:Record<string,string>}>}>}}|null;
+    const providerStatus=String(errorBody?.error?.status||"unknown").replace(/[^A-Za-z0-9_]/g,"").slice(0,48);
+    const providerCode=Number(errorBody?.error?.code)||response.status;
+    const category=Object.keys(errorBody?.error?.details?.[0]?.errors?.[0]?.errorCode||{})[0]||"unknown";
+    console.error("google_ads_reporting_provider_failure",{httpStatus:response.status,providerStatus,providerCode,category:category.slice(0,48)});
+    throw new Error(`google_ads_reporting_http_${response.status}_${providerStatus}`);
+  }
   const rows=payload.flatMap(batch=>batch.results||[]).map(row=>({date:String(row.segments?.date||""),campaignId:String(row.campaign?.id||""),campaignName:String(row.campaign?.name||""),campaignStatus:String(row.campaign?.status||""),impressions:Number(row.metrics?.impressions||0),clicks:Number(row.metrics?.clicks||0),costMicros:Number(row.metrics?.costMicros||0),conversions:Number(row.metrics?.conversions||0),conversionValue:Number(row.metrics?.conversionsValue||0)}));
   return {accountLabel:accounts[0].provider_account_label?String(accounts[0].provider_account_label):"Google Ads account",days,rowCount:rows.length,totalCostMicros:rows.reduce((n,row)=>n+row.costMicros,0),totalImpressions:rows.reduce((n,row)=>n+row.impressions,0),totalClicks:rows.reduce((n,row)=>n+row.clicks,0),rows:rows.slice(0,100)};
 }

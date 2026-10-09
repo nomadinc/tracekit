@@ -18,7 +18,8 @@ export async function runDueGoogleAdsReportingSchedules(input:{organizationId?:s
   try{
    await ingestGoogleAdsReportingBounded({organizationId:String(schedule.organization_id),connectionId:String(schedule.connection_id),days:7,mode:"scheduled"});
    await marketingPersistenceRequest("rpc/finish_google_ads_campaign_daily_schedule",{method:"POST",body:JSON.stringify({p_schedule_id:scheduleId,p_lease_owner:owner,p_now:new Date().toISOString(),p_outcome:"completed"})});completed++;
-  }catch{
+  }catch(error){
+   console.error("google_ads_scheduled_ingestion_failed",{scheduleId,reason:error instanceof Error?error.message.slice(0,120):"unknown_error"});
    await marketingPersistenceRequest("rpc/finish_google_ads_campaign_daily_schedule",{method:"POST",body:JSON.stringify({p_schedule_id:scheduleId,p_lease_owner:owner,p_now:new Date().toISOString(),p_outcome:"failed"})}).catch(()=>null);failed++;
   }
  }
