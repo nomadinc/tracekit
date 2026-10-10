@@ -18,7 +18,7 @@ export async function ingestGoogleAdsReportingBounded(input:{organizationId:stri
  const runId=String(runs[0]?.id||"");if(!runId)throw new Error("Google Ads reporting run could not be created.");
  let proof;
  try{proof=await runGoogleAdsReportingProof({organizationId:input.organizationId,connectionId:input.connectionId,days});}
- catch(error){await marketingPersistenceRequest(`marketing_reporting_runs?id=eq.${encodeURIComponent(runId)}&organization_id=eq.${encodeURIComponent(input.organizationId)}`,{method:"PATCH",body:JSON.stringify({status:"failed",error_code:"provider_read_failed",completed_at:new Date().toISOString()})});throw error;}
+ catch(error){await marketingPersistenceRequest(`marketing_reporting_runs?id=eq.${encodeURIComponent(runId)}&organization_id=eq.${encodeURIComponent(input.organizationId)}`,{method:"PATCH",body:JSON.stringify({status:"failed",error_code:(error instanceof Error&&/^google_ads_[a-z0-9_]+$/i.test(error.message)?error.message.slice(0,120):"provider_read_failed"),completed_at:new Date().toISOString()})});throw error;}
  let evidenceCreated=0,evidenceReused=0,factsCreated=0,factsUpdated=0,factsUnchanged=0;
  for(const row of proof.rows){
   if(!row.date||!row.campaignId)continue;
