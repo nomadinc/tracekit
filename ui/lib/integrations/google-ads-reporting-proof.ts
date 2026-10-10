@@ -23,14 +23,19 @@ export async function runGoogleAdsReportingProof(input:{organizationId:string;co
   let access;
   try { access=await refreshGoogleAccessToken({refreshToken,clientId:cfg.clientId,clientSecret:cfg.clientSecret,fetcher:input.fetcher}); }
   catch { throw new Error("google_ads_oauth_refresh_failed"); }
+  const developerToken=String(process.env.GOOGLE_ADS_DEVELOPER_TOKEN||"").trim();
+  if(!developerToken)throw new Error("google_ads_developer_token_missing");
   const customerId=String(accounts[0].provider_account_external_id);
+  const googleMetadata=(accounts[0].metadata as {google?:{loginCustomerIds?:unknown}}|null)?.google;
+  const loginIds=Array.isArray(googleMetadata?.loginCustomerIds)?googleMetadata.loginCustomerIds.filter((id):id is string=>typeof id==="string"&&/^\\d{10}$/.test(id)):[];
+  const loginCustomerId=loginIds.find(id=>id!==customerId);
   const query=[
     "SELECT segments.date, campaign.id, campaign.name, campaign.status, metrics.impressions, metrics.clicks, metrics.cost_micros, metrics.conversions, metrics.conversions_value",
     "FROM campaign",
     `WHERE segments.date DURING LAST_${days}_DAYS`,
     "ORDER BY segments.date DESC, campaign.id",
   ].join(" ");
-  const response=await (input.fetcher||fetch)(`https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers/${customerId}/googleAds:searchStream`,{method:"POST",cache:"no-store",headers:{Authorization:`Bearer ${access.accessToken}`,"Content-Type":"application/json"},body:JSON.stringify({query})});
+  const response=await (input.fetcher||fetch)(`https://googleads.googleapis.com/${GOOGLE_ADS_API_VERSION}/customers/${customerId}/googleAds:searchStream`,{method:"POST",cache:"no-store",headers:{Authorization:`Bearer ${access.accessToken}`,"developer-token":developerToken,...(loginCustomerId?{"login-customer-id":loginCustomerId}:{}),"Content-Type":"application/json"},body:JSON.stringify({query})});
   const payload=await response.json().catch(()=>null) as Array<{results?:Array<{segments?:{date?:string};campaign?:{id?:string;name?:string;status?:string};metrics?:Record<string,unknown>}>}>|null;
   if(!response.ok||!Array.isArray(payload)){
     const errorBody=payload as unknown as {error?:{status?:string;code?:number;details?:Array<{errors?:Array<{errorCode?:Record<string,string>}>}>}}|null;
