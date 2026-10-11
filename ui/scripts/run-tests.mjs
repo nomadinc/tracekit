@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 // These suites import server-only application modules. Preserve that boundary
 // by using Node's React Server condition, rather than mocking server-only away.
 const serverSuites = new Set([
+  "ws001-everflow-runtime-recovery.test.ts",
   "m11-shopify-webhook-rollback.test.ts", "m17-shopify-webhook-remediation.test.ts",
   "mcp-read-service.test.ts", "meta-oauth-foundation.test.ts",
   "ws020-mcp-customer-boundary.test.ts", "ws020-provider-action-boundary.test.ts",

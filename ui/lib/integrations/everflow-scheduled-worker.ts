@@ -958,6 +958,7 @@ export async function runDueEverflowSchedules(
     processed: results.length,
     results,
     historicalImport,
+    reconciliationMaintenance,
     staleRunRecovery,
     requestId: randomUUID(),
   };
