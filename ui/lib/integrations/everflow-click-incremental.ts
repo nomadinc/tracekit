@@ -78,15 +78,19 @@ export function everflowClickIncrementalWindow(input: {
       bootstrap: Boolean(input.boundary?.bootstrap),
       resumed: true,
     };
-  const parsed = input.lastSuccessfulAt
-    ? Date.parse(input.lastSuccessfulAt)
-    : NaN;
+  // Keep source coverage separate from the completion timestamp after recovery.
+  const coveredThrough = text(input.boundary?.providerTo);
+  const parsed = coveredThrough
+    ? Date.parse(coveredThrough.replace(" ", "T") + (coveredThrough.includes("T") ? "" : "Z"))
+    : input.lastSuccessfulAt ? Date.parse(input.lastSuccessfulAt) : NaN;
   const anchor = Number.isFinite(parsed)
     ? new Date(parsed)
     : subtractDays(input.now, bootstrapDays - 1);
   const fromDate = subtractDays(anchor, overlapDays),
     maxFrom = subtractDays(input.now, 14),
     boundedFrom = fromDate < maxFrom ? maxFrom : fromDate;
+  if (coveredThrough && anchor < maxFrom)
+    throw new Error("Everflow covered click boundary requires governed recovery outside the 14-day lookback.");
   return {
     from: dayStart(boundedFrom),
     to: dayEnd(boundedFrom),
@@ -197,7 +201,7 @@ export async function markEverflowClickIncrementalChunkSuccess(input: {
         adaptiveSplit,
       },
       last_stopping_reason: "window_complete",
-      status: "current",
+      status: input.targetTo.slice(0, 10) < input.completedAt.slice(0, 10) ? "stale" : "current",
     });
   else
     Object.assign(patch, {
