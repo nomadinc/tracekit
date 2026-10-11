@@ -4,7 +4,10 @@ import type { Activation, CommerceConnection, CommerceControlRepository, Credent
 type Row = Record<string, unknown>;
 
 export class CommercePersistenceError extends Error {
-  constructor(readonly status: number, readonly databaseCode: string) { super("Commerce persistence failed."); }
+  constructor(readonly status: number, readonly databaseCode: string, readonly resource = "database") {
+    super(`Commerce persistence failed (${status}/${databaseCode}; ${resource}).`);
+    this.name = "CommercePersistenceError";
+  }
 }
 
 function configuration() {
@@ -22,7 +25,10 @@ export async function commercePersistenceRequest(path: string, init: RequestInit
   if (!response.ok) {
     const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
     const databaseCode = String(payload.code || "database_request_failed").replace(/[^a-z0-9_.-]/gi, "_").slice(0, 80);
-    throw new CommercePersistenceError(response.status, databaseCode);
+    // Keep the SQLSTATE and table/RPC name, never row filters or provider data.
+    const resource = path.split("?", 1)[0];
+    const safeResource = /^(?:rpc\/)?[a-z][a-z0-9_]{0,79}$/.test(resource) ? resource : "database";
+    throw new CommercePersistenceError(response.status, databaseCode, safeResource);
   }
   if (response.status === 204) return [];
   const json = await response.json() as unknown;

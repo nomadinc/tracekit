@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
 import { commercePersistenceRequest } from "@/lib/commerce/supabase-control-repository";
 import { runDueEverflowSchedules } from "@/lib/integrations/everflow-scheduled-worker";
+import { everflowSchedulerHealth } from "@/lib/integrations/everflow-scheduler-health";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -58,16 +59,22 @@ export async function GET(request: Request) {
     backfill_error: null,
   });
 
-  let scheduler: unknown = null;
+  let scheduler: Awaited<ReturnType<typeof runDueEverflowSchedules>> | null = null;
   let schedulerFailed = false;
   let schedulerError: string | null = null;
 
   await patchTelemetry(requestId, { scheduler_started_at: new Date().toISOString(), scheduler_status: "running" });
   try {
     scheduler = await runDueEverflowSchedules({ limit: 3 });
+    const health = everflowSchedulerHealth(scheduler);
+    schedulerFailed = health.failed;
+    schedulerError = health.failed
+      ? `Everflow scheduled work failed: ${health.failedTargets} conversion targets, ${health.failedClickTargets} click targets, ${Number(health.historicalFailed)} historical imports, ${health.maintenanceFailures} reconciliation batches.`
+      : null;
     await patchTelemetry(requestId, {
       scheduler_completed_at: new Date().toISOString(),
-      scheduler_status: "completed",
+      scheduler_status: schedulerFailed ? "failed" : "completed",
+      scheduler_error: schedulerError,
     });
   } catch (error) {
     schedulerFailed = true;
