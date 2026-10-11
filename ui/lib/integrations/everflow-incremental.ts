@@ -28,9 +28,13 @@ export function everflowIncrementalWindow(input:{now:Date;lastSuccessfulAt?:stri
   const bootstrapDays=Math.min(7,Math.max(1,Math.trunc(input.bootstrapDays??EVERFLOW_INCREMENTAL_BOOTSTRAP_DAYS)));
   const activeFrom=text(input.boundary?.incrementalCursorFrom),activeTo=text(input.boundary?.incrementalTargetTo);
   if(activeFrom&&activeTo) return {from:activeFrom,to:dayEnd(new Date(`${activeFrom.slice(0,10)}T00:00:00Z`)),targetTo:activeTo,overlapDays,bootstrap:Boolean(input.boundary?.bootstrap),resumed:true,page:pageNumber(input.boundary?.incrementalPage)};
-  const parsed=input.lastSuccessfulAt?Date.parse(input.lastSuccessfulAt):NaN;
+  // A recovered old window was covered through providerTo, not through the
+  // wall-clock time when its last page finally persisted.
+  const coveredThrough=text(input.boundary?.providerTo);
+  const parsed=coveredThrough?Date.parse(coveredThrough.replace(" ","T")+(coveredThrough.includes("T")?"":"Z")):input.lastSuccessfulAt?Date.parse(input.lastSuccessfulAt):NaN;
   const anchor=Number.isFinite(parsed)?new Date(parsed):subtractDays(input.now,bootstrapDays-1);
   const fromDate=subtractDays(anchor,overlapDays),maxFrom=subtractDays(input.now,30),boundedFrom=fromDate<maxFrom?maxFrom:fromDate;
+  if(coveredThrough&&anchor<maxFrom)throw new Error("Everflow covered source boundary requires governed recovery outside the 30-day lookback.");
   return {from:dayStart(boundedFrom),to:dayEnd(boundedFrom),targetTo:dayEnd(input.now),overlapDays,bootstrap:!Number.isFinite(parsed),resumed:false,page:1};
 }
 
@@ -50,7 +54,7 @@ export async function markEverflowIncrementalChunkSuccess(input:{organizationId:
   const latest=await latestProviderTransactionAt(input);
   const patch:Row={last_provider_observation_at:input.completedAt,last_normalized_record_at:input.completedAt,latest_provider_transaction_at:latest,provider_total_observed:input.seen,warnings:[],updated_at:input.completedAt};
   if(!sourceComplete){Object.assign(patch,{last_stability_boundary:{incrementalCursorFrom:input.from,incrementalTargetTo:input.targetTo,incrementalPage:pageNumber(input.nextPage),overlapDays:input.overlapDays,bootstrap:input.bootstrap,lastChunkRunId:input.syncRunId},last_stopping_reason:"page_chunk_complete",status:"stale"});}
-  else if(finalDay){Object.assign(patch,{last_successful_at:input.completedAt,last_stability_boundary:{providerFrom:input.from,providerTo:input.targetTo,overlapDays:input.overlapDays,syncRunId:input.syncRunId},last_stopping_reason:"window_complete",status:"current"});}
+  else if(finalDay){Object.assign(patch,{last_successful_at:input.completedAt,last_stability_boundary:{providerFrom:input.from,providerTo:input.targetTo,overlapDays:input.overlapDays,syncRunId:input.syncRunId},last_stopping_reason:"window_complete",status:input.targetTo.slice(0,10)<input.completedAt.slice(0,10)?"stale":"current"});}
   else{Object.assign(patch,{last_stability_boundary:{incrementalCursorFrom:nextDay(input.from),incrementalTargetTo:input.targetTo,incrementalPage:1,overlapDays:input.overlapDays,bootstrap:input.bootstrap,lastChunkRunId:input.syncRunId},last_stopping_reason:"chunk_complete",status:"stale"});}
   await commercePersistenceRequest(`commerce_continuous_sync_state?organization_id=eq.${encodeURIComponent(input.organizationId)}&connection_id=eq.${encodeURIComponent(input.connectionId)}&provider_account_id=eq.${encodeURIComponent(input.providerAccountId)}&resource=eq.${RESOURCE}`,{method:"PATCH",headers:{Prefer:"return=representation"},body:JSON.stringify(patch)});
   return {windowComplete:finalDay,sourceComplete,nextFrom:sourceComplete?(finalDay?null:nextDay(input.from)):input.from,nextPage:sourceComplete?1:pageNumber(input.nextPage)};
