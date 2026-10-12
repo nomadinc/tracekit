@@ -54,6 +54,7 @@ export async function createEverflowRawVersionAudit(scope: { organizationId: str
     if (page === 49) throw new EverflowInventoryError("everflow_retained_inventory_bound");
   }
   const differences: Row[] = [];
+  const snapshots: Row[] = [];
   let matched = 0;
   let normalizedDifferences = 0;
   const missing: string[] = [];
@@ -80,10 +81,17 @@ export async function createEverflowRawVersionAudit(scope: { organizationId: str
           const payload = payloads[0]?.payload as Record<string, unknown> | undefined;
           if (payloads.length !== 1 || !payload || typeof payload !== "object" || Array.isArray(payload) || payload.conversion_id !== item.source.sourceIdentity) fail();
           if ((await normalizeEverflowConversion(payload)).payloadHash !== item.local.payload_hash) fail();
-          differences.push({ sourceIdentity: item.source.sourceIdentity, evidenceId: item.local.evidence_id, retainedRawHash: item.local.evidence.payload_hash, sourceRawHash: item.source.rawPayloadHash, normalizedEqual: item.source.payloadHash === item.local.payload_hash, ...compareRawPayloads(payload, item.source.rawPayload) });
+          const comparison=compareRawPayloads(payload, item.source.rawPayload);
+          const oldCount=(payload?.relationship as Row | undefined)?.events_count;
+          const newCount=(item.source.rawPayload.relationship as Row | undefined)?.events_count;
+          const validAggregate=(value:unknown)=>value==null||(Number.isSafeInteger(value)&&Number(value)>=0);
+          const aggregateDrift=comparison.changedFieldPaths.length===1&&comparison.changedFieldPaths[0]==="relationship.events_count"&&validAggregate(oldCount)&&validAggregate(newCount);
+          differences.push({ sourceIdentity: item.source.sourceIdentity, evidenceId: item.local.evidence_id, retainedRawHash: item.local.evidence.payload_hash, sourceRawHash: item.source.rawPayloadHash, normalizedEqual: item.source.payloadHash === item.local.payload_hash, classification:comparison.semanticEqual?"serialization_only":aggregateDrift?"provider_event_count_metadata_drift":"source_field_change_requires_review", ...comparison });
+          snapshots.push({sourceIdentity:item.source.sourceIdentity,sourceRawHash:item.source.rawPayloadHash,retainedEvidenceId:item.local.evidence_id,payload:item.source.rawPayload});
         }
       }
     },
     result() { return { readOnly: true, sourceIdentitiesMatched: matched, missingSourceIdentities: missing.sort(), normalizedDifferences, rawVersionDifferences: differences.length, semanticallyEqualRawVersions: differences.filter(row => row.semanticEqual).length, substantivelyDifferentRawVersions: differences.filter(row => !row.semanticEqual).length, differences: differences.sort((a,b) => String(a.sourceIdentity).localeCompare(String(b.sourceIdentity))), valuesIncluded: false }; },
+    protectedSnapshots() { return snapshots; },
   };
 }
