@@ -57,7 +57,8 @@ begin
     join public.commerce_provider_accounts a on a.connection_id=c.id and a.organization_id=c.organization_id
     where c.id=p_connection_id and c.organization_id=p_organization_id and c.account_id=p_account_id
       and c.provider='everflow' and c.status='connected' and a.id=p_provider_account_id
-      and a.status='active' and not a.provisional and a.external_id=p_certificate->'query'->>'networkId') then
+      and a.status='active' and a.provider_account_external_id not like 'provisional:%'
+      and a.provider_account_external_id=p_certificate->'query'->>'networkId') then
     raise exception 'Active provider scope changed' using errcode='40001';
   end if;
   v_count:=jsonb_array_length(p_manifest);
