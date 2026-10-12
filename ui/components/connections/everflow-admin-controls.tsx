@@ -32,6 +32,26 @@ export function EverflowHistoricalImport({ connection }: { connection: Connectio
   {completed?<div className={`mt-4 rounded-lg border px-3 py-3 text-xs ${state==="completed_with_warnings"?"border-amber-400/20 bg-amber-400/5 text-amber-100":"border-emerald-400/20 bg-emerald-400/5 text-emerald-100"}`}><div className="font-semibold">{state==="completed_with_warnings"?"Import completed with warnings":"Import completed"}{rangeLabel?` · ${rangeLabel}`:""}</div><p className="mt-1">{Number(runState?.records_seen||meta.result?.seen||0)} records processed · {Number(runState?.records_created||meta.result?.persisted||0)} persisted · {Number(runState?.pages_completed||meta.result?.pages||0)} pages.</p>{state==="completed_with_warnings"&&runState?.last_error_summary?<p className="mt-2 text-amber-200">Attribution reconciliation warning: {runState.last_error_summary}</p>:null}</div>:null}
   {interrupted?<div className="mt-4 rounded-lg border border-amber-400/20 bg-amber-400/5 px-3 py-3 text-xs text-amber-100"><div className="font-semibold">Import interrupted{rangeLabel?` · ${rangeLabel}`:""}</div><p className="mt-1">{runState?.status_message||"The historical import worker stopped before recording completion. TraceKit will attempt to recover this expired run."}</p>{runState?.heartbeat_at?<p className="mt-2 text-[11px] text-amber-200">Last worker heartbeat: {new Date(runState.heartbeat_at).toLocaleString()}</p>:null}</div>:null}
   {failed?<div className="mt-4 rounded-lg border border-rose-400/20 bg-rose-400/5 px-3 py-3 text-xs text-rose-200"><div className="font-semibold">Import failed{rangeLabel?` · ${rangeLabel}`:""}</div><p className="mt-1">{runState?.last_error_summary||"TraceKit could not complete this historical import."}</p>{runState?.last_error_code?<p className="mt-2 text-[11px] text-rose-300">Error code: {runState.last_error_code}</p>:null}</div>:null}
-  {runState?.id?<p className="mt-4 text-xs text-slate-400"><a className="text-cyan-200 underline" download href={`/api/commerce/connections/${connection.id}/historical-source-inventory?runId=${encodeURIComponent(String(runState.id))}`}>Download read-only source inventory</a><span className="ml-2">Checks this historical range without importing records or changing its status. Compare independent captures before certifying coverage.</span></p>:null}
+  {runState?.id?<EverflowSourceInventoryCapture connectionId={connection.id} runId={String(runState.id)}/>:null}
   {notice?<p role="status" className="mt-4 rounded-lg border border-white/10 bg-white/[.04] px-3 py-2 text-xs text-slate-300">{notice}</p>:null}</section>;
+}
+
+function EverflowSourceInventoryCapture({ connectionId, runId }: { connectionId: string; runId: string }) {
+  const [busy, setBusy] = useState(false);
+  const [message, setMessage] = useState<string | null>(null);
+  const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
+  useEffect(() => () => { if (downloadUrl) URL.revokeObjectURL(downloadUrl); }, [downloadUrl]);
+  async function capture() {
+    if (busy) return;
+    setBusy(true); setMessage("Reading the complete requested source range. No records or import status are changed."); setDownloadUrl(null);
+    try {
+      const response = await fetch(`/api/commerce/connections/${connectionId}/historical-source-inventory?runId=${encodeURIComponent(runId)}&view=1`, { cache: "no-store" });
+      const result = await response.json();
+      if (!response.ok) throw new Error(String(result.code || "Source inventory capture failed."));
+      setDownloadUrl(URL.createObjectURL(new Blob([JSON.stringify(result)], { type: "application/json" })));
+      setMessage(`Captured ${Number(result.uniqueIdentities).toLocaleString()} unique source identities across ${Number(result.pages)} pages. Identity digest: ${String(result.identitySetSha256)}. This capture requires an independent membership comparison before certification.`);
+    } catch (error) { setMessage(`Source inventory not established: ${error instanceof Error ? error.message : "Capture failed."}`); }
+    finally { setBusy(false); }
+  }
+  return <div className="mt-4 text-xs text-slate-400"><button type="button" onClick={capture} disabled={busy} className="rounded-lg border border-cyan-300/30 px-3 py-2 text-cyan-200 disabled:opacity-50">{busy ? "Reading source inventory…" : "Capture read-only source inventory"}</button><p className="mt-2">Checks this historical range without importing records or changing its status. Compare independent captures before certifying coverage.</p>{message ? <p role="status" className="mt-2 break-all">{message}</p> : null}{downloadUrl ? <a className="mt-2 inline-block text-cyan-200 underline" download={`everflow-source-inventory-${runId}.json`} href={downloadUrl}>Download captured source inventory</a> : null}</div>;
 }
