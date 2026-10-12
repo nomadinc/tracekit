@@ -41,17 +41,18 @@ function EverflowSourceInventoryCapture({ connectionId, runId }: { connectionId:
   const [message, setMessage] = useState<string | null>(null);
   const [downloadUrl, setDownloadUrl] = useState<string | null>(null);
   useEffect(() => () => { if (downloadUrl) URL.revokeObjectURL(downloadUrl); }, [downloadUrl]);
-  async function capture() {
+  async function capture(auditRawVersions = false) {
     if (busy) return;
     setBusy(true); setMessage("Reading the complete requested source range. No records or import status are changed."); setDownloadUrl(null);
     try {
-      const response = await fetch(`/api/commerce/connections/${connectionId}/historical-source-inventory?runId=${encodeURIComponent(runId)}&view=1`, { cache: "no-store" });
+      const response = await fetch(`/api/commerce/connections/${connectionId}/historical-source-inventory?runId=${encodeURIComponent(runId)}&view=1${auditRawVersions ? "&auditRawVersions=1" : ""}`, { cache: "no-store" });
       const result = await response.json();
       if (!response.ok) throw new Error(String(result.code || "Source inventory capture failed."));
       setDownloadUrl(URL.createObjectURL(new Blob([JSON.stringify(result)], { type: "application/json" })));
-      setMessage(`Captured ${Number(result.uniqueIdentities).toLocaleString()} unique source identities across ${Number(result.pages)} pages. Identity digest: ${String(result.identitySetSha256)}. This capture requires an independent membership comparison before certification.`);
+      const audit = result.rawVersionAudit;
+      setMessage(`Captured ${Number(result.uniqueIdentities).toLocaleString()} unique source identities across ${Number(result.pages)} pages. Identity digest: ${String(result.identitySetSha256)}. ${audit ? `Raw versions: ${audit.rawVersionDifferences} byte differences; ${audit.semanticallyEqualRawVersions} semantically equal; ${audit.substantivelyDifferentRawVersions} substantive differences. Normalized differences: ${audit.normalizedDifferences}. No source values are disclosed by the comparison.` : "This capture requires an independent membership comparison before certification."}`);
     } catch (error) { setMessage(`Source inventory not established: ${error instanceof Error ? error.message : "Capture failed."}`); }
     finally { setBusy(false); }
   }
-  return <div className="mt-4 text-xs text-slate-400"><button type="button" onClick={capture} disabled={busy} className="rounded-lg border border-cyan-300/30 px-3 py-2 text-cyan-200 disabled:opacity-50">{busy ? "Reading source inventory…" : "Capture read-only source inventory"}</button><p className="mt-2">Checks this historical range without importing records or changing its status. Compare independent captures before certifying coverage.</p>{message ? <p role="status" className="mt-2 break-all">{message}</p> : null}{downloadUrl ? <a className="mt-2 inline-block text-cyan-200 underline" download={`everflow-source-inventory-${runId}.json`} href={downloadUrl}>Download captured source inventory</a> : null}</div>;
+  return <div className="mt-4 text-xs text-slate-400"><button type="button" onClick={() => void capture()} disabled={busy} className="rounded-lg border border-cyan-300/30 px-3 py-2 text-cyan-200 disabled:opacity-50">{busy ? "Reading source inventory…" : "Capture read-only source inventory"}</button><button type="button" onClick={() => void capture(true)} disabled={busy} className="ml-2 rounded-lg border border-cyan-300/30 px-3 py-2 text-cyan-200 disabled:opacity-50">Compare retained raw versions</button><p className="mt-2">Checks this historical range without importing records or changing its status. Compare independent captures before certifying coverage.</p>{message ? <p role="status" className="mt-2 break-all">{message}</p> : null}{downloadUrl ? <a className="mt-2 inline-block text-cyan-200 underline" download={`everflow-source-inventory-${runId}.json`} href={downloadUrl}>Download captured source inventory</a> : null}</div>;
 }
