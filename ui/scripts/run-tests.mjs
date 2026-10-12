@@ -4,6 +4,7 @@ import { spawnSync } from "node:child_process";
 // These suites import server-only application modules. Preserve that boundary
 // by using Node's React Server condition, rather than mocking server-only away.
 const serverSuites = new Set([
+  "ws001-everflow-source-inventory.test.ts",
   "ws001-everflow-verification.test.ts",
   "ws001-everflow-covered-boundary.test.ts",
   "ws001-everflow-runtime-recovery.test.ts",
