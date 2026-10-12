@@ -7,6 +7,8 @@ const serverSuites = new Set([
   "ws001-everflow-source-inventory.test.ts",
   "ws001-everflow-raw-version-audit.test.ts",
   "ws001-everflow-coverage-certificate.test.ts",
+  "ws001-customer-source-evidence-audit.test.ts",
+  "ws001-customer-source-evidence-route.test.ts",
   "ws001-everflow-verification.test.ts",
   "ws001-everflow-covered-boundary.test.ts",
   "ws001-everflow-runtime-recovery.test.ts",

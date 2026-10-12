@@ -8,17 +8,20 @@ import { certifyEverflowCoverage } from "../lib/integrations/everflow-coverage-c
 
 const hash=(value:unknown)=>createHash("sha256").update(JSON.stringify(value)).digest("hex");
 test("certificate requires two identical source reads and verified local evidence before any write",async()=>{
+ const registry=new PGlite();
+ await registry.exec(`create table certification_evidence(id uuid,organization_id text not null,connection_id text not null,provider_account_id text not null,source_object_type text not null,source_object_id text not null,payload_hash text not null,storage_backend text not null,storage_reference text not null,byte_size bigint not null,observed_at timestamptz not null,pii_classification text not null,retention_policy text not null);`);
  const row:[string,string,string]=["source","a".repeat(64),"b".repeat(64)];
  const capture:any={sourceTotal:1,uniqueIdentities:1,rows:[row],pages:1,query:{},startedAt:"2026-10-12T00:00:00Z",completedAt:"2026-10-12T00:00:01Z",identitySetSha256:hash([row[0]]),normalizedVersionSetSha256:hash([row.slice(0,2)]),rawVersionSetSha256:hash([[row[0],row[2]]])};
  for(const failure of ["none","source_changed","missing","normalized","unreviewed_raw","running"]){
   const writes:any[]=[];let reads=0;
   const comparison:any={sourceIdentitiesMatched:1,missingSourceIdentities:failure==="missing"?["source"]:[],normalizedDifferences:failure==="normalized"?1:0,rawVersionDifferences:1,differences:[{classification:failure==="unreviewed_raw"?"source_field_change_requires_review":"provider_event_count_metadata_drift"}]};
-  const dependencies:any={store:new MemoryCommerceEvidenceStore(),capture:async()=>{reads++;return failure==="source_changed"&&reads===2?{...capture,identitySetSha256:"changed"}:capture;},createAudit:async()=>({async onPage(){},result:()=>comparison,protectedSnapshots:()=>[]}),db:async(path:string,init:any)=>{writes.push({path,init});if(path.startsWith("commerce_evidence_records"))return[{id:"evidence"}];return[JSON.parse(init.body).p_certificate];}};
+  const dependencies:any={store:new MemoryCommerceEvidenceStore(),capture:async()=>{reads++;return failure==="source_changed"&&reads===2?{...capture,identitySetSha256:"changed"}:capture;},createAudit:async()=>({async onPage(){},result:()=>comparison,protectedSnapshots:()=>[]}),db:async(path:string,init:any)=>{writes.push({path,init});if(path.startsWith("commerce_evidence_records")){const body=JSON.parse(init.body);const fields=["id","organization_id","connection_id","provider_account_id","source_object_type","source_object_id","payload_hash","storage_backend","storage_reference","byte_size","observed_at","pii_classification","retention_policy"];return (await registry.query(`insert into certification_evidence(${fields.join(',')}) values(${fields.map((_,i)=>'$'+(i+1)).join(',')}) returning id`,fields.map(field=>body[field]??null))).rows;}return[JSON.parse(init.body).p_certificate];}};
   const input:any={apiKey:"never-return",networkId:"3453",organizationId:"tenant",connectionId:"connection",providerAccountId:"provider",actorUserId:"actor",accountId:"account",correlationId:"correlation",run:{id:"original",status:failure==="running"?"running":"failed",metadata:{from:"2026-10-01 00:00:00",to:"2026-10-11 23:59:59"},records_seen:11600,pages_completed:63}};
   if(failure!=="none"){await assert.rejects(certifyEverflowCoverage(input,dependencies));assert.equal(writes.length,0);continue;}
   const cert=await certifyEverflowCoverage(input,dependencies);assert.equal(reads,2);assert.equal(cert.customerFinancialAcceptance,"not_certified");assert.equal(cert.historicalExecutionStatus,"failed");assert.equal(cert.historicalCountersPreserved,true);assert.equal(input.run.records_seen,11600);
   assert.deepEqual(writes.map(w=>w.path),["commerce_evidence_records?on_conflict=connection_id,provider_account_id,source_object_type,source_object_id,payload_hash","rpc/certify_everflow_source_coverage"]);assert.doesNotMatch(JSON.stringify(cert),/never-return/);
  }
+ await registry.close();
 });
 
 test("atomic certificate verifies commitments and tenant evidence, preserves failed diagnostics/counters, and is idempotent",async()=>{
