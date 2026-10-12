@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import test from "node:test";
-import { CommerceControlPlane, type Activation, type CommerceConnection, type CommerceControlRepository, type CredentialVersion, type ProviderAccount, type SourceMapping, type SyncCheckpoint, type SyncRun } from "../lib/commerce/control-plane";
+import { CommerceControlPlane, CommerceVerificationError, type Activation, type CommerceConnection, type CommerceControlRepository, type CredentialVersion, type ProviderAccount, type SourceMapping, type SyncCheckpoint, type SyncRun } from "../lib/commerce/control-plane";
 import { CommerceCredentialResolutionError, decryptCommerceCredential, encryptCommerceCredential } from "../lib/commerce/credential-crypto";
 import { MemoryCommerceEvidenceStore } from "../lib/commerce/evidence-store";
 import type { TraceKitSessionContext } from "../lib/identity/persistent-types";
@@ -72,6 +72,56 @@ function setup() {
   const control = new CommerceControlPlane(repository, { bytes: key, id: "test-key", version: 1 }, evidenceStore, { verify: async () => ({ capabilities: ["customers.read", "transactions.read"] }) });
   return { repository, evidenceStore, control };
 }
+
+test("Everflow reverification uses one scoped account and preserves reporting metadata and credentials", async () => {
+  const repository = new MemoryRepository();
+  const calls: any[] = [];
+  const control = new CommerceControlPlane(repository, {bytes:key,id:"test-key",version:1}, new MemoryCommerceEvidenceStore(), {verify:async input => {calls.push(input);return {capabilities:["network_identity"],providerStatus:200};}});
+  const connection = await control.createConnection(session(),ORG_A,{provider:"everflow",displayName:"Network",environment:"production"});
+  await control.upsertProviderAccount(session(),connection.id,{externalId:"4179",status:"active"});
+  await control.createCredential(session(),connection.id,"synthetic-secret");
+  const metadata = {networkId:"4179",timezoneId:80,currencyId:"USD"};
+  await repository.updateConnection(connection.id,ORG_A,{status:"degraded",capabilities:{everflowNetwork:metadata}});
+  await assert.rejects(control.verifyConnection(session(ORG_B,ACCOUNT_B),connection.id), /unavailable/i);
+  assert.equal(calls.length,0);
+  await control.verifyConnection(session(),connection.id);
+  assert.equal(calls[0].expectedProviderAccountId,"4179");
+  assert.equal(connection.status,"connected");
+  assert.deepEqual(connection.capabilities,{everflowNetwork:metadata,verified:["network_identity"]});
+  assert.equal(repository.credentials.length,1);
+  assert.equal(repository.credentials[0].revokedAt,null);
+  assert.equal(repository.runs.length,0);
+  assert.equal(repository.checkpointRows.length,0);
+});
+
+test("ambiguous Everflow account scope fails closed before provider verification", async () => {
+  const {repository,control} = setup();
+  const connection = await control.createConnection(session(),ORG_A,{provider:"everflow",displayName:"Network",environment:"production"});
+  await control.createCredential(session(),connection.id,"synthetic-secret");
+  await control.upsertProviderAccount(session(),connection.id,{externalId:"4179",status:"active"});
+  await control.upsertProviderAccount(session(),connection.id,{externalId:"9999",status:"active"});
+  await assert.rejects(control.verifyConnection(session(),connection.id), /everflow_account_scope_unavailable/);
+  assert.equal(connection.status,"degraded");
+  assert.equal(connection.lastErrorCode,"everflow_account_scope_unavailable");
+});
+
+test("typed verification failures retain safe diagnostics without losing network metadata", async () => {
+  const repository = new MemoryRepository();
+  const control = new CommerceControlPlane(repository,{bytes:key,id:"test-key",version:1},new MemoryCommerceEvidenceStore(),{verify:async()=>{throw new CommerceVerificationError("everflow_authentication_failed",401,false);}});
+  const connection = await control.createConnection(session(),ORG_A,{provider:"everflow",displayName:"Network",environment:"production"});
+  await control.upsertProviderAccount(session(),connection.id,{externalId:"4179",status:"active"});
+  await control.createCredential(session(),connection.id,"synthetic-secret");
+  await repository.updateConnection(connection.id,ORG_A,{capabilities:{everflowNetwork:{networkId:"4179",timezoneId:80,currencyId:"USD"}}});
+  await assert.rejects(control.verifyConnection(session(),connection.id), error=>{
+    assert.ok(error instanceof CommerceVerificationError);
+    assert.equal(error.retryable,false);
+    assert.doesNotMatch(error.message,/synthetic-secret/);
+    return true;
+  });
+  assert.equal(connection.lastErrorCode,"everflow_authentication_failed");
+  assert.equal(connection.capabilities?.everflowNetwork != null,true);
+  assert.equal(repository.audits.at(-1)?.metadata?.providerStatus,401);
+});
 
 test("authorized Organization admin creates a tenant-bound Connection while another Organization fails closed", async () => {
   const { control } = setup();

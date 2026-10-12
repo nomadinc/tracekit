@@ -49,7 +49,14 @@ export interface CommerceControlRepository {
 }
 
 export interface CommerceConnectionVerifier {
-  verify(input: { provider: string; environment: string; secret: string; correlationId: string }): Promise<{ capabilities: string[]; providerStatus?: number; providerRequestIdPresent?: boolean; rateLimitRemaining?: number | null }>;
+  verify(input: { provider: string; environment: string; secret: string; correlationId: string; expectedProviderAccountId?: string }): Promise<{ capabilities: string[]; providerStatus?: number; providerRequestIdPresent?: boolean; rateLimitRemaining?: number | null }>;
+}
+
+export class CommerceVerificationError extends Error {
+  constructor(readonly code: string, readonly providerStatus: number, readonly retryable: boolean) {
+    super(`Connection verification failed (${providerStatus}/${code}).`);
+    this.name = "CommerceVerificationError";
+  }
 }
 
 export interface CommerceReadinessEvaluator {
@@ -212,13 +219,21 @@ export class CommerceControlPlane {
     if (!this.verifier) throw new Error("Connection verification is unavailable.");
     try {
       const secret = await this.resolveCredentialForExecution(session, connectionId);
-      const result = await this.verifier.verify({ provider: connection.provider, environment: connection.environment, secret, correlationId: scope.correlationId });
-      await this.repository.updateConnection(connectionId, scope.organizationId, { status: "connected", lastSuccessAt: new Date().toISOString(), lastErrorAt: null, lastErrorCode: null, capabilities: { verified: result.capabilities } });
+      let expectedProviderAccountId: string | undefined;
+      if (connection.provider === "everflow") {
+        const accounts = (await this.repository.listProviderAccounts(connectionId, scope.organizationId)).filter(account => account.status === "active" && !account.provisional);
+        if (accounts.length !== 1) throw new CommerceVerificationError("everflow_account_scope_unavailable", 409, false);
+        expectedProviderAccountId = accounts[0].externalId;
+      }
+      const result = await this.verifier.verify({ provider: connection.provider, environment: connection.environment, secret, correlationId: scope.correlationId, expectedProviderAccountId });
+      await this.repository.updateConnection(connectionId, scope.organizationId, { status: "connected", lastSuccessAt: new Date().toISOString(), lastErrorAt: null, lastErrorCode: null, capabilities: { ...(connection.capabilities || {}), verified: result.capabilities } });
       await this.audit(scope, "provider_connection.updated", "commerce_provider_connection", connectionId, { verification: "succeeded", capabilities: result.capabilities });
       return { status: "connected" as const, ...result };
-    } catch {
-      await this.repository.updateConnection(connectionId, scope.organizationId, { status: "degraded", lastErrorAt: new Date().toISOString(), lastErrorCode: "provider_verification_failed" });
-      await this.audit(scope, "provider_connection.updated", "commerce_provider_connection", connectionId, { verification: "failed" });
+    } catch (error) {
+      const failureCode = error instanceof CommerceVerificationError ? error.code : "provider_verification_failed";
+      await this.repository.updateConnection(connectionId, scope.organizationId, { status: "degraded", lastErrorAt: new Date().toISOString(), lastErrorCode: failureCode });
+      await this.audit(scope, "provider_connection.updated", "commerce_provider_connection", connectionId, { verification: "failed", failureCode, ...(error instanceof CommerceVerificationError ? {providerStatus:error.providerStatus} : {}) });
+      if (error instanceof CommerceVerificationError) throw error;
       throw new Error("Connection verification failed.");
     }
   }

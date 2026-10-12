@@ -4,6 +4,7 @@ import { resolveApplicationSession } from "@/lib/identity/application-session";
 import { createCommerceControlPlane } from "@/lib/commerce/server-control-plane";
 import { MemoryCommerceEvidenceStore } from "@/lib/commerce/evidence-store";
 import { CommerceProviderConnectionVerifier } from "@/lib/commerce/provider-verifier";
+import { CommerceVerificationError } from "@/lib/commerce/control-plane";
 import { normalizeShopifyConnectionDomain, serializeShopifyConnectionCredential } from "@/lib/commerce/shopify-verifier";
 import { commercePersistenceRequest } from "@/lib/commerce/supabase-control-repository";
 
@@ -126,7 +127,9 @@ export async function POST(request: Request, context: { params: Promise<{ commer
       try {
         const result = await plane.verifyConnection(resolution.session, connectionId);
         return success(requestId, { verified: true, status: result.status, verification: { providerStatus: result.providerStatus ?? null, providerRequestIdPresent: result.providerRequestIdPresent ?? false, rateLimitRemaining: result.rateLimitRemaining ?? null } });
-      } catch {
+      } catch (error) {
+        if (error instanceof CommerceVerificationError)
+          return failure(requestId, 502, error.code, error.message, error.retryable);
         return failure(requestId, 502, "provider_verification_failed", "Connection verification did not succeed.", true);
       }
     }
