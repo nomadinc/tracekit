@@ -6,6 +6,7 @@ import { MemoryCommerceEvidenceStore } from "@/lib/commerce/evidence-store";
 import { commercePersistenceRequest } from "@/lib/commerce/supabase-control-repository";
 import { getEverflowNetworkIdentity, EverflowHealthError } from "@/lib/integrations/everflow-client";
 import { captureEverflowSourceInventory, EverflowInventoryError } from "@/lib/integrations/everflow-source-inventory";
+import { createEverflowRawVersionAudit } from "@/lib/integrations/everflow-raw-version-audit";
 
 export const maxDuration = 300;
 export const dynamic = "force-dynamic";
@@ -41,9 +42,10 @@ export async function GET(request: Request, context: { params: Promise<{ connect
       return Response.json({ ok: false, code: "everflow_inventory_reporting_scope_unverified" }, { status: 409, headers });
     const apiKey = await plane.resolveCredentialForExecution(resolution.session, connectionId);
     await getEverflowNetworkIdentity({ apiKey, networkId: account.externalId, correlationId: resolution.session.correlationId });
+    const rawAudit = url.searchParams.get("auditRawVersions") === "1" ? await createEverflowRawVersionAudit({ organizationId, connectionId, providerAccountId: account.id }) : null;
     const inventory = await captureEverflowSourceInventory({ apiKey, networkId: account.externalId,
-      from: String(metadata?.from || ""), to: String(metadata?.to || ""), timezoneId: 80, currencyId: "USD" });
-    const body = JSON.stringify({ ...inventory, importId: runId, organizationId, connectionId, providerAccountId: account.id });
+      from: String(metadata?.from || ""), to: String(metadata?.to || ""), timezoneId: 80, currencyId: "USD", onPage: rawAudit?.onPage });
+    const body = JSON.stringify({ ...inventory, importId: runId, organizationId, connectionId, providerAccountId: account.id, ...(rawAudit ? {rawVersionAudit: rawAudit.result()} : {}) });
     if (Buffer.byteLength(body) > 12_000_000) throw new EverflowInventoryError("everflow_inventory_download_limit");
     if(url.searchParams.get("view") === "1") {
       if(Buffer.byteLength(body)>4_000_000) throw new EverflowInventoryError("everflow_inventory_download_required");

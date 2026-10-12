@@ -12,6 +12,7 @@ export async function captureEverflowSourceInventory(input: {
   timezoneId: number; currencyId: string;
   fetchPage?: typeof listEverflowConversionsPage;
   now?: () => number;
+  onPage?: (rows: EverflowConversionPage["conversions"]) => Promise<void>;
 }) {
   const range = validateEverflowConversionRange(input.from, input.to);
   if(input.timezoneId !== 80 || input.currencyId !== "USD") throw new EverflowInventoryError("everflow_inventory_reporting_scope_unverified");
@@ -56,6 +57,7 @@ export async function captureEverflowSourceInventory(input: {
       classifications[category] = (classifications[category] || 0) + 1;
       advertisers[row.advertiserId || "unknown"] = (advertisers[row.advertiserId || "unknown"] || 0) + 1;
     }
+    await input.onPage?.(result.conversions);
     pages++;
     if (rows.length > declaredTotal) throw new EverflowInventoryError("everflow_inventory_count_overflow");
     if (rows.length === declaredTotal) break;
