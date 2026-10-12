@@ -45,6 +45,10 @@ export async function GET(request: Request, context: { params: Promise<{ connect
       from: String(metadata?.from || ""), to: String(metadata?.to || ""), timezoneId: 80, currencyId: "USD" });
     const body = JSON.stringify({ ...inventory, importId: runId, organizationId, connectionId, providerAccountId: account.id });
     if (Buffer.byteLength(body) > 12_000_000) throw new EverflowInventoryError("everflow_inventory_download_limit");
+    if(url.searchParams.get("view") === "1") {
+      if(Buffer.byteLength(body)>4_000_000) throw new EverflowInventoryError("everflow_inventory_download_required");
+      return new Response(body,{headers:{...headers,"Content-Type":"application/json"}});
+    }
     return new Response(Uint8Array.from(gzipSync(body)), { headers: { ...headers, "Content-Type": "application/gzip",
       "Content-Disposition": `attachment; filename="everflow-source-inventory-${runId}-${Date.now()}.json.gz"` } });
   } catch (error) {
