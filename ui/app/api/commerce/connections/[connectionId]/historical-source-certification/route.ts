@@ -2,7 +2,7 @@ import { resolveApplicationSession } from "@/lib/identity/application-session";
 import { requirePermission } from "@/lib/identity/authorization-gateway";
 import { createCommerceControlPlane } from "@/lib/commerce/server-control-plane";
 import { MemoryCommerceEvidenceStore } from "@/lib/commerce/evidence-store";
-import { commercePersistenceRequest } from "@/lib/commerce/supabase-control-repository";
+import { commercePersistenceRequest, CommercePersistenceError } from "@/lib/commerce/supabase-control-repository";
 import { getEverflowNetworkIdentity, EverflowHealthError } from "@/lib/integrations/everflow-client";
 import { EverflowInventoryError } from "@/lib/integrations/everflow-source-inventory";
 import { certifyEverflowCoverage } from "@/lib/integrations/everflow-coverage-certificate";
@@ -41,6 +41,7 @@ export async function POST(request:Request,context:{params:Promise<{connectionId
     const certificate=await certifyEverflowCoverage({apiKey,networkId:account.externalId,organizationId,connectionId,providerAccountId:account.id,actorUserId:resolution.session.user.id,accountId:connection.accountId,correlationId:resolution.session.correlationId,run:runs[0]});
     return Response.json({ok:true,certificate},{headers});
   } catch(error) {
+    if(error instanceof CommercePersistenceError)return Response.json({ok:false,code:"everflow_certification_persistence_failed",databaseCode:error.databaseCode,resource:error.resource},{status:409,headers});
     const code=error instanceof EverflowInventoryError||error instanceof EverflowHealthError?error.code:"everflow_certification_unavailable";
     return Response.json({ok:false,code},{status:409,headers});
   }
