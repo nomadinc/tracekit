@@ -2,7 +2,7 @@ import "server-only";
 import { randomUUID } from "node:crypto";
 import { commercePersistenceRequest } from "@/lib/commerce/supabase-control-repository";
 import { SupabaseCommerceEvidenceStore } from "@/lib/commerce/supabase-evidence-store-core";
-import type { CommerceEvidenceStore } from "@/lib/commerce/evidence-store";
+import type { CommerceEvidenceStore, StoredEvidence } from "@/lib/commerce/evidence-store";
 import { captureEverflowSourceInventory, EverflowInventoryError } from "./everflow-source-inventory";
 import { createEverflowRawVersionAudit } from "./everflow-raw-version-audit";
 
@@ -28,11 +28,15 @@ export async function certifyEverflowCoverage(input: {
   const artifactBytes=new TextEncoder().encode(JSON.stringify({certificate:base,sourceRows:second.rows,comparison,rawVersionSnapshots:audit.protectedSnapshots(),originalExecution:input.run}));
   const stored=await store.putImmutable({organizationId:input.organizationId,connectionId:input.connectionId,providerAccountId:input.providerAccountId,sourceObjectType:"everflow_source_coverage_certification",payload:artifactBytes,contentType:"application/json"});
   if(!await store.verifyHash({organizationId:input.organizationId,storageReference:stored.storageReference,payloadHash:stored.payloadHash})) throw new EverflowInventoryError("everflow_certification_artifact_unverified");
+  return commitCoverageProof(input,base,stored,second.rows.map(row=>[row[0],row[1]]),db);
+}
+
+export async function commitCoverageProof(input:Parameters<typeof certifyEverflowCoverage>[0],base:Record<string,any>,stored:StoredEvidence,manifest:Array<[string,string]>,db:typeof commercePersistenceRequest) {
   const evidenceId=randomUUID();
   const evidence=await db("commerce_evidence_records?on_conflict=connection_id,provider_account_id,source_object_type,source_object_id,payload_hash",{method:"POST",headers:{Prefer:"resolution=ignore-duplicates,return=representation"},body:JSON.stringify({id:evidenceId,organization_id:input.organizationId,connection_id:input.connectionId,provider_account_id:input.providerAccountId,sync_run_id:input.run.id,source_object_type:"everflow_source_coverage_certification",source_object_id:input.run.id,payload_hash:stored.payloadHash,storage_backend:"object_storage",storage_reference:stored.storageReference,content_type:stored.contentType,byte_size:stored.byteSize,observed_at:base.certifiedAt,normalizer_version:"manifest-v1",mapping_version:"ws001-source-coverage-v1",pii_classification:"sensitive",retention_policy:"commerce-provider-raw-v1",metadata:{immutable:true,sourceCoverageOnly:true}})});
   if(evidence.length!==1)throw new EverflowInventoryError("everflow_certification_artifact_record_unverified");
   const certificate={...base,artifact:{evidenceId:String(evidence[0].id),payloadHash:stored.payloadHash,storageReference:stored.storageReference}};
-  const result=await db("rpc/certify_everflow_source_coverage",{method:"POST",body:JSON.stringify({p_run_id:input.run.id,p_organization_id:input.organizationId,p_connection_id:input.connectionId,p_provider_account_id:input.providerAccountId,p_actor_user_id:input.actorUserId,p_account_id:input.accountId,p_correlation_id:input.correlationId,p_expected_metadata:input.run.metadata,p_certificate:certificate,p_manifest:second.rows.map(row=>row.slice(0,2)),p_evidence_id:String(evidence[0].id)})});
+  const result=await db("rpc/certify_everflow_source_coverage",{method:"POST",body:JSON.stringify({p_run_id:input.run.id,p_organization_id:input.organizationId,p_connection_id:input.connectionId,p_provider_account_id:input.providerAccountId,p_actor_user_id:input.actorUserId,p_account_id:input.accountId,p_correlation_id:input.correlationId,p_expected_metadata:input.run.metadata,p_certificate:certificate,p_manifest:manifest,p_evidence_id:String(evidence[0].id)})});
   if(!result[0]||result[0].state!=="certified")throw new EverflowInventoryError("everflow_certification_not_committed");
   return result[0];
 }

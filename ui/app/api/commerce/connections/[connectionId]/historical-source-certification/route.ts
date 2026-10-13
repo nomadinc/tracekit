@@ -5,6 +5,7 @@ import { MemoryCommerceEvidenceStore } from "@/lib/commerce/evidence-store";
 import { commercePersistenceRequest, CommercePersistenceError } from "@/lib/commerce/supabase-control-repository";
 import { getEverflowNetworkIdentity, EverflowHealthError } from "@/lib/integrations/everflow-client";
 import { EverflowInventoryError } from "@/lib/integrations/everflow-source-inventory";
+import { certifyRetainedEverflowCoverage } from "@/lib/integrations/everflow-retained-coverage-proof";
 import { certifyEverflowCoverage } from "@/lib/integrations/everflow-coverage-certificate";
 
 export const maxDuration=300;
@@ -20,7 +21,7 @@ export async function POST(request:Request,context:{params:Promise<{connectionId
     if(resolution.kind!=="authenticated"||!resolution.session.activeOrganization)return unavailable();
     requirePermission(resolution.session,"connectors.manage");requirePermission(resolution.session,"imports.manage");
     const text=await request.text();if(text.length>512)return unavailable();
-    const body=JSON.parse(text) as {runId?:unknown};
+    const body=JSON.parse(text) as {runId?:unknown;retainedProof?:unknown};
     const runId=String(body.runId||"");const {connectionId}=await context.params;
     if(!/^[0-9a-f-]{36}$/i.test(runId)||!/^[0-9a-f-]{36}$/i.test(connectionId))return unavailable();
     const organizationId=resolution.session.activeOrganization.id;
@@ -36,6 +37,7 @@ export async function POST(request:Request,context:{params:Promise<{connectionId
     if(Number(network?.timezoneId)!==80||String(network?.currencyId)!=="USD"||String(network?.networkId)!==account.externalId)return unavailable();
     if((runs[0].metadata as any)?.source_coverage_certification)return Response.json({ok:true,certificate:(runs[0].metadata as any).source_coverage_certification},{headers});
     if(runs[0].status!=="failed"||runs[0].lease_owner)return Response.json({ok:false,code:"everflow_certification_request_not_eligible"},{status:409,headers});
+    if(body.retainedProof===true){const certificate=await certifyRetainedEverflowCoverage({networkId:account.externalId,organizationId,connectionId,providerAccountId:account.id,actorUserId:resolution.session.user.id,accountId:connection.accountId,correlationId:resolution.session.correlationId,run:runs[0]});return Response.json({ok:true,certificate},{headers});}
     const apiKey=await plane.resolveCredentialForExecution(resolution.session,connectionId);
     await getEverflowNetworkIdentity({apiKey,networkId:account.externalId,correlationId:resolution.session.correlationId});
     const certificate=await certifyEverflowCoverage({apiKey,networkId:account.externalId,organizationId,connectionId,providerAccountId:account.id,actorUserId:resolution.session.user.id,accountId:connection.accountId,correlationId:resolution.session.correlationId,run:runs[0]});
