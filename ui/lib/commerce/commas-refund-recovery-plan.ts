@@ -12,7 +12,7 @@ export type RefundRecoveryCandidate = RefundScope & {
 function cents(value: string): bigint | null {
   if (!/^\d+(?:\.\d{1,2})?$/.test(value)) return null;
   const [whole, fraction = ""] = value.split(".");
-  return BigInt(whole) * 100n + BigInt(fraction.padEnd(2, "0"));
+  return BigInt(whole) * BigInt(100) + BigInt(fraction.padEnd(2, "0"));
 }
 export function planCommasRefundRecovery(scope: RefundScope, candidates: RefundRecoveryCandidate[]) {
   if (!candidates.length || candidates.length > 100) throw new Error("Recovery requires 1–100 explicit observations.");
