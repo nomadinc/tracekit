@@ -66,6 +66,9 @@ export async function GET(request:Request){
   const observations=await db(`commerce_refund_created_observations?organization_id=eq.${org}&connection_id=eq.${connectionId}&provider_account_id=eq.${providerAccountId}&provider_refund_hashid=in.(${ids.join(",")})&select=id,provider_refund_hashid,original_payment_id,canonical_order_id,evidence_id,payload_hash&limit=10`);
   if(observations.length!==9||new Set(observations.map(o=>o.provider_refund_hashid)).size!==9)throw new Error("cohort");
 
+  const exclusions=await db(`commerce_refund_created_exclusions?observation_id=in.(${observations.map(o=>o.id).join(",")})&select=observation_id,reason,confirmation_provenance&limit=10`);
+  const excludedIds=new Set(exclusions.map(x=>String(x.observation_id)));
+  const excludedResult=(o:Row)=>({observationId:o.id,refundHashid:o.provider_refund_hashid,state:"excluded_test_data",financialDisposition:"excluded_test_data",confirmationProvenance:"user_report_of_provider_confirmation"});
   if(new URL(request.url).searchParams.get("mode")==="retained"){
    const store=new SupabaseCommerceEvidenceStore(),results:unknown[]=[];
    for(const o of observations){
@@ -75,10 +78,11 @@ export async function GET(request:Request){
     if(!ref.startsWith(prefix)||ref.includes(".."))throw new Error("storage_scope");
     const bytes=await store.getAuthorized({organizationId:org,storageReference:ref});
     if(!bytes||bytes.byteLength>1000000||createHash("sha256").update(bytes).digest("hex")!==evidence[0].payload_hash)throw new Error("evidence_hash");
-    results.push({observationId:o.id,evidenceId:o.evidence_id,evidenceHashVerified:true,...inspectRetainedRefundIdentity(JSON.parse(new TextDecoder().decode(bytes)),String(o.provider_refund_hashid),String(o.original_payment_id))});
+    results.push({financialDisposition:excludedIds.has(String(o.id))?"excluded_test_data":"not_excluded",observationId:o.id,evidenceId:o.evidence_id,evidenceHashVerified:true,...inspectRetainedRefundIdentity(JSON.parse(new TextDecoder().decode(bytes)),String(o.provider_refund_hashid),String(o.original_payment_id))});
    }
    return response(requestId,{ok:true,mode:"read_only",providerRequests:0,writes:0,checkpointsAdvanced:false,results},200);
   }
+  if(excludedIds.size===observations.length)return response(requestId,{ok:true,mode:"read_only",providerRequests:0,writes:0,checkpointsAdvanced:false,results:observations.map(excludedResult)},200);
   const credentials=await db(`commerce_provider_credentials?connection_id=eq.${connectionId}&organization_id=eq.${org}&revoked_at=is.null&select=encryption_key_id,encryption_version,secret_iv,secret_ciphertext&limit=2`);
   if(credentials.length!==1)throw new Error("credentials");
   const row=credentials[0],keyId=process.env.COMMERCE_CREDENTIALS_KEY_ID,version=Number(process.env.COMMERCE_CREDENTIALS_ENCRYPTION_VERSION||"1");
@@ -86,16 +90,19 @@ export async function GET(request:Request){
   const secret=await decryptCommerceCredential({keyId,encryptionVersion:version,iv:bytes(row.secret_iv),ciphertext:bytes(row.secret_ciphertext)},decodeCommerceCredentialKey(process.env.COMMERCE_CREDENTIALS_ENC_KEY));
   const client=new CommasClient({apiKey:secret,environment:"production",maxAttempts:1,timeoutMs:15000});
   const results:unknown[]=[];
+  let providerRequests=0;
   for(const o of observations){
+   if(excludedIds.has(String(o.id))){results.push(excludedResult(o));continue;}
    const orders=await db(`platform_orders?organization_id=eq.${org}&connection_id=eq.${connectionId}&provider_account_id=eq.${providerAccountId}&canonical_order_id=eq.${o.canonical_order_id}&select=transaction_id&limit=2`);
    if(orders.length!==1||!/^\d+$/.test(String(orders[0].transaction_id)))throw new Error("parent");
    const transactionId=String(orders[0].transaction_id);
    try{
+    providerRequests++;
     const detail=await client.getTransaction(transactionId,{correlationId:`refund-detail-${requestId}-${o.id}`});
     results.push({observationId:o.id,...inspectRefundIdentityBridge(detail.item as Row,transactionId,String(o.original_payment_id),String(o.provider_refund_hashid))});
    }catch{results.push({observationId:o.id,state:"provider_detail_unavailable"});}
   }
-  return response(requestId,{ok:true,mode:"read_only",writes:0,checkpointsAdvanced:false,results},200);
+  return response(requestId,{ok:true,mode:"read_only",providerRequests,writes:0,checkpointsAdvanced:false,results},200);
  }catch(error){
   return response(requestId,{ok:false,code:error instanceof AuthorizationDeniedError?"resource_unavailable":"refund_detail_inspection_unavailable"},409);
  }
