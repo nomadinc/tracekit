@@ -21,10 +21,14 @@ TEST EVIDENCE (operator-provided logs, not independently rerun here)
 Seven target files: 28 PASS / 0 FAIL / 0 SKIP.
 All M12-M16: 234 PASS / 0 FAIL / 0 SKIP.
 PR #561 focused (M15 execution recovery, M3 replay, MCP protocol, M5 policy negatives): 19 PASS / 0 FAIL / 0 SKIP.
-Complete configured UI: 1,314 PASS / 33 FAIL / 0 SKIP (1,347 total).
+Complete configured UI on PR #565: 1,359 PASS / 35 FAIL / 0 SKIP (1,394 total). First TAP group: 1,314 PASS / 33 FAIL (1,347 total). React-server group: 45 PASS / 2 FAIL (47 total). WS-022 independent run confirms this corrected accounting.
 Targeted and focused suites overlap; counts must not be summed as unique tests.
 
 FULL-SUITE FAILURE REGISTER — PROVISIONAL; NONE WAIVED
+The 33 entries below represent only the first TAP group. The following two React-server failures complete the 35-failure branch accounting:
+34. Account selection accepts internal IDs without schedule activation.
+35. Tenant-scoped status presentation without credential material.
+WS-022 candidate on reconciled current main: 1,371 PASS / 32 FAIL / 0 SKIP (1,403 total); latest untouched main: 1,361 PASS / 42 FAIL / 0 SKIP (1,403 total). These candidate figures are NOT PR-branch results. No new candidate failure names versus main.
 1. commerce API and runtime entrypoints remain present
 2. review workspace keeps candidate resolution read-only
 3. review workspace preserves the existing affiliate/source chargeback report
@@ -64,6 +68,9 @@ Retained test coverage includes unknown-tool and malformed-argument rejection; e
 These passing tests do not independently certify production authorization, tenant isolation, provider rollback or full Production V1 readiness.
 Special scrutiny required: M3 shared confirmation RPC, M9 eligibility, M17 Everflow remediation, Edge tenancy/validator, Everflow identity heuristics, Shopify refunds. Missing migration/component files in several full-suite failures must be investigated as missing fixture vs legitimate removed runtime.
 Do not automatically classify the 33 failures as obsolete, waive them, or change runtime in WS-019 without safety review.
+
+WS-022 INDEPENDENT REVIEW (CONDITIONAL ACCEPT)
+WS-022 independently reviewed PR #565 head 765d2fd7, found seven-test contracts acceptable, and reproduced 28/28, M12–M16 234/234, PR #561 19/19, plus 19/19 M3/M9/M17 security triage on a reconciled candidate. A local candidate merged latest main without conflicts; this does not authorize merging the PR. No live tenant/authorization/provider/concurrency certification is implied. Outstanding 32 candidate UI failures remain, with domain owner acknowledgments pending. WS-022's 163-row ledger: 58 resolved, 105 unresolved (32 UI, historical 9 API, 4 skips, 60 TS diagnostics). API/TS counts were not rerun. PR #544 and Production V1 remain HOLD.
 
 REQUIRED WS-022 ACTION
 Independently review seven-test diff and this matrix. Classify the 33 failures by owner and behavioral/security impact; independently inspect the five M3/M9/M17 assertions before approving WS-019 closure. If actual authorization, tenant isolation, identity, replay, audit or policy defect is identified, STOP and escalate. Hold merge/deployment and PR #544 until independent acceptance and separate release gates.
