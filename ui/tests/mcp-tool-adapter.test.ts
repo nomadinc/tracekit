@@ -8,7 +8,7 @@ test("M2 tool catalog preserves approved read-only core tools and explicitly nam
  for(const name of core){const tool=TRACEKIT_MCP_TOOLS.find(t=>t.name===name);assert.ok(tool,name);assert.equal(tool.annotations.readOnlyHint,true);assert.equal(tool.annotations.destructiveHint,false);}
  assert.equal(new Set(names).size,names.length,"tool names must be unique");
  assert.ok(names.every(name=>name.startsWith("tracekit.")));
- for(const name of ["tracekit.execute_shopify_controlled_proof","tracekit.execute_inspect_evidence"]){const tool=TRACEKIT_MCP_TOOLS.find(t=>t.name===name);assert.ok(tool,"named governed execution tool");assert.equal(tool.annotations.readOnlyHint,false);}
+ const shopify=TRACEKIT_MCP_TOOLS.find(t=>t.name==="tracekit.execute_shopify_controlled_proof");assert.ok(shopify,"named governed Shopify proof");assert.equal(shopify.annotations.readOnlyHint,false);assert.equal(shopify.annotations.destructiveHint,true);const inspection=TRACEKIT_MCP_TOOLS.find(t=>t.name==="tracekit.execute_inspect_evidence");assert.ok(inspection,"named non-mutating governed inspection");assert.equal(inspection.annotations.readOnlyHint,true);assert.equal(inspection.annotations.destructiveHint,false);
  for(const name of ["tracekit.execute_commas_test_delivery","tracekit.execute_provider_action"]){assert.ok(!names.includes(name),"suppressed or generic execution tool must not be exposed");}
 });
 test("M2 adapter dispatches normalized arguments",async()=>{
