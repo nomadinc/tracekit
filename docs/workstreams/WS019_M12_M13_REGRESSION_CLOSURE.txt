@@ -1,0 +1,97 @@
+WS-019 M12/M13 test-only regression closure
+
+Branch: workstream/ws-019-m12-m13-regression-closure
+Verified starting HEAD: 415fed14d20a3d8af915d0288bae989f25d43142
+Starting worktree: clean
+Baseline: 142 tests / 114 passed / 28 failed.
+Final original suite: 143 passed / 0 failed / 0 skipped (one additional SQL isolation test).
+PR #561 focused suite: 19 passed / 0 failed / 0 skipped.
+Additional next29-m13 suites: 7 passed / 0 failed / 0 skipped.
+No runtime, migration, dependency or production configuration changes. No merge or deployment.
+Security stop condition: none discovered. Blockers: none for test-only closure.
+This does not declare Production V1 production-ready or replace live provider/concurrency proof.
+
+Verification commands (from ui):
+node scripts/run-tests.mjs $(printf '%s\n' tests/m12-*.test.ts tests/m13-*.test.ts)
+node scripts/run-tests.mjs m15-shopify-execution-recovery.test.ts m3-authoritative-shopify-execution-replay.test.ts mcp-protocol.test.ts m5-policy-negative-production-acceptance.test.ts
+node scripts/run-tests.mjs next29-m13-webhook-characterization-ui.test.ts next29-m13-webhook-canary-ui.test.ts
+git diff --check
+
+Evidence logs and SHA-256:
+/tmp/ws019-m12-m13-baseline.log  4285b6935e176915022d2a903c48baa3fa1587ea5d91fe83f39a248759f9918c
+/tmp/ws019-m12-m13-closure.log  040369eafc3e1fb9cc9077450f5b651d3867aa2f6f4960d8e512026a5f51d763
+/tmp/ws019-pr561-focused.log  00415c727023c872fa46d65c8786c2d64ebf3d51c678cf2c44fa46946bf12fcf
+/tmp/ws019-next29-m13.log  70d11c9a1f422bac1c6ac3f2f2bc0fa5c159862a9d81c49e55327954a02d46ea
+
+Disposition matrix (baseline TAP IDs; all 28 original failures covered):
+Baseline ID | Original failure | Classification | Correction | Verification evidence | Remaining risk
+--- | --- | --- | --- | --- | ---
+2 | M12 readiness does not itself enable reusable production execution | Obsolete activation assertion | Expect readiness and named inspect_evidence registry execution enabled. | /tmp/ws019-m12-m13-closure.log: m12-acceptance-proof-complete.test.ts passes in 143/143 run | Static readiness is not live proof.
+6 | M12 plan operation remains bound but unavailable until a later execution exposure slice | Obsolete activation assertion | Assert enabled plan_only, non-mutating, confirmation-required inspect_evidence binding. | /tmp/ws019-m12-m13-closure.log: m12-action-capability-binding.test.ts passes in 143/143 run | Registry contract only.
+13 | M12 tool remains governed by disabled named capability | Obsolete source assertion | Check enabled binding behavior and retain adapter delegation/no direct execution contract. | /tmp/ws019-m12-m13-closure.log: m12-action-tool-surface.test.ts passes in 143/143 run | Delegation is partly source-checked.
+14 | M12 adapter rejects even authorized consumed envelope while registry exposure is disabled | Obsolete adapter expectation | Expect completed authorized consumed inspection, exact consumption ID and no provider mutation. | /tmp/ws019-m12-m13-closure.log: m12-adapter-capability-gate.test.ts passes in 143/143 run | Adapter assumes trusted server envelope.
+15 | M12 adapter cannot be enabled by envelope executionAvailable field | Invalid negative fixture | Keep explicit caller executionAvailable negative for both boolean values against unauthorized envelope and rejected consumption. | /tmp/ws019-m12-m13-closure.log: m12-adapter-capability-gate.test.ts passes in 143/143 run | Adapter is a trusted internal boundary.
+24 | M12 caller-safe orchestration remains disabled at the named capability gate | Obsolete gate precedence | Use fresh confirmations to isolate missing execution permission; explicitly reject customer, journey and plan identity drift. | /tmp/ws019-m12-m13-closure.log: m12-caller-safe-orchestration.test.ts passes in 143/143 run | No persistence reached in negative case.
+27 | M12 confirmation within five minutes reaches disabled capability gate | Unisolated persistence fixture | Use synthetic isolated store; five-minute confirmation completes and persists authorization/result. | /tmp/ws019-m12-m13-closure.log: m12-confirmation-freshness.test.ts passes in 143/143 run | Mock does not prove database atomicity.
+41 | M12 disabled capability rejects before durable authorization issuance | Brittle source-order assertion | Behaviorally reject unregistered operation before any persistence request. | /tmp/ws019-m12-m13-closure.log: m12-durable-authorization.test.ts passes in 143/143 run | Other SQL checks remain contract checks.
+47 | M12 eligibility inspection derives execution capability from registry | Obsolete capability assertion | Enabled binding and execution-capability check remain distinct from ineligible unconfirmed plan. | /tmp/ws019-m12-m13-closure.log: m12-eligibility-inspection-binding.test.ts passes in 143/143 run | Inspection does not execute the action.
+49 | M12 current registry remains disabled while resolution faithfully reflects registry state | Obsolete activation assertion | Assert exact registry/plan binding and eligible fully satisfied governance. | /tmp/ws019-m12-m13-closure.log: m12-end-to-end-acceptance-gate.test.ts passes in 143/143 run | Pure eligibility does not prove authorization.
+50 | M12 end-to-end governed chain is complete up to the single named exposure gate | Obsolete execution assertion | Expect completed non-mutating bounded inspection and independently verified retained evidence. | /tmp/ws019-m12-m13-closure.log: m12-end-to-end-acceptance-gate.test.ts passes in 143/143 run | Unit chain omits durable transport.
+55 | M12 proof completion remains separate from reusable M13 activation | Obsolete activation assertion | Assert readiness and enabled named activation after replay proof. | /tmp/ws019-m12-m13-closure.log: m12-exec-v2-acceptance-close.test.ts passes in 143/143 run | Readiness is declared registry truth.
+60 | M12 both permissions reach capability gate but execution remains disabled | Stale positive fixture and obsolete gate | Make confirmation fresh; both permissions complete via isolated durable store; retain each missing-permission negative. | /tmp/ws019-m12-m13-closure.log: m12-execution-permission-gate.test.ts passes in 143/143 run | No production persistence or concurrency proof.
+62 | M12 does not enable inspect_evidence before caller-safe governed orchestration exists | Obsolete readiness blocker | Assert ready/enabled, implemented caller-safe orchestration and no blockers. | /tmp/ws019-m12-m13-closure.log: m12-inspect-evidence-readiness.test.ts passes in 143/143 run | Readiness contract only.
+69 | M12 server proof authorizes only exact non-mutating inspect_evidence boundary | Obsolete historical proof override | Enabled capability no longer qualifies for disabled-registry acceptance override; retain wrong flag/provider negatives. | /tmp/ws019-m12-m13-closure.log: m12-opaque-acceptance-proof.test.ts passes in 143/143 run | Historical override is unnecessary, not general authorization.
+73 | M12 resolves an existing M9 inspect_evidence plan to its exact capability | Obsolete binding assertion | Exact inspect_evidence capability resolves enabled; retain missing/unregistered/permission/confirmation/proof-operation negatives. | /tmp/ws019-m12-m13-closure.log: m12-plan-capability-resolution.test.ts passes in 143/143 run | Binding does not itself authorize execution.
+80 | M12 bounded adapter still rejects while production registry disabled | Obsolete adapter expectation | Enabled normal adapter completes without acceptance override and remains non-mutating. | /tmp/ws019-m12-m13-closure.log: m12-proof-adapter-gate.test.ts passes in 143/143 run | Trusted internal adapter fixture.
+84 | M12 readiness now names MCP tool exposure and acceptance proof as remaining blockers | Obsolete readiness blockers | Assert tool surface and governed acceptance complete, enabled readiness, empty blockers. | /tmp/ws019-m12-m13-closure.log: m12-readiness-after-replay.test.ts passes in 143/143 run | Readiness is not a fresh production canary.
+85 | M12 eligibility cannot be enabled by caller supplied execution state | Invalid caller-state negative fixture | Caller flags cannot bypass invalid confirmation or enable unregistered operation; test both boolean values. | /tmp/ws019-m12-m13-closure.log: m12-registry-backed-eligibility.test.ts passes in 143/143 run | Registry-derived check is distinct from final eligibility.
+86 | M12 fully satisfied governance remains blocked while registry exposure is disabled | Obsolete eligibility expectation | Satisfied governance yields eligible/enabled with no rejection reasons; retain independent failed-gate negatives. | /tmp/ws019-m12-m13-closure.log: m12-registry-backed-eligibility.test.ts passes in 143/143 run | Pure eligibility omits durable authorization.
+94 | M12 replay reads authorization by id and org before rebuilding envelope | Brittle source-order assertion | Behaviorally preserve persisted createdAt/envelope identity and exact result on later replay; reject changed identity/audit/idempotency/tenant and missing result. | /tmp/ws019-m12-m13-closure.log: m12-replay-envelope-identity.test.ts passes in 143/143 run | Mock transport does not prove atomic SQL consumption.
+106 | M13 actual MCP customer repository classifies Core failures | Obsolete diagnostic name | Exercise real repository with synthetic fetch errors for DNS/TLS/timeout/connection/HTTP and exact bounded messages. | /tmp/ws019-m12-m13-closure.log: m13-actual-read-diagnostic.test.ts passes in 143/143 run | Synthetic transport failures only.
+114 | M13 live replay failure restores inspect_evidence execution gate | Obsolete replay rollback expectation | Assert enabled named capability after corrected exact replay proof. | /tmp/ws019-m12-m13-closure.log: m13-disable-unproven-replay.test.ts passes in 143/143 run | Registry truth is not live proof.
+115 | M13 readiness records deterministic replay as unresolved | Obsolete replay readiness expectation | Assert ready/enabled, durable replay complete, no obsolete timestamp blocker. | /tmp/ws019-m12-m13-closure.log: m13-disable-unproven-replay.test.ts passes in 143/143 run | Readiness contract only.
+121 | M13 enables only the named TraceKit non-mutating journey evidence capability | Exposure-layer conflation | Count reusable assessed bindings; only inspect_evidence is reusable, with exact non-mutating boundary. | /tmp/ws019-m12-m13-closure.log: m13-inspect-evidence-enablement.test.ts passes in 143/143 run | Controlled proof can be enabled separately.
+122 | M13 keeps every external or provider-configuration capability disabled | Exposure-layer conflation | Assert Commas disabled; Shopify enabled only controlled_proof_only/reversible; both reject reusable plan resolution. | /tmp/ws019-m12-m13-closure.log: m13-inspect-evidence-enablement.test.ts passes in 143/143 run | No provider live proof performed.
+126 | M13 restore does not enable external provider capabilities | Exposure-layer conflation | Preserve Commas disabled and Shopify controlled-proof-only; reject both reusable bindings/plans. | /tmp/ws019-m12-m13-closure.log: m13-inspect-evidence-regression.test.ts passes in 143/143 run | No provider live proof performed.
+133 | M13 completion leaves external provider execution disabled | Exposure-layer conflation | Preserve Commas disabled and Shopify controlled-proof-only; reject both reusable bindings/plans. | /tmp/ws019-m12-m13-closure.log: m13-production-canary-complete.test.ts passes in 143/143 run | No provider live proof performed.
+
+Additional governance preservation:
+Caller executionAvailable flags, missing read/execution permissions, stale/future/malformed confirmation, mismatched customer target, unregistered operations and proof operation plan binding retain explicit negatives.
+Added in-memory PGlite execution of actual confirmation-resolution migration: correct tenant/actor succeeds; foreign tenant, foreign actor and expired references return no rows. Existing service-role and exact intent/actor SQL contracts retained.
+Replaced additional source-order checks in authorization provenance, authorization lookup, proof integration and durable replay wiring with order-independent call/branch contracts. Behavioral replay covers immutable identity, exact result, missing result and authorization mismatch rejection.
+All durable orchestration transport is intercepted; synthetic .test host/key replace environment values and are restored in finally. Unknown mock paths fail. No network forwarding.
+Mock store proves application transport/scoping behavior only; PGlite proves local confirmation SQL predicates, not production policies or database concurrency.
+
+Files changed:
+ui/tests/m12-acceptance-proof-complete.test.ts
+ui/tests/m12-action-capability-binding.test.ts
+ui/tests/m12-action-tool-surface.test.ts
+ui/tests/m12-adapter-capability-gate.test.ts
+ui/tests/m12-authorization-provenance.test.ts
+ui/tests/m12-caller-safe-orchestration.test.ts
+ui/tests/m12-confirmation-freshness.test.ts
+ui/tests/m12-durable-action-intents.test.ts
+ui/tests/m12-durable-authorization.test.ts
+ui/tests/m12-eligibility-inspection-binding.test.ts
+ui/tests/m12-end-to-end-acceptance-gate.test.ts
+ui/tests/m12-exec-v2-acceptance-close.test.ts
+ui/tests/m12-execution-permission-gate.test.ts
+ui/tests/m12-inspect-evidence-readiness.test.ts
+ui/tests/m12-opaque-acceptance-proof.test.ts
+ui/tests/m12-opaque-proof-integration.test.ts
+ui/tests/m12-plan-capability-resolution.test.ts
+ui/tests/m12-proof-adapter-gate.test.ts
+ui/tests/m12-readiness-after-replay.test.ts
+ui/tests/m12-registry-backed-eligibility.test.ts
+ui/tests/m12-replay-authorization-lookup.test.ts
+ui/tests/m12-replay-envelope-identity.test.ts
+ui/tests/m12-wire-durable-replay.test.ts
+ui/tests/m13-actual-read-diagnostic.test.ts
+ui/tests/m13-disable-unproven-replay.test.ts
+ui/tests/m13-inspect-evidence-enablement.test.ts
+ui/tests/m13-inspect-evidence-regression.test.ts
+ui/tests/m13-production-canary-complete.test.ts
+ui/tests/fixtures/m12-durable-store.ts
+docs/workstreams/WS019_M12_M13_REGRESSION_CLOSURE.txt
+
+Commit SHA and push outcome are reported in the delivery response (this report is part of that commit).
