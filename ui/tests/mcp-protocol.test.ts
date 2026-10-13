@@ -11,10 +11,22 @@ test("MCP initialize advertises tools capability and protocol version",async()=>
  assert.equal(result.result.protocolVersion,TRACEKIT_MCP_PROTOCOL_VERSION);
  assert.equal(result.result.capabilities.tools.listChanged,false);
 });
-test("MCP tools/list exposes only approved read-only tools",async()=>{
+test("MCP tools/list exposes named read-only and explicitly governed action tools",async()=>{
  const result:any=await handleTraceKitMcpMessage(service,{jsonrpc:"2.0",id:2,method:"tools/list"});
- assert.equal(result.result.tools.length,5);
- assert.ok(result.result.tools.every((tool:any)=>tool.annotations.readOnlyHint===true));
+ const tools:any[]=result.result.tools;
+ const names=new Set(tools.map(t=>t.name));
+ assert.equal(names.size,tools.length,"duplicate tool registrations are prohibited");
+ for(const name of ["tracekit.list_customers","tracekit.get_order","tracekit.inspect_remediation_signals","tracekit.inspect_shopify_controlled_proof_readiness"]){
+  const tool=tools.find(t=>t.name===name);
+  assert.ok(tool,`${name} must remain registered`);
+  assert.equal(tool.annotations.readOnlyHint,true,`${name} must remain read-only`);
+ }
+ for(const name of ["tracekit.prepare_shopify_controlled_proof","tracekit.confirm_shopify_controlled_proof","tracekit.execute_shopify_controlled_proof"]){
+  const tool=tools.find(t=>t.name===name);
+  assert.ok(tool,`${name} must remain explicitly registered`);
+  assert.equal(tool.annotations.readOnlyHint,false,`${name} must not claim to be read-only`);
+ }
+ assert.ok(!names.has("tracekit.execute_provider_action"),"generic provider execution must not be exposed");
 });
 test("MCP tools/call dispatches through governed service adapter",async()=>{
  const result:any=await handleTraceKitMcpMessage(service,{jsonrpc:"2.0",id:3,method:"tools/call",params:{name:"tracekit.list_customers",arguments:{limit:1}}});
