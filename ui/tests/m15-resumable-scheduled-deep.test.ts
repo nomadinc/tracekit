@@ -34,7 +34,7 @@ test("scheduled deep identity remains stable and paused run is redispatchable",(
 test("worker resumes after highest completed page and pauses at chunk boundary",()=>{
   assert.match(worker,/scheduledDeepResumePage=scheduledDeepSchedule&&completedPages\.length\?Math\.max\(\.\.\.completedPages\)\+1:1/);
   assert.match(worker,/scheduledDeepInvocationCeilingValue/);
-  assert.match(worker,/stoppingReason="scheduled_deep_chunk_boundary"/);
+  assert.match(worker,/stoppingReason\s*=\s*scheduledDeepRequestLimit\s*!==\s*null[\s\S]*?"bounded_deep_reconciliation_proof"\s*:\s*"scheduled_deep_chunk_boundary"/);
   assert.match(worker,/rpc\/pause_commerce_sync_run/);
   assert.match(worker,/\["bounded_deep_reconciliation_proof","scheduled_deep_chunk_boundary"\]\.includes\(stoppingReason\)/);
 });
