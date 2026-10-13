@@ -5,6 +5,8 @@ export type RefundRecoveryCandidate = RefundScope & {
   status: string; orderMatchState: string; evidenceVerified: boolean;
   sellerCost: string; creatorAmount: string; processorFee: string;
   currencyContractVerified: boolean;
+  /** Must come from a scoped exclusion lookup; missing/unchecked cannot qualify. */
+  financialDisposition: "not_excluded" | "excluded_test_data" | "unchecked";
   /** Provider-proven identity bridge; amount/time similarity is insufficient. */
   numericRefundIdentity: string | null; identityBridgeVerified: boolean;
   existingWebhookLedgerRows: number; existingEmbeddedLedgerRows: number;
@@ -30,6 +32,7 @@ export function planCommasRefundRecovery(scope: RefundScope, candidates: RefundR
   }
   const rows = candidates.map(c => {
     const blockers: string[] = [];
+    if(c.financialDisposition!=="not_excluded") blockers.push(c.financialDisposition==="excluded_test_data"?"test_data_excluded":"financial_exclusion_check_required");
     if (c.status !== "success") blockers.push("refund_not_final_success");
     if (!c.canonicalOrderId || c.orderMatchState !== "exact_ord") blockers.push("exact_order_relationship_required");
     if (!c.evidenceVerified) blockers.push("verified_retained_evidence_required");
