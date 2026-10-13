@@ -1,0 +1,28 @@
+(node:5499) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+(node:5527) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ ⛅️ wrangler 4.148.0
+────────────────────
+Total Upload: 2582.52 KiB / gzip: 481.39 KiB
+Your Worker has access to the following bindings:
+Binding                                                                                       Resource
+env.wowboost_imports (wowboost-imports)                                                       Queue
+env.continuous_commerce (continuous-commerce)                                                 Queue
+env.everflow_firehose (tracekit-everflow-firehose)                                            Queue
+env.CONTINUOUS_COMMERCE_RUNTIME (tracekit-continuous-runtime)                                 Worker
+env.SUPABASE_URL ("https://uoeosoiegatlqtzemsfv.supabase...")                                 Environment Variable
+env.TRACEKIT_ROOT_DOMAIN ("buyecowatt.com")                                                   Environment Variable
+env.TRACEKIT_AUTO_LINK_OUTBOUND ("true")                                                      Environment Variable
+env.TRACEKIT_COMMERCE_SCHEDULER_ENABLED ("true")                                              Environment Variable
+env.TRACEKIT_MAINTENANCE_WRITE_GATE_ENABLED ("false")                                         Environment Variable
+env.TRACEKIT_COMMERCE_KILL_SWITCH ("enabled")                                                 Environment Variable
+env.TRACEKIT_TKID_ERASURE_EXECUTOR_ENABLED ("false")                                          Environment Variable
+env.TRACEKIT_TKID_RELAY_ENABLED ("false")                                                     Environment Variable
+env.TRACEKIT_TKID_RELAY_ORIGIN ("https://journey.trace-kit.io")                               Environment Variable
+
+--dry-run: exiting now.

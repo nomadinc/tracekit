@@ -6,7 +6,9 @@ import { unstable_readConfig } from "wrangler";
 const configUrl = new URL("../wrangler.toml", import.meta.url);
 
 function productionConfig(): Record<string, any> {
-  return unstable_readConfig({ config: configUrl.pathname });
+  // Wrangler's patched TOML parser returns null-prototype records. Compare
+  // configuration values independently of the parser's object prototypes.
+  return structuredClone(unstable_readConfig({ config: configUrl.pathname }));
 }
 
 test("production Worker configuration preserves the authorized Queue topology", () => {

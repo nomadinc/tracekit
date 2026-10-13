@@ -41,7 +41,7 @@
     "exceljs": "^4.4.0",
     "fast-csv": "^4.3.6",
     "lucide-react": "^0.461.0",
-    "next": "15.5.23",
+    "next": "15.5.27",
     "next-themes": "^0.2.1",
     "react": "18.3.1",
     "react-dom": "18.3.1",
@@ -50,6 +50,12 @@
   "overrides": {
     "exceljs": {
       "uuid": "^11.1.1"
+    },
+    "glob@10.5.0": {
+      "minimatch": "9.0.7"
+    },
+    "next@15.5.27": {
+      "postcss": "8.5.29"
     }
   },
   "devDependencies": {
@@ -60,10 +66,13 @@
     "autoprefixer": "^10.4.19",
     "esbuild": "0.25.10",
     "eslint": "^8.57.0",
-    "eslint-config-next": "15.5.23",
+    "eslint-config-next": "15.5.27",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.10",
     "tsx": "^4.23.1",
     "typescript": "^5.4.5"
+  },
+  "engines": {
+    "node": ">=22.11.0"
   }
 }
