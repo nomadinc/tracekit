@@ -51,7 +51,7 @@ function EverflowSourceInventoryCapture({ connectionId, runId, canCertify, cover
     if(busy)return;setBusy(true);setMessage(retainedProof?"Validating the existing protected proof and original capture times. No provider pages or conversions are reimported.":"Verifying two independent complete source reads and retained evidence before certification. Original execution records remain preserved.");
     try {
       const response=await fetch(`/api/commerce/connections/${connectionId}/historical-source-certification`,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({runId,retainedProof})});
-      const result=await response.json();if(!response.ok)throw new Error(String(result.code||"Certification could not be committed."));
+      const result=await response.json();if(!response.ok)throw new Error(`${String(result.code||"Certification could not be committed.")}${result.databaseCode?` (${String(result.databaseCode)}; ${String(result.resource)})`:""}`);
       setMessage(`Source coverage certified for ${Number(result.certificate.sourceTotal).toLocaleString()} identities. No conversions reimported; original counters preserved. Customer financial verification remains separate.`);await onCertified();
     }catch(error){setMessage(`Source coverage not certified: ${error instanceof Error?error.message:"Certification failed."}`);}finally{setBusy(false);}
   }

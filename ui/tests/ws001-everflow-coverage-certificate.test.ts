@@ -4,7 +4,7 @@ import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { PGlite } from "@electric-sql/pglite";
 import { MemoryCommerceEvidenceStore } from "../lib/commerce/evidence-store";
-import { certifyEverflowCoverage } from "../lib/integrations/everflow-coverage-certificate";
+import { certifyEverflowCoverage, commitCoverageProof } from "../lib/integrations/everflow-coverage-certificate";
 
 const hash=(value:unknown)=>createHash("sha256").update(JSON.stringify(value)).digest("hex");
 test("certificate requires two identical source reads and verified local evidence before any write",async()=>{
@@ -26,14 +26,15 @@ test("certificate requires two identical source reads and verified local evidenc
 
 test("atomic certificate verifies commitments and tenant evidence, preserves failed diagnostics/counters, and is idempotent",async()=>{
  const db=new PGlite();
+ const safe=readFileSync(new URL("../../supabase/migrations/036_financial_event_matches.sql",import.meta.url),"utf8");await db.exec(safe.slice(safe.indexOf("create or replace function public.financial_reconciliation_metadata_is_safe"),safe.indexOf("$$;",safe.indexOf("create or replace function public.financial_reconciliation_metadata_is_safe"))+3));
  await db.exec(`create role anon;create role authenticated;create role service_role;
- create table commerce_sync_runs(id uuid primary key,organization_id uuid,connection_id uuid,provider_account_id uuid,sync_type text,status text,metadata jsonb,lease_owner text,records_seen int,pages_completed int,last_error_code text);
+ create table commerce_sync_runs(id uuid primary key,organization_id uuid,connection_id uuid,provider_account_id uuid,sync_type text,status text,metadata jsonb check(public.financial_reconciliation_metadata_is_safe(metadata)),lease_owner text,records_seen int,pages_completed int,last_error_code text);
  create table commerce_provider_connections(id uuid,organization_id uuid,account_id uuid,provider text,status text);
  create table commerce_provider_accounts(id uuid,organization_id uuid,connection_id uuid,status text,provider_account_external_id text);
  create table commerce_evidence_records(id uuid primary key,organization_id uuid,connection_id uuid,provider_account_id uuid,sync_run_id uuid,source_object_type text,source_object_id text,payload_hash text,deleted_at timestamptz,metadata jsonb);
  create table everflow_conversion_events(source_identity text,conversion_id text,payload_hash text,evidence_id uuid,organization_id uuid,connection_id uuid,provider_account_id uuid,conversion_at timestamptz,network_id text,currency text);
  create table tracekit_audit_events(actor_user_id uuid,account_id uuid,organization_id uuid,action text,target_type text,target_id text,result text,correlation_id text,metadata jsonb);`);
- await db.exec(readFileSync(new URL('../../supabase/migrations/20261012231715_ws001_everflow_source_coverage_certification.sql',import.meta.url),'utf8'));
+ await db.exec(readFileSync(new URL('../../supabase/migrations/20261013001508_ws001_everflow_certificate_safe_digest_references.sql',import.meta.url),'utf8'));
  const ids=Array.from({length:8},(_,i)=>`00000000-0000-0000-0000-${String(i+1).padStart(12,'0')}`);const [run,org,conn,provider,actor,account,sourceEvidence,certEvidence]=ids;
  const metadata={from:"2026-10-01 00:00:00",to:"2026-10-11 23:59:59",next_page:64,retry_page:42,total_count:22307};const manifest=[["source","a".repeat(64)]];
  await db.query(`insert into commerce_sync_runs values($1,$2,$3,$4,'everflow_conversions_historical','failed',$5,null,11600,63,'original_error')`,[run,org,conn,provider,metadata]);
@@ -41,12 +42,22 @@ test("atomic certificate verifies commitments and tenant evidence, preserves fai
  await db.query(`insert into commerce_evidence_records values($1,$2,$3,$4,$5,'everflow_conversion','source',$6,null,$7),($8,$2,$3,$4,$5,'everflow_source_coverage_certification',$5::text,$9,null,'{}')`,[sourceEvidence,org,conn,provider,run,"b".repeat(64),{normalizedPayloadHash:"a".repeat(64)},certEvidence,"c".repeat(64)]);
  await db.query(`insert into everflow_conversion_events values('source','source',$1,$2,$3,$4,$5,'2026-10-02T04:00:00Z','3453','USD')`,["a".repeat(64),sourceEvidence,org,conn,provider]);
  const capture={identitySetSha256:hash(["source"]),normalizedVersionSetSha256:hash(manifest),rawVersionSetSha256:"d".repeat(64)};
- const cert={kind:"source_identity_coverage",state:"certified",organizationId:org,connectionId:conn,providerAccountId:provider,actorUserId:actor,importId:run,customerFinancialAcceptance:"not_certified",query:{from:metadata.from,to:metadata.to,timezoneId:80,currencyId:"USD",networkId:"3453",showConversions:true,showEvents:true,filters:[],searchTerms:[]},sourceTotal:1,...capture,captures:[capture,capture],artifact:{payloadHash:"c".repeat(64)}};
+ const cert={kind:"source_identity_coverage",state:"certified",organizationId:org,connectionId:conn,providerAccountId:provider,actorUserId:actor,importId:run,customerFinancialAcceptance:"not_certified",query:{from:metadata.from,to:metadata.to,timezoneId:80,currencyId:"USD",networkId:"3453",showConversions:true,showEvents:true,filters:[],searchTerms:[]},sourceTotal:1,...capture,captures:[capture,capture],artifact:{contentSha256:"c".repeat(64)}};
  const call=(certificate:any=cert,sourceManifest:any=manifest)=>db.query(`select certify_everflow_source_coverage($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11) certificate`,[run,org,conn,provider,actor,account,"correlation",metadata,certificate,sourceManifest,certEvidence]);
  await assert.rejects(call({...cert,identitySetSha256:"0".repeat(64)}),/commitment invalid/);
  await db.query(`update commerce_provider_accounts set provider_account_external_id='provisional:unknown'`);await assert.rejects(call(),/Active provider scope changed/);await db.query(`update commerce_provider_accounts set provider_account_external_id='3453'`);
  await db.query(`update commerce_evidence_records set organization_id=$1 where id=$2`,[actor,sourceEvidence]);await assert.rejects(call(),/coverage changed or incomplete/);await db.query(`update commerce_evidence_records set organization_id=$1 where id=$2`,[org,sourceEvidence]);
+ const unsafe=await db.query(`select financial_reconciliation_metadata_is_safe($1) safe`,[{artifact:{payloadHash:"c".repeat(64)}}]);assert.equal((unsafe.rows[0] as any).safe,false);
  await call();await call();
  const result:any=(await db.query(`select * from commerce_sync_runs`)).rows[0];assert.equal(result.status,"failed");assert.equal(result.records_seen,11600);assert.equal(result.pages_completed,63);assert.equal(result.last_error_code,"original_error");assert.equal(result.metadata.next_page,64);assert.equal(result.metadata.retry_page,42);assert.equal(result.metadata.source_coverage_certification.state,"certified");assert.equal((await db.query(`select * from tracekit_audit_events`)).rows.length,1);
  const privileges:any=(await db.query(`select has_function_privilege('anon','certify_everflow_source_coverage(uuid,uuid,uuid,uuid,uuid,uuid,text,jsonb,jsonb,jsonb,uuid)','execute') anon,has_function_privilege('authenticated','certify_everflow_source_coverage(uuid,uuid,uuid,uuid,uuid,uuid,text,jsonb,jsonb,jsonb,uuid)','execute') authenticated`)).rows[0];assert.equal(privileges.anon,false);assert.equal(privileges.authenticated,false);await db.close();
+});
+
+test("registration reuses an existing exact immutable proof record after an uncommitted certificate",async()=>{
+ const input:any={organizationId:"org",connectionId:"connection",providerAccountId:"provider",actorUserId:"actor",accountId:"account",correlationId:"correlation",run:{id:"original",metadata:{},status:"failed"}};
+ const stored:any={payloadHash:"a".repeat(64),storageReference:"commerce-evidence/scoped-proof",byteSize:100,contentType:"application/json"};
+ const paths:string[]=[];let rpc=0;
+ const db:any=async(path:string,init:any)=>{paths.push(path);if(init?.method==="POST"&&path.startsWith("commerce_evidence_records"))return[];if(!init)return[{id:"existing-evidence",storage_reference:stored.storageReference,byte_size:100,sync_run_id:"original"}];rpc++;const body=JSON.parse(init.body);assert.equal(body.p_evidence_id,"existing-evidence");assert.equal(body.p_certificate.artifact.contentSha256,stored.payloadHash);assert.equal(body.p_certificate.artifact.payloadHash,undefined);return[body.p_certificate];};
+ const result:any=await commitCoverageProof(input,{state:"certified",certifiedAt:new Date().toISOString()},stored,[["source","b".repeat(64)]],db);assert.equal(result.artifact.evidenceId,"existing-evidence");assert.equal(rpc,1);assert.ok(paths[1].includes("organization_id=eq.org"));
+ await assert.rejects(commitCoverageProof(input,{state:"certified",certifiedAt:new Date().toISOString()},stored,[],async(path,init)=>!init?[{id:"wrong",storage_reference:"other",byte_size:100,sync_run_id:"original"}]:[]));
 });
