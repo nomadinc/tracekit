@@ -1,0 +1,106 @@
+WS-019 M14-M16 regression closure — final M16 corrections
+
+Repository: nomadinc/tracekit
+Branch: workstream/ws-019-m14-m16-regression-closure
+Worktree: /Users/nomadm/Projects/tracekit-ws019-m14-m16
+Starting HEAD for this continuation: 61695bcb
+Starting worktree: clean.
+Original baseline: 91 tests / 74 PASS / 17 FAIL / 0 SKIP (retained baseline TAP).
+User-reported intermediate result: 89 PASS / 2 FAIL / 0 SKIP.
+Final verification: 91 PASS / 0 FAIL / 0 SKIP.
+This continuation changes only two test files and this evidence report. Earlier WS-019
+corrections are already committed on this same branch; the matrix covers all 17 originals.
+No runtime, migration, configuration, dependency or credential changes. No live provider
+operations, merge or deployment. No other worktrees or main modified.
+
+Independent implementation inspection before corrections
+- ui/components/connections/governed-provider-actions.tsx: discovery is GET;
+  prepare POST sends only operation; confirm POST sends operation and opaque intentId.
+  Confirm requires a deliberate onClick after prepared state. Confirmed state says
+  "Confirmed — not executed". No provider execute endpoint is called by this component.
+- ui/app/api/actions/provider-prepare/route.ts and provider-confirm/route.ts:
+  authenticated application session, Shopify-only allowlist, reject unknown body fields,
+  revalidate discovery readiness. Prepare issues intent, confirm issues confirmation;
+  neither calls execution. Confirmation response explicitly sets executionAvailable:false.
+- ui/lib/mcp/action-service.ts: prepareApprovedShopifyControlledProof requires action
+  access/policy and server-resolved plan; prepare validates exposure and issues expiring
+  durable intent with executionAvailable:false. confirm requires action access/policy
+  and binds intent to the exact operation/target kind. Execution is a separate method.
+- ui/lib/mcp/provider-action-discovery.ts: capability/contract/policy assessment and
+  session permission checks precede session-scoped provider readiness. Organization
+  comes from activeOrganization. Handoff arguments are empty. No preparation,
+  confirmation, authorization consumption or execution occurs in discovery.
+- ui/lib/mcp/tool-adapter.ts: discovery inputSchema is an empty object with
+  additionalProperties:false; dispatcher assertKeys(args,[]) precedes read-service call.
+- ui/lib/mcp/production-v1-policy.ts, action-capability-registry.ts and
+  provider-action-contract.ts: Commas engineering-ready/not-live-proven remains
+  non-executable. Shopify is only the named controlled_webhook_create_delete_proof,
+  controlled_proof_only, reversible, provider_read_back, actions.execute and explicit
+  confirmation required. Controlled proofs cannot resolve from reusable action plans.
+  Matching durable intent/authorization/replay metadata and policy are required.
+- ui/lib/mcp/durable-execution-gate.ts retains issue/find, atomic consumption,
+  exact persisted replay result and rejection when authorization/result is unavailable.
+These are local implementation observations, not a new production certification.
+
+Final corrections and security verification
+m16-operations-provider-actions.test.ts replaces obsolete Read only/no-POST expectation
+with preparation and deliberate confirmation assertions, exact fetch endpoint allowlist,
+state text checks and negative execution/consumption/idempotency assertions.
+m16-provider-action-discovery.test.ts removes delimiter-based schema extraction entirely.
+It imports the actual tool definition and dispatcher, compares the entire closed empty
+schema and all read-only annotations, verifies empty arguments delegate once, then rejects
+17 target/provider/tenant/credential/execution keys before any further delegation.
+The read-service stub performs no network or provider action. Existing no-execution,
+organization scoping, permission, exact-target and empty-handoff negatives remain.
+No security assertion removed to permit provider execution. UI/route checks remain source
+contracts, not browser end-to-end proof. No new security defect established in this scope.
+
+Verification commands (from ui; printf/globs are macOS compatible)
+node scripts/run-tests.mjs $(printf '%s\n' tests/m14-*.test.ts tests/m15-*.test.ts tests/m16-*.test.ts)
+  91 tests / 91 PASS / 0 FAIL / 0 SKIP.
+node scripts/run-tests.mjs $(printf '%s\n' tests/m12-*.test.ts tests/m13-*.test.ts)
+  143 tests / 143 PASS / 0 FAIL / 0 SKIP.
+node scripts/run-tests.mjs m15-shopify-execution-recovery.test.ts m3-authoritative-shopify-execution-replay.test.ts mcp-protocol.test.ts m5-policy-negative-production-acceptance.test.ts
+  PR #561 focused regression: 19 tests / 19 PASS / 0 FAIL / 0 SKIP.
+git diff --check: PASS.
+
+Separate broad-suite evidence (not WS-019 acceptance)
+1,305 PASS / 42 FAIL, as supplied in the continuation request. Not rerun here; original
+broad-suite log, command and individual failing assertions were not supplied/available
+among retained WS-019 logs. Skip count is not established. Do not infer that these 42
+failures are harmless or fixed by this closure. Any failures involving tenant/actor
+isolation, credential disclosure, caller-selected targets, authorization/confirmation,
+replay/idempotency, policy bypass or rollback/audit integrity are potential security
+defects requiring independent triage. Specific defects cannot be identified from counts
+alone. Preserve that follow-up outside WS-019; no unrelated fixes included here.
+
+Complete original-failure disposition matrix
+Baseline TAP ID | Original assertion | Classification | Correction | Verification | Remaining limitation
+3 | M14 durable orchestration contains atomic consume, result persistence and replay branches | Refactored durable gate | Check shared consume/read-result gate and policy-before-gate order; retain persistence/replay checks. | m14-commas-durable-authorization.test.ts: PASS in 91/91 final run | Local test/source evidence; no live provider or concurrency proof.
+6 | M14 prepare binds exact Commas subscription and event while execution remains disabled | Formatting-sensitive assertion | Allow whitespace in executionAvailable metadata; retain exact Commas plan and confirmation checks. | m14-commas-intent-confirmation.test.ts: PASS in 91/91 final run | Local test/source evidence; no live provider or concurrency proof.
+8 | M14 prepare tool accepts no caller-controlled provider target | Obsolete exposed tool expectation | Assert Commas prepare/confirm/execute MCP registrations absent under Production V1. | m14-commas-prepare-confirm-tools.test.ts: PASS in 91/91 final run | Local test/source evidence; no live provider or concurrency proof.
+10 | M14 confirm accepts only opaque intent id and execute tool is reference-only | Obsolete exposed tool expectation | Assert disabled Commas confirm/execute tools absent rather than parse nonexistent schemas. | m14-commas-prepare-confirm-tools.test.ts: PASS in 91/91 final run | Local test/source evidence; no live provider or concurrency proof.
+11 | M14 prepare and confirm descriptions explicitly do not send provider request | Obsolete exposed description | Assert available diagnostic is read-only and does not describe provider delivery. | m14-commas-prepare-confirm-tools.test.ts: PASS in 91/91 final run | Local test/source evidence; no live provider or concurrency proof.
+13 | M14 diagnostic reports boundary booleans/counts without secret or payload fields | Secret-use versus response conflation | Check explicit diagnostic response shape excludes secret material; retain no delivery/intent assertions. | m14-commas-readiness-diagnostic.test.ts: PASS in 91/91 final run | Local test/source evidence; no live provider or concurrency proof.
+32 | worker resumes after highest completed page and pauses at chunk boundary | Changed conditional assignment | Check bounded-proof versus chunk-boundary stopping reason conditional; retain resume and pause contracts. | m15-resumable-scheduled-deep.test.ts: PASS in 91/91 final run | Local test/source evidence; no live provider or concurrency proof.
+41 | M15 execution re-resolves current target and compares persisted intent | Formatting-sensitive target assertions | Allow whitespace while retaining persisted connection/shop/topic/callback binding checks. | m15-shopify-controlled-exposure.test.ts: PASS in 91/91 final run | Local test/source evidence; no live provider or concurrency proof.
+42 | M15 immutable mutation audit occurs only after rollback verification | Formatting-sensitive audit assertions | Allow whitespace while retaining rollback-before-audit and exact created/deleted external IDs with net mutation false. | m15-shopify-controlled-exposure.test.ts: PASS in 91/91 final run | Local test/source evidence; no live provider or concurrency proof.
+44 | M16 Shopify delegates only durable authorization replay to shared kernel | Changed authorization delegation | Assert named Shopify authorization wrapper, consume gate and exact confirmation/idempotency references; retain recovery/rollback/audit checks. | m15-shopify-controlled-exposure.test.ts: PASS in 91/91 final run | Local test/source evidence; no live provider or concurrency proof.
+56 | M15 Shopify prepare is caller-blind and execution remains absent | Obsolete execution absence assertion | Assert caller-blind preparation plus separately governed named Shopify execution and confirmation/policy checks. | m15-shopify-intent-recovery.test.ts: PASS in 91/91 final run | Local test/source evidence; no live provider or concurrency proof.
+57 | M15 Shopify intent persists exact server target and prepared recovery shell | Formatting-sensitive recovery state | Allow whitespace around prepared state; retain exact target kind/topic/recovery table. | m15-shopify-intent-recovery.test.ts: PASS in 91/91 final run | Local test/source evidence; no live provider or concurrency proof.
+74 | M16 Connections governed actions remain read only | Obsolete read-only UI expectation | Assert discovery/preparation/explicit confirmation clicks and prepared/confirmed states; allow only three fetch endpoints and prohibit execution references. | m16-operations-provider-actions.test.ts: PASS in 91/91 final run | Local test/source evidence; no live provider or concurrency proof.
+81 | M16 provider exposure requires complete matching governance contract | Effective policy exposure mismatch | Assert Commas suppressed and Shopify exposed; retain altered recovery contract rejection. | m16-provider-action-contract.test.ts: PASS in 91/91 final run | Local test/source evidence; no live provider or concurrency proof.
+82 | M16 named provider action service enforces contracts without generic execution surface | Parsing nonexistent disabled tool | Assert no generic execution, named Shopify reference-only schema, and absent Commas execution tool. | m16-provider-action-contract.test.ts: PASS in 91/91 final run | Local test/source evidence; no live provider or concurrency proof.
+85 | M16 discovery MCP tool is read only and caller blind | Truncated schema extraction | Read exported tool object; compare full empty closed schema and read-only annotations; behaviorally reject 17 caller argument keys before delegation. | m16-provider-action-discovery.test.ts: PASS in 91/91 final run | Local test/source evidence; no live provider or concurrency proof.
+91 | M16 Connections UI can prepare but cannot confirm or execute | Obsolete no-confirm UI expectation | Assert preparation and confirmation supported, with no execute endpoint or consumption/idempotency inputs. | m16-provider-action-prepare-ui.test.ts: PASS in 91/91 final run | Local test/source evidence; no live provider or concurrency proof.
+
+Evidence logs (SHA-256; local retained artifacts)
+/tmp/ws019-m14-m16-baseline.log  9cecec8926274aeeb5d285fd53ddb921552a6c9a09e1d6f3215268378eb75261
+/tmp/ws019-m14-m16-final.log  d2ebb5999a1c5230317ad070bd8a9d3cd480582ab13cb8c0be2ba2407f8ad511
+/tmp/ws019-m12-m13-recheck.log  f2a4d2b26ac82358dbf13dad72eea75236cc4ad630586b61cb146eed9e7892c4
+/tmp/ws019-pr561-recheck.log  13348d2dc08107557a82149ba3887739d8b8f6fc575d4dbc26689c76ffebbba9
+
+Handoff: stop after verified commit and push for WS-022 independent acceptance.
+Production V1 is NOT declared complete. Local tests do not replace independent
+acceptance, live governed provider proof, production isolation or concurrency proof.
+Commit SHA and push outcome are reported in the delivery response.
