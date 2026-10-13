@@ -16,7 +16,7 @@ export async function withDurableStore<T>(run: (store: { calls: Array<{url: URL;
     const rows = url.pathname.endsWith("mcp_action_authorizations") ? store.authorizations : url.pathname.endsWith("mcp_action_execution_results") ? store.results : null;
     if (rows) {
       if (method === "POST") { rows.push(structuredClone(body)); return Response.json([body]); }
-      return Response.json(rows.filter(row => [...url.searchParams].every(([key, value]) => !value.startsWith("eq.") || String(row[key]) === value.slice(3))));
+      return Response.json(rows.filter(row => { let matches = true; url.searchParams.forEach((value, key) => { if (value.startsWith("eq.") && String(row[key]) !== value.slice(3)) matches = false; }); return matches; }));
     }
     if (url.pathname === "/rest/v1/rpc/consume_mcp_action_authorization") {
       const row = store.authorizations.find(row => row.authorization_id === body.p_authorization_id && row.organization_id === body.p_organization_id && row.envelope_identity === body.p_envelope_identity && row.idempotency_key === body.p_idempotency_key && row.audit_correlation_id === body.p_audit_correlation_id);
