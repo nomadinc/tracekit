@@ -1,0 +1,70 @@
+WS-019 REMAINING INTELLIGENCE REGRESSION CLOSURE — 2026-10-13
+Status: TARGETED GATES PASS / FULL SUITE FAIL / WS-022 INDEPENDENT ACCEPTANCE PENDING
+Repository: nomadinc/tracekit
+Branch: workstream/ws-019-remaining-intelligence-regressions
+Baseline: db4e7b6acb9cf66f425d221b11e2f37f8e3cedd4
+
+SCOPE AND CHANGE VERIFICATION
+GitHub compare baseline...branch: 8 commits ahead, 0 behind; 7 changed files, all under ui/tests. Runtime files changed: ZERO. No migrations, credentials, production configuration or provider mutations in this branch diff. This verifies committed branch contents, not the operator's local worktree state.
+
+SEVEN-ROW DISPOSITION MATRIX
+Columns: milestone | test file | original failure | classification | implementation evidence | correction | final result | residual risk
+M2 | mcp-tool-adapter.test.ts | five-tool-only catalog assertion | obsolete assertion | Named Shopify proof and inspect_evidence exposed; generic/Commas execution suppressed | Approved core tools and named governed tools asserted; unknown arguments/tool negatives retained | PASS in 28/28 targeted suite | Source-inspection tests alone do not prove all live policy behavior; WS-022 independent review required.
+M5 | mcp-journey-intelligence.test.ts | deterministic relationship/shared transaction mismatch | obsolete assertion | Journey evidence groups retain exact transaction identifier and all participant event IDs | Behavioral test verifies customer-journey, journey-order and unrelated identifier exclusion | PASS in 28/28 targeted suite | Source-inspection tests alone do not prove all live policy behavior; WS-022 independent review required.
+M6 | mcp-cross-journey-comparisons.test.ts | whole-repository descriptive assertion | fixture/test defect | buildObservedDeviations reports cohort/baseline counts, rates and sample evidence | Scope nonpredictive assertion to deviation builder | PASS in 28/28 targeted suite | Source-inspection tests alone do not prove all live policy behavior; WS-022 independent review required.
+M8 | mcp-recommendation-intelligence.test.ts | whole-repository no-execution assertion | fixture/test defect | buildRecommendations emits advisory diagnostic recommendations | Scope non-execution assertion to recommendation builder | PASS in 28/28 targeted suite | Source-inspection tests alone do not prove all live policy behavior; WS-022 independent review required.
+M9 | mcp-governed-action-planning.test.ts | whole-JSON mutation/rollback word prohibition | fixture/test defect | plan_only and inspect_evidence operation with confirmation and audit | Structured plan contract assertions replace keyword prohibition | PASS in 28/28 targeted suite | Source-inspection tests alone do not prove all live policy behavior; WS-022 independent review required.
+M10 | mcp-execution-envelope.test.ts | obsolete exec-v1 identity prefix | obsolete assertion | Canonical envelope identity uses exec-v2 | Assert exec-v2 and retain target, expiry, idempotency, audit and no-execution tests | PASS in 28/28 targeted suite | Source-inspection tests alone do not prove all live policy behavior; WS-022 independent review required.
+M17 | m17-shopify-remediation-connections-ui.test.ts | factory name incorrectly matched as mutation | fixture/test defect | GET route authenticates and calls read-only remediation inspection | Assert GET, no-store, no mutation exports/provider execution | PASS in 28/28 targeted suite | Source-inspection tests alone do not prove all live policy behavior; WS-022 independent review required.
+
+TEST EVIDENCE (operator-provided logs, not independently rerun here)
+Seven target files: 28 PASS / 0 FAIL / 0 SKIP.
+All M12-M16: 234 PASS / 0 FAIL / 0 SKIP.
+PR #561 focused (M15 execution recovery, M3 replay, MCP protocol, M5 policy negatives): 19 PASS / 0 FAIL / 0 SKIP.
+Complete configured UI: 1,314 PASS / 33 FAIL / 0 SKIP (1,347 total).
+Targeted and focused suites overlap; counts must not be summed as unique tests.
+
+FULL-SUITE FAILURE REGISTER — PROVISIONAL; NONE WAIVED
+1. commerce API and runtime entrypoints remain present
+2. review workspace keeps candidate resolution read-only
+3. review workspace preserves the existing affiliate/source chargeback report
+4. live disputes do not present opaque buyer IDs as customers or assume currency and order certainty
+5. dispute review does not present unverified currency or provider buyer reference as customer identity
+6. chargeback routes use same-origin JSON while Worker APIs keep their configured base
+7. scheduled deep bound survives scheduler, queue, runtime, and worker
+8. product mapping decisions are append-only, tenant-scoped, and expected-version guarded
+9. normal imports preserve an explicit product mapping and historical order identity
+10. tests/commerce-product-mapping-workflow.test.ts
+11. delivery derives tenancy from authenticated credential and validates contract
+12. delivery does not expose persistence errors or raw credentials
+13. Core validator accepts every pinned canonical Edge v1 fixture
+14. Core validator rejects raw IP even when hidden in an optional v1 field
+15. affiliate endpoints use authenticated application routes
+16. conversion sync snapshots evidence before ingest and finalizes metrics afterward
+17. conversion sync uses durable runs, checkpoints, leases, and the Step 6 order resolver
+18. email fallback is guarded by time and amount when amount is available
+19. email alone is never treated as deterministic transaction identity
+20. Everflow has an isolated authenticated five-minute Vercel cron trigger
+21. Everflow conversion sync persists observable run metrics
+22. Connections overview preserves the approved commerce provider roadmap
+23. navigation exposes canonical Investigation URL only when Product/Admin capability is effective
+24. M17 live Everflow remediation derives only from authorized Connections experience
+25. M17 live Everflow remediation reports exact connection identity
+26. M3 all confirmation paths use the shared RPC with operation-specific target contracts
+27. M9 live-safe eligibility inspection reports every unsatisfied future execution gate
+28. M9 eligibility inspection cannot grant confirm enable or execute
+29. tests/meta-connection-ui.test.ts
+30. persistent Offers use canonical catalog while development keeps reviewed mock workspace
+31. tests/push-button-system-catalog.test.ts
+32. order reads split refund reconciliation into independent bounded Shopify requests
+33. Shopify M6 scheduler reuses the certified incremental runtime with bounded leases
+
+SECURITY AND ACCEPTANCE BOUNDARIES
+Retained test coverage includes unknown-tool and malformed-argument rejection; exact shared-identifier participant evidence; descriptive cohort deviations; advisory recommendations; plan-only confirmation and audit; exec-v2 immutable identity, target mismatch, expiry and replay tests; authenticated GET-only no-store Shopify remediation readiness. M12-M16 and PR #561 tests also passed.
+These passing tests do not independently certify production authorization, tenant isolation, provider rollback or full Production V1 readiness.
+Special scrutiny required: M3 shared confirmation RPC, M9 eligibility, M17 Everflow remediation, Edge tenancy/validator, Everflow identity heuristics, Shopify refunds. Missing migration/component files in several full-suite failures must be investigated as missing fixture vs legitimate removed runtime.
+Do not automatically classify the 33 failures as obsolete, waive them, or change runtime in WS-019 without safety review.
+
+REQUIRED WS-022 ACTION
+Independently review seven-test diff and this matrix. Classify the 33 failures by owner and behavioral/security impact; independently inspect the five M3/M9/M17 assertions before approving WS-019 closure. If actual authorization, tenant isolation, identity, replay, audit or policy defect is identified, STOP and escalate. Hold merge/deployment and PR #544 until independent acceptance and separate release gates.
+No Production V1 completion claim.
