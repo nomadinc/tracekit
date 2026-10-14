@@ -44,3 +44,7 @@ WS-023 may format PR #569's source-backed nullable principal/fee fields independ
 All passed with zero failures or skips. Tests are preparation evidence, not production or end-to-end certification.
 
 Remaining gates: Commas confirms rollout and exact field paths for both event types; independently hash-check real scoped payloads; confirm whether old disputes receive fields through future updates or supported replay; integrate a trusted verifier and bounded atomic caller; certify concurrent PostgreSQL behavior and the customer read path; obtain WS-022 release approval. Retained legacy events without authoritative parent IDs remain unresolved.
+
+## Internal follow-up supersedes preparation-only integration status
+
+See [internal follow-up](ws001-internal-followup-20261014.md). Customer detail now includes a disabled read adapter after person authorization; no router supplies an enable flag, and no new storage is queried by default. The source/sub-ID cohort contract and native validation harnesses are prepared. The combined focused suite passes 71 tests with zero failures/skips. Native full-chain and concurrent-session execution remain blocked by this workspace's root-only PostgreSQL startup limitation. No production activation or UI work occurred.
