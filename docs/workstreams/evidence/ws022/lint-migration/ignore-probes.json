@@ -1,0 +1,42 @@
+[
+  {
+    "path": ".next/a.js",
+    "ignored": true
+  },
+  {
+    "path": ".next-build/a.ts",
+    "ignored": true
+  },
+  {
+    "path": "node_modules/a.js",
+    "ignored": true
+  },
+  {
+    "path": "next-env.d.ts",
+    "ignored": true
+  },
+  {
+    "path": "out/a.ts",
+    "ignored": true
+  },
+  {
+    "path": "build/a.js",
+    "ignored": true
+  },
+  {
+    "path": "app/contract.js",
+    "ignored": false
+  },
+  {
+    "path": "components/contract.jsx",
+    "ignored": false
+  },
+  {
+    "path": "lib/api.ts",
+    "ignored": false
+  },
+  {
+    "path": "components/chargebacks/chargeback-review-workspace.tsx",
+    "ignored": false
+  }
+]

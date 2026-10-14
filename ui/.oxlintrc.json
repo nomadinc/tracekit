@@ -1,0 +1,163 @@
+{
+  "$schema": "./node_modules/oxlint/configuration_schema.json",
+  "plugins": [
+    "react",
+    "nextjs",
+    "jsx-a11y",
+    "import"
+  ],
+  "categories": {
+    "correctness": "off",
+    "suspicious": "off",
+    "pedantic": "off",
+    "perf": "off",
+    "style": "off",
+    "restriction": "off",
+    "nursery": "off"
+  },
+  "rules": {
+    "react/display-name": [
+      2
+    ],
+    "react/jsx-key": [
+      2
+    ],
+    "react/jsx-no-comment-textnodes": [
+      2
+    ],
+    "react/jsx-no-duplicate-props": [
+      2
+    ],
+    "react/jsx-no-undef": [
+      2
+    ],
+    "react/no-children-prop": [
+      2
+    ],
+    "react/no-danger-with-children": [
+      2
+    ],
+    "react/no-direct-mutation-state": [
+      2
+    ],
+    "react/no-find-dom-node": [
+      2
+    ],
+    "react/no-is-mounted": [
+      2
+    ],
+    "react/no-render-return-value": [
+      2
+    ],
+    "react/no-string-refs": [
+      2
+    ],
+    "react/no-unescaped-entities": [
+      2
+    ],
+    "react/require-render-return": [
+      2
+    ],
+    "nextjs/google-font-display": [
+      1
+    ],
+    "nextjs/google-font-preconnect": [
+      1
+    ],
+    "nextjs/next-script-for-ga": [
+      1
+    ],
+    "nextjs/no-async-client-component": [
+      1
+    ],
+    "nextjs/no-before-interactive-script-outside-document": [
+      1
+    ],
+    "nextjs/no-css-tags": [
+      1
+    ],
+    "nextjs/no-head-element": [
+      1
+    ],
+    "nextjs/no-img-element": [
+      1
+    ],
+    "nextjs/no-page-custom-font": [
+      1
+    ],
+    "nextjs/no-styled-jsx-in-document": [
+      1
+    ],
+    "nextjs/no-sync-scripts": [
+      2
+    ],
+    "nextjs/no-title-in-document-head": [
+      1
+    ],
+    "nextjs/no-typos": [
+      1
+    ],
+    "nextjs/no-unwanted-polyfillio": [
+      1
+    ],
+    "nextjs/inline-script-id": [
+      2
+    ],
+    "nextjs/no-assign-module-variable": [
+      2
+    ],
+    "nextjs/no-document-import-in-page": [
+      2
+    ],
+    "nextjs/no-duplicate-head": [
+      2
+    ],
+    "nextjs/no-head-import-in-document": [
+      2
+    ],
+    "nextjs/no-script-component-in-head": [
+      2
+    ],
+    "import/no-anonymous-default-export": [
+      1
+    ],
+    "jsx-a11y/alt-text": [
+      1,
+      {
+        "elements": [
+          "img"
+        ],
+        "img": [
+          "Image"
+        ]
+      }
+    ],
+    "jsx-a11y/aria-props": [
+      1
+    ],
+    "jsx-a11y/aria-proptypes": [
+      1
+    ],
+    "jsx-a11y/aria-unsupported-elements": [
+      1
+    ],
+    "jsx-a11y/role-has-required-aria-props": [
+      1
+    ],
+    "jsx-a11y/role-supports-aria-props": [
+      1
+    ]
+  },
+  "ignorePatterns": [
+    ".next/**",
+    ".next-build/**",
+    "node_modules/**",
+    "next-env.d.ts",
+    "out/**",
+    "build/**"
+  ],
+  "env": {
+    "browser": true,
+    "node": true
+  }
+}
