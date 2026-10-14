@@ -27,9 +27,10 @@ test("Commas dispute envelope normalizes created and updated without inventing f
   assert.equal(event?.amount, 49);
   assert.equal(event?.fee, 15);
   assert.equal(event?.buyerReference, "user_1");
-  assert.equal(event?.currency, "USD");
+  assert.equal(event?.currency, null);
+  assert.equal(event?.feeCurrency,null);
   assert.equal(COMMAS_CURRENCY, "USD");
-  assert.equal(normalizeCommasDisputeEvent({ ...fixture, data: { ...fixture.data, currency: "EUR" } }), null);
+  assert.equal(normalizeCommasDisputeEvent({ ...fixture, data: { ...fixture.data, currency: "EUR" } })?.currency, "EUR");
   assert.equal(normalizeCommasDisputeEvent({ ...fixture, type: "payment.succeeded" }), null);
   assert.equal(normalizeCommasDisputeEvent({ ...fixture, id: undefined }), null);
   const updated = normalizeCommasDisputeEvent({ ...fixture, id: "event-2", type: "dispute.updated", data: { ...fixture.data, status: "won", updated_at: "2026-08-24T12:00:00Z" } });
@@ -174,4 +175,13 @@ test("router exposes only the Commas webhook POST path and keeps scheduler/provi
   assert.equal(request.headers.get("x-webhook-signature"), signature);
   assert.doesNotMatch(source.slice(source.indexOf("async function handleCommasDisputeWebhook"), source.indexOf("function parseYmd")), /new Request|new Headers/);
   assert.doesNotMatch(source.slice(source.indexOf("async function handleCommasDisputeWebhook"), source.indexOf("function parseYmd")), /listTransactions|getTransaction|continuous_commerce\.send/);
+});
+
+test("currency comes only from explicit fields and preserves independent fee currency and zero fee",()=>{
+ const e=normalizeCommasDisputeEvent({...fixture,data:{...fixture.data,currency:" eur ",fee_currency:"GBP",dispute_fee:0}})!;
+ assert.equal(e.currency,"EUR");assert.equal(e.currencySource,"provider_payload.currency");
+ assert.equal(e.feeCurrency,"GBP");assert.equal(e.feeCurrencySource,"provider_payload.fee_currency");assert.equal(e.fee,0);
+ const unknown=normalizeCommasDisputeEvent({...fixture,data:{...fixture.data,currency:"$",locale:"en-US",account_currency:"USD"}})!;
+ assert.equal(unknown.currency,null);assert.equal(unknown.currencySource,null);assert.equal(unknown.feeCurrency,null);
+ assert.equal(normalizeCommasDisputeEvent({...fixture,data:{...fixture.data,currency:"USD"}})?.feeCurrency,null);
 });
