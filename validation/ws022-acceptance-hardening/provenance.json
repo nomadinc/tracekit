@@ -1,0 +1,14 @@
+{
+  "code_commit": "fee88aa23e9a1762c5f866e6ab96ed01eff2f59e",
+  "runtime_parent": "2332a66f96a50b41d79b21a2b2ac5840a13f519f",
+  "ui_pass": 1461,
+  "ui_fail": 0,
+  "api_inherited": {
+    "pass": 1111,
+    "fail": 0,
+    "skip": 4,
+    "note": "unchanged API source; not repeated for UI server logging change"
+  },
+  "independent_acceptance": false,
+  "staging_acceptance": false
+}

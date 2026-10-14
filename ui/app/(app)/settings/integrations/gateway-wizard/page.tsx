@@ -211,7 +211,7 @@ React.useEffect(() => {
         </p>
       </div>
       
-   <section className="rounded-2xl border bg-white p-5 shadow-sm">
+   <section className="rounded-2xl border bg-white p-5 shadow-xs">
   <div className="flex items-center justify-between gap-3">
     <h2 className="text-lg font-medium">Saved gateway accounts</h2>
 
@@ -261,7 +261,7 @@ React.useEffect(() => {
   </div>
 </section>   
 
-      <section className="rounded-2xl border bg-white p-5 shadow-sm">
+      <section className="rounded-2xl border bg-white p-5 shadow-xs">
         <h2 className="text-lg font-medium">1. Account setup</h2>
 
         <div className="mt-4 grid gap-4 md:grid-cols-2">
@@ -354,7 +354,7 @@ React.useEffect(() => {
         </div>
       </section>
 
-      <section className="rounded-2xl border bg-white p-5 shadow-sm">
+      <section className="rounded-2xl border bg-white p-5 shadow-xs">
         <h2 className="text-lg font-medium">2. Import transactions</h2>
 
         <div className="mt-4 grid gap-4 md:grid-cols-4">
@@ -420,7 +420,7 @@ React.useEffect(() => {
       )}
 
       {lastResult && (
-        <section className="rounded-2xl border bg-white p-5 shadow-sm">
+        <section className="rounded-2xl border bg-white p-5 shadow-xs">
           <h2 className="text-lg font-medium">Last result</h2>
           <pre className="mt-3 overflow-auto rounded-xl bg-gray-950 p-4 text-xs text-gray-100">
             {JSON.stringify(lastResult, null, 2)}

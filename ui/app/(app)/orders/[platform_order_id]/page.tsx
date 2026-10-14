@@ -427,7 +427,7 @@ export default async function OrderDetailPage({
           {order.identity_key ? (
             <Link
               href={`/customers/${encodeURIComponent(order.identity_key)}`}
-              className="rounded border px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
+              className="rounded-sm border px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
             >
               Customer
             </Link>
@@ -435,7 +435,7 @@ export default async function OrderDetailPage({
 
           <Link
             href="/orders"
-            className="rounded border px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
+            className="rounded-sm border px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
           >
             Back to Orders
           </Link>
@@ -622,7 +622,7 @@ export default async function OrderDetailPage({
         ) : null}
 
         {!rollup ? (
-          <div className="rounded bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-300">
+          <div className="rounded-sm bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-300">
             No ledger-based profit rollup is available for this order yet.
           </div>
         ) : (
@@ -732,7 +732,7 @@ export default async function OrderDetailPage({
         </div>
 
         {ledgerRows.length === 0 ? (
-          <div className="rounded bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-300">
+          <div className="rounded-sm bg-slate-50 px-3 py-2 text-sm text-slate-600 dark:bg-slate-900 dark:text-slate-300">
             No ledger events are available for this order.
           </div>
         ) : (
@@ -819,7 +819,7 @@ export default async function OrderDetailPage({
                     </div>
 
                     {event.detail ? (
-                      <div className="mt-2 whitespace-pre-wrap rounded bg-white/70 px-2 py-1 text-sm font-mono break-all dark:bg-slate-950/50">
+                      <div className="mt-2 whitespace-pre-wrap rounded-sm bg-white/70 px-2 py-1 text-sm font-mono break-all dark:bg-slate-950/50">
                         {event.detail}
                       </div>
                     ) : null}
@@ -834,7 +834,7 @@ export default async function OrderDetailPage({
       <div className="rounded-lg border p-4">
         <h2 className="mb-3 font-semibold">Raw Payload</h2>
 
-        <pre className="max-h-[600px] overflow-auto rounded bg-slate-100 p-3 text-xs text-slate-900 dark:bg-slate-950 dark:text-slate-100">
+        <pre className="max-h-[600px] overflow-auto rounded-sm bg-slate-100 p-3 text-xs text-slate-900 dark:bg-slate-950 dark:text-slate-100">
           {JSON.stringify(order.raw_json, null, 2)}
         </pre>
       </div>

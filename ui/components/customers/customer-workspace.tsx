@@ -198,7 +198,7 @@ function CustomerWorkspaceContent() {
   if (!snapshot && customers.length) return <State title="Customer not found" />;
   const active = snapshot?.journey[replayIndex] || null;
   return (
-    <div className="flex min-h-[calc(100dvh-8rem)] overflow-hidden rounded-2xl border border-white/10 bg-[#0b0e14] text-slate-100 shadow-sm">
+    <div className="flex min-h-[calc(100dvh-8rem)] overflow-hidden rounded-2xl border border-white/10 bg-[#0b0e14] text-slate-100 shadow-xs">
       <CustomerList
         customers={customers}
         selected={snapshot?.customer.id || ""}
@@ -491,7 +491,7 @@ function CustomerList({
             value={filter.query || ""}
             onChange={(e) => setFilter({ ...filter, query: e.target.value })}
             placeholder="Search Customers"
-            className="min-w-0 flex-1 bg-transparent text-xs outline-none"
+            className="min-w-0 flex-1 bg-transparent text-xs outline-hidden"
           />
         </label>
         <div className="mt-2 flex gap-1">

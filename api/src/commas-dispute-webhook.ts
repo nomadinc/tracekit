@@ -1,5 +1,5 @@
 export const COMMAS_DISPUTE_EVENT_TYPES = ["dispute.created", "dispute.updated"] as const;
-/** Provider-confirmed platform currency; never infer it from an absent payload field. */
+/** Historical platform-contract label only; never used as a dispute currency fallback. */
 export const COMMAS_CURRENCY = "USD" as const;
 export const LIVE_COMMAS_DISPUTE_RECOVERY_POSTING = "UNSUPPORTED" as const;
 export const COMMAS_DISPUTE_WALLET_POSTING = "UNSUPPORTED" as const;
@@ -31,6 +31,9 @@ export type NormalizedCommasDisputeEvent = {
   externalOrderId: string | null;
   amount: number | null;
   currency: string | null;
+  currencySource?: string | null;
+  feeCurrency?: string | null;
+  feeCurrencySource?: string | null;
   fee: number | null;
   totalAmount: number | null;
   status: string | null;
@@ -59,8 +62,8 @@ export function normalizeCommasDisputeEvent(payload: unknown): NormalizedCommasD
   if (!providerEventId || !providerDisputeId) return null;
   const buyer = object(data.buyer || data.customer);
   const product = object(data.product || data.item);
-  const suppliedCurrency = text(data.currency)?.toUpperCase();
-  if (suppliedCurrency && suppliedCurrency !== COMMAS_CURRENCY) return null;
+  const code=(value:unknown)=>{const v=text(value)?.toUpperCase();return v&&/^[A-Z]{3}$/.test(v)?v:null;};
+  const suppliedCurrency=code(data.currency),suppliedFeeCurrency=code(data.fee_currency);
   return {
     providerEventId,
     eventType: eventType as CommasDisputeEventType,
@@ -74,8 +77,11 @@ export function normalizeCommasDisputeEvent(payload: unknown): NormalizedCommasD
     orderId: text(data.order_id),
     externalOrderId: text(data.external_order_id || data.external_order_reference),
     amount: numberValue(data.amount),
-    currency: COMMAS_CURRENCY,
-    fee: numberValue(data.dispute_fee || data.fee),
+    currency: suppliedCurrency,
+    currencySource: suppliedCurrency?"provider_payload.currency":null,
+    feeCurrency: suppliedFeeCurrency,
+    feeCurrencySource: suppliedFeeCurrency?"provider_payload.fee_currency":null,
+    fee: numberValue(data.dispute_fee ?? data.fee),
     totalAmount: numberValue(data.total_amount),
     status: text(data.status),
     state: text(data.state),
@@ -94,7 +100,7 @@ export type DisputeProjectionDecision = "create" | "advance" | "stale" | "safe_t
 // Both warning variants are observed in retained lifecycle Evidence; their
 // needs_response -> under_review transition has also been observed.
 const statusRank: Record<string, number> = { needs_response: 0, warning_needs_response: 0, under_review: 1, warning_under_review: 1, won: 2, lost: 2 };
-const stateFields = ["providerDisputeId", "processorDisputeId", "paymentIntentId", "paymentId", "providerTransactionId", "orderId", "externalOrderId", "amount", "currency", "fee", "totalAmount", "status", "state", "reason", "reasonCode", "responseDeadline", "openedAt", "closedAt", "buyerReference", "productReference"] as const;
+const stateFields = ["providerDisputeId", "processorDisputeId", "paymentIntentId", "paymentId", "providerTransactionId", "orderId", "externalOrderId", "amount", "currency", "currencySource", "feeCurrency", "feeCurrencySource", "fee", "totalAmount", "status", "state", "reason", "reasonCode", "responseDeadline", "openedAt", "closedAt", "buyerReference", "productReference"] as const;
 export function classifyCommasDisputeProjection(incoming: NormalizedCommasDisputeEvent, current: NormalizedCommasDisputeEvent | null): DisputeProjectionDecision {
   if (!current) return "create";
   const nextTime = Date.parse(incoming.updatedAt || "");
@@ -115,7 +121,7 @@ export function classifyCommasDisputeProjection(incoming: NormalizedCommasDisput
 
 export function commasDisputeProjectionValues(event: NormalizedCommasDisputeEvent, scope: { organizationId: string; accountId: string; connectionId: string; providerAccountId: string; eventId: string; evidenceId: string }) {
   if (!event.updatedAt || !Number.isFinite(Date.parse(event.updatedAt))) throw new Error("dispute_provider_state_unorderable");
-  return { organization_id: scope.organizationId, account_id: scope.accountId, connection_id: scope.connectionId, provider_account_id: scope.providerAccountId, provider_dispute_id: event.providerDisputeId, latest_event_id: scope.eventId, latest_evidence_id: scope.evidenceId, provider_transaction_id: event.providerTransactionId, payment_intent_id: event.paymentIntentId, payment_id: event.paymentId, order_id: event.orderId, external_order_id: event.externalOrderId, amount: event.amount, currency: event.currency, fee: event.fee, status: event.status, state: event.state, reason: event.reason, reason_code: event.reasonCode, response_deadline: event.responseDeadline, opened_at: event.openedAt, updated_at: event.updatedAt, closed_at: event.closedAt, buyer_reference: event.buyerReference, product_reference: event.productReference };
+  return { organization_id: scope.organizationId, account_id: scope.accountId, connection_id: scope.connectionId, provider_account_id: scope.providerAccountId, provider_dispute_id: event.providerDisputeId, latest_event_id: scope.eventId, latest_evidence_id: scope.evidenceId, provider_transaction_id: event.providerTransactionId, payment_intent_id: event.paymentIntentId, payment_id: event.paymentId, order_id: event.orderId, external_order_id: event.externalOrderId, amount: event.amount, currency: event.currency, currency_source: event.currencySource??null, fee_currency: event.feeCurrency??null, fee_currency_source: event.feeCurrencySource??null, fee: event.fee, status: event.status, state: event.state, reason: event.reason, reason_code: event.reasonCode, response_deadline: event.responseDeadline, opened_at: event.openedAt, updated_at: event.updatedAt, closed_at: event.closedAt, buyer_reference: event.buyerReference, product_reference: event.productReference };
 }
 
 const encoder = new TextEncoder();

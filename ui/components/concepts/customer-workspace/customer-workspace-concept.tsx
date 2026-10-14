@@ -86,7 +86,7 @@ function CustomerList({
           <input
             value={query}
             onChange={(event) => setQuery(event.target.value)}
-            className="min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-slate-400"
+            className="min-w-0 flex-1 bg-transparent text-xs outline-hidden placeholder:text-slate-400"
             placeholder="Search customers"
             aria-label="Search customers"
           />
@@ -175,7 +175,7 @@ function SearchModal({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-start justify-center bg-slate-950/35 px-4 pt-[10vh] backdrop-blur-sm" role="dialog" aria-modal="true" aria-label="Universal forensic search">
+    <div className="fixed inset-0 z-70 flex items-start justify-center bg-slate-950/35 px-4 pt-[10vh] backdrop-blur-xs" role="dialog" aria-modal="true" aria-label="Universal forensic search">
       <button type="button" className="absolute inset-0" onClick={onClose} aria-label="Close search" />
       <div className="relative w-full max-w-2xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl">
         <div className="flex items-center gap-3 border-b border-slate-200 px-5">
@@ -199,11 +199,11 @@ function SearchModal({
               }
               if (event.key === "Enter" && matches[activeIndex]) onSelect(matches[activeIndex]);
             }}
-            className="h-16 min-w-0 flex-1 text-base text-slate-900 outline-none placeholder:text-slate-400"
+            className="h-16 min-w-0 flex-1 text-base text-slate-900 outline-hidden placeholder:text-slate-400"
             placeholder="Paste an email, order ID, click ID, session ID..."
             aria-label="Search any identifier"
           />
-          <kbd className="rounded border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] text-slate-500">ESC</kbd>
+          <kbd className="rounded-sm border border-slate-200 bg-slate-50 px-2 py-1 text-[10px] text-slate-500">ESC</kbd>
         </div>
         <div className="flex items-center justify-between border-b border-slate-100 bg-slate-50 px-5 py-2.5 text-xs">
           <span className="text-slate-500">Detected type</span>
@@ -281,7 +281,7 @@ function JourneyTimeline({
                   type="button"
                   data-event-id={event.id}
                   onClick={() => onSelect(event)}
-                  className={`relative mx-auto flex h-11 w-11 items-center justify-center rounded-full border-2 bg-white transition focus:outline-none focus:ring-4 ${
+                  className={`relative mx-auto flex h-11 w-11 items-center justify-center rounded-full border-2 bg-white transition focus:outline-hidden focus:ring-4 ${
                     active
                       ? "border-cyan-500 bg-cyan-50 text-cyan-800 ring-4 ring-cyan-100"
                       : highlighted
@@ -319,7 +319,7 @@ function JourneyTimeline({
               </div>
               {index < events.length - 1 ? (
                 <div className="mt-5 h-px w-5 shrink-0 bg-slate-300">
-                  <ArrowRight className="-mt-[7px] ml-1 h-3.5 w-3.5 text-slate-400" />
+                  <ArrowRight className="mt-[-7px] ml-1 h-3.5 w-3.5 text-slate-400" />
                 </div>
               ) : null}
             </React.Fragment>
@@ -438,7 +438,7 @@ export default function CustomerWorkspaceConcept() {
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="truncate text-sm font-semibold">Customer Workspace</span>
-              <span className="rounded border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-violet-700">Concept</span>
+              <span className="rounded-sm border border-violet-200 bg-violet-50 px-1.5 py-0.5 text-[9px] font-semibold uppercase tracking-wider text-violet-700">Concept</span>
             </div>
             <div className="hidden text-[10px] text-slate-400 sm:block">Local mock data · No production connection</div>
           </div>
@@ -447,11 +447,11 @@ export default function CustomerWorkspaceConcept() {
           <button
             type="button"
             onClick={() => setSearchOpen(true)}
-            className="flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-500 shadow-sm transition hover:border-slate-400 hover:text-slate-800"
+            className="flex h-9 items-center gap-2 rounded-lg border border-slate-200 bg-white px-3 text-xs text-slate-500 shadow-xs transition hover:border-slate-400 hover:text-slate-800"
           >
             <Search className="h-3.5 w-3.5" />
             <span className="hidden sm:inline">Search any identifier</span>
-            <span className="hidden items-center gap-0.5 rounded border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[9px] sm:flex">
+            <span className="hidden items-center gap-0.5 rounded-sm border border-slate-200 bg-slate-50 px-1.5 py-0.5 text-[9px] sm:flex">
               <Command className="h-2.5 w-2.5" />K
             </span>
           </button>
@@ -496,7 +496,7 @@ export default function CustomerWorkspaceConcept() {
                     setReplayPlaying(true);
                     setReplayIndex(0);
                   }}
-                  className="inline-flex h-9 items-center gap-2 rounded-lg bg-slate-950 px-3.5 text-xs font-semibold text-white shadow-sm hover:bg-slate-800"
+                  className="inline-flex h-9 items-center gap-2 rounded-lg bg-slate-950 px-3.5 text-xs font-semibold text-white shadow-xs hover:bg-slate-800"
                 >
                   <Play className="h-3.5 w-3.5" />
                   Replay Journey
@@ -529,7 +529,7 @@ export default function CustomerWorkspaceConcept() {
           </div>
 
           <div className="space-y-4 p-4 sm:p-6">
-            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
               <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-4 py-3.5 sm:px-5">
                 <div>
                   <h3 className="text-sm font-semibold">Customer Journey</h3>
@@ -611,7 +611,7 @@ export default function CustomerWorkspaceConcept() {
               </div>
             </section>
 
-            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
+            <section className="overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xs">
               <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3.5 sm:px-5">
                 <div>
                   <h3 className="text-sm font-semibold">Orders</h3>

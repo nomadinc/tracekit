@@ -217,7 +217,7 @@ test("decision home links to dedicated refund and chargeback analysis routes", (
   assert.match(worker, /href: "\/dashboard\/refunds"/);
   assert.match(worker, /href: "\/dashboard\/chargebacks"/);
   assert.match(refundPage, /<FinancialIssueAnalysisClient kind="refund" \/>/);
-  assert.match(chargebackPage, /<FinancialIssueAnalysisClient kind="chargeback" \/>/);
+  assert.match(chargebackPage, /<ChargebackReviewWorkspace \/>/);
   assert.match(analysisClient, /\/v1\/refunds\/analysis/);
   assert.match(analysisClient, /\/v1\/chargebacks\/analysis/);
   assert.match(analysisClient, /TimeIntervalPicker/);
@@ -541,7 +541,7 @@ test("shared time interval picker keeps labels and dark-mode controls readable",
   assert.match(picker, /dark:text-slate-200/);
   assert.match(picker, /dark:text-slate-300/);
   assert.match(picker, /focus:ring-2 focus:ring-teal-500/);
-  assert.match(picker, /dark:\[color-scheme:dark\]/);
+  assert.match(picker, /dark:scheme-dark/);
   assert.match(picker, /setFromStr\(e\.target\.value\)/);
   assert.match(picker, /setToStr\(e\.target\.value\)/);
   assert.doesNotMatch(picker, /className="(?:[^"]* )?text-left px-2 py-2 rounded border hover:bg-gray-50 text-sm"/);

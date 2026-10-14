@@ -61,7 +61,7 @@ function DefinitionList({ values }: { values: Array<[string, React.ReactNode]> }
       {values.map(([label, value]) => (
         <React.Fragment key={label}>
           <dt className="text-slate-500">{label}</dt>
-          <dd className="min-w-0 break-words font-medium text-slate-800">{value}</dd>
+          <dd className="min-w-0 wrap-break-word font-medium text-slate-800">{value}</dd>
         </React.Fragment>
       ))}
     </dl>
@@ -158,7 +158,7 @@ function EventEvidence({
           {event.redirectPath.map((hop, index) => (
             <div key={`${hop.url}:${index}`} className="relative rounded-lg border border-slate-200 bg-slate-50 p-3">
               <div className="flex items-center justify-between gap-3">
-                <span className="rounded bg-slate-900 px-1.5 py-0.5 font-mono text-[10px] font-bold text-white">{hop.statusCode}</span>
+                <span className="rounded-sm bg-slate-900 px-1.5 py-0.5 font-mono text-[10px] font-bold text-white">{hop.statusCode}</span>
                 <span className="text-[11px] text-slate-500">{hop.elapsedMs} ms</span>
               </div>
               <code className="mt-2 block break-all font-mono text-[10px] leading-4 text-slate-700">{hop.url}</code>
@@ -335,7 +335,7 @@ export function EvidenceDrawer({
       <div className="flex h-16 shrink-0 items-center justify-between border-b border-slate-200 px-5">
         <div className="min-w-0">
           <div className="flex items-center gap-2">
-            <span className="rounded bg-slate-950 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest text-white">Evidence</span>
+            <span className="rounded-sm bg-slate-950 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-widest text-white">Evidence</span>
             <span className="truncate text-sm font-semibold text-slate-950">{title}</span>
           </div>
           <div className="mt-1 truncate text-[11px] text-slate-500">{subtitle} · {customer.name}</div>

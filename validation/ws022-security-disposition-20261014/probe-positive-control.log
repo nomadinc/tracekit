@@ -1,0 +1,2 @@
+Positive control: blocked expected glob invocation
+{"probe":"fast-glob calls blocked","imports":1,"calls":1}

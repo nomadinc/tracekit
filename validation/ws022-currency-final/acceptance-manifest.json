@@ -1,0 +1,39 @@
+{
+  "release_status": "HOLD",
+  "production_baseline": "57eaec27b4b5022ec5ba5e81c0cdcb3182c150f3",
+  "entries": [
+    {
+      "evidence": "Original 222-migration chain",
+      "tested_commit": "57eaec27b4b5022ec5ba5e81c0cdcb3182c150f3",
+      "scope": "Inherited WS024 accepted scope; not replayed in this run"
+    },
+    {
+      "evidence": "Strengthened Commas SQL",
+      "tested_commit": "18198adcfd710abd28de40d50a7b2ed8f56ddc39",
+      "scope": "Inherited WS024 accepted scope; not replayed in this run"
+    },
+    {
+      "evidence": "PR569 223-migration chain",
+      "tested_commit": "f750a5f55845ad133b17504e519ab855b9c93c24",
+      "scope": "Inherited WS024 accepted scope; not replayed in this run"
+    },
+    {
+      "evidence": "Corrected PR569 API regression",
+      "tested_commit": "9fe121aad6f8e0842675907f7f651be0b9ddb785",
+      "scope": "Prior WS024 scope, supplemented by current complete API run"
+    },
+    {
+      "evidence": "PR569 UI currency regression",
+      "tested_commit": "f750a5f55845ad133b17504e519ab855b9c93c24",
+      "scope": "Prior WS024 scope, supplemented by current combined UI run"
+    },
+    {
+      "evidence": "Combined repaired candidate and PR569",
+      "tested_commit": "2332a66f96a50b41d79b21a2b2ac5840a13f519f",
+      "scope": "Fresh UI/API/types/build runtime-tree validation; test-only additions after build started"
+    }
+  ],
+  "fresh_database_execution": false,
+  "merge_to_main": false,
+  "deployment": false
+}

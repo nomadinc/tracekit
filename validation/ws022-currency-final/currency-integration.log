@@ -1,0 +1,13 @@
+✔ legacy USD without provenance remains unknown (2.035109ms)
+✔ principal and fee preserve independent source-backed codes (0.328055ms)
+✔ missing, invalid and unrecognized provenance never gain a currency (0.241444ms)
+✔ principal and fee reject each other's provenance categories (0.231329ms)
+✔ qualified API values reach UI without principal or fee currency fallback (18.286118ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 535.064373

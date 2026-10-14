@@ -196,7 +196,7 @@ export function InvestigationDrawer() {
       <button
         type="button"
         aria-label="Close investigation panel"
-        className="absolute inset-0 bg-slate-950/35 backdrop-blur-sm"
+        className="absolute inset-0 bg-slate-950/35 backdrop-blur-xs"
         onClick={investigation.close}
       />
       <aside
@@ -212,7 +212,7 @@ export function InvestigationDrawer() {
               <button
                 type="button"
                 onClick={investigation.back}
-                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/10"
+                className="inline-flex h-9 w-9 items-center justify-center rounded-lg border hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/10"
                 aria-label="Back to previous preview"
               >
                 <ArrowLeft className="h-4 w-4" />
@@ -220,7 +220,7 @@ export function InvestigationDrawer() {
             ) : null}
             <div className="min-w-0">
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Investigation</div>
-              <h2 id="investigation-title" ref={titleRef} tabIndex={-1} className="truncate text-base font-semibold outline-none">
+              <h2 id="investigation-title" ref={titleRef} tabIndex={-1} className="truncate text-base font-semibold outline-hidden">
                 {title}
               </h2>
             </div>
@@ -228,7 +228,7 @@ export function InvestigationDrawer() {
           <button
             type="button"
             onClick={investigation.close}
-            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/10"
+            className="inline-flex h-9 w-9 items-center justify-center rounded-lg border hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/10"
             aria-label="Close investigation panel"
           >
             <X className="h-4 w-4" />

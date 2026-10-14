@@ -81,7 +81,7 @@ export function ShopifyWebhookSecret({ connectionId }: { connectionId: string })
   }
 
   return (
-    <section className="rounded-2xl border border-white/10 bg-white/[0.02] p-6">
+    <section className="rounded-2xl border border-white/10 bg-white/2 p-6">
       <div className="flex flex-col gap-5 lg:flex-row lg:items-end lg:justify-between">
         <div className="max-w-2xl">
           <div className="text-xs font-semibold uppercase tracking-[0.18em] text-slate-400">Shopify webhooks</div>
@@ -105,7 +105,7 @@ export function ShopifyWebhookSecret({ connectionId }: { connectionId: string })
             value={secret}
             onChange={(event) => setSecret(event.target.value)}
             placeholder={configured ? "Replace app secret" : "Shopify app secret"}
-            className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-none placeholder:text-slate-600 focus:border-emerald-400/50"
+            className="min-w-0 flex-1 rounded-xl border border-white/10 bg-black/20 px-4 py-3 text-sm text-white outline-hidden placeholder:text-slate-600 focus:border-emerald-400/50"
           />
           <button
             type="button"

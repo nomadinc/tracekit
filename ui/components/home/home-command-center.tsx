@@ -37,7 +37,7 @@ import {
 const WORKSPACE_ID = "default";
 
 function cardClass(extra = "") {
-  return `rounded-xl border bg-white p-5 shadow-sm dark:border-white/10 dark:bg-ink/85 ${extra}`;
+  return `rounded-xl border bg-white p-5 shadow-xs dark:border-white/10 dark:bg-ink/85 ${extra}`;
 }
 
 function toneClass(tone: string) {
@@ -101,7 +101,7 @@ function EmptyState({ title, body, href, action }: { title: string; body: string
       <div className="font-medium">{title}</div>
       <p className="mt-2 leading-6 text-slate-500 dark:text-slate-400">{body}</p>
       {href && action ? (
-        <Link href={href} className="mt-4 inline-flex items-center gap-2 rounded-lg border px-3 py-2 font-medium hover:bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 dark:hover:bg-white/10">
+        <Link href={href} className="mt-4 inline-flex items-center gap-2 rounded-lg border px-3 py-2 font-medium hover:bg-white focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:hover:bg-white/10">
           {action}
           <ArrowRight className="h-4 w-4" />
         </Link>
@@ -152,8 +152,8 @@ function HomeHeader({
                 type="button"
                 onClick={() => onWindowChange(item.key)}
                 className={[
-                  "rounded-lg px-3 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-slate-400",
-                  windowKey === item.key ? "bg-white shadow-sm dark:bg-white/10" : "text-slate-600 hover:bg-white/70 dark:text-slate-300 dark:hover:bg-white/10",
+                  "rounded-lg px-3 py-2 text-sm font-medium transition focus:outline-hidden focus:ring-2 focus:ring-slate-400",
+                  windowKey === item.key ? "bg-white shadow-xs dark:bg-white/10" : "text-slate-600 hover:bg-white/70 dark:text-slate-300 dark:hover:bg-white/10",
                 ].join(" ")}
               >
                 {item.label}
@@ -163,7 +163,7 @@ function HomeHeader({
           <button
             type="button"
             onClick={onRefresh}
-            className="inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:hover:bg-white/10"
+            className="inline-flex items-center justify-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:hover:bg-white/10"
           >
             <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
             Refresh
@@ -195,7 +195,7 @@ function OperationalSummary({ summary }: { summary: HomeSummaryResponse }) {
         <Link
           key={item.key}
           href={item.key === "health" ? "/notifications" : metricHref(item.key)}
-          className={`rounded-xl border bg-white p-4 shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:bg-ink/85`}
+          className={`rounded-xl border bg-white p-4 shadow-xs transition hover:-translate-y-0.5 hover:shadow-md focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:bg-ink/85`}
         >
           <div className="flex items-center justify-between gap-3">
             <div className="text-sm text-slate-500 dark:text-slate-400">{item.label}</div>
@@ -249,7 +249,7 @@ function PriorityWorkItems({ items }: { items: WorkItem[] }) {
               key={item.id}
               target={{ type: "work_item", id: item.id, label: item.title, query: { workspace_id: WORKSPACE_ID } }}
               href={`/operations?workspace_id=${encodeURIComponent(WORKSPACE_ID)}&inspect=${encodeURIComponent(`work_item:${item.id}`)}`}
-              className="block rounded-xl border p-4 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5"
+              className="block rounded-xl border p-4 transition hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5"
             >
               <div className="flex flex-wrap items-center gap-2">
                 <span className={`rounded-full border px-2 py-1 text-xs font-medium ${toneClass(item.priority)}`}>{workItemPriorityLabel(item.priority)}</span>
@@ -293,7 +293,7 @@ function WorkspaceHealth({ summary }: { summary: HomeSummaryResponse }) {
       </div>
       <div className="mt-4 space-y-3">
         {summary.health.categories.map((category) => (
-          <Link key={category.category} href={category.deep_link} className="block rounded-xl border p-3 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5">
+          <Link key={category.category} href={category.deep_link} className="block rounded-xl border p-3 transition hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5">
             <div className="flex items-center justify-between gap-3">
               <div className="font-medium">{category.label}</div>
               <span className={`rounded-full border px-2 py-0.5 text-xs ${toneClass(category.severity)}`}>{category.lifecycle_state.replace(/_/g, " ")}</span>
@@ -329,7 +329,7 @@ function RecentActivity({ summary }: { summary: HomeSummaryResponse }) {
                 <span className="text-xs text-slate-500 dark:text-slate-400">{homeTimeAgo(activity.occurred_at)}</span>
               </>
             );
-            const className = "grid grid-cols-[auto_1fr_auto] gap-3 rounded-xl border p-3 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5";
+            const className = "grid grid-cols-[auto_1fr_auto] gap-3 rounded-xl border p-3 transition hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5";
             return target ? (
               <EntityLink key={activity.id} target={target} href={activity.deep_link} className={className}>
                 {content}
@@ -415,7 +415,7 @@ function RecentCustomers({ summary }: { summary: HomeSummaryResponse }) {
                 target={{ type: "customer", id, label: customerName(customer), query: { workspace_id: WORKSPACE_ID } }}
                 href={id ? `/customers/${encodeURIComponent(id)}?workspace_id=${encodeURIComponent(WORKSPACE_ID)}` : "/customers"}
                 mode={id ? "panel" : "page"}
-                className="flex items-center justify-between gap-3 rounded-xl border p-3 text-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5"
+                className="flex items-center justify-between gap-3 rounded-xl border p-3 text-sm transition hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5"
               >
                 <span className="min-w-0">
                   <span className="block truncate font-medium">{customerName(customer)}</span>
@@ -444,7 +444,7 @@ function IntegrationsAndActions({ summary }: { summary: HomeSummaryResponse }) {
         {summary.integrations.length ? (
           <div className="space-y-2">
             {summary.integrations.map((integration) => (
-              <Link key={integration.id} href={integration.deep_link} className="block rounded-xl border p-3 text-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5">
+              <Link key={integration.id} href={integration.deep_link} className="block rounded-xl border p-3 text-sm transition hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5">
                 <div className="flex items-center justify-between gap-3">
                   <span className="font-medium">{integration.name}</span>
                   <span className={`rounded-full border px-2 py-0.5 text-xs ${toneClass(integration.severity)}`}>{integration.status.replace(/_/g, " ")}</span>
@@ -461,7 +461,7 @@ function IntegrationsAndActions({ summary }: { summary: HomeSummaryResponse }) {
         <SectionHeader title="Quick Actions" body="Jump into existing TraceKit workflows." />
         <div className="grid gap-2">
           {summary.quick_actions.map((action) => (
-            <Link key={action.href} href={action.href} className="flex items-center justify-between rounded-xl border px-3 py-2 text-sm font-medium transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5">
+            <Link key={action.href} href={action.href} className="flex items-center justify-between rounded-xl border px-3 py-2 text-sm font-medium transition hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5">
               <span>{action.label}</span>
               <ArrowRight className="h-4 w-4 text-slate-400" />
             </Link>
@@ -568,7 +568,7 @@ export default function HomeCommandCenter() {
         </div>
         <h1 className="mt-4 text-2xl font-semibold">Home is temporarily unavailable</h1>
         <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{error || "The Home API did not return a usable response."}</p>
-        <button type="button" onClick={() => setRefreshId((value) => value + 1)} className="mt-4 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:hover:bg-white/10">
+        <button type="button" onClick={() => setRefreshId((value) => value + 1)} className="mt-4 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:hover:bg-white/10">
           <RefreshCw className="h-4 w-4" />
           Retry
         </button>

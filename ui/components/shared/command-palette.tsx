@@ -412,7 +412,7 @@ export function CommandPaletteDialog({
   if (!open) return null;
 
   return (
-    <div className="fixed inset-0 z-50 bg-slate-950/35 p-0 backdrop-blur-sm sm:p-4" role="presentation" onMouseDown={onClose}>
+    <div className="fixed inset-0 z-50 bg-slate-950/35 p-0 backdrop-blur-xs sm:p-4" role="presentation" onMouseDown={onClose}>
       <div
         role="dialog"
         aria-modal="true"
@@ -428,7 +428,7 @@ export function CommandPaletteDialog({
             onChange={(event) => setQuery(event.target.value)}
             onKeyDown={onInputKeyDown}
             placeholder={GLOBAL_SEARCH_PLACEHOLDER}
-            className="h-11 min-w-0 flex-1 bg-transparent text-base outline-none placeholder:text-slate-400"
+            className="h-11 min-w-0 flex-1 bg-transparent text-base outline-hidden placeholder:text-slate-400"
             aria-label="Search customers, orders, Work Items, and pages"
           />
           {loading ? <Loader2 className="h-4 w-4 animate-spin text-slate-400" /> : null}
@@ -468,7 +468,7 @@ export function CommandPaletteDialog({
                         onMouseEnter={() => setActiveIndex(flatIndex)}
                         onClick={() => openItem(item)}
                         className={[
-                          "flex w-full items-center gap-3 rounded-lg p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-slate-400",
+                          "flex w-full items-center gap-3 rounded-lg p-3 text-left transition focus:outline-hidden focus:ring-2 focus:ring-slate-400",
                           active ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950" : "hover:bg-slate-100 dark:hover:bg-white/10",
                         ].join(" ")}
                       >

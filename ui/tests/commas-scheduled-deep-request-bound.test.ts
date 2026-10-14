@@ -30,8 +30,9 @@ test("scheduled deep bound survives scheduler, queue, runtime, and worker",()=>{
   assert.match(scheduler,/currentLimit!==message\.max_provider_requests/);
   assert.match(queue,/max_provider_requests:scheduledDeepLimit!/);
   assert.match(runtime,/maxProviderRequests: message\.scheduled_deep===true \? message\.max_provider_requests : undefined/);
+  assert.match(worker,/scheduledDeepInvocationCeiling/);
   assert.match(worker,/onAttempt\?\.\(\)/);
-  assert.match(worker,/scheduledDeepAttemptAllowance\(scheduledDeepRequestLimit,providerRequests\)/);
+  assert.match(worker,/scheduledDeepAttemptAllowance\(scheduledDeepInvocationCeilingValue!,providerRequests\)/);
   assert.match(worker,/reason:"bounded_deep_reconciliation_proof"/);
   assert.match(worker,/decision\.reason!=="provider_history_boundary"/);
 });

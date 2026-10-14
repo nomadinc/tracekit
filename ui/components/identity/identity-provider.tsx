@@ -90,7 +90,7 @@ export function IdentityProvider({ children, initialSession, persistentOrganizat
 
   return (
     <IdentityContext.Provider value={value}>
-      {!ready ? <div className="flex min-h-dvh items-center justify-center bg-slate-50 text-sm font-medium text-slate-600">Preparing development identity…</div> : invalidExplicitIdentity ? <div role="alert" className="flex min-h-dvh items-center justify-center bg-slate-50 p-6 text-slate-900"><div className="max-w-lg rounded-xl border bg-white p-6 shadow-sm"><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Development identity error</p><h1 className="mt-2 text-lg font-semibold">Unknown development identity</h1><p className="mt-2 text-sm text-slate-600"><code>dev_identity={invalidExplicitIdentity}</code> is not a registered review identity. No fallback user was selected.</p></div></div> : children}
+      {!ready ? <div className="flex min-h-dvh items-center justify-center bg-slate-50 text-sm font-medium text-slate-600">Preparing development identity…</div> : invalidExplicitIdentity ? <div role="alert" className="flex min-h-dvh items-center justify-center bg-slate-50 p-6 text-slate-900"><div className="max-w-lg rounded-xl border bg-white p-6 shadow-xs"><p className="text-xs font-semibold uppercase tracking-wider text-slate-500">Development identity error</p><h1 className="mt-2 text-lg font-semibold">Unknown development identity</h1><p className="mt-2 text-sm text-slate-600"><code>dev_identity={invalidExplicitIdentity}</code> is not a registered review identity. No fallback user was selected.</p></div></div> : children}
     </IdentityContext.Provider>
   );
 }

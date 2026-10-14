@@ -41,7 +41,7 @@ const CATEGORIES: Array<NotificationCategory | "all"> = ["all", "tracking", "ide
 const STATUSES: Array<NotificationStatus | "all"> = ["all", "unread", "read", "resolved", "dismissed"];
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <section className={`rounded-2xl border bg-white p-5 shadow-sm dark:border-white/10 dark:bg-ink/85 ${className}`}>{children}</section>;
+  return <section className={`rounded-2xl border bg-white p-5 shadow-xs dark:border-white/10 dark:bg-ink/85 ${className}`}>{children}</section>;
 }
 
 function EmptyState({ title, body }: { title: string; body: string }) {
@@ -110,7 +110,7 @@ function NotificationRow({ notification, selected, onOpen }: {
     <button
       type="button"
       onClick={() => onOpen(notification)}
-      className={`w-full rounded-2xl border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400 ${selected ? "border-slate-900 ring-2 ring-slate-200 dark:border-white dark:ring-white/10" : "bg-white dark:bg-white/5"}`}
+      className={`w-full rounded-2xl border p-4 text-left transition hover:-translate-y-0.5 hover:shadow-xs focus:outline-hidden focus:ring-2 focus:ring-slate-400 ${selected ? "border-slate-900 ring-2 ring-slate-200 dark:border-white dark:ring-white/10" : "bg-white dark:bg-white/5"}`}
     >
       <div className="flex items-start gap-3">
         <span className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border ${severityTone(notification.severity)}`}>
@@ -142,7 +142,7 @@ function DetailDrawer({ notification, onDismiss }: {
 }) {
   if (!notification) {
     return (
-      <Card className="sticky top-6 min-h-[36rem]">
+      <Card className="sticky top-6 min-h-144">
         <EmptyState title="Select a notification" body="Open a notification to see evidence, timeline, and the affected workspace area." />
       </Card>
     );
@@ -197,13 +197,13 @@ function DetailDrawer({ notification, onDismiss }: {
             <EntityLink
               target={{ type: "work_item", id: notification.work_item_id, label: notification.title, query: { workspace_id: notification.workspace_id } }}
               href={`/operations?workspace_id=${encodeURIComponent(notification.workspace_id)}&inspect=${encodeURIComponent(`work_item:${notification.work_item_id}`)}`}
-              className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:bg-white dark:text-slate-950"
+              className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:bg-white dark:text-slate-950"
             >
               Open Work Item
               <Eye className="h-4 w-4" />
             </EntityLink>
           ) : (
-            <Link href={notification.deep_link || "/overview"} className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:bg-white dark:text-slate-950">
+            <Link href={notification.deep_link || "/overview"} className="inline-flex items-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-sm font-medium text-white hover:bg-slate-800 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:bg-white dark:text-slate-950">
               Open affected page
               <Eye className="h-4 w-4" />
             </Link>
@@ -212,7 +212,7 @@ function DetailDrawer({ notification, onDismiss }: {
             <button
               type="button"
               onClick={() => onDismiss(notification)}
-              className="inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5"
+              className="inline-flex items-center gap-2 rounded-xl border px-4 py-2 text-sm font-medium hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5"
             >
               Dismiss
               <Trash2 className="h-4 w-4" />
@@ -226,7 +226,7 @@ function DetailDrawer({ notification, onDismiss }: {
             {compactEvidence(notification.evidence).map(([key, value]) => (
               <div key={key} className="grid gap-2 py-2 sm:grid-cols-[10rem_1fr]">
                 <span className="font-medium text-slate-500">{key}</span>
-                <span className="break-words text-slate-700 dark:text-slate-200">{value}</span>
+                <span className="wrap-break-word text-slate-700 dark:text-slate-200">{value}</span>
               </div>
             ))}
           </div>
@@ -430,7 +430,7 @@ export default function NotificationsClient() {
                 key={item.label}
                 type="button"
                 onClick={() => item.filter === "resolved" ? setStatus("resolved") : setSeverity(item.filter as NotificationSeverity)}
-                className={`flex items-center justify-between rounded-xl border px-3 py-2 text-sm transition hover:shadow-sm ${severityTone(item.tone)}`}
+                className={`flex items-center justify-between rounded-xl border px-3 py-2 text-sm transition hover:shadow-xs ${severityTone(item.tone)}`}
               >
                 <span>{item.label}</span>
                 <span className="font-semibold">{item.value}</span>
@@ -486,7 +486,7 @@ export default function NotificationsClient() {
                 value={search}
                 onChange={(event) => setSearch(event.target.value)}
                 placeholder="Search notifications"
-                className="h-10 w-full rounded-xl border bg-white pl-9 pr-3 text-sm outline-none transition focus:ring-2 focus:ring-slate-300 dark:border-white/10 dark:bg-white/5"
+                className="h-10 w-full rounded-xl border bg-white pl-9 pr-3 text-sm outline-hidden transition focus:ring-2 focus:ring-slate-300 dark:border-white/10 dark:bg-white/5"
               />
             </div>
           </div>
@@ -519,7 +519,7 @@ export default function NotificationsClient() {
           <button
             type="button"
             onClick={() => load(nextCursor, true)}
-            className="w-full rounded-xl border px-4 py-3 text-sm font-medium hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5"
+            className="w-full rounded-xl border px-4 py-3 text-sm font-medium hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5"
             disabled={loading}
           >
             {loading ? "Loading..." : "Load more"}

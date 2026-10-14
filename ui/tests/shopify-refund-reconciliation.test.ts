@@ -52,7 +52,7 @@ test("order reads split refund reconciliation into independent bounded Shopify r
   });
 
   assert.equal(requestBodies.length, 3, "orders must use one incremental request plus two financial reconciliation requests");
-  assert.equal(requestBodies[0]?.variables?.query, "updated_at:>=2026-09-08T00:13:54.000Z");
+  assert.equal(requestBodies[0]?.variables?.query, "updated_at:>='2026-09-08T00:13:54.000Z'");
   assert.equal(requestBodies[1]?.variables?.query, "financial_status:refunded");
   assert.equal(requestBodies[2]?.variables?.query, "financial_status:partially_refunded");
   assert.match(String(requestBodies[0]?.query || ""), /query TraceKitShopifyOrders/);

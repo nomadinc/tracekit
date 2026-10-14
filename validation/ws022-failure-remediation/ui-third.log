@@ -1,0 +1,1837 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> tracekit-ui@0.1.0 test
+> node scripts/run-tests.mjs
+
+✔ persistent context absent from mock metadata remains authorized and active (1.812725ms)
+✔ mock metadata may decorate but cannot change persistent identity or tenant scope (0.250288ms)
+✔ quality funnel and coverage keep identity, evidence, and projection separate (2.759002ms)
+✔ conflict diagnostics contain field names but no source values (1.470849ms)
+✔ field agreement separates missing values, and temporal cohorts use UTC event dates (11.244661ms)
+✔ latency uses persisted stage timestamps and does not invent first-match history (0.507626ms)
+✔ ORD identity pending after a newer webhook is not counted as a permanent mapping failure (0.344821ms)
+✔ report request path is GET only and cannot mutate attribution state (1.040369ms)
+✔ database aggregation is scoped and has no 5,000-observation application bound (0.385842ms)
+✔ measurement epoch and healthy days require durable scoped evidence (0.297349ms)
+✔ stored comparison, pending identity, unavailable latency and payment path are explicit (0.555387ms)
+✔ conflict drill-down compares Everflow once per scoped transaction cohort (0.498882ms)
+✔ production SQL latency without liveV2 renders instead of throwing digest 2660621090 (4.68043ms)
+✔ production logout supplies an absolute same-origin signed-out destination (1.167842ms)
+✔ preview authentication keeps its explicitly configured deployment origin (0.227624ms)
+✔ untrusted origins, credentials and protocol downgrade cannot become return destinations (0.447135ms)
+✔ local development remains available without authorizing production localhost (0.284199ms)
+✔ a stale preview callback configuration cannot redirect a production logout (0.16571ms)
+✔ business-context access uses the explicit composite FK in PostgREST (0.864815ms)
+✔ capability manifest records established and planned capabilities (1.293231ms)
+✔ UI convergence remains deferred and Legacy Dashboard is explicitly transitional (0.32491ms)
+✔ critical UI routes and auth/session entrypoints remain present and non-placeholder (0.538693ms)
+✔ commerce API and runtime entrypoints remain present (7.57111ms)
+✔ migration sequence is monotonic, includes 063/064, and has no duplicate numbers (2.18765ms)
+✔ principal and fee retain independent currencies (18.068735ms)
+✔ unknown currency never defaults to USD (0.404951ms)
+✔ zero values and missing amounts remain distinct (0.23203ms)
+✔ detail currency null does not fall back to list currency (0.41715ms)
+✔ late A response cannot overwrite selected B (1.416697ms)
+✔ closing prevents late detail from returning (0.247974ms)
+✔ late A rejection cannot clear B (0.281545ms)
+✔ selection change immediately clears previous detail (0.270658ms)
+✔ reason normalization preserves distinct evidence families (1.189204ms)
+✔ timing and percentile calculations are deterministic (0.932136ms)
+✔ distribution comparison requires an explicit control (0.385182ms)
+✔ maturity windows prevent immature cohort claims (0.658604ms)
+✔ Journey construction is ordered, partial, and exposes evidence gaps (9.279928ms)
+✔ Investigation identity and output are replay deterministic (0.268966ms)
+✔ chargeback review filters are bounded and preserve server pagination (1.224667ms)
+✔ confidence presentation is defensive for unknown values (0.19899ms)
+✔ evidence factors become operator-readable labels (1.209925ms)
+✔ review workspace keeps candidate resolution read-only (14.038937ms)
+✔ review workspace holds uncertified affiliate/source money reporting while preserving backend analysis (4.33526ms)
+✔ live disputes do not present opaque buyer IDs as customers or assume currency and order certainty (1.952546ms)
+✔ dispute review does not present unverified currency or provider buyer reference as customer identity (1.986116ms)
+✔ chargeback routes use same-origin JSON while Worker APIs keep their configured base (3.555193ms)
+✔ chargeback summaries use exact server counts instead of the PostgREST row ceiling (3.264515ms)
+✔ large scoped populations retain exact confidence counts while rows stay paginated (0.692004ms)
+✔ old dispute detail is hidden immediately when selection changes (1.059088ms)
+✔ only matching dispute detail is displayed (0.213392ms)
+✔ rejects zero transactions and accepts exactly ten (1.542837ms)
+✔ rejects eleven and deduplicates repeated IDs deterministically (1.105968ms)
+✔ confirmation is parsed and unsafe scheduler/continuous states block (0.341125ms)
+✔ selection never exceeds the hard bound and does not imply page two (0.413985ms)
+✔ preflight flag itself is write-blocking input (0.252641ms)
+✔ preflight returns before every provider transaction method (0.571933ms)
+✔ persistence plan is idempotent and never advances historical checkpoints (0.288165ms)
+✔ continuous recovery starts at the first incomplete checkpoint and reuses verified Evidence (1.118047ms)
+✔ completed checkpoint rollup makes interrupted progress visible without terminal-only counters (0.97431ms)
+✔ Evidence-only replay retains checkpoint lifetime accounting and records invocation work separately (1.117236ms)
+✔ Evidence-only terminalization preserves the claimed run lifetime counters across repeated replay (0.516439ms)
+✔ page completion rolls up from the in-memory checkpoint snapshot to reserve terminalization capacity (0.28465ms)
+✔ existing lease RPC safely reclaims only expired running runs (0.110116ms)
+✔ cadence migration adds a durable database-managed schedule version (1.151427ms)
+✔ one-time initialization is exact-scope, version guarded, and audited (5.133523ms)
+✔ only a proven scheduled provider-history completion advances cadence atomically (0.373343ms)
+✔ scheduled message version survives scheduler queue runtime and worker (0.267684ms)
+✔ incomplete runs retain due cadence and ordinary sync stays isolated (0.471842ms)
+✔ control operations are service-role-only SECURITY INVOKER (0.441846ms)
+✔ known 9,431-order reference fixture conserves without becoming a production constant (3.306297ms)
+✔ manifest header and items freeze complete allocation inputs (0.510299ms)
+✔ manifest creation uses the existing pure allocation engine and freezes atomically (0.23831ms)
+✔ frozen items and financial baseline are database-immutable (0.248285ms)
+✔ input and cohort fingerprints are deterministic SHA-256 contracts (0.401205ms)
+✔ manifest execution prevalidates a whole bounded batch before writing (0.673556ms)
+✔ manifest write reuses idempotent reconciliation and cannot expand to new orders (0.518332ms)
+✔ completion requires persisted manifest totals and zero per-order violations (0.374855ms)
+✔ manifest surfaces are RLS-protected service-role-only SECURITY INVOKER contracts (1.404889ms)
+✔ bounded PBS totals decompose into conserved deterministic economic lines (1.589608ms)
+✔ known 9,405-order cohort conserves provider gross exactly (0.205229ms)
+✔ migration scopes inference to approved current cohort and exact canonical hierarchy (0.41765ms)
+✔ projection has stable identity, provenance, conservation, and no provider mutation (0.316097ms)
+✔ single-order, continuous batch, and resumable backfill share the SQL engine (0.935527ms)
+✔ product reporting uses one conserved source while company gross remains untouched (0.255004ms)
+✔ allocation surfaces are server-only SECURITY INVOKER contracts (0.989833ms)
+✔ standalone bumps and unsupported transactions remain independent fallback revenue (0.271599ms)
+✔ original Gold identity is preserved and its missing branch is modeled once (1.406943ms)
+✔ exact Gold-branch identities target the authorized canonical steps (0.223718ms)
+✔ Growth Partner hierarchy preserves the approved $75 target UUID (0.324209ms)
+✔ historical PBS and Mystery Box tests reuse existing canonical identities (0.174884ms)
+✔ affiliate tracking test is retained but suppressed as non-commerce (0.208735ms)
+✔ migration stays suggestion-only and preserves immutable commerce facts (0.368156ms)
+✔ Millionaire Interview Series adds one exact, suggest-only order bump without changing existing bumps (0.36471ms)
+✔ historical mode requires confirmation and date bounds (2.754405ms)
+✔ historical bounds cap provider exposure and per-page size (0.207402ms)
+✔ quota floor is fail-closed and does not depend on scheduler state (0.143867ms)
+✔ incomplete historical chunks release as resumable and complete only at the range boundary (0.116095ms)
+✔ resumed chunks use persisted resume_page and an invocation-local page budget (0.128644ms)
+✔ batch driver requires confirmation, caps chunks, and stops on unsafe progress (0.375707ms)
+✔ warning classification uses only durable before/after values (0.131198ms)
+✔ newer historical quota observations supersede bootstrap quota and stale values fail closed (0.88197ms)
+✔ only one adjacent tail/head overlap is benign and excluded from unsafe warnings (0.257289ms)
+✔ batch reporting labels runner counters invocation-local (14.275325ms)
+✔ migration provides an owner-bound lease release without touching scheduler state (1.293201ms)
+✔ legacy recovery is hard-coded, one-time, and preserves the run payload (0.917003ms)
+✔ legacy recovery repair is safe after marker-table statements partially applied (2.347522ms)
+✔ historical mode resumes from an explicit page and reuses the idempotent shadow normalizer (0.960499ms)
+✔ ordering is detected, ambiguity fails closed, and range filtering is date based (0.389437ms)
+✔ historical dispute preview reports parser results without currency aggregation (21.755009ms)
+✔ retained transaction Evidence produces exact ORD mapping inputs without api_metadata (12.787911ms)
+✔ ORD backfill batches are bounded and cursor is stable (1.632322ms)
+✔ ORD dry-run summaries aggregate every reconciliation class (0.448576ms)
+✔ PostgREST Evidence range query preserves exact grouping for every bound form (0.396108ms)
+✔ frozen horizon excludes live Evidence arriving after terminal completion (0.621348ms)
+✔ inclusive same-timestamp horizon uses Evidence UUID as deterministic tie breaker (0.434075ms)
+✔ upper-only complete run keeps the frozen horizon through every batch (0.346423ms)
+✔ lower cursor is exclusive and upper horizon is inclusive (0.729941ms)
+✔ global preflight deduplicates repeated pairs and detects cross-batch directional collisions (1.403377ms)
+✔ missing ORD values are not malformed and remain outside the identity cohort (0.340383ms)
+✔ frozen baseline ignores unrelated live ingestion and normalizes first-write idempotency (2.142953ms)
+✔ frozen baseline changes for every frozen identity, authority, integrity, collision, conflict, and scope change (4.728253ms)
+✔ hash failures and malformed ORD identities fail closed before writes (9.709406ms)
+✔ ORD planner has no attribution or financial mutation surface (0.460144ms)
+✔ quota observation freshness is explicit and fail-closed (1.409376ms)
+✔ quota probe is one-request, state-only, and never enters normalization (0.473925ms)
+✔ stranded recovery quota mode is explicit and fixed-scope (0.408497ms)
+✔ fixed redelivery quota refresh excludes only its pristine target and has no dispatch or run mutation (0.518562ms)
+✔ fixed redelivery quota eligibility rejects every unsafe production-state variant (0.54332ms)
+✔ 078 recovery RPC consumes the same fresh quota floor used by the probe (0.267995ms)
+✔ quota observation updates the existing continuous state row without an upsert insert (0.438401ms)
+✔ quota observation creates a schema-complete state row only when absent (0.989523ms)
+✔ persistence diagnostics are sanitized and quota persistence does not refetch (0.536719ms)
+✔ PostgREST failures expose only bounded persistence diagnostics (0.731744ms)
+✔ scheduled deep provider request limits are explicit and fail closed (1.23327ms)
+✔ retry allowance caps actual provider HTTP attempts at the reserved budget (0.152229ms)
+✔ scheduled deep bound survives scheduler, queue, runtime, and worker (3.019365ms)
+✔ ordinary and operator execution retain their existing bounds (0.361586ms)
+✔ Transaction normalization is deterministic and preserves verified financial vocabulary (13.779928ms)
+✔ provider Product identity is immutable across renames and shared across distinct Transactions (1.038636ms)
+✔ unknown Product IDs remain distinct and missing immutable Product identity fails closed (1.008061ms)
+✔ Customer contact signals normalize without becoming merge keys (0.220903ms)
+✔ Refund discovery reports field names and types only (0.410289ms)
+✔ verified embedded Refunds normalize deterministically and unknown fields fail closed (1.236045ms)
+✔ purchase and subscription support does not broaden the dispute normalizer contract (1.589868ms)
+✔ existing incomplete subscription reports an explicit update requirement without mutation (0.466764ms)
+✔ successful creation updates Cloudflare exactly once and returns no secret (0.272641ms)
+✔ missing returned secret fails closed before Cloudflare update (1.480383ms)
+✔ confirmation is mandatory (0.304239ms)
+✔ webhook inspector emits only safe subscription fields (2.16093ms)
+✔ webhook URL sanitizer preserves routing identity without query secrets or fragments (0.756792ms)
+✔ subscription identity remains visible after endpoint sanitization without secret disclosure (0.229326ms)
+✔ exact target matching is URL-exact and does not create/update/delete (12.34577ms)
+✔ test delivery uses the exact endpoint, API-key header, and event body (4.784398ms)
+✔ unsupported events and missing IDs are rejected before fetch (0.839186ms)
+✔ empty 201 and 204 responses never throw (3.718319ms)
+✔ HTML errors and malformed JSON become safe errors (1.459442ms)
+✔ structured success and error envelopes are preserved (0.62299ms)
+✔ Everflow reverification uses one scoped account and preserves reporting metadata and credentials (17.429774ms)
+✔ ambiguous Everflow account scope fails closed before provider verification (3.224234ms)
+✔ typed verification failures retain safe diagnostics without losing network metadata (1.838363ms)
+✔ authorized Organization admin creates a tenant-bound Connection while another Organization fails closed (0.469529ms)
+✔ connection setup idempotency reuses one Organization-bound Connection (0.468186ms)
+✔ credential encryption uses fresh IVs, round trips, and fails safely with the wrong key (5.179714ms)
+✔ credential rotation retains the revoked version and cross-Organization rotation is denied (3.718019ms)
+✔ verification resolves a credential server-side and returns capabilities without returning a secret (1.375535ms)
+✔ failed verification degrades safely and a later retry recovers (2.358958ms)
+✔ sync creation and cancellation remain Organization authorized (0.832946ms)
+✔ Sync failure persistence and audit redact secret-bearing summaries (1.063474ms)
+✔ page checkpoints are idempotent and retain failure retry state without date cursors (0.594076ms)
+✔ source mapping validates canonical target Organization and replays by source identity (0.514206ms)
+✔ evidence access requires the persistent session Organization (2.2268ms)
+✔ repository activation defaults to mock, requires readiness, and rolls back immediately (1.891433ms)
+✔ development state cannot substitute for a persistent authorized session (0.723271ms)
+✔ product mapping decisions are append-only, tenant-scoped, and expected-version guarded (1.653785ms)
+✔ normal imports preserve an explicit product mapping and historical order identity (0.430129ms)
+{"event":"commerce.evidence.persistence","result":"persisted","statusCode":200,"conflict":false,"sourceObjectType":"transaction_page","scope":"tenant_scoped","payloadHashPrefix":"bafe4238","verificationAttempts":0}
+{"event":"commerce.evidence.persistence","result":"post_failed","statusCode":400,"conflict":true,"sourceObjectType":"transaction_page","scope":"tenant_scoped","payloadHashPrefix":"bafe4238","verificationAttempts":0}
+{"event":"commerce.evidence.persistence","result":"reused","statusCode":200,"conflict":true,"sourceObjectType":"transaction_page","scope":"tenant_scoped","payloadHashPrefix":"bafe4238","verificationAttempts":1}
+✔ durable Evidence is hash-addressed, idempotent, private-path scoped, and erasable (15.319881ms)
+{"event":"commerce.evidence.persistence","result":"post_failed","statusCode":400,"conflict":true,"sourceObjectType":"transaction_page","scope":"tenant_scoped","payloadHashPrefix":"cea23dd4","verificationAttempts":0}
+✔ tampered existing Evidence is detected and cannot be overwritten (4.087055ms)
+{"event":"commerce.evidence.persistence","result":"post_failed","statusCode":409,"conflict":true,"sourceObjectType":"transaction_page","scope":"tenant_scoped","payloadHashPrefix":"75cd2b7c","verificationAttempts":0}
+{"event":"commerce.evidence.persistence","result":"reused","statusCode":200,"conflict":true,"sourceObjectType":"transaction_page","scope":"tenant_scoped","payloadHashPrefix":"75cd2b7c","verificationAttempts":2}
+✔ duplicate storage response retries verification and reuses only a matching immutable object (28.771714ms)
+{"event":"commerce.evidence.persistence","result":"post_failed","statusCode":500,"conflict":false,"sourceObjectType":"transaction_page","scope":"tenant_scoped","payloadHashPrefix":"e30d15eb","verificationAttempts":0}
+✔ non-conflict storage failure is classified without an unsafe GET or overwrite (1.572272ms)
+✔ Evidence failure prevents normalization and Checkpoint completion (1.503899ms)
+✔ normalization failure preserves Evidence and leaves the Checkpoint failed for replay (0.307153ms)
+✔ Checkpoint completes only after Evidence and transactional normalization (0.221885ms)
+✔ uses the Production-backed identities in dependency order (2.088591ms)
+✔ preserves the byte-identical SQL bodies from before reconciliation (0.526725ms)
+✔ keeps Shopify independent and the Commas ownership dependencies intact (0.465432ms)
+✔ mapping review route is WorkOS authenticated, offers.manage protected, same-origin, and fixed scope (1.535917ms)
+✔ review recommendations come from persisted intelligence rather than hard-coded product presets (0.520095ms)
+✔ recommendation reads are advisory only and never append mapping decisions or auto-map from GET (0.278179ms)
+✔ server validates the complete tenant-scoped hierarchy and rejection carries no target (0.201384ms)
+✔ single-product approval remains explicit, version guarded, append-only, audited, and sanitized (0.537801ms)
+✔ recommendation confidence cannot bypass mapping-version concurrency (0.268635ms)
+✖ review projection supplies ranked impact, refund, alert, and work-item state without PII (9.176884ms)
+✔ UI preserves manual review fallback and explicit single-product reason/confirmation (0.342046ms)
+✔ bulk approval is server-guarded, recommendation-revalidated, and uses one atomic RPC (0.383829ms)
+✔ bulk UI requires one operator reason and explicit confirmation for the selected group (0.295947ms)
+✔ individual and bulk review actions open the established right-side shell drawer (0.168404ms)
+✔ review content lives only in the drawer and is not appended below the product list (0.939947ms)
+✔ bulk drawer shows target, totals, evidence, mapping versions, and selectable products (0.191439ms)
+✔ review projection returns distinct sorted source prices and both drawers render all price states (0.379873ms)
+✔ Growth Partner correction removes ambiguous exact IDs without changing decisions or approved projections (8.390217ms)
+✔ price evidence corroborates identity but cannot independently establish it (0.332382ms)
+✔ checkout identities remain distinct, may share Front End via registry, and import preserves approval (0.333483ms)
+✔ bulk review revalidates current versions and recommendations before one atomic guarded RPC (0.475488ms)
+✔ bulk decisions fail atomically on a stale item while manual single-product review remains available (0.847459ms)
+✔ product-health evaluator remains the sole owner of alert and work-item resolution (0.625503ms)
+✔ connections overview treats marketing provider discovery as optional (0.858826ms)
+✔ connections overview isolates individual marketing adapter failures (0.127923ms)
+✔ commerce connections remain authoritative in overview (0.336598ms)
+✔ ordinary provider pages persist authoritative quota without Evidence replay overwriting it (1.800397ms)
+✔ Commas ordering is measured rather than assumed (1.004695ms)
+✔ continuous ordering observer verifies adjacent newest-first pages and benign boundary overlap (0.425803ms)
+✔ continuous ordering observer verifies oldest-first boundaries (0.259441ms)
+✔ continuous ordering observer fails closed for unknown, mixed, reversed, and unsafe duplicate pages (0.385011ms)
+✔ middle-page recovery replay cannot claim global provider ordering (0.15915ms)
+✔ continuous parser validates required identity before normalization (0.745204ms)
+✔ source and normalizer changes remain distinct (0.174614ms)
+✔ two known unchanged pages form the stability boundary (0.802351ms)
+✔ page movement is diagnosed without treating known records as updates (0.198499ms)
+✔ five new newest-first head records safely shift known pages without requesting reconciliation (0.864474ms)
+✔ one new head plus a benign page-2/page-3 boundary repeat remains an aligned newest-first shift (0.747618ms)
+✔ only an exact classified boundary repeat is removed from newest-first alignment (0.206632ms)
+✔ newest-first alignment still rejects missing, reordered, duplicated, and mid-feed movement (0.498532ms)
+✔ new and changed records reset a known stability boundary (0.11901ms)
+✔ unknown ordering and low quota fail conservatively (0.131849ms)
+✔ unknown-quota bootstrap is capped to one request and cannot traverse page two (0.207433ms)
+✔ stranded running checkpoint is the resumable page and completed progress is durable (0.526324ms)
+✔ replayed Evidence contributes no provider request and preserves idempotent progress accounting (0.110647ms)
+✔ absence of live attribution source is not failed attribution (0.123015ms)
+✔ candidate generation is maturity and sample aware (0.122695ms)
+✔ candidate identity is deterministic and changes with evidence context (7.429698ms)
+✔ scheduler prioritizes due deep reconciliation and ignores disabled schedules (0.405602ms)
+✔ production scheduler requires explicit activation and honors global and Connection kill switches (0.365201ms)
+✔ zero-change boundary is a completed outcome (0.11299ms)
+✔ Investigation staleness is resource, entity, and period scoped (0.173482ms)
+✔ native clipboard receives the exact bounded value (4.160326ms)
+✔ a rejected Clipboard API falls back to the user-gesture copy path (0.419393ms)
+✔ clipboard failure is returned instead of reporting false success (0.184158ms)
+✔ CopyButton remains a keyboard-native button with accessible feedback (5.948604ms)
+✔ evidence copy controls pass only first and latest bounded values (0.475388ms)
+✔ existing shared CopyButton consumers retain the value and label contract (0.236968ms)
+✔ Mission Control and cross-Workspace builders select exact opaque objects (2.021009ms)
+✔ Offer related Customer and Order records are canonical IDs (20.515219ms)
+✔ Customer related Order separates canonical ID from display number (1.041211ms)
+✔ Order routes point back to exact production Customer and Offer (1.248854ms)
+✔ Universal Search resolves production Offer, Customer, and Order contracts (14.108924ms)
+✔ versioned deep links survive serialization and history-style reparsing (0.349538ms)
+✔ invalid object and Drawer IDs normalize without disclosure or exceptions (1.204878ms)
+✔ agency resolves an assigned active Organization while unscoped and direct-client access fail closed (0.552283ms)
+✔ Drawer target and Business Context restore from canonical URL state (0.273483ms)
+✔ canonical Drawer identifiers resolve through mock repositories (11.862735ms)
+✔ Compare IDs are deduplicated, bounded, and versioned (3.975427ms)
+✔ invalid explicit development identity never falls back (0.31181ms)
+✔ opaque identifier references prevent sensitive raw values in generated URLs (8.137837ms)
+✔ production core sources do not target concepts or legacy object detail routes (0.927659ms)
+✔ route registry excludes concept routes and covers all production destinations (0.292712ms)
+✔ Customer snapshots are scoped, serializable, and cloned (5.794156ms)
+✔ sensitive fields and financials follow capabilities (1.439141ms)
+✔ inaccessible and platform Customer scopes are denied (1.49805ms)
+✔ deep links normalize invalid event, identifier, Order, and Drawer state (1.285419ms)
+✔ identifier search focuses the matching event and production Drawer (5.087454ms)
+✔ Customer changes clear incompatible temporary and Replay state (0.687277ms)
+✔ Mission Control, Offer, and Order contracts use production routes (0.254383ms)
+✔ privacy conclusions retain uncertainty (0.641007ms)
+✔ semantic design tokens cover product, finding, Evidence, and focus states (1.523749ms)
+✔ Finding taxonomy remains distinguishable without relying on color alone (0.249536ms)
+✔ Investigation report exposes keyboard-safe canonical section navigation (0.39101ms)
+✔ Investigation workspace owns an intentional dark token scope independent of the light shell (0.48373ms)
+✔ dark report warnings, branch context, and sticky navigation use scoped readable treatments (0.520315ms)
+✔ brand blue remains distinct from semantic finding colors (0.280894ms)
+✔ brand boundary preserves placeholder until an approved logo asset exists (0.597071ms)
+✔ authenticated shell, Investigations, and Connections consume one canonical brand family (2.707885ms)
+✔ Connection summary is derived from server presentation state (0.763191ms)
+✔ Edge delivery credentials store hashes only and are organization/tenant scoped (1.014821ms)
+✔ delivery derives tenancy from authenticated credential and validates contract (0.156266ms)
+✔ delivery does not expose persistence errors or raw credentials (0.375797ms)
+✔ Edge Intelligence v1 receiving boundary is revisioned and tenant scoped (1.1732ms)
+✔ duplicate revisions are idempotent while conflicting same revisions fail closed (0.227233ms)
+✔ stale snapshots are retained but cannot regress current projection (0.23893ms)
+✔ Core rejects breaking versions and forbidden routing or private fields (0.256457ms)
+✔ Core keeps journey association separate and unresolved until deterministic linkage exists (0.211178ms)
+✔ ingestion RPC remains service-role only (0.215966ms)
+✔ Edge Intelligence tenancy uses the canonical TraceKit organization table (0.272251ms)
+✔ Edge service authentication is independent from organization ownership (1.032317ms)
+✔ organization id is derived only from active tenant binding (0.14573ms)
+✔ unknown tenant fails closed after valid service authentication (0.259291ms)
+✔ Core validator accepts every pinned canonical Edge v1 fixture (3.837248ms)
+✔ Core validator rejects breaking version tenant mismatch and routing fields (0.86209ms)
+✔ Core validator preserves unknown provider identifiers (0.332672ms)
+✔ Core validator rejects raw IP even when hidden in an optional v1 field (0.321645ms)
+✔ Edge tenant binding control plane uses the canonical authorization gateway (0.859297ms)
+✔ binding writes resolve only canonical active TraceKit organizations (0.185269ms)
+✔ binding lifecycle supports active and disabled without deleting evidence (0.164489ms)
+✔ tenant reference remains opaque and bounded (0.244809ms)
+✔ Edge tenant identity is deterministic, opaque, and organization specific (1.214963ms)
+✔ control plane no longer accepts a caller-selected tenantRef on write (0.178859ms)
+✔ invalid organization identifiers cannot derive Edge tenant identity (0.494827ms)
+✔ Everflow advertiser list uses the documented bounded read-only table search (1.132539ms)
+✔ advertiser source identity is network scoped and never globally unique (0.409718ms)
+✔ advertiser normalization excludes verification tokens, revenue snapshots, and user/billing PII (0.303898ms)
+✔ advertiser persistence is idempotent and browser access is denied (0.243607ms)
+✔ advertiser endpoints are authenticated and use the stored connection credential (0.234524ms)
+✔ Everflow affiliate client is bounded, paginated, and read-only (0.939978ms)
+✔ affiliate source identity is network scoped and never globally unique (0.279492ms)
+✔ affiliate normalization excludes internal notes and relationship PII (1.167411ms)
+✔ affiliate persistence is an idempotent source-resource upsert (0.222646ms)
+✔ affiliate migration denies direct browser access (0.210508ms)
+✔ affiliate endpoints use authenticated application routes (0.256777ms)
+✔ affiliate sync resolves stored credential instead of accepting a secret from the caller (0.188334ms)
+✔ deduplicates an exact durable click identity (2.077083ms)
+✔ removes duplicates that would share a 500-row persistence batch (0.217849ms)
+✔ deduplicates across the persistence batch boundary (0.969682ms)
+✔ deduplication precedes row mapping and every 500-row upsert slice (0.308605ms)
+✔ latest normalized observation deterministically supplies mutable fields (0.246272ms)
+✔ unique rows remain unchanged and in provider order (0.170137ms)
+✔ replaying the same normalized set remains idempotent (0.217648ms)
+✔ the complete durable scope participates in identity (0.187513ms)
+✔ 9,999 is accepted while 10,000 and above are saturated (2.600904ms)
+✔ saturation checkpoints the narrowed interval before its fetch (2.165206ms)
+✔ a resumed invocation starts from the exact persisted child (0.319241ms)
+✔ recursive saturation checkpoints the grandchild before fetching it (0.598053ms)
+✔ low runtime before the first request returns healthy partial (0.360845ms)
+✔ runtime exhaustion after one request preserves the exact child (0.465282ms)
+✔ two-request counters reset for each invocation (0.487625ms)
+✔ checkpoint timeout stops before requesting the child (1.287963ms)
+✔ persistence timeout leaves the interval incomplete (0.341455ms)
+✔ provider timeout remains a failure with exact resume bounds (0.394555ms)
+✔ minimum one-second saturation fails distinctly (0.522278ms)
+✔ split bounds are adjacent, non-overlapping whole seconds and shrink (0.269246ms)
+✔ normalization and persistence are bounded without changing identity (0.35831ms)
+✔ all click database operations use a narrow path-local timeout (0.535017ms)
+✔ adaptive state stores exact bounds and safe timing only (0.469138ms)
+✔ healthy partial reaches normal lease finish (0.442497ms)
+✔ application budget, conversions, and five-minute cadence remain intact (0.296688ms)
+✔ Everflow health check is one bounded read-only network-info GET (5.526396ms)
+✔ Everflow rejects invalid credentials without leaking the API key (1.118086ms)
+✔ Everflow fails closed when supplied Network ID conflicts with authenticated network (0.773366ms)
+✔ Everflow rate-limit failure is explicit, retryable, and does not retry the health call (0.575038ms)
+✔ existing credential primitive encrypts Everflow API keys before persistence (16.826704ms)
+✔ Everflow connection verifies before writes and persists network identity (0.627657ms)
+✔ same Everflow network rotates credentials; different network remains separately scoped (0.486264ms)
+✔ Everflow connect route returns safe identity metadata and reconnect state (0.35788ms)
+✔ Everflow status route exposes safe persisted network state (0.367745ms)
+✔ provider-scoped connect and status routes bypass the Worker API base (0.314985ms)
+✔ Everflow screen enables the persisted status endpoint without global UI redesign (0.227073ms)
+✔ future order linkage hierarchy remains transaction ID first with guarded email fallback (0.11969ms)
+✔ Everflow reruns classify created, updated, and unchanged rows by prior payload hash (1.187892ms)
+✔ conversion sync snapshots evidence before ingest and finalizes metrics afterward (0.326001ms)
+✔ Everflow conversion client uses the bounded Network reporting endpoint and URL pagination (1.046799ms)
+✔ conversion normalization retains attribution dimensions required by TraceKit (0.287693ms)
+✔ live conversion ingestion hashes provider IP evidence before persistence (0.723701ms)
+✔ Step 7 extends protected Everflow conversion evidence instead of inventing another conversion table (0.253883ms)
+✔ API conversion evidence is tenant, provider-account, and sync-run scoped (0.226181ms)
+✔ overlap reads are idempotent and cannot move a persisted event primary key (0.16551ms)
+✔ conversion sync uses durable runs, checkpoints, leases, and the Step 6 order resolver (0.266522ms)
+✔ conversion sync requires verified reporting metadata instead of guessing timezone or currency (0.373724ms)
+✔ conversion sync route is authenticated, same-origin, bounded, and never accepts API credentials (0.259541ms)
+✔ Step 8 preserves distinct Everflow provider states in a protected history table (1.281634ms)
+✔ approved to rejected is classified as a reversal and uses effective financial deltas (0.378881ms)
+✔ rejected to approved is a reinstatement instead of a duplicate approval (0.243567ms)
+✔ unchanged provider payloads produce no financial delta history inflation (0.23881ms)
+✔ Step 8 observes post-conversion events without replacing the Step 7 latest-state projection (0.470079ms)
+✔ conversion sync captures the financial baseline before ingestion and persists event effects afterward (0.287334ms)
+✔ Everflow financial projection reuses the canonical conversions ledger (1.139669ms)
+✔ financial projection only activates after a verified canonical order mapping exists (0.17296ms)
+✔ Everflow payout is projected as signed affiliate cost, not duplicate customer revenue (0.201293ms)
+✔ poll reconciliation projects unprojected Firehose state history (0.18575ms)
+✔ baseline and state transitions have deterministic idempotency keys (0.157217ms)
+✔ newly mapped current state is baselined and the same-run transition is not double counted (0.134283ms)
+✔ conversion sync returns dormant financial projection metrics (0.193482ms)
+✔ Everflow offer client uses bounded paginated read/search endpoint (1.506222ms)
+✔ offer source identity is connection scoped and advertiser ownership is retained (0.313053ms)
+✔ offer normalization excludes internal notes and descriptive HTML (0.275766ms)
+✔ offer persistence is idempotent and network guarded (0.312211ms)
+✔ offer migration denies direct browser access (0.237699ms)
+✔ offer routes are authenticated application routes and resolve stored credentials (0.27812ms)
+✔ Everflow direct order linkage checks both transaction identity columns before email fallback (1.402636ms)
+✔ email fallback is guarded by time and amount when amount is available (0.198289ms)
+✖ email alone is never treated as deterministic transaction identity (2.916008ms)
+✔ ambiguous candidates fail closed without creating mappings (0.254935ms)
+✔ source mappings are connection and provider-account scoped (0.228024ms)
+✔ existing mappings cannot silently move the same Everflow identity to another order (0.226842ms)
+✔ Step 6 reuses platform_orders and commerce_source_mappings instead of inventing a parallel identity table (0.215215ms)
+✔ order-linkage route is authenticated and does not return email or transaction input (0.267293ms)
+✔ Everflow scheduled worker discovers schedules without auto-activating them (1.592202ms)
+✔ Everflow scheduler uses atomic owner-checked leases and records enqueue time on claim (0.327735ms)
+✔ automatic Everflow selection excludes manual schedules and reuses the incremental engine (0.292201ms)
+✔ Everflow run metrics distinguish immutable evidence writes from reuse (0.301195ms)
+✔ Everflow scheduler remains additive and does not depend on the Commas runtime (0.429347ms)
+✔ Everflow has an isolated authenticated five-minute Vercel cron trigger (0.303267ms)
+✔ Everflow click sync runs independently on every scheduled conversion chunk (0.516719ms)
+✔ Everflow click failures persist safe stage and error diagnostics (0.917704ms)
+✔ click failure diagnostics do not alter conversion or Firehose behavior (0.362547ms)
+✔ Everflow conversion sync persists observable run metrics (1.169785ms)
+✔ Everflow run metrics are scoped to the authenticated organization and connection (0.266061ms)
+✔ only a completely empty installation can bootstrap (1.174522ms)
+✔ bootstrap names are bounded and normalized (0.253402ms)
+✔ bootstrap derives identity and role server-side (0.485663ms)
+✔ bootstrap is transactional, conflict-safe, and service-role-only (0.280012ms)
+✔ bootstrap creates exactly one account, organization, membership, and audit event (0.889952ms)
+✔ second bootstrap and every partially initialized state are rejected (0.195285ms)
+✔ the authenticated user receives the existing owner role (0.175735ms)
+✔ empty installations render setup while existing no-membership remains distinct (0.151729ms)
+✔ top-level unaffiliated session resolution selects bootstrap only for an empty installation (1.76305ms)
+✔ proxy rejects unauthenticated and unauthorized persistent sessions before upstream access (5.05799ms)
+✔ authorized list request uses only the fixed upstream path and injects the server secret (1.718782ms)
+✔ proxy rejects arbitrary operations, query injection, tenant overrides, and malformed imports (5.056087ms)
+✔ authorized import preserves the bounded contract and sanitizes the upstream result (1.943883ms)
+✔ status is available through the same fixed proxy boundary and unsafe upstream errors are sanitized (2.381352ms)
+✔ cross-origin browser requests are rejected before authorization (0.309357ms)
+✔ Gateway Wizard uses only the narrow application proxy and its client boundary contains no admin secret reference (0.813667ms)
+✔ Google customer IDs normalize to digits without UI hyphens (1.265709ms)
+✔ multiple directly accessible roots remain distinct manager access contexts (8.068982ms)
+✔ nested manager hierarchy preserves canonical parentage and spend eligibility (0.401386ms)
+✔ overlapping access paths preserve login context evidence without duplicating canonical account identity (0.22504ms)
+✔ hierarchy traversal recursively queries managers with explicit login customer context (11.504535ms)
+✔ multiple accessible roots preserve overlapping login contexts without duplicate canonical accounts (0.373984ms)
+✔ cycle and duplicate observations do not recurse forever (0.372122ms)
+✔ configured discovery bounds fail explicitly instead of returning partial hierarchy (0.582639ms)
+✔ Google Ads OAuth requests restricted adwords scope and offline consent (1.277246ms)
+✔ OAuth state is signed, scoped to organization and single setup request, and expires (1.110826ms)
+✔ authorization-code exchange requires a refresh token for a new durable connection (4.153617ms)
+✔ refresh token exchange returns short-lived access token without mutating stored refresh token (0.782811ms)
+✔ ListAccessibleCustomers uses v25 bearer auth and never sends login-customer-id (1.470067ms)
+✔ direct advertiser profile is discovered without customer_client hierarchy (4.894884ms)
+✔ profile failure preserves bounded Google Ads authorization enum (1.163966ms)
+✔ CUSTOMER_NOT_ENABLED remains a bounded skippable profile error (0.537661ms)
+✔ default roles resolve to typed permission collections (0.955642ms)
+✔ shell variants follow Account type rather than role labels (0.13943ms)
+✔ Agency and Client Organization access remains membership scoped (0.680687ms)
+✔ Business Contexts are restricted to the active allowed Organization (0.180663ms)
+✔ session normalization removes inaccessible Organization and Business Context state (0.171339ms)
+✔ route authorization checks permission, Organization scope, and shell variant (0.184187ms)
+✔ persistent Organization UUIDs are authorized from membership scope without consulting mock IDs (0.153571ms)
+✔ each representative identity resolves the permissions that drive its navigation (0.268024ms)
+✔ identity storage retries only transient transport rate-limit and server failures (1.537309ms)
+✔ identity storage still fails closed after retry and on non-transient errors (0.146031ms)
+✔ Connections overview preserves the approved commerce provider roadmap (2.143023ms)
+✔ Commas capability presentation preserves verified limitations (0.235586ms)
+✔ Connection experience never renders credential or evidence secrets (0.420605ms)
+✔ credential flow never echoes the submitted API key (0.293302ms)
+✔ commerce mutation route always uses structured JSON envelopes (0.211619ms)
+✔ commerce mutations enforce same-origin requests and persistent sessions (0.188905ms)
+✔ continuous Shadow execution remains background-only and never becomes browser activation (0.323518ms)
+✔ readiness is loaded server-side and cannot be posted by the browser (0.708149ms)
+✔ production readiness is read-only, server-derived, and keeps activation unavailable in browser routes (0.307484ms)
+✔ client bundle has no service-role, crypto, verifier, persistence, or Evidence imports (0.647197ms)
+✔ primary client navigation uses Connections and retains direct Settings routes (0.507186ms)
+✔ Connection routes and links remain canonical without development identity state (0.293012ms)
+✔ managed TKID origin lifecycle is understandable and remains source-gated (0.302055ms)
+✔ origin mutations are persistent-session, Product/Admin-scoped, same-origin, tenant-derived operations (0.206251ms)
+✔ ordinary Organization Admin cannot receive or render the managed origin registry (0.290778ms)
+✔ origin verification secrets remain one-time and audit metadata is safe (0.390259ms)
+✔ Accufy presentation preserves approved findings and typed uncertainty (1.600745ms)
+✔ Evidence-window eligibility uses calibrated timestamps and persisted rule tolerances (0.739605ms)
+✔ eligible attribution denominator excludes all-time Orders without source coverage (0.485763ms)
+✔ Version 3 corrects methodology while Version 2 remains immutable (0.338191ms)
+✔ Journey rendering distinguishes observed, propagated, and missing evidence (0.206732ms)
+✔ Nandi comparison emphasizes control delta rather than an isolated characteristic (0.227974ms)
+✔ client presentation excludes PII, raw Evidence, and storage fields (0.894991ms)
+✔ Investigation authorization requires Product/Admin capability and Organization scope (0.43082ms)
+✔ Investigation run identity is replay deterministic and version-sensitive (0.413895ms)
+✔ navigation exposes canonical Investigation URL only when Product/Admin capability is effective (0.439142ms)
+✔ server read model and runtime remain server-only (0.482237ms)
+✔ Investigation UI contains no Phase 3 dispute operation (0.33829ms)
+✔ browser request queues only durable work and cannot supply tenant or algorithm scope (0.264559ms)
+✔ expected Investigation denial renders a safe access-required state (0.426113ms)
+✔ OTO2 child materialization preserves the reviewed branch result (0.243938ms)
+✔ child Evidence Quality is cohort-specific and preserves uncertainty (0.302336ms)
+✔ child reuses typed findings without introducing causal claims (0.582088ms)
+✔ branch migration enforces same-tenant acyclic immutable provenance (0.418241ms)
+✔ child runtime references exact parent Version 3 and remains idempotent (0.219531ms)
+✔ Investigation UI exposes branch navigation without weakening authorization (0.421876ms)
+✔ authorized presentation builds the bounded inspection taxonomy (15.336125ms)
+✔ OTO2 inspection links the existing child without creating one (0.806777ms)
+✔ child catalog retains affected/control cohorts and Evidence ceiling (3.946653ms)
+✔ cohort drawer groups each metric with definitions, values, difference, and interpretation (0.438812ms)
+✔ sparse comparisons explain limitations instead of presenting Fragile or Small as deltas (0.485132ms)
+✔ comparison renderer keeps affected, control, and difference in one responsive unit before provenance (0.363388ms)
+✔ inspection DTO excludes PII and raw Evidence (1.173651ms)
+✔ deep-link state preserves unrelated query state and closes safely (0.235065ms)
+✔ drawer source includes modal focus, Escape, restoration, responsive sheet, and browser Back (0.577351ms)
+✔ drawer remains a read-only presentation surface (0.354445ms)
+✔ Investigation targets expose restrained keyboard triggers (0.39767ms)
+✔ empty evidence is a valid, clear state (7.15283ms)
+✔ Everflow-only evidence shows a stable identifier (19.346184ms)
+✔ Meta and Everflow evidence remains descriptive (1.36595ms)
+✔ Google and Everflow providers render independently (4.121598ms)
+✔ raw alias groups display separately (2.968528ms)
+✔ missing referrer has explicit operational wording (1.059579ms)
+✔ changed identifier is labeled Changed without accusation (3.503976ms)
+✔ multiple providers remain compact badges (1.036043ms)
+✔ truncation is visible and names capped categories (0.936102ms)
+✔ helper copy is explicitly evidence-only (0.82843ms)
+✔ event drill-down extracts only the bounded evidence contract (0.591592ms)
+✔ responsive layout uses collapsing grids and no mandatory wide table (0.3111ms)
+✔ loading and API errors remain handled by the existing journey detail state (0.220843ms)
+✔ person journey cards stay compact and evidence loads only with selected detail (0.256988ms)
+✔ complete zero-signal state is quiet and does not claim safety (24.251645ms)
+✔ informational network signal appears only under Context (12.170289ms)
+✔ unexpected network severity is neutralized with a contract warning (1.993457ms)
+✔ low and medium identifier changes render exact title, copy, and severity (3.065324ms)
+✔ future high severity and all confidence labels remain textual (5.298823ms)
+✔ review signals precede informational context when mixed (2.523597ms)
+✔ multiple changed groups remain separate cards (2.997612ms)
+✔ partial zero-signal state explains incompleteness without favorable empty copy (0.753477ms)
+✔ not-evaluable state explains unsupported evidence (1.096654ms)
+✔ signal and evaluation disclosures expose bounded provenance accessibly (2.261632ms)
+✔ stable evidence key and DOM ID are deterministic, bounded-contract identities (0.363078ms)
+✔ unresolved evidence references have neutral feedback and no fetch path (0.486935ms)
+✔ evidence cards expose focusable stable anchors and non-color-only highlighting (0.237618ms)
+✔ long bounded facts and digest use wrapping responsive layouts without tables (1.903271ms)
+✔ rendered conclusions remain neutral (2.307862ms)
+✔ customer cards, header, and timeline remain isolated from risk signals (0.453113ms)
+✔ live stream URLs never accept caller-controlled tenant scope (1.366662ms)
+✔ live stream retries are bounded and use capped exponential backoff (0.28471ms)
+✔ M11 actions.execute is a first-class permission (0.899968ms)
+✔ M11 execution permission is limited to privileged operator roles (0.156175ms)
+✔ M11 live route requires actions.execute and explicit confirmation (1.116434ms)
+✔ M11 route resolves exact existing TraceKit subscription server-side (0.143637ms)
+✔ M11 route never returns or accepts Commas credential (0.158038ms)
+✔ M11 route is bounded to test delivery and no provider config mutation (0.141674ms)
+✔ M11 route verifies same origin (0.107973ms)
+✔ M11 Commas webhook configuration mutation remains disabled (0.813918ms)
+✔ M11 create is evidenced but rollback remains unknown (0.240292ms)
+✔ M11 update and delete are not invented from absent evidence (0.203627ms)
+✔ M11 readiness requires provider contract controlled target and secret recovery (0.151518ms)
+✔ M11 external execution audit is durable service-role-only evidence (1.084336ms)
+✔ M11 audit is idempotent by request identity (0.145219ms)
+✔ M11 non-mutating audit refuses configuration mutation evidence (0.097778ms)
+✔ M11 live route persists audit before returning success (0.206681ms)
+✔ M11 no next-provider mutation is enabled yet (1.071957ms)
+✔ M11 Shopify webhook create is structurally preferred but blocked (0.190157ms)
+✔ M11 Shopify cannot graduate until rollback and governed wiring are proven (0.190157ms)
+✔ M11 Everflow mutation is not invented from read/sync client (0.216417ms)
+✔ Production V1 closes the legacy direct Shopify mutation route (1.452711ms)
+✔ governed Shopify proof remains hard-bound to the certified target and topic (0.189996ms)
+✔ governed proof deterministically handles one recovery object and rejects ambiguity (0.169786ms)
+✔ bounded creation verifies provider read-back before rollback (0.183226ms)
+✔ proof deletes only the bound execution object and reports net-zero (0.39141ms)
+✔ M11 mutation audit requires exact create rollback identity and verified net-zero state (1.154101ms)
+✔ M11 mutation audit is service-role only and idempotent (0.334174ms)
+✔ governed Shopify orchestration persists mutation audit before returning success (0.267494ms)
+✔ persisted evidence contains proof topic and callback but no credential (0.181303ms)
+✔ M11 Shopify remains blocked without explicitly approved controlled target (1.075592ms)
+✔ M11 readiness can pass only after rollback readback and controlled target approval (0.249216ms)
+✔ Shopify proof-only topic is APP_UNINSTALLED and excluded from ingestion topics (1.079429ms)
+✔ proof readback includes proof topic while normal readiness requires business topics (0.215946ms)
+✔ governed proof uses only the proof topic and rejects ambiguous matches (0.160793ms)
+✔ proof topic remains callback-bound to exact-object rollback (0.268885ms)
+✔ M12 readiness converges after authenticated bounded acceptance and durable replay proof (1.805624ms)
+✔ M12 readiness reflects enabled named inspection after acceptance (0.244549ms)
+✔ M12 binds only named operation-specific capabilities (1.948359ms)
+✔ M12 registry carries permission confirmation verification recovery and target boundaries (0.243348ms)
+✔ M12 does not expose proof operations as reusable execution (0.614637ms)
+✔ M12 named non-mutating plan capability exposes execution (0.187503ms)
+✔ M12 rejects unregistered generic operations (0.194313ms)
+✔ M12 exposes one named inspect_evidence action tool rather than generic execution (1.230897ms)
+✔ M12 action tool accepts opaque reference contract only (0.272051ms)
+✔ M12 adapter forwards opaque confirmation id rather than caller plan (0.220573ms)
+✔ M12 authenticated route supplies separate action service to protocol (0.166932ms)
+✔ M12 action service resolves durable reference under authenticated session (0.166912ms)
+✔ M12 tool delegates to governed enabled named non-mutating capability (0.462127ms)
+✔ M12 enabled adapter completes authorized consumed inspection without mutation (0.877033ms)
+✔ M12 adapter cannot be enabled by envelope executionAvailable field (0.193112ms)
+✔ M12 authenticated action service remains separate from read service (1.19937ms)
+✔ M12 does not prematurely expose inspect_evidence in public MCP tool list (0.22547ms)
+✔ M12 action service delegates only through governed orchestration (0.330048ms)
+✔ M12 reconciled action service preserves permission and freshness gates (0.169025ms)
+✔ M12 reconciled action service preserves durable replay boundary (0.177227ms)
+✔ M12 supplied authorization id requires persisted exact-envelope provenance (1.285699ms)
+✔ M12 unknown or mismatched persisted authorization fails closed (0.608919ms)
+✔ M12 authorization read uses service role and exact immutable envelope dimensions (3.518487ms)
+✔ M12 enabled orchestration still rejects missing execution permission (1.571921ms)
+✔ M12 caller-safe orchestration rejects missing permission before envelope execution (0.221253ms)
+✔ M12 caller-safe orchestration rejects confirmation drift before envelope execution (0.307344ms)
+✔ M12 confirmation at five-minute boundary reaches isolated durable execution (8.245689ms)
+✔ M12 stale confirmation fails before envelope or authorization (0.253323ms)
+✔ M12 future-dated confirmation fails closed (0.398722ms)
+✔ M12 malformed confirmation time fails closed (0.25833ms)
+✔ M12 preserves remediation-oriented recommendation success evidence as expected postcondition (1.325309ms)
+✔ M12 non-mutating inspect execution verifies diagnostic observation, not remediation (0.758043ms)
+✔ M12 diagnostic verification explicitly preserves no-provider-mutation boundary (0.224388ms)
+✔ M12 durable action references are service-role only (0.871976ms)
+✔ M12 intent retains exact server plan target operation actor and audit identity (0.183607ms)
+✔ M12 confirmation is bound to exact durable intent and actor (0.133802ms)
+✔ M12 confirmation resolution is organization actor and expiry scoped (0.123206ms)
+✔ M12 repository issues opaque ids server side and uses service role (0.11958ms)
+✔ M12 durable confirmation rejects foreign tenant, foreign actor and expired references in isolated SQL (1320.384562ms)
+✔ M12 durable authorization is service-role persistence backed (1.037075ms)
+✔ M12 authorization issuance binds immutable envelope identity and audit keys (0.31804ms)
+✔ M12 unregistered capability rejects before any durable authorization request (0.832125ms)
+✔ M12 consumption uses database atomic RPC rather than caller authorization state (0.205761ms)
+✔ M12 execution result persistence is service-role and immutable-envelope scoped (0.954059ms)
+✔ M12 replay repository only reads exact envelope result (0.137398ms)
+✔ M12 result store has no provider mutation surface (0.226952ms)
+✔ M12 eligibility inspection surfaces exact registry binding (1.373421ms)
+✔ M12 eligibility inspection derives execution capability from registry (0.217117ms)
+✔ M12 eligibility inspection remains read-only and does not make a plan eligible (0.233983ms)
+✔ M12 enabled registry resolves exact plan and satisfied governance (0.957655ms)
+✔ M12 governed chain completes named non-mutating inspection and independent verification (1.149484ms)
+✔ M12 valid envelope remains authorized but non-executable when plan capability binds (2.991183ms)
+✔ M12 envelope invalidates when execution operation differs from proposed plan operation (0.553445ms)
+✔ M12 envelope invalidates a plan whose capability contract drifts (1.081472ms)
+✔ M12 readiness closes after live exec-v2 same-result replay proof (1.476407ms)
+✔ M12 completed replay proof is reflected in named M13 activation (0.263057ms)
+✔ M12 exec-v2 canonicalizes equivalent UTC timestamp serializations to one identity (1.826695ms)
+✔ M12 exec-v2 changes identity when the actual instant changes (0.336177ms)
+✔ M12 customers.view alone cannot cross execution orchestration gate (2.4593ms)
+✔ M12 actions.execute alone does not replace plan read permission (0.148063ms)
+✔ M12 both permissions and fresh confirmation reach isolated durable execution (5.432726ms)
+✔ M12 inspect_evidence satisfies bounded capability properties (0.817022ms)
+✔ M12 enabled readiness includes caller-safe governed orchestration (0.58976ms)
+✔ M12 readiness does not weaken non-mutating or confirmation boundaries (0.130106ms)
+✔ M12 prepare tool derives intent from current server plan not caller plan (0.754989ms)
+✔ M12 confirm tool accepts only opaque intent id (0.127593ms)
+✔ M12 prepare and confirm persist but never invoke orchestration (0.263979ms)
+✔ M12 execution remains separate and opaque confirmation based (0.122845ms)
+✔ M12 intent and confirmation TTLs remain bounded (0.176707ms)
+✔ M12 historical disabled-registry proof override is unnecessary after named activation (0.97399ms)
+✔ M12 proof flag is absent from public MCP action schema (1.001681ms)
+✔ M12 server resolves proof only after durable opaque confirmation (0.25195ms)
+✔ M12 normal execution remains disabled without registry exposure or server proof (0.160793ms)
+✔ M12 resolves an existing M9 inspect_evidence plan to its exact capability (1.209254ms)
+✔ M12 refuses plans with no or unregistered operation (0.197929ms)
+✔ M12 fails closed when plan permission differs from capability (0.265982ms)
+✔ M12 fails closed when confirmation semantics differ (0.228815ms)
+✔ M12 never resolves controlled proof operations as reusable plan capabilities (0.473064ms)
+✔ M12 adapter independently reasserts proof capability is TraceKit journey-evidence non-mutating (1.063865ms)
+✔ M12 adapter proof remains an alternative only to reusable execution flag, not other gates (0.481055ms)
+✔ M12 enabled bounded adapter completes without acceptance proof override (1.023945ms)
+✔ M12 bounded adapter accepts only explicit server-authorized proof with all normal gates satisfied (0.267193ms)
+✔ M12 proof flag cannot bypass envelope or consumption gates (0.21258ms)
+✔ M12 readiness recognizes implemented orchestration authorization and replay (0.813407ms)
+✔ M12 readiness closes MCP tool exposure and acceptance proof blockers (0.649129ms)
+✔ M12 eligibility cannot be enabled by caller supplied execution state (1.301744ms)
+✔ M12 fully satisfied governance is eligible for enabled named capability (0.940178ms)
+✔ M12 unregistered operation fails capability binding (0.189836ms)
+✔ M12 governance gates still fail closed independently (0.604092ms)
+✔ M12 exact replay resolves existing authorization by immutable envelope (1.006287ms)
+✔ M12 orchestration finds existing authorization before issuing (0.171799ms)
+✔ M12 replay still requires atomic decision and durable result (0.136766ms)
+✔ M12 hardened adapter proof gates remain intact (0.187824ms)
+✔ M12 authorization persists exact envelope createdAt for deterministic replay identity (1.23293ms)
+✔ M12 replay rebuilds exact persisted envelope identity under organization scope (19.446346ms)
+✔ M12 consumed replay may outlive original confirmation freshness but must retain exact confirmation binding (0.133502ms)
+✔ M12 new execution still requires fresh confirmation (0.147362ms)
+✔ M12 legacy authorizations are not given fabricated envelope timestamps (3.143693ms)
+✔ M12 synthetic fixture is unavailable without exact server proof flag (0.951696ms)
+✔ M12 fixture naturally produces one identifier propagation inspection plan (1.135603ms)
+✔ M12 fixture does not alter recommendation logic or persist fake commerce entities (0.362978ms)
+✔ M12 fixture tool remains server-flag gated and caller has no fixture parameters (0.259171ms)
+✔ M12 replay branch reads durable result before bounded adapter (0.827708ms)
+✔ M12 missing replay result fails closed instead of re-executing (0.215735ms)
+✔ M12 completed first execution persists exact result after adapter (0.109305ms)
+✔ M12 replay returns prior execution object and remains non-provider-mutating (0.185209ms)
+✔ M13 actual MCP customer repository classifies Core failures into bounded categories (4.635393ms)
+✔ M13 bounded diagnostic accepts actual MCP repository namespace (0.189506ms)
+✔ M13 Core fetch diagnostics remain bounded categories (1.154351ms)
+✔ M13 protocol allowlists transport categories only behind bounded-v1 (0.275926ms)
+✔ M13 server customer reads use authoritative authenticated scope directly against Core (0.816111ms)
+✔ M13 server customer reads do not nested-fetch session-protected Next API (0.153041ms)
+✔ M13 browser customer repository retains same-origin Next API path (0.101092ms)
+✔ M13 all production repository reads pass governed scope (0.204929ms)
+✔ M13 corrected exact replay proof retains named inspection gate (0.693646ms)
+✔ M13 readiness records deterministic replay acceptance as complete (1.059048ms)
+✔ M13 evidence-limit fingerprint is deterministic and exact-text sensitive (0.786857ms)
+✔ M13 acceptance requires exact current Journey evidence limit (0.190037ms)
+✔ M13 planning only unblocks when every current limit fingerprint is durably accepted (0.11253ms)
+✔ M13 acceptance never rewrites Journey evidence (0.173602ms)
+✔ M13 acceptance ledger is service-role only and scope unique (0.23192ms)
+✔ M13 enables only the named TraceKit non-mutating journey evidence capability (5.234827ms)
+✔ M13 keeps Commas disabled and Shopify restricted to controlled proof (1.228294ms)
+✔ M13 reusable plan binding is enabled only for exact inspect evidence contract (0.19843ms)
+✔ M13 readiness reports enabled registry truth after all acceptance gates (0.302697ms)
+✔ M13 proven inspect_evidence exposure remains enabled after exact replay acceptance (1.147441ms)
+✔ M13 restore preserves provider controlled proof boundaries (0.742039ms)
+✔ M13 journey analysis exposes bounded opaque customer cursor (1.145588ms)
+✔ M13 cursor passes through service without decoding Core keyset internals (0.279662ms)
+✔ M13 repository forwards opaque cursor and returns Core next cursor (0.194643ms)
+✔ M13 first-page defaults remain backward compatible (0.197858ms)
+✔ MCP customer Core reads ignore legacy workspace hints and fail closed when canonical scope is absent (5.693169ms)
+✔ M13 Production canary completion is reflected in registry-backed readiness (1.413662ms)
+✔ M13 completion preserves provider controlled proof boundaries (0.453234ms)
+✔ M13 Core read errors are reduced to bounded status/fetch classes (1.085107ms)
+✔ M13 diagnostic is exact server-flag gated and allowlisted (0.320093ms)
+✔ M13 readiness reports the same enabled state as the registry (1.469587ms)
+✔ server customer repository uses authenticated Core transport with canonical organization scope (5.154115ms)
+✔ browser customer reads remain relative same-origin and cannot forward a server credential (0.72277ms)
+✔ production default keeps existing TK_SECRET_KEY behavior (1.142804ms)
+✔ explicit staging mode selects only TK_SECRET_KEY_STAGING (0.146141ms)
+✔ explicit staging mode never falls back to live TK_SECRET_KEY (0.381936ms)
+✔ non-exact staging flag does not switch credentials (0.115735ms)
+✔ M14 Commas durable envelope includes immutable creation and expiry timestamps (1.228873ms)
+✔ M14 Production V1 classification stops before authorization or provider execution (0.55006ms)
+✔ M14 durable orchestration delegates atomic consume and replay to shared gate (0.549699ms)
+✔ M14 provider intents use explicit target kind/json without overloading customer identity (1.142213ms)
+✔ M14 preserves existing Journey confirmation resolver and adds provider resolver (0.144128ms)
+✔ M14 prepare binds exact Commas subscription and event while execution remains disabled (0.263277ms)
+✔ M14.4 does not expose a Commas execution MCP tool (0.236367ms)
+✔ M14 Commas preparation is not exposed as an MCP tool in Production V1 (1.19363ms)
+✔ M14 target is exact server-derived approved webhook plus dispute.created (0.191649ms)
+✔ M14 Commas confirm and execute MCP tools remain suppressed (0.270608ms)
+✔ M14 diagnostic describes read-only inspection without provider delivery (0.309477ms)
+✔ M14 readiness diagnostic is read only and accepts no input (1.1334ms)
+✔ M14 diagnostic reports boundary booleans/counts without secret or payload fields (0.538663ms)
+✔ M14 diagnostic does not send test delivery or create intent (0.276397ms)
+✔ M14 Commas envelope identity is deterministic over bounded target and audit identity (1.353041ms)
+✔ M14 registry retains but disables the controlled Commas proof capability (0.277238ms)
+✔ Production V1 policy fails before Commas provider call (1.125037ms)
+✔ M16 Commas orchestration delegates durable authorization and replay to shared kernel (0.604733ms)
+✔ M14 selects Commas test delivery as bounded external-side-effect candidate (1.531621ms)
+✔ M14 engineering readiness does not expose Commas in Production V1 (0.147693ms)
+✔ M3 certification exposes only the Shopify controlled proof (0.107081ms)
+✔ Commas cron persists an invocation row before authorization branching (1.002212ms)
+✔ successful scheduler telemetry persists bounded dispatch counters (0.194363ms)
+✔ commerce cron telemetry is service-role only and indexed by provider/time (0.13258ms)
+✔ M15 Commas scheduler is protected and durably invoked (1.246931ms)
+✔ initial M15 host dispatches only due continuous shadow work (0.27885ms)
+✔ scheduler requires tenant production control and no connection pause (0.1994ms)
+✔ successful cycle advances only overlap schedule and records completion (0.228505ms)
+✔ M15 deep chunks have a strict per-invocation provider ceiling (1.220792ms)
+✔ deep due state cannot be starved by overlap last_enqueued cadence (0.431781ms)
+✔ scheduled deep identity remains stable and paused run is redispatchable (0.227092ms)
+✔ worker resumes after highest completed page and pauses at chunk boundary (0.498192ms)
+✔ pause RPC is lease-owner safe and non-terminal (0.238089ms)
+✔ derived investigation invalidation cannot fail a durably checkpointed chunk (0.360153ms)
+✔ scheduled deep chunk preserves normal continuous boundary state (0.237739ms)
+✔ scheduled deep conservative stops remain resumable (0.20532ms)
+✔ deep completion accepts exactly the stable resumable scheduler identity (0.535958ms)
+✔ M15 execute tool is reference-only with no caller provider target (1.124336ms)
+✔ M15 capability enables only named controlled reversible proof (0.237158ms)
+✔ M15 Shopify execution uses its provider-scoped durable confirmation resolver (0.190357ms)
+✔ M15 execution re-resolves current target and compares persisted intent (0.227814ms)
+✔ M15 immutable mutation audit occurs only after rollback verification (0.313793ms)
+✔ M15 Shopify resolver RPC preserves target integrity and cannot resolve Commas (0.281324ms)
+✔ M16 Shopify delegates only durable authorization replay to shared kernel (0.297198ms)
+✔ M16 Shopify orchestration source contains no escaped newline artifacts (0.132239ms)
+✔ M15 Shopify readiness tool is read-only and accepts no target arguments (1.041521ms)
+✔ M15 readiness is hard-bound to current Stem Labs Shopify tenancy (0.196186ms)
+✔ M15 readiness derives an HTTPS callback from server runtime origin (0.216407ms)
+✔ M15 readiness proves proof-only topic absence without mutation (0.282266ms)
+✔ M15 readiness requires governed credential envelope and decrypt (0.227623ms)
+✔ M15 execution exposure is explicitly governed, not generically available (1.083475ms)
+✔ M15 persists the exact created id before invoking rollback (0.419103ms)
+✔ M15 adopts exactly one existing proof topic and rejects ambiguity (0.289376ms)
+✔ M15 deletes only the persisted or adopted proof and verifies absence (0.321685ms)
+✔ M15 completed replay returns persisted result before provider orchestration (0.329918ms)
+✔ M15 Shopify preparation is caller-blind and execution remains separately governed (1.244377ms)
+✔ M15 Shopify intent persists exact server target and prepared recovery shell (0.256277ms)
+✔ M15 recovery schema can persist exact created external id before rollback (0.186221ms)
+✔ M15 recovery schema does not weaken immutable final mutation audit (0.236958ms)
+✔ M15 persistence diagnostics expose only HTTP status and never response body (0.256477ms)
+✔ M15 persistence diagnostic codes are allowlisted without exposing arbitrary errors (0.253793ms)
+✔ M15 workspace provisioning is bound to current Stem Labs Shopify tenancy (1.12017ms)
+✔ M15 creates authorization workspace only and no canonical catalog (0.393864ms)
+✔ M15 fails closed if Stem Labs catalog or mapping state appears (0.213782ms)
+✔ M15 stranded recovery is pinned to the exact canonical run and scope (0.928421ms)
+✔ recovery requires expired lease, exact lifetime counters, page 191 boundary, and persisted Evidence (0.217749ms)
+✔ recovery reuses original run and bounds lifetime provider requests at 191 without automatic continuation (0.223918ms)
+✔ schedule is paused for operator review before recovery and action requires Accufy permission plus exact confirmation (0.182916ms)
+✔ M16 durable execution kernel owns provider-neutral authorization and replay decisions (1.216775ms)
+✔ M16 kernel contains no provider target credential mutation or recovery knowledge (0.45071ms)
+✔ M16 leaves durable authorization and execution-result repositories unchanged (0.238109ms)
+✔ M16 governed actions API remains authenticated TraceKit-session scoped (1.091707ms)
+✔ M16 governed actions render on live Connections and not legacy Operations (0.189556ms)
+✔ M16 Connections supports preparation and deliberate confirmation without execution (1.255885ms)
+✔ Production V1 confirmation route is Shopify-only, authenticated, explicit and execution-free (1.215744ms)
+✔ M16 confirmation UI requires deliberate click after prepare (0.256567ms)
+✔ M16 contracts describe both proven provider actions and match capability governance (1.124727ms)
+✔ M16 contracts preserve materially different verification and recovery semantics (0.210918ms)
+✔ M16 contract registry is declarative and contains no provider execution escape hatch (0.370119ms)
+✔ M16 does not register inspect_evidence as an external provider action (0.154143ms)
+✔ M16 provider exposure requires complete matching governance contract (0.532643ms)
+✔ M16 named provider action service enforces contracts without generic execution surface (0.998932ms)
+✔ M16 provider action discovery is contract and readiness backed (1.310908ms)
+✔ M16 discovery cannot prepare confirm authorize or execute (0.321104ms)
+✔ M16 discovery MCP tool is read only and caller blind (2.729227ms)
+✔ M16 discovery does not merge provider readiness across organizations (0.94142ms)
+✔ M16 discovery touched TypeScript sources contain no escaped newline artifacts (0.428897ms)
+✔ M16 discovery handoff names only caller-blind prepare tools (0.292941ms)
+✔ M16 prepare route is authenticated caller-blind and readiness revalidated (1.09407ms)
+✔ Production V1 prepare route maps only the certified Shopify controlled proof (0.156346ms)
+✔ M16 Connections UI prepares and confirms without executing (0.188104ms)
+✔ M17 live Everflow remediation derives only from authorized Connections experience (0.786867ms)
+✔ M17 live Everflow remediation remains read only (0.21897ms)
+✔ M17 live Everflow remediation reports exact connection identity (0.11253ms)
+✔ M17 Everflow sync remediation is not offered for healthy state (1.211928ms)
+✔ M17 Everflow sync remediation is eligible for retained degraded evidence without active run (0.223597ms)
+✔ M17 Everflow sync remediation fails closed for active or stalled run (0.194894ms)
+✔ M17 Everflow sync remediation fails closed outside connected Everflow (0.184128ms)
+✔ M17 recovered historical failed checkpoints do not trigger remediation (0.308675ms)
+✔ M17 latest failed run remains eligible even before freshness degrades (0.170767ms)
+✔ M17 Everflow remediation inspector is isolated from application session and Connections loader (1.146549ms)
+✔ M17 isolated Everflow inspector scopes every read to active organization and exact connection (0.175185ms)
+✔ M17 isolated Everflow inspector reads no credentials or provider mutation surfaces (0.253312ms)
+✔ M17 live remediation signal view composes proven provider inspectors (0.813697ms)
+✔ M17 aggregate actionRequired derives only from provider signals (0.138489ms)
+✔ M17 remediation signal inspection remains read only (0.1521ms)
+✔ M17 Shopify provider state maps into common remediation vocabulary (1.348254ms)
+✔ M17 Everflow common signal preserves recovered healthy state (0.166782ms)
+✔ M17 only real eligible provider signal requires action (0.14553ms)
+✔ M17 remediation vocabulary is closed (1.390338ms)
+✔ M17 only eligible state requires action (0.224007ms)
+✔ M17 remediation signal derives actionRequired from state (0.162646ms)
+✔ M17 remediation signal requires provenance fields (0.516008ms)
+✔ M17 live remediation resolves approved target and reads provider state (1.258739ms)
+✔ M17 live remediation remains read only (0.277188ms)
+✔ M17 live remediation fails closed when target or provider read is unavailable (0.166682ms)
+✔ M17 touched TypeScript sources contain no escaped newline artifacts (0.368165ms)
+✔ M17 remediation health API is authenticated and read only (1.179128ms)
+✔ M17 Connections card distinguishes healthy repairable and blocked states (0.205821ms)
+✔ M17 Connections card exposes no remediation mutation control (0.23215ms)
+✔ M3 confirmation validity and insertion share one locked database transaction (2.637269ms)
+✔ M3 atomic confirmation binds tenant actor operation target and immutable plan identity (0.214684ms)
+✔ M3 stale missing cross-tenant actor and contract mismatches all reject before insertion (0.264029ms)
+✔ M3 replay is serialized and returns only the same still-valid confirmation (0.273202ms)
+✔ M3 all confirmation paths use the shared RPC with operation-specific target contracts (0.474145ms)
+✔ M3 failed confirmation cannot create authorization or access a provider (0.163016ms)
+✔ M3 execution retains independent stale tenant actor operation and target defenses (0.174143ms)
+✔ completed replay is resolved before confirmation and provider target resolution (1.133099ms)
+✔ completed replay returns the durable result without orchestration (0.247173ms)
+✔ requested_at is metadata while database time owns validity (0.242205ms)
+✔ replay is tenant actor confirmation operation and immutable-result bound (0.194985ms)
+✔ only service role can invoke the new execution RPCs (0.315856ms)
+✔ M4.4 production evidence closes notification contract without overclaiming Production V1 (1.721667ms)
+✔ M4.3 reconstructs the exact M3 lifecycle without a duplicate execution (8.619013ms)
+✔ M4.3 is truthful about supplemental and unlinked evidence (0.982412ms)
+✔ M4.3 endpoint is tenant-bound permission-gated and side-effect free (0.628328ms)
+✔ M4.3 response is allowlisted and does not expose raw plans or secrets (0.47727ms)
+✔ M4.3 UI remains under the audit permission boundary (0.315235ms)
+✔ M4.3 validator records production-proven lifecycle visibility without declaring Production V1 ready (1.031386ms)
+✔ M4.2 preserves the authoritative execution and audit role policy (0.938576ms)
+✔ M4.2 operational permissions are explicit and do not broaden provider execution (1.055352ms)
+✔ M4.2 rejects foreign malformed tenant and spoofed actor hints (0.203427ms)
+✔ M4.2 Work Item and Notification routes derive scope and actor before the admin-secret boundary (0.530821ms)
+✔ M4.2 foreign object IDs remain non-disclosing under server workspace scope (0.310028ms)
+✔ M4.2 Work Item transitions retain graph checks and authenticated activity actor (0.313633ms)
+✔ M4.2 audit view is permission bounded paginated and Admin Client View tenant-scoped (0.427825ms)
+✔ M4.2 release evaluator exposes each production evidence gate independently (0.1196ms)
+✔ M4 freezes the Production V1 provider/action matrix and unknown operations fail closed (4.96534ms)
+✔ M4 safe-disable hierarchy defaults certified Shopify on and fails closed on disables or invalid values (0.61667ms)
+✔ M4 exposes Shopify and suppresses Commas in capability and MCP discovery (0.530791ms)
+✔ M4 mutation, provider and action disables remove Shopify mutation tools (0.657311ms)
+✔ M4 Commas prepare, confirm and execute fail before persistence or provider access (0.268134ms)
+✔ M4 direct and shared Commas mutation routes reject before target/provider work (0.385342ms)
+✔ M4 suppresses the legacy direct Shopify bypass while retaining governed exposure (1.314127ms)
+✔ M4 evaluation disable preserves the finding but prevents actionable remediation (3.083968ms)
+✔ M4 policy gates do not gate historical lifecycle repositories (2.088381ms)
+✔ M4 evaluator certifies M3's bounded proof without declaring Production V1 ready (1.330607ms)
+✔ M4 evaluator requires every controlled-action and cross-cutting release gate (0.359673ms)
+✔ M4.2b first-party route derives tenant and actor and rejects all caller fields (1.278198ms)
+✔ M4.2b exposes no general Work Item creation route and keeps production transition evidence incomplete (0.247774ms)
+✔ M5 production policy negatives retain all fourteen correlated zero-delta cases (2.119697ms)
+✔ M5 restoration is exact and does not overclaim Production V1 (0.961871ms)
+✔ M5 policy negative plan covers every bypass class without authorizing execution (1.224287ms)
+✔ M5 plan preserves WS-022 ownership and validator separation (0.180162ms)
+✔ M5B projects only the declared governed-action notification classes (1.055302ms)
+✔ M5B derives lifecycle truth from existing durable action records (0.142915ms)
+✔ M5B stores presentation state separately from immutable lifecycle evidence (0.167123ms)
+✔ M5B action notification routes preserve tenant and RBAC boundaries (0.141152ms)
+✔ M5B Notification Center merges governed rows before unified filtering and pagination (0.165319ms)
+✔ M5B keeps Production V1 delivery in app only (0.134803ms)
+✔ M4.4 hardens tenant hints, mutation bodies, same-origin, and source failure (0.09974ms)
+✔ M4.4 uses exact durable execution identities and fails closed on ambiguity (0.115715ms)
+✔ M4.4 persists sanitized terminal failures without widening completed replay (0.224809ms)
+✔ M4.4 makes awaiting approval durable and explicitly confirmable (0.252971ms)
+✔ M4.4 applies governed filters and never hides governed-source failure (0.14539ms)
+✔ client and agency production navigation expose Notifications under organizations.view only (2.186508ms)
+✔ production header, account menu, and command palette navigate without notification mutations (0.84182ms)
+✔ exact authenticated production response renders six health rows and correct counts (0.452152ms)
+✔ successful governed-available empty response renders a genuine empty state (0.226672ms)
+✔ source failure is degraded and cannot become false healthy (0.527856ms)
+✔ page load uses server-derived tenant scope and performs no notification mutation (0.296447ms)
+✔ Phase B manifest is deterministic, Stem Labs scoped, and projection compatible (1.287593ms)
+✔ Phase B first-party route derives tenant and actor and accepts exact empty bodies only (1.009904ms)
+✔ Phase B persistence is atomic, idempotent, and fails closed on incompatible state (0.394285ms)
+✔ Phase B provider firewall has no credential, orchestration, delivery, or external audit path (0.335546ms)
+✔ Phase B lifecycle and presentation operations remain separated (0.254524ms)
+✔ Phase B applied migration remains byte-stable and initially installs invoker-rights functions (0.18562ms)
+✔ Phase B confirmation repair elevates only fixed confirmation writers and preserves M3 direct-insert denial (0.403589ms)
+✔ the already-applied M4.4 migration remains byte-identical (1.129404ms)
+✔ the forward migration removes default grants before granting the exact runtime contract (0.559814ms)
+✔ the repair is ACL-only and does not change global defaults or table semantics (0.369618ms)
+✔ M9 live-safe eligibility inspection reports every unsatisfied future execution gate (1.628977ms)
+✔ M9 eligibility inspection cannot grant confirm enable or execute (0.71592ms)
+✔ M9 satisfied governance remains blocked while execution capability is disabled (0.864614ms)
+✔ M9 exact plan target and fresh confirmation gates eligibility (0.188124ms)
+✔ M9 stronger permission and prerequisites independently block (0.332852ms)
+✔ M9 eligibility projection exposes audit identity but no execution operation (0.303218ms)
+✔ M10 atomic consumption locks authorization row before state transition (0.911505ms)
+✔ M10 authorization persistence is service-role only (0.254064ms)
+✔ M10 persistence contains no provider execution (0.167543ms)
+✔ M10 consume RPC qualifies state predicates against authorization table alias (0.959318ms)
+✔ MCP audit records actor, scope, permission, result and correlation (0.778404ms)
+✔ MCP audit supports denied and failure outcomes (0.671433ms)
+✔ M10 concurrent consumers serialize on the same authorization row (1.0211ms)
+✔ M10 loser observes persisted winner through consumed replay path (0.173081ms)
+✔ M10 invariant probe is service-only and checks consumed pair completeness (0.485562ms)
+✔ M10 authorization can be consumed once for exact immutable envelope (1.1003ms)
+✔ M10 exact retry after consumption is replay-safe and does not consume twice (0.228104ms)
+✔ M10 consumed authorization cannot cross envelope or idempotency boundary (0.183317ms)
+✔ M10 expired or invalid envelope fails closed (0.171498ms)
+✔ M10 consumption semantics remain a decision model with no execution primitive (0.385581ms)
+✔ M3 bearer parser accepts only bearer authorization (2.540182ms)
+✔ M3 MCP resource and OAuth challenge use canonical production endpoint (0.20596ms)
+✔ M3 bearer diagnostics classify safe pre-signature failures (2.359159ms)
+✔ M3 route diagnostics never log authorization value (0.713306ms)
+✔ M3 response diagnostic exposes only fixed auth reason codes (0.531923ms)
+✔ M10 first adapter executes only bounded evidence inspection after consumed authorization (2.440331ms)
+✔ M10 adapter rejects without authorized envelope or winning consumption (0.329126ms)
+✔ M10 adapter never claims verification it did not perform (0.156026ms)
+✔ M10 first adapter has no provider mutation surface (0.251669ms)
+✔ M11 governed Commas delivery requires winning consumption (1.108021ms)
+✔ M11 verified delivery requires provider sent plus target 2xx evidence (3.678509ms)
+✔ M11 provider/target failure does not become verified (0.525202ms)
+✔ M11 ambiguous provider response remains unresolved (0.534516ms)
+✔ M11 operation cannot mutate provider configuration (0.618643ms)
+✔ M6 aggregate buckets retain bounded Journey evidence references (5.693669ms)
+✔ M6 unresolved cohorts are directly investigable and bounded (0.443619ms)
+✔ M6 comparative cohorts expose counts denominators and evidence references (1.48517ms)
+✔ M6 comparative intelligence remains descriptive not scored or ranked (0.527906ms)
+✔ M6 observed deviations expose cohort and baseline math with sample safeguard (0.484811ms)
+✔ M6 deviation detection remains descriptive and non-predictive (0.406063ms)
+✔ M6 emits exact signed deviation math with evidence references (3.191535ms)
+✔ M6 suppresses genuine differences below minimum cohort sample (0.327284ms)
+✔ M6 emits no deviation when cohort equals baseline (0.162375ms)
+✔ M6 analyze_journeys is bounded read-only population evidence (1.661837ms)
+✔ M6 does not introduce causal quality or fraud scoring (0.625764ms)
+✔ M6 population semantics distinguish scanned discovered analyzed skipped and failed (1.501605ms)
+✔ M6 tool exposes independent customer and total Journey bounds (0.316668ms)
+✔ MCP customer repository uses TraceKit Core directly, not relative UI fetches (1.412611ms)
+✔ MCP server is wired to the server-native customer repository (0.248675ms)
+✔ M7 positive deviation handoff preserves math and affected Journey investigations (3.508964ms)
+✔ M7 positive handoff reports unresolved supporting Journey IDs instead of dropping them (0.673666ms)
+✔ M7 deviation handoff stays bounded to ten investigations (0.579825ms)
+✔ M7 deviation investigation revalidates observed deviation and bounds Journey investigations (1.283386ms)
+✔ M7 deviation tool is bounded read-only and requires evidence coordinates (0.239581ms)
+✔ M10 exact confirmed envelope can become authorized but never executable in foundation slice (2.285909ms)
+✔ M10 envelope identity changes when authorized target or operation changes (0.488787ms)
+✔ M10 confirmation bound to different target invalidates envelope (0.294755ms)
+✔ M10 expired authorization cannot remain authorized (0.386433ms)
+✔ M10 envelope carries idempotency audit verification and no execution primitive (0.793377ms)
+✔ M10 verified outcome requires no recovery (0.806887ms)
+✔ M10 unresolved verification fails closed to manual intervention (0.155154ms)
+✔ M10 failed reversible or compensatable outcome requires a new governed recovery plan (0.153051ms)
+✔ M10 failed irreversible outcome requires manual intervention (0.182746ms)
+✔ M10 recovery decision preserves verification evidence and never auto-recovers (0.792636ms)
+✔ M10 completed adapter is unresolved without verification evidence (1.112057ms)
+✔ M10 retained positive evidence independently verifies completion (1.367358ms)
+✔ M10 contradictory evidence marks verification failed despite completed adapter (0.153632ms)
+✔ M10 rejected execution cannot become verified (0.151118ms)
+✔ M10 verification remains evidence-only and non-mutating (0.274634ms)
+✔ M10 external provider adapters are disabled by contract (1.00714ms)
+✔ M10 external adapter contract requires full governance chain (0.188605ms)
+✔ M10 irreversible external mutation has explicit additional blocker (0.187232ms)
+✔ M10 external contract exposes no generic request execution surface (0.323458ms)
+✔ external MCP identity resolves only exact WorkOS user and organization membership (2.215051ms)
+✔ external MCP identity fails closed for unknown user or organization (0.307794ms)
+✔ external MCP identity fails closed when token organization is not the user's active membership (0.259952ms)
+✔ external MCP identity without org claim resolves exactly one active organization membership (0.317319ms)
+✔ external MCP identity without org claim fails closed when organization membership is ambiguous (0.535773ms)
+✔ external MCP session authorizes persistent contexts absent from mock metadata (1.11337ms)
+✔ external MCP session uses mock context data only as display decoration (0.46439ms)
+✔ external MCP session cannot activate a mock-only or missing persistent context (0.329607ms)
+✔ external MCP session excludes contexts outside the selected organization (0.333433ms)
+✔ external MCP permission overrides retain deny precedence independently of context resolution (0.281194ms)
+✔ M9 ready diagnostic maps to confirmation-required plan without executing (1.328463ms)
+✔ M9 blocked recommendation stays blocked and cannot request confirmation (0.209666ms)
+✔ M9 informational evidence review is not executable (0.173642ms)
+✔ M9 governance contract remains non-mutating (1.031737ms)
+✔ M9 ready recommendation preserves target evidence verification and requires confirmation (1.600144ms)
+✔ M9 blocked recommendation cannot request confirmation or become eligible (0.272932ms)
+✔ M9 informational recommendation is non executable (0.256878ms)
+✔ M9 positive plan remains non mutating even after human confirmation becomes conceptually required (0.44451ms)
+✔ MCP scope is derived from authorized session and rejects cross-tenant scope (1.533944ms)
+✔ MCP scope rejects missing capability (0.246392ms)
+✔ customer projection masks sensitive data without sensitive permission (0.279912ms)
+✔ order projection removes financial and sensitive fields without capabilities (0.242446ms)
+✔ M10 first mutation adapter requires persisted consumed authorization identity (0.983243ms)
+✔ M10 internal mutation is idempotent and changed replay rejects (0.255255ms)
+✔ M10 first mutation is reversible and remains internal (0.226322ms)
+✔ M10 mutation RPCs are service-role only (0.251019ms)
+✔ M7 investigation exposes evidence present missing boundaries and inspection targets (1.356155ms)
+✔ M7 tool is read-only and avoids unsupported root-cause claims (0.544581ms)
+✔ M7 unresolved attribution identifies missing primary evidence without blaming a boundary (2.457908ms)
+✔ M7 missing deterministic bridge preserves both source boundaries for inspection (1.375735ms)
+✔ M7 commerce-unlinked is independent from established attribution (0.423438ms)
+✔ M5 explain_journey is read-only, bounded, and evidence structured (1.215393ms)
+✔ M5 Journey intelligence keeps unknown evidence explicit (0.214093ms)
+✔ M5 distinguishes primary attribution evidence from downstream corroboration (0.224819ms)
+✔ M5 emits deterministic customer Journey order and exact shared-transaction evidence (1.175363ms)
+✔ M5 shared identifiers are evidence groups with complete participants (0.201293ms)
+✔ M5 machine conclusions cite evidence instead of free-form inference (0.219241ms)
+✔ M5 no attribution credit leaves attribution unresolved while commerce may remain linked (1.269185ms)
+✔ M5 attribution can be established without deterministic identity bridge (0.260904ms)
+✔ M5 commerce without canonical Journey stays explicitly unresolved (0.139711ms)
+✔ M9 end-to-end recommendation becomes confirmation-required governed plan (1.318048ms)
+✔ M9 exact confirmation plus all governance gates can establish theoretical eligibility only (0.382277ms)
+✔ M9 plan change invalidates previously valid confirmation (0.30486ms)
+✔ M9 target change requires fresh human confirmation (0.201203ms)
+✔ M9 close proof exposes no execution primitive (0.347093ms)
+✔ only Production-backed MCP migration identities remain deployable (1.160681ms)
+✔ filename reconciliation preserves every approved repository body hash (0.439082ms)
+✔ migration versions remain unique and the reconciled dependency order is exact (1.067751ms)
+✔ M4 order workspace preserves journey evidence and commerce relationship separately (3.147158ms)
+✔ M4 order enrichment does not invent unavailable financial detail (0.261234ms)
+✔ M4 MCP read repositories are server-native (1.512702ms)
+✔ M4 MCP server does not wire browser production repositories (0.216847ms)
+✔ MCP initialize advertises tools capability and protocol version (0.880488ms)
+✔ MCP tools/list exposes named read-only and explicitly governed action tools (0.670812ms)
+✔ MCP tools/call dispatches through governed service adapter (1.094902ms)
+✔ MCP protocol rejects malformed and unknown methods without leaking internals (0.155444ms)
+✔ MCP governed denial becomes generic tool error (0.458342ms)
+✔ M4 protocol keeps internal failures generic and unavailable resources non-specific (0.64966ms)
+✔ M4 protocol rejects unknown arguments before tool execution (0.17925ms)
+✔ M11 controlled Shopify mutation proof is recorded without enabling general mutation (1.142934ms)
+✔ M11 readiness mapping keeps all general mutation candidates disabled (0.245861ms)
+✔ M11 Commas test delivery remains only a non-mutating external transport proof (0.327344ms)
+✔ M11 Commas webhook creation remains blocked by recovery and second-system side effect (0.198921ms)
+✔ M11 generic Shopify and Everflow mutation remain outside the bounded contract (0.265941ms)
+✔ M8 recommendation with satisfied dependencies is ready (0.887229ms)
+✔ M8 evidence-limit review is informational and dependent diagnostics are blocked (0.647507ms)
+✔ M8 applicability is derived without scores or execution semantics (0.202656ms)
+✔ M8 evidence review deterministically precedes dependent diagnostics (1.5246ms)
+✔ M8 without evidence limits has no artificial dependency (0.177087ms)
+✔ M8 dependency ordering is explicit not score based (0.332842ms)
+✔ M8 maps M7 conditions to bounded advisory recommendations with evidence contract (1.666685ms)
+✔ M8 remains advisory and contains no execution or repair path (0.564581ms)
+✔ M8 end-to-end plan exposes informational prerequisite and blocked diagnostic (2.135581ms)
+✔ M8 evidence resolution deterministically makes diagnostic ready (0.41112ms)
+✔ M8 plan proof remains advisory and evidence backed (0.485703ms)
+✔ M8 unresolved attribution maps only to attribution inspection (1.527795ms)
+✔ M8 commerce-unlinked maps to commerce linkage inspection (0.287744ms)
+✔ M8 missing deterministic bridge maps to identifier propagation without assigning blame (0.405652ms)
+✔ M8 evidence limits map to explicit review and uncertainty (0.746947ms)
+✔ M8 multiple independent gaps yield multiple bounded recommendations (0.19892ms)
+✔ M2 tool catalog preserves approved read-only core tools and explicitly named governed actions (0.985587ms)
+✔ M2 adapter dispatches normalized arguments (1.043854ms)
+✔ M2 adapter rejects unknown tools, extra arguments, missing ids, and excessive limits (0.582439ms)
+✔ M2 result envelope provides text and structured content (0.154243ms)
+✔ M10 race harness requires distinct sessions and overlapping lock window (1.14065ms)
+✔ M10 race acceptance checks persisted invariant and cleans controlled row (0.228755ms)
+✔ M10 race harness contains no provider mutation (0.221695ms)
+✔ integrations hub exposes a dedicated Meta Ads advertising entry (0.83551ms)
+✔ Meta UI starts OAuth through the bounded server route and explains read-only scope (0.135124ms)
+✔ Meta UI preserves multiple connections and account selections independently (0.273253ms)
+✔ Meta account rows expose durable account identity and operational context (0.127232ms)
+✔ saving account selection explicitly does not activate sync (0.173161ms)
+✔ all 46 Production-backed identities are exact and 44 ordinary rename bodies stay locked (7.445352ms)
+✔ archived and superseded histories are not deployable (1.023524ms)
+✔ applied recoveries are self-contained and the duplicate has a local compatibility identity (0.62324ms)
+✔ three applied historical body exceptions are explicit and narrowly bounded (0.511162ms)
+✔ forward migrations precede and preserve the TKID migration (1.226671ms)
+✔ operational convergence defines generic final state without executing historical actions (0.725434ms)
+✔ subscription and credential forward contracts are narrowly scoped (0.639845ms)
+✔ portfolio financial totals preserve signed ledger math before display normalization (1.030745ms)
+✔ portfolio aggregation treats missing and non-numeric amounts as zero (0.171298ms)
+✔ portfolio aggregation does not infer values from unrelated fields (0.164348ms)
+✔ mock Mission Control repository returns the approved executive experience (2.285498ms)
+✔ mock Mission Control repository does not share mutable snapshots (1.344979ms)
+✔ review readiness extracts generated CSS and JavaScript assets (1.65014ms)
+✔ manifest validation fails when a referenced asset is missing (0.890914ms)
+✔ 29Next M12 operator surface is explicit bounded and non-production gated (8.026729ms)
+✔ 29Next M12 server path resolves encrypted credential without returning it (2.033057ms)
+✔ canonical source mappings explicitly permit subscription identity (1.872696ms)
+✔ 29Next M13 webhook canary is raw-byte signed and non-production gated (1.048832ms)
+✔ 29Next M13 webhook canary accepts only order.created and refreshes current order (0.200522ms)
+✔ 29Next M13 webhook canary persists idempotent receipt and keeps schedules disabled (0.418481ms)
+✔ M13 diagnostic webhook paths remain behind WorkOS and secrets are not returned (0.211069ms)
+✔ 29Next M13 characterization endpoint is non-production diagnostic only (1.118597ms)
+✔ 29Next M13 characterization does not activate webhook processing or depend on commerce persistence (0.237208ms)
+✔ 29Next M13 characterization returns proof only (0.261284ms)
+✔ M14.1B permits one active commerce credential per connection and type (1.21295ms)
+✔ M14.1B webhook secret resolver uses encrypted connection-scoped storage only (0.322977ms)
+✔ legacy commerce API credential lookup remains explicitly api_key scoped (0.295185ms)
+✔ 29Next M14 permanent webhook route is inert, raw-byte signed, and bounded (1.088702ms)
+✔ 29Next M14 signing secret is behind a server-only connection-scoped resolver (0.257709ms)
+✔ 29Next M14 route reuses proven order.created processing without broadening event coverage (0.266252ms)
+✔ M14 shared order.created processor is extracted from the M13 environment gate (0.31818ms)
+✔ only the exact permanent 29Next webhook path is added to WorkOS bypass (0.207123ms)
+✔ 29Next M14 runtime logging is bounded and response does not expose secret material (0.283518ms)
+✔ preserves the isolated Production-backed Next29 migration identities (2.547363ms)
+✔ migration 096 remains the sole lease-column prerequisite for the recovery (0.442307ms)
+✔ Next29 recovery preserves disabled provisioning and lease-aware RPC behavior (0.445492ms)
+✔ normal acceptance proxy is WorkOS, organization, permission, and same-origin protected (1.182203ms)
+✔ normal acceptance proxy accepts only confirmation and fixes the upstream contract (0.258871ms)
+✔ normal acceptance proxy keeps the secret server-side and sanitizes responses (0.283197ms)
+✔ fixed redelivery proxy requires authentication, active organization, permission, and same origin (0.94128ms)
+✔ fixed redelivery proxy accepts only confirmation and sends no caller scope upstream (0.200923ms)
+✔ fixed redelivery proxy uses only server secret and sanitizes both response paths (0.209506ms)
+✔ mock Offer snapshots are scoped, serializable, and freshly cloned (27.21132ms)
+✔ Offer scope rejects inaccessible Offers and product-admin client rendering (0.508377ms)
+✔ deep links parse and normalize invalid route state safely (3.45306ms)
+✔ Mission Control Offer hrefs preserve identity and production focus (0.507566ms)
+✔ Compare accepts two to four valid accessible Offers and derives its conclusion (1.188573ms)
+✔ trend selection and Offer search resolve through repository use cases (6.045791ms)
+✔ active organization owner receives role capabilities even when persisted role permissions are empty (1.235253ms)
+✔ canonical Offer route is session-derived, permission protected, and tenant scoped (0.618533ms)
+✔ inactive membership and wrong active organization fail closed (0.611232ms)
+✔ persistent Offers use canonical catalog while development keeps reviewed mock workspace (0.679596ms)
+✔ Offers page retains Product Mapping Review and guarded mapping mutations (0.446934ms)
+✔ one-shot operator proxy uses authenticated same-origin RBAC (0.739336ms)
+✔ one-shot proxy fixes scope and bounds server-side (0.235135ms)
+✔ secret is server-only and the response is sanitized (0.167442ms)
+✔ proxy does not mutate scheduler, schedule, activation, or provider state (0.204568ms)
+✔ stranded-run recovery proxy is authenticated, confirmation-bound, and server-only (0.274164ms)
+✔ build fingerprint proxy is authenticated, fixed-path, and read-only (0.242076ms)
+✔ Order snapshots are scoped, cloned, and serializable (3.490726ms)
+✔ financial and Customer-sensitive data respect permissions (0.926898ms)
+✔ inaccessible and Product Admin Order scope is denied (0.913999ms)
+✔ deep links normalize invalid temporary context (0.778133ms)
+✔ processor expected fee applies fixed fee to every capture (0.280984ms)
+✔ Shipping Margin and qualification remain explicit (0.61013ms)
+✔ identifier search focuses production Order evidence (5.882369ms)
+✔ Order route contracts preserve production destinations (0.399513ms)
+✔ filters cover approved scenarios (0.549859ms)
+✔ ordering evidence recovery proxy requires session, organization, permission, and same origin (0.984405ms)
+✔ ordering evidence recovery proxy fixes confirmation, scope, and upstream path server-side (0.275306ms)
+✔ ordering evidence recovery proxy keeps credentials server-only and sanitizes responses (0.305571ms)
+✔ reserved recovery resume proxy rejects unauthenticated, organization-less, unauthorized, and cross-origin requests (1.343707ms)
+✔ reserved recovery resume proxy accepts only its exact confirmation and fixed upstream path (0.235105ms)
+✔ reserved recovery resume proxy keeps the Worker secret server-side and makes no direct data or provider calls (0.443629ms)
+✔ reserved recovery resume proxy sanitizes success and failure responses (0.191469ms)
+✔ cohort construction requires Main and OTO2 in one tenant-scoped evidenced Journey (1.363587ms)
+✔ exclusive affected and clean-control outcomes remain distinct (0.357329ms)
+✔ an Order cannot be claimed by two Journeys (0.176977ms)
+✔ charge sequencing and elapsed buckets are deterministic (0.805766ms)
+✔ charge-count strata retain small denominators (0.300323ms)
+✔ numeric summaries use distributions rather than means alone (0.261815ms)
+✔ refund comparison retains numerator, denominator, and exact small-sample result (0.580626ms)
+✔ reason families preserve recognition distinctions and exact comparison (0.252361ms)
+✔ customer history outside the Everflow window stays Commerce-only (1.032758ms)
+✔ affected n=12 cannot be promoted beyond limited quality (0.266312ms)
+✔ finding taxonomy has no causal classification (0.113902ms)
+✔ analysis output is replay deterministic (0.161343ms)
+✔ PBS migration identities match the established Production ledger (1.087059ms)
+✔ test-only fixture supplies the exact seven-step approved foundation (0.503349ms)
+✔ generic replay skips absent PBS tenant and fails closed on partial/conflicting scope (0.293883ms)
+✔ runtime RPC preserves confirmation, membership, fixed scope, conflicts, and ACL (0.326853ms)
+✔ final catalog composition remains exactly 7 + 13 + 4 + 1 = 25 steps (0.283397ms)
+✔ production mode rejects development identity activation (1.375144ms)
+✔ a real WorkOS session always wins over local development identity state (0.195475ms)
+✔ persistent shell identity cannot be overridden by dev_identity or persisted mock state (0.533875ms)
+✔ persistent initial session is ready and never initializes development state (1.009964ms)
+✔ persistent user IDs are never encoded as development identity state (0.376678ms)
+✔ persistent navigation is canonical while development review preserves identity (0.589249ms)
+✔ persistent Organization UUID resolves to the mock repository scope only through Business Context (0.292402ms)
+✔ persistent Bullseye scope returns matching Workspace and search records only (7.074743ms)
+✔ unknown persistent Organization or Business Context produces a closed repository scope (0.831074ms)
+✔ role permissions are capabilities and an explicit deny wins (0.259792ms)
+✔ a platform administrator keeps support context while a customer-only identity selects its Organization (0.245711ms)
+✔ suspended membership has no permissions (0.131589ms)
+✔ organization and capability checks deny without disclosing existence (0.755359ms)
+✔ invitation validates intended identity, expiry, and replay (0.194213ms)
+✔ safe session serialization excludes external identity and override details (0.136466ms)
+✔ audit metadata redacts protected values (0.681959ms)
+✔ active Organization cookie is signed, user-bound, and expiring (0.646305ms)
+✔ Organization switching revalidates scope, clears Business Context, and audits success (0.337129ms)
+✔ production routes are protected while auth and static assets remain public (0.420845ms)
+✔ the sign-out route delegates active and missing sessions to AuthKit's safe cookie and provider flow (0.160012ms)
+✔ explicit local identity mode bypasses AuthKit initialization before provider configuration is read (0.170027ms)
+✔ real-data mode blocks privileged legacy proxies regardless of caller workspace_id (0.082665ms)
+✔ MCP OAuth discovery and resource routes bypass interactive AuthKit middleware only (0.115374ms)
+✔ expired, future and malformed membership periods cannot grant session permissions (0.231139ms)
+✔ advertiser and agency users cannot read platform catalog even with injected admin grants (1.63759ms)
+✔ platform support can inspect but cannot provision or invite (0.22545ms)
+✔ suspended membership and explicit permission denial fail closed (0.222546ms)
+✔ privileged mutations require same origin (2.29334ms)
+✔ client provisioning cannot create platform accounts (1.037205ms)
+✔ only the governed admin endpoint bypasses the legacy real-data proxy block (0.17918ms)
+▶ canonical provisioning transactions and tenant-safe membership administration
+  ✔ advertiser creates account plus organization; agency creates account plus agency (2.655508ms)
+  ✔ authenticated browser role cannot execute server provisioning RPC (3.405079ms)
+  ✔ service role can execute with authorized actor (6.913694ms)
+  ✔ normal customer actor cannot create clients (3.473232ms)
+  ✔ invalid account type and actor identity cannot provision (6.584737ms)
+  ✔ membership change rejects foreign tenant and platform role (7.50117ms)
+  ✔ final owner cannot be removed or demoted (4.911532ms)
+  ✔ explicit permission denial fails in database (4.138325ms)
+  ✔ audit failure rolls back account and organization creation (5.003491ms)
+✔ canonical provisioning transactions and tenant-safe membership administration (1458.828887ms)
+✔ canonical platform membership periods reject expired, future and malformed dates (0.72242ms)
+✔ normalizes punctuation and whitespace deterministically (3.259136ms)
+✔ routes high-confidence title identity to bulk review by default (0.62288ms)
+✔ price evidence corroborates but cannot create identity (0.220332ms)
+✔ provider-account scope wins over broader organization rule (0.262677ms)
+✔ auto-map requires policy, rule mode, threshold, and exact-id when configured (0.302346ms)
+✔ non-exact identity cannot auto-map when exact-id policy is required (0.205811ms)
+✔ corrected Growth Partner exact identities recommend only independently authorized products (0.554187ms)
+✔ final catalog exact identities remain suggest-only and price cannot substitute for identity (0.527586ms)
+✔ operator-authorized 5M6yv exact identity recommends existing Platinum without price identity (0.414545ms)
+✔ Push Button System bootstrap creates one context, one offer, seven stable steps, and no variants (1.181552ms)
+✔ authorized prices are metadata and never participate in canonical identity (0.413704ms)
+✔ catalog creation is fixed-scope, idempotent, audited, and service-role only (0.47736ms)
+✔ four checkout identities can converge on Front End without merging or creating variants (0.261575ms)
+✔ mapping remains separately version-guarded and imports cannot overwrite approval (0.44415ms)
+✔ catalog creation route is WorkOS scoped, same-origin, fixed-purpose, and sanitized (0.23221ms)
+✔ 5M6yv recommendation reuses Platinum and preserves all financial and mapping state (0.301775ms)
+✔ recovery baseline keeps the critical application routes (1.047711ms)
+✔ recovery baseline keeps authenticated shell and membership resolution (0.377335ms)
+✔ business-context cookie is user and organization bound (2.10117ms)
+✔ persistent UI writes Offer Workspace selection server side (0.507115ms)
+✔ server session reads persisted context and validates against accessible contexts (0.354775ms)
+✔ organization switch clears stale business-context cookie (0.220282ms)
+✔ command palette opens, toggles, and closes for every dismissal event (1.309025ms)
+✔ the trigger open event remains open until a distinct outside event occurs (0.164368ms)
+✔ search and avatar menu are mutually exclusive and avatar cleanup is deterministic (0.163557ms)
+✔ query identity wins, navigation preserves it, and persisted identity is the fallback (0.353874ms)
+✔ switching between Client and Platform identities clears incompatible scope (0.43079ms)
+✔ invalid Organization and Business Context values normalize without throwing (0.171098ms)
+✔ user menu context is variant-specific (0.349187ms)
+✔ development identity notice follows the resolved session origin (0.212831ms)
+✔ persistent sessions expose real sign-out without opening the placeholder drawer (1.200041ms)
+✔ development review sessions retain the non-mutating sign-out placeholder (0.367525ms)
+✔ every registered navigation destination resolves to an allowed or denied policy outcome (0.631302ms)
+✔ starts a historical bulk query with the requested cutoff (4.831249ms)
+✔ surfaces Shopify bulk user errors (0.922793ms)
+✔ reads a persisted bulk operation by exact id (0.52365ms)
+✔ downloads bulk JSONL only over HTTPS (0.548718ms)
+✔ parses flat bulk JSONL resources (0.38455ms)
+✔ reassembles order children from Shopify JSONL parent relationships (0.345461ms)
+✔ rejects malformed bulk JSONL (0.264298ms)
+✔ missing persisted Shopify operation is durably failed so the next pass can restart (6.573256ms)
+✔ completed Shopify operation without result URL is durably failed when objects exist (0.283838ms)
+✔ completed zero-object Shopify operation without result URL is a successful empty backfill (0.307654ms)
+✔ starts and persists a new Shopify bulk operation (2.247931ms)
+✔ polls the persisted operation id and persists waiting status (0.435336ms)
+✔ downloads, normalizes, writes, and completes a finished bulk operation (3.337945ms)
+✔ marks failed Shopify bulk operations failed without writing records (0.327124ms)
+✔ returns complete without restarting a matching completed run (0.745194ms)
+✔ persists an unavailable bulk operation as failed without downloading or writing (0.329196ms)
+✔ Shopify historical reader uses a fixed created_at cutoff and CREATED_AT ordering (4.153676ms)
+✔ bounded historical batches complete cleanly and preserve a resume cursor (0.504281ms)
+✔ M10 scheduler prioritizes live sync and advances Shopify bulk historical backfill (6.157399ms)
+✔ Shopify live orders stay below the Admin GraphQL single-query cost ceiling (3.277454ms)
+✔ M8 customer connection page replaces manual Shopify test controls with lifecycle status (0.837072ms)
+✔ M10 lifecycle exposes bulk history while retaining legacy backfill compatibility (1.11365ms)
+shopify_graphql_cost_retry { query: 'products', previousPageSize: 100, nextPageSize: 50 }
+shopify_graphql_cost {
+  query: 'products',
+  pageSize: 50,
+  requestedQueryCost: 570,
+  actualQueryCost: 10,
+  maximumAvailable: 2000,
+  currentlyAvailable: 1990,
+  restoreRate: 100
+}
+✔ orders are capped below Shopify's single-query cost ceiling (0.940789ms)
+✔ reader halves page size and retries when Shopify rejects a query for cost (7.923222ms)
+✔ reader does not retry non-cost GraphQL errors (1.560905ms)
+✔ Shopify refund uses transaction amount while totalRefundedSet is temporarily zero (1.89575ms)
+✔ Shopify refund prefers a positive totalRefundedSet when available (0.249907ms)
+✔ lib/commerce/shopify-core/normalized-writer.ts updates an existing refund ledger row instead of skipping it (1.218117ms)
+✔ ../api/src/connectors/shopify/normalized-writer.ts updates an existing refund ledger row instead of skipping it (0.297519ms)
+✔ order reads split refund reconciliation into independent bounded Shopify requests (9.614954ms)
+✔ legacy financial cursor migrates to the refunded traversal (0.221845ms)
+✔ fully refunded Shopify order normalizes as REFUNDED even when displayFinancialStatus remains PAID (1.825263ms)
+✔ paid Shopify order with no refund remains COMPLETED (0.259902ms)
+✔ partial refund does not mark the Shopify order fully refunded (0.20564ms)
+✔ Shopify M6 scheduler reuses the certified incremental runtime with bounded leases (13.266604ms)
+✔ Shopify scheduler is cron-protected and registered every five minutes (3.130934ms)
+✔ tenant A reuses its existing normalized Order identity on replay (1.050345ms)
+✔ tenant B receives a deterministic scoped locator when tenant A owns the compatibility locator (0.182695ms)
+✔ different connections in one organization remain distinct provider/source identities (0.274685ms)
+✔ ambiguous unowned legacy compatibility rows fail closed (0.410079ms)
+✔ canonical disagreement in the same provider/source scope fails closed (0.181274ms)
+✔ same-scope compatibility ownership without the authoritative source match fails closed (0.192731ms)
+✔ lib/commerce/shopify-core/normalized-writer.ts writes by provider/source scope without permitting canonical reassignment (0.403849ms)
+✔ ../api/src/connectors/shopify/normalized-writer.ts writes by provider/source scope without permitting canonical reassignment (0.183637ms)
+✔ migration exposes the scoped provider/source identity as an inferable conflict target (0.293944ms)
+✔ Shopify incremental order searches quote updated_at timestamps (5.165302ms)
+✔ Shopify signed webhook is the only commerce webhook explicitly public through WorkOS middleware (6.96055ms)
+✔ M9 registration manages exactly orders/create and refunds/create (14.7956ms)
+✔ M9 authenticated registration endpoint targets the signed production route shape (6.501027ms)
+✔ M9 connection UI exposes subscription readiness and activation (2.771761ms)
+✔ M9 Shopify webhook endpoint authenticates raw-body HMAC before commerce processing (12.339154ms)
+✔ M9 accepts only order-create and refund-create and resolves tenant from shop identity (1.591961ms)
+✔ M9 preserves webhook evidence, delivery idempotency, and reuses certified incremental order persistence (1.423097ms)
+✔ readiness contract covers identity and multi-tenant Edge dependencies (0.759936ms)
+✔ diagnostic is read-only and fails closed on schema drift (0.196656ms)
+✔ new sb_secret keys use apikey authentication without JWT Bearer (4.936768ms)
+✔ legacy JWT service-role keys retain Bearer authentication (5.594529ms)
+✔ empty-installation detection distinguishes bootstrap from ordinary no-membership (1.893176ms)
+✔ synchronizeUser updates an existing WorkOS identity without merge-upsert (1.09365ms)
+✔ business contexts come from active persistent access and catalog rows (1.907898ms)
+✔ remote-only duplicate has one comment-only compatibility identity (1.588756ms)
+✔ canonical journey-repair body stays unique and hash locked (23.031204ms)
+✔ deployable migration versions remain unique (1.773936ms)
+✔ source stop/start is organization scoped, explicitly confirmed, and audited (1.138277ms)
+✔ proof status is service-role operator state and its read path performs no mutation (0.384951ms)
+✔ migration is generic and the only new Stage-1 identity (1.322856ms)
+✔ status reports claims, accepted persistence, bounded rejection counts and terminal state (0.24553ms)
+✔ SDK is explicit-first and performs no broad DOM capture (1.012357ms)
+✔ SDK uses opaque UUID event identity, bounded queue, async keepalive and safe failure (0.628318ms)
+✔ browser storage is session-scoped and contains no secret or PII (0.301214ms)
+✔ bootstrap retries reuse a session-scoped idempotency identity (0.216417ms)
+✔ privacy mode suppresses non-essential VSL milestones (0.160802ms)
+✔ client-error API accepts bounded classification rather than stack or payload (0.136225ms)
+✔ release metadata, provenance, and integrity are deterministic (11.266847ms)
+✔ build rejects a syntactically valid nonexistent provenance commit (107.929712ms)
+✔ two clean builds produce identical bytes (287.515357ms)
+✔ artifact is generic, CSP-safe, and canonical (0.412452ms)
+✔ script load and initialization are idempotent (2.188311ms)
+✔ terminal M1 response fails closed without retry (2.286229ms)
+✔ successful essential bootstrap persists only session identity and respects autoPageView false (2.750499ms)
+✔ bundle contains no implicit behavioral, fingerprint, or referrer collection (0.25832ms)
+✔ configuration validation fails closed (2.180148ms)
+✔ recovery primitive is generic and accepts no caller event content (1.260582ms)
+✔ recovery requires stopped ingestion and pre-existing admitted durable state (0.286062ms)
+✔ event reconstruction explicitly maps real columns without normalized-only fields (0.29163ms)
+✔ replay and concurrency are mutation-idempotent (0.204568ms)
+✔ RPC is security-invoker and service-role-only (0.275876ms)
+✔ authenticated Bullseye Product/Admin review entitlement grants managed-origin access (1.568266ms)
+✔ ordinary Organization Admin and Investigation-only overrides remain denied (0.548818ms)
+✔ organization-owner requires the scoped TKID override (0.357869ms)
+✔ registry-wide authorization requires a null resource ID (0.304349ms)
+✔ missing Bullseye Business Context and wrong-scope overrides remain denied (0.299102ms)
+✔ platform-admin behavior remains available without a scoped override (0.148364ms)
+✔ authorization fails closed when organization, context, or capabilities are missing (0.688479ms)
+✔ an effective deny remains fail-closed despite a matching allow override (0.855501ms)
+✔ TKID provisioning is operator-authorized, tenant-scoped, and audited (1.9688ms)
+✔ TKID provisioning returns exact idempotent rollback evidence (0.540245ms)
+✔ migration defines a reusable mechanism and does not silently mutate the EcoWatt tenant (0.162896ms)
+✔ M2 is tenant-generic and seeds no executable privacy policy (1.254973ms)
+✔ policy registries require approved executable contracts (0.250998ms)
+✔ selection and execution are bounded, leased, idempotent, and source scoped (0.175715ms)
+✔ existing privacy contract redacts TKID evidence and preserves canonical Commerce (0.294434ms)
+✔ ingestion start requires active policies and enabled execution capability (0.224549ms)
+✔ operator RPCs are security invoker and service-role only (0.263707ms)
+✔ scheduler remains explicitly off until deployment configuration is approved (0.143998ms)
+✔ published 1.0.0 bytes and manifest exactly equal the approved release (1.772694ms)
+✔ versioned publication has immutable anonymous CORS and exact MIME contracts (0.411651ms)
+✔ static SDK paths bypass WorkOS middleware and no mutable alias exists (0.316678ms)
+✔ public artifact stays generic and release overwrite protection remains (0.388867ms)
+✔ EcoWatt acceptance fixture is data, valid, and absent from generic runtime (1.838524ms)
+✔ configuration fails closed for callbacks, extraction, wildcards, duplicate paths, and excess CTAs (0.526695ms)
+✔ universal entry owns exactly-once bootstrap, ordered lifecycle, trusted interaction, and teardown (0.315005ms)
+✔ managed queue is single-flight draining with bounded retry (0.22518ms)
+✔ duplicate universal initialization shares one startup (0.403559ms)
+✔ ordered lifecycle attaches one trusted CTA listener and teardown removes it (6.477091ms)
+✔ back-to-back lifecycle calls drain in order instead of stranding the second event (11.503614ms)
+✔ immutable SDK 1.0.0 remains byte-identical (0.325871ms)
+✔ published 1.1.0 bytes and manifest exactly equal the approved release (1.695107ms)
+✔ versioned 1.1.0 publication has immutable anonymous CORS and exact MIME contracts (0.279472ms)
+✔ 1.1.0 publication is generic, immutable, and has no mutable alias (0.376358ms)
+✔ universal 1.1.0 manifest and integrity are deterministic (11.386868ms)
+✔ two clean universal builds are byte and manifest identical (278.137024ms)
+✔ universal artifact is tenant-generic and CSP-safe (0.240032ms)
+✔ a later full current conversion window recovers historical checkpoint health without erasing history (1.553233ms)
+✔ partial, stale, failed or unproven recovery never clears active checkpoint failures (0.226422ms)
+✔ different resources and failures after the full-window boundary remain degraded (0.148214ms)
+✔ exact parent and explicit numeric/hashid pair proves observation (1.3259ms)
+✔ amount or time similarity never proves a bridge (0.235455ms)
+✔ parent mismatches and duplicate hashids fail closed (0.239171ms)
+✔ output never returns customer values or arbitrary raw fields (0.381024ms)
+✔ refund lookup accepts UUID identities and preserves scope and ambiguity (1349.935977ms)
+✔ absent authoritative identity bridge blocks even with matching order and amounts (2.244306ms)
+✔ scope leakage and ambiguous identity bridges reject the entire plan (0.569009ms)
+✔ pending refunds, invalid evidence and existing effects cannot qualify (0.409939ms)
+✔ money arithmetic is exact and component double counting is rejected (0.223227ms)
+✔ duplicate observations and oversized unbounded requests reject (0.28496ms)
+✔ test-data exclusions and missing exclusion checks block even with authoritative identity proof (0.303608ms)
+✔ certification accepts only the persisted request scope and rejects tenant, permission, lease and origin violations before execution (42.668774ms)
+✔ history passes resume every page, retain failed pages and create scoped durable fingerprints (83.008574ms)
+✔ v5 exact order lookup uses a selective tenant index without changing identity decisions (1760.962581ms)
+✔ inventory download requires both operator permissions, exact tenant/account/run scope and performs only provider/database reads (69.381389ms)
+✔ numeric refund field is visible without claiming a mapping (1.019548ms)
+✔ customer and secret fields are not returned (0.256957ms)
+✔ wrong event, refund or parent rejects (0.291009ms)
+✔ WS-017 Intelligence browser proxies resolve authenticated organization scope (1.5038ms)
+✔ WS-017 read routes reject conflicting scope and inject active organization (0.151609ms)
+✔ WS-017 lifecycle mutations require actions.execute (0.200393ms)
+✔ WS-017 Work Item mutation strips caller identity and overwrites actor/workspace (0.11253ms)
+✔ WS-017 Notification mutation forwards only validated server-derived workspace (0.162635ms)
+✔ WS-017 unauthorized proxy access fails closed without exposing authorization detail (0.222145ms)
+✔ client-read-only can read commerce identifiers but cannot read nested financial or sensitive details (2.639163ms)
+✔ detailed financial access requires both permissions and still excludes raw provider payloads (0.282616ms)
+✔ restricted financial values in narrative strings and primary identity containers are removed (0.215726ms)
+✔ successful provider send is durably settled without exposing provider tokens or granting membership (1.229716ms)
+✔ already claimed, sent or ambiguous attempts never make another provider request (1.368536ms)
+✔ known rejection is retryable but network/provider uncertainty remains ambiguous (0.459083ms)
+✔ lost persistence acknowledgement does not report a successful delivery or resend (0.279983ms)
+✔ provider result with foreign email or organization grant fails closed (0.283117ms)
+✔ no-membership landing provides verified-email discovery outside the membership shell (0.38416ms)
+✔ customer issuance permits only scoped existing least-privilege role (1.829772ms)
+✔ minimum customer role covers requested reads without platform or mutation powers (0.275716ms)
+✔ acceptance validation fails closed for invalid expiry and replays (0.334454ms)
+✔ Orders consume every canonical page including exact provider identities without inventing contacts (4.650258ms)
+✔ ordinary customer landing cannot fetch or serialize the global catalog even with a forged platform capability (1.711493ms)
+✔ platform catalog requires matching persisted identity, role, account, current dates and capability (1.07284ms)
+✔ Admin Client View requires persisted impersonation permission separately from catalog access (0.512133ms)
+✔ shell and direct platform route enforce persisted catalog guard before global data serialization (0.336839ms)
+✔ Mission Control accepts an authorized persistent context without a mock identifier (2.009843ms)
+✔ Mission Control fails closed for foreign or inaccessible contexts and organizations (0.405822ms)
+✔ conversion failures remain unavailable while genuine zero and positive counts survive (0.248055ms)
+✔ healthy credentials cannot conceal a failed sync, including behind unrelated success (0.449799ms)
+✔ only a later success for the same resource recovers its older failed run (0.169686ms)
+✔ persistent portfolio scopes every query and renders canonical order revenue when conversions fail (0.912286ms)
+✔ portfolio authorization rejects missing financial permission and foreign tenant before persistence (0.290228ms)
+✔ private read gateway denies unauthenticated, inactive, and foreign scope before Core transport (3.424307ms)
+✔ read gateway injects canonical tenant, retains pagination and projects restricted details (4.702647ms)
+✔ aggregate financial permission cannot authorize detailed financial reads or reconcile mutations (2.428284ms)
+✔ authorized detailed financial read preserves genuine zero (0.997786ms)
+✔ chargeback financial scope rejects read-only roles, expired membership and conflicting tenant hints (1.41104ms)
+✔ combined platform routes use canonical persisted capability checks (1.713136ms)
+✔ combined Admin Client View retains separate impersonation authorization and support label (0.320243ms)
+✔ platform invitation scope is persisted and request-only (2.094602ms)
+✔ persisted denial and ineffective memberships prevent catalog reads (1.706896ms)
+✔ unknown and inactive target organizations or accounts fail closed (1.157377ms)
+✔ customer scopes never expand or query platform catalog (0.300183ms)
+ℹ tests 1399
+ℹ suites 0
+ℹ pass 1397
+ℹ fail 2
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 10549.165332
+
+✖ failing tests:
+
+test at tests/commerce-product-mapping-workflow.test.ts:1:5963
+✖ review projection supplies ranked impact, refund, alert, and work-item state without PII (9.176884ms)
+  AssertionError [ERR_ASSERTION]: The input did not match the regular expression /refund_count/. Input:
+  
+  '-- Converge generic operational compatibility and product-mapping health state.\n' +
+    '-- Historical operator actions are intentionally not replayed.\n' +
+    '-- No fixed run, marker, audit, pause, or dispatch row is created by this migration.\n' +
+    '\n' +
+    'alter table public.commerce_product_mapping_decisions\n' +
+    '  add column if not exists correlation_id text;\n' +
+    '\n' +
+    'do $$\n' +
+    'declare v_definition text;\n' +
+    'begin\n' +
+    "  if to_regprocedure('public.decide_commerce_product_mapping(uuid,uuid,uuid,uuid,text,text,uuid,uuid,uuid,text,text,uuid,text,text)') is not null then\n" +
+    "    select pg_get_functiondef('public.decide_commerce_product_mapping(uuid,uuid,uuid,uuid,text,text,uuid,uuid,uuid,text,text,uuid,text,text)'::regprocedure) into v_definition;\n" +
+    "    if v_definition not ilike '%p_correlation_id%'\n" +
+    "      or v_definition not ilike '%tracekit_audit_events%'\n" +
+    "      or v_definition not ilike '%mapping_version is distinct from p_expected_mapping_version%' then\n" +
+    "      raise exception 'typed product-mapping decision RPC conflicts with expected final contract';\n" +
+    '    end if;\n' +
+    '  end if;\n' +
+    'end $$;\n' +
+    '\n' +
+    'do $$\n' +
+    'declare v_signature text;\n' +
+    'begin\n' +
+    '  foreach v_signature in array array[\n' +
+    "    'public.decide_commerce_product_mapping(uuid,uuid,uuid,uuid,text,text,uuid,uuid,uuid,text,uuid,text)',\n" +
+    "    'public.decide_commerce_product_mapping(uuid,uuid,uuid,uuid,text,text,uuid,uuid,uuid,text,text,uuid,text)'\n" +
+    '  ] loop\n' +
+    '    if to_regprocedure(v_signature) is not null then\n' +
+    "      execute format('revoke all on function %s from public, anon, authenticated, service_role', to_regprocedure(v_signature));\n" +
+    '    end if;\n' +
+    '  end loop;\n' +
+    'end $$;\n' +
+    '\n' +
+    'create or replace function public.decide_commerce_product_mapping(\n' +
+    '  p_organization_id uuid, p_connection_id uuid, p_provider_account_id uuid, p_provider_product_id uuid,\n' +
+    '  p_resulting_state text, p_business_context_id text, p_canonical_offer_id uuid, p_offer_step_id uuid,\n' +
+    '  p_offer_variant_id uuid, p_expected_mapping_version text, p_mapping_version text,\n' +
+    '  p_decided_by_user_id uuid, p_reason text, p_correlation_id text\n' +
+    ') returns boolean language plpgsql security invoker set search_path=public,pg_temp as $$\n' +
+    'declare v_previous_state text; v_current_mapping_version text; v_updated integer;\n' +
+    'begin\n' +
+    "  if p_resulting_state not in ('approved','rejected') or nullif(btrim(p_expected_mapping_version),'') is null\n" +
+    "    or nullif(btrim(p_mapping_version),'') is null or p_mapping_version=p_expected_mapping_version\n" +
+    "    or nullif(btrim(p_reason),'') is null or nullif(btrim(p_correlation_id),'') is null then\n" +
+    "    raise exception 'invalid product mapping decision' using errcode='22023';\n" +
+    '  end if;\n' +
+    "  if p_resulting_state='approved' and (p_business_context_id is null or p_canonical_offer_id is null or p_offer_step_id is null) then\n" +
+    "    raise exception 'approved product mapping target incomplete' using errcode='22023';\n" +
+    '  end if;\n' +
+    "  if p_resulting_state='rejected' and (p_business_context_id is not null or p_canonical_offer_id is not null or p_offer_step_id is not null or p_offer_variant_id is not null) then\n" +
+    "    raise exception 'rejected product mapping cannot retain a target' using errcode='22023';\n" +
+    '  end if;\n' +
+    '  select mapping_status,mapping_version into v_previous_state,v_current_mapping_version\n' +
+    '  from public.commerce_provider_products where id=p_provider_product_id and organization_id=p_organization_id\n' +
+    '    and connection_id=p_connection_id and provider_account_id=p_provider_account_id for update;\n' +
+    '  if not found then return false; end if;\n' +
+    "  if v_current_mapping_version is distinct from p_expected_mapping_version then raise exception 'stale product mapping version' using errcode='40001'; end if;\n" +
+    '  insert into public.commerce_product_mapping_decisions\n' +
+    '    (organization_id,connection_id,provider_account_id,provider_product_id,previous_state,resulting_state,business_context_id,canonical_offer_id,offer_step_id,offer_variant_id,mapping_version,decided_by_user_id,reason,correlation_id)\n' +
+    '  values (p_organization_id,p_connection_id,p_provider_account_id,p_provider_product_id,v_previous_state,p_resulting_state,p_business_context_id,p_canonical_offer_id,p_offer_step_id,p_offer_variant_id,p_mapping_version,p_decided_by_user_id,btrim(p_reason),btrim(p_correlation_id));\n' +
+    '  update public.commerce_provider_products set mapping_status=p_resulting_state,\n' +
+    "    business_context_id=case when p_resulting_state='approved' then p_business_context_id else null end,\n" +
+    "    canonical_offer_id=case when p_resulting_state='approved' then p_canonical_offer_id else null end,\n" +
+    "    offer_step_id=case when p_resulting_state='approved' then p_offer_step_id else null end,\n" +
+    "    offer_variant_id=case when p_resulting_state='approved' then p_offer_variant_id else null end,\n" +
+    '    mapping_version=p_mapping_version,reviewed_by_user_id=p_decided_by_user_id,reviewed_at=now(),updated_at=now()\n' +
+    '  where id=p_provider_product_id and organization_id=p_organization_id and connection_id=p_connection_id\n' +
+    '    and provider_account_id=p_provider_account_id and mapping_version is not distinct from p_expected_mapping_version;\n' +
+    '  get diagnostics v_updated=row_count;\n' +
+    "  if v_updated<>1 then raise exception 'stale product mapping version' using errcode='40001'; end if;\n" +
+    '  insert into public.tracekit_audit_events(actor_user_id,account_id,organization_id,action,target_type,target_id,result,permission_evaluated,correlation_id,metadata)\n' +
+    '  select p_decided_by_user_id,c.account_id,p_organization_id,\n' +
+    "    case when p_resulting_state='approved' then 'product_mapping.approved' else 'product_mapping.rejected' end,\n" +
+    "    'commerce_provider_product',p_provider_product_id::text,'success','offers.manage',btrim(p_correlation_id),\n" +
+    "    jsonb_build_object('previous_mapping_version',p_expected_mapping_version,'mapping_version',p_mapping_version,'resulting_state',p_resulting_state,'business_context_id',p_business_context_id,'canonical_offer_id',p_canonical_offer_id,'offer_step_id',p_offer_step_id,'offer_variant_id',p_offer_variant_id)\n" +
+    '  from public.commerce_provider_connections c where c.id=p_connection_id and c.organization_id=p_organization_id;\n' +
+    '  return true;\n' +
+    'end $$;\n' +
+    '\n' +
+    'revoke all on function public.decide_commerce_product_mapping(uuid,uuid,uuid,uuid,text,text,uuid,uuid,uuid,text,text,uuid,text,text)\n' +
+    '  from public,anon,authenticated;\n' +
+    'grant execute on function public.decide_commerce_product_mapping(uuid,uuid,uuid,uuid,text,text,uuid,uuid,uuid,text,text,uuid,text,text)\n' +
+    '  to service_role;\n' +
+    'comment on function public.decide_commerce_product_mapping(uuid,uuid,uuid,uuid,text,text,uuid,uuid,uuid,text,text,uuid,text,text)\n' +
+    "  is 'Append-only tenant-scoped Product mapping decision with expected-version, reason, and correlation evidence.';\n" +
+    '\n' +
+    'do $$\n' +
+    'begin\n' +
+    "  if to_regclass('public.commerce_ordering_evidence_recovery_markers') is null then\n" +
+    "    raise exception 'commerce_ordering_evidence_recovery_markers prerequisite is missing';\n" +
+    '  end if;\n' +
+    'end\n' +
+    '$$;\n' +
+    '\n' +
+    '-- One-time continuation for the already-reserved Evidence-only ordering recovery.\n' +
+    'alter table public.commerce_ordering_evidence_recovery_markers\n' +
+    '  add column if not exists continuation_dispatch_claimed_at timestamptz,\n' +
+    '  add column if not exists queue_dispatched_at timestamptz;\n' +
+    '\n' +
+    'alter table public.commerce_ordering_evidence_recovery_markers enable row level security;\n' +
+    'revoke all on table public.commerce_ordering_evidence_recovery_markers from public, anon, authenticated;\n' +
+    'grant select, update on table public.commerce_ordering_evidence_recovery_markers to service_role;\n' +
+    '\n' +
+    'create or replace function public.resume_ordering_evidence_only_fdf97cb1()\n' +
+    'returns table(run_id uuid, account_id uuid, organization_id uuid, connection_id uuid, provider_account_id uuid, scheduler_identity text, request_key uuid)\n' +
+    'language plpgsql\n' +
+    'security definer\n' +
+    'set search_path = public, pg_temp\n' +
+    'as $$\n' +
+    'declare\n' +
+    '  v_run public.commerce_sync_runs%rowtype;\n' +
+    '  v_connection public.commerce_provider_connections%rowtype;\n' +
+    '  v_marker public.commerce_ordering_evidence_recovery_markers%rowtype;\n' +
+    'begin\n' +
+    "  perform pg_advisory_xact_lock(hashtextextended('ordering-evidence-only-resume:fdf97cb1-222c-4fb3-b02d-b4502a3f85a9', 0));\n" +
+    '\n' +
+    '  select r.* into v_run\n' +
+    '  from public.commerce_sync_runs r\n' +
+    "  where r.id = 'fdf97cb1-222c-4fb3-b02d-b4502a3f85a9'::uuid\n" +
+    '  for update;\n' +
+    "  if not found then raise exception 'ordering continuation run unavailable' using errcode = '42501'; end if;\n" +
+    '\n' +
+    "  if v_run.status <> 'running' or v_run.lease_expires_at is null or v_run.lease_expires_at >= now() or v_run.cancelled_at is not null then\n" +
+    "    raise exception 'ordering continuation run is not reclaimable' using errcode = '42501';\n" +
+    '  end if;\n' +
+    "  if v_run.connection_id <> 'ea1c2313-6120-4692-84c5-ec3562e7dcf6'::uuid or v_run.sync_type <> 'transactions' or v_run.mode <> 'continuous' then\n" +
+    "    raise exception 'ordering continuation scope invalid' using errcode = '42501';\n" +
+    '  end if;\n' +
+    "  if coalesce(v_run.metadata->>'dispatch_source', '') <> 'operator_ordering_verification'\n" +
+    "    or v_run.metadata->>'ordering_verification' <> 'true'\n" +
+    "    or v_run.metadata->>'shadow_only' <> 'true'\n" +
+    "    or coalesce((v_run.metadata->>'max_pages')::integer, 0) <> 3\n" +
+    "    or coalesce((v_run.metadata->>'per_page')::integer, 0) <> 100\n" +
+    "    or v_run.metadata->>'operator_recovery_dispatched' <> 'true'\n" +
+    "    or coalesce(v_run.metadata->>'operator_recovery_reason', '') <> 'ordering_evidence_only' then\n" +
+    "    raise exception 'ordering continuation metadata invalid' using errcode = '42501';\n" +
+    '  end if;\n' +
+    '\n' +
+    '  select m.* into v_marker\n' +
+    '  from public.commerce_ordering_evidence_recovery_markers m\n' +
+    "  where m.recovery_key = 'fdf97cb1-222c-4fb3-b02d-b4502a3f85a9'\n" +
+    '    and m.run_id = v_run.id\n' +
+    '  for update;\n' +
+    "  if not found then raise exception 'ordering continuation marker unavailable' using errcode = '42501'; end if;\n" +
+    '  if v_marker.continuation_dispatch_claimed_at is not null or v_marker.queue_dispatched_at is not null then\n' +
+    "    raise exception 'ordering continuation already claimed' using errcode = '42501';\n" +
+    '  end if;\n' +
+    '\n' +
+    '  select c.* into v_connection\n' +
+    '  from public.commerce_provider_connections c\n' +
+    "  where c.id = 'ea1c2313-6120-4692-84c5-ec3562e7dcf6'::uuid\n" +
+    '    and c.id = v_run.connection_id\n' +
+    '    and c.organization_id = v_run.organization_id\n' +
+    '    and c.'... 35219 more characters
+  
+      at TestContext.<anonymous> (/workspace/scratch/61a85fe6297b/ws022-failure-remediation/ui/tests/commerce-product-mapping-workflow.test.ts:92:162)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: "-- Converge generic operational compatibility and product-mapping health state.\n-- Historical operator actions are intentionally not replayed.\n-- No fixed run, marker, audit, pause, or dispatch row is created by this migration.\n\nalter table public.commerce_product_mapping_decisions\n  add column if not exists correlation_id text;\n\ndo $$\ndeclare v_definition text;\nbegin\n  if to_regprocedure('public.decide_commerce_product_mapping(uuid,uuid,uuid,uuid,text,text,uuid,uuid,uuid,text,text,uuid,text,text)') is not null then\n    select pg_get_functiondef('public.decide_commerce_product_mapping(uuid,uuid,uuid,uuid,text,text,uuid,uuid,uuid,text,text,uuid,text,text)'::regprocedure) into v_definition;\n    if v_definition not ilike '%p_correlation_id%'\n      or v_definition not ilike '%tracekit_audit_events%'\n      or v_definition not ilike '%mapping_version is distinct from p_expected_mapping_version%' then\n      raise exception 'typed product-mapping decision RPC conflicts with expected final contract';\n    end if;\n  end if;\nend $$;\n\ndo $$\ndeclare v_signature text;\nbegin\n  foreach v_signature in array array[\n    'public.decide_commerce_product_mapping(uuid,uuid,uuid,uuid,text,text,uuid,uuid,uuid,text,uuid,text)',\n    'public.decide_commerce_product_mapping(uuid,uuid,uuid,uuid,text,text,uuid,uuid,uuid,text,text,uuid,text)'\n  ] loop\n    if to_regprocedure(v_signature) is not null then\n      execute format('revoke all on function %s from public, anon, authenticated, service_role', to_regprocedure(v_signature));\n    end if;\n  end loop;\nend $$;\n\ncreate or replace function public.decide_commerce_product_mapping(\n  p_organization_id uuid, p_connection_id uuid, p_provider_account_id uuid, p_provider_product_id uuid,\n  p_resulting_state text, p_business_context_id text, p_canonical_offer_id uuid, p_offer_step_id uuid,\n  p_offer_variant_id uuid, p_expected_mapping_version text, p_mapping_version text,\n  p_decided_by_user_id uuid, p_reason text, p_correlation_id text\n) returns boolean language plpgsql security invoker set search_path=public,pg_temp as $$\ndeclare v_previous_state text; v_current_mapping_version text; v_updated integer;\nbegin\n  if p_resulting_state not in ('approved','rejected') or nullif(btrim(p_expected_mapping_version),'') is null\n    or nullif(btrim(p_mapping_version),'') is null or p_mapping_version=p_expected_mapping_version\n    or nullif(btrim(p_reason),'') is null or nullif(btrim(p_correlation_id),'') is null then\n    raise exception 'invalid product mapping decision' using errcode='22023';\n  end if;\n  if p_resulting_state='approved' and (p_business_context_id is null or p_canonical_offer_id is null or p_offer_step_id is null) then\n    raise exception 'approved product mapping target incomplete' using errcode='22023';\n  end if;\n  if p_resulting_state='rejected' and (p_business_context_id is not null or p_canonical_offer_id is not null or p_offer_step_id is not null or p_offer_variant_id is not null) then\n    raise exception 'rejected product mapping cannot retain a target' using errcode='22023';\n  end if;\n  select mapping_status,mapping_version into v_previous_state,v_current_mapping_version\n  from public.commerce_provider_products where id=p_provider_product_id and organization_id=p_organization_id\n    and connection_id=p_connection_id and provider_account_id=p_provider_account_id for update;\n  if not found then return false; end if;\n  if v_current_mapping_version is distinct from p_expected_mapping_version then raise exception 'stale product mapping version' using errcode='40001'; end if;\n  insert into public.commerce_product_mapping_decisions\n    (organization_id,connection_id,provider_account_id,provider_product_id,previous_state,resulting_state,business_context_id,canonical_offer_id,offer_step_id,offer_variant_id,mapping_version,decided_by_user_id,reason,correlation_id)\n  values (p_organization_id,p_connection_id,p_provider_account_id,p_provider_product_id,v_previous_state,p_resulting_state,p_business_context_id,p_canonical_offer_id,p_offer_step_id,p_offer_variant_id,p_mapping_version,p_decided_by_user_id,btrim(p_reason),btrim(p_correlation_id));\n  update public.commerce_provider_products set mapping_status=p_resulting_state,\n    business_context_id=case when p_resulting_state='approved' then p_business_context_id else null end,\n    canonical_offer_id=case when p_resulting_state='approved' then p_canonical_offer_id else null end,\n    offer_step_id=case when p_resulting_state='approved' then p_offer_step_id else null end,\n    offer_variant_id=case when p_resulting_state='approved' then p_offer_variant_id else null end,\n    mapping_version=p_mapping_version,reviewed_by_user_id=p_decided_by_user_id,reviewed_at=now(),updated_at=now()\n  where id=p_provider_product_id and organization_id=p_organization_id and connection_id=p_connection_id\n    and provider_account_id=p_provider_account_id and mapping_version is not distinct from p_expected_mapping_version;\n  get diagnostics v_updated=row_count;\n  if v_updated<>1 then raise exception 'stale product mapping version' using errcode='40001'; end if;\n  insert into public.tracekit_audit_events(actor_user_id,account_id,organization_id,action,target_type,target_id,result,permission_evaluated,correlation_id,metadata)\n  select p_decided_by_user_id,c.account_id,p_organization_id,\n    case when p_resulting_state='approved' then 'product_mapping.approved' else 'product_mapping.rejected' end,\n    'commerce_provider_product',p_provider_product_id::text,'success','offers.manage',btrim(p_correlation_id),\n    jsonb_build_object('previous_mapping_version',p_expected_mapping_version,'mapping_version',p_mapping_version,'resulting_state',p_resulting_state,'business_context_id',p_business_context_id,'canonical_offer_id',p_canonical_offer_id,'offer_step_id',p_offer_step_id,'offer_variant_id',p_offer_variant_id)\n  from public.commerce_provider_connections c where c.id=p_connection_id and c.organization_id=p_organization_id;\n  return true;\nend $$;\n\nrevoke all on function public.decide_commerce_product_mapping(uuid,uuid,uuid,uuid,text,text,uuid,uuid,uuid,text,text,uuid,text,text)\n  from public,anon,authenticated;\ngrant execute on function public.decide_commerce_product_mapping(uuid,uuid,uuid,uuid,text,text,uuid,uuid,uuid,text,text,uuid,text,text)\n  to service_role;\ncomment on function public.decide_commerce_product_mapping(uuid,uuid,uuid,uuid,text,text,uuid,uuid,uuid,text,text,uuid,text,text)\n  is 'Append-only tenant-scoped Product mapping decision with expected-version, reason, and correlation evidence.';\n\ndo $$\nbegin\n  if to_regclass('public.commerce_ordering_evidence_recovery_markers') is null then\n    raise exception 'commerce_ordering_evidence_recovery_markers prerequisite is missing';\n  end if;\nend\n$$;\n\n-- One-time continuation for the already-reserved Evidence-only ordering recovery.\nalter table public.commerce_ordering_evidence_recovery_markers\n  add column if not exists continuation_dispatch_claimed_at timestamptz,\n  add column if not exists queue_dispatched_at timestamptz;\n\nalter table public.commerce_ordering_evidence_recovery_markers enable row level security;\nrevoke all on table public.commerce_ordering_evidence_recovery_markers from public, anon, authenticated;\ngrant select, update on table public.commerce_ordering_evidence_recovery_markers to service_role;\n\ncreate or replace function public.resume_ordering_evidence_only_fdf97cb1()\nreturns table(run_id uuid, account_id uuid, organization_id uuid, connection_id uuid, provider_account_id uuid, scheduler_identity text, request_key uuid)\nlanguage plpgsql\nsecurity definer\nset search_path = public, pg_temp\nas $$\ndeclare\n  v_run public.commerce_sync_runs%rowtype;\n  v_connection public.commerce_provider_connections%rowtype;\n  v_marker public.commerce_ordering_evidence_recovery_markers%rowtype;\nbegin\n  perform pg_advisory_xact_lock(hashtextextended('ordering-evidence-only-resume:fdf97cb1-222c-4fb3-b02d-b4502a3f85a9', 0));\n\n  select r.* into v_run\n  from public.commerce_sync_runs r\n  where r.id = 'fdf97cb1-222c-4fb3-b02d-b4502a3f85a9'::uuid\n  for update;\n  if not found then raise exception 'ordering continuation run unavailable' using errcode = '42501'; end if;\n\n  if v_run.status <> 'running' or v_run.lease_expires_at is null or v_run.lease_expires_at >= now() or v_run.cancelled_at is not null then\n    raise exception 'ordering continuation run is not reclaimable' using errcode = '42501';\n  end if;\n  if v_run.connection_id <> 'ea1c2313-6120-4692-84c5-ec3562e7dcf6'::uuid or v_run.sync_type <> 'transactions' or v_run.mode <> 'continuous' then\n    raise exception 'ordering continuation scope invalid' using errcode = '42501';\n  end if;\n  if coalesce(v_run.metadata->>'dispatch_source', '') <> 'operator_ordering_verification'\n    or v_run.metadata->>'ordering_verification' <> 'true'\n    or v_run.metadata->>'shadow_only' <> 'true'\n    or coalesce((v_run.metadata->>'max_pages')::integer, 0) <> 3\n    or coalesce((v_run.metadata->>'per_page')::integer, 0) <> 100\n    or v_run.metadata->>'operator_recovery_dispatched' <> 'true'\n    or coalesce(v_run.metadata->>'operator_recovery_reason', '') <> 'ordering_evidence_only' then\n    raise exception 'ordering continuation metadata invalid' using errcode = '42501';\n  end if;\n\n  select m.* into v_marker\n  from public.commerce_ordering_evidence_recovery_markers m\n  where m.recovery_key = 'fdf97cb1-222c-4fb3-b02d-b4502a3f85a9'\n    and m.run_id = v_run.id\n  for update;\n  if not found then raise exception 'ordering continuation marker unavailable' using errcode = '42501'; end if;\n  if v_marker.continuation_dispatch_claimed_at is not null or v_marker.queue_dispatched_at is not null then\n    raise exception 'ordering continuation already claimed' using errcode = '42501';\n  end if;\n\n  select c.* into v_connection\n  from public.commerce_provider_connections c\n  where c.id = 'ea1c2313-6120-4692-84c5-ec3562e7dcf6'::uuid\n    and c.id = v_run.connection_id\n    and c.organization_id = v_run.organization_id\n    and c."... 35219 more characters,
+    expected: /refund_count/,
+    operator: 'match',
+    diff: 'simple'
+  }
+
+test at tests/everflow-order-linkage-step6.test.ts:1:1259
+✖ email alone is never treated as deterministic transaction identity (2.916008ms)
+  AssertionError [ERR_ASSERTION]: The input was expected to not match the regular expression /confidence = 1(?:;|\s)/. Input:
+  
+  'let candidates: OrderCandidate[] = [];\n' +
+    '  let method: EverflowOrderLinkResult["matchMethod"] = null;\n' +
+    '  let confidence = 0;\n' +
+    '  let broadAmountAmbiguous = false;\n' +
+    '\n' +
+    '  if (!isCommerceValue) {\n' +
+    '    return { status: "non_order", canonicalOrderId: null, matchMethod: null, confidence: 0, mappingObserved: false };\n' +
+    '  }\n' +
+    '\n' +
+    '  if (transactionId) {\n' +
+    '    candidates = await directCandidates(input.link.organizationId, transactionId);\n' +
+    '    if (candidates.length === 1) {\n' +
+    '      method = "transaction_id";\n' +
+    '      confidence = 1;\n' +
+    '    } else if (candidates.length > 1) {\n' +
+    '      return { status: "ambiguous", canonicalOrderId: null, matchMethod: "transaction_id", confidence: 0, mappingObserved: false };\n' +
+    '    }\n' +
+    '  }\n' +
+    '\n' +
+    '  const eventName = !method ? await conversionEventName(input.link.connectionId, sourceRecordId) : null;\n' +
+    '\n' +
+    '  if (!method && email && input.link.occurredAt) {\n' +
+    '    candidates = await emailCandidates({\n' +
+    '      organizationId: input.link.organizationId,\n' +
+    '      email,\n' +
+    '      occurredAt: input.link.occurredAt,\n' +
+    '      amount,\n' +
+    '      windowMs: EXACT_AMOUNT_WINDOW_MS,\n' +
+    '      requireAmount: true,\n' +
+    '    });\n' +
+    '    if (candidates.length === 1) {\n' +
+    '      method = "email_amount_10s";\n' +
+    '      confidence = 0.95;\n' +
+    '    }\n' +
+    '  }\n' +
+    '\n' +
+    '  if (!method && email && input.link.occurredAt) {\n' +
+    '    candidates = await emailCandidates({\n' +
+    '      organizationId: input.link.organizationId,\n' +
+    '      email,\n' +
+    '      occurredAt: input.link.occurredAt,\n' +
+    '      amount,\n' +
+    '      windowMs: EMAIL_WINDOW_WITH_AMOUNT_MS,\n' +
+    '      requireAmount: true,\n' +
+    '    });\n' +
+    '    if (candidates.length === 1) {\n' +
+    '      method = "email_time_amount";\n' +
+    '      confidence = 0.85;\n' +
+    '    } else if (candidates.length > 1) {\n' +
+    '      broadAmountAmbiguous = true;\n' +
+    '    }\n' +
+    '  }\n' +
+    '\n' +
+    '  // Push Button checkout bumps are line items on the main checkout order, not\n' +
+    '  // independent downstream orders. Bumps only inherit this rule when the main\n' +
+    '  // PUSH BUTTON SYSTEM event is present in the same customer checkout burst.\n' +
+    '  if (!method && email && input.link.occurredAt && eventName) {\n' +
+    '    const bundleEventName = CHECKOUT_BUNDLE_EVENTS.has(eventName) ? eventName : null;\n' +
+    '    const hasMainEvent = bundleEventName === MAIN_CHECKOUT_EVENT\n' +
+    '      || (bundleEventName !== null && await hasMainCheckoutEvent({\n' +
+    '        connectionId: input.link.connectionId,\n' +
+    '        providerAccountId: account.id,\n' +
+    '        email,\n' +
+    '        occurredAt: input.link.occurredAt,\n' +
+    '      }));\n' +
+    '    if (bundleEventName && hasMainEvent) {\n' +
+    '      candidates = await emailCandidates({\n' +
+    '        organizationId: input.link.organizationId,\n' +
+    '        email,\n' +
+    '        occurredAt: input.link.occurredAt,\n' +
+    '        amount,\n' +
+    '        windowMs: CHECKOUT_BUNDLE_WINDOW_MS,\n' +
+    '        requireAmount: false,\n' +
+    '      });\n' +
+    '      if (candidates.length === 1) {\n' +
+    '        method = "checkout_bundle_15s";\n' +
+    '        confidence = 0.95;\n' +
+    '      } else if (candidates.length > 1) {\n' +
+    '        return { status: "ambiguous", canonicalOrderId: null, matchMethod: "checkout_bundle_15s", confidence: 0, mappingObserved: false };\n' +
+    '      }\n' +
+    '    }\n' +
+    '  }\n' +
+    '\n' +
+    '  // Duplicate classification is only allowed after deterministic evidence for a\n' +
+    '  // new order has failed. This prevents legitimate repeat purchases from being\n' +
+    '  // collapsed merely because Everflow reused the same transaction/event pair.\n' +
+    '  if (!method && transactionId && eventName && input.link.occurredAt && await hasMappedPriorDuplicate({\n' +
+    '    plane: input.plane,\n' +
+    '    session: input.session,\n' +
+    '    connectionId: input.link.connectionId,\n' +
+    '    providerAccountId: account.id,\n' +
+    '    sourceRecordId,\n' +
+    '    transactionId,\n' +
+    '    eventName,\n' +
+    '    occurredAt: input.link.occurredAt,\n' +
+    '  })) {\n' +
+    '    return { status: "duplicate", canonicalOrderId: null, matchMethod: "duplicate_event", confidence: 1, mappingObserved: false };\n' +
+    '  }\n' +
+    '\n' +
+    '  if (!method && broadAmountAmbiguous) {\n' +
+    '    return { status: "ambiguous", canonicalOrderId: null, matchMethod: "email_time_amount", confidence: 0, mappingObserved: false };\n' +
+    '  }\n' +
+    '\n' +
+    '  if (!method && email && input.link.occurredAt) {\n' +
+    '    candidates = await emailCandidates({\n' +
+    '      organizationId: input.link.organizationId,\n' +
+    '      email,\n' +
+    '      occurredAt: input.link.occurredAt,\n' +
+    '      amount,\n' +
+    '      windowMs: TIGHT_EMAIL_WINDOW_MS,\n' +
+    '      requireAmount: false,\n' +
+    '    });\n' +
+    '    if (candidates.length === 1) {\n' +
+    '      method = "email_time_30m";\n' +
+    '      confidence = 0.8;\n' +
+    '    } else if (candidates.length > 1) {\n' +
+    '      return { status: "ambiguous", canonicalOrderId: null, matchMethod: "email_time_30m", confidence: 0, mappingObserved: false };\n' +
+    '    }\n' +
+    '  }\n' +
+    '\n' +
+    '  if (!method || candidates.length !== 1) {\n' +
+    '    return { status: "unmatched", canonicalOrderId: null, matchMethod: null, confidence: 0, mappingObserved: false };\n' +
+    '  }\n' +
+    '\n' +
+    '  const canonicalOrderId = canonicalId(candidates[0]);\n' +
+    '  if (!canonicalOrderId) return { status: "unmatched", canonicalOrderId: null, matchMethod: null, confidence: 0, mappingObserved: false };\n' +
+    '  const payloadHash = await sha256({ sourceRecordId, transactionId, email, occurredAt: input.link.occurredAt || null, amount, isCommerceValue, canonicalOrderId, method });\n' +
+    '\n' +
+    '  const sourceObserved = await observeMapping({\n' +
+    '    plane: input.plane,\n' +
+    '    session: input.session,\n' +
+    '    connectionId: input.link.connectionId,\n' +
+    '    providerAccountId: account.id,\n' +
+    '    sourceObjectType: CONVERSION_SOURCE_TYPE,\n' +
+    '    sourceObjectId: sourceRecordId,\n' +
+    '    canonicalOrderId,\n' +
+    '    payloadHash,\n' +
+    '  });\n' +
+    '  if (sourceObserved.conflict) return { status: "conflict", canonicalOrderId: null, matchMethod: method, confidence: 0, mappingObserved: false };\n' +
+    '\n' +
+    '  if (transactionId && method === "transaction_id") {\n' +
+    '    const transactionObserved = await observeMapping({\n' +
+    '      plane: input.plane,\n' +
+    '      session: input.session,\n' +
+    '      connectionId: input.link.connectionId,\n' +
+    '      providerAccountId: account.id,\n' +
+    '      sourceObjectType: DIRECT_SOURCE_TYPE,\n' +
+    '      sourceObjectId: transactionId,\n' +
+    '      canonicalOrderId,\n' +
+    '      payloadHash,\n' +
+    '    });\n' +
+    '    if (transactionObserved.conflict) return { status: "conflict", canonicalOrderId: null, matchMethod: method, confidence: 0, mappingObserved: false };\n' +
+    '  }\n' +
+    '\n' +
+    '  return { status: "matched", canonicalOrderId, matchMethod: method, confidence, mappingObserved: true };\n' +
+    '}\n'
+  
+      at TestContext.<anonymous> (/workspace/scratch/61a85fe6297b/ws022-failure-remediation/ui/tests/everflow-order-linkage-step6.test.ts:36:10)
+      at Test.runInAsyncScope (node:async_hooks:227:14)
+      at Test.run (node:internal/test_runner/test:1382:25)
+      at Test.processPendingSubtests (node:internal/test_runner/test:960:18)
+      at Test.postRun (node:internal/test_runner/test:1522:19)
+      at Test.run (node:internal/test_runner/test:1447:12)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: 'let candidates: OrderCandidate[] = [];\n  let method: EverflowOrderLinkResult["matchMethod"] = null;\n  let confidence = 0;\n  let broadAmountAmbiguous = false;\n\n  if (!isCommerceValue) {\n    return { status: "non_order", canonicalOrderId: null, matchMethod: null, confidence: 0, mappingObserved: false };\n  }\n\n  if (transactionId) {\n    candidates = await directCandidates(input.link.organizationId, transactionId);\n    if (candidates.length === 1) {\n      method = "transaction_id";\n      confidence = 1;\n    } else if (candidates.length > 1) {\n      return { status: "ambiguous", canonicalOrderId: null, matchMethod: "transaction_id", confidence: 0, mappingObserved: false };\n    }\n  }\n\n  const eventName = !method ? await conversionEventName(input.link.connectionId, sourceRecordId) : null;\n\n  if (!method && email && input.link.occurredAt) {\n    candidates = await emailCandidates({\n      organizationId: input.link.organizationId,\n      email,\n      occurredAt: input.link.occurredAt,\n      amount,\n      windowMs: EXACT_AMOUNT_WINDOW_MS,\n      requireAmount: true,\n    });\n    if (candidates.length === 1) {\n      method = "email_amount_10s";\n      confidence = 0.95;\n    }\n  }\n\n  if (!method && email && input.link.occurredAt) {\n    candidates = await emailCandidates({\n      organizationId: input.link.organizationId,\n      email,\n      occurredAt: input.link.occurredAt,\n      amount,\n      windowMs: EMAIL_WINDOW_WITH_AMOUNT_MS,\n      requireAmount: true,\n    });\n    if (candidates.length === 1) {\n      method = "email_time_amount";\n      confidence = 0.85;\n    } else if (candidates.length > 1) {\n      broadAmountAmbiguous = true;\n    }\n  }\n\n  // Push Button checkout bumps are line items on the main checkout order, not\n  // independent downstream orders. Bumps only inherit this rule when the main\n  // PUSH BUTTON SYSTEM event is present in the same customer checkout burst.\n  if (!method && email && input.link.occurredAt && eventName) {\n    const bundleEventName = CHECKOUT_BUNDLE_EVENTS.has(eventName) ? eventName : null;\n    const hasMainEvent = bundleEventName === MAIN_CHECKOUT_EVENT\n      || (bundleEventName !== null && await hasMainCheckoutEvent({\n        connectionId: input.link.connectionId,\n        providerAccountId: account.id,\n        email,\n        occurredAt: input.link.occurredAt,\n      }));\n    if (bundleEventName && hasMainEvent) {\n      candidates = await emailCandidates({\n        organizationId: input.link.organizationId,\n        email,\n        occurredAt: input.link.occurredAt,\n        amount,\n        windowMs: CHECKOUT_BUNDLE_WINDOW_MS,\n        requireAmount: false,\n      });\n      if (candidates.length === 1) {\n        method = "checkout_bundle_15s";\n        confidence = 0.95;\n      } else if (candidates.length > 1) {\n        return { status: "ambiguous", canonicalOrderId: null, matchMethod: "checkout_bundle_15s", confidence: 0, mappingObserved: false };\n      }\n    }\n  }\n\n  // Duplicate classification is only allowed after deterministic evidence for a\n  // new order has failed. This prevents legitimate repeat purchases from being\n  // collapsed merely because Everflow reused the same transaction/event pair.\n  if (!method && transactionId && eventName && input.link.occurredAt && await hasMappedPriorDuplicate({\n    plane: input.plane,\n    session: input.session,\n    connectionId: input.link.connectionId,\n    providerAccountId: account.id,\n    sourceRecordId,\n    transactionId,\n    eventName,\n    occurredAt: input.link.occurredAt,\n  })) {\n    return { status: "duplicate", canonicalOrderId: null, matchMethod: "duplicate_event", confidence: 1, mappingObserved: false };\n  }\n\n  if (!method && broadAmountAmbiguous) {\n    return { status: "ambiguous", canonicalOrderId: null, matchMethod: "email_time_amount", confidence: 0, mappingObserved: false };\n  }\n\n  if (!method && email && input.link.occurredAt) {\n    candidates = await emailCandidates({\n      organizationId: input.link.organizationId,\n      email,\n      occurredAt: input.link.occurredAt,\n      amount,\n      windowMs: TIGHT_EMAIL_WINDOW_MS,\n      requireAmount: false,\n    });\n    if (candidates.length === 1) {\n      method = "email_time_30m";\n      confidence = 0.8;\n    } else if (candidates.length > 1) {\n      return { status: "ambiguous", canonicalOrderId: null, matchMethod: "email_time_30m", confidence: 0, mappingObserved: false };\n    }\n  }\n\n  if (!method || candidates.length !== 1) {\n    return { status: "unmatched", canonicalOrderId: null, matchMethod: null, confidence: 0, mappingObserved: false };\n  }\n\n  const canonicalOrderId = canonicalId(candidates[0]);\n  if (!canonicalOrderId) return { status: "unmatched", canonicalOrderId: null, matchMethod: null, confidence: 0, mappingObserved: false };\n  const payloadHash = await sha256({ sourceRecordId, transactionId, email, occurredAt: input.link.occurredAt || null, amount, isCommerceValue, canonicalOrderId, method });\n\n  const sourceObserved = await observeMapping({\n    plane: input.plane,\n    session: input.session,\n    connectionId: input.link.connectionId,\n    providerAccountId: account.id,\n    sourceObjectType: CONVERSION_SOURCE_TYPE,\n    sourceObjectId: sourceRecordId,\n    canonicalOrderId,\n    payloadHash,\n  });\n  if (sourceObserved.conflict) return { status: "conflict", canonicalOrderId: null, matchMethod: method, confidence: 0, mappingObserved: false };\n\n  if (transactionId && method === "transaction_id") {\n    const transactionObserved = await observeMapping({\n      plane: input.plane,\n      session: input.session,\n      connectionId: input.link.connectionId,\n      providerAccountId: account.id,\n      sourceObjectType: DIRECT_SOURCE_TYPE,\n      sourceObjectId: transactionId,\n      canonicalOrderId,\n      payloadHash,\n    });\n    if (transactionObserved.conflict) return { status: "conflict", canonicalOrderId: null, matchMethod: method, confidence: 0, mappingObserved: false };\n  }\n\n  return { status: "matched", canonicalOrderId, matchMethod: method, confidence, mappingObserved: true };\n}\n',
+    expected: /confidence = 1(?:;|\s)/,
+    operator: 'doesNotMatch',
+    diff: 'simple'
+  }
+✔ M11 Shopify rollback deletes exact bounded subscription then verifies absence (5.093186ms)
+✔ M11 Shopify rollback rejects callback target mismatch before provider call (0.777183ms)
+✔ M11 Shopify rollback fails closed on provider user error (0.670091ms)
+✔ M11 Shopify rollback fails if provider deletion identity differs (0.533605ms)
+✔ M17 Shopify remediation is healthy only with exactly one of each required ingestion topic (1.343899ms)
+✔ M17 Shopify remediation identifies only missing exact required topics (0.22576ms)
+✔ M17 Shopify remediation fails closed on duplicate required topic ambiguity (0.138399ms)
+✔ M17 remediation assessment contains no provider mutation (0.769681ms)
+✔ M2 list tools are bounded, projected and audited (2.451239ms)
+✔ M2 permission denial is audited without repository access (0.514387ms)
+✔ M2 search exposes only entity classes the principal can view (1.287543ms)
+✔ M4 nonexistent entity IDs return null and successful audited reads (0.946178ms)
+✔ M4 repository failures are audited as failure without leaking through audit metadata (0.626496ms)
+✔ M4 list and search bounds are enforced before projection (1.697492ms)
+✔ Meta adapter uses the Facebook Login for Business configuration (1.884965ms)
+✔ OAuth state is signed, tenant/user bound, time bounded, and tamper evident (1.0139ms)
+✔ Graph reads use bearer authorization and never place the access token in URLs (2.831644ms)
+✔ ad-account discovery is cursor bounded, deduplicated, and preserves multiple accounts (1.575408ms)
+✔ OAuth routes require connector management and bind callback to an HttpOnly state cookie (0.3643ms)
+✔ connection completion validates provider data before persistence and requires ads_read (0.273443ms)
+✔ credentials are encrypted at connection scope and provider accounts default unselected (0.326793ms)
+✔ account selection accepts many internal account IDs and never activates schedules (0.285431ms)
+✔ status presentation is tenant scoped and returns no credential material (0.229086ms)
+✔ customer audit distinguishes absent source fields from usable retained contacts without values or writes (17.192276ms)
+✔ customer evidence audit requires permissions, certified request, and both exact tenant scopes before protected reads (41.192051ms)
+✔ certificate requires two identical source reads and verified local evidence before any write (906.623629ms)
+✔ atomic certificate verifies commitments and tenant evidence, preserves failed diagnostics/counters, and is idempotent (695.524851ms)
+✔ registration reuses an existing exact immutable proof record after an uncommitted certificate (1.028833ms)
+✔ finishing an old source window cannot skip uncovered days (2.573494ms)
+✔ persisting an old final page records its source boundary without claiming current freshness (6.124914ms)
+✔ raw comparison ignores object key order, detects omitted fields and array changes, and exposes no values (1.949642ms)
+✔ retained audit reads only scoped evidence and distinguishes format-only from substantive versions (12.895942ms)
+✔ retained proof validates exact commitments, tenant, unchanged execution, reporting scope and original capture times (5.202822ms)
+✔ persistence errors retain SQLSTATE and resource without leaking filters, raw errors or credentials (4.988829ms)
+✔ caught conversion, click, historical and reconciliation failures remain failed scheduler health (0.592078ms)
+✔ cron HTTP status and persisted telemetry agree with caught target failures (47.353834ms)
+✔ a natural-page persistence failure fails its checkpoint and run without marking the page complete (8.655223ms)
+✔ bounded read includes all classes, builds deterministic identity/version manifests, excludes raw data and credentials (52.513352ms)
+✔ same totals with changed IDs or payload versions yield different commitments (1.344549ms)
+✔ duplicate or truncated pages, mutable totals, scope leakage and incorrect page metadata fail closed (13.178869ms)
+✔ generic verification dispatches Everflow to its bounded network health client (6.161008ms)
+✔ provider authentication and quota failures retain safe distinct diagnostics (1.31219ms)
+✔ client-read-only MCP customer serialization removes detailed money and nested contact evidence (2.275063ms)
+✔ expired membership and missing permission deny before customer persistence (0.678423ms)
+✔ server MCP repository scopes Core to authorized organization and fails closed before fetch without it (2.730882ms)
+✔ client-read-only cannot reach persistence or provider calls through any MCP action method (1.874559ms)
+✔ forged action permission cannot bypass expired membership or unavailable organization (1.595798ms)
+ℹ tests 47
+ℹ suites 0
+ℹ pass 47
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1993.565191

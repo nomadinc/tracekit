@@ -535,7 +535,7 @@ function OrderList({
             value={filter.query || ""}
             onChange={(e) => setFilter({ ...filter, query: e.target.value })}
             placeholder="Search Orders"
-            className="min-w-0 flex-1 bg-transparent text-xs outline-none"
+            className="min-w-0 flex-1 bg-transparent text-xs outline-hidden"
           />
         </label>
       </div>

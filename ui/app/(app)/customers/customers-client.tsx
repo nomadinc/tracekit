@@ -185,7 +185,7 @@ export default function CustomersClient() {
 
   return (
     <div className="min-h-full space-y-5">
-      <section className="rounded-lg border bg-white p-5 shadow-sm dark:bg-ink/80">
+      <section className="rounded-lg border bg-white p-5 shadow-xs dark:bg-ink/80">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <p className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">Customers</p>
@@ -224,7 +224,7 @@ export default function CustomersClient() {
                   if (event.key === "Enter") applyFilters();
                 }}
                 placeholder="Email, phone, person ID, order ID, transaction ID"
-                className="min-w-0 flex-1 bg-transparent px-3 py-2 outline-none"
+                className="min-w-0 flex-1 bg-transparent px-3 py-2 outline-hidden"
               />
             </div>
           </label>
@@ -298,7 +298,7 @@ export default function CustomersClient() {
         </section>
       ) : null}
 
-      <section className="overflow-hidden rounded-lg border bg-white shadow-sm dark:bg-ink/80">
+      <section className="overflow-hidden rounded-lg border bg-white shadow-xs dark:bg-ink/80">
         <div className="flex items-center justify-between border-b px-5 py-4 dark:border-white/10">
           <div>
             <h2 className="font-semibold">Customers</h2>

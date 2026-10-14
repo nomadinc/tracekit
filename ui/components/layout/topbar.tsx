@@ -81,7 +81,7 @@ export default function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
         <div className="flex min-w-0 items-center gap-3">
           <button
             type="button"
-            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:hover:bg-white/10 lg:hidden"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-lg border hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:hover:bg-white/10 lg:hidden"
             onClick={onMenuClick}
             aria-label="Open navigation"
           >
@@ -100,17 +100,17 @@ export default function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
           </div>
         </div>
 
-        <div className="hidden min-w-[22rem] max-w-xl flex-1 items-center justify-end gap-3 xl:flex">
+        <div className="hidden min-w-88 max-w-xl flex-1 items-center justify-end gap-3 xl:flex">
           <CommandPaletteButton
             onOpen={commandPalette.openPalette}
-            className="inline-flex h-10 w-full max-w-md items-center gap-2 rounded-xl border bg-white px-3 text-sm outline-none transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300 dark:bg-white/5 dark:hover:bg-white/10 dark:focus:ring-white/10"
+            className="inline-flex h-10 w-full max-w-md items-center gap-2 rounded-xl border bg-white px-3 text-sm outline-hidden transition hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-300 dark:bg-white/5 dark:hover:bg-white/10 dark:focus:ring-white/10"
           />
         </div>
 
         <div className="flex items-center gap-2">
           <button
             type="button"
-            className="hidden min-w-0 items-center gap-2 rounded-xl border px-3 py-2 text-left text-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:hover:bg-white/10 md:inline-flex"
+            className="hidden min-w-0 items-center gap-2 rounded-xl border px-3 py-2 text-left text-sm hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:hover:bg-white/10 md:inline-flex"
             aria-label="Switch workspace"
           >
             <span className="flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-200">
@@ -131,7 +131,7 @@ export default function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
             <button
               type="button"
               onClick={() => setNotificationsOpen((value) => !value)}
-              className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:hover:bg-white/10"
+              className="relative inline-flex h-10 w-10 items-center justify-center rounded-xl border hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:hover:bg-white/10"
               aria-label="Open notifications"
             >
               <Bell className="h-4 w-4" />
@@ -151,7 +151,7 @@ export default function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
                         target={{ type: "work_item", id: notification.work_item_id, label: notification.title, query: { workspace_id: "default" } }}
                         href={`/operations?workspace_id=default&inspect=${encodeURIComponent(`work_item:${notification.work_item_id}`)}`}
                         onOpen={() => setNotificationsOpen(false)}
-                        className={`block rounded-lg border p-3 transition hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400 ${severityTone(notification.severity)}`}
+                        className={`block rounded-lg border p-3 transition hover:shadow-xs focus:outline-hidden focus:ring-2 focus:ring-slate-400 ${severityTone(notification.severity)}`}
                       >
                         <div className="flex items-center justify-between gap-3 text-xs font-semibold uppercase tracking-wide">
                           <span>{notificationSeverityLabel(notification.severity)}</span>
@@ -164,7 +164,7 @@ export default function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
                         key={notification.id}
                         href={`/notifications?notification_id=${encodeURIComponent(notification.id)}`}
                         onClick={() => setNotificationsOpen(false)}
-                        className={`block rounded-lg border p-3 transition hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400 ${severityTone(notification.severity)}`}
+                        className={`block rounded-lg border p-3 transition hover:shadow-xs focus:outline-hidden focus:ring-2 focus:ring-slate-400 ${severityTone(notification.severity)}`}
                       >
                         <div className="flex items-center justify-between gap-3 text-xs font-semibold uppercase tracking-wide">
                           <span>{notificationSeverityLabel(notification.severity)}</span>
@@ -182,7 +182,7 @@ export default function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
                 <Link
                   href="/notifications"
                   onClick={() => setNotificationsOpen(false)}
-                  className="mt-3 block rounded-lg border px-3 py-2 text-center text-sm font-medium hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5"
+                  className="mt-3 block rounded-lg border px-3 py-2 text-center text-sm font-medium hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5"
                 >
                   View All
                 </Link>
@@ -195,7 +195,7 @@ export default function Topbar({ onMenuClick }: { onMenuClick?: () => void }) {
         <CommandPaletteButton
           onOpen={commandPalette.openPalette}
           compact
-          className="inline-flex h-10 w-full items-center gap-2 rounded-xl border bg-white px-3 text-sm outline-none transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-300 dark:bg-white/5 dark:hover:bg-white/10 dark:focus:ring-white/10"
+          className="inline-flex h-10 w-full items-center gap-2 rounded-xl border bg-white px-3 text-sm outline-hidden transition hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-300 dark:bg-white/5 dark:hover:bg-white/10 dark:focus:ring-white/10"
         />
       </div>
       <CommandPaletteDialog open={commandPalette.open} onClose={commandPalette.closePalette} />

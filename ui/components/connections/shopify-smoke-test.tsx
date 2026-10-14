@@ -141,7 +141,7 @@ export function ShopifySmokeTest({ connectionId }: { connectionId: string }) {
 
   return (
     <section className="mx-auto mt-4 max-w-[1360px] px-5 sm:px-8 lg:px-10">
-      <div className="rounded-2xl border border-white/10 bg-white/[.025] p-5 text-slate-100">
+      <div className="rounded-2xl border border-white/10 bg-white/2.5 p-5 text-slate-100">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
             <p className="text-sm font-semibold">Shopify live smoke test</p>

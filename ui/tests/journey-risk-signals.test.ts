@@ -174,7 +174,7 @@ test("evidence cards expose focusable stable anchors and non-color-only highligh
 test("long bounded facts and digest use wrapping responsive layouts without tables", () => {
   const long = "x".repeat(256);
   const html = render(evaluation({ input: { evidence_versions: { journey_attribution_evidence: 1 }, truncated: false, input_digest: long }, signals: [changedSignal({ facts: { ...changedSignal().facts, raw_param: long } })] }));
-  assert.match(html, /break-words/);
+  assert.match(html, /wrap-break-word/);
   assert.match(html, /break-all/);
   assert.doesNotMatch(html, /<table/);
 });

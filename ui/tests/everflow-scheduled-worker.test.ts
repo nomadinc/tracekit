@@ -96,7 +96,7 @@ test("Everflow has an isolated authenticated five-minute Vercel cron trigger", (
   assert.match(vercel, /"schedule": "\*\/5 \* \* \* \*"/);
   assert.match(cron, /process\.env\.CRON_SECRET/);
   assert.match(cron, /authorization/);
-  assert.match(cron, /runDueEverflowSchedules\(\{ limit: 1 \}\)/);
+  assert.match(cron, /runDueEverflowSchedules\(\{ limit: 3 \}\)/);
   assert.match(middleware, /"\/api\/cron\/:path\*"/);
   assert.doesNotMatch(
     cron,

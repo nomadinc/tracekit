@@ -1,0 +1,19 @@
+(node:1383) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ RUN  v3.2.7 /workspace/scratch/61a85fe6297b/tracekit-ws022/api/konnektive-relay/konnektive-relay
+
+Proxy environment variables detected. We'll use your proxy for fetch requests.
+[vpw:info] Starting isolated runtimes for vitest.config.js...
+[mf:warn] The latest compatibility date supported by the installed Cloudflare Workers Runtime is "2025-09-06",
+but you've requested "2025-11-21". Falling back to "2025-09-06"...
+(node:1383) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ✓ test/index.spec.js (2 tests) 100ms
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  06:51:02
+   Duration  3.90s (transform 51ms, setup 0ms, collect 117ms, tests 100ms, environment 0ms, prepare 657ms)
+
+[vpw:debug] Shutting down runtimes...

@@ -108,13 +108,13 @@ function SignalCard({ signal }: { signal: JourneyRiskSignal }) {
       {signal.signal_code === "multiple_affiliate_networks_observed" ? <p className="mt-3 text-sm text-slate-500 dark:text-slate-400">This may reflect forwarding, partner routing, or separate acquisition stages.</p> : null}
       {signal.observed_at ? <p className="mt-3 text-xs text-slate-500">Observed <time dateTime={signal.observed_at}>{formatCustomerTime(signal.observed_at)}</time></p> : null}
 
-      <button type="button" aria-label={`View supporting evidence for ${riskSignalTitle(signal.signal_code)}`} onClick={viewPrimaryEvidence} className="mt-4 inline-flex w-full justify-center rounded-md border px-3 py-2 text-sm font-medium hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 sm:w-auto dark:border-white/10 dark:hover:bg-white/5">
+      <button type="button" aria-label={`View supporting evidence for ${riskSignalTitle(signal.signal_code)}`} onClick={viewPrimaryEvidence} className="mt-4 inline-flex w-full justify-center rounded-md border px-3 py-2 text-sm font-medium hover:bg-slate-50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-slate-400 sm:w-auto dark:border-white/10 dark:hover:bg-white/5">
         View supporting evidence
       </button>
       {feedback ? <p className="mt-2 text-sm text-slate-500 dark:text-slate-400" role="status">{feedback}</p> : null}
 
       <details className="mt-4 rounded-md border bg-white/60 p-3 text-sm dark:border-white/10 dark:bg-black/10">
-        <summary className="cursor-pointer font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400">Signal details</summary>
+        <summary className="cursor-pointer font-medium focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-slate-400">Signal details</summary>
         <div className="mt-4 space-y-4">
           <div>
             <h5 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Evaluator summary</h5>
@@ -131,7 +131,7 @@ function SignalCard({ signal }: { signal: JourneyRiskSignal }) {
           </div>
           {facts.length ? (
             <dl className="grid gap-3 sm:grid-cols-2">
-              {facts.map(([label, value]) => <div key={label} className="min-w-0"><dt className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</dt><dd className="mt-1 break-words">{value}</dd></div>)}
+              {facts.map(([label, value]) => <div key={label} className="min-w-0"><dt className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</dt><dd className="mt-1 wrap-break-word">{value}</dd></div>)}
             </dl>
           ) : null}
           {signal.assumptions.length ? <div><h5 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Assumptions</h5><ul className="mt-1 list-disc space-y-1 pl-5">{signal.assumptions.map((assumption) => <li key={assumption}>{assumption}</li>)}</ul></div> : null}
@@ -141,7 +141,7 @@ function SignalCard({ signal }: { signal: JourneyRiskSignal }) {
               <h5 className="text-xs font-semibold uppercase tracking-wide text-slate-500">Supporting evidence</h5>
               <div className="mt-2 flex flex-wrap gap-2">
                 {signal.evidence_refs.map((reference, index) => (
-                  <button key={reference.stable_key} type="button" aria-label={`View supporting identifier group ${index + 1} for ${riskSignalTitle(signal.signal_code)}`} onClick={() => focusEvidence(reference, () => setFeedback("Supporting evidence is not available in the retained journey evidence."))} className="max-w-full rounded-md border px-2.5 py-1.5 text-left text-xs hover:bg-slate-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5">
+                  <button key={reference.stable_key} type="button" aria-label={`View supporting identifier group ${index + 1} for ${riskSignalTitle(signal.signal_code)}`} onClick={() => focusEvidence(reference, () => setFeedback("Supporting evidence is not available in the retained journey evidence."))} className="max-w-full rounded-md border px-2.5 py-1.5 text-left text-xs hover:bg-slate-50 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5">
                     View identifier group
                   </button>
                 ))}
@@ -189,9 +189,9 @@ export function JourneyRiskSignalsSection({ evaluation }: { evaluation?: Journey
         {contextSignals.length ? <section className="mt-5" aria-labelledby="context-signals-heading"><h3 id="context-signals-heading" className="text-sm font-semibold">Context</h3><div className="mt-3 grid gap-3 xl:grid-cols-2">{contextSignals.map((signal) => <SignalCard key={signal.id} signal={signal} />)}</div></section> : null}
 
         <details className="mt-5 rounded-md border p-3 text-sm dark:border-white/10">
-          <summary className="cursor-pointer font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400">Evaluation details</summary>
+          <summary className="cursor-pointer font-medium focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-slate-400">Evaluation details</summary>
           <dl className="mt-4 grid gap-3 sm:grid-cols-2">
-            <div><dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Ruleset</dt><dd className="mt-1 break-words">{evaluation.ruleset_version}</dd></div>
+            <div><dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Ruleset</dt><dd className="mt-1 wrap-break-word">{evaluation.ruleset_version}</dd></div>
             <div><dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Evaluation status</dt><dd className="mt-1">{evaluation.evaluation_status.replace(/_/g, " ")}</dd></div>
             <div><dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Evaluated</dt><dd className="mt-1"><time dateTime={evaluation.evaluated_at}>{formatCustomerTime(evaluation.evaluated_at)}</time></dd></div>
             <div><dt className="text-xs font-medium uppercase tracking-wide text-slate-500">Evidence schema</dt><dd className="mt-1">{evaluation.input.evidence_versions.journey_attribution_evidence ?? "Unsupported"}</dd></div>

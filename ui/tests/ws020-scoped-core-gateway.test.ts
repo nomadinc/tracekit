@@ -37,14 +37,14 @@ test("aggregate financial permission cannot authorize detailed financial reads o
  assert.equal(x.calls.length,0);
 });
 test("authorized detailed financial read preserves genuine zero",async()=>{
- const identity={...session(),effectivePermissions:[...session().effectivePermissions,"orders.view_financials"]};const x=proxy({kind:"authenticated",session:identity});
+ const identity={...session(),effectivePermissions:[...session().effectivePermissions,"orders.view_financials" as const]};const x=proxy({kind:"authenticated",session:identity});
  const result:any=await x.gateway.scopedCoreGet("/v1/financial-reconciliation","https://ui.example.test/api/financial-reconciliation",["financials.view","orders.view_financials"],projectCoreCustomerRead);
  assert.equal(result.body.orders[0].gross_amount,0);assert.equal(result.body.orders[0].customer_email,undefined);
 });
 test("chargeback financial scope rejects read-only roles, expired membership and conflicting tenant hints",()=>{
  const url="https://ui.example.test/api/chargebacks";
  assert.equal(authorizedDetailedFinancialOrganization(session(),url),null);
- const privileged={...session(),effectivePermissions:[...session().effectivePermissions,"orders.view_financials"]};
+ const privileged={...session(),effectivePermissions:[...session().effectivePermissions,"orders.view_financials" as const]};
  assert.equal(authorizedDetailedFinancialOrganization(privileged,url),"stem");
  assert.equal(authorizedDetailedFinancialOrganization(privileged,url+"?workspace_id=stem&workspace_id=foreign"),null);
  assert.equal(authorizedDetailedFinancialOrganization({...privileged,membership:{...privileged.membership!,effectiveUntil:"2020-01-02T00:00:00Z"}},url),null);

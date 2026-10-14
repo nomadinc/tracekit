@@ -59,7 +59,7 @@ export function EntityHeader({
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">
             {entityTypeLabel(entityType)}
           </div>
-          <h2 className="mt-1 break-words text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
+          <h2 className="mt-1 wrap-break-word text-2xl font-semibold tracking-tight text-slate-950 dark:text-white">
             {title}
           </h2>
           {subtitle ? <p className="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">{subtitle}</p> : null}
@@ -80,7 +80,7 @@ export function EntityHeader({
           {metadata.map((item) => (
             <div key={item.label} className="rounded-lg border bg-slate-50 p-3 dark:border-white/10 dark:bg-white/5">
               <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{item.label}</dt>
-              <dd className="mt-1 min-w-0 break-words text-sm font-medium text-slate-900 dark:text-white">{item.value ?? "Not available"}</dd>
+              <dd className="mt-1 min-w-0 wrap-break-word text-sm font-medium text-slate-900 dark:text-white">{item.value ?? "Not available"}</dd>
             </div>
           ))}
         </dl>
@@ -106,7 +106,7 @@ export function EntityHeader({
             }
             if (action.kind === "link" && action.href) {
               return (
-                <Link key={action.id} href={action.href} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/10">
+                <Link key={action.id} href={action.href} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/10">
                   {action.label}
                   <ExternalLink className="h-4 w-4" />
                 </Link>
@@ -119,7 +119,7 @@ export function EntityHeader({
                   type="button"
                   disabled={busyActionId === action.id}
                   onClick={() => onAction(action)}
-                  className="rounded-md border px-3 py-2 text-sm font-medium hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 disabled:opacity-60 dark:border-white/10 dark:hover:bg-white/10"
+                  className="rounded-md border px-3 py-2 text-sm font-medium hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 disabled:opacity-60 dark:border-white/10 dark:hover:bg-white/10"
                 >
                   {busyActionId === action.id ? "Saving..." : action.label}
                 </button>

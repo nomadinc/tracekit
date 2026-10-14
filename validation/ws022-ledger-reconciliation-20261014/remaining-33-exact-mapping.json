@@ -1,0 +1,332 @@
+[
+  {
+    "historical_row_position": 1,
+    "boundary": "ui",
+    "test": "commerce API and runtime entrypoints remain present",
+    "owner": "WS-001",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "tests/capability-regression.test.ts:1:3320",
+    "error_summary": "AssertionError [ERR_ASSERTION]: The input did not match the regular expression /Needs Review/. Input:"
+  },
+  {
+    "historical_row_position": 3,
+    "boundary": "ui",
+    "test": "review workspace preserves the existing affiliate/source chargeback report",
+    "owner": "WS-001",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "tests/chargeback-review-workspace.test.ts:1:1947",
+    "error_summary": "AssertionError [ERR_ASSERTION]: The input did not match the regular expression /FinancialIssueAnalysisClient/. Input:"
+  },
+  {
+    "historical_row_position": 7,
+    "boundary": "ui",
+    "test": "scheduled deep bound survives scheduler, queue, runtime, and worker",
+    "owner": "WS-001",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "tests/commas-scheduled-deep-request-bound.test.ts:1:953",
+    "error_summary": "AssertionError [ERR_ASSERTION]: The input did not match the regular expression /scheduledDeepAttemptAllowance\\(scheduledDeepRequestLimit,providerRequests\\)/. Input:"
+  },
+  {
+    "historical_row_position": 8,
+    "boundary": "ui",
+    "test": "product mapping decisions are append-only, tenant-scoped, and expected-version guarded",
+    "owner": "WS-001",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "tests/commerce-control-plane.test.ts:1:20385",
+    "error_summary": "Error: ENOENT: no such file or directory, open '/workspace/scratch/61a85fe6297b/ws022-tooling-integration/supabase/migrations/20260830053413_commerce_product_mapping_review_workflow.sql'"
+  },
+  {
+    "historical_row_position": 9,
+    "boundary": "ui",
+    "test": "normal imports preserve an explicit product mapping and historical order identity",
+    "owner": "WS-001",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "tests/commerce-control-plane.test.ts:1:21933",
+    "error_summary": "Error: ENOENT: no such file or directory, open '/workspace/scratch/61a85fe6297b/ws022-tooling-integration/supabase/migrations/20260830044726_guard_commerce_product_mapping_decisions.sql'"
+  },
+  {
+    "historical_row_position": 10,
+    "boundary": "ui",
+    "test": "tests/commerce-product-mapping-workflow.test.ts",
+    "owner": "WS-001",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "tests/commerce-product-mapping-workflow.test.ts:1:1",
+    "error_summary": "'test failed'"
+  },
+  {
+    "historical_row_position": 11,
+    "boundary": "ui",
+    "test": "delivery derives tenancy from authenticated credential and validates contract",
+    "owner": "WS-004 / Core Edge/privacy",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "tests/edge-intelligence-v1-delivery.test.ts:1:851",
+    "error_summary": "AssertionError [ERR_ASSERTION]: The input did not match the regular expression /validateEdgeIntelligenceV1\\(payload,\\{tenantRef:credential\\.tenant_ref\\}\\)/. Input:"
+  },
+  {
+    "historical_row_position": 12,
+    "boundary": "ui",
+    "test": "delivery does not expose persistence errors or raw credentials",
+    "owner": "WS-004 / Core Edge/privacy",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "tests/edge-intelligence-v1-delivery.test.ts:1:1244",
+    "error_summary": "AssertionError [ERR_ASSERTION]: The input was expected to not match the regular expression /console\\.log\\(token|token_hash.*response/i. Input:"
+  },
+  {
+    "historical_row_position": 13,
+    "boundary": "ui",
+    "test": "Core validator accepts every pinned canonical Edge v1 fixture",
+    "owner": "WS-004 / Core Edge/privacy",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "tests/edge-intelligence-v1-validator.test.ts:1:371",
+    "error_summary": "AssertionError [ERR_ASSERTION]: {\"ok\":false,\"errors\":[{\"path\":\"$\",\"code\":\"TYPE\"}]}"
+  },
+  {
+    "historical_row_position": 14,
+    "boundary": "ui",
+    "test": "Core validator rejects raw IP even when hidden in an optional v1 field",
+    "owner": "WS-004 / Core Edge/privacy",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "tests/edge-intelligence-v1-validator.test.ts:1:1248",
+    "error_summary": "TypeError: Cannot create property 'futureOptional' on string '1.0'"
+  },
+  {
+    "historical_row_position": 15,
+    "boundary": "ui",
+    "test": "affiliate endpoints use authenticated application routes",
+    "owner": "WS-001",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "tests/everflow-affiliates-step3.test.ts:1:2485",
+    "error_summary": "AssertionError [ERR_ASSERTION]: The input did not match the regular expression /affiliates\\(\\?:\\\\\\/sync\\)\\?/. Input:"
+  },
+  {
+    "historical_row_position": 16,
+    "boundary": "ui",
+    "test": "conversion sync snapshots evidence before ingest and finalizes metrics afterward",
+    "owner": "WS-001",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "tests/everflow-conversion-run-metrics.test.ts:1:1005",
+    "error_summary": "AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:"
+  },
+  {
+    "historical_row_position": 17,
+    "boundary": "ui",
+    "test": "conversion sync uses durable runs, checkpoints, leases, and the Step 6 order resolver",
+    "owner": "WS-001",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "tests/everflow-conversions-step7.test.ts:1:3911",
+    "error_summary": "AssertionError [ERR_ASSERTION]: The input did not match the regular expression /\"shadow\", \"everflow_conversions\"/. Input:"
+  },
+  {
+    "historical_row_position": 18,
+    "boundary": "ui",
+    "test": "email fallback is guarded by time and amount when amount is available",
+    "owner": "WS-001",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "tests/everflow-order-linkage-step6.test.ts:1:792",
+    "error_summary": "AssertionError [ERR_ASSERTION]: The input did not match the regular expression /EMAIL_WINDOW_WITHOUT_AMOUNT_MS = 6/. Input:"
+  },
+  {
+    "historical_row_position": 19,
+    "boundary": "ui",
+    "test": "email alone is never treated as deterministic transaction identity",
+    "owner": "WS-001",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "tests/everflow-order-linkage-step6.test.ts:1:1249",
+    "error_summary": "AssertionError [ERR_ASSERTION]: The input did not match the regular expression /confidence = amount === null \\? 0\\.65 : 0\\.85/. Input:"
+  },
+  {
+    "historical_row_position": 20,
+    "boundary": "ui",
+    "test": "Everflow has an isolated authenticated five-minute Vercel cron trigger",
+    "owner": "WS-001",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "tests/everflow-scheduled-worker.test.ts:1:3055",
+    "error_summary": "AssertionError [ERR_ASSERTION]: The input did not match the regular expression /runDueEverflowSchedules\\(\\{ limit: 1 \\}\\)/. Input:"
+  },
+  {
+    "historical_row_position": 21,
+    "boundary": "ui",
+    "test": "Everflow conversion sync persists observable run metrics",
+    "owner": "WS-001",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "tests/everflow-sync-metrics.test.ts:1:426",
+    "error_summary": "AssertionError [ERR_ASSERTION]: The input did not match the regular expression /created = Math\\.max\\(0, afterCount - beforeCount\\)/. Input:"
+  },
+  {
+    "historical_row_position": 74,
+    "boundary": "ui",
+    "test": "M17 live Everflow remediation derives only from authorized Connections experience",
+    "owner": "WS-001",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "tests/m17-everflow-live-sync-remediation.test.ts:1:293",
+    "error_summary": "AssertionError [ERR_ASSERTION]: The input did not match the regular expression /loadConnectionExperiences/. Input:"
+  },
+  {
+    "historical_row_position": 75,
+    "boundary": "ui",
+    "test": "M17 live Everflow remediation reports exact connection identity",
+    "owner": "WS-001",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "tests/m17-everflow-live-sync-remediation.test.ts:1:749",
+    "error_summary": "AssertionError [ERR_ASSERTION]: The input did not match the regular expression /connectionId:c\\.id/. Input:"
+  },
+  {
+    "historical_row_position": 84,
+    "boundary": "ui",
+    "test": "tests/meta-connection-ui.test.ts",
+    "owner": "Core/UI infrastructure",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "tests/meta-connection-ui.test.ts:1:1",
+    "error_summary": "'test failed'"
+  },
+  {
+    "historical_row_position": 87,
+    "boundary": "ui",
+    "test": "order reads split refund reconciliation into independent bounded Shopify requests",
+    "owner": "WS-001",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "tests/shopify-refund-reconciliation.test.ts:1:345",
+    "error_summary": "AssertionError [ERR_ASSERTION]: Expected values to be strictly equal:"
+  },
+  {
+    "historical_row_position": 88,
+    "boundary": "ui",
+    "test": "Shopify M6 scheduler reuses the certified incremental runtime with bounded leases",
+    "owner": "WS-001",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "tests/shopify-scheduled-worker.test.ts:1:358",
+    "error_summary": "AssertionError [ERR_ASSERTION]: The input did not match the regular expression /pageSize:\\s*50/. Input:"
+  },
+  {
+    "historical_row_position": 89,
+    "boundary": "ui",
+    "test": "account selection accepts many internal account IDs and never activates schedules",
+    "owner": "WS-001",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "tests/meta-oauth-foundation.test.ts:1:6809",
+    "error_summary": "Error: ENOENT: no such file or directory, open '/workspace/scratch/61a85fe6297b/ws022-tooling-integration/ui//app/v1/integrations/meta/accounts/route.ts'"
+  },
+  {
+    "historical_row_position": 90,
+    "boundary": "ui",
+    "test": "status presentation is tenant scoped and returns no credential material",
+    "owner": "WS-001",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "tests/meta-oauth-foundation.test.ts:1:7447",
+    "error_summary": "Error: ENOENT: no such file or directory, open '/workspace/scratch/61a85fe6297b/ws022-tooling-integration/ui//app/v1/integrations/meta/status/route.ts'"
+  },
+  {
+    "historical_row_position": 91,
+    "boundary": "api",
+    "test": "decision home links to dedicated refund and chargeback analysis routes",
+    "owner": "WS-001",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "src/app-shell.test.ts:2:14228",
+    "error_summary": "AssertionError [ERR_ASSERTION]: The input did not match the regular expression /<FinancialIssueAnalysisClient kind=\"chargeback\" \\/>/. Input:"
+  },
+  {
+    "historical_row_position": 92,
+    "boundary": "api",
+    "test": "overlap idempotency migration keys lifecycle effects by logical payload",
+    "owner": "WS-001",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "src/commas-dispute-webhook.test.ts:2:14863",
+    "error_summary": "Error: ENOENT: no such file or directory, open '/workspace/scratch/61a85fe6297b/ws022-tooling-integration/supabase/migrations/20260911210000_commas_dispute_overlap_idempotency.sql'"
+  },
+  {
+    "historical_row_position": 93,
+    "boundary": "api",
+    "test": "migration is additive, service-role-only, shadow-only, and leaves attribution credits untouched",
+    "owner": "WS-001",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "src/commas-provider-attribution.test.ts:2:6416",
+    "error_summary": "Error: ENOENT: no such file or directory, open '/workspace/scratch/61a85fe6297b/ws022-tooling-integration/supabase/migrations/20260903002350_commas_provider_observed_attribution_foundation.sql'"
+  },
+  {
+    "historical_row_position": 94,
+    "boundary": "api",
+    "test": "Evidence reconciliation remains service-role-only, exact-ORD-only, and credit-free",
+    "owner": "WS-001",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "src/commas-provider-attribution.test.ts:2:8386",
+    "error_summary": "Error: ENOENT: no such file or directory, open '/workspace/scratch/61a85fe6297b/ws022-tooling-integration/supabase/migrations/20260913223346_reconcile_commas_provider_observations_v2.sql'"
+  },
+  {
+    "historical_row_position": 95,
+    "boundary": "api",
+    "test": "src/commas-refund-created-runtime.test.ts",
+    "owner": "WS-001",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "src/commas-refund-created-runtime.test.ts:1:1",
+    "error_summary": "'test failed'"
+  },
+  {
+    "historical_row_position": 96,
+    "boundary": "api",
+    "test": "scheduled deep queue bounds are trusted and separate from operator bounds",
+    "owner": "WS-001",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "src/continuous-commerce-cloudflare.test.ts:2:38304",
+    "error_summary": "AssertionError [ERR_ASSERTION]: Missing expected exception."
+  },
+  {
+    "historical_row_position": 97,
+    "boundary": "api",
+    "test": "migration filenames are unique and numerically ordered",
+    "owner": "WS-001",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "src/database-bootstrap.test.ts:2:8393",
+    "error_summary": "AssertionError [ERR_ASSERTION]: Expected values to be strictly deep-equal:"
+  },
+  {
+    "historical_row_position": 98,
+    "boundary": "api",
+    "test": "migration codifies duplicate, out-of-order, stale-update, and poll convergence semantics",
+    "owner": "WS-001",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "src/everflow-firehose.test.ts:2:17230",
+    "error_summary": "Error: ENOENT: no such file or directory, open '/workspace/scratch/61a85fe6297b/ws022-tooling-integration/api/src//../../supabase/migrations/20260910151937_everflow_firehose_v1.sql'"
+  },
+  {
+    "historical_row_position": 99,
+    "boundary": "api",
+    "test": "worker consumer retries failures and never logs raw payloads",
+    "owner": "WS-001",
+    "status": "UNRESOLVED",
+    "current_failure_confirmed": true,
+    "location": "src/everflow-firehose.test.ts:2:19109",
+    "error_summary": "AssertionError [ERR_ASSERTION]: The input was expected to not match the regular expression /body\\.payload|JSON\\.stringify\\(body/. Input:"
+  }
+]

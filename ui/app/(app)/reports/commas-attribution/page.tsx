@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 
 const muted = "text-slate-500 dark:text-slate-400";
 const section = "tk-surface min-w-0 p-4 sm:p-5";
-const tableHead = "bg-slate-50 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-white/[.04] dark:text-slate-400";
+const tableHead = "bg-slate-50 text-[10px] font-semibold uppercase tracking-wide text-slate-500 dark:bg-white/4 dark:text-slate-400";
 const cell = "px-3 py-3 first:pl-4 last:pr-4";
 const numeric = `${cell} text-right tabular-nums`;
 
@@ -25,7 +25,7 @@ type StatusTone = "success" | "warning" | "critical" | "info" | "neutral";
 
 function StatRow({ label, value, tone }: { label: string; value: ReactNode; tone?: StatusTone }) {
   return <div className="flex min-w-0 items-center justify-between gap-3 border-b border-slate-200/70 py-2.5 last:border-0 dark:border-white/10">
-    <span className={`min-w-0 break-words text-sm ${muted}`}>{label}</span>
+    <span className={`min-w-0 wrap-break-word text-sm ${muted}`}>{label}</span>
     {tone ? <StatusBadge tone={tone}>{value}</StatusBadge> : <strong className="shrink-0 text-sm font-semibold tabular-nums">{value}</strong>}
   </div>;
 }
@@ -69,7 +69,7 @@ export default async function CommasAttributionQualityPage() {
     </section>
 
     <Panel title="Quality funnel" description="Verified accepted purchase events through shadow projection.">
-      <ol className="grid gap-2 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-8">{Object.entries(funnel).map(([label, value], index) => <li className="min-w-0 rounded-lg border border-slate-200/70 bg-slate-50/60 p-3 dark:border-white/10 dark:bg-white/[.03]" key={label}><span className="tk-label block min-h-8 leading-4">{String(index + 1).padStart(2, "0")} · {label}</span><strong className="mt-2 block text-lg font-semibold tabular-nums">{value ?? "—"}</strong></li>)}</ol>
+      <ol className="grid gap-2 sm:grid-cols-2 md:grid-cols-4 xl:grid-cols-8">{Object.entries(funnel).map(([label, value], index) => <li className="min-w-0 rounded-lg border border-slate-200/70 bg-slate-50/60 p-3 dark:border-white/10 dark:bg-white/3" key={label}><span className="tk-label block min-h-8 leading-4">{String(index + 1).padStart(2, "0")} · {label}</span><strong className="mt-2 block text-lg font-semibold tabular-nums">{value ?? "—"}</strong></li>)}</ol>
       <p className={`mt-3 text-xs leading-5 ${muted}`}>Unsigned or malformed rejected requests are not durably counted and are excluded from this verified-purchase cohort.</p>
     </Panel>
 

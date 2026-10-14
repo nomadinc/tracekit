@@ -18,18 +18,24 @@ test("Everflow direct order linkage checks both transaction identity columns bef
 test("email fallback is guarded by time and amount when amount is available", () => {
   const code = source();
   assert.match(code, /EMAIL_WINDOW_WITH_AMOUNT_MS = 72/);
-  assert.match(code, /EMAIL_WINDOW_WITHOUT_AMOUNT_MS = 6/);
+  assert.match(code, /TIGHT_EMAIL_WINDOW_MS = 30 \* 60 \* 1000/);
   assert.match(code, /order_ts=gte/);
   assert.match(code, /order_ts=lte/);
   assert.match(code, /AMOUNT_TOLERANCE = 0\.01/);
   assert.match(code, /receipt_total \?\? row\.gross_amount/);
   assert.match(code, /email_time_amount/);
-  assert.match(code, /email_time/);
+  assert.match(code, /email_time_30m/);
 });
 
 test("email alone is never treated as deterministic transaction identity", () => {
   const code = source();
-  assert.match(code, /confidence = amount === null \? 0\.65 : 0\.85/);
+  assert.match(code, /confidence = 0\.95/);
+  assert.match(code, /confidence = 0\.85/);
+  assert.match(code, /confidence = 0\.8/);
+  const heuristicStart=code.indexOf("const eventName = !method");
+  assert.ok(heuristicStart > code.indexOf('method = "transaction_id"'));
+  const heuristics=code.slice(heuristicStart);
+  assert.doesNotMatch(heuristics, /confidence = 1(?:;|\s)/);
   assert.doesNotMatch(code, /email_time[^\n]*confidence:\s*1/);
 });
 

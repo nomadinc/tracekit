@@ -52,8 +52,8 @@ export async function POST(request:Request){
     const result=await rest("rpc/ingest_edge_intelligence_v1",{method:"POST",body:JSON.stringify({p_organization_id:binding.organization_id,p_payload:validation.value})});
     await rest("edge_intelligence_service_credentials?id=eq."+encodeURIComponent(credential.id),{method:"PATCH",headers:{Prefer:"return=minimal"},body:JSON.stringify({last_used_at:new Date().toISOString()})}).catch(()=>undefined);
     return response({ok:true,outcome:result?.outcome,revision:result?.revision,currentRevision:result?.currentRevision},result?.outcome==="accepted"?201:200);
-  }catch(error){
-    console.error("edge_intelligence_v1_delivery_failed",{message:error instanceof Error?error.message:"unknown"});
+  }catch{
+    console.error("edge_intelligence_v1_delivery_failed",{code:"delivery_unavailable"});
     return response({ok:false,code:"delivery_unavailable"},503);
   }
 }

@@ -182,7 +182,7 @@ function BusinessTrend({
         ? current.toLocaleString()
         : money(current);
   return (
-    <section className="overflow-hidden rounded-xl border bg-white shadow-sm dark:border-white/10 dark:bg-ink">
+    <section className="overflow-hidden rounded-xl border bg-white shadow-xs dark:border-white/10 dark:bg-ink">
       <div className="flex flex-wrap items-start justify-between gap-4 border-b px-5 py-4 dark:border-white/10">
         <div>
           <div className="text-[9px] font-semibold uppercase tracking-[.14em] text-slate-400">
@@ -215,7 +215,7 @@ function BusinessTrend({
               type="button"
               key={value}
               onClick={() => setRange(value)}
-              className={`rounded-md border px-2.5 py-1.5 text-[10px] font-semibold focus:outline-none focus:ring-2 focus:ring-slate-400 ${range === value ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950" : "bg-white dark:border-white/10 dark:bg-ink"}`}
+              className={`rounded-md border px-2.5 py-1.5 text-[10px] font-semibold focus:outline-hidden focus:ring-2 focus:ring-slate-400 ${range === value ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950" : "bg-white dark:border-white/10 dark:bg-ink"}`}
             >
               {value}
             </button>
@@ -228,7 +228,7 @@ function BusinessTrend({
             type="button"
             key={value}
             onClick={() => setMeasure(value)}
-            className={`rounded-full border px-3 py-1 text-[10px] font-semibold focus:outline-none focus:ring-2 focus:ring-slate-400 ${measure === value ? "border-slate-900 bg-slate-100 dark:border-white dark:bg-white/10" : "text-slate-500 dark:border-white/10"}`}
+            className={`rounded-full border px-3 py-1 text-[10px] font-semibold focus:outline-hidden focus:ring-2 focus:ring-slate-400 ${measure === value ? "border-slate-900 bg-slate-100 dark:border-white dark:bg-white/10" : "text-slate-500 dark:border-white/10"}`}
           >
             {measure === value ? "●" : "○"} {measureNames[value]}
           </button>
@@ -410,7 +410,7 @@ export function MissionControl({
         </span>
       </section>
       {portfolio ? <PortfolioKpis portfolio={portfolio} /> : null}
-      <section className="rounded-xl border border-dashed border-white/10 bg-white/[.02] p-4">
+      <section className="rounded-xl border border-dashed border-white/10 bg-white/2 p-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
             <p className="text-[10px] font-semibold uppercase tracking-[.14em] text-slate-500">Preview intelligence</p>
@@ -420,7 +420,7 @@ export function MissionControl({
         </div>
       </section>
       <BusinessTrend trends={snapshot.trends} />
-      <section className="rounded-xl border bg-white shadow-sm dark:border-white/10 dark:bg-ink">
+      <section className="rounded-xl border bg-white shadow-xs dark:border-white/10 dark:bg-ink">
         <div className="border-b px-5 py-3 dark:border-white/10">
           <h2 className="text-xs font-semibold">Offer Workspaces · Demo preview</h2>
           <p className="mt-1 text-[10px] text-slate-500">
@@ -434,7 +434,7 @@ export function MissionControl({
               type="button"
               key={business.id}
               onClick={() => navigate("offer", business.businessContextId)}
-              className="flex min-w-[220px] items-center gap-3 rounded-xl border p-3 text-left hover:border-slate-400 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5"
+              className="flex min-w-[220px] items-center gap-3 rounded-xl border p-3 text-left hover:border-slate-400 hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5"
             >
               <Mark value={business.mark} />
               <span className="min-w-0 flex-1">
@@ -461,7 +461,7 @@ export function MissionControl({
         </div>
       </section>
       <section className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_360px]">
-        <div className="rounded-xl border bg-white shadow-sm dark:border-white/10 dark:bg-ink">
+        <div className="rounded-xl border bg-white shadow-xs dark:border-white/10 dark:bg-ink">
           <div className="flex items-center justify-between border-b px-5 py-4 dark:border-white/10">
             <div>
               <div className="text-[9px] font-semibold uppercase tracking-[.14em] text-slate-400">
@@ -484,7 +484,7 @@ export function MissionControl({
                   snapshot.continuation.offerDeepLink,
                 )
               }
-              className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10"
+              className="inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-xs font-semibold focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10"
             >
               Resume
               <ArrowRight className="h-3.5 w-3.5" />
@@ -494,7 +494,7 @@ export function MissionControl({
         <button
           type="button"
           onClick={() => inspect(briefingItem)}
-          className="rounded-xl border bg-white p-4 text-left shadow-sm hover:border-slate-400 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:bg-ink"
+          className="rounded-xl border bg-white p-4 text-left shadow-xs hover:border-slate-400 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:bg-ink"
         >
           <div className="flex items-center gap-2">
             <Sparkles className="h-4 w-4" />
@@ -516,7 +516,7 @@ export function MissionControl({
           </p>
         </button>
       </section>
-      <section className="overflow-hidden rounded-xl border-2 border-slate-900 bg-white shadow-sm dark:border-white dark:bg-ink">
+      <section className="overflow-hidden rounded-xl border-2 border-slate-900 bg-white shadow-xs dark:border-white dark:bg-ink">
         <div className="flex items-end justify-between border-b px-5 py-4 dark:border-white/10">
           <div>
             <div className="text-[9px] font-semibold uppercase tracking-[.14em] text-slate-400">
@@ -567,7 +567,7 @@ export function MissionControl({
               <button
                 type="button"
                 onClick={() => inspect(item)}
-                className="rounded-lg border px-3 py-2 text-xs font-semibold focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10"
+                className="rounded-lg border px-3 py-2 text-xs font-semibold focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10"
               >
                 Explain · Evidence
               </button>
@@ -580,7 +580,7 @@ export function MissionControl({
                     item.offerDeepLink,
                   )
                 }
-                className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-xs font-semibold text-white focus:outline-none focus:ring-2 focus:ring-slate-400 dark:bg-white dark:text-slate-950"
+                className="inline-flex items-center justify-center gap-2 rounded-lg bg-slate-950 px-3 py-2 text-xs font-semibold text-white focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:bg-white dark:text-slate-950"
               >
                 {item.action}
                 <ArrowRight className="h-3.5 w-3.5" />
@@ -589,7 +589,7 @@ export function MissionControl({
           </article>
         ))}
       </section>
-      <section className="rounded-xl border bg-white shadow-sm dark:border-white/10 dark:bg-ink">
+      <section className="rounded-xl border bg-white shadow-xs dark:border-white/10 dark:bg-ink">
         <div className="border-b px-5 py-4 dark:border-white/10">
           <h2 className="text-sm font-semibold">Today&apos;s Winners</h2>
           <p className="mt-1 text-[11px] text-slate-500">
@@ -617,7 +617,7 @@ export function MissionControl({
         </div>
       </section>
       <div className="grid gap-4 xl:grid-cols-2">
-        <section className="rounded-xl border bg-white shadow-sm dark:border-white/10 dark:bg-ink">
+        <section className="rounded-xl border bg-white shadow-xs dark:border-white/10 dark:bg-ink">
           <div className="border-b px-5 py-4 dark:border-white/10">
             <h2 className="text-sm font-semibold">Recent Activity</h2>
           </div>
@@ -635,9 +635,9 @@ export function MissionControl({
                     activity.orderDeepLink,
                   )
                 }
-                className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-slate-400 dark:hover:bg-white/5"
+                className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-inset focus:ring-slate-400 dark:hover:bg-white/5"
               >
-                <span className="rounded border px-2 py-1 text-[9px] font-semibold uppercase dark:border-white/10">
+                <span className="rounded-sm border px-2 py-1 text-[9px] font-semibold uppercase dark:border-white/10">
                   {activity.type}
                 </span>
                 <span className="min-w-0 flex-1">
@@ -653,7 +653,7 @@ export function MissionControl({
             ))}
           </div>
         </section>
-        <section className="rounded-xl border bg-white shadow-sm dark:border-white/10 dark:bg-ink">
+        <section className="rounded-xl border bg-white shadow-xs dark:border-white/10 dark:bg-ink">
           <div className="border-b px-5 py-4 dark:border-white/10">
             <h2 className="text-sm font-semibold">Recent Searches</h2>
           </div>
@@ -671,7 +671,7 @@ export function MissionControl({
                     search.orderDeepLink,
                   )
                 }
-                className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-slate-400 dark:hover:bg-white/5"
+                className="flex w-full items-center gap-3 px-4 py-3 text-left hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-inset focus:ring-slate-400 dark:hover:bg-white/5"
               >
                 <span className="min-w-0 flex-1">
                   <span className="block text-[9px] font-semibold uppercase text-slate-400">

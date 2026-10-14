@@ -226,7 +226,7 @@ export default function EventsExplorerClient() {
 
   return (
     <div className="min-h-full space-y-5">
-      <section className="rounded-lg border bg-white p-5 shadow-sm dark:bg-ink/80">
+      <section className="rounded-lg border bg-white p-5 shadow-xs dark:bg-ink/80">
         <div className="flex flex-col gap-4 xl:flex-row xl:items-start xl:justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">Event Explorer</h1>
@@ -281,7 +281,7 @@ export default function EventsExplorerClient() {
             <span className="font-medium">Search</span>
             <div className="flex items-center gap-2 rounded-md border bg-white px-3 py-2 dark:bg-transparent">
               <Search className="h-4 w-4 text-slate-400" />
-              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Event, person, TKID, journey, affiliate" className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
+              <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Event, person, TKID, journey, affiliate" className="min-w-0 flex-1 bg-transparent text-sm outline-hidden" />
             </div>
           </label>
           <label className="space-y-1 text-sm">
@@ -326,7 +326,7 @@ export default function EventsExplorerClient() {
         </div>
       </section>
 
-      <section className="overflow-hidden rounded-lg border bg-white shadow-sm dark:bg-ink/80">
+      <section className="overflow-hidden rounded-lg border bg-white shadow-xs dark:bg-ink/80">
         <div className="flex items-center justify-between gap-3 border-b px-4 py-3">
           <div className="text-sm font-medium">{events.length.toLocaleString()} event{events.length === 1 ? "" : "s"} loaded</div>
           {loading ? <Loader2 className="h-4 w-4 animate-spin text-slate-500" /> : null}
@@ -429,7 +429,7 @@ function EventDetailDrawer({ event, detail, loading, error, onClose }: { event: 
     <div className="fixed inset-0 z-40">
       <button type="button" aria-label="Close event detail" className="absolute inset-0 bg-black/30" onClick={onClose} />
       <aside className="absolute right-0 top-0 h-full w-full max-w-2xl overflow-y-auto border-l bg-white shadow-2xl dark:bg-ink">
-        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b bg-white/95 p-5 backdrop-blur dark:bg-ink/95">
+        <div className="sticky top-0 z-10 flex items-start justify-between gap-4 border-b bg-white/95 p-5 backdrop-blur-sm dark:bg-ink/95">
           <div>
             <h2 className="text-lg font-semibold">{event.event_type}</h2>
             <p className="mt-1 font-mono text-xs text-slate-500">{event.event_key}</p>
@@ -556,7 +556,7 @@ function DetailGrid({ rows }: { rows: Array<[string, React.ReactNode]> }) {
       {rows.map(([label, value]) => (
         <div key={label}>
           <dt className="text-xs uppercase tracking-wide text-slate-500">{label}</dt>
-          <dd className="mt-1 break-words text-sm font-medium">{value || "-"}</dd>
+          <dd className="mt-1 wrap-break-word text-sm font-medium">{value || "-"}</dd>
         </div>
       ))}
     </dl>

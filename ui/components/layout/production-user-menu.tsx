@@ -93,7 +93,7 @@ export function ProductionUserMenu({ open, onToggle, onClose, onBeforeOpen }: Pr
           if (!open) onBeforeOpen();
           onToggle();
         }}
-        className="inline-flex h-10 items-center gap-2 rounded-xl border px-2 focus:outline-none focus:ring-2 focus:ring-slate-400"
+        className="inline-flex h-10 items-center gap-2 rounded-xl border px-2 focus:outline-hidden focus:ring-2 focus:ring-slate-400"
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label="Open account menu"
@@ -118,7 +118,7 @@ export function ProductionUserMenu({ open, onToggle, onClose, onBeforeOpen }: Pr
           <div className="py-2">
             {actions.map((action, index) => {
               const Icon = action.icon;
-              return <button key={action.label} ref={index === 0 ? firstItemRef : undefined} type="button" role="menuitem" onClick={() => { if (action.href) { requestClose(false); router.push(action.href); return; } selectAction(action.label, action.description); }} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:hover:bg-white/10"><Icon className="h-4 w-4 text-slate-500" /><span>{action.label}</span></button>;
+              return <button key={action.label} ref={index === 0 ? firstItemRef : undefined} type="button" role="menuitem" onClick={() => { if (action.href) { requestClose(false); router.push(action.href); return; } selectAction(action.label, action.description); }} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:hover:bg-white/10"><Icon className="h-4 w-4 text-slate-500" /><span>{action.label}</span></button>;
             })}
             <button
               type="button"
@@ -128,7 +128,7 @@ export function ProductionUserMenu({ open, onToggle, onClose, onBeforeOpen }: Pr
                 navigate: (href) => window.location.assign(href),
                 openPlaceholder,
               })}
-              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:hover:bg-white/10"
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm hover:bg-slate-100 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:hover:bg-white/10"
             >
               <LogOut className="h-4 w-4 text-slate-500" />
               <span>{signOutAction.label}</span>
@@ -136,7 +136,7 @@ export function ProductionUserMenu({ open, onToggle, onClose, onBeforeOpen }: Pr
           </div>
           {shouldShowDevelopmentIdentityNotice(session) ? (
             <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-[10px] leading-4 text-amber-950">
-              <strong className="block uppercase tracking-[.1em]">Development identity only</strong>
+              <strong className="block uppercase tracking-widest">Development identity only</strong>
               Mock identity switching is isolated from the production account menu and is not production authentication.
             </div>
           ) : null}

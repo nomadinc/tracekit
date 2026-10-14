@@ -174,8 +174,9 @@ test("migration filenames are unique and numerically ordered", () => {
     .sort();
   const numbers = names.map((name) => name.slice(0, 3));
 
+  // 082–084 were renumbered by 25e4658d; 085–088 now have canonical timestamp identities.
   assert.equal(new Set(numbers).size, numbers.length);
-  assert.deepEqual(numbers, Array.from({ length: Number(numbers.at(-1)) + 1 }, (_, index) => String(index).padStart(3, "0")));
+  assert.deepEqual(numbers, Array.from({ length: Number(numbers.at(-1)) + 1 }, (_, index) => String(index).padStart(3, "0")).filter(version => !["082", "083", "084", "085", "086", "087", "088"].includes(version)));
 });
 test("operator one-shot quota reservation includes durable freshness fields and service-role ACL", () => {
   const migration = readFileSync(new URL("../../supabase/migrations/077_operator_one_shot_continuous_shadow.sql", import.meta.url), "utf8");

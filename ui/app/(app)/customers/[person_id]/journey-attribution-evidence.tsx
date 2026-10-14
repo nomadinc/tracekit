@@ -18,7 +18,7 @@ function Field({ label, value, mono = false }: { label: string; value: string | 
   return (
     <div className="min-w-0">
       <dt className="text-[11px] font-medium uppercase tracking-wide text-slate-500">{label}</dt>
-      <dd className={`mt-1 break-words text-sm ${mono ? "font-mono text-xs" : ""}`}>{value === null || value === undefined || value === "" ? "Not observed" : value}</dd>
+      <dd className={`mt-1 wrap-break-word text-sm ${mono ? "font-mono text-xs" : ""}`}>{value === null || value === undefined || value === "" ? "Not observed" : value}</dd>
     </div>
   );
 }
@@ -36,7 +36,7 @@ export function JourneyAttributionEvidenceSection({ evidence }: { evidence?: Jou
   const hasEvidence = Boolean(evidence && (evidence.evidence_event_count || evidence.providers.length || evidence.identifiers.length || evidence.flags.length || evidence.referrers.missing_observed || evidence.referrers.first_observed_client_referrer));
   const capped = evidence?.truncation.truncated ? truncationLabels(evidence.truncation) : [];
   return (
-    <div id="journey-attribution-evidence" tabIndex={-1} className="focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400">
+    <div id="journey-attribution-evidence" tabIndex={-1} className="focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-slate-400">
     <Section title="Attribution Evidence" icon={RadioTower}>
       <p className="mb-4 text-sm leading-6 text-slate-600 dark:text-slate-300">Observed acquisition signals across this journey. This is observed attribution evidence, not a fraud determination.</p>
       {!evidence || !hasEvidence ? <EvidenceEmptyState /> : (
@@ -68,7 +68,7 @@ export function JourneyAttributionEvidenceSection({ evidence }: { evidence?: Jou
             {evidence.identifiers.length ? (
               <div className="mt-3 grid gap-3">
                 {evidence.identifiers.map((identifier) => (
-                  <article id={identifierEvidenceDomId(identifier)} tabIndex={-1} key={`${identifier.raw_param}:${identifier.provider}:${identifier.category}:${identifier.identifier_type}`} className="group min-w-0 rounded-lg border p-4 transition data-[supporting-evidence=true]:ring-2 data-[supporting-evidence=true]:ring-slate-500 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-slate-400 dark:border-white/10">
+                  <article id={identifierEvidenceDomId(identifier)} tabIndex={-1} key={`${identifier.raw_param}:${identifier.provider}:${identifier.category}:${identifier.identifier_type}`} className="group min-w-0 rounded-lg border p-4 transition data-[supporting-evidence=true]:ring-2 data-[supporting-evidence=true]:ring-slate-500 focus-visible:outline-hidden focus-visible:ring-2 focus-visible:ring-slate-400 dark:border-white/10">
                     <div className="flex flex-wrap items-start justify-between gap-3">
                       <div className="min-w-0">
                         <h4 className="break-all font-mono text-sm font-semibold">{identifier.raw_param}</h4>

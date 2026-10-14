@@ -105,7 +105,7 @@ export default async function JourneyDetailPage({ params }: Props) {
         </Link>
       </div>
 
-      <section className="rounded-xl border bg-white p-5 shadow-sm dark:border-white/10 dark:bg-ink/80">
+      <section className="rounded-xl border bg-white p-5 shadow-xs dark:border-white/10 dark:bg-ink/80">
         <EntityHeader
           entityType="journey"
           title="Customer Journey"

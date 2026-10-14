@@ -273,7 +273,7 @@ function MetricCard({
   return (
     <Link
       href={href}
-      className={`block rounded-xl border p-4 transition hover:-translate-y-0.5 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-teal-500 ${toneClass}`}
+      className={`block rounded-xl border p-4 transition hover:-translate-y-0.5 hover:shadow-xs focus:outline-hidden focus:ring-2 focus:ring-teal-500 ${toneClass}`}
     >
       {body}
     </Link>
@@ -419,7 +419,7 @@ function StoryHeader({
               <Link
                 key={period.key}
                 href={periodHref(period.key, brand)}
-                className={`rounded-full border px-3 py-2 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-teal-500 ${
+                className={`rounded-full border px-3 py-2 text-sm font-medium transition focus:outline-hidden focus:ring-2 focus:ring-teal-500 ${
                   active
                     ? "border-teal-600 bg-teal-600 text-white"
                     : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
@@ -513,7 +513,7 @@ function TrendModule({
             key={item.key}
             type="button"
             onClick={() => setMetric(item.key)}
-            className={`rounded-full border px-3 py-1.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-teal-500 ${
+            className={`rounded-full border px-3 py-1.5 text-sm font-medium transition focus:outline-hidden focus:ring-2 focus:ring-teal-500 ${
               item.key === metric
                 ? "border-slate-950 bg-slate-950 text-white dark:border-white dark:bg-white dark:text-slate-950"
                 : "border-slate-200 bg-white text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-300"
@@ -758,7 +758,7 @@ function OperationalHealthModule({
             <Link
               key={card.title}
               href={card.href}
-              className={`rounded-xl border p-4 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:hover:bg-slate-900 ${toneClass}`}
+              className={`rounded-xl border p-4 transition hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-teal-500 dark:hover:bg-slate-900 ${toneClass}`}
             >
               <div className="flex items-start gap-3">
                 <span className="rounded-lg bg-slate-100 p-2 text-slate-700 dark:bg-slate-900 dark:text-slate-200">
@@ -942,7 +942,7 @@ export function DecisionHomeOverview() {
           <select
             value={selectedBrand}
             onChange={(event) => changeBrand(event.target.value)}
-            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
+            className="rounded-lg border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 focus:outline-hidden focus:ring-2 focus:ring-teal-500 dark:border-slate-800 dark:bg-slate-900 dark:text-slate-100"
           >
             <option value="">All brands</option>
             {brands.map((row) => (
