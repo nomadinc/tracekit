@@ -15,7 +15,7 @@ The pure resolver accepts generic normalized numericTransactionId/publicOrderId 
 - Multiple mappings to different orders are a conflict. Repeated identical mappings do not invent ambiguity.
 - Existing links to another order are held, including suggested links, rather than silently overwritten.
 
-The identity-only update planner returns only matched_canonical_order_id and reconciliation_state. It never emits status, amount, fee, currency or wallet-loss changes. A replay after the same exact link is established returns noop. The current projection's tenant and provider dispute identity must also agree.
+The identity-only update planner recomputes resolution from the current input and supplied mappings; it does not accept detached precomputed decisions. It returns only matched_canonical_order_id and reconciliation_state. It never emits status, amount, fee, currency or wallet-loss changes. A replay after the same exact link is established returns noop. The current projection's tenant and provider dispute identity must also agree.
 
 ## Activation prerequisites
 
@@ -34,6 +34,6 @@ Currency API preparation remains in PR #569; source/affiliate monetary aggregati
 
 Node 24 command: node --test api/src/commas-dispute-order-resolver.test.ts
 
-11 passed, 0 failed, 0 skipped. Covers dual/single identifiers, missing or malformed IDs, tenant isolation, ambiguity, incomplete and heuristic lookup denial, unsafe integers, status-preserving identity-only plans, replay, conflicting existing links and mismatched dispute projections.
+14 passed, 0 failed, 0 skipped. Covers dual/single identifiers, missing or malformed IDs, tenant isolation, ambiguity, incomplete and heuristic lookup denial, unsafe integers, status-preserving identity-only plans, replay, conflicting existing links and mismatched dispute projections. Additional cases verify stale evidence denial, every projection scope dimension, and older/equal evidence planning without terminal lifecycle or financial mutations. These are pure planner tests, not runtime lifecycle integration tests.
 
 Database atomicity, live payload binding, customer journey end-to-end acceptance and historical replay have not been tested or certified.
