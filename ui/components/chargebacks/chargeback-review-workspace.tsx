@@ -3,6 +3,8 @@ import Link from "next/link";
 import * as React from "react";
 import { sameOriginGetJson } from "@/lib/api";
 import { formatDisputeAmount } from "@/lib/chargebacks/format-currency";
+import { createDetailRequestCoordinator } from "@/lib/chargebacks/detail-request";
+import { selectedDetail } from "@/lib/chargebacks/selected-detail";
 import { MATCH_AUTHORITY_LABELS, type MatchAuthority } from "@/lib/chargebacks/review";
 type Row={id:string;source:"historical"|"live";sourceLabel:string;status?:string|null;disputeDate?:string|null;amount?:number|null;fee?:number|null;currency?:string|null;currencySource?:string|null;feeCurrency?:string|null;feeCurrencySource?:string|null;reason?:string|null;matchAuthority:MatchAuthority;matchedOrderId:string|null};
 type Data={rows:Row[];pagination:{page:number;returned:number;hasMore:boolean};summary:{total:number;statuses:Record<string,number>;historicalTotal:number;liveTotal:number}};
@@ -15,9 +17,23 @@ const label=(v:any)=>String(v||"Unknown").replace(/[_-]+/g," ").replace(/\b\w/g,
 const tone=(v:MatchAuthority)=>v==="exact"?"border-emerald-200 bg-emerald-50 text-emerald-800":v==="suggested"?"border-amber-200 bg-amber-50 text-amber-800":"border-slate-200 bg-slate-100 text-slate-700";
 function Metric({name,value,note}:{name:string;value:string;note?:string}){return <div className="rounded-xl border bg-white p-4"><div className="text-[10px] font-semibold uppercase text-slate-500">{name}</div><div className="mt-2 text-2xl font-semibold">{value}</div>{note&&<div className="mt-1 text-xs text-slate-500">{note}</div>}</div>}
 export function ChargebackReviewWorkspace(){
- const[page,setPage]=React.useState(1),[data,setData]=React.useState<Data|null>(null),[selected,setSelected]=React.useState<Row|null>(null),[detail,setDetail]=React.useState<Detail|null>(null),[error,setError]=React.useState<string|null>(null);
+ const[page,setPage]=React.useState(1),[data,setData]=React.useState<Data|null>(null),[selected,setSelected]=React.useState<Row|null>(null),[loadedDetail,setLoadedDetail]=React.useState<{id:string;value:Detail}|null>(null),[error,setError]=React.useState<string|null>(null);
  React.useEffect(()=>{setError(null);sameOriginGetJson<Data>(`/api/chargebacks?page=${page}&page_size=50`).then(setData).catch(e=>setError(e?.message||"Chargebacks unavailable"))},[page]);
- React.useEffect(()=>{if(!selected){setDetail(null);return}sameOriginGetJson<Detail>(`/api/chargebacks/${selected.id}`).then(setDetail).catch(()=>setDetail(null))},[selected]);
+ const coordinator = React.useMemo(
+  () => createDetailRequestCoordinator<{id:string;value:Detail}>(
+    async id => ({
+      id,
+      value: await sameOriginGetJson<Detail>(`/api/chargebacks/${id}`)
+    }),
+    setLoadedDetail
+  ),
+  []
+);
+React.useEffect(() => {
+  void coordinator.select(selected?.id ?? null);
+  return () => coordinator.dispose();
+}, [selected?.id, coordinator]);
+ const detail = selectedDetail(selected?.id ?? null, loadedDetail);
  const s=data?.summary;
  return <main className="space-y-6">
   <header className="flex flex-wrap items-end justify-between gap-4"><div><div className="text-xs font-semibold uppercase tracking-[.16em] text-teal-700">Revenue intelligence</div><h1 className="mt-2 text-3xl font-semibold">Chargebacks</h1><p className="mt-2 text-sm text-slate-500">Provider disputes connected to commerce, customer, and marketing context—with uncertainty shown explicitly.</p></div><div className="flex items-center gap-2"><Link href="/dashboard/chargebacks/exposure" className="rounded-lg border px-3 py-2 text-xs font-semibold">Exposure</Link><div className="rounded-full border px-3 py-1.5 text-xs text-slate-500">{s?`${s.liveTotal} Live · ${s.historicalTotal} Historical`:"Loading…"}</div></div></header>

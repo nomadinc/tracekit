@@ -73,7 +73,8 @@ test("chargeback routes use same-origin JSON while Worker APIs keep their config
   const workspace = await readFile(new URL("../components/chargebacks/chargeback-review-workspace.tsx", import.meta.url), "utf8");
   const api = await readFile(new URL("../lib/api.ts", import.meta.url), "utf8");
   assert.match(workspace, /sameOriginGetJson<Data>\(`\/api\/chargebacks\?/);
-  assert.match(workspace, /sameOriginGetJson<Detail>\(`\/api\/chargebacks\/\$\{selected\.id\}`\)/);
+  assert.match(workspace, /sameOriginGetJson<Detail>\(`\/api\/chargebacks\/\$\{id\}`\)/);
+  assert.match(workspace, /createDetailRequestCoordinator<Detail>/);
   assert.match(api, /export async function sameOriginGetJson/);
   assert.match(api, /const url = pathAndQuery\.startsWith\("\/"\) \? pathAndQuery/);
   assert.match(api, /export async function apiGetJson/);
