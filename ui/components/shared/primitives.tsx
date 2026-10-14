@@ -6,7 +6,7 @@ import { AlertTriangle, CheckCircle2, Copy, ExternalLink, Loader2 } from "lucide
 
 export function PageSection({ children, className = "" }: { children: React.ReactNode; className?: string }) {
   return (
-    <section className={`rounded-lg border bg-white p-5 shadow-sm dark:border-white/10 dark:bg-ink/85 ${className}`}>
+    <section className={`rounded-lg border bg-white p-5 shadow-xs dark:border-white/10 dark:bg-ink/85 ${className}`}>
       {children}
     </section>
   );
@@ -72,7 +72,7 @@ export function ErrorState({ title, body, onRetry }: { title: string; body: stri
           <div className="font-semibold">{title}</div>
           <p className="mt-1 leading-6">{body}</p>
           {onRetry ? (
-            <button type="button" onClick={onRetry} className="mt-3 rounded-md border border-red-300 px-3 py-2 font-medium hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-300 dark:border-red-400/40 dark:hover:bg-red-500/10">
+            <button type="button" onClick={onRetry} className="mt-3 rounded-md border border-red-300 px-3 py-2 font-medium hover:bg-red-100 focus:outline-hidden focus:ring-2 focus:ring-red-300 dark:border-red-400/40 dark:hover:bg-red-500/10">
               Retry
             </button>
           ) : null}
@@ -150,7 +150,7 @@ export function CopyButton({ value, label = "Copy" }: { value: string; label?: s
     resetTimer.current = window.setTimeout(() => setStatus("idle"), 1600);
   }
   return (
-    <button type="button" onClick={copy} aria-label={status === "idle" ? label : `${label}: ${status === "copied" ? "copied" : "copy failed"}`} className="inline-flex min-w-24 items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/10">
+    <button type="button" onClick={copy} aria-label={status === "idle" ? label : `${label}: ${status === "copied" ? "copied" : "copy failed"}`} className="inline-flex min-w-24 items-center justify-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/10">
       <Copy className="h-3.5 w-3.5" />
       <span aria-live="polite">{status === "copied" ? "Copied" : status === "failed" ? "Copy failed" : label}</span>
     </button>
@@ -159,7 +159,7 @@ export function CopyButton({ value, label = "Copy" }: { value: string; label?: s
 
 export function ExternalLinkButton({ href, children }: { href: string; children: React.ReactNode }) {
   return (
-    <Link href={href} className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/10">
+    <Link href={href} className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/10">
       {children}
       <ExternalLink className="h-3.5 w-3.5" />
     </Link>

@@ -77,7 +77,7 @@ export function EntityPreview({
                 key={`${related.type}:${related.id}`}
                 target={{ type: related.type, id: related.id, label: related.label }}
                 href={related.href}
-                className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5"
+                className="flex items-center justify-between gap-3 rounded-lg border p-3 text-sm hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5"
               >
                 <span className="min-w-0">
                   <span className="block font-medium">{related.label}</span>
@@ -98,7 +98,7 @@ export function EntityPreview({
               {section.items.map((item, index) => (
                 <div key={`${item.label}:${index}`} className="grid gap-2 py-2 sm:grid-cols-[9rem_1fr]">
                   <dt className="text-slate-500 dark:text-slate-400">{item.label}</dt>
-                  <dd className="min-w-0 break-words text-slate-800 dark:text-slate-100">{displayValue(item.value)}</dd>
+                  <dd className="min-w-0 wrap-break-word text-slate-800 dark:text-slate-100">{displayValue(item.value)}</dd>
                 </div>
               ))}
             </dl>
@@ -137,7 +137,7 @@ export function EntityPreview({
         </PageSection>
       ) : null}
 
-      <Link href={entity.full_page_link} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-3 text-sm font-medium text-white hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:bg-white dark:text-slate-950">
+      <Link href={entity.full_page_link} className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-slate-950 px-4 py-3 text-sm font-medium text-white hover:bg-slate-800 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:bg-white dark:text-slate-950">
         Open full page
         <ArrowRight className="h-4 w-4" />
       </Link>

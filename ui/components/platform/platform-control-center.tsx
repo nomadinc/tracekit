@@ -122,7 +122,7 @@ export function PlatformControlCenter({
         />
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-white/[.025]">
+      <section className="rounded-2xl border border-white/10 bg-white/2.5">
         <div className="border-b border-white/10 p-5">
           <h2 className="text-lg font-semibold">Needs Attention</h2>
           <p className="mt-1 text-xs text-slate-500">
@@ -176,7 +176,7 @@ export function PlatformControlCenter({
         )}
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-white/[.025]">
+      <section className="rounded-2xl border border-white/10 bg-white/2.5">
         <div className="flex flex-col gap-3 border-b border-white/10 p-5 xl:flex-row xl:items-center xl:justify-between">
           <div>
             <h2 className="text-lg font-semibold">Client / Brand portfolio</h2>
@@ -200,13 +200,13 @@ export function PlatformControlCenter({
                 </option>
               ))}
             </select>
-            <label className="flex min-w-64 items-center gap-2 rounded-xl border border-white/10 bg-white/[.04] px-3 py-2">
+            <label className="flex min-w-64 items-center gap-2 rounded-xl border border-white/10 bg-white/4 px-3 py-2">
               <Search className="h-4 w-4 text-slate-500" />
               <input
                 value={query}
                 onChange={(event) => setQuery(event.target.value)}
                 placeholder="Search clients"
-                className="min-w-0 flex-1 bg-transparent text-sm outline-none"
+                className="min-w-0 flex-1 bg-transparent text-sm outline-hidden"
               />
             </label>
           </div>
@@ -303,7 +303,7 @@ export function PlatformControlCenter({
         </div>
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-white/[.025] p-5">
+      <section className="rounded-2xl border border-white/10 bg-white/2.5 p-5">
         <h2 className="text-sm font-semibold">Health interpretation</h2>
         <p className="mt-2 text-xs leading-5 text-slate-500">
           This view does not calculate a synthetic client health score.

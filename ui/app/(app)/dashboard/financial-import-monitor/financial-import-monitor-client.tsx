@@ -110,7 +110,7 @@ function issueTone(severity: string) {
 }
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <section className={`rounded-lg border bg-white p-4 shadow-sm dark:border-white/10 dark:bg-ink/85 ${className}`}>{children}</section>;
+  return <section className={`rounded-lg border bg-white p-4 shadow-xs dark:border-white/10 dark:bg-ink/85 ${className}`}>{children}</section>;
 }
 
 function currentActivityLabel(account: FinancialImportMonitorAccount) {
@@ -139,7 +139,7 @@ function ImportHealthHero({ data, onReviewIssues }: { data: FinancialImportMonit
     ["Completed in 24h", health.imports_last_24h, Clock3],
   ];
   return (
-    <section className="rounded-lg border bg-white p-5 shadow-sm dark:border-white/10 dark:bg-ink/90">
+    <section className="rounded-lg border bg-white p-5 shadow-xs dark:border-white/10 dark:bg-ink/90">
       <div className="grid gap-6 lg:grid-cols-[1.1fr_0.9fr]">
         <div>
           <div className="flex flex-wrap items-center gap-3">
@@ -153,11 +153,11 @@ function ImportHealthHero({ data, onReviewIssues }: { data: FinancialImportMonit
           <p className="mt-3 max-w-2xl text-sm leading-6 text-slate-600 dark:text-slate-300">{health.description}</p>
           <p className="mt-3 text-sm text-slate-500">Last successful import: <span className="font-medium text-slate-800 dark:text-slate-100">{time(health.last_successful_import)}</span></p>
           <div className="mt-5 flex flex-wrap gap-2">
-            <button type="button" onClick={onReviewIssues} className="inline-flex items-center gap-2 rounded-md bg-slate-950 px-4 py-2 text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-slate-400 dark:bg-white dark:text-slate-950">
+            <button type="button" onClick={onReviewIssues} className="inline-flex items-center gap-2 rounded-md bg-slate-950 px-4 py-2 text-sm font-medium text-white focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:bg-white dark:text-slate-950">
               <ShieldAlert className="h-4 w-4" />
               Review issues
             </button>
-            <Link href="/operations" className="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5">
+            <Link href="/operations" className="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5">
               View jobs
               <ArrowRight className="h-4 w-4" />
             </Link>
@@ -186,7 +186,7 @@ function ImportHealthHero({ data, onReviewIssues }: { data: FinancialImportMonit
 
 function IssueCards({ cards, onSelect }: { cards: FinancialImportIssueCard[]; onSelect: (card: FinancialImportIssueCard) => void }) {
   return (
-    <section id="import-issues" tabIndex={-1} className="scroll-mt-24 space-y-3 focus:outline-none" aria-labelledby="import-issues-heading">
+    <section id="import-issues" tabIndex={-1} className="scroll-mt-24 space-y-3 focus:outline-hidden" aria-labelledby="import-issues-heading">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
           <h2 id="import-issues-heading" className="text-lg font-semibold">What needs your attention?</h2>
@@ -200,7 +200,7 @@ function IssueCards({ cards, onSelect }: { cards: FinancialImportIssueCard[]; on
               type="button"
               key={card.category}
               onClick={() => onSelect(card)}
-              className="rounded-lg border bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:bg-ink/85"
+              className="rounded-lg border bg-white p-4 text-left shadow-xs transition hover:-translate-y-0.5 hover:shadow-md focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:bg-ink/85"
             >
               <div className="flex items-start justify-between gap-3">
                 <div>
@@ -263,11 +263,11 @@ function Filters({ range, platform, account, status, mode, attentionOnly }: {
       <div className="grid gap-3 lg:grid-cols-[1fr_1fr_1fr_1fr_1fr_auto]">
         <label className="space-y-1">
           <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">From</span>
-          <input type="date" value={form.from} onChange={(e) => setForm((prev) => ({ ...prev, from: e.target.value }))} className="h-10 w-full rounded-md border bg-white px-3 text-sm dark:border-white/10 dark:bg-slate-950 dark:[color-scheme:dark]" />
+          <input type="date" value={form.from} onChange={(e) => setForm((prev) => ({ ...prev, from: e.target.value }))} className="h-10 w-full rounded-md border bg-white px-3 text-sm dark:border-white/10 dark:bg-slate-950 dark:scheme-dark" />
         </label>
         <label className="space-y-1">
           <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">To</span>
-          <input type="date" value={form.to} onChange={(e) => setForm((prev) => ({ ...prev, to: e.target.value }))} className="h-10 w-full rounded-md border bg-white px-3 text-sm dark:border-white/10 dark:bg-slate-950 dark:[color-scheme:dark]" />
+          <input type="date" value={form.to} onChange={(e) => setForm((prev) => ({ ...prev, to: e.target.value }))} className="h-10 w-full rounded-md border bg-white px-3 text-sm dark:border-white/10 dark:bg-slate-950 dark:scheme-dark" />
         </label>
         <label className="space-y-1">
           <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Connector</span>
@@ -290,7 +290,7 @@ function Filters({ range, platform, account, status, mode, attentionOnly }: {
             <input type="checkbox" checked={form.attentionOnly} onChange={(e) => setForm((prev) => ({ ...prev, attentionOnly: e.target.checked }))} />
             Needs attention
           </label>
-          <button type="button" onClick={apply} className="inline-flex h-10 items-center gap-2 rounded-md bg-slate-950 px-4 text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-slate-400 dark:bg-white dark:text-slate-950">
+          <button type="button" onClick={apply} className="inline-flex h-10 items-center gap-2 rounded-md bg-slate-950 px-4 text-sm font-medium text-white focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:bg-white dark:text-slate-950">
             <Filter className="h-4 w-4" />
             Apply
           </button>
@@ -298,7 +298,7 @@ function Filters({ range, platform, account, status, mode, attentionOnly }: {
       </div>
       <label className="mt-3 flex max-w-md items-center gap-2 rounded-md border bg-slate-50 px-3 py-2 dark:border-white/10 dark:bg-white/5">
         <Search className="h-4 w-4 text-slate-400" />
-        <input value={form.account} onChange={(e) => setForm((prev) => ({ ...prev, account: e.target.value }))} placeholder="Filter by account identifier" className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
+        <input value={form.account} onChange={(e) => setForm((prev) => ({ ...prev, account: e.target.value }))} placeholder="Filter by account identifier" className="min-w-0 flex-1 bg-transparent text-sm outline-hidden" />
       </label>
     </Card>
   );
@@ -394,7 +394,7 @@ function RecentImportActivity({ data, onSelect }: { data: FinancialImportMonitor
                 type="button"
                 key={row.id}
                 onClick={() => onSelect(row.account_key)}
-                className="grid w-full gap-3 px-4 py-3 text-left transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-slate-400 dark:hover:bg-white/5 lg:grid-cols-[minmax(0,1fr)_9rem_13rem_minmax(0,1.2fr)]"
+                className="grid w-full gap-3 px-4 py-3 text-left transition hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-inset focus:ring-slate-400 dark:hover:bg-white/5 lg:grid-cols-[minmax(0,1fr)_9rem_13rem_minmax(0,1.2fr)]"
               >
                 <div>
                   <div className="font-medium">{row.connector} · {compact(row.account, "Unknown account")}</div>
@@ -470,7 +470,7 @@ function DetailPanel({ account }: { account: FinancialImportMonitorAccount | nul
         ].map(([label, value]) => (
           <div key={label} className="rounded-lg border bg-slate-50 p-3 dark:border-white/10 dark:bg-white/5">
             <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</dt>
-            <dd className="mt-1 break-words text-sm">{String(value)}</dd>
+            <dd className="mt-1 wrap-break-word text-sm">{String(value)}</dd>
           </div>
         ))}
       </dl>
@@ -544,7 +544,7 @@ function DetailPanel({ account }: { account: FinancialImportMonitorAccount | nul
           ].map(([label, value]) => (
             <div key={label} className="rounded-lg border bg-slate-50 p-3 dark:border-white/10 dark:bg-white/5">
               <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</dt>
-              <dd className="mt-1 break-words text-sm">{String(value)}</dd>
+              <dd className="mt-1 wrap-break-word text-sm">{String(value)}</dd>
             </div>
           ))}
         </dl>
@@ -675,7 +675,7 @@ export default function FinancialImportMonitorClient() {
           <ImportHealthHero data={data} onReviewIssues={focusIssues} />
           <IssueCards cards={issueCards} onSelect={selectIssue} />
           <RecentImportActivity data={data} onSelect={(accountKey) => focusInventory(accountKey)} />
-          <section id="connector-inventory" tabIndex={-1} className="scroll-mt-24 space-y-4 focus:outline-none">
+          <section id="connector-inventory" tabIndex={-1} className="scroll-mt-24 space-y-4 focus:outline-hidden">
             <Card>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -687,7 +687,7 @@ export default function FinancialImportMonitorClient() {
                   onClick={() => setFiltersOpen((prev) => !prev)}
                   aria-expanded={filtersOpen}
                   aria-controls="financial-import-filters"
-                  className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5"
+                  className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5"
                 >
                   <Filter className="h-4 w-4" />
                   {filtersOpen ? "Hide filters" : "Show filters"}

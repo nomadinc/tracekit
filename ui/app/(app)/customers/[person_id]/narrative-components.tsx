@@ -45,7 +45,7 @@ export function Badge({ children, tone = "neutral" }: { children: React.ReactNod
 
 export function Section({ title, icon: Icon, children, right }: { title: string; icon?: any; children: React.ReactNode; right?: React.ReactNode }) {
   return (
-    <section className="rounded-lg border bg-white p-5 shadow-sm dark:bg-ink/80">
+    <section className="rounded-lg border bg-white p-5 shadow-xs dark:bg-ink/80">
       <div className="mb-4 flex items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 font-semibold">
           {Icon ? <Icon className="h-4 w-4 text-slate-500" /> : null}
@@ -66,7 +66,7 @@ export function DetailGrid({ rows }: { rows: Array<[string, React.ReactNode]> })
       {populated.map(([label, value]) => (
         <div key={label} className="rounded-md border bg-slate-50 p-3 dark:border-white/10 dark:bg-white/5">
           <dt className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</dt>
-          <dd className="mt-1 break-words text-sm">{value}</dd>
+          <dd className="mt-1 wrap-break-word text-sm">{value}</dd>
         </div>
       ))}
     </dl>
@@ -128,7 +128,7 @@ export function ActivityFilterBar({
             key={option}
             type="button"
             onClick={() => onModeChange(option)}
-            className={`rounded px-3 py-1 ${mode === option ? "bg-slate-100 font-medium dark:bg-white/10" : "text-slate-500"}`}
+            className={`rounded-sm px-3 py-1 ${mode === option ? "bg-slate-100 font-medium dark:bg-white/10" : "text-slate-500"}`}
           >
             {option === "story" ? "Story view" : "Technical view"}
           </button>
@@ -182,7 +182,7 @@ function TechnicalEvidenceDrawer({ evidence }: { evidence: any }) {
   return (
     <details className="mt-3 rounded-md border bg-slate-50 p-3 text-xs dark:border-white/10 dark:bg-white/5">
       <summary className="cursor-pointer font-medium">Technical evidence</summary>
-      <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap break-words">{JSON.stringify(redactCustomerEvidence(evidence), null, 2)}</pre>
+      <pre className="mt-3 max-h-72 overflow-auto whitespace-pre-wrap wrap-break-word">{JSON.stringify(redactCustomerEvidence(evidence), null, 2)}</pre>
     </details>
   );
 }
@@ -216,8 +216,8 @@ function EventAttributionEvidenceDisclosure({ activity }: { activity: unknown })
           </div>
         ) : null}
         <dl className="grid gap-2 sm:grid-cols-2">
-          <div><dt className="text-xs text-slate-500">Referrer</dt><dd className="break-words">{evidence.referrer.client || "Not observed"}</dd></div>
-          <div><dt className="text-xs text-slate-500">Referrer origin</dt><dd className="break-words">{evidence.referrer.origin || "Not observed"}</dd></div>
+          <div><dt className="text-xs text-slate-500">Referrer</dt><dd className="wrap-break-word">{evidence.referrer.client || "Not observed"}</dd></div>
+          <div><dt className="text-xs text-slate-500">Referrer origin</dt><dd className="wrap-break-word">{evidence.referrer.origin || "Not observed"}</dd></div>
         </dl>
         {evidence.flags.length ? <p className="text-xs text-slate-500">{evidence.flags.map(flagLabel).join(" · ")}</p> : null}
       </div>
@@ -249,7 +249,7 @@ function ActivityTimelineItem({ activity, highlighted, mode }: { activity: any; 
             {displayFields.map(([key, value]) => (
               <div key={key} className="rounded-md border bg-slate-50 p-2 dark:border-white/10 dark:bg-white/5">
                 <dt className="text-[11px] uppercase tracking-wide text-slate-500">{eventCategoryLabel(key)}</dt>
-                <dd className="mt-1 break-words text-sm">{String(value)}</dd>
+                <dd className="mt-1 wrap-break-word text-sm">{String(value)}</dd>
               </div>
             ))}
           </dl>

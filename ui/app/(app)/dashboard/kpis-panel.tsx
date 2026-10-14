@@ -77,7 +77,7 @@ function DeltaHelper({
           "rounded-full px-2 py-0.5",
           "text-xs font-medium",
           "cursor-help select-none",
-          "focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-black/40",
+          "focus:outline-hidden focus:ring-2 focus:ring-offset-1 focus:ring-black/40",
           styles.pill,
         ].join(" ")}
       >

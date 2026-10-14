@@ -131,7 +131,7 @@ function newIdempotencyKey() {
 }
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <section className={`rounded-lg border bg-white p-4 shadow-sm dark:border-white/10 dark:bg-ink/85 ${className}`}>{children}</section>;
+  return <section className={`rounded-lg border bg-white p-4 shadow-xs dark:border-white/10 dark:bg-ink/85 ${className}`}>{children}</section>;
 }
 
 function statusToneClasses(state: ReturnType<typeof deriveFinancialHealth>["state"]) {
@@ -155,7 +155,7 @@ function HealthHero({ data, onReviewIssues, onOpenLedger }: { data: FinancialRec
   const canReview = health.attention_items > 0 || health.state === "critical" || health.state === "review_needed";
 
   return (
-    <section className="rounded-lg border bg-white p-5 shadow-sm dark:border-white/10 dark:bg-ink/90">
+    <section className="rounded-lg border bg-white p-5 shadow-xs dark:border-white/10 dark:bg-ink/90">
       <div className="grid gap-6 lg:grid-cols-[1.15fr_0.85fr]">
         <div>
           <div className="flex flex-wrap items-center gap-3">
@@ -177,7 +177,7 @@ function HealthHero({ data, onReviewIssues, onOpenLedger }: { data: FinancialRec
               <ListChecks className="h-4 w-4" />
               Review Issues
             </button>
-            <button type="button" onClick={onOpenLedger} className="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5">
+            <button type="button" onClick={onOpenLedger} className="inline-flex items-center gap-2 rounded-md border px-4 py-2 text-sm font-medium hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5">
               Financial ledger
               <ArrowRight className="h-4 w-4" />
             </button>
@@ -232,7 +232,7 @@ function IssueCards({ data, active, onSelect }: { data: FinancialReconciliationR
             key={card.category}
             onClick={() => onSelect(card.category)}
             aria-label={`Show ${card.title}: ${card.count} ${card.severity.toLowerCase()} signal${card.count === 1 ? "" : "s"}`}
-            className={`rounded-lg border bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:bg-ink/85 ${active === card.category ? "ring-2 ring-slate-400" : ""}`}
+            className={`rounded-lg border bg-white p-4 text-left shadow-xs transition hover:-translate-y-0.5 hover:shadow-md focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:bg-ink/85 ${active === card.category ? "ring-2 ring-slate-400" : ""}`}
           >
             <div className="flex items-start justify-between gap-3">
               <div>
@@ -288,11 +288,11 @@ function Filters({ range, platform, account, eventType, state, confidence, needs
       <div className="grid gap-3 lg:grid-cols-[1fr_1fr_1fr_1fr_1fr_1fr_auto]">
         <label className="space-y-1">
           <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">From</span>
-          <input type="date" value={form.from} onChange={(e) => setForm((prev) => ({ ...prev, from: e.target.value }))} className="h-10 w-full rounded-md border bg-white px-3 text-sm dark:border-white/10 dark:bg-slate-950 dark:[color-scheme:dark]" />
+          <input type="date" value={form.from} onChange={(e) => setForm((prev) => ({ ...prev, from: e.target.value }))} className="h-10 w-full rounded-md border bg-white px-3 text-sm dark:border-white/10 dark:bg-slate-950 dark:scheme-dark" />
         </label>
         <label className="space-y-1">
           <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">To</span>
-          <input type="date" value={form.to} onChange={(e) => setForm((prev) => ({ ...prev, to: e.target.value }))} className="h-10 w-full rounded-md border bg-white px-3 text-sm dark:border-white/10 dark:bg-slate-950 dark:[color-scheme:dark]" />
+          <input type="date" value={form.to} onChange={(e) => setForm((prev) => ({ ...prev, to: e.target.value }))} className="h-10 w-full rounded-md border bg-white px-3 text-sm dark:border-white/10 dark:bg-slate-950 dark:scheme-dark" />
         </label>
         <label className="space-y-1">
           <span className="text-xs font-semibold uppercase tracking-wide text-slate-500">Connector</span>
@@ -321,7 +321,7 @@ function Filters({ range, platform, account, eventType, state, confidence, needs
             <input type="checkbox" checked={form.needsReview} onChange={(e) => setForm((prev) => ({ ...prev, needsReview: e.target.checked }))} />
             Needs review
           </label>
-          <button type="button" onClick={apply} className="inline-flex h-10 items-center gap-2 rounded-md bg-slate-950 px-4 text-sm font-medium text-white focus:outline-none focus:ring-2 focus:ring-slate-400 dark:bg-white dark:text-slate-950">
+          <button type="button" onClick={apply} className="inline-flex h-10 items-center gap-2 rounded-md bg-slate-950 px-4 text-sm font-medium text-white focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:bg-white dark:text-slate-950">
             <Filter className="h-4 w-4" />
             Apply
           </button>
@@ -329,7 +329,7 @@ function Filters({ range, platform, account, eventType, state, confidence, needs
       </div>
       <label className="mt-3 flex max-w-md items-center gap-2 rounded-md border bg-slate-50 px-3 py-2 dark:border-white/10 dark:bg-white/5">
         <Search className="h-4 w-4 text-slate-400" />
-        <input value={form.account} onChange={(e) => setForm((prev) => ({ ...prev, account: e.target.value }))} placeholder="Filter by processor account" className="min-w-0 flex-1 bg-transparent text-sm outline-none" />
+        <input value={form.account} onChange={(e) => setForm((prev) => ({ ...prev, account: e.target.value }))} placeholder="Filter by processor account" className="min-w-0 flex-1 bg-transparent text-sm outline-hidden" />
       </label>
     </Card>
   );
@@ -368,7 +368,7 @@ function EventTable({ items, selectedId, onSelect }: { items: FinancialReconcili
                 <td className="px-4 py-3 text-slate-500">{time(item.event_date)}</td>
                 <td className="px-4 py-3 font-medium">{label(item.event_type)}</td>
                 <td className="px-4 py-3">
-                  <button type="button" onClick={() => onSelect(item)} className="text-left font-mono text-xs underline-offset-2 hover:underline focus:outline-none focus:ring-2 focus:ring-slate-400">
+                  <button type="button" onClick={() => onSelect(item)} className="text-left font-mono text-xs underline-offset-2 hover:underline focus:outline-hidden focus:ring-2 focus:ring-slate-400">
                     {compact(orderReference(item), "Not reported")}
                   </button>
                   <div className="mt-1 text-xs text-slate-500">{financialEventDisplayLabel(item).secondary || `event ...${eventSuffix(item.id)}`}</div>
@@ -437,7 +437,7 @@ function WorkQueue({
             key={entry.id}
             onClick={() => onSelect(entry)}
             aria-label={`${entry.severity} ${entry.title} for ${entry.order_reference}`}
-            className={`grid w-full gap-3 px-4 py-4 text-left transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-slate-400 dark:hover:bg-white/5 md:grid-cols-[8rem_minmax(0,1.2fr)_minmax(0,1.4fr)_8rem_8rem] ${selectedId === entry.event_id ? "bg-slate-100 dark:bg-white/10" : ""}`}
+            className={`grid w-full gap-3 px-4 py-4 text-left transition hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-inset focus:ring-slate-400 dark:hover:bg-white/5 md:grid-cols-[8rem_minmax(0,1.2fr)_minmax(0,1.4fr)_8rem_8rem] ${selectedId === entry.event_id ? "bg-slate-100 dark:bg-white/10" : ""}`}
           >
             <div>
               <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${severityTone(entry.severity)}`}>{entry.severity}</span>
@@ -515,7 +515,7 @@ function RecentActivity({ data, onSelect }: { data: FinancialReconciliationRespo
       </div>
       <div className="mt-4 grid gap-3 lg:grid-cols-2">
         {stories.length ? stories.map((story) => (
-          <button type="button" key={story.id} onClick={() => onSelect(story.event_id)} className="rounded-lg border bg-slate-50 p-3 text-left hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10">
+          <button type="button" key={story.id} onClick={() => onSelect(story.event_id)} className="rounded-lg border bg-slate-50 p-3 text-left hover:bg-slate-100 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10">
             <div className="flex items-start justify-between gap-3">
               <div>
                 <div className="font-medium">{compact(story.title, "Not reported")}</div>
@@ -642,7 +642,7 @@ function DetailPanel({
         ].map(([term, value]) => (
           <div key={term} className="rounded-lg border bg-slate-50 p-3 dark:border-white/10 dark:bg-white/5">
             <dt className="text-xs font-semibold uppercase tracking-wide text-slate-500">{term}</dt>
-            <dd className="mt-1 break-words text-sm">{value}</dd>
+            <dd className="mt-1 wrap-break-word text-sm">{value}</dd>
           </div>
         ))}
       </dl>
@@ -877,7 +877,7 @@ export default function FinancialReconciliationClient() {
             </Card>
           ) : null}
           <IssueCards data={data} active={activeIssue} onSelect={(category) => reviewIssues(category)} />
-          <section id="work-queue" tabIndex={-1} className="grid scroll-mt-24 gap-6 focus:outline-none 2xl:grid-cols-[minmax(0,1.35fr)_minmax(420px,0.65fr)]">
+          <section id="work-queue" tabIndex={-1} className="grid scroll-mt-24 gap-6 focus:outline-hidden 2xl:grid-cols-[minmax(0,1.35fr)_minmax(420px,0.65fr)]">
             <WorkQueue
               items={workQueue}
               selectedId={selected}
@@ -896,7 +896,7 @@ export default function FinancialReconciliationClient() {
             setExplorerOpen(true);
             setReviewContext(null);
           }} />
-          <section id="financial-ledger" tabIndex={-1} className="scroll-mt-24 space-y-4 focus:outline-none">
+          <section id="financial-ledger" tabIndex={-1} className="scroll-mt-24 space-y-4 focus:outline-hidden">
             <Card>
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div>
@@ -908,7 +908,7 @@ export default function FinancialReconciliationClient() {
                   onClick={() => setExplorerOpen((prev) => !prev)}
                   aria-expanded={explorerOpen}
                   aria-controls="financial-ledger-filters-panel"
-                  className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5"
+                  className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5"
                 >
                   {explorerOpen ? "Hide advanced filters" : "Show advanced filters"}
                   <ChevronDown className={`h-4 w-4 transition ${explorerOpen ? "rotate-180" : ""}`} />

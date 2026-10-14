@@ -42,8 +42,8 @@ test("dark report warnings, branch context, and sticky navigation use scoped rea
   const css = read("../app/globals.css");
   const experience = read("../components/investigations/investigation-experience.tsx");
   const navigator = read("../components/investigations/investigation-section-nav.tsx");
-  assert.match(css, /\.tk-investigation-workspace \.tk-warning-panel/);
-  assert.match(css, /\.tk-investigation-workspace \.tk-branch-context/);
+  assert.match(css, /@utility tk-warning-panel\s*\{\s*\.tk-investigation-workspace &/);
+  assert.match(css, /@utility tk-branch-context\s*\{\s*\.tk-investigation-workspace &/);
   assert.match(experience, /tk-warning-panel/);
   assert.match(experience, /tk-branch-context/);
   assert.match(navigator, /--tk-dark-background/);

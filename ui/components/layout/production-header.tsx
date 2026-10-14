@@ -103,7 +103,7 @@ export function ProductionHeader({
         <button
           type="button"
           onClick={onMenuClick}
-          className="inline-flex h-10 w-10 items-center justify-center rounded-lg border focus:outline-none focus:ring-2 focus:ring-slate-400 lg:hidden"
+          className="inline-flex h-10 w-10 items-center justify-center rounded-lg border focus:outline-hidden focus:ring-2 focus:ring-slate-400 lg:hidden"
           aria-label="Open navigation"
         >
           <Menu className="h-5 w-5" />
@@ -128,7 +128,7 @@ export function ProductionHeader({
         <div className="hidden min-w-[260px] max-w-sm flex-1 xl:block">
           <CommandPaletteButton
             onOpen={command.openPalette}
-            className="inline-flex h-10 w-full items-center gap-2 rounded-xl border bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300 dark:bg-white/5"
+            className="inline-flex h-10 w-full items-center gap-2 rounded-xl border bg-white px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-slate-300 dark:bg-white/5"
           />
         </div>
         {variant !== "product-admin" && !session.adminClientView ? (
@@ -140,7 +140,7 @@ export function ProductionHeader({
                   onChange={(event) =>
                     setActiveOrganization(event.target.value)
                   }
-                  className="mt-0.5 h-9 max-w-[190px] rounded-lg border border-blue-400/30 bg-blue-400/10 px-2 text-xs font-semibold text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                  className="mt-0.5 h-9 max-w-[190px] rounded-lg border border-blue-400/30 bg-blue-400/10 px-2 text-xs font-semibold text-blue-50 focus:outline-hidden focus:ring-2 focus:ring-blue-400"
                 >
                   <option value="" disabled>
                     Select Organization
@@ -171,7 +171,7 @@ export function ProductionHeader({
                 onChange={(event) =>
                   setActiveBusinessContext(event.target.value)
                 }
-                className="mt-0.5 h-9 max-w-[190px] rounded-lg border border-white/10 bg-white/5 px-2 text-xs font-semibold text-slate-100 focus:outline-none focus:ring-2 focus:ring-blue-400"
+                className="mt-0.5 h-9 max-w-[190px] rounded-lg border border-white/10 bg-white/5 px-2 text-xs font-semibold text-slate-100 focus:outline-hidden focus:ring-2 focus:ring-blue-400"
                 disabled={!businessContexts.length}
               >
                 <option value="">
@@ -197,7 +197,7 @@ export function ProductionHeader({
                 type="button"
                 disabled={adminViewBusy}
                 onClick={() => setClientMenuOpen((value) => !value)}
-                className="mt-0.5 inline-flex h-9 min-w-[180px] items-center justify-between gap-3 rounded-lg border border-blue-400/30 bg-blue-400/10 px-3 text-xs font-semibold text-blue-50 focus:outline-none focus:ring-2 focus:ring-blue-400 disabled:opacity-50"
+                className="mt-0.5 inline-flex h-9 min-w-[180px] items-center justify-between gap-3 rounded-lg border border-blue-400/30 bg-blue-400/10 px-3 text-xs font-semibold text-blue-50 focus:outline-hidden focus:ring-2 focus:ring-blue-400 disabled:opacity-50"
               >
                 <span>
                   {adminViewBusy
@@ -216,7 +216,7 @@ export function ProductionHeader({
                       type="search"
                       value={clientQuery}
                       onChange={(event) => setClientQuery(event.target.value)}
-                      className="mt-1 w-full rounded border border-white/15 bg-white/5 px-2 py-2"
+                      className="mt-1 w-full rounded-sm border border-white/15 bg-white/5 px-2 py-2"
                     />
                   </label>
                   <button
@@ -308,7 +308,7 @@ export function ProductionHeader({
                 "MCP Chat",
               )
             }
-            className="hidden h-10 items-center gap-2 rounded-xl border px-3 text-xs font-semibold sm:inline-flex focus:outline-none focus:ring-2 focus:ring-slate-400"
+            className="hidden h-10 items-center gap-2 rounded-xl border px-3 text-xs font-semibold sm:inline-flex focus:outline-hidden focus:ring-2 focus:ring-slate-400"
           >
             <Bot className="h-4 w-4" />
             MCP
@@ -318,7 +318,7 @@ export function ProductionHeader({
           <button
             type="button"
             onClick={() => router.push("/notifications")}
-            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border focus:outline-none focus:ring-2 focus:ring-slate-400"
+            className="inline-flex h-10 w-10 items-center justify-center rounded-xl border focus:outline-hidden focus:ring-2 focus:ring-slate-400"
             aria-label="Open notifications"
           >
             <Bell className="h-4 w-4" />
@@ -335,7 +335,7 @@ export function ProductionHeader({
         <CommandPaletteButton
           onOpen={command.openPalette}
           compact
-          className="inline-flex h-10 w-full items-center gap-2 rounded-xl border bg-white px-3 text-sm focus:outline-none focus:ring-2 focus:ring-slate-300 dark:bg-white/5"
+          className="inline-flex h-10 w-full items-center gap-2 rounded-xl border bg-white px-3 text-sm focus:outline-hidden focus:ring-2 focus:ring-slate-300 dark:bg-white/5"
         />
       </div>
       <CommandPaletteDialog

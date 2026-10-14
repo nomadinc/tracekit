@@ -13,7 +13,7 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
   const pathname = usePathname() || "/";
 
   return (
-    <aside className="flex h-full w-72 flex-col border-r bg-white/95 shadow-sm backdrop-blur dark:bg-ink/95">
+    <aside className="flex h-full w-72 flex-col border-r bg-white/95 shadow-xs backdrop-blur-sm dark:bg-ink/95">
       <div className="border-b px-5 py-5">
         <Link href="/" onClick={onNavigate} className="inline-flex items-center gap-3">
           <span className="flex h-9 w-9 items-center justify-center rounded-xl bg-slate-950 text-sm font-bold text-white dark:bg-white dark:text-slate-950">TK</span>
@@ -38,8 +38,8 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                     href={groupHref}
                     onClick={onNavigate}
                     className={[
-                      "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-slate-400",
-                      groupActive ? "bg-slate-950 text-white shadow-sm dark:bg-white dark:text-slate-950" : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/10",
+                      "group flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition focus:outline-hidden focus:ring-2 focus:ring-slate-400",
+                      groupActive ? "bg-slate-950 text-white shadow-xs dark:bg-white dark:text-slate-950" : "text-slate-700 hover:bg-slate-100 dark:text-slate-200 dark:hover:bg-white/10",
                     ].join(" ")}
                   >
                     <Icon className="h-4 w-4" />
@@ -65,7 +65,7 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                           href={item.href}
                           onClick={onNavigate}
                           className={[
-                            "ml-5 block rounded-lg px-3 py-2 text-sm transition focus:outline-none focus:ring-2 focus:ring-slate-400",
+                            "ml-5 block rounded-lg px-3 py-2 text-sm transition focus:outline-hidden focus:ring-2 focus:ring-slate-400",
                             active ? "bg-slate-100 font-medium text-slate-950 dark:bg-white/10 dark:text-white" : "text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-white/10",
                           ].join(" ")}
                         >
@@ -88,7 +88,7 @@ export default function Sidebar({ onNavigate }: { onNavigate?: () => void }) {
                 key={`${item.label}:${item.href}`}
                 href={item.href}
                 onClick={onNavigate}
-                className="block rounded-lg px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:text-slate-300 dark:hover:bg-white/10"
+                className="block rounded-lg px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-100 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:text-slate-300 dark:hover:bg-white/10"
               >
                 {item.label}
               </Link>

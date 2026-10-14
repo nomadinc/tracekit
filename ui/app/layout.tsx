@@ -6,7 +6,7 @@ export const metadata = { title: "TraceKit", description: "Track. Reconcile. Tru
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en" className="dark" suppressHydrationWarning>
-      <body className={`${inter.className} bg-[var(--tk-background)] text-[var(--tk-text-primary)]`}>
+      <body className={`${inter.className} bg-(--tk-background) text-(--tk-text-primary)`}>
         <ThemeProvider>{children}</ThemeProvider>
       </body>
     </html>

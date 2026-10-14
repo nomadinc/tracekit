@@ -135,7 +135,7 @@ function IntroCard({ icon, title, children }: { icon: React.ReactNode; title: st
   return (
     <div className="rounded-lg border bg-slate-50 p-4 dark:bg-white/5">
       <div className="flex items-start gap-3">
-        <div className="rounded-md bg-white p-2 text-slate-700 shadow-sm dark:bg-black/20 dark:text-slate-100">{icon}</div>
+        <div className="rounded-md bg-white p-2 text-slate-700 shadow-xs dark:bg-black/20 dark:text-slate-100">{icon}</div>
         <div>
           <div className="font-semibold">{title}</div>
           <div className="mt-1 text-sm leading-6 text-slate-600 dark:text-slate-300">{children}</div>
@@ -151,7 +151,7 @@ function PrimaryButton({ children, disabled, onClick, icon }: { children: React.
       type="button"
       disabled={disabled}
       onClick={onClick}
-      className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-950 px-4 py-2.5 text-sm font-medium text-white shadow-sm hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
+      className="inline-flex items-center justify-center gap-2 rounded-md bg-slate-950 px-4 py-2.5 text-sm font-medium text-white shadow-xs hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-200"
     >
       {icon}
       {children}
@@ -352,8 +352,8 @@ export default function SetupWizardClient() {
 
   if (loading) {
     return (
-      <div className="flex min-h-[28rem] items-center justify-center">
-        <div className="flex items-center gap-3 rounded-lg border bg-white px-4 py-3 text-sm shadow-sm dark:bg-ink/80">
+      <div className="flex min-h-112 items-center justify-center">
+        <div className="flex items-center gap-3 rounded-lg border bg-white px-4 py-3 text-sm shadow-xs dark:bg-ink/80">
           <Loader2 className="h-4 w-4 animate-spin" />
           Loading setup wizard
         </div>
@@ -366,7 +366,7 @@ export default function SetupWizardClient() {
 
   return (
     <div className="mx-auto max-w-7xl space-y-5">
-      <section className="rounded-lg border bg-white p-5 shadow-sm dark:bg-ink/80">
+      <section className="rounded-lg border bg-white p-5 shadow-xs dark:bg-ink/80">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <div className="flex flex-wrap items-center gap-2">
@@ -424,7 +424,7 @@ export default function SetupWizardClient() {
         </div>
       ) : null}
 
-      <section className="rounded-lg border bg-white p-5 shadow-sm dark:bg-ink/80">
+      <section className="rounded-lg border bg-white p-5 shadow-xs dark:bg-ink/80">
         {activeStep === "workspace" ? (
           <div className="grid gap-5 lg:grid-cols-[1fr_20rem]">
             <div className="space-y-4">
@@ -463,7 +463,7 @@ export default function SetupWizardClient() {
                 <StatusTile label="Tracking Environment" value={websiteUrl ? "Website ready" : "Waiting for website"} tone={websiteUrl ? "good" : "warn"} />
                 <StatusTile label="Workspace ID" value={workspaceId} />
               </div>
-              <div className="mt-4 rounded-md bg-white p-3 text-slate-600 shadow-sm dark:bg-black/20 dark:text-slate-300">Your progress is saved automatically so you can leave and return later.</div>
+              <div className="mt-4 rounded-md bg-white p-3 text-slate-600 shadow-xs dark:bg-black/20 dark:text-slate-300">Your progress is saved automatically so you can leave and return later.</div>
             </aside>
           </div>
         ) : null}
@@ -547,7 +547,7 @@ export default function SetupWizardClient() {
                 ["TraceKit", "Automatically detects the event.", <CheckCircle2 key="detect" className="h-5 w-5" />],
               ].map(([label, text, icon]) => (
                 <div key={String(label)} className="rounded-lg border bg-slate-50 p-4 dark:bg-white/5">
-                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm dark:bg-black/20">{icon}</div>
+                  <div className="mb-3 flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-xs dark:bg-black/20">{icon}</div>
                   <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{label}</div>
                   <div className="mt-1 text-sm font-medium">{text}</div>
                 </div>

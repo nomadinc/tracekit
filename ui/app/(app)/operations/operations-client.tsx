@@ -56,7 +56,7 @@ async function readJsonSafe(res: Response) {
 }
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <section className={`rounded-lg border bg-white p-5 shadow-sm dark:border-white/10 dark:bg-ink/85 ${className}`}>{children}</section>;
+  return <section className={`rounded-lg border bg-white p-5 shadow-xs dark:border-white/10 dark:bg-ink/85 ${className}`}>{children}</section>;
 }
 
 function EmptyState({ title, body }: { title: string; body: string }) {
@@ -152,7 +152,7 @@ function SummaryKpis({ summary }: { summary: OperationsSummaryResponse | null })
   return (
     <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
       {items.map(([label, value, Icon]: any) => (
-        <div key={label} className="rounded-lg border bg-white p-4 shadow-sm dark:border-white/10 dark:bg-ink/85">
+        <div key={label} className="rounded-lg border bg-white p-4 shadow-xs dark:border-white/10 dark:bg-ink/85">
           <div className="flex items-center justify-between gap-3">
             <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</div>
             <Icon className="h-4 w-4 text-slate-400" />
@@ -170,7 +170,7 @@ function QueueCards({ summary, onFilter }: { summary: OperationsSummaryResponse 
   return (
     <section className="grid gap-3 md:grid-cols-2 xl:grid-cols-4">
       {queues.map((queue) => (
-        <button key={queue.category} type="button" onClick={() => onFilter(queue.category)} className="rounded-lg border bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:bg-ink/85">
+        <button key={queue.category} type="button" onClick={() => onFilter(queue.category)} className="rounded-lg border bg-white p-4 text-left shadow-xs transition hover:-translate-y-0.5 hover:shadow-md focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:bg-ink/85">
           <div className="flex items-start justify-between gap-3">
             <div>
               <div className="font-semibold">{queue.label}</div>
@@ -196,7 +196,7 @@ function WorkItemRow({ item, selected, onOpen }: { item: WorkItem; selected: boo
     <button
       type="button"
       onClick={() => onOpen(item)}
-      className={`grid w-full gap-3 rounded-lg border p-4 text-left transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5 lg:grid-cols-[9rem_1fr_9rem_8rem_8rem_6rem] ${selected ? "border-slate-950 ring-2 ring-slate-200 dark:border-white dark:ring-white/20" : "bg-white dark:bg-white/5"}`}
+      className={`grid w-full gap-3 rounded-lg border p-4 text-left transition hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5 lg:grid-cols-[9rem_1fr_9rem_8rem_8rem_6rem] ${selected ? "border-slate-950 ring-2 ring-slate-200 dark:border-white dark:ring-white/20" : "bg-white dark:bg-white/5"}`}
     >
       <div className="flex flex-wrap gap-2 lg:block">
         <span className={`inline-flex rounded-full border px-2 py-0.5 text-xs font-medium ${priorityTone(item.priority)}`}>{workItemPriorityLabel(item.priority)}</span>
@@ -205,7 +205,7 @@ function WorkItemRow({ item, selected, onOpen }: { item: WorkItem; selected: boo
       <div className="min-w-0">
         <div className="flex items-center gap-2 font-semibold">
           {severityIcon(item.severity)}
-          <span className="break-words">{item.title}</span>
+          <span className="wrap-break-word">{item.title}</span>
         </div>
         <div className="mt-1 text-sm leading-6 text-slate-500 dark:text-slate-400">{item.summary}</div>
         <div className="mt-2 text-xs text-slate-500">{compactId(related)}</div>
@@ -253,13 +253,13 @@ function DetailPanel({
   }
 
   if (loading) {
-    return <Card className="sticky top-6 min-h-[36rem]"><div className="flex h-64 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div></Card>;
+    return <Card className="sticky top-6 min-h-144"><div className="flex h-64 items-center justify-center"><Loader2 className="h-6 w-6 animate-spin text-slate-400" /></div></Card>;
   }
   if (error) {
     return <Card className="sticky top-6"><p className="rounded-md border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800 dark:border-rose-500/30 dark:bg-rose-500/10 dark:text-rose-100">{error}</p></Card>;
   }
   if (!item) {
-    return <Card className="sticky top-6 min-h-[36rem]"><EmptyState title="Select a Work Item" body="Open an item to see evidence, activity, and workflow actions." /></Card>;
+    return <Card className="sticky top-6 min-h-144"><EmptyState title="Select a Work Item" body="Open an item to see evidence, activity, and workflow actions." /></Card>;
   }
 
   const active = ["open", "acknowledged", "in_progress"].includes(item.status);
@@ -360,7 +360,7 @@ function DetailPanel({
 
       <details className="mt-4 rounded-lg border p-4 dark:border-white/10">
         <summary className="cursor-pointer font-semibold">Evidence</summary>
-        <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words text-xs">{JSON.stringify(item.evidence || {}, null, 2)}</pre>
+        <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap wrap-break-word text-xs">{JSON.stringify(item.evidence || {}, null, 2)}</pre>
       </details>
 
       <details className="mt-4 rounded-lg border p-4 dark:border-white/10" open>
@@ -557,7 +557,7 @@ function OperationsContent() {
             <span className="text-slate-500">Workspace</span>
             <input value={workspaceId} onChange={(event) => setWorkspaceId(event.target.value || WORKSPACE_ID)} className="w-40 rounded-md border bg-white px-3 py-2 dark:border-white/10 dark:bg-transparent" />
           </label>
-          <button type="button" onClick={() => load(true)} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5">
+          <button type="button" onClick={() => load(true)} className="inline-flex items-center gap-2 rounded-md border px-3 py-2 text-sm font-medium hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5">
             <RefreshCw className="h-4 w-4" />
             Refresh
           </button>

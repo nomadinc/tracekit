@@ -32,7 +32,7 @@ function ShellFrame({ children, platformOrganizations }: { children: React.React
   const [mobileNavOpen, setMobileNavOpen] = React.useState(false);
 
   return (
-    <div className="min-h-dvh bg-[var(--tk-background)] text-[var(--tk-text-primary)]">
+    <div className="min-h-dvh bg-(--tk-background) text-(--tk-text-primary)">
       <div className="hidden lg:fixed lg:inset-y-0 lg:left-0 lg:block">
         <ProductionSidebar />
       </div>

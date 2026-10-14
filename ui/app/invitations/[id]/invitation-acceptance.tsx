@@ -12,5 +12,5 @@ export function InvitationAcceptance({ id }: { id: string }) {
     } catch { setMessage("Invitation processing is unavailable. Try again later."); }
     finally { setPending(false); }
   }
-  return <div className="mt-6"><button disabled={pending} onClick={accept} className="rounded border px-4 py-2">{pending ? "Accepting…" : "Accept invitation"}</button><p role="status">{message}</p></div>;
+  return <div className="mt-6"><button disabled={pending} onClick={accept} className="rounded-sm border px-4 py-2">{pending ? "Accepting…" : "Accept invitation"}</button><p role="status">{message}</p></div>;
 }

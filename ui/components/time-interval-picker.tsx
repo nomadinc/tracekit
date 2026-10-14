@@ -215,7 +215,7 @@ export function TimeIntervalPicker({
       <button
         ref={buttonRef}
         type="button"
-        className="max-w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:border-white/10 dark:bg-ink/80 dark:text-slate-100 dark:hover:bg-slate-900"
+        className="max-w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-800 hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-teal-500 dark:border-white/10 dark:bg-ink/80 dark:text-slate-100 dark:hover:bg-slate-900"
         onClick={() => setOpen((v) => !v)}
       >
         {summary}
@@ -245,7 +245,7 @@ export function TimeIntervalPicker({
                     type="button"
                     aria-pressed={selected}
                     className={[
-                      "rounded border px-2 py-2 text-left text-sm font-medium transition focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:opacity-60",
+                      "rounded-sm border px-2 py-2 text-left text-sm font-medium transition focus:outline-hidden focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:opacity-60",
                       selected
                         ? "border-teal-500 bg-teal-50 text-teal-800 dark:border-teal-400 dark:bg-teal-400/10 dark:text-teal-200"
                         : "border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-white/10 dark:bg-slate-950/60 dark:text-slate-200 dark:hover:bg-slate-900",
@@ -276,7 +276,7 @@ export function TimeIntervalPicker({
                 From
                 <input
                   type="date"
-                  className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-sm text-slate-900 [color-scheme:light] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 dark:border-white/10 dark:bg-slate-950 dark:text-slate-100 dark:[color-scheme:dark] dark:placeholder:text-slate-500 dark:disabled:bg-slate-900 dark:disabled:text-slate-500"
+                  className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-sm text-slate-900 scheme-light placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 dark:border-white/10 dark:bg-slate-950 dark:text-slate-100 dark:scheme-dark dark:placeholder:text-slate-500 dark:disabled:bg-slate-900 dark:disabled:text-slate-500"
                   value={fromStr}
                   onChange={(e) => setFromStr(e.target.value)}
                 />
@@ -286,7 +286,7 @@ export function TimeIntervalPicker({
                 To
                 <input
                   type="date"
-                  className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-sm text-slate-900 [color-scheme:light] placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 dark:border-white/10 dark:bg-slate-950 dark:text-slate-100 dark:[color-scheme:dark] dark:placeholder:text-slate-500 dark:disabled:bg-slate-900 dark:disabled:text-slate-500"
+                  className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-2 text-sm text-slate-900 scheme-light placeholder:text-slate-400 focus:outline-hidden focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-500 dark:border-white/10 dark:bg-slate-950 dark:text-slate-100 dark:scheme-dark dark:placeholder:text-slate-500 dark:disabled:bg-slate-900 dark:disabled:text-slate-500"
                   value={toStr}
                   onChange={(e) => setToStr(e.target.value)}
                 />
@@ -296,7 +296,7 @@ export function TimeIntervalPicker({
             <div className="mt-3 flex items-center justify-between">
               <button
                 type="button"
-                className="rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:border-white/10 dark:text-slate-200 dark:hover:bg-slate-900"
+                className="rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-teal-500 dark:border-white/10 dark:text-slate-200 dark:hover:bg-slate-900"
                 onClick={() => {
                   setFromStr("");
                   setToStr("");
@@ -310,14 +310,14 @@ export function TimeIntervalPicker({
               <div className="space-x-2">
                 <button
                   type="button"
-                  className="rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:border-white/10 dark:text-slate-200 dark:hover:bg-slate-900"
+                  className="rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-teal-500 dark:border-white/10 dark:text-slate-200 dark:hover:bg-slate-900"
                   onClick={close}
                 >
                   Cancel
                 </button>
                 <button
                   type="button"
-                  className="rounded-md border border-teal-700 bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300 disabled:text-slate-600 disabled:opacity-80 dark:border-teal-500 dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400 dark:disabled:border-slate-700 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
+                  className="rounded-md border border-teal-700 bg-teal-700 px-3 py-2 text-sm font-semibold text-white hover:bg-teal-800 focus:outline-hidden focus:ring-2 focus:ring-teal-500 disabled:cursor-not-allowed disabled:border-slate-300 disabled:bg-slate-300 disabled:text-slate-600 disabled:opacity-80 dark:border-teal-500 dark:bg-teal-500 dark:text-slate-950 dark:hover:bg-teal-400 dark:disabled:border-slate-700 dark:disabled:bg-slate-800 dark:disabled:text-slate-500"
                   onClick={applyInputs}
                   disabled={!fromStr && !toStr}
                 >

@@ -842,7 +842,7 @@ export default function OrdersClient() {
           <div>Showing orders that need attention.</div>
           <button
             type="button"
-            className="rounded border px-2 py-1 text-xs"
+            className="rounded-sm border px-2 py-1 text-xs"
             onClick={() => setHealthFilter("all")}
           >
             Clear health filter
@@ -857,7 +857,7 @@ export default function OrdersClient() {
 
             <button
               type="button"
-              className="rounded border px-2 py-1 text-xs disabled:opacity-50"
+              className="rounded-sm border px-2 py-1 text-xs disabled:opacity-50"
               disabled={loading || pageRows.length === 0}
               onClick={exportCsv}
             >
@@ -866,7 +866,7 @@ export default function OrdersClient() {
 
             <div className="flex items-center gap-1 flex-wrap">
               <button
-                className="rounded border px-2 py-1 text-xs disabled:opacity-50"
+                className="rounded-sm border px-2 py-1 text-xs disabled:opacity-50"
                 disabled={currentPage <= 1 || loading}
                 onClick={() => goToPage(currentPage - 1)}
               >
@@ -876,7 +876,7 @@ export default function OrdersClient() {
               {visiblePages[0] > 1 ? (
                 <>
                   <button
-                    className="rounded border px-2 py-1 text-xs"
+                    className="rounded-sm border px-2 py-1 text-xs"
                     onClick={() => goToPage(1)}
                   >
                     1
@@ -888,7 +888,7 @@ export default function OrdersClient() {
               {visiblePages.map((p) => (
                 <button
                   key={p}
-                  className={`rounded border px-2 py-1 text-xs ${p === currentPage ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" : ""}`}
+                  className={`rounded-sm border px-2 py-1 text-xs ${p === currentPage ? "bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900" : ""}`}
                   disabled={loading}
                   onClick={() => goToPage(p)}
                 >
@@ -900,7 +900,7 @@ export default function OrdersClient() {
                 <>
                   <span className="px-1 text-xs text-slate-400">…</span>
                   <button
-                    className="rounded border px-2 py-1 text-xs"
+                    className="rounded-sm border px-2 py-1 text-xs"
                     onClick={() => goToPage(totalPages)}
                   >
                     {totalPages}
@@ -909,7 +909,7 @@ export default function OrdersClient() {
               ) : null}
 
               <button
-                className="rounded border px-2 py-1 text-xs disabled:opacity-50"
+                className="rounded-sm border px-2 py-1 text-xs disabled:opacity-50"
                 disabled={currentPage >= totalPages || loading}
                 onClick={() => goToPage(currentPage + 1)}
               >
@@ -1034,7 +1034,7 @@ export default function OrdersClient() {
                 {getFullOrderHref(selectedOrder) ? (
                   <Link
                     href={getFullOrderHref(selectedOrder)}
-                    className="rounded border px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
+                    className="rounded-sm border px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
                   >
                     Open Full Order Page
                   </Link>
@@ -1042,7 +1042,7 @@ export default function OrdersClient() {
 
                 <button
                   type="button"
-                  className="rounded border px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
+                  className="rounded-sm border px-3 py-2 text-sm hover:bg-slate-100 dark:hover:bg-slate-800"
                   onClick={() => setDrawerOpen(false)}
                 >
                   ✕
@@ -1245,7 +1245,7 @@ export default function OrdersClient() {
 
                   <button
                     type="button"
-                    className="rounded border px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
+                    className="rounded-sm border px-3 py-2 text-xs disabled:cursor-not-allowed disabled:opacity-50"
                     disabled={!selectedOrder.tkid}
                     onClick={() => {
                       if (selectedOrder.tkid) {
@@ -1349,7 +1349,7 @@ export default function OrdersClient() {
                 <div className="mb-3 text-sm font-semibold">Data Health</div>
 
                 {getDataHealth(selectedOrder).length === 0 ? (
-                  <div className="rounded bg-green-50 px-3 py-2 text-sm text-green-700 dark:bg-green-950 dark:text-green-300">
+                  <div className="rounded-sm bg-green-50 px-3 py-2 text-sm text-green-700 dark:bg-green-950 dark:text-green-300">
                     No obvious data gaps detected.
                   </div>
                 ) : (
@@ -1357,7 +1357,7 @@ export default function OrdersClient() {
                     {getDataHealth(selectedOrder).map((issue) => (
                       <div
                         key={issue}
-                        className="rounded bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-300"
+                        className="rounded-sm bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:bg-amber-950 dark:text-amber-300"
                       >
                         {issue}
                       </div>
@@ -1389,7 +1389,7 @@ export default function OrdersClient() {
                   {getReconciliation(selectedOrder).checks.map((check) => (
                     <div
                       key={check.label}
-                      className="flex items-start justify-between gap-3 rounded bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800"
+                      className="flex items-start justify-between gap-3 rounded-sm bg-slate-50 px-3 py-2 text-sm dark:bg-slate-800"
                     >
                       <div>
                         <div className="font-medium">{check.label}</div>
@@ -1413,7 +1413,7 @@ export default function OrdersClient() {
 
               <div className="pt-4">
                 <div className="mb-2 text-xs text-slate-500">Raw JSON</div>
-                <pre className="max-h-[45vh] overflow-auto rounded bg-slate-100 p-3 text-xs dark:bg-slate-800">
+                <pre className="max-h-[45vh] overflow-auto rounded-sm bg-slate-100 p-3 text-xs dark:bg-slate-800">
                   {JSON.stringify(selectedOrder, null, 2)}
                 </pre>
               </div>

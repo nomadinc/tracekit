@@ -55,7 +55,7 @@ function EvidenceDrawer({ block }: { block: any }) {
   return (
     <details className="mt-3 rounded-md border bg-slate-50 p-3 text-xs dark:border-white/10 dark:bg-white/5">
       <summary className="cursor-pointer font-medium">View supporting evidence</summary>
-      <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap break-words">{JSON.stringify(redactCustomerEvidence({ statements, limitations }), null, 2)}</pre>
+      <pre className="mt-3 max-h-64 overflow-auto whitespace-pre-wrap wrap-break-word">{JSON.stringify(redactCustomerEvidence({ statements, limitations }), null, 2)}</pre>
     </details>
   );
 }
@@ -63,7 +63,7 @@ function EvidenceDrawer({ block }: { block: any }) {
 export function Customer360Header({ customer, summary, customer360, onCopyPerson }: { customer: any; summary: any; customer360: any; onCopyPerson: () => void }) {
   const chips = customer360?.status?.chips || [];
   return (
-    <section className="rounded-lg border bg-white p-5 shadow-sm dark:bg-ink/80">
+    <section className="rounded-lg border bg-white p-5 shadow-xs dark:bg-ink/80">
       <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
         <div className="flex min-w-0 gap-4">
           <div className="flex h-12 w-12 shrink-0 items-center justify-center rounded-lg bg-slate-100 text-slate-600 dark:bg-white/10 dark:text-slate-200">
@@ -71,7 +71,7 @@ export function Customer360Header({ customer, summary, customer360, onCopyPerson
           </div>
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="break-words text-2xl font-semibold tracking-tight">{customer.display_name}</h1>
+              <h1 className="wrap-break-word text-2xl font-semibold tracking-tight">{customer.display_name}</h1>
               <Badge tone={customerStatusTone(summary.identity_status)}>{summary.identity_status}</Badge>
               {chips.map((chip: string) => <Badge key={chip} tone={customerStatusTone(chip)}>{chip}</Badge>)}
             </div>
@@ -120,7 +120,7 @@ export function CustomerMetricGrid({ metrics }: { metrics: any }) {
   return (
     <section className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {items.map(([label, value, Icon]: any) => (
-        <div key={label} className="rounded-lg border bg-white p-4 shadow-sm dark:border-white/10 dark:bg-ink/80">
+        <div key={label} className="rounded-lg border bg-white p-4 shadow-xs dark:border-white/10 dark:bg-ink/80">
           <div className="flex items-center justify-between gap-3">
             <div className="text-xs font-medium uppercase tracking-wide text-slate-500">{label}</div>
             <Icon className="h-4 w-4 text-slate-400" />

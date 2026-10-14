@@ -90,7 +90,7 @@ export function ShellDrawerProvider({
         <div className="fixed inset-0 z-50" role="presentation">
           <button
             type="button"
-            className="absolute inset-0 bg-slate-950/35 backdrop-blur-sm"
+            className="absolute inset-0 bg-slate-950/35 backdrop-blur-xs"
             onClick={dismissDrawer}
             aria-label="Close temporary Drawer"
           />
@@ -110,7 +110,7 @@ export function ShellDrawerProvider({
               <button
                 type="button"
                 onClick={dismissDrawer}
-                className="rounded-lg border p-2 focus:outline-none focus:ring-2 focus:ring-slate-400"
+                className="rounded-lg border p-2 focus:outline-hidden focus:ring-2 focus:ring-slate-400"
                 aria-label="Close Drawer"
               >
                 <X className="h-4 w-4" />

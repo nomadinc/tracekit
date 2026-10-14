@@ -340,7 +340,7 @@ export default function CustomerDetailClient({ personId }: { personId: string })
         </label>
       </div>
 
-      <section className="rounded-lg border bg-white p-5 shadow-sm dark:border-white/10 dark:bg-ink/80">
+      <section className="rounded-lg border bg-white p-5 shadow-xs dark:border-white/10 dark:bg-ink/80">
         <EntityHeader
           entityType="customer"
           title={customer.display_name || customer.primary_email || customer.primary_phone || customer.id}

@@ -56,7 +56,7 @@ function MoneyHubContent() {
         />
       </section>
 
-      <section className="rounded-2xl border border-white/10 bg-white/[.025] p-5">
+      <section className="rounded-2xl border border-white/10 bg-white/2.5 p-5">
         <div className="flex items-start gap-3">
           <Landmark className="mt-0.5 h-5 w-5 text-blue-300" />
           <div>

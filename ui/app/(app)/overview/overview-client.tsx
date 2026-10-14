@@ -164,19 +164,19 @@ function statusTone(status: "healthy" | "info" | "attribution" | "warning" | "er
 }
 
 function Card({ children, className = "" }: { children: React.ReactNode; className?: string }) {
-  return <section className={`rounded-2xl border bg-white p-5 shadow-sm dark:border-white/10 dark:bg-ink/85 ${className}`}>{children}</section>;
+  return <section className={`rounded-2xl border bg-white p-5 shadow-xs dark:border-white/10 dark:bg-ink/85 ${className}`}>{children}</section>;
 }
 
 function EmptyState({ title, body, actionHref, actionLabel }: { title: string; body: string; actionHref?: string; actionLabel?: string }) {
   return (
     <div className="flex min-h-44 flex-col items-center justify-center rounded-2xl border border-dashed bg-slate-50 p-6 text-center dark:border-white/10 dark:bg-white/5">
-      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-sm dark:bg-black/20 dark:text-blue-200">
+      <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-white text-blue-600 shadow-xs dark:bg-black/20 dark:text-blue-200">
         <Sparkles className="h-5 w-5" />
       </div>
       <h3 className="mt-4 font-semibold">{title}</h3>
       <p className="mt-2 max-w-md text-sm leading-6 text-slate-500 dark:text-slate-400">{body}</p>
       {actionHref && actionLabel ? (
-        <Link href={actionHref} className="mt-4 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium hover:bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 dark:hover:bg-white/10">
+        <Link href={actionHref} className="mt-4 inline-flex items-center gap-2 rounded-xl border px-3 py-2 text-sm font-medium hover:bg-white focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:hover:bg-white/10">
           {actionLabel}
           <ArrowRight className="h-4 w-4" />
         </Link>
@@ -296,7 +296,7 @@ function NotificationSummaryPanel({ report }: { report: NotificationsResponse | 
           {notifications.length ? (
             <div className="mt-4 space-y-3">
               {notifications.slice(0, 5).map((notification) => (
-                <Link key={notification.id} href={`/notifications?notification_id=${encodeURIComponent(notification.id)}`} className="grid grid-cols-[1fr_auto] gap-3 rounded-xl border bg-slate-50 p-3 text-sm transition hover:bg-white focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10">
+                <Link key={notification.id} href={`/notifications?notification_id=${encodeURIComponent(notification.id)}`} className="grid grid-cols-[1fr_auto] gap-3 rounded-xl border bg-slate-50 p-3 text-sm transition hover:bg-white focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:bg-white/5 dark:hover:bg-white/10">
                   <span>
                     <span className="block font-medium">{notification.title}</span>
                     <span className="mt-1 block text-xs text-slate-500 dark:text-slate-400">
@@ -333,7 +333,7 @@ function NotificationSummaryPanel({ report }: { report: NotificationsResponse | 
               <div className="text-xs text-slate-500">Dismissed</div>
             </div>
           </div>
-          <Link href="/notifications" className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:bg-white dark:text-slate-950">
+          <Link href="/notifications" className="mt-4 inline-flex w-full items-center justify-center gap-2 rounded-xl bg-slate-950 px-4 py-2 text-sm font-medium text-white transition hover:bg-slate-800 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:bg-white dark:text-slate-950">
             Open Notification Center
             <ArrowRight className="h-4 w-4" />
           </Link>
@@ -474,7 +474,7 @@ export default function OverviewClient() {
 
   return (
     <div className="space-y-6">
-      <section className="overflow-hidden rounded-3xl border bg-slate-950 p-6 text-white shadow-sm dark:border-white/10">
+      <section className="overflow-hidden rounded-3xl border bg-slate-950 p-6 text-white shadow-xs dark:border-white/10">
         <div className="grid gap-6 lg:grid-cols-[1.4fr_0.8fr] lg:items-end">
           <div>
             <div className="inline-flex items-center gap-2 rounded-full bg-white/10 px-3 py-1 text-xs font-medium text-blue-100">
@@ -567,7 +567,7 @@ export default function OverviewClient() {
       </section>
 
       <section className="grid gap-6 xl:grid-cols-[1.55fr_0.95fr]">
-        <Card className="min-h-[28rem]">
+        <Card className="min-h-112">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h2 className="text-xl font-semibold">Revenue Trend</h2>
@@ -579,7 +579,7 @@ export default function OverviewClient() {
                   key={item.label}
                   type="button"
                   onClick={() => setPeriod(item)}
-                  className={`rounded-full border px-3 py-1.5 text-sm transition focus:outline-none focus:ring-2 focus:ring-slate-400 ${period.label === item.label ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950" : "hover:bg-slate-50 dark:hover:bg-white/10"}`}
+                  className={`rounded-full border px-3 py-1.5 text-sm transition focus:outline-hidden focus:ring-2 focus:ring-slate-400 ${period.label === item.label ? "bg-slate-950 text-white dark:bg-white dark:text-slate-950" : "hover:bg-slate-50 dark:hover:bg-white/10"}`}
                 >
                   {item.label}
                 </button>
@@ -625,11 +625,11 @@ export default function OverviewClient() {
               <h2 className="text-xl font-semibold">Latest Notifications</h2>
               <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">Operational inbox entries generated by the Notification Engine.</p>
             </div>
-            <Link href="/notifications" className="rounded-full border px-3 py-1.5 text-sm font-medium hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5">View All</Link>
+            <Link href="/notifications" className="rounded-full border px-3 py-1.5 text-sm font-medium hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:hover:bg-white/5">View All</Link>
           </div>
           <div className="mt-5 space-y-3">
             {latestNotifications.length ? latestNotifications.map((notification) => (
-              <Link key={notification.id} href={`/notifications?notification_id=${encodeURIComponent(notification.id)}`} className={`flex items-start gap-3 rounded-2xl border p-4 transition hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400 ${statusTone(notificationTone(notification.severity))}`}>
+              <Link key={notification.id} href={`/notifications?notification_id=${encodeURIComponent(notification.id)}`} className={`flex items-start gap-3 rounded-2xl border p-4 transition hover:shadow-xs focus:outline-hidden focus:ring-2 focus:ring-slate-400 ${statusTone(notificationTone(notification.severity))}`}>
                 <AlertTriangle className="mt-0.5 h-5 w-5" />
                 <span>
                   <span className="block font-medium">{notification.title}</span>
@@ -653,7 +653,7 @@ export default function OverviewClient() {
           {events.length ? (
             <div className="mt-5 grid gap-3 sm:grid-cols-2">
               {sourceCards.map((source) => (
-                <Link key={source.name} href={`/events?source=${encodeURIComponent(source.name.toLowerCase())}`} className="rounded-2xl border p-4 transition hover:-translate-y-0.5 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10">
+                <Link key={source.name} href={`/events?source=${encodeURIComponent(source.name.toLowerCase())}`} className="rounded-2xl border p-4 transition hover:-translate-y-0.5 hover:shadow-xs focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10">
                   <div className="flex items-center justify-between">
                     <div className="font-semibold">{source.name}</div>
                     <MousePointerClick className="h-4 w-4 text-blue-500" />
@@ -679,7 +679,7 @@ export default function OverviewClient() {
               {sourceCards.map((source) => {
                 const width = Math.max(4, Math.round((source.revenue / maxSourceRevenue) * 100));
                 return (
-                  <Link key={`bar:${source.name}`} href={`/events?source=${encodeURIComponent(source.name.toLowerCase())}`} className="block rounded-xl p-2 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400 dark:hover:bg-white/5">
+                  <Link key={`bar:${source.name}`} href={`/events?source=${encodeURIComponent(source.name.toLowerCase())}`} className="block rounded-xl p-2 hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:hover:bg-white/5">
                     <div className="mb-2 flex items-center justify-between text-sm">
                       <span className="font-medium">{source.name}</span>
                       <span className="text-slate-500">{money(source.revenue)}</span>
@@ -725,8 +725,8 @@ export default function OverviewClient() {
               {FUNNEL_STAGES.map((stage, index) => {
                 const count = events.filter((event) => stage.eventTypes.includes(event.event_type)).length;
                 return (
-                  <Link key={stage.label} href={stage.href} className="group relative rounded-2xl border bg-slate-50 p-4 text-center transition hover:-translate-y-0.5 hover:shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:bg-white/5">
-                    <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-sm dark:bg-black/20">
+                  <Link key={stage.label} href={stage.href} className="group relative rounded-2xl border bg-slate-50 p-4 text-center transition hover:-translate-y-0.5 hover:shadow-xs focus:outline-hidden focus:ring-2 focus:ring-slate-400 dark:border-white/10 dark:bg-white/5">
+                    <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-full bg-white shadow-xs dark:bg-black/20">
                       {index + 1}
                     </div>
                     <div className="mt-3 text-2xl font-semibold">{numberText(count)}</div>
@@ -747,7 +747,7 @@ export default function OverviewClient() {
         </Card>
       </section>
 
-      <section className="grid gap-4 rounded-3xl border bg-white p-5 shadow-sm dark:border-white/10 dark:bg-ink/85 md:grid-cols-3">
+      <section className="grid gap-4 rounded-3xl border bg-white p-5 shadow-xs dark:border-white/10 dark:bg-ink/85 md:grid-cols-3">
         <div className="flex items-start gap-3">
           <CheckCircle2 className="mt-1 h-5 w-5 text-emerald-500" />
           <div><div className="font-semibold">Health first</div><p className="mt-1 text-sm text-slate-500">Every card points to the next useful operational view.</p></div>

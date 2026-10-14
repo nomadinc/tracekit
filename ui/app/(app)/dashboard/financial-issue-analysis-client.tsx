@@ -227,7 +227,7 @@ export function FinancialIssueAnalysisClient({ kind }: Props) {
             <button
               type="button"
               onClick={() => pushQuery({ affiliate_id: affiliateInput })}
-              className="rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 focus:outline-none focus:ring-2 focus:ring-teal-500"
+              className="rounded-lg bg-teal-700 px-4 py-2 text-sm font-semibold text-white hover:bg-teal-800 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
             >
               Apply
             </button>
@@ -237,7 +237,7 @@ export function FinancialIssueAnalysisClient({ kind }: Props) {
                 setAffiliateInput("");
                 pushQuery({ affiliate_id: "" });
               }}
-              className="rounded-lg border px-4 py-2 text-sm font-semibold hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-teal-500 dark:hover:bg-slate-900"
+              className="rounded-lg border px-4 py-2 text-sm font-semibold hover:bg-slate-50 focus:outline-hidden focus:ring-2 focus:ring-teal-500 dark:hover:bg-slate-900"
             >
               Clear
             </button>

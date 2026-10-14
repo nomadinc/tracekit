@@ -27,7 +27,7 @@ export default function FirstAdminBootstrap() {
 
   return (
     <main className="mx-auto flex min-h-dvh max-w-lg flex-col justify-center gap-6 p-6">
-      <section className="rounded-2xl border bg-white p-6 shadow-sm dark:border-white/10 dark:bg-ink">
+      <section className="rounded-2xl border bg-white p-6 shadow-xs dark:border-white/10 dark:bg-ink">
         <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">TraceKit identity</p>
         <h1 className="mt-2 text-2xl font-semibold">Initialize TraceKit</h1>
         <p className="mt-2 text-sm leading-6 text-slate-600 dark:text-slate-300">You are the first authenticated administrator. Create the initial workspace to continue.</p>
