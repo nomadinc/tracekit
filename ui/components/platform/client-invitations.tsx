@@ -60,23 +60,26 @@ export function PendingInvitationActions({ organizationId, invitationId }: { org
   const [busy, setBusy] = useState(false);
   const [confirming, setConfirming] = useState(false);
   const [message, setMessage] = useState("");
-  async function request(operation: "delivery-status" | "revoke") {
-    if (busy) return;
+  const [deliveryState, setDeliveryState] = useState<string | null>(null);
+  async function request(operation: "delivery-status" | "deliver" | "revoke") {
+    if (busy || (operation === "deliver" && !["failed", "prepared"].includes(deliveryState || ""))) return;
     setBusy(true);
     setMessage("");
     try {
       const response = await fetch("/api/invitations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operation, organizationId, invitationId }) });
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error();
+      setDeliveryState(operation === "revoke" ? null : result.delivery?.state || null);
       setMessage(operation === "revoke" ? "Invitation revoked." : deliveryMessage(result.delivery?.state));
       setConfirming(false);
       router.refresh();
-    } catch { setMessage("Operation unavailable. Refresh to check the current invitation state."); }
+    } catch { setDeliveryState(null); setMessage("Operation unavailable. Refresh to check the current invitation state."); }
     finally { setBusy(false); }
   }
   return <div className="space-y-2">
     <div className="flex flex-wrap gap-3 text-sm">
       <button type="button" disabled={busy} onClick={() => request("delivery-status")} className="text-blue-300">Check delivery</button>
+      <button type="button" disabled={busy || !["failed", "prepared"].includes(deliveryState || "")} onClick={() => request("deliver")} className="text-blue-300 disabled:opacity-40" title={deliveryState === null ? "Check delivery first" : undefined}>Resend invitation</button>
       <button type="button" disabled={busy} onClick={() => confirming ? request("revoke") : setConfirming(true)} className="text-rose-300">{confirming ? "Confirm revoke" : "Revoke invitation"}</button>
       {confirming ? <button type="button" disabled={busy} onClick={() => setConfirming(false)}>Cancel</button> : null}
     </div>
