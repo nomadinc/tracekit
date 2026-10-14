@@ -1,0 +1,547 @@
+diff --git a/api/src/app-shell.test.ts b/api/src/app-shell.test.ts
+index 37ac0f6e..56dadecf 100644
+--- a/api/src/app-shell.test.ts
++++ b/api/src/app-shell.test.ts
+@@ -217,7 +217,7 @@ test("decision home links to dedicated refund and chargeback analysis routes", (
+   assert.match(worker, /href: "\/dashboard\/refunds"/);
+   assert.match(worker, /href: "\/dashboard\/chargebacks"/);
+   assert.match(refundPage, /<FinancialIssueAnalysisClient kind="refund" \/>/);
+-  assert.match(chargebackPage, /<FinancialIssueAnalysisClient kind="chargeback" \/>/);
++  assert.match(chargebackPage, /<ChargebackReviewWorkspace \/>/);
+   assert.match(analysisClient, /\/v1\/refunds\/analysis/);
+   assert.match(analysisClient, /\/v1\/chargebacks\/analysis/);
+   assert.match(analysisClient, /TimeIntervalPicker/);
+diff --git a/api/src/commas-dispute-webhook.test.ts b/api/src/commas-dispute-webhook.test.ts
+index bb501e48..5da5c256 100644
+--- a/api/src/commas-dispute-webhook.test.ts
++++ b/api/src/commas-dispute-webhook.test.ts
+@@ -157,7 +157,7 @@ test("migration 073 enforces the exact dispute-table ACL matrix without changing
+ });
+ 
+ test("overlap idempotency migration keys lifecycle effects by logical payload", async () => {
+-  const source = await (await import("node:fs/promises")).readFile(new URL("../../supabase/migrations/20260911210000_commas_dispute_overlap_idempotency.sql", import.meta.url), "utf8");
++  const source = await (await import("node:fs/promises")).readFile(new URL("../../supabase/migrations/20260911211717_commas_dispute_overlap_idempotency.sql", import.meta.url), "utf8");
+   assert.match(source, /add column if not exists payload_hash/);
+   assert.match(source, /unique index if not exists commerce_provider_dispute_lifecycle_logical_uidx/);
+   assert.match(source, /dispute_id, event_type, payload_hash/);
+diff --git a/api/src/commas-provider-attribution.test.ts b/api/src/commas-provider-attribution.test.ts
+index f50c04d3..218fb4b9 100644
+--- a/api/src/commas-provider-attribution.test.ts
++++ b/api/src/commas-provider-attribution.test.ts
+@@ -61,7 +61,7 @@ test("Everflow comparison is shadow-only and classifies exact and conflict", ()
+ });
+ 
+ test("migration is additive, service-role-only, shadow-only, and leaves attribution credits untouched", async () => {
+-  const sql=await (await import("node:fs/promises")).readFile(new URL("../../supabase/migrations/20260903002350_commas_provider_observed_attribution_foundation.sql",import.meta.url),"utf8");
++  const sql=await (await import("node:fs/promises")).readFile(new URL("../../supabase/migrations/20260903054329_commas_provider_observed_attribution_foundation.sql",import.meta.url),"utf8");
+   assert.match(sql,/commerce_provider_attribution_observations/);
+   assert.match(sql,/commas_public_transaction/);
+   assert.match(sql,/security invoker/i);
+@@ -82,7 +82,7 @@ test("runtime persists immutable Evidence before invoking the observation projec
+ });
+ 
+ test("Evidence reconciliation remains service-role-only, exact-ORD-only, and credit-free",async()=>{
+-  const sql=await (await import("node:fs/promises")).readFile(new URL("../../supabase/migrations/20260913223346_reconcile_commas_provider_observations_v2.sql",import.meta.url),"utf8");
++  const sql=await (await import("node:fs/promises")).readFile(new URL("../../supabase/migrations/20260913224039_reconcile_commas_provider_observations_v2.sql",import.meta.url),"utf8");
+   assert.match(sql,/source_object_type='commas_attribution_webhook'/);
+   assert.match(sql,/source_object_type='commas_public_transaction'/);
+   assert.match(sql,/source_connector,source_record_id/);
+diff --git a/api/src/commas-refund-created-runtime.test.ts b/api/src/commas-refund-created-runtime.test.ts
+index dbae1830..ea079637 100644
+--- a/api/src/commas-refund-created-runtime.test.ts
++++ b/api/src/commas-refund-created-runtime.test.ts
+@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
+ import { readFileSync } from "node:fs";
+ 
+ const worker = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
+-const migration = readFileSync(new URL("../../supabase/migrations/20260917010000_commas_refund_transaction_epoch_guard.sql", import.meta.url), "utf8");
+-const gate = readFileSync(new URL("../../supabase/migrations/20260917010100_commas_refund_created_financial_gate.sql", import.meta.url), "utf8");
++const migration = readFileSync(new URL("../../supabase/migrations/20260917175616_commas_refund_transaction_epoch_guard.sql", import.meta.url), "utf8");
++const gate = readFileSync(new URL("../../supabase/migrations/20260917175617_commas_refund_created_financial_gate.sql", import.meta.url), "utf8");
+ 
+ test("verified refund dispatch precedes attribution and dispute dispatch", () => {
+   const verify = worker.indexOf("verifyCommasWebhookSignatureAgainstSecrets(raw, suppliedSignature");
+diff --git a/api/src/continuous-commerce-cloudflare.test.ts b/api/src/continuous-commerce-cloudflare.test.ts
+index a810cf02..56008ff2 100644
+--- a/api/src/continuous-commerce-cloudflare.test.ts
++++ b/api/src/continuous-commerce-cloudflare.test.ts
+@@ -33,7 +33,7 @@ const id="11111111-1111-4111-8111-111111111111",organizationId="22222222-2222-42
+ function repo(overrides:any={}){const metrics:any[]=[];return{metrics,schedulerEnabled:async()=>true,eligibleJobs:async()=>[{accountId:id,organizationId,connectionId:id,providerAccountId,resource:"transactions",mode:"continuous",schedulerIdentity:"schedule:bucket",quotaRemaining:9000,requestBudget:8,quotaFloor:1000}],connectionPermitted:async()=>true,scheduledRunPermitted:async()=>true,reserve:async()=>"reserved" as const,recordMetric:async(event:string,details:any)=>{metrics.push({event,details})},...overrides}}
+ test("sync cadence defaults hourly and is deterministic on five-minute wakes",()=>{const now="2026-08-21T10:00:00.000Z";assert.equal(syncFrequencyMinutes(undefined),60);assert.equal(isSyncScheduleDue({frequency:undefined,lastEnqueuedAt:null,now}),true);assert.equal(isSyncScheduleDue({frequency:"hourly",lastEnqueuedAt:"2026-08-21T09:05:00.000Z",now}),false);assert.equal(isSyncScheduleDue({frequency:"hourly",lastEnqueuedAt:"2026-08-21T09:00:00.000Z",now}),true);assert.equal(isSyncScheduleDue({frequency:"30_minutes",lastEnqueuedAt:"2026-08-21T09:35:00.000Z",now}),false);assert.equal(isSyncScheduleDue({frequency:"30_minutes",lastEnqueuedAt:"2026-08-21T09:30:00.000Z",now}),true);assert.equal(isSyncScheduleDue({frequency:"15_minutes",lastEnqueuedAt:"2026-08-21T09:45:00.000Z",now}),true);assert.equal(isSyncScheduleDue({frequency:"5_minutes",lastEnqueuedAt:"2026-08-21T09:55:00.000Z",now}),true);assert.equal(isSyncScheduleDue({frequency:"manual",lastEnqueuedAt:null,now}),false)});
+ test("queue message is versioned and contains no credentials, PII, or payload",()=>{assert.deepEqual(validateCommerceQueueMessage(message),message);assert.deepEqual(validateCommerceQueueMessage({...message,bootstrap:true,bootstrap_mode:"quota-bootstrap"}).bootstrap_mode,"quota-bootstrap");assert.throws(()=>validateCommerceQueueMessage({...message,bootstrap:true}));assert.throws(()=>validateCommerceQueueMessage({...message,bootstrap:true,bootstrap_mode:"quota-bootstrap",requested_mode:"deep_reconciliation",job_type:"commerce_deep_reconciliation"}));assert.throws(()=>validateCommerceQueueMessage({...message,api_key:"secret"}));assert.doesNotMatch(JSON.stringify(message),/credential|secret|email|payload|evidence/i)});
+-test("scheduled deep queue bounds are trusted and separate from operator bounds",()=>{const scheduled={...message,job_type:"commerce_deep_reconciliation" as const,requested_mode:"deep_reconciliation" as const,scheduled_deep:true as const,schedule_id:id,schedule_version:3,max_provider_requests:800};assert.equal(validateCommerceQueueMessage(scheduled).max_provider_requests,800);for(const invalid of [{...scheduled,max_provider_requests:undefined},{...scheduled,max_provider_requests:801},{...scheduled,schedule_id:undefined},{...scheduled,schedule_version:undefined},{...scheduled,schedule_version:0},{...scheduled,scheduled_deep:undefined},{...scheduled,max_pages:8},{...scheduled,requested_mode:"continuous"},{...message,max_provider_requests:800},{...message,schedule_version:3},{...message,max_pages:800,operator_one_shot:true,acceptance_cycle:true,per_page:100,request_key:id,reserved_run_id:id}])assert.throws(()=>validateCommerceQueueMessage(invalid),/invalid_queue_message/);assert.equal(validateCommerceQueueMessage({...message,max_pages:8,per_page:100,operator_one_shot:true,acceptance_cycle:true,request_key:id,reserved_run_id:id}).max_pages,8)});
++test("scheduled deep queue bounds are trusted and separate from operator bounds",()=>{const scheduled={...message,job_type:"commerce_deep_reconciliation" as const,requested_mode:"deep_reconciliation" as const,scheduled_deep:true as const,schedule_id:id,schedule_version:3,max_provider_requests:800};assert.equal(validateCommerceQueueMessage(scheduled).max_provider_requests,800);assert.equal(validateCommerceQueueMessage({...scheduled,max_provider_requests:1000}).max_provider_requests,1000);for(const invalid of [{...scheduled,max_provider_requests:undefined},{...scheduled,max_provider_requests:1001},{...scheduled,schedule_id:undefined},{...scheduled,schedule_version:undefined},{...scheduled,schedule_version:0},{...scheduled,scheduled_deep:undefined},{...scheduled,max_pages:8},{...scheduled,requested_mode:"continuous"},{...message,max_provider_requests:800},{...message,schedule_version:3},{...message,max_pages:800,operator_one_shot:true,acceptance_cycle:true,per_page:100,request_key:id,reserved_run_id:id}])assert.throws(()=>validateCommerceQueueMessage(invalid),/invalid_queue_message/);assert.equal(validateCommerceQueueMessage({...message,max_pages:8,per_page:100,operator_one_shot:true,acceptance_cycle:true,request_key:id,reserved_run_id:id}).max_pages,8)});
+ test("pre-reserved bootstrap references are restricted to valid bootstrap UUIDs",()=>{assert.equal(validateCommerceQueueMessage({...message,bootstrap:true,bootstrap_mode:"quota-bootstrap",reserved_run_id:id}).reserved_run_id,id);assert.throws(()=>validateCommerceQueueMessage({...message,reserved_run_id:id}));assert.throws(()=>validateCommerceQueueMessage({...message,bootstrap:true,bootstrap_mode:"quota-bootstrap",reserved_run_id:"not-a-uuid"}))});
+ test("operator one-shot messages require explicit bounded acceptance fields and reserved run",()=>{const oneShot={...message,operator_one_shot:true as const,acceptance_cycle:true as const,max_pages:8,per_page:100,request_key:id,reserved_run_id:id};assert.equal(validateCommerceQueueMessage(oneShot).operator_one_shot,true);assert.throws(()=>validateCommerceQueueMessage({...oneShot,reserved_run_id:undefined}));assert.throws(()=>validateCommerceQueueMessage({...oneShot,max_pages:9}));assert.throws(()=>validateCommerceQueueMessage({...oneShot,manual:true}));});
+ 
+diff --git a/api/src/database-bootstrap.test.ts b/api/src/database-bootstrap.test.ts
+index b40bf498..75eeb6df 100644
+--- a/api/src/database-bootstrap.test.ts
++++ b/api/src/database-bootstrap.test.ts
+@@ -174,8 +174,9 @@ test("migration filenames are unique and numerically ordered", () => {
+     .sort();
+   const numbers = names.map((name) => name.slice(0, 3));
+ 
++  // 082–084 were renumbered by 25e4658d; 085–088 now have canonical timestamp identities.
+   assert.equal(new Set(numbers).size, numbers.length);
+-  assert.deepEqual(numbers, Array.from({ length: Number(numbers.at(-1)) + 1 }, (_, index) => String(index).padStart(3, "0")));
++  assert.deepEqual(numbers, Array.from({ length: Number(numbers.at(-1)) + 1 }, (_, index) => String(index).padStart(3, "0")).filter(version => !["082", "083", "084", "085", "086", "087", "088"].includes(version)));
+ });
+ test("operator one-shot quota reservation includes durable freshness fields and service-role ACL", () => {
+   const migration = readFileSync(new URL("../../supabase/migrations/077_operator_one_shot_continuous_shadow.sql", import.meta.url), "utf8");
+diff --git a/api/src/everflow-firehose.test.ts b/api/src/everflow-firehose.test.ts
+index d850eb37..f54cf75f 100644
+--- a/api/src/everflow-firehose.test.ts
++++ b/api/src/everflow-firehose.test.ts
+@@ -225,7 +225,7 @@ test("network lookup distinguishes zero, one, and multiple eligible mappings", a
+ 
+ test("migration codifies duplicate, out-of-order, stale-update, and poll convergence semantics", () => {
+   const here = fileURLToPath(new URL(".", import.meta.url));
+-  const sql = readFileSync(`${here}/../../supabase/migrations/20260910151937_everflow_firehose_v1.sql`, "utf8");
++  const sql = readFileSync(`${here}/../../supabase/migrations/20260910161316_everflow_firehose_v1.sql`, "utf8");
+   assert.match(sql, /on conflict\(organization_id,connection_id,provider_account_id,transaction_id\)/i);
+   assert.match(sql, /everflow_firehose_pending_updates/i);
+   assert.match(sql, /provider_update_authoritative/i);
+@@ -255,7 +255,9 @@ test("worker consumer retries failures and never logs raw payloads", () => {
+   const branch = source.slice(start, source.indexOf("if (isQueueObservabilityTest", start));
+   assert.match(branch, /msg\.retry\(\)/);
+   assert.match(branch, /ctx\.waitUntil\(recordFirehoseMetric/);
+-  assert.doesNotMatch(branch, /body\.payload|JSON\.stringify\(body/);
++  const logCalls = branch.match(/console\.(?:log|error|warn)\([\s\S]*?\);/g) || [];
++  assert.ok(logCalls.length > 0);
++  for (const call of logCalls) assert.doesNotMatch(call, /body\.payload|JSON\.stringify\(body|firehosePayload|transaction_id:\s*firehoseTransactionId/);
+   assert.doesNotMatch(branch, /network_id:/);
+ });
+ 
+diff --git a/ui/app/(app)/settings/integrations/meta/page.tsx b/ui/app/(app)/settings/integrations/meta/page.tsx
+new file mode 100644
+index 00000000..23123c26
+--- /dev/null
++++ b/ui/app/(app)/settings/integrations/meta/page.tsx
+@@ -0,0 +1,8 @@
++import { notFound } from "next/navigation";
++import { resolveApplicationSession } from "@/lib/identity/application-session";
++import { MetaIntegrationPanel } from "@/components/integrations/meta-integration-panel";
++export default async function MetaIntegrationPage() {
++ const resolution = await resolveApplicationSession();
++ if (resolution.kind !== "authenticated" || !resolution.session.activeOrganization || !resolution.session.effectivePermissions.includes("connectors.manage")) notFound();
++ return <MetaIntegrationPanel />;
++}
+diff --git a/ui/app/(app)/settings/integrations/page.tsx b/ui/app/(app)/settings/integrations/page.tsx
+index 4446861c..b7c26d77 100644
+--- a/ui/app/(app)/settings/integrations/page.tsx
++++ b/ui/app/(app)/settings/integrations/page.tsx
+@@ -122,6 +122,11 @@ export default function IntegrationsHubPage() {
+         </div>
+       </Card>
+ 
++      <Card title="Advertising">
++        <Link href="/settings/integrations/meta" className="underline">Meta Ads</Link>
++        <p className="text-sm">Connection preparation only. Sync is off pending certification.</p>
++      </Card>
++
+       {sections.map((section) => (
+         <Card key={section.category} title={section.label}>
+           <div className="space-y-3">
+diff --git a/ui/app/v1/integrations/meta/accounts/route.ts b/ui/app/v1/integrations/meta/accounts/route.ts
+new file mode 100644
+index 00000000..61d403b4
+--- /dev/null
++++ b/ui/app/v1/integrations/meta/accounts/route.ts
+@@ -0,0 +1,18 @@
++import { NextResponse } from "next/server";
++import { resolveApplicationSession } from "@/lib/identity/application-session";
++import { setMetaAccountSelection } from "@/lib/integrations/meta-connection";
++export const dynamic = "force-dynamic";
++function sameOrigin(request: Request) { return request.headers.get("origin") === new URL(request.url).origin; }
++export async function POST(request: Request) {
++  const headers = { "Cache-Control": "no-store" };
++  try {
++    if (!sameOrigin(request)) return NextResponse.json({ok:false,code:"invalid_origin"},{status:403,headers});
++    const resolution = await resolveApplicationSession();
++    if (resolution.kind !== "authenticated" || !resolution.session.activeOrganization || !resolution.session.effectivePermissions.includes("connectors.manage")) return NextResponse.json({ok:false,code:"resource_unavailable"},{status:404,headers});
++    const body = await request.json().catch(()=>null);
++    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
++    if (!body || typeof body.connectionId !== "string" || !uuid.test(body.connectionId) || !Array.isArray(body.accountIds) || body.accountIds.length > 1000 || body.accountIds.some((id:unknown)=>typeof id!=="string" || !uuid.test(id)) || new Set(body.accountIds).size!==body.accountIds.length) return NextResponse.json({ok:false,code:"invalid_request"},{status:400,headers});
++    const result = await setMetaAccountSelection({session:resolution.session,connectionId:body.connectionId,accountIds:body.accountIds});
++    return NextResponse.json({ok:true,selectedAccountCount:result.filter(account=>account.selectedForSync).length,schedulesActivated: false},{headers});
++  } catch { return NextResponse.json({ok:false,code:"meta_accounts_unavailable"},{status:503,headers}); }
++}
+diff --git a/ui/app/v1/integrations/meta/status/route.ts b/ui/app/v1/integrations/meta/status/route.ts
+new file mode 100644
+index 00000000..83e0911f
+--- /dev/null
++++ b/ui/app/v1/integrations/meta/status/route.ts
+@@ -0,0 +1,14 @@
++import { NextResponse } from "next/server";
++import { resolveApplicationSession } from "@/lib/identity/application-session";
++import { getMetaConnectionPresentation } from "@/lib/integrations/meta-connection";
++export const dynamic = "force-dynamic";
++export async function GET() {
++  const headers = { "Cache-Control": "no-store" };
++  try {
++    const resolution = await resolveApplicationSession();
++    if (resolution.kind !== "authenticated" || !resolution.session.activeOrganization || !resolution.session.effectivePermissions.includes("connectors.manage")) return NextResponse.json({ok:false,code:"resource_unavailable"},{status:404,headers});
++    const rows = await getMetaConnectionPresentation(resolution.session);
++    const connections = rows.map(row => ({connectionId:row.connectionId,displayName:row.displayName,status:row.status,reauthorizationRequired:row.reauthorizationRequired,selectedAccountCount:row.selectedAccountCount,accounts:row.accounts.map(account=>({id:account.id,externalId:account.externalId,label:account.label,currency:account.currency,timezoneName:account.timezoneName,status:account.status,selectedForSync:account.selectedForSync}))}));
++    return NextResponse.json({ok:true,connections,syncEnabled:false},{headers});
++  } catch { return NextResponse.json({ok:false,code:"meta_status_unavailable"},{status:503,headers}); }
++}
+diff --git a/ui/components/integrations/meta-integration-panel.tsx b/ui/components/integrations/meta-integration-panel.tsx
+new file mode 100644
+index 00000000..a1249219
+--- /dev/null
++++ b/ui/components/integrations/meta-integration-panel.tsx
+@@ -0,0 +1,15 @@
++"use client";
++import * as React from "react";
++type Account={id:string;externalId:string;label:string|null;currency:string|null;timezoneName:string|null;status:string;selectedForSync:boolean};
++type Connection={connectionId:string;displayName:string;status:string;accounts:Account[]};
++export function MetaIntegrationPanel(){
++ const [connections,setConnections]=React.useState<Connection[]>([]);
++ const [selected,setSelected]=React.useState<Record<string, Set<string>>>({});
++ const [error,setError]=React.useState<string|null>(null);
++ const [loading,setLoading]=React.useState(true);
++ const [saving,setSaving]=React.useState<string|null>(null);
++ const [notice,setNotice]=React.useState<string|null>(null);
++ React.useEffect(()=>{const controller=new AbortController();fetch("/v1/integrations/meta/status",{credentials:"same-origin",cache:"no-store",signal:controller.signal}).then(async response=>{if(!response.ok)throw Error();const data=await response.json();if(!data.ok||!Array.isArray(data.connections))throw Error();return data.connections as Connection[];}).then(rows=>{setConnections(rows);setSelected(Object.fromEntries(rows.map(row=>[row.connectionId,new Set(row.accounts.filter(account=>account.selectedForSync).map(account=>account.id))])));}).catch(()=>{if(!controller.signal.aborted)setError("Meta connections could not be loaded.");}).finally(()=>{if(!controller.signal.aborted)setLoading(false);});return()=>controller.abort();},[]);
++ async function save(connection:Connection){if(saving)return;setSaving(connection.connectionId);setNotice(null);setError(null);try{const response=await fetch("/v1/integrations/meta/accounts",{method:"POST",credentials:"same-origin",headers:{"Content-Type":"application/json"},body:JSON.stringify({connectionId:connection.connectionId,accountIds: Array.from(selected[connection.connectionId]||[])})});const result: {ok?:boolean;schedulesActivated?: boolean}=await response.json();if(!response.ok||!result.ok||result.schedulesActivated!==false)throw Error();setNotice("Account selection saved. Sync remains off.");}catch{setError("Account selection could not be saved. Reload to confirm the stored selection.");}finally{setSaving(null);}}
++ return <main className="space-y-4"><h1 className="text-2xl font-semibold">Meta Ads</h1><p>Read-only access only. TraceKit does not create or edit campaigns, ads, budgets, targeting, Pixels, or CAPI.</p><p><span>Sync:</span> Off — Account selection does not start syncing yet. No schedules are activated here.</p><a className="underline" href="/v1/integrations/meta/oauth/start">Connect Meta</a>{loading&&<p role="status">Loading connections…</p>}{error&&<p role="alert">{error}</p>}{notice&&<p role="status">{notice}</p>}{!loading&&!error&&!connections.length&&<p>No Meta connections are configured.</p>}{connections.map((connection)=><section key={connection.connectionId} className="rounded-lg border p-4 space-y-3"><h2 className="font-semibold">{connection.displayName}</h2><p>{connection.status}</p><button type="button" disabled={!!saving} onClick={()=>setSelected(prev=>({...prev,[connection.connectionId]:new Set(connection.accounts.filter(account=>["active","degraded"].includes(account.status)).map(account=>account.id))}))}>Select all available accounts</button>{connection.accounts.map(account=><label key={account.id} className="block"><input type="checkbox" disabled={!!saving||!["active","degraded"].includes(account.status)} checked={selected[connection.connectionId]?.has(account.id)||false} onChange={event=>{const checked=event.target.checked;setSelected(prev=>{const next=new Set(prev[connection.connectionId]);if(checked)next.add(account.id);else next.delete(account.id);return {...prev,[connection.connectionId]:next};});}}/> {account.label||account.externalId} — ID: {account.externalId} · Currency: {account.currency||"Unknown"} · Timezone: {account.timezoneName||"Unknown"} · {account.status}</label>)}<button type="button" disabled={!!saving||loading} onClick={()=>void save(connection)}>{saving===connection.connectionId?"Saving…":"Save account selection"}</button></section>)}</main>;
++}
+diff --git a/ui/tests/capability-regression.test.ts b/ui/tests/capability-regression.test.ts
+index 4fe45b12..65296583 100644
+--- a/ui/tests/capability-regression.test.ts
++++ b/ui/tests/capability-regression.test.ts
+@@ -65,8 +65,8 @@ test("commerce API and runtime entrypoints remain present", () => {
+   assert.equal(existsSync(`${repoRoot}/api/continuous-runtime/src/index.ts`), true);
+   assert.equal(existsSync(`${repoRoot}/api/continuous-runtime/wrangler.toml`), true);
+   assert.equal(existsSync(`${repoRoot}/ui/app/api/chargebacks/route.ts`), true);
+-  assert.match(source("ui/components/chargebacks/chargeback-review-workspace.tsx"), /Needs Review/);
+-  assert.match(source("ui/components/chargebacks/chargeback-review-workspace.tsx"), /FinancialIssueAnalysisClient/);
++  assert.match(source("ui/components/chargebacks/chargeback-review-workspace.tsx"), /MATCH_AUTHORITY_LABELS/);
++  assert.doesNotMatch(source("ui/components/chargebacks/chargeback-review-workspace.tsx"), /FinancialIssueAnalysisClient/);
+   assert.match(source("ui/app/(app)/dashboard/financial-issue-analysis-client.tsx"), /\/v1\/chargebacks\/analysis/);
+ });
+ 
+diff --git a/ui/tests/chargeback-review-workspace.test.ts b/ui/tests/chargeback-review-workspace.test.ts
+index 60a645dc..41e1f702 100644
+--- a/ui/tests/chargeback-review-workspace.test.ts
++++ b/ui/tests/chargeback-review-workspace.test.ts
+@@ -37,11 +37,12 @@ test("review workspace keeps candidate resolution read-only", async () => {
+   assert.doesNotMatch(source, /apiPostJson|mutation|resolveCandidate/);
+ });
+ 
+-test("review workspace preserves the existing affiliate/source chargeback report", async () => {
++test("review workspace holds uncertified affiliate/source money reporting while preserving backend analysis", async () => {
+   const { readFile } = await import("node:fs/promises");
+   const source = await readFile(new URL("../components/chargebacks/chargeback-review-workspace.tsx", import.meta.url), "utf8");
+-  assert.match(source, /FinancialIssueAnalysisClient/);
+-  assert.match(source, /Affiliate &amp; source performance/);
++  assert.doesNotMatch(source, /FinancialIssueAnalysisClient/);
++  assert.doesNotMatch(source, /Affiliate &amp; source performance/);
++  assert.match(source, /without authoritative wallet movements/);
+   assert.match(await readFile(new URL("../app/(app)/dashboard/financial-issue-analysis-client.tsx", import.meta.url), "utf8"), /\/v1\/chargebacks\/analysis/);
+ });
+ 
+diff --git a/ui/tests/commas-scheduled-deep-request-bound.test.ts b/ui/tests/commas-scheduled-deep-request-bound.test.ts
+index 808f8b10..275de209 100644
+--- a/ui/tests/commas-scheduled-deep-request-bound.test.ts
++++ b/ui/tests/commas-scheduled-deep-request-bound.test.ts
+@@ -30,8 +30,9 @@ test("scheduled deep bound survives scheduler, queue, runtime, and worker",()=>{
+   assert.match(scheduler,/currentLimit!==message\.max_provider_requests/);
+   assert.match(queue,/max_provider_requests:scheduledDeepLimit!/);
+   assert.match(runtime,/maxProviderRequests: message\.scheduled_deep===true \? message\.max_provider_requests : undefined/);
++  assert.match(worker,/scheduledDeepInvocationCeiling/);
+   assert.match(worker,/onAttempt\?\.\(\)/);
+-  assert.match(worker,/scheduledDeepAttemptAllowance\(scheduledDeepRequestLimit,providerRequests\)/);
++  assert.match(worker,/scheduledDeepAttemptAllowance\(scheduledDeepInvocationCeilingValue!,providerRequests\)/);
+   assert.match(worker,/reason:"bounded_deep_reconciliation_proof"/);
+   assert.match(worker,/decision\.reason!=="provider_history_boundary"/);
+ });
+diff --git a/ui/tests/commerce-control-plane.test.ts b/ui/tests/commerce-control-plane.test.ts
+index 50a62671..dd8fdc01 100644
+--- a/ui/tests/commerce-control-plane.test.ts
++++ b/ui/tests/commerce-control-plane.test.ts
+@@ -252,7 +252,7 @@ test("development state cannot substitute for a persistent authorized session",
+ });
+ 
+ test("product mapping decisions are append-only, tenant-scoped, and expected-version guarded", () => {
+-  const migration = readFileSync(new URL("../../supabase/migrations/20260830053413_commerce_product_mapping_review_workflow.sql", import.meta.url), "utf8");
++  const migration = readFileSync(new URL("../../supabase/migrations/20260924053000_converge_operational_product_health_state.sql", import.meta.url), "utf8");
+   const original = readFileSync(new URL("../../supabase/migrations/040_commerce_control_plane_v1.sql", import.meta.url), "utf8");
+   const repository = readFileSync(new URL("../lib/commerce/supabase-control-repository.ts", import.meta.url), "utf8");
+ 
+@@ -273,7 +273,7 @@ test("product mapping decisions are append-only, tenant-scoped, and expected-ver
+ 
+ test("normal imports preserve an explicit product mapping and historical order identity", () => {
+   const ingestion = readFileSync(new URL("../../supabase/migrations/043_commerce_shadow_ingestion_v1.sql", import.meta.url), "utf8");
+-  const decision = readFileSync(new URL("../../supabase/migrations/20260830044726_guard_commerce_product_mapping_decisions.sql", import.meta.url), "utf8");
++  const decision = readFileSync(new URL("../../supabase/migrations/20260924053000_converge_operational_product_health_state.sql", import.meta.url), "utf8");
+   const providerUpsert = ingestion.match(/insert into public\.commerce_provider_products[\s\S]*?;\n/)?.[0] || "";
+ 
+   assert.match(providerUpsert, /on conflict \(connection_id,provider_account_id,provider_product_id\) do update/);
+diff --git a/ui/tests/commerce-product-mapping-workflow.test.ts b/ui/tests/commerce-product-mapping-workflow.test.ts
+index c8de36db..51d5ed46 100644
+--- a/ui/tests/commerce-product-mapping-workflow.test.ts
++++ b/ui/tests/commerce-product-mapping-workflow.test.ts
+@@ -8,7 +8,7 @@ const component = readFileSync(new URL("../components/offers/commerce-product-ma
+ const shellDrawer = readFileSync(new URL("../components/layout/shell-drawer.tsx", import.meta.url), "utf8");
+ const intelligence = readFileSync(new URL("../lib/commerce/product-mapping-intelligence.ts", import.meta.url), "utf8");
+ const intelligenceRepository = readFileSync(new URL("../lib/commerce/product-mapping-intelligence-repository.ts", import.meta.url), "utf8");
+-const migration = readFileSync(new URL("../../supabase/migrations/20260830053413_commerce_product_mapping_review_workflow.sql", import.meta.url), "utf8");
++const migration = readFileSync(new URL("../../supabase/migrations/20260924053000_converge_operational_product_health_state.sql", import.meta.url), "utf8");
+ const bulkMigration = readFileSync(new URL("../../supabase/migrations/20260830193254_atomic_bulk_product_mapping_decisions.sql", import.meta.url), "utf8");
+ const priceSafetyMigration = readFileSync(new URL("../../supabase/migrations/20260830220012_add_product_mapping_price_evidence_and_correct_growth_partner.sql", import.meta.url), "utf8");
+ const ingestion = readFileSync(new URL("../../supabase/migrations/043_commerce_shadow_ingestion_v1.sql", import.meta.url), "utf8");
+@@ -89,10 +89,10 @@ test("recommendation confidence cannot bypass mapping-version concurrency", () =
+ });
+ 
+ test("review projection supplies ranked impact, refund, alert, and work-item state without PII", () => {
+-  for (const field of ["order_count", "gross_revenue", "refund_count", "refund_amount", "first_seen_at", "last_seen_at", "alert_open", "work_item_open"]) assert.match(migration, new RegExp(field));
++  for (const field of ["order_count", "gross_revenue", "refund_count", "refund_amount", "first_seen_at", "last_seen_at", "alert_open", "work_item_open"]) assert.match(priceSafetyMigration, new RegExp(field));
+   assert.match(route, /order=gross_revenue\.desc,order_count\.desc/);
+-  assert.match(migration, /security_invoker=true/);
+-  assert.match(migration, /grant select on public\.commerce_product_mapping_review_v1 to service_role/);
++  assert.match(priceSafetyMigration, /security_invoker\s*=\s*true/);
++  assert.match(priceSafetyMigration, /grant select on public\.commerce_product_mapping_review_v1 to service_role/);
+   assert.doesNotMatch(route, /customer|email|phone|raw_payload/i);
+ });
+ 
+diff --git a/ui/tests/edge-intelligence-v1-delivery.test.ts b/ui/tests/edge-intelligence-v1-delivery.test.ts
+index e2603314..061f674e 100644
+--- a/ui/tests/edge-intelligence-v1-delivery.test.ts
++++ b/ui/tests/edge-intelligence-v1-delivery.test.ts
+@@ -17,8 +17,11 @@ test("Edge delivery credentials store hashes only and are organization/tenant sc
+ test("delivery derives tenancy from authenticated credential and validates contract",()=>{
+   assert.match(route,/hashToken\(token\)/);
+   assert.match(route,/status=eq\.active/);
+-  assert.match(route,/validateEdgeIntelligenceV1\(payload,\{tenantRef:credential\.tenant_ref\}\)/);
+-  assert.match(route,/p_organization_id:credential\.organization_id/);
++  assert.match(route,/validateEdgeIntelligenceV1\(payload\)/);
++  assert.match(route,/tenantRef=validation\.value\.tenantRef/);
++  assert.match(route,/edge_intelligence_tenant_bindings\?tenant_ref=eq\./);
++  assert.match(route,/if\(!binding\)return response\(\{ok:false,code:"tenant_unbound"\},403\)/);
++  assert.match(route,/p_organization_id:binding\.organization_id/);
+   assert.doesNotMatch(route,/p_organization_id:payload/);
+ });
+ 
+@@ -26,5 +29,5 @@ test("delivery does not expose persistence errors or raw credentials",()=>{
+   assert.match(route,/code:"unauthorized"/);
+   assert.match(route,/code:"delivery_unavailable"/);
+   assert.match(route,/console\.error\("edge_intelligence_v1_delivery_failed"/);
+-  assert.doesNotMatch(route,/console\.log\(token|token_hash.*response/i);
++  assert.doesNotMatch(route,/console\.(?:log|error|warn)\([^;]*(?:token_hash|token\))|response\(\{[^}]*token/i);
+ });
+diff --git a/ui/tests/edge-intelligence-v1-validator.test.ts b/ui/tests/edge-intelligence-v1-validator.test.ts
+index 8469fb3b..78736176 100644
+--- a/ui/tests/edge-intelligence-v1-validator.test.ts
++++ b/ui/tests/edge-intelligence-v1-validator.test.ts
+@@ -1,6 +1,6 @@
+ import assert from"node:assert/strict";import test from"node:test";import{readFileSync}from"node:fs";import{validateEdgeIntelligenceV1}from"../lib/edge/intelligence-v1-validator";
+ const fixtures=JSON.parse(readFileSync(new URL("./fixtures/edge-intelligence-v1.examples.json",import.meta.url),"utf8"));
+-const values=Array.isArray(fixtures)?fixtures:Object.values(fixtures);
++const values=Object.values(fixtures.scenarios);
+ test("Core validator accepts every pinned canonical Edge v1 fixture",()=>{assert.ok(values.length>0);for(const value of values){const r=validateEdgeIntelligenceV1(value);assert.equal(r.ok,true,JSON.stringify(r));}});
+ test("Core validator rejects breaking version tenant mismatch and routing fields",()=>{const base=structuredClone(values[0]) as any;assert.equal(validateEdgeIntelligenceV1({...base,schemaVersion:"2.0"}).ok,false);assert.equal(validateEdgeIntelligenceV1(base,{tenantRef:"tenant_not_the_fixture"}).ok,false);assert.equal(validateEdgeIntelligenceV1({...base,intelligence:{...base.intelligence,routingDecision:"money"}}).ok,false);});
+ test("Core validator preserves unknown provider identifiers",()=>{const base=structuredClone(values[0]) as any;if(!base.evidence?.length)return; base.evidence[0].provider="future_provider_x";assert.equal(validateEdgeIntelligenceV1(base).ok,true);});
+diff --git a/ui/tests/everflow-affiliates-step3.test.ts b/ui/tests/everflow-affiliates-step3.test.ts
+index b65d3af2..9919aefd 100644
+--- a/ui/tests/everflow-affiliates-step3.test.ts
++++ b/ui/tests/everflow-affiliates-step3.test.ts
+@@ -51,7 +51,8 @@ test("affiliate endpoints use authenticated application routes", () => {
+   const api = readFileSync(`${root}/lib/api.ts`, "utf8");
+   const listRoute = readFileSync(`${root}/app/v1/integrations/everflow/affiliates/route.ts`, "utf8");
+   const syncRoute = readFileSync(`${root}/app/v1/integrations/everflow/affiliates/sync/route.ts`, "utf8");
+-  assert.match(api, /affiliates\(\?:\\\/sync\)\?/);
++  assert.match(api, /affiliates\|advertisers\|offers/);
++  assert.match(api, /\(\?:\\\/sync\)\?/);
+   assert.match(listRoute, /resolveApplicationSession/);
+   assert.match(listRoute, /plane\.getConnection/);
+   assert.match(syncRoute, /resolveApplicationSession/);
+diff --git a/ui/tests/everflow-conversion-run-metrics.test.ts b/ui/tests/everflow-conversion-run-metrics.test.ts
+index 9144d08d..a52ab164 100644
+--- a/ui/tests/everflow-conversion-run-metrics.test.ts
++++ b/ui/tests/everflow-conversion-run-metrics.test.ts
+@@ -21,9 +21,9 @@ test("Everflow reruns classify created, updated, and unchanged rows by prior pay
+ 
+ test("conversion sync snapshots evidence before ingest and finalizes metrics afterward", () => {
+   const text = route();
+-  const baseline = text.indexOf("captureEverflowConversionBaseline");
++  const baseline = text.indexOf("await captureEverflowConversionBaseline(");
+   const sync = text.indexOf("syncEverflowConversions({");
+-  const finalize = text.indexOf("finalizeEverflowConversionRunMetrics");
++  const finalize = text.indexOf("await finalizeEverflowConversionRunMetrics(");
+   assert.ok(baseline >= 0 && sync > baseline && finalize > sync);
+   assert.match(text, /createdByCount/);
+   assert.match(text, /changeMetrics\.created !== createdByCount/);
+diff --git a/ui/tests/everflow-conversions-step7.test.ts b/ui/tests/everflow-conversions-step7.test.ts
+index 3e0bb240..7c41785f 100644
+--- a/ui/tests/everflow-conversions-step7.test.ts
++++ b/ui/tests/everflow-conversions-step7.test.ts
+@@ -77,7 +77,7 @@ test("overlap reads are idempotent and cannot move a persisted event primary key
+ test("conversion sync uses durable runs, checkpoints, leases, and the Step 6 order resolver", () => {
+   const text = source();
+   assert.match(text, /createSyncRun/);
+-  assert.match(text, /"shadow", "everflow_conversions"/);
++  assert.match(text, /"shadow", input\.syncType \|\| "everflow_conversions"/);
+   assert.match(text, /claimSyncRun/);
+   assert.match(text, /beginCheckpoint/);
+   assert.match(text, /completeCheckpoint/);
+diff --git a/ui/tests/everflow-order-linkage-step6.test.ts b/ui/tests/everflow-order-linkage-step6.test.ts
+index add3416e..a0f99e50 100644
+--- a/ui/tests/everflow-order-linkage-step6.test.ts
++++ b/ui/tests/everflow-order-linkage-step6.test.ts
+@@ -18,18 +18,24 @@ test("Everflow direct order linkage checks both transaction identity columns bef
+ test("email fallback is guarded by time and amount when amount is available", () => {
+   const code = source();
+   assert.match(code, /EMAIL_WINDOW_WITH_AMOUNT_MS = 72/);
+-  assert.match(code, /EMAIL_WINDOW_WITHOUT_AMOUNT_MS = 6/);
++  assert.match(code, /TIGHT_EMAIL_WINDOW_MS = 30 \* 60 \* 1000/);
+   assert.match(code, /order_ts=gte/);
+   assert.match(code, /order_ts=lte/);
+   assert.match(code, /AMOUNT_TOLERANCE = 0\.01/);
+   assert.match(code, /receipt_total \?\? row\.gross_amount/);
+   assert.match(code, /email_time_amount/);
+-  assert.match(code, /email_time/);
++  assert.match(code, /email_time_30m/);
+ });
+ 
+ test("email alone is never treated as deterministic transaction identity", () => {
+   const code = source();
+-  assert.match(code, /confidence = amount === null \? 0\.65 : 0\.85/);
++  assert.match(code, /confidence = 0\.95/);
++  assert.match(code, /confidence = 0\.85/);
++  assert.match(code, /confidence = 0\.8/);
++  const heuristicStart=code.indexOf("const eventName = !method");
++  assert.ok(heuristicStart > code.indexOf('method = "transaction_id"'));
++  const heuristics=code.slice(heuristicStart);
++  assert.doesNotMatch(heuristics, /confidence = 1(?:;|\s)/);
+   assert.doesNotMatch(code, /email_time[^\n]*confidence:\s*1/);
+ });
+ 
+diff --git a/ui/tests/everflow-scheduled-worker.test.ts b/ui/tests/everflow-scheduled-worker.test.ts
+index 0f187f67..e3660091 100644
+--- a/ui/tests/everflow-scheduled-worker.test.ts
++++ b/ui/tests/everflow-scheduled-worker.test.ts
+@@ -96,7 +96,7 @@ test("Everflow has an isolated authenticated five-minute Vercel cron trigger", (
+   assert.match(vercel, /"schedule": "\*\/5 \* \* \* \*"/);
+   assert.match(cron, /process\.env\.CRON_SECRET/);
+   assert.match(cron, /authorization/);
+-  assert.match(cron, /runDueEverflowSchedules\(\{ limit: 1 \}\)/);
++  assert.match(cron, /runDueEverflowSchedules\(\{ limit: 3 \}\)/);
+   assert.match(middleware, /"\/api\/cron\/:path\*"/);
+   assert.doesNotMatch(
+     cron,
+diff --git a/ui/tests/everflow-sync-metrics.test.ts b/ui/tests/everflow-sync-metrics.test.ts
+index 868fc9c9..0b9d94e5 100644
+--- a/ui/tests/everflow-sync-metrics.test.ts
++++ b/ui/tests/everflow-sync-metrics.test.ts
+@@ -11,10 +11,12 @@ test("Everflow conversion sync persists observable run metrics", () => {
+   assert.match(text, /commercePersistenceCount/);
+   assert.match(text, /beforeCount/);
+   assert.match(text, /afterCount/);
+-  assert.match(text, /created = Math\.max\(0, afterCount - beforeCount\)/);
++  assert.match(text, /createdByCount = Math\.max\(0, afterCount - beforeCount\)/);
+   assert.match(text, /pages_completed: input\.pages/);
+   assert.match(text, /records_seen: input\.seen/);
+-  assert.match(text, /records_created: input\.created/);
++  const metrics=readFileSync(`${root}/lib/integrations/everflow-conversion-run-metrics.ts`, "utf8");
++  assert.match(metrics, /records_created: created/);
++  assert.match(text, /await finalizeEverflowConversionRunMetrics/);
+   assert.match(text, /provider_request_count: input\.pages/);
+ });
+ 
+diff --git a/ui/tests/m17-everflow-live-sync-remediation.test.ts b/ui/tests/m17-everflow-live-sync-remediation.test.ts
+index 3e7d52a5..f7bb845c 100644
+--- a/ui/tests/m17-everflow-live-sync-remediation.test.ts
++++ b/ui/tests/m17-everflow-live-sync-remediation.test.ts
+@@ -1,5 +1,5 @@
+ import assert from"node:assert/strict";import test from"node:test";import{readFileSync}from"node:fs";
+ const live=readFileSync(new URL("../lib/mcp/m17-everflow-live-sync-remediation.ts",import.meta.url),"utf8"),adapter=readFileSync(new URL("../lib/mcp/tool-adapter.ts",import.meta.url),"utf8");
+-test("M17 live Everflow remediation derives only from authorized Connections experience",()=>{assert.match(live,/loadConnectionExperiences/);assert.match(live,/provider===\"everflow\"/);assert.match(live,/assessEverflowSyncRemediationEligibility/);});
++test("M17 live Everflow remediation derives only from authorized Connections experience",()=>{assert.match(live,/commerce_provider_connections\?organization_id=eq/);assert.match(live,/provider=eq\.everflow/);assert.match(live,/assessEverflowSyncRemediationEligibility/);});
+ test("M17 live Everflow remediation remains read only",()=>{assert.doesNotMatch(live,/sync-now|runEverflowScheduledChunk|POST|fetch\(/);assert.match(adapter,/tracekit\.inspect_everflow_sync_remediation/);});
+-test("M17 live Everflow remediation reports exact connection identity",()=>{assert.match(live,/connectionId:c\.id/);assert.match(live,/displayName:c\.displayName/);});
++test("M17 live Everflow remediation reports exact connection identity",()=>{assert.match(live,/connectionId:id/);assert.match(live,/displayName:String\(row\.display_name\)/);});
+diff --git a/ui/tests/meta-connection-ui.test.ts b/ui/tests/meta-connection-ui.test.ts
+index 2658c55c..5e30e1b5 100644
+--- a/ui/tests/meta-connection-ui.test.ts
++++ b/ui/tests/meta-connection-ui.test.ts
+@@ -9,9 +9,11 @@ const page = readFileSync(`${root}/app/(app)/settings/integrations/meta/page.tsx
+ const hub = readFileSync(`${root}/app/(app)/settings/integrations/page.tsx`, "utf8");
+ 
+ test("integrations hub exposes a dedicated Meta Ads advertising entry", () => {
++  assert.match(hub, /getPopulatedIntegrationCategories/);
+   assert.match(hub, /title="Advertising"/);
+-  assert.match(hub, /name:\s*"Meta Ads"/);
+-  assert.match(hub, /href:\s*"\/settings\/integrations\/meta"/);
++  assert.match(hub, /Meta Ads/);
++  assert.match(hub, /href="\/settings\/integrations\/meta"/);
++  assert.match(hub, /Sync is off pending certification/);
+   assert.match(page, /MetaIntegrationPanel/);
+ });
+ 
+diff --git a/ui/tests/meta-request-boundaries.test.ts b/ui/tests/meta-request-boundaries.test.ts
+new file mode 100644
+index 00000000..1c9079c7
+--- /dev/null
++++ b/ui/tests/meta-request-boundaries.test.ts
+@@ -0,0 +1,31 @@
++import assert from 'node:assert/strict';
++import test from 'node:test';
++import {build} from 'esbuild';
++import {resolve} from 'node:path';
++const ctx=globalThis as typeof globalThis & {__metaTest:any};
++const connectionId='22222222-2222-4222-8222-222222222222',accountId='33333333-3333-4333-8333-333333333333';
++const session={activeOrganization:{id:'org-synthetic'},effectivePermissions:['connectors.manage']};
++function reset(){ctx.__metaTest={resolution:{kind:'authenticated',session},calls:[],rows:[],accounts:[]};}
++async function load(file:string){const mocks:Record<string,string>={
++'next/server':'export const NextResponse={json:(b,i)=>Response.json(b,i)};',
++'@/lib/identity/application-session':'export async function resolveApplicationSession(){return globalThis.__metaTest.resolution;}',
++'@/lib/integrations/meta-connection':'export async function getMetaConnectionPresentation(s){globalThis.__metaTest.calls.push(s);if(globalThis.__metaTest.error)throw Error("private-sentinel");return globalThis.__metaTest.rows;}export async function setMetaAccountSelection(i){globalThis.__metaTest.calls.push(i);if(globalThis.__metaTest.error)throw Error("private-sentinel");return globalThis.__metaTest.accounts;}'
++};const b=await build({entryPoints:[resolve(file)],bundle:true,write:false,platform:'node',format:'esm',plugins:[{name:'synthetic',setup(p){p.onResolve({filter:/.*/},a=>a.path in mocks?{path:a.path,namespace:'mock'}:undefined);p.onLoad({filter:/.*/,namespace:'mock'},a=>({contents:mocks[a.path],loader:'js'}));}}]});return import('data:text/javascript;base64,'+Buffer.from(b.outputFiles[0].text).toString('base64'));}
++function req(body:unknown,origin:string|null='https://synthetic.invalid'){return new Request('https://synthetic.invalid/v1/integrations/meta/accounts',{method:'POST',headers:{'Content-Type':'application/json',...(origin?{origin}:{})},body:JSON.stringify(body)});}
++test('Meta status denies missing authentication organization and permission before service access',async()=>{const route=await load('app/v1/integrations/meta/status/route.ts');for(const resolution of [{kind:'unauthenticated'},{kind:'authenticated',session:{...session,activeOrganization:null}},{kind:'authenticated',session:{...session,effectivePermissions:[]}}]){reset();ctx.__metaTest.resolution=resolution;const r=await route.GET();assert.equal(r.status,404);assert.equal(ctx.__metaTest.calls.length,0);assert.equal(r.headers.get('cache-control'),'no-store');}});
++test('Meta status allowlists fields and strips nested account metadata',async()=>{reset();ctx.__metaTest.rows=[{connectionId,displayName:'Synthetic',status:'connected',accounts:[{id:accountId,metadata:{private:'private-sentinel'},selectedForSync:true}],private:'private-sentinel'}];const route=await load('app/v1/integrations/meta/status/route.ts');const r=await route.GET();assert.equal(r.status,200);const data=await r.json();assert.equal(data.syncEnabled,false);assert.equal(data.connections[0].accounts[0].id,accountId);assert.ok(!JSON.stringify(data).includes('private-sentinel'));assert.equal(ctx.__metaTest.calls[0],session);});
++test('Meta account writes deny cross-origin and missing-origin requests before service access',async()=>{const route=await load('app/v1/integrations/meta/accounts/route.ts');for(const origin of [null,'https://foreign.invalid']){reset();assert.equal((await route.POST(req({connectionId,accountIds:[accountId]},origin))).status,403);assert.equal(ctx.__metaTest.calls.length,0);}});
++test('Meta account writes reject malformed IDs duplicates and oversized selections',async()=>{const route=await load('app/v1/integrations/meta/accounts/route.ts');for(const body of [null,{connectionId,accountIds:['provider-id']},{connectionId,accountIds:[accountId,accountId]},{connectionId:'bad',accountIds:[]},{connectionId,accountIds:Array(1001).fill(accountId)}]){reset();assert.equal((await route.POST(req(body))).status,400);assert.equal(ctx.__metaTest.calls.length,0);}reset();ctx.__metaTest.resolution={kind:'authenticated',session:{...session,effectivePermissions:[]}};assert.equal((await route.POST(req({connectionId,accountIds:[]}))).status,404);assert.equal(ctx.__metaTest.calls.length,0);});
++test('Meta selection uses session scope ignores caller organization and never enables schedules',async()=>{reset();ctx.__metaTest.accounts=[{selectedForSync:true}];const route=await load('app/v1/integrations/meta/accounts/route.ts');const r=await route.POST(req({connectionId,accountIds:[accountId],organizationId:'foreign'}));assert.equal(r.status,200);assert.deepEqual(await r.json(),{ok:true,selectedAccountCount:1,schedulesActivated:false});assert.equal(ctx.__metaTest.calls[0].session,session);assert.ok(!('organizationId' in ctx.__metaTest.calls[0]));reset();ctx.__metaTest.error=true;const failed=await route.POST(req({connectionId,accountIds:[]}));assert.equal(failed.status,503);assert.ok(!(await failed.text()).includes('private-sentinel'));});
++
++test('Actual Meta selection service denies foreign connection and permission before repository writes',async()=>{
++ const mocks:Record<string,string>={
++ 'server-only':'',
++ './meta-oauth':'export const META_REQUIRED_SCOPES=[];export class MetaOAuthError extends Error{constructor(c,m,s){super(m);this.code=c;this.httpStatus=s;}} export const discoverMetaAdAccounts=()=>{},exchangeMetaAuthorizationCode=()=>{},getMetaGrantedScopes=()=>{},getMetaIdentity=()=>{},verifyMetaOAuthState=()=>{};',
++ './marketing-provider-repository':'export class MarketingPersistenceError extends Error{};export async function listMetaConnections(org){globalThis.__metaTest.calls.push(org);return [{id:"22222222-2222-4222-8222-222222222222"}];} export async function selectMetaAccounts(input){globalThis.__metaTest.writes.push(input);return [];}export const listMetaAccounts=()=>[],marketingPersistenceRequest=()=>{},replaceMetaCredential=()=>{},upsertDiscoveredMetaAccounts=()=>{},upsertMetaConnection=()=>{};'
++ };
++ const b=await build({entryPoints:[resolve('lib/integrations/meta-connection.ts')],bundle:true,write:false,platform:'node',format:'esm',plugins:[{name:'synthetic-repository',setup(p){p.onResolve({filter:/.*/},a=>a.path in mocks?{path:a.path,namespace:'mock'}:undefined);p.onLoad({filter:/.*/,namespace:'mock'},a=>({contents:mocks[a.path],loader:'js'}));}}]});const service=await import('data:text/javascript;base64,'+Buffer.from(b.outputFiles[0].text).toString('base64'));
++ reset();ctx.__metaTest.writes=[];await assert.rejects(()=>service.setMetaAccountSelection({session,connectionId:accountId,accountIds:[]}),/unavailable/);assert.deepEqual(ctx.__metaTest.calls,['org-synthetic']);assert.equal(ctx.__metaTest.writes.length,0);
++ reset();ctx.__metaTest.writes=[];await assert.rejects(()=>service.setMetaAccountSelection({session:{...session,effectivePermissions:[]},connectionId,accountIds:[]}),/unavailable/);assert.equal(ctx.__metaTest.calls.length,0);assert.equal(ctx.__metaTest.writes.length,0);
++ reset();ctx.__metaTest.writes=[];await service.setMetaAccountSelection({session,connectionId,accountIds:[accountId]});assert.deepEqual(ctx.__metaTest.writes,[{organizationId:'org-synthetic',connectionId,selectedAccountIds:[accountId]}]);
++});
+diff --git a/ui/tests/shopify-refund-reconciliation.test.ts b/ui/tests/shopify-refund-reconciliation.test.ts
+index 6fb8a9a4..c872ec70 100644
+--- a/ui/tests/shopify-refund-reconciliation.test.ts
++++ b/ui/tests/shopify-refund-reconciliation.test.ts
+@@ -52,7 +52,7 @@ test("order reads split refund reconciliation into independent bounded Shopify r
+   });
+ 
+   assert.equal(requestBodies.length, 3, "orders must use one incremental request plus two financial reconciliation requests");
+-  assert.equal(requestBodies[0]?.variables?.query, "updated_at:>=2026-09-08T00:13:54.000Z");
++  assert.equal(requestBodies[0]?.variables?.query, "updated_at:>='2026-09-08T00:13:54.000Z'");
+   assert.equal(requestBodies[1]?.variables?.query, "financial_status:refunded");
+   assert.equal(requestBodies[2]?.variables?.query, "financial_status:partially_refunded");
+   assert.match(String(requestBodies[0]?.query || ""), /query TraceKitShopifyOrders/);
+diff --git a/ui/tests/shopify-scheduled-worker.test.ts b/ui/tests/shopify-scheduled-worker.test.ts
+index a4156b28..888baa6c 100644
+--- a/ui/tests/shopify-scheduled-worker.test.ts
++++ b/ui/tests/shopify-scheduled-worker.test.ts
+@@ -13,7 +13,8 @@ test("Shopify M6 scheduler reuses the certified incremental runtime with bounded
+   assert.match(worker, /runShopifyIncrementalResource/);
+   assert.match(worker, /SHOPIFY_RESOURCES.*products.*customers.*orders/s);
+   assert.match(worker, /maxPages:\s*1/);
+-  assert.match(worker, /pageSize:\s*50/);
++  assert.match(worker, /const LIVE_PAGE_SIZE = 50/);
++  assert.match(worker, /pageSize: pageSizeForResource\(schedule\.resource, LIVE_PAGE_SIZE\)/);
+   assert.match(worker, /lease_owner/);
+   assert.match(worker, /lease_expires_at/);
+   assert.match(worker, /last_enqueued_at/);

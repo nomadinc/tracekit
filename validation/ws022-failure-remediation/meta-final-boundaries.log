@@ -1,0 +1,14 @@
+✔ Meta status denies missing authentication organization and permission before service access (22.800887ms)
+✔ Meta status allowlists fields and strips nested account metadata (7.411678ms)
+✔ Meta account writes deny cross-origin and missing-origin requests before service access (7.877481ms)
+✔ Meta account writes reject malformed IDs duplicates and oversized selections (8.626391ms)
+✔ Meta selection uses session scope ignores caller organization and never enables schedules (6.934359ms)
+✔ Actual Meta selection service denies foreign connection and permission before repository writes (5.447956ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 296.702137

@@ -1,0 +1,2179 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> tracekit-api@0.1.0 test
+> node --import tsx --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test src/*.test.ts
+
+✔ existing production TK_SECRET_KEY remains accepted (3.598267ms)
+✔ additive staging TK_SECRET_KEY_STAGING is accepted independently (0.529588ms)
+✔ invalid credential still fails closed (4.447307ms)
+✔ missing configured credentials still fail closed (0.736961ms)
+✔ staging-only configured credential remains valid without production key (1.904773ms)
+✔ application shell reorganizes existing routes around business navigation (1.582847ms)
+✔ Mission Control owns the approved root while the legacy overview compatibility route remains isolated (0.421065ms)
+✔ dashboard renders executive dashboard modules from the dedicated endpoint (2.731019ms)
+✔ PayPal and gateway financial ingestion are queued through Connector Runtime (5.890795ms)
+✔ executive dashboard exposes reporting readiness without changing ledger formulas (3.919952ms)
+✔ topbar exposes workspace search and notification affordances (0.310569ms)
+✔ legacy live workspace infrastructure remains safely disabled in the production shell (1.169564ms)
+✔ notification center route consumes Notification Engine APIs (0.352862ms)
+✔ decision home links to dedicated refund and chargeback analysis routes (3.871809ms)
+✔ financial import monitor route uses an authenticated server-side proxy (4.046552ms)
+✔ financial reconciliation center routes, UI, and migration are wired safely (5.032891ms)
+✔ financial issue analysis migration adds indexes matching the bounded query predicates (0.494936ms)
+✔ customer-facing integration catalog hides WowPay while keeping v1 commerce sources clear (0.38446ms)
+✔ existing WowPay backend routes remain registered by the Worker (5.5826ms)
+✔ shared time interval picker keeps labels and dark-mode controls readable (0.403658ms)
+✔ investigation drawer primitives are installed in the app shell (0.35147ms)
+✔ entity investigation is reachable from Home, Operations, Notifications, and command search (0.572864ms)
+attribution.calculation.unattributed {
+  workspace_id: 'default',
+  journey_id: 'journey-1',
+  person_id: 'person-1',
+  conversion_event_id: 'purchase-1',
+  model: 'first_touch',
+  model_version: 'v1',
+  eligibility_version: 'touchpoint_eligibility_v1',
+  status: 'unattributed'
+}
+attribution.calculation.unattributed {
+  workspace_id: 'default',
+  journey_id: 'journey-1',
+  person_id: 'person-1',
+  conversion_event_id: 'purchase-no-amount',
+  model: 'first_touch',
+  model_version: 'v1',
+  eligibility_version: 'touchpoint_eligibility_v1',
+  status: 'unattributed'
+}
+attribution.credit.created {
+  workspace_id: 'default',
+  journey_id: 'journey-1',
+  person_id: 'person-1',
+  conversion_event_id: 'purchase-1',
+  touchpoint_event_id: 'touch-1',
+  model: 'first_touch',
+  model_version: 'v1',
+  eligibility_version: 'touchpoint_eligibility_v1',
+  status: 'attributed'
+}
+attribution.credit.created {
+  workspace_id: 'default',
+  journey_id: 'journey-1',
+  person_id: 'person-1',
+  conversion_event_id: 'purchase-1',
+  touchpoint_event_id: 'touch-2',
+  model: 'last_touch',
+  model_version: 'v1',
+  eligibility_version: 'touchpoint_eligibility_v1',
+  status: 'attributed'
+}
+attribution.credit.replaced {
+  workspace_id: 'default',
+  journey_id: 'journey-1',
+  person_id: 'person-1',
+  conversion_event_id: 'purchase-1',
+  touchpoint_event_id: 'touch-0',
+  model: 'first_touch',
+  model_version: 'v1',
+  eligibility_version: 'touchpoint_eligibility_v1',
+  status: 'attributed'
+}
+attribution.credit.created {
+  workspace_id: 'default',
+  journey_id: 'journey-1',
+  person_id: 'person-1',
+  conversion_event_id: 'purchase-1',
+  touchpoint_event_id: 'touch-1',
+  model: 'first_touch',
+  model_version: 'v1',
+  eligibility_version: 'touchpoint_eligibility_v1',
+  status: 'attributed'
+}
+attribution.calculation.started {
+  workspace_id: 'default',
+  journey_id: 'journey-1',
+  person_id: 'person-1',
+  model: 'first_touch,last_touch',
+  model_version: 'v1',
+  eligibility_version: 'touchpoint_eligibility_v1'
+}
+attribution.credit.created {
+  workspace_id: 'default',
+  journey_id: 'journey-1',
+  person_id: 'person-1',
+  conversion_event_id: 'purchase-1',
+  touchpoint_event_id: 'touch-1',
+  model: 'first_touch',
+  model_version: 'v1',
+  eligibility_version: 'touchpoint_eligibility_v1',
+  status: 'attributed'
+}
+attribution.credit.created {
+  workspace_id: 'default',
+  journey_id: 'journey-1',
+  person_id: 'person-1',
+  conversion_event_id: 'purchase-1',
+  touchpoint_event_id: 'touch-2',
+  model: 'last_touch',
+  model_version: 'v1',
+  eligibility_version: 'touchpoint_eligibility_v1',
+  status: 'attributed'
+}
+attribution.calculation.completed {
+  workspace_id: 'default',
+  journey_id: 'journey-1',
+  person_id: 'person-1',
+  duration_ms: 1,
+  inserted_count: 2,
+  replaced_count: 0,
+  unattributed_count: 0
+}
+attribution.credit.created {
+  workspace_id: 'default',
+  journey_id: 'journey-1',
+  person_id: 'person-1',
+  conversion_event_id: 'purchase-1',
+  touchpoint_event_id: 'touch-1',
+  model: 'first_touch',
+  model_version: 'v1',
+  eligibility_version: 'touchpoint_eligibility_v1',
+  status: 'attributed'
+}
+attribution.credit.created {
+  workspace_id: 'default',
+  journey_id: 'journey-1',
+  person_id: 'person-1',
+  conversion_event_id: 'purchase-1',
+  touchpoint_event_id: 'touch-2',
+  model: 'last_touch',
+  model_version: 'v1',
+  eligibility_version: 'touchpoint_eligibility_v1',
+  status: 'attributed'
+}
+attribution.calculation.unattributed {
+  workspace_id: 'default',
+  journey_id: 'journey-2',
+  person_id: 'person-1',
+  conversion_event_id: 'purchase-2',
+  model: 'first_touch',
+  model_version: 'v1',
+  eligibility_version: 'touchpoint_eligibility_v1',
+  status: 'unattributed'
+}
+attribution.calculation.unattributed {
+  workspace_id: 'default',
+  journey_id: 'journey-2',
+  person_id: 'person-1',
+  conversion_event_id: 'purchase-2',
+  model: 'last_touch',
+  model_version: 'v1',
+  eligibility_version: 'touchpoint_eligibility_v1',
+  status: 'unattributed'
+}
+attribution.credit.created {
+  workspace_id: 'default',
+  journey_id: 'journey-2',
+  person_id: 'person-1',
+  conversion_event_id: 'purchase-2',
+  touchpoint_event_id: null,
+  model: 'first_touch',
+  model_version: 'v1',
+  eligibility_version: 'touchpoint_eligibility_v1',
+  status: 'unattributed'
+}
+attribution.credit.created {
+  workspace_id: 'default',
+  journey_id: 'journey-2',
+  person_id: 'person-1',
+  conversion_event_id: 'purchase-2',
+  touchpoint_event_id: null,
+  model: 'last_touch',
+  model_version: 'v1',
+  eligibility_version: 'touchpoint_eligibility_v1',
+  status: 'unattributed'
+}
+attribution.calculation.unattributed {
+  workspace_id: 'default',
+  journey_id: 'journey-2',
+  person_id: 'person-1',
+  conversion_event_id: 'purchase-2',
+  model: 'first_touch',
+  model_version: 'v1',
+  eligibility_version: 'touchpoint_eligibility_v1',
+  status: 'unattributed'
+}
+attribution.calculation.unattributed {
+  workspace_id: 'default',
+  journey_id: 'journey-2',
+  person_id: 'person-1',
+  conversion_event_id: 'purchase-2',
+  model: 'last_touch',
+  model_version: 'v1',
+  eligibility_version: 'touchpoint_eligibility_v1',
+  status: 'unattributed'
+}
+attribution.credit.created {
+  workspace_id: 'default',
+  journey_id: 'journey-1',
+  person_id: 'person-1',
+  conversion_event_id: 'purchase-1',
+  touchpoint_event_id: 'touch-1',
+  model: 'first_touch',
+  model_version: 'v1',
+  eligibility_version: 'touchpoint_eligibility_v1',
+  status: 'attributed'
+}
+attribution.credit.created {
+  workspace_id: 'default',
+  journey_id: 'journey-1',
+  person_id: 'person-1',
+  conversion_event_id: 'purchase-1',
+  touchpoint_event_id: 'touch-2',
+  model: 'last_touch',
+  model_version: 'v1',
+  eligibility_version: 'touchpoint_eligibility_v1',
+  status: 'attributed'
+}
+attribution.credit.created {
+  workspace_id: 'default',
+  journey_id: 'journey-1',
+  person_id: 'person-1',
+  conversion_event_id: 'purchase-2',
+  touchpoint_event_id: 'touch-1',
+  model: 'first_touch',
+  model_version: 'v1',
+  eligibility_version: 'touchpoint_eligibility_v1',
+  status: 'attributed'
+}
+attribution.credit.created {
+  workspace_id: 'default',
+  journey_id: 'journey-1',
+  person_id: 'person-1',
+  conversion_event_id: 'purchase-2',
+  touchpoint_event_id: 'touch-2',
+  model: 'last_touch',
+  model_version: 'v1',
+  eligibility_version: 'touchpoint_eligibility_v1',
+  status: 'attributed'
+}
+attribution.calculation.started {
+  workspace_id: 'default',
+  journey_id: 'journey-1',
+  person_id: 'person-1',
+  model: 'first_touch',
+  model_version: 'v1',
+  eligibility_version: 'touchpoint_eligibility_v1'
+}
+attribution.credit.created {
+  workspace_id: 'default',
+  journey_id: 'journey-1',
+  person_id: 'person-1',
+  conversion_event_id: 'purchase-1',
+  touchpoint_event_id: 'touch-1',
+  model: 'first_touch',
+  model_version: 'v1',
+  eligibility_version: 'touchpoint_eligibility_v1',
+  status: 'attributed'
+}
+attribution.calculation.completed {
+  workspace_id: 'default',
+  journey_id: 'journey-1',
+  person_id: 'person-1',
+  duration_ms: 1,
+  inserted_count: 1,
+  replaced_count: 0,
+  unattributed_count: 0
+}
+attribution.calculation.started {
+  workspace_id: 'default',
+  journey_id: 'journey-1',
+  person_id: 'person-1',
+  model: 'first_touch',
+  model_version: 'v1',
+  eligibility_version: 'touchpoint_eligibility_v1'
+}
+attribution.credit.created {
+  workspace_id: 'default',
+  journey_id: 'journey-1',
+  person_id: 'person-1',
+  conversion_event_id: 'purchase-1',
+  touchpoint_event_id: 'touch-1',
+  model: 'first_touch',
+  model_version: 'v1',
+  eligibility_version: 'touchpoint_eligibility_v1',
+  status: 'attributed'
+}
+attribution.credit.created {
+  workspace_id: 'default',
+  journey_id: 'journey-1',
+  person_id: 'person-1',
+  conversion_event_id: 'purchase-2',
+  touchpoint_event_id: 'touch-1',
+  model: 'first_touch',
+  model_version: 'v1',
+  eligibility_version: 'touchpoint_eligibility_v1',
+  status: 'attributed'
+}
+attribution.calculation.completed {
+  workspace_id: 'default',
+  journey_id: 'journey-1',
+  person_id: 'person-1',
+  duration_ms: 0,
+  inserted_count: 2,
+  replaced_count: 0,
+  unattributed_count: 0
+}
+✔ migration creates rebuildable attribution credit storage and indexes (1.852193ms)
+✔ route matching covers attribution APIs and deterministic method rejection (0.637741ms)
+✔ backfill route is wired to Connector Runtime instead of synchronous attribution processing (4.625536ms)
+✔ queue handler acknowledges runtime messages only after execution and durable follow-up (2.527632ms)
+✔ touchpoint eligibility is centralized and requires acquisition context (0.615859ms)
+✔ non-touchpoint and financial reversal events are not acquisition candidates (0.229826ms)
+✔ conversion eligibility only includes positive conversion lifecycle events (0.163026ms)
+✔ first and last touch choose deterministic winners inside one journey (2.93748ms)
+✔ browser page_view linked by identify can receive credit for a later commerce purchase (0.560075ms)
+✔ browser purchase smoke event is a conversion without making identify a touchpoint (9.87286ms)
+✔ after-conversion, out-of-scope, and outside-window touchpoints are excluded (0.326412ms)
+✔ same-timestamp ties use event id ascending for first touch and descending for last touch (6.718112ms)
+✔ window defaults, inclusive boundary, custom config, and invalid config fallback are deterministic (1.483067ms)
+✔ unattributed conversions are explicit and missing amounts still receive percentage credit (0.361525ms)
+✔ journey calculation supports platform and model filters (0.522017ms)
+✔ persistence inserts, reruns idempotently, replaces stale winners, and isolates versions (1.236215ms)
+✔ persisting attribution credits emits domain events only after authoritative replacement (0.899187ms)
+✔ recalculate journey persists first and last touch without mutating source events (0.855641ms)
+✔ backfill processes bounded journeys, records unattributed conversions, and resumes by cursor (1.11358ms)
+✔ one-journey attribution batch still processes multiple conversions in that journey (0.494646ms)
+✔ backfill request validation rejects invalid dates and preserves normalized options (0.433604ms)
+✔ journey attribution API distinguishes not calculated from unattributed and supports filters (1.474384ms)
+✔ person attribution API is workspace scoped, filtered, paginated, and omits sensitive identity fields (1.155113ms)
+✔ browser event type aliases normalize to canonical values (1.136474ms)
+✔ normalizes raw page views without requiring identity (13.939719ms)
+✔ smoke page view with string browser session id is accepted for browser_events_raw (1.784361ms)
+✔ missing event time uses received_at with warning instead of rejecting (2.536336ms)
+✔ unsupported event type is clearly rejected before persistence (0.224969ms)
+✔ marketing parameters preserve current and first-touch values (0.560386ms)
+✔ attribution evidence preserves providers, aliases, conflicts, and compatibility (1.148602ms)
+✔ attribution evidence retains locations and distinct values deterministically (0.427575ms)
+✔ attribution evidence is allowlisted, bounded, conservative, and fail-open (1.025136ms)
+✔ journey metadata receives evidence without changing normalized output (1.161532ms)
+✔ browser journey event mapping uses existing journey event schema (0.19892ms)
+✔ browser identify remains identify and can carry resolved person identity (0.241514ms)
+✔ same-batch anonymous page_view inherits person from later identify with same tkid (0.618824ms)
+journey.created {
+  workspace_id: 'default',
+  person_id: 'person-browser-1',
+  journey_id: 'journey-1'
+}
+journey.closed {
+  workspace_id: 'default',
+  person_id: 'person-browser-1',
+  journey_id: 'journey-1',
+  status: 'abandoned'
+}
+journey.updated {
+  workspace_id: 'default',
+  person_id: 'person-browser-1',
+  journey_id: 'journey-1',
+  events_processed: 1
+}
+journey.closed {
+  workspace_id: 'default',
+  person_id: 'person-browser-1',
+  journey_id: 'journey-1',
+  status: 'abandoned'
+}
+journey.updated {
+  workspace_id: 'default',
+  person_id: 'person-browser-1',
+  journey_id: 'journey-1',
+  events_processed: 1
+}
+journey.closed {
+  workspace_id: 'default',
+  person_id: 'person-browser-1',
+  journey_id: 'journey-1',
+  status: 'completed'
+}
+✔ browser identify with identity.email populates person and journey linkage for prior tkid page view (12.35938ms)
+journey.created {
+  workspace_id: 'default',
+  person_id: 'person-browser-purchase-1',
+  journey_id: 'journey-1'
+}
+journey.closed {
+  workspace_id: 'default',
+  person_id: 'person-browser-purchase-1',
+  journey_id: 'journey-1',
+  status: 'abandoned'
+}
+journey.updated {
+  workspace_id: 'default',
+  person_id: 'person-browser-purchase-1',
+  journey_id: 'journey-1',
+  events_processed: 1
+}
+journey.closed {
+  workspace_id: 'default',
+  person_id: 'person-browser-purchase-1',
+  journey_id: 'journey-1',
+  status: 'abandoned'
+}
+journey.updated {
+  workspace_id: 'default',
+  person_id: 'person-browser-purchase-1',
+  journey_id: 'journey-1',
+  events_processed: 1
+}
+journey.closed {
+  workspace_id: 'default',
+  person_id: 'person-browser-purchase-1',
+  journey_id: 'journey-1',
+  status: 'completed'
+}
+✔ later browser purchase can join an existing tkid journey after identify resolved the person (3.899922ms)
+✔ raw click becomes a journey event input with safe metadata (0.599825ms)
+✔ identify events expose identity identifiers but page views do not require them (0.385732ms)
+✔ browser external_customer_id is explicit bounded and additive (0.86912ms)
+journey.created {
+  workspace_id: 'default',
+  person_id: 'person-external-1',
+  journey_id: 'journey-1'
+}
+journey.closed {
+  workspace_id: 'default',
+  person_id: 'person-external-1',
+  journey_id: 'journey-1',
+  status: 'abandoned'
+}
+journey.updated {
+  workspace_id: 'default',
+  person_id: 'person-external-1',
+  journey_id: 'journey-1',
+  events_processed: 1
+}
+journey.closed {
+  workspace_id: 'default',
+  person_id: 'person-external-1',
+  journey_id: 'journey-1',
+  status: 'abandoned'
+}
+✔ external customer identify resolves a normal journey while unrelated TKIDs stay anonymous (9.921843ms)
+✔ payload hashes are stable for exact replay detection (2.868857ms)
+✔ write key hash is workspace-scoped (1.19292ms)
+✔ CORS allow and deny behavior is deterministic (0.307814ms)
+✔ browser event cursors round trip (0.192971ms)
+✔ setup snippet uses caller endpoint and never hard-codes production host in logic (0.126471ms)
+✔ browser HTTP route matcher registers ingestion setup and configuration routes (2.124304ms)
+✔ Worker router dispatch uses browser route matcher before generic not_found (5.292262ms)
+✔ migration upgrades legacy events_raw additively before indexing canonical fields (0.544642ms)
+✔ migration 021 creates canonical browser_events_raw without altering legacy events_raw (0.358351ms)
+✔ migration 023 allows browser purchase smoke events without ledger schema changes (0.233993ms)
+✔ browser SDK exposes required API and avoids blanket click capture (0.309627ms)
+✔ Connector Runtime dispatch includes browser normalization task (8.027327ms)
+✔ PayPal dispute list URL uses update-time filters and bounded page size (2.031534ms)
+✔ PayPal dispute list pagination fixture parses next page and token (0.909341ms)
+✔ PayPal dispute list uses HATEOAS next without numeric pagination metadata (0.306141ms)
+✔ PayPal continuation validation respects production and sandbox hosts (0.248174ms)
+✔ PayPal dispute continuation rejects non-PayPal next URLs (0.147142ms)
+✔ PayPal continuation cursor canonicalizes query-only cursors (0.150207ms)
+✔ PayPal repeated next cursor can be detected by the runtime (0.209466ms)
+✔ PayPal empty or inverted update-time windows are detectable after clamping (0.153241ms)
+✔ PayPal dispute list URL clamps future update_time_before (0.283187ms)
+✔ PayPal duplicate dispute IDs on one page are deduped before detail fetch (1.105397ms)
+✔ PayPal detail URL uses the dispute id path and no authorization material (7.921598ms)
+✔ PayPal malformed detail payload fails before normalization (0.554837ms)
+✔ PayPal detail payload is required before deterministic seller-transaction matching (0.878976ms)
+✔ PayPal detail response fixture emits separate principal and fee events (0.434174ms)
+✔ PayPal missing fee fields emit no chargeback fee event (0.328215ms)
+✔ PayPal inspected live payload shape emits no fee or recovery without explicit money evidence (0.317809ms)
+✔ PayPal explicit principal amount emits one stable chargeback event (0.203657ms)
+✔ PayPal unmatched dispute remains insertable with source identifiers (0.151689ms)
+✔ PayPal later deterministic match preserves the same event identity as an unmatched dispute (0.219461ms)
+✔ PayPal seller-favorable update appends recoveries without rewriting original debit (0.451421ms)
+✔ PayPal seller-favorable status without explicit money movement does not manufacture recoveries (0.121744ms)
+✔ same PayPal dispute polled repeatedly preserves stable event identities (0.309447ms)
+✔ boundary duplicate windows rely on source-event idempotency (0.138318ms)
+✔ same upstream transaction ID in two processor accounts produces distinct event identities (3.369682ms)
+✔ missing native source event ID receives a deterministic fallback identity (0.181774ms)
+✔ NMI/PayDiverse parser does not classify ACH returns or refunds as card chargebacks (0.280693ms)
+✔ unknown NMI action remains a diagnostic and is not inserted (0.335757ms)
+✔ NMI refund, sale, and settle actions produce diagnostics only and no ledger inserts (0.31175ms)
+✔ ambiguous generic NMI return remains diagnostic-only (0.100151ms)
+✔ NMI empty and unknown action types remain diagnostic-only (0.15282ms)
+✔ chargeback migration uses processor-account-aware idempotency and service role RPC (0.235996ms)
+✔ chargeback runtime route and task type are wired without changing gateway snapshot imports (7.881266ms)
+✔ production scheduler wires PayPal dispute ingestion alongside transaction sync (6.901565ms)
+✔ scheduled PayPal disputes reuse the existing chargeback runtime instead of a parallel importer (10.821521ms)
+✔ constructs the documented API-key header without alternate auth (8.043221ms)
+✔ rejects missing configuration without serializing credentials (1.110826ms)
+✔ constructs production resource URLs (1.264618ms)
+✔ encodes transaction query parameters (1.225659ms)
+✔ parses Laravel pagination (1.521915ms)
+✔ iterates multiple pages without duplicating page requests (2.357906ms)
+✔ types 401 as authentication and does not retry (1.338519ms)
+✔ types 403 as authorization and does not retry (0.972827ms)
+✔ types 404 as not found (0.985917ms)
+✔ retries 429 using Retry-After (1.736099ms)
+✔ returns typed rate-limit error after bounded attempts (3.19599ms)
+✔ retries transient 5xx (0.863072ms)
+✔ does not retry non-retryable 400 (0.537681ms)
+✔ types timeout failures without leaking request configuration (14.966809ms)
+✔ redacts sensitive strings (0.282066ms)
+✔ redaction preserves ISO timestamps and does not mistake rate-limit reset epochs for phones (0.879056ms)
+✔ preserves unknown fields behind raw provider types (0.642759ms)
+✔ supports empty lists (0.472062ms)
+✔ rejects malformed success responses (0.500906ms)
+✔ rejects list items without verified provider identity (0.439973ms)
+✔ propagates an internal request correlation ID (0.436108ms)
+✔ exposes no mutation or unsupported read methods (0.206031ms)
+✔ serialized provider errors exclude credentials and response bodies (0.621157ms)
+✔ normal client operation emits no discovery diagnostics (0.441556ms)
+✔ opt-in discovery diagnostics capture a redacted HTTP 500 exchange (0.883973ms)
+✔ discovery diagnostics distinguish malformed JSON from an HTTP failure (1.022121ms)
+✔ discovery diagnostics distinguish fetch failures without exposing request credentials (0.489729ms)
+✔ transaction detail diagnostics redact the path identifier and record JSON parsing (0.662419ms)
+✔ discovery summaries report shape while redacting customer fields (9.512787ms)
+✔ matches product maps by immutable Product ID rather than row order (0.552574ms)
+✔ bounded traversal proves distinct IDs without exposing them (1.450598ms)
+✔ nested transaction discovery reports field names and types without values (1.048452ms)
+✔ transaction list/detail comparison exposes only schema differences (0.309788ms)
+✔ bounded discovery reports detail HTTP 500 while preserving pagination and refund findings (2.692971ms)
+✔ bounded discovery still aborts on required list authentication failure (0.340663ms)
+✔ identifier discovery matches case and separators while emitting paths only (1.910572ms)
+✔ identifier discovery reports absent attribution and webhook-dependent disputes (0.199351ms)
+✔ identifier discovery reports dispute field paths without values (0.264789ms)
+✔ account selection is explicit and never defaults when credentials coexist (0.259251ms)
+✔ dispute discovery probes only the two allowlisted read-only collections (2.226318ms)
+✔ functional dispute probe reports structure without record values (2.775857ms)
+✔ sanitized dispute fixture removes PII/secrets while preserving relationships and enums (1.187711ms)
+✔ dispute endpoint failures are isolated and each candidate stays page-one/per-page-two (0.746466ms)
+✔ manual contract runner is read-only, explicit, and never enters scheduler code (0.348957ms)
+✔ connection verification performs one bounded Customer read and returns no provider values (1.092718ms)
+✔ Commas dispute envelope normalizes created and updated without inventing fields (2.262993ms)
+✔ strict provider-state ordering never picks an equal-timestamp winner (0.705865ms)
+✔ confirmed core dispute statuses advance monotonically without invented timestamp or terminal tie-breaks (0.301224ms)
+✔ descriptive dispute amounts and status cannot establish wallet economics (0.253031ms)
+✔ Commas webhook signature uses raw bytes and fails closed (13.777169ms)
+✔ Commas webhook overlap accepts only the bounded primary or secondary secret (9.173035ms)
+✔ overlap verifier does not place secrets in its source-level diagnostics (7.915849ms)
+✔ overlap duplicate suppression keys logical dispute effects by dispute, event semantics, and payload (0.314645ms)
+✔ webhook storage path is scoped and deterministic (3.105394ms)
+✔ dispute webhook handler cannot post unproven financial events (10.640788ms)
+✔ migration adds immutable event, projection, and lifecycle storage without scheduler dependencies (2.16101ms)
+✔ migration 072 is safe for the partial-071 state and repeats no destructive operation (7.152057ms)
+✔ migration 073 enforces the exact dispute-table ACL matrix without changing ownership or policies (12.543668ms)
+✔ overlap idempotency migration keys lifecycle effects by logical payload (1.090064ms)
+✔ router exposes only the Commas webhook POST path and keeps scheduler/provider paths separate (15.171412ms)
+✔ purchase attribution preserves aliases independently and validates ORD identity (2.839572ms)
+✔ purchase attribution reads additional_params from the observed Commas data envelope (0.275726ms)
+✔ purchase and subscription events remain behind the existing raw-body signature gate (16.613026ms)
+✔ conflicting aliases remain separate and never pick a winner (0.672665ms)
+✔ single aliases and malformed oversized fields fail bounded normalization (0.374765ms)
+✔ subscription captures nested additional_params without inventing order inheritance (0.199731ms)
+✔ api_metadata is never treated as checkout attribution (0.312331ms)
+✔ Everflow comparison is shadow-only and classifies exact and conflict (0.323217ms)
+✔ migration is additive, service-role-only, shadow-only, and leaves attribution credits untouched (5.36425ms)
+✔ runtime persists immutable Evidence before invoking the observation projection (5.257078ms)
+✔ Evidence reconciliation remains service-role-only, exact-ORD-only, and credit-free (4.564274ms)
+✔ verified refund dispatch precedes attribution and dispute dispatch (1.01473ms)
+✔ refund handler persists restricted Evidence before normalizing and cannot mutate attribution (0.429658ms)
+✔ database guards transaction-page economics and posts one seller-cost refund only after epoch (0.26478ms)
+✔ normalizes success using ORD identity and provider refund_cost (1.445771ms)
+✔ pending persists provisionally and never posts economics (0.21209ms)
+✔ failed refund never posts economics (0.200483ms)
+✔ legacy original_payment_id remains unresolved rather than treated as ORD (0.154383ms)
+✔ rejects non-conserving seller components (0.241834ms)
+✔ affiliate clawback does not change seller economics (0.135594ms)
+✔ before activation transaction pages retain economic ownership (1.056354ms)
+✔ at and after activation refund.created exclusively owns economics (0.917434ms)
+✔ pre-epoch historical refunds remain transaction-page economic authority (0.164468ms)
+✔ invalid timestamps fail closed (0.194173ms)
+✔ provider cross-surface refund IDs are never compared for equality (0.171939ms)
+✔ plans positive append-only reversal for legacy seller-cost overstatement (1.343486ms)
+✔ equivalent legacy economics require no correction (0.219581ms)
+✔ fails closed on provider component non-conservation or legacy understatement (0.758123ms)
+✔ recognizes only scoped Commas correction reversals (0.335306ms)
+✔ healthy hourly connection produces no alert (3.240067ms)
+✔ one delayed cron inside tolerance produces no missed alert (0.402186ms)
+✔ 90-minute missed success is warning (0.261865ms)
+✔ prolonged missed success escalates (0.183817ms)
+✔ intentional pause suppresses missed success (2.811891ms)
+✔ disabled schedule or production control suppresses missed success (0.227913ms)
+✔ failed state alerts and recovered state clears (0.213502ms)
+✔ 401 403 and credential failures are immediately critical (0.421686ms)
+✔ single degraded cycle warns and self-recovery clears it (0.273673ms)
+✔ consecutive degraded cycles escalate (0.985967ms)
+✔ successful quota bootstrap does not alert (6.5869ms)
+✔ bootstrap failure warns then escalates when prolonged (4.759919ms)
+✔ quota floor suppression uses the eight-request budget (0.230878ms)
+✔ expired lease recovery warns once and escalates when repeated (0.178829ms)
+✔ single page-shift/deep scan is not critical (0.221785ms)
+✔ repeated deep reconciliation escalates while a recovered current state clears (0.251089ms)
+✔ safe context contains operational scope and no provider payload (0.323668ms)
+✔ alert lifecycle uses stable open-incident identity, resolution, and Operations projection (0.355086ms)
+✔ scheduler and queue/runtime failures reconcile independently without blocking commerce execution (7.650629ms)
+✔ unmapped provider Product is a review warning and material revenue raises priority without guessing (0.299101ms)
+✔ mapping conflict is critical and resolved mapping closes its incident (0.135545ms)
+✔ product alert identity is provider-product scoped and projects to Operations (0.292681ms)
+✔ product mapping health loader executes the deployed view contract and returns its shape (0.421856ms)
+✔ product mapping health failures preserve only sanitized PostgREST diagnostics (0.744503ms)
+✔ mapping health migration is read-only, security-invoker, scoped, and never infers a target (0.363588ms)
+✔ mapping health performance migration pre-aggregates orders once and provides a scoped covering index (0.50369ms)
+✔ mapping health planner migration models correlated scope and matches the partial index predicate (2.181901ms)
+✔ Commerce persistence keeps immutable identities, approved mappings, lines, and Refund links scoped (0.492983ms)
+✔ creates compact runtime progress for durable connector jobs (1.982801ms)
+✔ runtime metadata marks Connector Runtime v1 jobs durably (1.059448ms)
+✔ runtime status helpers preserve paused retrying and completed_with_errors (0.30496ms)
+✔ legacy synchronous jobs are never auto-reused by Connector Runtime v1 (0.360934ms)
+✔ active matching runtime jobs can be deduped (0.998085ms)
+✔ force_new_job always bypasses runtime job reuse (0.170958ms)
+✔ explicit runtime job_id resumes only marked runtime jobs (0.206001ms)
+✔ terminal runtime jobs are not reused implicitly (0.27167ms)
+✔ replacement runtime job starts at export staging page one with null cursor (0.356818ms)
+✔ task dedupe key is deterministic and payload order independent (0.928981ms)
+✔ queue messages contain identifiers only (0.215836ms)
+✔ queue enqueue succeeds immediately without retries (0.476108ms)
+✔ queue enqueue retries one 429 then succeeds without duplicating the task message (0.642048ms)
+✔ queue enqueue uses exponential delays for multiple 429s before success (0.480115ms)
+✔ queue enqueue respects Retry-After for 429 retry delays (0.140242ms)
+✔ queue enqueue exhausts 429s as transient retryable state without duplicating continuation message (1.131647ms)
+✔ queue enqueue does not retry permanent queue failures (0.380794ms)
+✔ admin requeue publishes queued task message without creating duplicate task row (0.313853ms)
+✔ admin requeue rejects missing or non-queued tasks (0.154604ms)
+✔ admin requeue reopens completed_with_errors job while preserving metadata (0.182315ms)
+✔ task diagnostics append bounded heartbeat breadcrumbs (0.310067ms)
+✔ task diagnostic samples do not count as durable heartbeats (0.508657ms)
+✔ task diagnostic batch preserves event order with one durable heartbeat (0.270899ms)
+✔ inline debug diagnostics compact buffered target events and subrequest totals (0.603811ms)
+✔ detects Cloudflare Worker subrequest-limit errors (0.236357ms)
+✔ durable heartbeat throttle writes only on interval or force (0.19903ms)
+✔ task stale detection uses the newest heartbeat lock or update timestamp (0.258019ms)
+✔ stale running task recovery leaves active tasks untouched (0.646295ms)
+✔ stale running task recovery atomically prepares a reclaim patch with preserved cursor and payload (0.591783ms)
+✔ stale running task recovery fails exhausted tasks with useful diagnostics (2.646922ms)
+✔ queued task republish decision ignores fresh or unavailable tasks and republishes old queued tasks (0.317809ms)
+✔ force republish allows a queued task to be published immediately (0.272852ms)
+✔ stale running task requeue decision republishes exact task state without changing cursor or payload (0.316778ms)
+✔ stale running task requeue decision fails max-attempt tasks without republishing (0.114623ms)
+✔ failure classifier separates transient permanent and blocking errors (2.795231ms)
+✔ runtime error summaries preserve message and stack for storage (0.342948ms)
+✔ finalize summary failure marks progress completed_with_errors (0.245139ms)
+✔ successful finalize path completes from deterministic count results (0.307954ms)
+✔ rerun finalize resets only finalize state and is idempotent (0.226362ms)
+✔ retry delay uses exponential backoff with a cap (0.25222ms)
+✔ counter merges keep large histories out of job JSON (0.595217ms)
+✔ public runtime payload is compact by default (0.674267ms)
+✔ failed runtime task diagnostics are surfaced without exposing full progress (0.322567ms)
+[TraceKit] commerce.queue.pre_reserved_accepted { reserved_run_id: '55555555-5555-4555-8555-555555555555' }
+[TraceKit] commerce.queue.pre_reserved_accepted { reserved_run_id: '11111111-1111-4111-8111-111111111111' }
+[TraceKit] commerce.queue.pre_reserved_accepted { reserved_run_id: '11111111-1111-4111-8111-111111111111' }
+✔ bootstrap rejection codes identify each fail-closed predicate (3.187989ms)
+✔ queue observability messages are exact synthetic no-op messages (0.239762ms)
+✔ runtime dispatch probe is exact and isolated (0.160613ms)
+✔ commerce build fingerprint is static, admin-protected, and read-only (4.487939ms)
+✔ queue handler recognizes observability before commerce routing (8.405648ms)
+✔ runtime dispatch probe uses the internal binding and emits only sanitized success/failure events (2.136192ms)
+✔ real commerce dispatch has sanitized stage observability (4.820561ms)
+✔ early bootstrap acknowledgements expose only sanitized gate diagnostics (1.905274ms)
+✔ quota bootstrap read diagnostic is internal and read-only (3.80595ms)
+✔ operator one-shot route is internal, fixed-scope, schedule-independent, and queue-bound (2.712486ms)
+✔ ordering verification dispatch is fixed to three shadow pages and exposes bounded stages (4.144461ms)
+✔ ordering verification post-reservation gate reports sanitized named checks and excludes its reserved run (2.544117ms)
+✔ ordering verification uses a pure dedicated pre-reserved contract (2.633021ms)
+✔ production-shaped ordering reservation reaches queue only after its dedicated validation (5.349679ms)
+✔ ordering gate faults are stage-classified and do not reach queue send (3.517776ms)
+✔ every ordering gate read preserves its exact failure stage (0.876162ms)
+✔ nested ordering gate wrappers preserve only recognized sanitized stages (0.266552ms)
+✔ ordering verification contract evaluation is pure and reports failed predicates (0.772095ms)
+✔ evidence-only ordering recovery is fixed to the completed production run (3.804969ms)
+✔ evidence-only recovery bypasses only its quota read and dispatches exactly once (4.568169ms)
+✔ reserved evidence-only continuation is fixed-scope, gate-checked, and sends once (2.938672ms)
+✔ reserved evidence-only continuation atomically rejects duplicate or unsafe production state (0.826467ms)
+✔ normal ordering and provider-capable one-shot paths retain quota enforcement (4.497995ms)
+✔ pre-reserved read and contract faults retain their sub-stage (2.250304ms)
+✔ route-level ordering gate mapping preserves forced pre-reserved stages (1.946766ms)
+✔ stranded operator recovery is fixed-scope, durable-marker protected, and queue-bound (2.382593ms)
+✔ recovery migration hard-codes the stranded run and preserves a one-time audit marker (0.221915ms)
+✔ qualified recovery migration removes RETURNS TABLE column ambiguity (0.379152ms)
+✔ one-shot reservation migration is service-role-only, atomic, bounded, and schedule-independent (1.990182ms)
+✔ ordering verification migration is fixed-scope, bounded, and service-role-only (0.207112ms)
+✔ sync cadence defaults hourly and is deterministic on five-minute wakes (0.485502ms)
+✔ queue message is versioned and contains no credentials, PII, or payload (0.328406ms)
+✔ scheduled deep queue bounds are trusted and separate from operator bounds (0.440003ms)
+✔ pre-reserved bootstrap references are restricted to valid bootstrap UUIDs (0.144678ms)
+✔ operator one-shot messages require explicit bounded acceptance fields and reserved run (0.29853ms)
+✔ normal continuous follow-up is an ordinary fixed five-page operator message (0.349708ms)
+✔ fixed five-page redelivery claims the existing run and can send exactly once (6.117847ms)
+✔ fixed redelivery migration validates pristine state and fails closed after its durable claim (0.418281ms)
+✔ cron failure persistence awaits Supabase builders without calling catch on the builder (2.681304ms)
+✔ five-page normal acceptance reuses the reserved queue architecture and is one fixed follow-up (2.944692ms)
+✔ operator recovery is a distinct validated queue message shape (0.315206ms)
+✔ pre-reserved run validation requires queued scope, idempotency, and bootstrap metadata (0.509418ms)
+✔ runtime diagnostic replay shape passes both pre-reserved and quota gates (0.620646ms)
+✔ Commas scheduler scope rejects non-Commas or non-connected connections (0.120752ms)
+✔ production adapter resolves the connection explicitly without PostgREST embedding (2.012786ms)
+✔ repository activation guard uses the migration-defined composite key (0.558472ms)
+✔ repository activation guard safely handles absent, live, and live-beta rows (0.680967ms)
+✔ repository activation read errors fail closed (0.262556ms)
+✔ scheduler uses authoritative fresh continuous-state quota (4.194366ms)
+✔ scheduler scope rejects non-Commas, disconnected, and ambiguous accounts (0.226681ms)
+✔ continuous queue messages cannot request live repository activation (0.259131ms)
+✔ cron disabled reports only failed predicate names (0.871124ms)
+✔ Stage-E scheduler state reaches eligibility instead of disabled (0.229747ms)
+✔ scheduler object failures identify and sanitize the failing operation (6.437419ms)
+✔ Supabase result errors retain the exact scheduler query label (0.219541ms)
+✔ transient scheduler failure has no side effects and the next cron retries normally (0.399392ms)
+✔ stale scheduled quota re-reads authoritative state and enqueues once (0.43101ms)
+✔ post-bootstrap authoritative stale or insufficient quota never enqueues (0.34519ms)
+✔ post-bootstrap schedule control or active-run changes fail closed without repeating bootstrap (0.472292ms)
+✔ automatic quota bootstrap failure and throttle never enqueue (0.228996ms)
+✔ fresh scheduled quota performs no automatic bootstrap (0.151268ms)
+✔ automatic quota claim migration is advisory-locked throttled and service-role only (0.421156ms)
+✔ scheduled handler logs structured diagnostics instead of object coercion (2.228191ms)
+✔ exact Stage-E environment and database control satisfy the scheduler master gate (0.196256ms)
+✔ cron honors pause, quota, and eligibility (0.33129ms)
+✔ paused connection is observable and excluded before reservation (0.263657ms)
+✔ pause race after eligibility and reservation cannot reach queue send (0.258861ms)
+✔ resume restores normal eligibility without changing idempotency (0.252942ms)
+✔ pause contract preserves scheduler and intelligence state and is audited (0.560285ms)
+✔ quota guard preserves known quota boundary (0.198379ms)
+✔ unknown quota is suppressed unless explicitly marked bootstrap (0.109746ms)
+✔ bootstrap gate requires disabled normal controls and empty live state (0.171158ms)
+✔ normal scheduler cannot auto-enqueue quota bootstrap (0.236246ms)
+✔ second unknown-quota bootstrap is suppressed after the attempt marker (0.180342ms)
+✔ bootstrap consumer is allowed with normal controls disabled and reserves once (0.396358ms)
+✔ producer-reserved bootstrap skips the second reservation and dispatches once (0.566615ms)
+✔ operator one-shot uses the pre-reserved queue path while scheduler remains disabled (0.414245ms)
+✔ operator gate excludes only its validated reservation and keeps post-reservation diagnostics distinct (3.58733ms)
+✔ invalid pre-reserved bootstrap references fail closed while ordinary duplicates remain suppressed (0.417139ms)
+✔ manual delivery uses its own guarded permission while scheduler is disabled (0.468216ms)
+✔ cron enqueues bounded continuous and versioned deep messages (0.471661ms)
+✔ duplicate reservation suppresses at-least-once enqueue (0.231049ms)
+✔ consumer rechecks kill switch and Connection pause (0.174273ms)
+✔ consumer rechecks authoritative quota and active-run eligibility before runtime (0.168304ms)
+✔ consumer invokes existing runtime once and duplicate delivery converges through runtime identity (0.435167ms)
+✔ consumer classifies retryable and permanent failures (0.84906ms)
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+✔ runtime configuration enables guarded Commas sync without direct scheduler or queue bindings (9.788604ms)
+✔ startup and disabled invocation cannot call a provider (5.304701ms)
+✔ direct invocation rejects missing and non-Commas scope (0.467064ms)
+✔ runtime message contract cannot request live activation (0.420204ms)
+✔ Cloudflare continuous-worker requests omit unsupported cache while preserving options (0.2656ms)
+✔ continuous runtime encoding path works without global Buffer (0.552323ms)
+✔ Supabase server fetch strips Authorization only for sb_secret keys (0.904935ms)
+✔ customer explorer routes are canonical and method-safe (2.543366ms)
+✔ customer list params are workspace scoped bounded and preserve real filters (1.058556ms)
+✔ customer explorer cursors round-trip deterministically (0.563389ms)
+✔ customer journey detail params are bounded and reject missing IDs (0.660726ms)
+✔ customer display prefers useful deterministic identifiers over generic unknowns (0.303058ms)
+✔ customer explorer is wired through read-only authenticated backend routes (5.089776ms)
+✔ narrative activity feed composes mixed subsystem events in stable story order (20.602813ms)
+✔ journey activity summary uses stored metrics without inferring journey outcome (1.553073ms)
+✔ narrative labels and evidence redaction are deterministic and safe (0.448817ms)
+✔ customer 360 aggregates commercial value attribution commissions and risk without duplicate event counting (14.069319ms)
+✔ customer 360 omits unsupported subscription and records limited-evidence explanations (0.957274ms)
+✔ Migration Zero owns only evidence-backed legacy prerequisites (3.046344ms)
+✔ tracked migrations retain ownership of platform_orders additions (2.434812ms)
+✔ migration filenames are unique and numerically ordered (1.155252ms)
+✔ operator one-shot quota reservation includes durable freshness fields and service-role ACL (0.207493ms)
+✔ Migration 070 defines a one-time post-fix Worker cache replay (0.313913ms)
+✔ Migration 069 defines a one-time early-ack observability replay (0.394806ms)
+✔ Migration 068 defines a one-time exact-run runtime dispatch diagnostic replay (0.239451ms)
+✔ Migration 067 accepts absent or self-referencing roots without weakening recovery guards (0.224779ms)
+✔ Migration 066 bounds quota bootstrap retries at the chain root and provides exceptional recovery (0.462077ms)
+✔ Migration 065 provides a one-time service-role-only quota bootstrap retry (0.493814ms)
+✔ Migration 061 converges trigger-only guard functions without changing definitions or defaults (0.333533ms)
+✔ Migration 060 converges protected table ACLs without changing default privileges (0.273182ms)
+✔ Migration 057 adds convergent credential key-version metadata without rewriting ciphertext (0.310057ms)
+✔ Migration 059 defines deterministic Legacy B, future, and Legacy C lineage semantics (0.166061ms)
+✔ Migration 058 makes integration credentials server-only without rewriting secrets (0.215245ms)
+✔ schema provenance exports contain metadata headers and no known secret material (0.768889ms)
+✔ persistent identity migration converges its invitation FK and table privileges (0.30476ms)
+✔ commerce persistence migration is tenant-owned and fail-closed (0.525723ms)
+✔ commerce control-plane migration remains additive and server-only (0.949713ms)
+[TraceKit] domain event published {
+  workspace_id: 'default',
+  type: 'work_item.resolved',
+  event_position: 1
+}
+[TraceKit] domain event projected {
+  workspace_id: 'default',
+  event_id: 'evt_1',
+  updates: 2,
+  activity_group_id: 'activity_group:default:work_item:wi_1'
+}
+[TraceKit] duplicate domain event prevented {
+  workspace_id: 'default',
+  type: 'work_item.resolved',
+  deduplication_key: 'work_item:wi_1:resolved:2026-07-26T12:00:00.000Z'
+}
+[TraceKit] domain event projected {
+  workspace_id: 'default',
+  event_id: 'evt_1',
+  updates: 2,
+  activity_group_id: 'activity_group:default:work_item:wi_1'
+}
+[TraceKit] domain event published {
+  workspace_id: 'default',
+  type: 'work_item.resolved',
+  event_position: 1
+}
+[TraceKit] domain event published {
+  workspace_id: 'default',
+  type: 'work_item.resolved',
+  event_position: 1
+}
+[TraceKit] domain event projected {
+  workspace_id: 'default',
+  event_id: 'evt_1',
+  updates: 2,
+  activity_group_id: 'activity_group:default:work_item:wi_1'
+}
+[TraceKit] domain event published {
+  workspace_id: 'other',
+  type: 'work_item.resolved',
+  event_position: 2
+}
+[TraceKit] domain event projected {
+  workspace_id: 'other',
+  event_id: 'evt_2',
+  updates: 2,
+  activity_group_id: 'activity_group:other:work_item:wi_other'
+}
+[TraceKit] domain event published {
+  workspace_id: 'default',
+  type: 'work_item.resolved',
+  event_position: 3
+}
+[TraceKit] domain event projected {
+  workspace_id: 'default',
+  event_id: 'evt_3',
+  updates: 2,
+  activity_group_id: 'activity_group:default:work_item:wi_2'
+}
+[TraceKit] domain event published {
+  workspace_id: 'default',
+  type: 'work_item.resolved',
+  event_position: 1
+}
+[TraceKit] domain event projected {
+  workspace_id: 'default',
+  event_id: 'evt_1',
+  updates: 2,
+  activity_group_id: 'activity_group:default:work_item:wi_1'
+}
+[TraceKit] domain event published {
+  workspace_id: 'default',
+  type: 'work_item.resolved',
+  event_position: 1
+}
+[TraceKit] domain event projected {
+  workspace_id: 'default',
+  event_id: 'evt_1',
+  updates: 2,
+  activity_group_id: 'activity_group:default:work_item:wi_1'
+}
+[TraceKit] workspace event stream connected { workspace_id: 'default', cursor: 0 }
+[TraceKit] workspace event stream cancelled { workspace_id: 'default', cursor: 2 }
+[TraceKit] domain event published {
+  workspace_id: 'default',
+  type: 'purchase.completed',
+  event_position: 1
+}
+[TraceKit] domain event projected {
+  workspace_id: 'default',
+  event_id: 'evt_1',
+  updates: 2,
+  activity_group_id: 'activity_group:default:order_1'
+}
+[TraceKit] domain event published {
+  workspace_id: 'default',
+  type: 'attribution.generated',
+  event_position: 2
+}
+[TraceKit] domain event projected {
+  workspace_id: 'default',
+  event_id: 'evt_2',
+  updates: 2,
+  activity_group_id: 'activity_group:default:order_1'
+}
+[TraceKit] domain event published {
+  workspace_id: 'default',
+  type: 'commission.created',
+  event_position: 3
+}
+[TraceKit] domain event projected {
+  workspace_id: 'default',
+  event_id: 'evt_3',
+  updates: 2,
+  activity_group_id: 'activity_group:default:order_1'
+}
+[TraceKit] domain event published {
+  workspace_id: 'default',
+  type: 'purchase.completed',
+  event_position: 1
+}
+[TraceKit] domain event projected {
+  workspace_id: 'default',
+  event_id: 'evt_1',
+  updates: 2,
+  activity_group_id: 'activity_group:default:order_pending_1'
+}
+[TraceKit] domain event published {
+  workspace_id: 'default',
+  type: 'attribution.pending',
+  event_position: 2
+}
+[TraceKit] domain event projected {
+  workspace_id: 'default',
+  event_id: 'evt_2',
+  updates: 2,
+  activity_group_id: 'activity_group:default:order_pending_1'
+}
+[TraceKit] domain event published {
+  workspace_id: 'default',
+  type: 'purchase.completed',
+  event_position: 1
+}
+[TraceKit] domain event projected {
+  workspace_id: 'default',
+  event_id: 'evt_1',
+  updates: 2,
+  activity_group_id: 'activity_group:default:purchase-1'
+}
+[TraceKit] domain event projected {
+  workspace_id: 'default',
+  event_id: 'evt_1',
+  updates: 2,
+  activity_group_id: 'activity_group:default:purchase-1'
+}
+[TraceKit] domain event published {
+  workspace_id: 'default',
+  type: 'work_item.resolved',
+  event_position: 1
+}
+[TraceKit] domain event projected {
+  workspace_id: 'default',
+  event_id: 'evt_1',
+  updates: 2,
+  activity_group_id: 'activity_group:default:work_item:wi_1'
+}
+[TraceKit] domain event published {
+  workspace_id: 'other',
+  type: 'work_item.resolved',
+  event_position: 2
+}
+[TraceKit] domain event projected {
+  workspace_id: 'other',
+  event_id: 'evt_2',
+  updates: 2,
+  activity_group_id: 'activity_group:other:work_item:wi_1'
+}
+[TraceKit] domain event projected {
+  workspace_id: 'other',
+  event_id: 'evt_2',
+  updates: 2,
+  activity_group_id: 'activity_group:other:work_item:wi_1'
+}
+[TraceKit] domain event published {
+  workspace_id: 'default',
+  type: 'work_item.resolved',
+  event_position: 1
+}
+[TraceKit] domain event projected {
+  workspace_id: 'default',
+  event_id: 'evt_1',
+  updates: 2,
+  activity_group_id: 'activity_group:default:work_item:wi_1'
+}
+[TraceKit] domain event projected {
+  workspace_id: 'default',
+  event_id: 'evt_1',
+  updates: 2,
+  activity_group_id: 'activity_group:default:work_item:wi_1'
+}
+[TraceKit] domain event projected {
+  workspace_id: 'default',
+  event_id: 'evt_1',
+  updates: 2,
+  activity_group_id: 'activity_group:default:work_item:wi_1'
+}
+[TraceKit] domain event published {
+  workspace_id: 'default',
+  type: 'work_item.resolved',
+  event_position: 1
+}
+[TraceKit] domain event projected {
+  workspace_id: 'default',
+  event_id: 'evt_1',
+  updates: 2,
+  activity_group_id: 'activity_group:default:work_item:wi_1'
+}
+[TraceKit] domain event published {
+  workspace_id: 'default',
+  type: 'work_item.resolved',
+  event_position: 1
+}
+[TraceKit] domain event projected {
+  workspace_id: 'default',
+  event_id: 'evt_1',
+  updates: 2,
+  activity_group_id: 'activity_group:default:work_item:wi-fail'
+}
+[TraceKit] domain event published {
+  workspace_id: 'default',
+  type: 'work_item.resolved',
+  event_position: 2
+}
+[TraceKit] domain event projected {
+  workspace_id: 'default',
+  event_id: 'evt_2',
+  updates: 2,
+  activity_group_id: 'activity_group:default:work_item:wi-after'
+}
+[TraceKit] domain event projected {
+  workspace_id: 'default',
+  event_id: 'evt_2',
+  updates: 2,
+  activity_group_id: 'activity_group:default:work_item:wi-after'
+}
+[TraceKit] domain event projected {
+  workspace_id: 'default',
+  event_id: 'evt_1',
+  updates: 2,
+  activity_group_id: 'activity_group:default:work_item:wi-fail'
+}
+[TraceKit] domain event projected {
+  workspace_id: 'default',
+  event_id: 'evt_2',
+  updates: 2,
+  activity_group_id: 'activity_group:default:work_item:wi-after'
+}
+[TraceKit] domain event published {
+  workspace_id: 'default',
+  type: 'work_item.resolved',
+  event_position: 1
+}
+[TraceKit] domain event projected {
+  workspace_id: 'default',
+  event_id: 'evt_1',
+  updates: 2,
+  activity_group_id: 'activity_group:default:work_item:wi_1'
+}
+[TraceKit] domain event published {
+  workspace_id: 'other',
+  type: 'work_item.resolved',
+  event_position: 2
+}
+[TraceKit] domain event projected {
+  workspace_id: 'other',
+  event_id: 'evt_2',
+  updates: 2,
+  activity_group_id: 'activity_group:other:work_item:wi_1'
+}
+[TraceKit] domain event projected {
+  workspace_id: 'other',
+  event_id: 'evt_2',
+  updates: 2,
+  activity_group_id: 'activity_group:other:work_item:wi_1'
+}
+[TraceKit] domain event projected {
+  workspace_id: 'default',
+  event_id: 'evt_1',
+  updates: 2,
+  activity_group_id: 'activity_group:default:work_item:wi_1'
+}
+✔ migration 032 replaces claim consumer RPC with qualified aliases (2.325588ms)
+✔ domain event routes do not conflict with Event Explorer detail routing (0.933007ms)
+✔ domain event validation enforces workspace, event naming, and payload versioning (2.173608ms)
+✔ domain event payload redacts prohibited keys and contact fields (0.160992ms)
+✔ publishing persists one event, creates workspace updates, and dedupes producer retries (3.680641ms)
+✔ outbox-only domain event publishing defers projection work (0.338521ms)
+✔ workspace update replay is ordered and workspace isolated (2.077093ms)
+✔ workspace update SSE envelope is browser-safe (0.871674ms)
+✔ workspace SSE stream sends connected event and replays workspace updates (3.548602ms)
+✔ activity group evolves deterministically across related events (1.350857ms)
+✔ purchase pending attribution remains one active Activity Intelligence group (7.049922ms)
+✔ native producer builders create safe purchase, identity, attribution, and commission events (1.685873ms)
+✔ projector replay persists consumer cursor and does not duplicate projections (3.068208ms)
+✔ projector replay is workspace isolated (7.160499ms)
+✔ projector replay rejects unsafe consumers and privileged rewinds by default (2.472489ms)
+✔ active projection lease prevents overlapping runners (0.375927ms)
+✔ projection failure is persisted without advancing cursor past failed event (2.911401ms)
+✔ scheduled projection runner processes registered consumers across workspaces (1.145968ms)
+[TraceKit] workspace event stream disconnected { workspace_id: 'default', cursor: 2 }
+✔ entity preview route matches supported entity types and rejects mutations (2.699942ms)
+✔ entity preview route is registered by the Worker dispatcher (4.074305ms)
+✔ customer preview is workspace scoped and bounded (22.586485ms)
+✔ event explorer route matching is method-safe and avoids browser ingestion alias (1.514875ms)
+✔ event explorer params preserve workspace isolation filters and bounded limits (0.787428ms)
+✔ event explorer cursors and sorting are deterministic (0.313693ms)
+✔ event explorer summarizes attribution commission and pipeline states (0.373644ms)
+✔ event explorer UI helpers render status tones and money consistently (14.012173ms)
+✔ event explorer source uses existing backend surfaces and keeps admin secret server-side (3.96522ms)
+✔ constant-time comparison and path-authoritative event discriminator (1.487824ms)
+✔ receiver accepts a valid click without routing, strips sensitive fields, and queues (5.555068ms)
+✔ authentication rejects missing and invalid bearer secrets (1.164746ms)
+✔ receiver enforces method, JSON content, malformed JSON, size, and supported types (3.019293ms)
+✔ strict validation rejects missing identity but queues any syntactically valid network for async routing (1.147891ms)
+✔ click, conversion, and update queue while the routing database is unavailable (4.677464ms)
+✔ conversion and update payloads use conversion identity without field inference (1.572091ms)
+✔ same transaction in a different network retains distinct async routing input (0.602879ms)
+✔ queue publication failure is retryable and never acknowledged (0.689089ms)
+✔ best-effort telemetry failure cannot block queue publication (0.431451ms)
+✔ privacy snapshot removes raw IP, user agent, redirect, geo, secrets, and raw query string (0.13264ms)
+✔ consumer resolves tenant scope before calling the single atomic persistence RPC (0.480114ms)
+✔ consumer retries availability errors and bounds routing lookup to five seconds (8.46696ms)
+✔ unknown and ambiguous networks never reach persistence (0.391441ms)
+✔ routing observations persist only bounded operational fields (5.673066ms)
+✔ each routing outcome records the network while preserving fail-closed behavior (1.003784ms)
+✔ diagnostic write failure cannot block valid processing or weaken tenant rejection (0.724152ms)
+✔ routing observation migration is server-only, bounded, and automatically retained (0.482027ms)
+✔ network lookup distinguishes zero, one, and multiple eligible mappings (0.540315ms)
+✔ migration codifies duplicate, out-of-order, stale-update, and poll convergence semantics (0.519744ms)
+✔ worker accepts only the three documented path-discriminated endpoints (3.649915ms)
+✔ worker consumer retries failures and never logs raw payloads (3.319066ms)
+✔ worker receipt path has no tenant-routing database dependency (5.018289ms)
+✔ verified Everflow schema remains exact (1.011366ms)
+✔ row identity preserves event and Transaction distinction (1.11422ms)
+✔ row identity is deterministic and source-bound (0.425522ms)
+✔ 103-field profiling reports type, nullability, cardinality, and group stability without values (3.957629ms)
+✔ URL and bounded structured parameter discovery reports paths, never values (7.234501ms)
+✔ opaque identifier comparison distinguishes deterministic matches and collisions (0.726286ms)
+✔ journey attribution provenance remains explicit (0.156787ms)
+✔ nandi failures are classified without relaxing evidence (0.134974ms)
+✔ investigation version comparison is deterministic (0.214684ms)
+✔ report-period timezone normalization is explicit and rejects timezone-marked input (0.772925ms)
+✔ Transaction-group semantics preserve events and varying commercial fields (0.411521ms)
+✔ Journey propagation excludes competing claims (0.259712ms)
+✔ financial import monitor route constant is the canonical API path (1.57143ms)
+✔ configured PayPal account defaults to disabled without exposing credential secrets (1.287712ms)
+✔ explicitly enabled PayPal account with no history shows Never run (0.326413ms)
+✔ customer-facing Financial Imports hides WowPay while preserving WowBoost PayPal and NMI labels (6.72927ms)
+✔ NMI and PayDiverse accounts are default-disabled and diagnostic-only when enabled (0.40487ms)
+✔ WowBoost commerce snapshot jobs are monitored separately from financial ledger totals (0.890473ms)
+✔ WowBoost commerce snapshot monitor reports stale source-order evidence (0.462127ms)
+✔ WowBoost commerce snapshot monitor does not treat missing source-order evidence as fresh (0.378191ms)
+✔ financial import health presentation derives no-connectors healthy running review critical and partial states (2.263423ms)
+✔ diagnostic-only NMI account remains diagnostic and inserts no financial events (7.533482ms)
+✔ diagnostic-only import errors are separate from intentional diagnostic-only mode (0.595088ms)
+✔ active task shows Running and stale task shows Attention (1.407904ms)
+✔ most recent failed job shows Failed while later successful job supersedes failure (0.481456ms)
+✔ unmatched events and missing affiliate attribution show Attention without dropping totals (0.419583ms)
+✔ disabled connector shows Disabled (0.175434ms)
+✔ refund and chargeback event amounts remain separate from fees and reversals (0.294314ms)
+✔ workspace isolation excludes credentials from other workspaces (0.13934ms)
+✔ filters can limit status, connector, mode, and attention-only views (0.394826ms)
+✔ financial import issue cards summarize actionable and intentional import states (1.675727ms)
+✔ account detail includes bounded recent job history (0.56347ms)
+✔ recent financial import activity is bounded and uses not-reported metrics when counters are unavailable (0.487115ms)
+✔ workspace scoping excludes other workspace jobs tasks ledger and filtered accounts (0.229296ms)
+✔ one account represented by credentials jobs tasks and ledger produces one row (0.206802ms)
+✔ two PayPal merchant accounts remain separate even when platform matches (0.255485ms)
+✔ legacy ledger rows without processor account stay separate from saved merchant accounts (0.257608ms)
+✔ status precedence keeps disabled and diagnostic-only states explicit (0.256466ms)
+✔ running task takes precedence over prior failure while retaining diagnostics (0.378321ms)
+✔ old success and generic non-financial jobs do not remain Healthy indefinitely (0.390779ms)
+✔ stale task detection respects heartbeat and ignores queued completed or barely active tasks (0.448616ms)
+✔ unavailable metrics remain null while reported zero remains zero (0.241294ms)
+✔ mixed currencies are marked instead of being labeled as USD (0.159511ms)
+✔ duplicate source events are not double-counted in financial totals (0.190537ms)
+✔ recursive response redaction removes secrets PII cards and tokenized cursors (0.498903ms)
+✔ date ranges are normalized and clamped to a bounded window (0.235966ms)
+✔ financial reconciliation route constants are canonical (1.024055ms)
+✔ deterministic matching prefers seller transaction id and never uses amount/date only (1.992184ms)
+✔ generic ledger transaction_id is not treated as buyer or seller evidence (0.261925ms)
+✔ matching priority supports parent transaction, platform order, commerce reference, and explicit custom order reference (1.173941ms)
+✔ multiple same-workspace deterministic candidates produce conflict without arbitrary suggestion (0.538502ms)
+✔ reconciliation state precedence honors ignored, manual, removed, automatic, ambiguous, and unmatched (1.347692ms)
+✔ migration-disabled reads keep diagnostics available and disable manual controls (0.259912ms)
+✔ double debit diagnostics use same deterministic order, same currency, and seven-day window (0.607687ms)
+✔ duplicate diagnostics distinguish stored duplicate evidence and conflicting ledger duplicates (0.464611ms)
+✔ broken chains detect fee, reversal, mixed currency, and unmatched refund or chargeback issues (0.466293ms)
+✔ broken chains do not join chargebacks and fees across processor accounts (0.299952ms)
+✔ summary marks capped result sets as partial instead of silently capping totals (0.313613ms)
+✔ decision normalization requires safe target/reason/idempotency fields and allowlists metadata (0.720757ms)
+✔ apply decision distinguishes missing migration, missing RPC, idempotency conflict, and transient database errors (0.668758ms)
+✔ migration source enforces idempotency, concurrency, immutable history, and metadata safety (0.51067ms)
+✔ route error redaction suppresses credentials and PII (0.235145ms)
+✔ financial health derivation handles healthy, no-events, review, critical, and partial states (12.672933ms)
+✔ financial issue cards and work queue expose narrative review counts and priority (1.787056ms)
+✔ financial work queue omits operator-resolved items and merges multiple diagnostics per event (0.303227ms)
+✔ financial event display labels distinguish orders, references, and repeated-looking ledger rows (2.68586ms)
+✔ financial impact keeps ledger types separate and calculates signed net totals (0.734497ms)
+✔ recent financial activity uses honest lifecycle labels without inventing state (0.577531ms)
+✔ admin authentication behavior rejects missing/invalid credentials and accepts existing header forms (6.319161ms)
+✔ Gateway Classic list, status, and import independently authenticate before handler work (0.970383ms)
+✔ Gateway Classic authorization is independent of the maintenance gate (1.001921ms)
+✔ NMI credential, Classic Query, normalization, identity, and scheduler behavior are unchanged (0.438591ms)
+✔ health route matching is canonical method-safe and trailing-slash tolerant (3.306196ms)
+✔ healthy workspace report produces deterministic score status and finding shape (16.034664ms)
+✔ critical and warning findings lower the health score deterministically (2.18197ms)
+✔ new workspace lifecycle distinguishes setup from operational failure (0.641958ms)
+✔ recently configured Browser SDK without traffic initializes instead of failing (0.440504ms)
+✔ identity resolution waits for backfill readiness before critical severity (0.804904ms)
+✔ identity health excludes orders without deterministic identifiers from eligible denominator (0.599264ms)
+✔ identity health degrades completed backfill with unresolved eligible orders (0.549279ms)
+✔ identity health surfaces completed jobs with failed or incomplete child tasks (4.713198ms)
+✔ attribution distinguishes low sample initialization from mature degradation (0.67574ms)
+✔ commission policy rate respects workspace mode disabled state and overrides (0.53755ms)
+✔ runtime errors and tasks use recency and stale state (0.572894ms)
+✔ health engine source remains read-only and Worker route is registered before not_found (3.616194ms)
+✔ home route is registered with deterministic method handling (5.358572ms)
+✔ home params preserve workspace and normalize reporting windows (0.810453ms)
+✔ purchase activity uses stable IDs and excludes low-level or reversal rows (0.679154ms)
+✔ home activity dedupes by deterministic ID and sorts by time (0.37798ms)
+✔ Mission Control owns root while legacy Home API and overview compatibility remain present (0.374805ms)
+✔ normalizes identity backfill request with defaults and force-new aliases (2.428393ms)
+✔ identity resolve default batch size is three and max remains unchanged (0.203377ms)
+✔ target identity diagnostics are scoped and redact identifier values (0.345862ms)
+✔ rejects invalid identity backfill date ranges (0.150107ms)
+✔ filters supported platforms and excludes WowPay (0.162876ms)
+✔ date range uses inclusive from and next-day exclusive to (0.179691ms)
+✔ cursor serializes compound platform and platform order id (0.2852ms)
+✔ classifies only confident WowBoost platform orders for identity backfill (0.304129ms)
+✔ runtime select lists use persisted platform_orders columns only (0.250889ms)
+✔ discovery scan contract matches the migration 015 keyset index (0.260362ms)
+✔ finalize count contract uses per-platform index-supported predicates (0.224719ms)
+✔ migration 016 replaces finalize counts with per-platform indexed counts (0.321816ms)
+✔ extracts deterministic identity evidence from WowBoost platform orders (14.650595ms)
+✔ customer identifiers and names are extracted from raw_json, not assumed typed columns (0.577631ms)
+✔ does not use unsafe phone, order number, amount, shipping reference, or commerce reference as person identity (0.574586ms)
+✔ stable resolve batch dedupe keys are deterministic (0.171108ms)
+✔ resolve budget checkpoint triggers only after a completed record boundary (0.176276ms)
+✔ resolve budget continuation contains only unprocessed records and has a distinct key (0.202185ms)
+✔ three-record identity resolve batch completes without continuation (0.103185ms)
+✔ subrequest-limit checkpoint preserves completed progress and retries only remaining ids (0.170567ms)
+✔ continuation discovery excludes completed records (0.157247ms)
+✔ subrequest-limit checkpoint does not skip gaps after the last contiguous completed id (0.125439ms)
+✔ dry run preview uses read-only repository methods and reports would-create (2.470797ms)
+✔ dry run preview reports existing matches and review without mutations (0.765886ms)
+✔ dry run preview skips records with no valid identifiers (0.426934ms)
+✔ identity backfill runtime progress is marked as Connector Runtime v1 (0.362397ms)
+✔ per-platform discovery state tracks completion, pending, and exhausted failures (0.267223ms)
+✔ keyset cursor preserves platform and platform_order_id without offset pagination (0.176246ms)
+✔ legacy jobs are not reused for identity backfill runtime v1 (0.207313ms)
+✔ active identity runtime jobs dedupe while force_new_job bypasses reuse (0.139481ms)
+✔ identity runtime config match reuses equivalent active jobs with batch size three (0.258239ms)
+✔ identity runtime config match rejects active jobs with stale batch size (0.104328ms)
+✔ identity runtime config match rejects differing platform date or dry-run requests (0.1391ms)
+✔ new identity runtime progress persists batch size three (0.091428ms)
+✔ explicit identity runtime job_id resumes only marked runtime jobs (0.15886ms)
+✔ identity backfill task type names are durable (0.076585ms)
+✔ finalize status reflects unresolved or review work (0.115644ms)
+✔ dry run finalization allows expected remaining unlinked records (0.140371ms)
+✔ dry-run finalize can complete from persisted metrics without table counts (0.186141ms)
+✔ compact metrics expose dry-run would counters and consistent retry counters (0.191318ms)
+✔ dry-run parent reclassifies live-shaped first resolve batch metrics (0.287804ms)
+✔ identity resolve route matches canonical POST handler (1.672202ms)
+✔ identity resolve rejects GET before generic not_found fallback (0.159511ms)
+✔ identity resolve trailing slash behavior is deterministic (0.146972ms)
+✔ identity review route still matches GET (0.1729ms)
+✔ supabase repository findIdentifiers batches lookup and preserves exact identifier pairs (3.152414ms)
+✔ identity normalization is deterministic and conservative (12.833936ms)
+✔ identity resolution creates matches conflicts and preserves workspace isolation (8.774663ms)
+✔ browser identify creates a person and repeat identify reuses it (3.269972ms)
+✔ browser external_customer_id is idempotent workspace scoped and follows existing merge rules (6.751864ms)
+✔ identity resolution batches ownership lookup and reuses caches during attach (1.367673ms)
+✔ identity resolution loads existing person identifiers once and skips unchanged primary sync (2.611989ms)
+✔ identity resolution preserves cached cross-person attach conflicts (1.796098ms)
+✔ identity diagnostics identify awaited operations without raw PII (2.369483ms)
+✔ identity diagnostics timeout a never-resolving repository await as transient (21.858277ms)
+✔ identity persist diagnostics capture synchronous repository call failures (8.981105ms)
+✔ supabase repository attachIdentifier short-circuits unchanged same-person identifiers (1.103444ms)
+✔ supabase repository attachIdentifier emits direct update diagnostics without recursive lookup (0.884875ms)
+✔ supabase repository attachIdentifier emits direct insert diagnostics (0.763081ms)
+✔ supabase repository attachIdentifier recovers concurrent unique insert conflicts (0.650621ms)
+✔ supabase repository attachIdentifier does not recover non-unique insert errors (0.345721ms)
+✔ supabase repository attachIdentifier retries 23505 recovery before throwing original context (59.998024ms)
+✔ identity resolution adopts concurrent identifier winner and reconciles losing created person (4.612396ms)
+✔ identity identifier attachment and merge framework are safe and auditable (9.756725ms)
+✔ connector integration hook links source records without side effects (1.69798ms)
+✔ identity API-style helpers return compact paginated review data (1.523668ms)
+✔ PayPal run-now creates an import job payload with non-null metadata (1.274512ms)
+✔ WowPay and WowBoost run-now create import job payloads with non-null metadata (0.23869ms)
+✔ scheduled job creation preserves explicit metadata (0.162125ms)
+✔ missing or invalid import job metadata defaults to empty object (0.18528ms)
+✔ import job insert payload keeps existing fields while defaulting metadata (3.651828ms)
+✔ Worker createImportJob uses the shared non-null metadata payload builder (3.339026ms)
+✔ continues multi-page imports and accumulates metrics (1.832724ms)
+✔ continues multi-window imports (0.539414ms)
+✔ job cursor advances safely and resume keeps the last saved cursor (0.329837ms)
+✔ supports failure, resume, cancellation, and unknown total progress (0.220863ms)
+✔ repeated import warnings aggregate instead of appending duplicates (6.066229ms)
+✔ prevents duplicate active imports for the same connector and date range (0.241745ms)
+✔ adapts connector responses into the shared chunk contract (0.271149ms)
+✔ computes determinate percentages when total count is known (0.200853ms)
+✔ compacts thousands of historical WowBoost warnings to bounded samples and counters (6.880307ms)
+✔ WowBoost progress compaction is idempotent and preserves cursor and export state (0.443609ms)
+✔ WowBoost progress compaction removes recovered permanent-missing IDs and corrects counters (0.234825ms)
+✔ compact job payload hides full progress by default and exposes it with full_progress (0.455297ms)
+✔ current WowBoost job can resume after compaction with new incremental diagnostics (0.282817ms)
+✔ legacy compatibility, explicit v1, and matching transition bindings work (19.490435ms)
+✔ different transitional v1 bindings fail closed (1.041491ms)
+✔ Legacy B, Legacy C, and future rows decrypt deterministically (4.821922ms)
+✔ write version controls the persisted encryption version (2.109021ms)
+✔ Legacy C is decrypt-only (0.453124ms)
+✔ missing, malformed, and unsupported key configuration fails closed (0.499563ms)
+✔ row key requirements and unknown versions fail closed without blind fallback (1.794326ms)
+✔ V2-only runtime supports an 18-row population and version-2 writes without legacy bindings (13.063547ms)
+✔ synthetic 16 Legacy B and 2 Legacy C rows use deterministic keys with no fallback (7.344016ms)
+✔ missing persisted version is an explicit temporary v1-only compatibility path (1.090515ms)
+✔ wrong key and tampering are rejected by authenticated encryption (1.340612ms)
+✔ synthetic v1 to v2 re-encryption preserves plaintext and rejects v1 afterward (1.674936ms)
+✔ WowPay run-now uses the in-scope import result instead of an undefined res variable (1.492451ms)
+✔ WowPay run-now successful job creation returns the intended API response (0.368185ms)
+✔ WowPay run-now import-job creation failures return a sanitized API error (0.962041ms)
+✔ PayPal run-now keeps its existing runPaypalImport response path (0.352401ms)
+✔ missing integration settings default to disabled without scheduler history (1.752232ms)
+✔ settings save patch persists enabled state and preserves scheduler history fields (0.259771ms)
+✔ settings save patch updates interval and lookback with existing clamps (0.147512ms)
+✔ WowBoost and PayPal settings POST handlers upsert missing rows by platform (3.06319ms)
+✔ settings GET handlers return disabled defaults without destructive upsert (2.8048ms)
+✔ credential writes persist key version, IV, and ciphertext atomically (5.412103ms)
+✔ single Everflow identity remains unchanged (9.445766ms)
+✔ Meta and Everflow produce descriptive cross-category flag (0.497941ms)
+✔ Google then Meta transition is deterministic (1.169013ms)
+✔ identifier value change is retained (0.505983ms)
+✔ source locations retain first and latest (0.372332ms)
+✔ multiple affiliate networks are descriptive (0.25863ms)
+✔ multiple trackers are descriptive (0.277669ms)
+✔ missing referrer on any event is retained (0.364119ms)
+✔ external referrer changes are retained (0.465222ms)
+✔ duplicate observations do not inflate distinct values (0.435837ms)
+✔ same timestamp ordering uses event id (0.256417ms)
+✔ empty evidence is safe (0.170948ms)
+✔ identifier cap exposes truncation (0.867608ms)
+✔ referrer origin cap exposes truncation (0.585042ms)
+✔ source event cap is explicit (0.231239ms)
+journey_event.created {
+  workspace_id: 'default',
+  event_type: 'identify',
+  source_platform: 'browser',
+  source_connector: 'browser-event-normalization'
+}
+journey_event.batch_completed {
+  inserted_count: 1,
+  duplicate_count: 0,
+  conflict_count: 0,
+  malformed_count: 0,
+  duration_ms: 2
+}
+journey_event.created {
+  workspace_id: 'default',
+  event_type: 'purchase',
+  source_platform: 'wowboost',
+  source_connector: 'wowboost'
+}
+journey_event.batch_completed {
+  inserted_count: 1,
+  duplicate_count: 0,
+  conflict_count: 0,
+  malformed_count: 0,
+  duration_ms: 0
+}
+journey_event.created {
+  workspace_id: 'default',
+  event_type: 'purchase',
+  source_platform: 'wowboost',
+  source_connector: 'wowboost'
+}
+journey_event.batch_completed {
+  inserted_count: 1,
+  duplicate_count: 0,
+  conflict_count: 0,
+  malformed_count: 0,
+  duration_ms: 0
+}
+journey_event.duplicate {
+  workspace_id: 'default',
+  event_type: 'purchase',
+  source_platform: 'wowboost',
+  source_connector: 'wowboost'
+}
+journey_event.batch_completed {
+  inserted_count: 0,
+  duplicate_count: 1,
+  conflict_count: 0,
+  malformed_count: 0,
+  duration_ms: 1
+}
+journey_event.created {
+  workspace_id: 'default',
+  event_type: 'refund',
+  source_platform: 'wowboost',
+  source_connector: 'wowboost'
+}
+journey_event.batch_completed {
+  inserted_count: 1,
+  duplicate_count: 0,
+  conflict_count: 0,
+  malformed_count: 0,
+  duration_ms: 0
+}
+journey_event.created {
+  workspace_id: 'default',
+  event_type: 'purchase',
+  source_platform: 'wowboost',
+  source_connector: 'wowboost'
+}
+journey_event.batch_completed {
+  inserted_count: 1,
+  duplicate_count: 0,
+  conflict_count: 0,
+  malformed_count: 0,
+  duration_ms: 0
+}
+journey_event.conflict {
+  workspace_id: 'default',
+  event_type: 'purchase',
+  source_platform: 'wowboost',
+  source_connector: 'wowboost',
+  conflict_fields: [ 'amount' ]
+}
+journey_event.batch_completed {
+  inserted_count: 0,
+  duplicate_count: 0,
+  conflict_count: 1,
+  malformed_count: 0,
+  duration_ms: 1
+}
+journey_event.created {
+  workspace_id: 'default',
+  event_type: 'purchase',
+  source_platform: 'wowboost',
+  source_connector: 'wowboost'
+}
+journey_event.batch_completed {
+  inserted_count: 1,
+  duplicate_count: 0,
+  conflict_count: 0,
+  malformed_count: 0,
+  duration_ms: 0
+}
+journey_event.duplicate {
+  workspace_id: 'default',
+  event_type: 'purchase',
+  source_platform: 'wowboost',
+  source_connector: 'wowboost'
+}
+journey_event.conflict {
+  workspace_id: 'default',
+  event_type: 'purchase',
+  source_platform: 'wowboost',
+  source_connector: 'wowboost',
+  conflict_fields: [ 'amount' ]
+}
+journey_event.created {
+  workspace_id: 'default',
+  event_type: 'purchase',
+  source_platform: 'wowboost',
+  source_connector: 'wowboost'
+}
+journey_event.batch_completed {
+  inserted_count: 1,
+  duplicate_count: 1,
+  conflict_count: 1,
+  malformed_count: 0,
+  duration_ms: 1
+}
+journey_event.duplicate {
+  workspace_id: 'default',
+  event_type: 'purchase',
+  source_platform: 'wowboost',
+  source_connector: 'wowboost'
+}
+journey_event.conflict {
+  workspace_id: 'default',
+  event_type: 'purchase',
+  source_platform: 'wowboost',
+  source_connector: 'wowboost',
+  conflict_fields: [ 'amount' ]
+}
+journey_event.created {
+  workspace_id: 'default',
+  event_type: 'purchase',
+  source_platform: 'wowboost',
+  source_connector: 'wowboost'
+}
+journey_event.created {
+  workspace_id: 'default',
+  event_type: 'purchase',
+  source_platform: 'wowboost',
+  source_connector: 'wowboost'
+}
+journey_event.batch_completed {
+  inserted_count: 2,
+  duplicate_count: 1,
+  conflict_count: 1,
+  malformed_count: 0,
+  duration_ms: 0
+}
+journey_event.created {
+  workspace_id: 'default',
+  event_type: 'purchase',
+  source_platform: 'wowboost',
+  source_connector: 'wowboost'
+}
+journey_event.batch_completed {
+  inserted_count: 1,
+  duplicate_count: 0,
+  conflict_count: 0,
+  malformed_count: 0,
+  duration_ms: 1
+}
+journey_event.created {
+  workspace_id: 'other',
+  event_type: 'purchase',
+  source_platform: 'wowboost',
+  source_connector: 'wowboost'
+}
+journey_event.batch_completed {
+  inserted_count: 1,
+  duplicate_count: 0,
+  conflict_count: 0,
+  malformed_count: 0,
+  duration_ms: 0
+}
+journey_event.created {
+  workspace_id: 'default',
+  event_type: 'purchase',
+  source_platform: 'wowboost',
+  source_connector: 'wowboost'
+}
+journey_event.batch_completed {
+  inserted_count: 1,
+  duplicate_count: 0,
+  conflict_count: 0,
+  malformed_count: 0,
+  duration_ms: 0
+}
+journey_event.duplicate {
+  workspace_id: 'default',
+  event_type: 'purchase',
+  source_platform: 'wowboost',
+  source_connector: 'wowboost'
+}
+journey_event.batch_completed {
+  inserted_count: 0,
+  duplicate_count: 1,
+  conflict_count: 0,
+  malformed_count: 0,
+  duration_ms: 0
+}
+journey_event.created {
+  workspace_id: 'default',
+  event_type: 'purchase',
+  source_platform: 'wowboost',
+  source_connector: 'wowboost'
+}
+journey_event.created {
+  workspace_id: 'default',
+  event_type: 'purchase',
+  source_platform: 'wowboost',
+  source_connector: 'wowboost'
+}
+journey_event.created {
+  workspace_id: 'default',
+  event_type: 'purchase',
+  source_platform: 'wowboost',
+  source_connector: 'wowboost'
+}
+journey_event.batch_completed {
+  inserted_count: 3,
+  duplicate_count: 0,
+  conflict_count: 0,
+  malformed_count: 0,
+  duration_ms: 1
+}
+journey_event.created {
+  workspace_id: 'default',
+  event_type: 'purchase',
+  source_platform: 'wowboost',
+  source_connector: 'wowboost'
+}
+journey_event.created {
+  workspace_id: 'default',
+  event_type: 'refund',
+  source_platform: 'wowboost',
+  source_connector: 'wowboost'
+}
+journey_event.batch_completed {
+  inserted_count: 2,
+  duplicate_count: 0,
+  conflict_count: 0,
+  malformed_count: 0,
+  duration_ms: 0
+}
+✔ migration creates journey_events with idempotency and timeline indexes (1.200851ms)
+✔ migration 022 allows identify journey events without changing the ledger table (0.252881ms)
+✔ identify is a valid journey event type for browser identity milestones (2.084153ms)
+✔ valid event insert normalizes currency and preserves metadata (1.117115ms)
+✔ duplicate event returns already-present while different event type is allowed (1.228563ms)
+✔ conflicting immutable event values are surfaced and not overwritten (0.602939ms)
+✔ invalid event type and amount are rejected (0.947759ms)
+✔ batch insert reports inserted duplicate and conflict counts (0.940018ms)
+✔ batch insert dedupes repeated source keys before insert (0.519794ms)
+✔ idempotency key is workspace-scoped (0.593295ms)
+✔ platform order adapter maps linked orders to purchase events without sensitive metadata (0.35129ms)
+✔ platform order adapter skips unlinked or incomplete orders (0.104107ms)
+✔ platform order adapter leaves missing optional revenue fields null (0.098689ms)
+✔ rerunning mapped platform order creates no duplicate journey event (0.418561ms)
+✔ person timeline returns chronological stable-cursor pages (0.949161ms)
+✔ person timeline route matcher reaches GET handler and rejects other methods deterministically (0.295386ms)
+✔ person timeline supports event type and date filters (0.516228ms)
+✔ person timeline rejects missing people invalid cursor and invalid limit normalizes safely (0.390389ms)
+✔ person timeline is workspace scoped (0.343398ms)
+✔ journey backfill request and cursor are date-bounded and resumable (0.502868ms)
+✔ journey backfill scan contract uses linked platform orders and excludes sensitive selected fields (0.160201ms)
+journey.created {
+  workspace_id: 'default',
+  person_id: 'person-1',
+  journey_id: 'journey-1'
+}
+journey.closed {
+  workspace_id: 'default',
+  person_id: 'person-1',
+  journey_id: 'journey-1',
+  status: 'abandoned'
+}
+journey.updated {
+  workspace_id: 'default',
+  person_id: 'person-1',
+  journey_id: 'journey-1',
+  events_processed: 1
+}
+journey.closed {
+  workspace_id: 'default',
+  person_id: 'person-1',
+  journey_id: 'journey-1',
+  status: 'completed'
+}
+journey.created {
+  workspace_id: 'default',
+  person_id: 'person-1',
+  journey_id: 'journey-2'
+}
+journey.created {
+  workspace_id: 'default',
+  person_id: 'person-1',
+  journey_id: 'journey-1'
+}
+journey.closed {
+  workspace_id: 'default',
+  person_id: 'person-1',
+  journey_id: 'journey-1',
+  status: 'completed'
+}
+journey.created {
+  workspace_id: 'default',
+  person_id: 'person-1',
+  journey_id: 'journey-1'
+}
+journey.closed {
+  workspace_id: 'default',
+  person_id: 'person-1',
+  journey_id: 'journey-1',
+  status: 'abandoned'
+}
+journey.created {
+  workspace_id: 'default',
+  person_id: 'person-2',
+  journey_id: 'journey-2'
+}
+journey.closed {
+  workspace_id: 'default',
+  person_id: 'person-2',
+  journey_id: 'journey-2',
+  status: 'abandoned'
+}
+journey.created {
+  workspace_id: 'default',
+  person_id: 'person-1',
+  journey_id: 'journey-1'
+}
+journey.updated {
+  workspace_id: 'default',
+  person_id: 'person-1',
+  journey_id: 'journey-1',
+  events_processed: 1
+}
+journey.updated {
+  workspace_id: 'default',
+  person_id: 'person-1',
+  journey_id: 'journey-1',
+  events_processed: 1
+}
+journey.updated {
+  workspace_id: 'default',
+  person_id: 'person-1',
+  journey_id: 'journey-1',
+  events_processed: 1
+}
+journey.created {
+  workspace_id: 'default',
+  person_id: 'person-1',
+  journey_id: 'journey-1'
+}
+journey.closed {
+  workspace_id: 'default',
+  person_id: 'person-1',
+  journey_id: 'journey-1',
+  status: 'abandoned'
+}
+✔ migration creates journeys and links journey_events without redesigning the ledger (1.795087ms)
+✔ same person events inside timeout share a journey while gaps create new journeys (3.629904ms)
+✔ canonical resolved-event assignment ignores anonymous and already-assigned events (0.730271ms)
+✔ different people never share journeys (1.01806ms)
+✔ purchases refunds subscriptions and chargebacks do not terminate a journey (1.230065ms)
+✔ journey status is derived from inactivity and conversion presence (0.255295ms)
+✔ boundary helper requires same workspace person and timeout window (0.475367ms)
+✔ summaries preserve decimal-safe revenue and compact public shape (0.377269ms)
+✔ assignment backfill is idempotent and skips already assigned events (0.536869ms)
+✔ backfill request validation and cursor encoding are deterministic (0.859507ms)
+✔ person journeys API returns stable cursor pages and enforces workspace (1.18017ms)
+✔ journey detail returns chronological events with pagination (30.093597ms)
+✔ journey route matcher reaches read handlers and rejects unsupported methods (0.639435ms)
+✔ supabase repository query shape uses exact tuple filtering after broad cursor conditions (0.101523ms)
+✔ local authenticated review bootstrap resolves rather than creates a WorkOS user (0.847097ms)
+✔ local review tenant uses stable fixture identity and idempotent conflict keys (0.210588ms)
+✔ local review identity has explicit platform membership and narrow Product/Admin entitlements (0.182165ms)
+✔ local bootstrap remains separate from production migrations and documents post-login restore (0.237879ms)
+✔ scheduled deep eligibility is independent of overlap last_enqueued cadence (1.151887ms)
+✔ overlap cadence remains gated by last_enqueued_at (0.234514ms)
+✔ Worker applies the maintenance gate before HTTP mutation routing (1.129353ms)
+✔ scheduled handler exits before every producer and direct write (0.460926ms)
+✔ Queue consumer remains active and maintenance allows bounded continuations only (0.416939ms)
+[TraceKit] maintenance write blocked {
+  event: 'maintenance.write_blocked',
+  source_category: 'http_mutation',
+  timestamp: '2026-10-14T16:46:31.162Z'
+}
+✔ maintenance gate defaults off and parses only explicit approved values (1.001491ms)
+✔ maintenance disposition preserves reads and consumer drain but blocks producers (0.186361ms)
+✔ HTTP classifier blocks mutations, webhook ingress, and GET relay lifecycle writes (0.293202ms)
+✔ protected mutations authenticate before maintenance while public ingress stays generic (0.138699ms)
+✔ maintenance response is bounded, retryable, and contains no request data (4.353937ms)
+✔ negative settle-only children remain unknown candidates with complete safe evidence (12.929961ms)
+✔ normal settlement and CLOSE batch evidence do not imply disputes (2.149101ms)
+✔ RETURN refund and SUSPECTED FRAUD decline preserve their non-dispute meanings (3.117902ms)
+✔ synthetic lifecycle shapes exercise mechanics without certifying provider semantics (3.056119ms)
+✔ exact same-account parent evidence is safe and optional (1.456096ms)
+✔ bounded summary retains every candidate and explicitly truncates ordinary evidence (10.736083ms)
+✔ diagnostic evidence contains no unrestricted XML or common customer/card fields (1.285569ms)
+✔ scope audit requires a consistent exact four-dimension join (6.087652ms)
+✔ dry-run is deterministic, read-only, parent-aware, and scope-gated (45.197847ms)
+✔ missing scope blocks otherwise valid future actions without creating writes (6.64402ms)
+✔ approved client ownership remains blocked until its tenant is onboarded (1.798832ms)
+✔ 1. successful full refund is an eligible negative economic event (23.708808ms)
+✔ 2. successful partial refund preserves its independent amount and parent (1.888519ms)
+✔ 3. failed refund records attempted amount but no economic effect (0.841228ms)
+✔ 4. two successful refund children remain independent and cumulative (4.802287ms)
+✔ 5. failed then successful attempts count only the successful child (1.856409ms)
+✔ 6. unresolved parent does not invalidate source evidence (3.835104ms)
+✔ 7. missing attribution is absent from financial evidence and does not block classification (2.25409ms)
+✔ 8. identical replay and normalized raw formatting retain identity and financial fingerprint (3.847423ms)
+✔ 9. conflicting replay changes the material financial fingerprint (5.707938ms)
+✔ 10. unknown response code is ambiguous (3.000946ms)
+✔ 11. prospective pending refund has zero economic effect (0.90154ms)
+✔ 12. multiple refund actions in one transaction are quarantined as ambiguous (1.05425ms)
+✔ 13. cumulative refund above sale is preserved and flagged for review (1.079478ms)
+✔ 14. later parent arrival advances reconciliation without changing refund identity (1.297217ms)
+✔ invalid amount, currency, and timestamp remain ambiguous diagnostics (0.769961ms)
+✔ alternate certified failure response remains a zero-effect attempt (0.68934ms)
+✔ success-shaped action without processor response evidence remains ambiguous (0.717773ms)
+✔ certifies only the retained RETURN reference family with exact settlement corroboration (2.820664ms)
+✔ nearby or insufficiently corroborated RETURN evidence remains ambiguous (1.335585ms)
+✔ RETURN reference replay fingerprint is stable and settlement changes are material (2.032045ms)
+✔ notification routes are registered with deterministic method handling (1.62388ms)
+✔ healthy workspace has no unread notifications but keeps resolved history (16.203047ms)
+✔ critical tracking finding becomes an unread notification with MCP metadata (0.854088ms)
+✔ mixed severities filter by severity category status search and date (0.632915ms)
+✔ notification status maps Health lifecycle without duplicating rule logic (4.693389ms)
+✔ read and dismissed state are workspace scoped and resolved is Health-driven (0.88893ms)
+✔ pagination returns stable cursors without N+1 state assumptions (3.092554ms)
+✔ Worker route proxy and migration are wired for notification state only (3.862846ms)
+✔ Work Item list returns persisted rows without synchronization or business-state writes (3.154297ms)
+✔ Notification read dependency loads persisted health Work Items without mutation (0.255055ms)
+✔ deployed operational GET handlers cannot invoke synchronization (2.866393ms)
+✔ migration creates policy and commission ledger without changing attribution storage (1.326521ms)
+✔ route matching covers payout APIs and method rejection (1.053298ms)
+✔ workspace attribution policy selects the active operational model (4.644294ms)
+✔ generation consumes only immutable credits from the selected attribution model (2.171295ms)
+✔ commission event ids are deterministic and prevent duplicate ledger rows (1.655677ms)
+✔ commission generation emits domain events only for newly inserted commissions (0.796772ms)
+✔ dry run reports generated commissions without inserting rows (0.408496ms)
+✔ unattributed or affiliate-less credits do not become payable commissions (0.242055ms)
+✔ date filters are inclusive by day for payout generation (0.532103ms)
+✔ default policy is explicit but not persisted by read-only policy lookup (0.430029ms)
+✔ commission row builder snapshots policy without mutating attribution credit (0.335867ms)
+✔ affiliate-bearing page view identify purchase smoke flow generates one first-touch commission (10.312213ms)
+✔ policy switching does not silently create a second payable commission for a historical conversion (0.406333ms)
+✔ commission precision uses decimal arithmetic and USD currency rounding (0.147512ms)
+✔ commission audit snapshot preserves payout decision fields (0.162184ms)
+✔ new commissions begin as draft and lifecycle statuses validate (0.527906ms)
+✔ concurrent generation and retries remain idempotent by conversion (0.419733ms)
+✔ active model with multiple credits for one conversion generates only one payable commission (13.26125ms)
+✔ API validation rejects invalid payout policy and generation inputs (0.281705ms)
+✔ selects PayPal base URLs by environment (8.0227ms)
+✔ classifies OAuth and permission errors (0.90858ms)
+✔ splits transaction-search imports into PayPal-compliant windows (0.743722ms)
+✔ parses transaction pagination deterministically (6.024967ms)
+✔ builds stable connector IDs without exposing raw client IDs (1.175273ms)
+✔ classifies sales, refunds, explicit processor fees, chargebacks, and reversals (1.129793ms)
+✔ uses stable dedupe IDs when PayPal transaction IDs repeat (0.27137ms)
+✔ retains unmatched financial transactions without manufacturing orders (11.313083ms)
+✔ normalizes matched records into platform_orders shape (1.785167ms)
+✔ deduplicates PayPal capture and fee records sharing one invoice into one platform order (2.067077ms)
+✔ deduplicates PayPal capture and refund sharing one invoice without overwriting sale gross (3.641297ms)
+✔ duplicate PayPal batch rows produce one canonical platform order key (3.180237ms)
+✔ PayPal records without reliable references skip platform_orders but keep payment and ledger rows (4.059733ms)
+✔ maps PayPal custom_field to canonical commerce_reference (0.708659ms)
+✔ separate PayPal merchant invoices remain separate platform orders (0.706796ms)
+✔ normalizes explicit dispute fixtures into ledger events (0.453333ms)
+✔ normalizes PayPal seller-favorable dispute updates as chargeback-specific reversals (0.263017ms)
+✔ does not infer PayPal dispute recovery from seller-favorable status alone (0.096145ms)
+✔ reconciles exact invoice/order references (0.667907ms)
+✔ reconciles exact commerce references before merchant references (0.155514ms)
+✔ keeps ambiguous commerce reference matches unmatched (0.23209ms)
+✔ reconciles unmatched PayPal payment transaction by exact commerce_reference (0.160082ms)
+✔ keeps duplicate WowBoost commerce-reference candidates ambiguous (0.137858ms)
+✔ reconciles exact PayPal transaction IDs already stored on commerce orders (0.16615ms)
+✔ reconciles normalized email, amount, currency, and time within two hours (0.164929ms)
+✔ does not reconcile email and amount outside twenty four hours (0.122645ms)
+✔ keeps repeat-customer candidate matches ambiguous (0.178259ms)
+✔ leaves ambiguous exact matches unmatched (0.142084ms)
+✔ rejects email-only matches (0.229757ms)
+✔ filters PayPal captures that would duplicate an existing commerce sale (0.183036ms)
+✔ commerce-reference reconciliation does not create duplicate commerce sales (0.183727ms)
+✔ attaches refunds through a parent PayPal transaction (0.267944ms)
+✔ attaches processor fees to the matched commerce order (0.143657ms)
+✔ preserves PayPal initiation/update timestamps and official event code (6.857112ms)
+✔ uses update timestamp for refund lifecycle ledger chronology (0.286922ms)
+✔ plans bulk lookups for 50 PayPal transactions without per-record query growth (6.05375ms)
+✔ phone lookup timeout cannot fail import because phone lookup is not planned (0.33172ms)
+✔ order reference lookup timeout does not fail ingestion primitives (1.181332ms)
+✔ transaction lookup timeout does not fail ingestion primitives (0.886076ms)
+✔ phone-only records remain unmatched and return deferred warning (0.583239ms)
+✔ plans parent PayPal transaction matching as one bulk lookup (0.618704ms)
+✔ chunk boundaries preserve parent refund reconciliation (0.300153ms)
+✔ production configuration is capability scoped and disabled by default (2.003271ms)
+✔ missing optional capability configuration fails closed without failing application start (0.216146ms)
+✔ quota circuit breaker protects headroom, defers deep runs, and honors 429 (0.224268ms)
+✔ freshness SLO separates routine lag and deep age (0.250768ms)
+✔ bounded Shadow proof limits reject broad activation (0.129946ms)
+✔ TKID failures never block checkout (0.161654ms)
+✔ handoff rotation accepts current/previous windows and rejects revoked keys (0.145499ms)
+✔ operational metrics reject PII, secrets, raw Evidence, and storage references (0.618462ms)
+✔ aggregates sale-only profit (1.65778ms)
+✔ profit reporting readiness distinguishes stale and diagnostic-only connectors (0.924774ms)
+✔ profit reporting readiness ignores disabled connectors and reports sanitized failures (0.160432ms)
+✔ profit reporting readiness reports live state and common reliable boundary (0.199691ms)
+✔ aggregates sale plus partial refund (0.173782ms)
+✔ aggregates sale with chargeback and chargeback fee (0.223307ms)
+✔ keeps same-order refunds, chargebacks, and recoveries financially independent (0.188534ms)
+✔ aggregates multiple processor fees (0.289857ms)
+✔ keeps positive and negative adjustments signed as stored (0.242456ms)
+✔ returns null margin when gross revenue is zero (0.260253ms)
+✔ builds stable keys and deterministic upsert rows (0.437079ms)
+✔ aggregates daily profit across multiple orders (3.799801ms)
+✔ executive sales count positive active sale events only and dedupes by order or transaction (0.286262ms)
+✔ executive dashboard day bounds respect the requested timezone (13.541313ms)
+✔ executive commission summary uses affiliate_commissions and excludes voided rows (0.251209ms)
+✔ executive commerce definition counts regular order sales separately from upsell orders (2.533902ms)
+✔ executive commerce excludes refunded chargeback cancelled void failed declined abandoned and test rows (0.294714ms)
+✔ executive commerce uses exact raw Brand and keeps unknown brand explicit (0.241495ms)
+✔ executive commerce preserves currencies and dedupes platform order snapshots (1.417268ms)
+✔ builds top-five refund affiliates using distinct affected-order counts (0.786306ms)
+✔ keeps refund and chargeback analysis separate (0.194453ms)
+✔ builds chargeback analysis from matched ledger events with affiliate and source rankings (0.520695ms)
+✔ chargeback analysis excludes missing platform orders and zero amounts (1.135893ms)
+✔ chargeback analysis preserves distinct same-order events and deduplicates repeated source events (0.387254ms)
+✔ chargeback affiliate filter scopes totals and denominator (0.152741ms)
+✔ chargeback affiliate without sale denominator reports a warning instead of a misleading rate (0.196026ms)
+✔ reports missing denominators instead of zero rates (0.171389ms)
+✔ affiliate filter scopes summary and rows (0.131859ms)
+✔ top-five affiliate ordering uses affected orders then rate (0.355616ms)
+✔ maps explicit WowBoost refund platform rows into analysis ledger rows (0.561347ms)
+✔ does not classify cancelled or declined WowBoost rows as refunds (0.214834ms)
+✔ uses receipt refunded evidence from WowBoost raw payloads (0.215365ms)
+✔ normalized receipt events suppress the legacy platform order refund fallback (0.211589ms)
+✔ legacy refund snapshots remain eligible only when no normalized receipt event exists (0.167172ms)
+✔ builds refund analysis from WowBoost platform fallback rows (0.512103ms)
+✔ refund analysis excludes unmatched ledger rows and reports diagnostics (0.126831ms)
+✔ refund analysis includes matched receipt events without affiliate in source-of-truth totals (0.399433ms)
+✔ Resolution Center parser validates schema and creates stable non-provider row identities (89.669664ms)
+✔ Resolution Center parser fails closed on unexpected headers (41.480233ms)
+✔ historical importer validates before mutation and uses secret-key-compatible Supabase auth (0.72284ms)
+✔ stable and repeated identifier observations produce no signal (10.70151ms)
+✔ known Everflow transaction change spanning two events is medium (8.131274ms)
+✔ known Google click change spanning two events is medium (1.394984ms)
+✔ unknown tracker change is low (0.730431ms)
+✔ different transaction alias groups do not manufacture a change (10.157709ms)
+✔ value_changed without two retained distinct values is insufficient (6.53067ms)
+✔ multiple changed groups produce deterministic separate signals (1.852263ms)
+✔ Everflow plus TUNE emits one informational multi-network signal (1.234942ms)
+✔ two Everflow params count as one network (0.692114ms)
+✔ paid media and unknown affiliate providers do not count as known networks (0.867348ms)
+✔ three known affiliate networks have one sorted provider signal (2.615555ms)
+✔ rule-relevant truncation is partial while flag/referrer caps are complete (3.868024ms)
+✔ positive retained facts still emit under partial evaluation (1.410377ms)
+✔ same semantic input is deterministic across time, shuffle, and retry (1.335354ms)
+✔ digest excludes values, evaluated time, unrelated fields, and array order (2.288081ms)
+✔ empty, missing, malformed, and unsupported evidence fail safely (1.382755ms)
+✔ risk evaluation leaves attribution inputs and outputs byte-for-byte unchanged (3.194919ms)
+✔ detail-only wiring reuses one evaluator and adds no persistence (0.618092ms)
+✔ global search route accepts GET and rejects mutations (2.18746ms)
+✔ global search is registered by the Worker dispatcher (6.278199ms)
+✔ global search params are workspace scoped and bounded (0.406784ms)
+✔ short global search query returns empty groups without database reads (0.505883ms)
+✔ global search queries customers, orders, and work items with concise output (19.166027ms)
+✔ setup wizard route matching is deterministic and method-safe (2.201891ms)
+✔ workspace setup request normalizes workspace metadata without creating a second model (0.614437ms)
+✔ setup progress resumes incomplete state and completion is explicit (1.204917ms)
+✔ setup wizard UI helpers parse origins progress and real event timing (0.584862ms)
+✔ migration adds only workspace-scoped onboarding state (0.435957ms)
+✔ setup wizard UI proxy keeps admin secret server-side and reuses existing APIs (0.823081ms)
+✔ normalizes Shopify shop domains (1.490017ms)
+✔ normalizes Shopify order payloads into platform_orders shape (1.50501ms)
+✔ builds stable Shopify ledger event IDs and signs (0.794558ms)
+✔ bootstrap uses a durable idempotency key and claims before returning identity (5.573786ms)
+✔ event ingestion preserves abuse control and claims capacity before any persistence (1.028181ms)
+✔ bounded proof failures are safe and do not disclose counts (2.833745ms)
+✔ runtime adapter declarations fail closed instead of silently substituting (0.521186ms)
+✔ database reservations are serialized, unique, and conservatively retained (0.251499ms)
+✔ ordinary TKID event persistence has no alternate browser route (0.848279ms)
+✔ standards-compliant bootstrap and events preflights need no actual custom-header values (1.434584ms)
+✔ only enumerated browser routes receive preflight contracts (0.185439ms)
+✔ eligible preflight returns exact ACAO and never wildcard or credentials (0.451932ms)
+✔ origin-only eligibility accepts at least one candidate without selecting a source (0.665104ms)
+✔ preflight eligibility fails closed for origin and source ineligibility (0.632664ms)
+✔ malformed and unsafe Production origins remain denied (0.512824ms)
+✔ POST authorization remains source-bound and trusted responses use exact-origin CORS (4.534499ms)
+✔ stopped proof rejection remains before persistence and becomes browser-readable (5.032731ms)
+✔ bounded declarative definition accepts semantic markers and safe legacy selectors (2.385218ms)
+✔ declarative definition rejects executable, extracting, wildcard, and unbounded configuration (0.665083ms)
+✔ event-specific semantic requirements fail closed (1.170906ms)
+✔ multiple Worker instances share one distributed source limit (10.059683ms)
+✔ fixed window resets and permits configured burst (2.93666ms)
+✔ rate classes and Organizations cannot collide (8.816007ms)
+✔ invalid and handoff rates have independent thresholds (1.958083ms)
+✔ backend unavailable fails TKID closed while checkout remains allowed (0.925346ms)
+✔ transport IP is irreversibly hashed and never exposed (0.772285ms)
+✔ authorized erasure deletes object before database tombstone and audits (2.104354ms)
+✔ cross-Organization or unknown Journey fails closed (0.617702ms)
+✔ second execution is idempotent (0.291049ms)
+✔ object failure checkpoints retry without false completion (0.439633ms)
+✔ database failure preserves completed object work for retry (0.25873ms)
+✔ erasure contract carries opaque IDs and no behavioral payload (0.23831ms)
+﹣ real SDK-compatible journey_started follows the Worker claim/persistence pipeline against the actual schema (1.41868ms) # SKIP
+﹣ evidence-only interruption resumes the same event without another reservation (0.23216ms) # SKIP
+﹣ Stage-1 event types share the same explicit persistence mapper (0.113651ms) # SKIP
+﹣ an event without its matching evidence fails closed (0.10002ms) # SKIP
+✔ event persistence mapping enumerates schema columns and excludes normalized-only fields (9.595933ms)
+✔ evidence mapping keeps deterministic event identity and bounded safe payload (2.825311ms)
+✔ operator failure evidence is bounded and excludes database messages (0.674938ms)
+✔ canonical exact HTTPS origins normalize and unsafe forms fail (1.553583ms)
+✔ DNS challenge is random, digest-only persistence compatible, and Organization-scoped by caller (7.369756ms)
+✔ activation requires verification and retirement/reactivation preserve the row (0.619985ms)
+✔ multiple active origins satisfy readiness while inactive states explain the blocker (0.946969ms)
+✔ relay routes are host/config gated and never accept a next destination (2.905673ms)
+✔ dedicated relay host exposes only a bounded root response and relay routes (1.349465ms)
+✔ outbound initiation reauthorizes active source, origin, Business Context, and persisted TKID identity (1.209254ms)
+✔ opaque initiation and cookie values are digest persisted (0.488127ms)
+✔ return uses managed active destination and existing signed handoff (0.74286ms)
+✔ duplicate return converges to token-free fallback (0.462928ms)
+✔ same browser and flow cannot own two open continuities (0.527375ms)
+✔ relay uses distributed abuse classes and records bounded Evidence milestones (1.605832ms)
+✔ relay erasure follows Journey tombstone without touching Commerce (0.443609ms)
+✔ relay diagnostics avoid PII, cookie/token logging, raw IP, and redirect queries (1.032587ms)
+✔ relay host is configurable exact HTTPS with explicit local exception (2.895346ms)
+✔ flow defaults remain disabled and enabled flow is bounded (0.387915ms)
+✔ checkout allowlist prevents open redirects (0.345701ms)
+✔ relay cookie is opaque host-only HttpOnly Secure Lax and short lived (0.513014ms)
+✔ continuity references are digest-addressed (12.649639ms)
+✔ return destination is configured and handoff-bound (0.482928ms)
+✔ failure remains customer-flow safe and records an Evidence gap (0.998045ms)
+✔ relay responses are non-cacheable, non-referring, and non-rendering (0.214063ms)
+✔ two same-flow checkouts are never resolved from one mutable browser identity (0.166081ms)
+✔ synthetic cross-origin round trip restores the same Journey without checkout echo (8.214324ms)
+✔ concurrent different flows are addressable while duplicate same-flow initiation fails closed (0.506594ms)
+✔ relay module contains no PII, fingerprint, raw IP, token logging, or arbitrary next parameter (0.597902ms)
+✔ retention executor is explicitly deployment-gated and disabled by default (1.386291ms)
+✔ scheduled execution uses bounded database scheduling and leased claims (0.883853ms)
+✔ object-level failure is fail-closed and does not complete the run (0.729059ms)
+✔ worker evidence and logs remain bounded and tenant-generic (0.812906ms)
+✔ opaque IDs use UUIDv4 strong randomness (2.768736ms)
+✔ Journey and browser session lifetimes are bounded separately (0.706857ms)
+✔ event taxonomy is explicit and route surface bounded (0.19201ms)
+✔ offer, price, terms, disclosure and displayed descriptor normalize immutably (14.739941ms)
+✔ unknown events, old timestamps and non-opaque IDs fail closed (3.718549ms)
+✔ PII, free text, stack traces and fingerprint fields are rejected (0.454075ms)
+✔ arbitrary metadata and nested price fields are rejected (0.228925ms)
+✔ client errors are bounded to safe code and category (0.388566ms)
+✔ batch and payload bounds reject abuse (0.353894ms)
+✔ source routing and origin validation fail closed across tenants (0.725374ms)
+✔ production TKID accepts only explicit Shadow or legacy active state (15.007505ms)
+✔ event retry is idempotent (1.409767ms)
+✔ signed cross-domain handoff validates scope and rejects tamper/replay (8.442403ms)
+✔ safe Journey read model answers the OTO2 acceptance questions without PII (17.94118ms)
+✔ browser purchase confirmation remains distinct from server/provider truth (1.012357ms)
+✔ erasure produces an explicit completeness tombstone rather than silent mutation (0.257729ms)
+✔ Worker wiring keeps routing server-derived and Commerce association authenticated (7.422605ms)
+✔ M4.2b registers only the fixed POST fixture route (2.050983ms)
+✔ M4.2b fixture is deterministic, tenant-scoped, synthetic, and relationship-free (0.62951ms)
+✔ M4.2b creates once with authenticated actor evidence and replays without writes (1.20024ms)
+✔ M4.2b fails closed for an incompatible existing fixture (0.83539ms)
+✔ M4.2b fixture implementation has no provider, notification-state, or external-delivery dependency (0.300854ms)
+✔ work item routes are registered with deterministic method handling (2.518379ms)
+✔ health finding builds a deterministic work item candidate with redacted evidence (0.841019ms)
+✔ work item mutation context builds a deterministic domain event (1.195843ms)
+✔ status lifecycle remains separate from source lifecycle during acknowledgement and recovery (0.348105ms)
+✔ recurrence reopens resolved items but does not reopen dismissed items (0.313242ms)
+✔ notification report links to related work item without merging lifecycles (1.831162ms)
+✔ health report can be enriched with work item references without changing health status (0.990143ms)
+✔ work item explanation is deterministic and evidence based (0.434555ms)
+✔ query normalization clamps and filters supported values (0.592784ms)
+✔ priority defaults are deterministic from severity and type (0.242135ms)
+✔ work item migration creates stable source identity, activity, indexes, and notification link (0.340053ms)
+✔ operations UI and proxy routes are present (0.780568ms)
+[33m▲ [43;33m[[43;30mWARNING[43;33m][0m [1mProxy environment variables detected. We'll use your proxy for fetch requests.[0m
+
+
+✔ production Worker configuration preserves the authorized Queue topology (11.314014ms)
+✔ production Worker configuration preserves route, cron, maintenance, and key controls (1.375024ms)
+✔ staging Core admin credential remains a secret-only production binding (0.627146ms)
+✔ WowBoost Connector Runtime v1 golden fixture covers staging through finalization (8.825631ms)
+✔ reports connected WowSuite credentials without exposing the encrypted secret (4.182899ms)
+✔ reports missing WowSuite credential fields without treating the route as unavailable (0.24553ms)
+✔ validates WowSuite import ranges without accepting rollover or reversed dates (0.339652ms)
+✔ maps WowBoost ReferenceId to canonical commerce reference (0.677892ms)
+✔ maps WowBoost Reference ID to canonical commerce reference (0.198159ms)
+✔ normalizes UTF-8 BOM on ReferenceId header (0.46417ms)
+✔ normalizes Reference Id capitalization and spacing (0.216677ms)
+✔ normalizes trailing whitespace on reference header (0.138239ms)
+✔ normalizes punctuation underscore and hyphen reference header variants (0.170407ms)
+✔ diagnoses missing ReferenceId export column without exposing row values (0.368936ms)
+✔ diagnoses detected ReferenceId header name (0.161413ms)
+✔ builds backfill patch from historical WowBoost raw_json ReferenceId (0.23197ms)
+✔ never overwrites existing WowBoost commerce_reference (0.162765ms)
+✔ missing WowBoost reference remains unchanged (0.123466ms)
+✔ dry-run summarizes WowBoost backfill without update patches (0.264219ms)
+✔ rerunning WowBoost backfill is idempotent after reference is populated (0.171639ms)
+✔ WowPay rows are excluded from WowBoost commerce-reference backfill (0.132931ms)
+✔ export backfill maps confirmed WowBoost ReferenceId fixture only to commerce_reference (0.590951ms)
+✔ legacy Order Number maps to true WowBoost Order ID through export rows (0.567967ms)
+✔ legacy Order Number mapping recognizes spaced Order ID header (0.366913ms)
+✔ legacy Order Number mapping leaves missing and duplicate mappings unresolved or ambiguous (0.314915ms)
+✔ runtime staging stop decision ignores hasMore once all targets are mapped (0.264329ms)
+✔ runtime staging keeps page forty target mapping even when Order Create Date is before requested range (0.193092ms)
+✔ runtime staging can filter unrelated export rows by target order number (1.533032ms)
+✔ runtime staging stop decision handles export end empty pages repeated pages and max page limit (0.130297ms)
+✔ runtime page fingerprint detects bounded repeated export pages (0.525803ms)
+✔ runtime max export pages default and override are clamped (0.094793ms)
+✔ legacy export paging resumes from persisted page for the same pinned cursor (0.244639ms)
+✔ WowBoost export continuation token preserves requested date filters (0.5903ms)
+✔ legacy export paging fetches page 2 after resume even when request has generic page 1 (0.198199ms)
+✔ legacy export paging does not reuse page state after the platform cursor changes (0.143216ms)
+✔ explicit legacy export page request overrides persisted progress (0.241745ms)
+✔ legacy export scan processes multiple pages and finds a later mapping in one invocation (0.936252ms)
+✔ legacy export scan keeps platform cursor pinned while export pages remain pending (0.309076ms)
+✔ legacy export scan exhaustion marks unresolved and allows platform cursor advancement (0.248265ms)
+✔ legacy export scan ambiguity marks ambiguous and allows platform cursor advancement (0.245921ms)
+✔ legacy export scan elapsed budget stops safely and persists the next page (0.286082ms)
+✔ legacy export max pages per invocation is clamped (0.183727ms)
+✔ legacy export deferred warning aggregates page ranges (0.108544ms)
+✔ legacy export state resets after the pinned row is resolved (0.124779ms)
+✔ export backfill never substitutes TransactionId, Order Number, or ShippingReference for ReferenceId (0.144178ms)
+✔ export dry-run performs no updates and shows existing commerce reference sample fields (0.181935ms)
+✔ export backfill falls back to unique WowBoost platform order_id match (0.127913ms)
+✔ order detail diagnostics detects the known WowBoost UI Reference ID safely (0.787819ms)
+✔ order detail diagnostics reports when expected WowBoost Reference ID is absent (0.208485ms)
+✔ extracts only top-level WowBoost order details referenceId (0.142244ms)
+✔ order details backfill maps known WowBoost fixture order 105330 (0.298731ms)
+✔ order details backfill never substitutes transaction order or shipping fields (0.093091ms)
+✔ order details backfill does not overwrite existing commerce_reference (0.081954ms)
+✔ order details dry-run summary performs no update patches (0.154804ms)
+✔ order details backfill enforces bounded batch size (0.084928ms)
+✔ order details backfill preserves resume cursor at the last scanned platform order (0.067652ms)
+✔ order details backfill treats 429 timeout and 5xx as transient (0.075383ms)
+✔ order details lookup classifies permanent not found without retry (0.178369ms)
+✔ order details lookup keeps authentication failures blocking (0.071328ms)
+✔ order details lookup keeps 429 and repeated 5xx transient after retry exhaustion (0.077427ms)
+✔ order details backfill excludes WowPay rows (0.179691ms)
+✔ order details backfill parses 429 Retry-After seconds and HTTP dates (0.355907ms)
+✔ order details backfill uses exponential retry delay with jitter and cap (0.202015ms)
+✔ order details pacing defaults conservatively and clamps configuration (0.087092ms)
+✔ order details cursor stops before first failed order and retries it on resume (0.106261ms)
+✔ order details cursor preserves earlier success and does not advance to later unprocessed rows (0.124387ms)
+✔ order details cursor advances past permanent 404 outcomes (0.085258ms)
+✔ order details summary commits successful earlier updates before a blocking failure (0.194994ms)
+✔ order details summary updates rows before and after a permanent 404 without writing the 404 row (0.160953ms)
+✔ order details permanent missing ID sample is capped to the most recent IDs (0.277378ms)
+✔ order details cursor lets already-populated lower rows be skipped safely during repair (0.101694ms)
+✔ order details date range scans only rows on or after 2026-04-01 (0.604582ms)
+✔ order details date range treats to date as inclusive through next-day exclusive (0.146531ms)
+✔ order details date range excludes rows outside range and WowPay rows (0.141363ms)
+✔ order details scan applies cursor and date filter together (0.148715ms)
+✔ order details scan includes legacy WowBoost rows with null order_id (0.843432ms)
+✔ order details resume preserves persisted date range instead of a new form range (3.094447ms)
+✔ order details date range rejects missing invalid and reversed dates (0.123356ms)
+✔ order details scan plan matches the partial backfill index shape (0.304269ms)
+✔ order details scan plan omits exact counts for normal continuation calls (0.136046ms)
+✔ order details compound cursor preserves platform and platform_order_id (0.11941ms)
+✔ order details alias scanner advances through all WowBoost aliases (0.086261ms)
+✔ order details scan statement timeout is recognized and cursor can be preserved (0.08638ms)
+✔ order details lookup uses non-empty numeric order_id first (0.11972ms)
+✔ order details lookup parses numeric order ID from current WowBoost platform_order_id formats (0.143106ms)
+✔ legacy wowsuite:wowboost null order_id suffix is classified as legacy order number (0.096775ms)
+✔ current WowBoost rows are unaffected and WowPay rows are not legacy mapped (0.068454ms)
+✔ order details lookup rejects nonnumeric extracted IDs before API calls (0.117898ms)
+✔ order details backfill updates legacy wowsuite:wowboost row with null order_id (0.109545ms)
+✔ extracts a refunded receipt independently from shipped or completed order status (1.514004ms)
+✔ keeps multiple receipt rows and partial refunds for one order as separate events (0.412172ms)
+✔ paid and refund receipt rows produce only the refund ledger event (0.341555ms)
+✔ JSON order normalization inspects every receipts entry (0.544371ms)
+✔ refund event keys are stable across exact reruns and additive across wider ranges (1.083884ms)
+✔ refund events use a conservative composite key when no receipt identifier exists (0.406493ms)
+✔ later sparse non-refund snapshots preserve established financial evidence (0.399582ms)
+✔ upstream hasMore controls pagination even for short or zero in-range pages (0.180512ms)
+✔ import page date diagnostics distinguish in-range, older, newer, and invalid records (0.376969ms)
+✔ import page date diagnostics identify pages entirely before the requested window (0.175605ms)
+✔ snapshot continuation stops after consecutive pages before the requested range (0.25222ms)
+✔ an in-range refund on an older order remains eligible for receipt backfill (0.359372ms)
+✔ snapshot completion does not terminate an explicit receipt-event backfill (0.105879ms)
+✔ normal snapshot imports pause at the hard page bound even when upstream has more (0.154894ms)
+✔ receipt backfill pauses at its page bound and persists a stable continuation page (0.120732ms)
+✔ receipt backfill bounds are clamped and source-row bounds are explicit (0.120702ms)
+✔ terminal and paused WowBoost jobs cannot be processed by an in-flight page (0.101934ms)
+✔ WowBoost import modes are explicit and default to snapshot import (0.129726ms)
+✔ scheduled WowBoost commerce window includes previous two local calendar days through today (15.376031ms)
+✔ scheduled WowBoost commerce window clamps lower lookbacks to the safe overlap (0.59ms)
+✔ scheduled WowBoost commerce window falls back safely for invalid timezones (0.294404ms)
+✔ scheduled WowBoost commerce window is stable across local midnight and DST boundaries (4.344292ms)
+✔ scheduled WowBoost job identity is deterministic for the same effective import (38.783585ms)
+✔ scheduled WowBoost duplicate guard blocks only genuinely active matching snapshot jobs (0.447064ms)
+✔ scheduled handler queues WowBoost order snapshots without scheduling receipt backfill (3.305876ms)
+✔ WowBoost scheduled jobs store workspace and connector metadata for monitor isolation (2.421342ms)
+✔ legacy queue uses a conditional active-status update and durable receipt continuation (3.535913ms)
+✔ cancellation observed after page work cannot overwrite the terminal job state (1.881618ms)
+✔ checkpointed duplicate pages are skipped before any upstream fetch (3.269752ms)
+✔ receipt-only pages skip mutable platform order snapshots (2.590537ms)
+✔ refund migration provides atomic idempotent receipt-event insertion (0.178059ms)
+✔ direct and async WowBoost import paths persist durable import jobs (2.149923ms)
+✔ actual Core HTTP router rejects private customer reads without a server credential before database access (19.633712ms)
+✔ actual Core HTTP router requires explicit scope on authorized private reads (2.298257ms)
+✔ private commerce mutations cannot use anonymous Core access (0.808089ms)
+✔ canonical order read includes unresolved evidence and enforces both tenant columns (1.822258ms)
+✔ order pagination is independent of customers and retains deterministic next page (0.39124ms)
+✔ order read failure is unavailable and route is GET-only (0.666455ms)
+ℹ tests 1114
+ℹ suites 0
+ℹ pass 1110
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 4
+ℹ todo 0
+ℹ duration_ms 4115.461346
