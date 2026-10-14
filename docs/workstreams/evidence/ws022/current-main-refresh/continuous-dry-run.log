@@ -1,0 +1,19 @@
+(node:6997) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+▲ [WARNING] Proxy environment variables detected. We'll use your proxy for fetch requests.
+
+
+(node:7027) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+ ⛅️ wrangler 4.148.0
+────────────────────
+Total Upload: 110.08 KiB / gzip: 24.16 KiB
+Your Worker has access to the following bindings:
+Binding                                                                                       Resource
+env.SUPABASE_URL ("https://uoeosoiegatlqtzemsfv.supabase...")                                 Environment Variable
+env.COMMERCE_CREDENTIALS_ENCRYPTION_VERSION ("1")                                             Environment Variable
+env.TRACEKIT_COMMERCE_SCHEDULER_ENABLED ("true")                                              Environment Variable
+env.TRACEKIT_COMMERCE_KILL_SWITCH ("enabled")                                                 Environment Variable
+
+--dry-run: exiting now.

@@ -1,0 +1,98 @@
+(node:7310) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+> tracekit-ui@0.1.0 test
+> node scripts/run-tests.mjs tests/m3-atomic-confirmation-integrity.test.ts tests/mcp-action-eligibility-inspection.test.ts tests/m5-policy-negative-production-acceptance.test.ts
+
+(node:7323) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:7331) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+(Use `node --trace-warnings ...` to show where the warning was created)
+TAP version 13
+# (node:7338) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: M3 confirmation validity and insertion share one locked database transaction
+ok 1 - M3 confirmation validity and insertion share one locked database transaction
+  ---
+  duration_ms: 0.978145
+  type: 'test'
+  ...
+# Subtest: M3 atomic confirmation binds tenant actor operation target and immutable plan identity
+ok 2 - M3 atomic confirmation binds tenant actor operation target and immutable plan identity
+  ---
+  duration_ms: 0.147332
+  type: 'test'
+  ...
+# Subtest: M3 stale missing cross-tenant actor and contract mismatches all reject before insertion
+ok 3 - M3 stale missing cross-tenant actor and contract mismatches all reject before insertion
+  ---
+  duration_ms: 0.381675
+  type: 'test'
+  ...
+# Subtest: M3 replay is serialized and returns only the same still-valid confirmation
+ok 4 - M3 replay is serialized and returns only the same still-valid confirmation
+  ---
+  duration_ms: 0.186661
+  type: 'test'
+  ...
+# Subtest: M3 all confirmation paths use the shared RPC with operation-specific target contracts
+ok 5 - M3 all confirmation paths use the shared RPC with operation-specific target contracts
+  ---
+  duration_ms: 0.511641
+  type: 'test'
+  ...
+# Subtest: M3 failed confirmation cannot create authorization or access a provider
+ok 6 - M3 failed confirmation cannot create authorization or access a provider
+  ---
+  duration_ms: 0.187473
+  type: 'test'
+  ...
+# Subtest: M3 execution retains independent stale tenant actor operation and target defenses
+ok 7 - M3 execution retains independent stale tenant actor operation and target defenses
+  ---
+  duration_ms: 0.177858
+  type: 'test'
+  ...
+# (node:7338) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# (node:7339) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: M5 production policy negatives retain all fourteen correlated zero-delta cases
+ok 8 - M5 production policy negatives retain all fourteen correlated zero-delta cases
+  ---
+  duration_ms: 1.388443
+  type: 'test'
+  ...
+# Subtest: M5 restoration is exact and does not overclaim Production V1
+ok 9 - M5 restoration is exact and does not overclaim Production V1
+  ---
+  duration_ms: 0.633695
+  type: 'test'
+  ...
+# (node:7339) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# (node:7340) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+# Subtest: M9 live-safe eligibility inspection reports every unsatisfied future execution gate
+ok 10 - M9 live-safe eligibility inspection reports every unsatisfied future execution gate
+  ---
+  duration_ms: 0.815951
+  type: 'test'
+  ...
+# Subtest: M9 eligibility inspection cannot grant confirm enable or execute
+ok 11 - M9 eligibility inspection cannot grant confirm enable or execute
+  ---
+  duration_ms: 0.305601
+  type: 'test'
+  ...
+# (node:7340) [UNDICI-EHPA] Warning: EnvHttpProxyAgent is experimental, expect them to change at any time.
+# (Use `node --trace-warnings ...` to show where the warning was created)
+1..11
+# tests 11
+# suites 0
+# pass 11
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 204.129082

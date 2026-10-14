@@ -1,0 +1,1 @@
+Set TRACEKIT_MIGRATION_TEST_DB_URL to the postgres database in a disposable local Supabase Postgres instance.

@@ -69,7 +69,7 @@ test("M3 all confirmation paths use the shared RPC with operation-specific targe
     'expectedTargetKind:"commas_webhook_subscription"',
     'expectedOperation:"shopify.controlled_webhook_create_delete_proof"',
     'expectedTargetKind:"shopify_webhook_subscription"',
-  ]) assert.ok(service.includes(contract), contract);
+  ]) assert.ok(service.replace(/\s+/g, "").includes(contract), contract);
 });
 
 test("M3 failed confirmation cannot create authorization or access a provider", () => {
