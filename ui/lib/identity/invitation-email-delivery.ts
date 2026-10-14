@@ -34,5 +34,5 @@ export function invitationProviderDiagnostics(error: unknown) {
     const field = (item as Record<string, unknown>).field;
     return typeof field === "string" && allowedFields.has(field) ? [field] : [];
   }) : [];
-  return { code, fields: [...new Set(fields)] };
+  return { code, fields: Array.from(new Set(fields)) };
 }
