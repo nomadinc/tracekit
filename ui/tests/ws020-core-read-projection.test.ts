@@ -9,7 +9,7 @@ test("client-read-only can read commerce identifiers but cannot read nested fina
   const permissions = ROLE_PERMISSIONS["client-read-only"];
   assert.ok(permissions.includes("financials.view"));
   assert.ok(permissions.includes("connectors.view"));
-  assert.ok(!permissions.includes("orders.view_financials"));
+  assert.ok(!(permissions as readonly string[]).includes("orders.view_financials"));
   assert.deepEqual(projectCoreCustomerRead({ customer_id: "person", email: "private@example.test", orders: [{ order_id: "order", gross_amount: 12, status: "COMPLETED", raw_json: { secret: "provider" } }], journey: { phone: "123", revenue: 12, identifiers: ["private@example.test"] } }, session(permissions)), { customer_id: "person", orders: [{ order_id: "order", status: "COMPLETED" }], journey: {} });
 });
 test("detailed financial access requires both permissions and still excludes raw provider payloads", () => {

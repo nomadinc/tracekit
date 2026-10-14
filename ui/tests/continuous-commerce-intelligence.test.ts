@@ -36,7 +36,7 @@ test("continuous ordering observer verifies adjacent newest-first pages and beni
 });
 
 test("continuous ordering observer verifies oldest-first boundaries",()=>{
-  const page=(number:number,first:string,last:string,ids:string[])=>({page, direction:"oldest_first" as const, firstTimestamp:first,lastTimestamp:last,firstSourceId:ids[0]||null,lastSourceId:ids.at(-1)||null,ids});
+  const page=(number:number,first:string,last:string,ids:string[])=>({page:number, direction:"oldest_first" as const, firstTimestamp:first,lastTimestamp:last,firstSourceId:ids[0]||null,lastSourceId:ids.at(-1)||null,ids});
   let state=observeOrderingPage(initialOrderingObserver(),page(1,"2026-08-01T00:00:00Z","2026-08-02T00:00:00Z",["a","b"]));
   state=observeOrderingPage(state,page(2,"2026-08-02T00:00:00Z","2026-08-03T00:00:00Z",["c","d"]));
   assert.equal(state.ordering,"oldest_first");assert.equal(state.paginationClassification,"none");
