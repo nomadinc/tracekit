@@ -38,12 +38,18 @@ export const GET = handleAuth({
       // the downstream tenancy/storage availability boundary.
       console.error("authentication_success_persistence_failed", authErrorDiagnostic(error));
     }
-    const providerId = providerIdFromState(state);
-    if (providerId && !impersonator) {
+    if (!impersonator && user.emailVerified) {
       try {
+        const repository = new SupabaseIdentityTenancyRepository();
+        let providerId = providerIdFromState(state);
+        if (!providerId) {
+          // Recover acceptance completed on another deployment. Never bulk-accept.
+          const candidates = await repository.pendingProviderInvitationIdsForVerifiedEmail(user.email);
+          if (candidates.length !== 1) return;
+          providerId = candidates[0];
+        }
         const provider = await getWorkOS().userManagement.getInvitation(providerId);
         if (!canCompleteInvitation(provider, user)) return;
-        const repository = new SupabaseIdentityTenancyRepository();
         const identity = await repository.userByWorkOSId(user.id);
         if (!identity) return;
         const invitationId = await repository.invitationIdForProvider(providerId, user.email);

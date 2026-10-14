@@ -47,6 +47,11 @@ async function rest(path: string, init: RequestInit = {}) {
 const user = (row: Row): PersistentUser => ({ id: String(row.id), workosUserId: String(row.workos_user_id), primaryEmail: String(row.primary_email), displayName: String(row.display_name), avatarUrl: row.avatar_url ? String(row.avatar_url) : null, status: row.status as PersistentUser["status"] });
 
 export class SupabaseIdentityTenancyRepository implements IdentityTenancyRepository {
+  async pendingProviderInvitationIdsForVerifiedEmail(email: string): Promise<string[]> {
+    const rows = await rest(`tracekit_invitation_deliveries?state=eq.sent&select=provider_invitation_id,tracekit_invitations!inner(id)&tracekit_invitations.intended_email=eq.${encodeURIComponent(email.trim().toLowerCase())}&tracekit_invitations.status=eq.pending&tracekit_invitations.expires_at=gt.${encodeURIComponent(new Date().toISOString())}&limit=2`) as Row[];
+    return rows.flatMap(row => typeof row.provider_invitation_id === "string" ? [row.provider_invitation_id] : []);
+  }
+
   async invitationIdForProvider(providerId: string, email: string): Promise<string | null> {
     const deliveries = await rest(`tracekit_invitation_deliveries?provider_invitation_id=eq.${encodeURIComponent(providerId)}&state=eq.sent&select=invitation_id&limit=2`) as Row[];
     if (deliveries.length !== 1) return null;

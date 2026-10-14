@@ -29,7 +29,9 @@ test("sign-in forwards the token while retaining SDK PKCE URL and sealed invitat
 test("callback accepts only the exact persisted invite and skips impersonated or unrelated sign-ins", async () => {
   const calls: any[] = [];
   const selected: any[] = [];
+  let candidates: string[] = [];
   class Repository {
+    async pendingProviderInvitationIdsForVerifiedEmail() { return candidates; }
     async userByWorkOSId() { return { id: "persistent-user" }; }
     async invitationIdForProvider(providerId: string, email: string) { calls.push({ providerId, email }); return "tracekit-invite"; }
     async customerInvitation(value: any) { calls.push(value); return { ok: true, organizationId: "invited-organization" }; }
@@ -63,6 +65,17 @@ test("callback accepts only the exact persisted invite and skips impersonated or
   await route.GET.onSuccess({ ...input, impersonator: { email: "admin@example.test" } });
   await route.GET.onSuccess({ ...input, state: undefined });
   await route.GET.onSuccess({ ...input, user: { ...input.user, emailVerified: false } });
+  assert.equal(calls.length, 0);
+  assert.equal(selected.length, 0);
+  candidates = ["invitation_123"];
+  await route.GET.onSuccess({ ...input, state: undefined });
+  assert.equal(calls.length, 2);
+  assert.equal(calls[1].p_invitation_id, "tracekit-invite");
+  assert.equal(selected.length, 1);
+  calls.length = 0;
+  selected.length = 0;
+  candidates = ["invitation_123", "invitation_other"];
+  await route.GET.onSuccess({ ...input, state: undefined });
   assert.equal(calls.length, 0);
   assert.equal(selected.length, 0);
   const request = { url: "https://app.example.test/auth/callback?code=rejected&state=untrusted", cookies: { has: () => false } };
