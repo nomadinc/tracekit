@@ -1,0 +1,107 @@
+{
+  "schema_version": 2,
+  "status": "REVIEW/HOLD",
+  "candidate_sha": "88f7411457b988e83e51fbc9bf7b4b5b76002fe7",
+  "pr": {
+    "url": "https://github.com/nomadinc/tracekit/pull/575",
+    "draft": true
+  },
+  "deployment": {
+    "id": "dpl_7kVc4eqTa3QseM9rMyRjGXkFhZ3U",
+    "url": "tracekit-staging-38p6rybzt-tracekit.vercel.app",
+    "readyState": "READY",
+    "projectId": "prj_KPHnqsNayx17VXmMIp7Rasrsp7gc",
+    "environment": "preview",
+    "commit": "88f7411457b988e83e51fbc9bf7b4b5b76002fe7",
+    "team_id": "team_QFcd7GbqA7MfBH9bPM0kAqG9"
+  },
+  "new_runtime_source_changes": false,
+  "staging_configuration_change": {
+    "environment": "WorkOS Staging",
+    "environment_id": "environment_01KZ1RW7BEJ57BNJNPP5JRQD7G",
+    "application_client_id": "client_01KZ1RW7ZH5X45Y1A8M3YAYDP5",
+    "added_signout_uri": "https://tracekit-staging-38p6rybzt-tracekit.vercel.app/",
+    "existing_entries_and_default_preserved": true,
+    "production_configuration_changed": false,
+    "corrected_logout_destination_observed": true
+  },
+  "checks": {
+    "ui": {
+      "pass": 1462,
+      "fail": 0,
+      "skip": 0
+    },
+    "api_with_disposable_db": {
+      "pass": 1115,
+      "fail": 0,
+      "skip": 0
+    },
+    "api_default_without_db": {
+      "pass": 1111,
+      "fail": 0,
+      "skip": 4
+    },
+    "focused_four_db": {
+      "pass": 4,
+      "fail": 0,
+      "skip": 0,
+      "included_in_full_api": true
+    },
+    "relay_worker": {
+      "pass": 2,
+      "fail": 0,
+      "skip": 0
+    },
+    "independent": {
+      "pass": 51,
+      "fail": 0,
+      "skip": 0,
+      "overlaps_full_ui": true
+    },
+    "typescript_diagnostics": 0,
+    "build": "PASS",
+    "lint": {
+      "errors": 0,
+      "warnings": 9
+    }
+  },
+  "database": {
+    "fresh_commit": "88f7411457b988e83e51fbc9bf7b4b5b76002fe7",
+    "authoritative_harness": "PASS",
+    "final_migration_version": "20261014034517",
+    "four_skips_closed_for_candidate": true,
+    "owned_fixture_cleanup": "three owned containers and anonymous volumes removed; absence verified",
+    "early_attempt_raw_logs": "1\u20134 overwritten; narrative diagnostics only; explicitly disclosed",
+    "inherited_ws024": "separate inherited/ws024 archives, original commits unchanged"
+  },
+  "tooling": {
+    "full_ui_high_package_records": 5,
+    "underlying_advisory": "GHSA-vfj7-8cjw-p6xm",
+    "production_ui_advisories": 0,
+    "eslint_peer_incompatibility": "UNRESOLVED",
+    "supported_patch_available": false,
+    "force_or_legacy_peer_deps_used": false,
+    "new_unsupported_override_or_suppression": false,
+    "waiver": false,
+    "owner_decision": "security and UI tooling owners: supported upstream remedy/replacement migration or explicit bounded risk exception"
+  },
+  "staging_role_matrix": {
+    "no_membership_identity": "corrected logout observed; email password challenge ready",
+    "admin": "BLOCKED: existing member identity/session + intended tenant/workspace",
+    "client": "BLOCKED: existing member identity/session + intended tenant/workspace",
+    "cross_tenant": "BLOCKED: both member role sessions and allowed/denied scopes",
+    "member_login_persistence_logout_relogin": "BLOCKED at existing password challenge",
+    "governed_chargeback_meta": "synthetic boundary tests pass; live member staging blocked"
+  },
+  "independent_review": {
+    "commit_id": "88f7411457b988e83e51fbc9bf7b4b5b76002fe7",
+    "html_url": "https://github.com/nomadinc/tracekit/pull/575#pullrequestreview-5524567480",
+    "id": 5524567480,
+    "state": "COMMENTED"
+  },
+  "evidence_branch": "evidence/ws022-acceptance-followup-20261014",
+  "evidence_directory": "docs/workstreams/evidence/ws022/remaining-acceptance-20261014",
+  "financial_reporting": "HOLD pending WS-001",
+  "meta": "INACTIVE/UNCERTIFIED",
+  "production_v1": "HOLD"
+}

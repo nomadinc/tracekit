@@ -1,0 +1,146 @@
+TAP version 13
+# Subtest: real SDK-compatible journey_started follows the Worker claim/persistence pipeline against the actual schema
+not ok 1 - real SDK-compatible journey_started follows the Worker claim/persistence pipeline against the actual schema
+  ---
+  duration_ms: 44.977042
+  type: 'test'
+  location: '/private/tmp/tracekit-ws022-recovery-20261014/api/src/tkid-event-persistence.integration.test.ts:2:3619'
+  failureType: 'hookFailed'
+  error: |-
+    tracekit_accounts: Invalid path specified in request URL
+    + actual - expected
+    
+    + {
+    +   code: 'PGRST125',
+    +   details: null,
+    +   hint: null,
+    +   message: 'Invalid path specified in request URL'
+    + }
+    - null
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ~
+  actual:
+    code: 'PGRST125'
+    details: ~
+    hint: ~
+    message: 'Invalid path specified in request URL'
+  operator: 'strictEqual'
+  stack: |-
+    setup (/private/tmp/tracekit-ws022-recovery-20261014/api/src/tkid-event-persistence.integration.test.ts:44:12)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async TestContext.<anonymous> (/private/tmp/tracekit-ws022-recovery-20261014/api/src/tkid-event-persistence.integration.test.ts:49:44)
+    async TestHook.run (node:internal/test_runner/test:1054:7)
+  ...
+# Subtest: evidence-only interruption resumes the same event without another reservation
+not ok 2 - evidence-only interruption resumes the same event without another reservation
+  ---
+  duration_ms: 0.356583
+  type: 'test'
+  location: '/private/tmp/tracekit-ws022-recovery-20261014/api/src/tkid-event-persistence.integration.test.ts:2:5181'
+  failureType: 'hookFailed'
+  error: |-
+    tracekit_accounts: Invalid path specified in request URL
+    + actual - expected
+    
+    + {
+    +   code: 'PGRST125',
+    +   details: null,
+    +   hint: null,
+    +   message: 'Invalid path specified in request URL'
+    + }
+    - null
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ~
+  actual:
+    code: 'PGRST125'
+    details: ~
+    hint: ~
+    message: 'Invalid path specified in request URL'
+  operator: 'strictEqual'
+  stack: |-
+    setup (/private/tmp/tracekit-ws022-recovery-20261014/api/src/tkid-event-persistence.integration.test.ts:44:12)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async TestContext.<anonymous> (/private/tmp/tracekit-ws022-recovery-20261014/api/src/tkid-event-persistence.integration.test.ts:49:44)
+    async TestHook.run (node:internal/test_runner/test:1054:7)
+  ...
+# Subtest: Stage-1 event types share the same explicit persistence mapper
+not ok 3 - Stage-1 event types share the same explicit persistence mapper
+  ---
+  duration_ms: 0.036
+  type: 'test'
+  location: '/private/tmp/tracekit-ws022-recovery-20261014/api/src/tkid-event-persistence.integration.test.ts:2:8402'
+  failureType: 'hookFailed'
+  error: |-
+    tracekit_accounts: Invalid path specified in request URL
+    + actual - expected
+    
+    + {
+    +   code: 'PGRST125',
+    +   details: null,
+    +   hint: null,
+    +   message: 'Invalid path specified in request URL'
+    + }
+    - null
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ~
+  actual:
+    code: 'PGRST125'
+    details: ~
+    hint: ~
+    message: 'Invalid path specified in request URL'
+  operator: 'strictEqual'
+  stack: |-
+    setup (/private/tmp/tracekit-ws022-recovery-20261014/api/src/tkid-event-persistence.integration.test.ts:44:12)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async TestContext.<anonymous> (/private/tmp/tracekit-ws022-recovery-20261014/api/src/tkid-event-persistence.integration.test.ts:49:44)
+    async TestHook.run (node:internal/test_runner/test:1054:7)
+  ...
+# Subtest: an event without its matching evidence fails closed
+not ok 4 - an event without its matching evidence fails closed
+  ---
+  duration_ms: 0.022625
+  type: 'test'
+  location: '/private/tmp/tracekit-ws022-recovery-20261014/api/src/tkid-event-persistence.integration.test.ts:2:10171'
+  failureType: 'hookFailed'
+  error: |-
+    tracekit_accounts: Invalid path specified in request URL
+    + actual - expected
+    
+    + {
+    +   code: 'PGRST125',
+    +   details: null,
+    +   hint: null,
+    +   message: 'Invalid path specified in request URL'
+    + }
+    - null
+    
+  code: 'ERR_ASSERTION'
+  name: 'AssertionError'
+  expected: ~
+  actual:
+    code: 'PGRST125'
+    details: ~
+    hint: ~
+    message: 'Invalid path specified in request URL'
+  operator: 'strictEqual'
+  stack: |-
+    setup (/private/tmp/tracekit-ws022-recovery-20261014/api/src/tkid-event-persistence.integration.test.ts:44:12)
+    process.processTicksAndRejections (node:internal/process/task_queues:103:5)
+    async TestContext.<anonymous> (/private/tmp/tracekit-ws022-recovery-20261014/api/src/tkid-event-persistence.integration.test.ts:49:44)
+    async TestHook.run (node:internal/test_runner/test:1054:7)
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 0
+# fail 4
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 293.89075

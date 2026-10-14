@@ -1,0 +1,15 @@
+
+> konnektive-relay@0.0.0 test
+> vitest --run
+
+
+ RUN  v4.1.11 /private/tmp/tracekit-ws022-recovery-20261014/api/konnektive-relay/konnektive-relay
+
+(node:32400) [DEP0040] DeprecationWarning: The `punycode` module is deprecated. Please use a userland alternative instead.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+
+ Test Files  1 passed (1)
+      Tests  2 passed (2)
+   Start at  13:59:41
+   Duration  1.21s (transform 28ms, setup 0ms, import 53ms, tests 14ms, environment 0ms)
+

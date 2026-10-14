@@ -1,0 +1,1280 @@
+Do you want to reset the remote database? [y/N] y
+Resetting remote database to version: 20261001061138
+NOTICE (00000): dropping function: public.backfill_platform_order_commerce_references
+NOTICE (00000): dropping function: public.lookup_wowboost_orders_by_commerce_references
+NOTICE (00000): dropping function: public.reconcile_paypal_commerce_reference_matches
+NOTICE (00000): dropping function: public.sync_wowboost_order_reference_target_coverage
+NOTICE (00000): dropping function: public.populate_wowboost_order_reference_targets
+NOTICE (00000): dropping function: public.wowboost_runtime_finalize_counts
+NOTICE (00000): dropping function: public.identity_backfill_finalize_counts
+NOTICE (00000): dropping function: public.replace_journey_attribution_credits
+NOTICE (00000): dropping function: public.copy_legacy_events_raw_to_browser_events_raw
+NOTICE (00000): dropping function: public.claim_domain_event_consumer
+NOTICE (00000): dropping function: public.insert_wowsuite_refund_events
+NOTICE (00000): dropping function: public.insert_chargeback_ledger_events
+NOTICE (00000): dropping function: public.financial_reconciliation_metadata_is_safe
+NOTICE (00000): drop cascades to 17 other objects
+NOTICE (00000): dropping function: public.financial_event_matches_immutable_guard
+NOTICE (00000): drop cascades to trigger financial_event_matches_immutable_guard_trigger on table financial_event_matches
+NOTICE (00000): dropping function: public.commerce_evidence_immutable_guard
+NOTICE (00000): drop cascades to trigger commerce_evidence_immutable_guard_trigger on table commerce_evidence_records
+NOTICE (00000): dropping function: public.apply_financial_event_match_decision
+NOTICE (00000): dropping function: public.commerce_provider_credential_version_guard
+NOTICE (00000): drop cascades to trigger commerce_provider_credential_version_guard_trigger on table commerce_provider_credentials
+NOTICE (00000): dropping function: public.commerce_product_mapping_decision_immutable_guard
+NOTICE (00000): drop cascades to trigger commerce_product_mapping_decision_immutable_guard_trigger on table commerce_product_mapping_decisions
+NOTICE (00000): dropping function: public.claim_commerce_sync_run
+NOTICE (00000): dropping function: public.heartbeat_commerce_sync_run
+NOTICE (00000): dropping function: public.transition_commerce_sync_run
+NOTICE (00000): dropping function: public.cancel_commerce_sync_run
+NOTICE (00000): dropping function: public.rotate_commerce_provider_credential
+NOTICE (00000): dropping function: public.decide_commerce_product_mapping
+NOTICE (00000): dropping table: public.profit_daily_rollups
+NOTICE (00000): dropping table: public.payment_transactions
+NOTICE (00000): dropping table: public.notification_states
+NOTICE (00000): dropping table: public.journey_events
+NOTICE (00000): drop cascades to 6 other objects
+NOTICE (00000): dropping table: public.customers_identity
+NOTICE (00000): dropping table: public.integration_import_errors
+NOTICE (00000): dropping table: public.domain_events
+NOTICE (00000): dropping table: public.activity_group_events
+NOTICE (00000): dropping table: public.workspace_onboarding
+NOTICE (00000): dropping table: public.domain_event_projection_failures
+NOTICE (00000): dropping table: public.workspace_updates
+NOTICE (00000): dropping table: public.wowboost_order_reference_targets
+NOTICE (00000): dropping table: public.identity_resolution_events
+NOTICE (00000): dropping table: public.browser_events_raw
+NOTICE (00000): dropping table: public.everflow_conversions
+NOTICE (00000): dropping table: public.journeys
+NOTICE (00000): drop cascades to 2 other objects
+NOTICE (00000): dropping table: public.domain_event_projection_audit
+NOTICE (00000): dropping table: public.attribution_matches
+NOTICE (00000): dropping table: public.activity_groups
+NOTICE (00000): dropping table: public.events_raw
+NOTICE (00000): dropping table: public.workspace_attribution_policy
+NOTICE (00000): drop cascades to constraint affiliate_commissions_policy_id_fkey on table affiliate_commissions
+NOTICE (00000): dropping table: public.person_merge_history
+NOTICE (00000): dropping table: public.affiliate_commissions
+NOTICE (00000): dropping table: public.profit_order_rollups
+NOTICE (00000): dropping table: public.integration_import_jobs
+NOTICE (00000): drop cascades to 2 other objects
+NOTICE (00000): dropping table: public.work_items
+NOTICE (00000): dropping table: public.tracekit_users
+NOTICE (00000): drop cascades to 10 other objects
+NOTICE (00000): dropping table: public.tracekit_accounts
+NOTICE (00000): drop cascades to 7 other objects
+NOTICE (00000): dropping table: public.tracekit_agencies
+NOTICE (00000): drop cascades to 2 other objects
+NOTICE (00000): dropping table: public.tracekit_organizations
+NOTICE (00000): drop cascades to 15 other objects
+NOTICE (00000): dropping table: public.tracekit_roles
+NOTICE (00000): drop cascades to 2 other objects
+NOTICE (00000): dropping table: public.tracekit_memberships
+NOTICE (00000): drop cascades to 2 other objects
+NOTICE (00000): dropping table: public.tracekit_permission_overrides
+NOTICE (00000): dropping table: public.tracekit_agency_client_assignments
+NOTICE (00000): dropping table: public.tracekit_business_contexts
+NOTICE (00000): drop cascades to 4 other objects
+NOTICE (00000): dropping table: public.tracekit_business_context_access
+NOTICE (00000): dropping table: public.tracekit_invitations
+NOTICE (00000): dropping table: public.tracekit_audit_events
+NOTICE (00000): dropping table: public.connector_import_tasks
+NOTICE (00000): dropping table: public.integrations_settings
+NOTICE (00000): dropping table: public.wowboost_order_reference_stage
+NOTICE (00000): dropping table: public.commerce_provider_products
+NOTICE (00000): drop cascades to 3 other objects
+NOTICE (00000): dropping table: public.offer_variants
+NOTICE (00000): drop cascades to constraint commerce_product_mapping_decisions_variant_fk on table commerce_product_mapping_decisions
+NOTICE (00000): dropping table: public.offer_steps
+NOTICE (00000): drop cascades to constraint commerce_product_mapping_decisions_step_fk on table commerce_product_mapping_decisions
+NOTICE (00000): dropping table: public.canonical_offers
+NOTICE (00000): drop cascades to constraint commerce_product_mapping_decisions_offer_fk on table commerce_product_mapping_decisions
+NOTICE (00000): dropping table: public.commerce_source_mappings
+NOTICE (00000): drop cascades to 4 other objects
+NOTICE (00000): dropping table: public.commerce_evidence_records
+NOTICE (00000): drop cascades to 5 other objects
+NOTICE (00000): dropping table: public.commerce_sync_checkpoints
+NOTICE (00000): dropping table: public.commerce_sync_runs
+NOTICE (00000): dropping table: public.commerce_provider_credentials
+NOTICE (00000): dropping table: public.commerce_provider_accounts
+NOTICE (00000): drop cascades to 5 other objects
+NOTICE (00000): dropping table: public.commerce_provider_connections
+NOTICE (00000): drop cascades to 5 other objects
+NOTICE (00000): dropping table: public.commerce_repository_activation
+NOTICE (00000): dropping table: public.people
+NOTICE (00000): drop cascades to 4 other objects
+NOTICE (00000): dropping table: public.person_identifiers
+NOTICE (00000): dropping table: public.person_source_identities
+NOTICE (00000): dropping table: public.conversions
+NOTICE (00000): drop cascades to constraint financial_event_matches_financial_event_id_fkey on table financial_event_matches
+NOTICE (00000): dropping table: public.domain_event_consumer_state
+NOTICE (00000): dropping table: public.campaign_costs
+NOTICE (00000): dropping table: public.browser_event_sources
+NOTICE (00000): dropping table: public.journey_attribution_credits
+NOTICE (00000): dropping table: public.platform_orders
+NOTICE (00000): dropping table: public.work_item_activity
+NOTICE (00000): dropping table: public.commerce_product_mapping_decisions
+NOTICE (00000): dropping table: public.financial_event_matches
+NOTICE (00000): dropping table: public.conversions_pkey
+NOTICE (00000): table "conversions_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_conv_ledger_type
+NOTICE (00000): table "idx_conv_ledger_type" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_conv_occurred_at
+NOTICE (00000): table "idx_conv_occurred_at" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_conv_order
+NOTICE (00000): table "idx_conv_order" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_conv_order_id
+NOTICE (00000): table "idx_conv_order_id" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_conv_parent_transaction_id
+NOTICE (00000): table "idx_conv_parent_transaction_id" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_conv_platform
+NOTICE (00000): table "idx_conv_platform" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_conv_tkid
+NOTICE (00000): table "idx_conv_tkid" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_conv_transaction
+NOTICE (00000): table "idx_conv_transaction" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_conv_transaction_id
+NOTICE (00000): table "idx_conv_transaction_id" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_conv_workspace_id
+NOTICE (00000): table "idx_conv_workspace_id" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_conversions_connector_id
+NOTICE (00000): table "idx_conversions_connector_id" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_conversions_email
+NOTICE (00000): table "idx_conversions_email" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_conversions_event_source
+NOTICE (00000): table "idx_conversions_event_source" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_conversions_ingestion_method
+NOTICE (00000): table "idx_conversions_ingestion_method" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_conversions_order_id
+NOTICE (00000): table "idx_conversions_order_id" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_conversions_tkid
+NOTICE (00000): table "idx_conversions_tkid" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_conversions_transaction_id
+NOTICE (00000): table "idx_conversions_transaction_id" does not exist, skipping
+NOTICE (00000): dropping table: public.integrations_settings_pkey
+NOTICE (00000): table "integrations_settings_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.customers_identity_pkey
+NOTICE (00000): table "customers_identity_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_customers_identity_email_norm
+NOTICE (00000): table "idx_customers_identity_email_norm" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_customers_identity_email_hash
+NOTICE (00000): table "idx_customers_identity_email_hash" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_customers_identity_tkid
+NOTICE (00000): table "idx_customers_identity_tkid" does not exist, skipping
+NOTICE (00000): dropping table: public.everflow_conversions_pkey
+NOTICE (00000): table "everflow_conversions_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.everflow_conversions_conversion_id_key
+NOTICE (00000): table "everflow_conversions_conversion_id_key" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_ef_email_norm
+NOTICE (00000): table "idx_ef_email_norm" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_ef_transaction_id
+NOTICE (00000): table "idx_ef_transaction_id" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_ef_affiliate_subs
+NOTICE (00000): table "idx_ef_affiliate_subs" does not exist, skipping
+NOTICE (00000): dropping table: public.payment_transactions_pkey
+NOTICE (00000): table "payment_transactions_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.payment_transactions_platform_account_id_transaction_id_eve_key
+NOTICE (00000): table "payment_transactions_platform_account_id_transaction_id_eve_key" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_payment_email_norm
+NOTICE (00000): table "idx_payment_email_norm" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_payment_transaction_id
+NOTICE (00000): table "idx_payment_transaction_id" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_payment_order_id
+NOTICE (00000): table "idx_payment_order_id" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_payment_event_type
+NOTICE (00000): table "idx_payment_event_type" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_payment_ts
+NOTICE (00000): table "idx_payment_ts" does not exist, skipping
+NOTICE (00000): dropping table: public.campaign_costs_pkey
+NOTICE (00000): table "campaign_costs_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_campaign_costs_date
+NOTICE (00000): table "idx_campaign_costs_date" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_campaign_costs_aff_subs
+NOTICE (00000): table "idx_campaign_costs_aff_subs" does not exist, skipping
+NOTICE (00000): dropping table: public.attribution_matches_pkey
+NOTICE (00000): table "attribution_matches_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_matches_email_norm
+NOTICE (00000): table "idx_matches_email_norm" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_matches_platform_order
+NOTICE (00000): table "idx_matches_platform_order" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_matches_payment
+NOTICE (00000): table "idx_matches_payment" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_matches_everflow
+NOTICE (00000): table "idx_matches_everflow" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_profit_order_rollups_connector
+NOTICE (00000): table "idx_profit_order_rollups_connector" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_platform_orders_email_norm
+NOTICE (00000): table "idx_platform_orders_email_norm" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_platform_orders_email_hash
+NOTICE (00000): table "idx_platform_orders_email_hash" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_platform_orders_transaction_id
+NOTICE (00000): table "idx_platform_orders_transaction_id" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_platform_orders_affiliate_subs
+NOTICE (00000): table "idx_platform_orders_affiliate_subs" does not exist, skipping
+NOTICE (00000): dropping table: public.profit_order_rollups_pkey
+NOTICE (00000): table "profit_order_rollups_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.profit_order_rollups_workspace_id_order_id_connector_id_cur_key
+NOTICE (00000): table "profit_order_rollups_workspace_id_order_id_connector_id_cur_key" does not exist, skipping
+NOTICE (00000): dropping table: public.profit_daily_rollups_pkey
+NOTICE (00000): table "profit_daily_rollups_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.profit_daily_rollups_workspace_id_day_connector_id_currency_key
+NOTICE (00000): table "profit_daily_rollups_workspace_id_day_connector_id_currency_key" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_profit_order_rollups_workspace
+NOTICE (00000): table "idx_profit_order_rollups_workspace" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_profit_order_rollups_order_id
+NOTICE (00000): table "idx_profit_order_rollups_order_id" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_profit_order_rollups_event_source
+NOTICE (00000): table "idx_profit_order_rollups_event_source" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_profit_order_rollups_platform
+NOTICE (00000): table "idx_profit_order_rollups_platform" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_profit_order_rollups_last_event
+NOTICE (00000): table "idx_profit_order_rollups_last_event" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_profit_daily_rollups_workspace
+NOTICE (00000): table "idx_profit_daily_rollups_workspace" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_profit_daily_rollups_day
+NOTICE (00000): table "idx_profit_daily_rollups_day" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_profit_daily_rollups_connector
+NOTICE (00000): table "idx_profit_daily_rollups_connector" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_profit_daily_rollups_event_source
+NOTICE (00000): table "idx_profit_daily_rollups_event_source" does not exist, skipping
+NOTICE (00000): dropping table: public.idx_profit_daily_rollups_platform
+NOTICE (00000): table "idx_profit_daily_rollups_platform" does not exist, skipping
+NOTICE (00000): dropping table: public.profit_order_rollups_workspace_order_connector_currency_uidx
+NOTICE (00000): table "profit_order_rollups_workspace_order_connector_currency_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.platform_orders_platform_order_id_lookup_idx
+NOTICE (00000): table "platform_orders_platform_order_id_lookup_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.platform_orders_platform_transaction_id_lookup_idx
+NOTICE (00000): table "platform_orders_platform_transaction_id_lookup_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.platform_orders_platform_commerce_reference_idx
+NOTICE (00000): table "platform_orders_platform_commerce_reference_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.payment_transactions_platform_commerce_reference_idx
+NOTICE (00000): table "payment_transactions_platform_commerce_reference_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.payment_transactions_paypal_event_code_idx
+NOTICE (00000): table "payment_transactions_paypal_event_code_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.payment_transactions_platform_account_external_record_uidx
+NOTICE (00000): table "payment_transactions_platform_account_external_record_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.platform_orders_wowboost_reference_backfill_idx
+NOTICE (00000): table "platform_orders_wowboost_reference_backfill_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.workspace_updates_pkey
+NOTICE (00000): table "workspace_updates_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.workspace_updates_id_key
+NOTICE (00000): table "workspace_updates_id_key" does not exist, skipping
+NOTICE (00000): dropping table: public.integration_import_jobs_runtime_lookup_idx
+NOTICE (00000): table "integration_import_jobs_runtime_lookup_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.integration_import_jobs_runtime_updated_idx
+NOTICE (00000): table "integration_import_jobs_runtime_updated_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.workspace_updates_event_type_uidx
+NOTICE (00000): table "workspace_updates_event_type_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.connector_import_tasks_pkey
+NOTICE (00000): table "connector_import_tasks_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.connector_import_tasks_job_id_dedupe_key_key
+NOTICE (00000): table "connector_import_tasks_job_id_dedupe_key_key" does not exist, skipping
+NOTICE (00000): dropping table: public.connector_import_tasks_job_status_idx
+NOTICE (00000): table "connector_import_tasks_job_status_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.connector_import_tasks_connector_status_idx
+NOTICE (00000): table "connector_import_tasks_connector_status_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.connector_import_tasks_phase_idx
+NOTICE (00000): table "connector_import_tasks_phase_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.workspace_updates_id_uidx
+NOTICE (00000): table "workspace_updates_id_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.integration_import_errors_pkey
+NOTICE (00000): table "integration_import_errors_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.integration_import_errors_job_idx
+NOTICE (00000): table "integration_import_errors_job_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.integration_import_errors_connector_idx
+NOTICE (00000): table "integration_import_errors_connector_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.workspace_updates_workspace_position_idx
+NOTICE (00000): table "workspace_updates_workspace_position_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.workspace_updates_workspace_type_idx
+NOTICE (00000): table "workspace_updates_workspace_type_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.workspace_updates_entity_idx
+NOTICE (00000): table "workspace_updates_entity_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.domain_event_consumer_state_pkey
+NOTICE (00000): table "domain_event_consumer_state_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.wowboost_order_reference_targets_job_order_number_idx
+NOTICE (00000): table "wowboost_order_reference_targets_job_order_number_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.wowboost_order_reference_stage_pkey
+NOTICE (00000): table "wowboost_order_reference_stage_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.wowboost_order_reference_stage_job_id_order_number_order_id_key
+NOTICE (00000): table "wowboost_order_reference_stage_job_id_order_number_order_id_key" does not exist, skipping
+NOTICE (00000): dropping table: public.wowboost_order_reference_stage_job_order_number_idx
+NOTICE (00000): table "wowboost_order_reference_stage_job_order_number_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.wowboost_order_reference_stage_workspace_order_number_idx
+NOTICE (00000): table "wowboost_order_reference_stage_workspace_order_number_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.wowboost_order_reference_stage_job_export_page_idx
+NOTICE (00000): table "wowboost_order_reference_stage_job_export_page_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.person_identifiers_active_value_uidx
+NOTICE (00000): table "person_identifiers_active_value_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.wowboost_order_reference_targets_pkey
+NOTICE (00000): table "wowboost_order_reference_targets_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.wowboost_order_reference_targets_job_id_order_number_key
+NOTICE (00000): table "wowboost_order_reference_targets_job_id_order_number_key" does not exist, skipping
+NOTICE (00000): dropping table: public.wowboost_order_reference_targets_job_unmapped_idx
+NOTICE (00000): table "wowboost_order_reference_targets_job_unmapped_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.wowboost_order_reference_targets_workspace_order_number_idx
+NOTICE (00000): table "wowboost_order_reference_targets_workspace_order_number_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.people_pkey
+NOTICE (00000): table "people_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.people_workspace_status_idx
+NOTICE (00000): table "people_workspace_status_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.people_workspace_email_idx
+NOTICE (00000): table "people_workspace_email_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.people_workspace_phone_idx
+NOTICE (00000): table "people_workspace_phone_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.activity_groups_pkey
+NOTICE (00000): table "activity_groups_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.activity_groups_workspace_status_idx
+NOTICE (00000): table "activity_groups_workspace_status_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.person_identifiers_pkey
+NOTICE (00000): table "person_identifiers_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.person_identifiers_person_idx
+NOTICE (00000): table "person_identifiers_person_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.person_identifiers_hash_idx
+NOTICE (00000): table "person_identifiers_hash_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.person_identifiers_source_idx
+NOTICE (00000): table "person_identifiers_source_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.activity_groups_workspace_entity_idx
+NOTICE (00000): table "activity_groups_workspace_entity_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.activity_groups_workspace_correlation_idx
+NOTICE (00000): table "activity_groups_workspace_correlation_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.integration_import_errors_job_class_idx
+NOTICE (00000): table "integration_import_errors_job_class_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.identity_resolution_events_pkey
+NOTICE (00000): table "identity_resolution_events_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.identity_resolution_events_workspace_created_idx
+NOTICE (00000): table "identity_resolution_events_workspace_created_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.identity_resolution_events_person_idx
+NOTICE (00000): table "identity_resolution_events_person_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.identity_resolution_events_review_idx
+NOTICE (00000): table "identity_resolution_events_review_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.person_merge_history_pkey
+NOTICE (00000): table "person_merge_history_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.person_merge_history_workspace_created_idx
+NOTICE (00000): table "person_merge_history_workspace_created_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.person_merge_history_source_idx
+NOTICE (00000): table "person_merge_history_source_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.platform_orders_workspace_person_idx
+NOTICE (00000): table "platform_orders_workspace_person_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.payment_transactions_workspace_person_idx
+NOTICE (00000): table "payment_transactions_workspace_person_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.platform_orders_identity_backfill_scan_idx
+NOTICE (00000): table "platform_orders_identity_backfill_scan_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.platform_orders_identity_backfill_unlinked_count_idx
+NOTICE (00000): table "platform_orders_identity_backfill_unlinked_count_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.platform_orders_identity_backfill_linked_count_idx
+NOTICE (00000): table "platform_orders_identity_backfill_linked_count_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.identity_resolution_events_backfill_review_idx
+NOTICE (00000): table "identity_resolution_events_backfill_review_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.journey_events_pkey
+NOTICE (00000): table "journey_events_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.journey_events_source_event_uidx
+NOTICE (00000): table "journey_events_source_event_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.journey_events_person_timeline_idx
+NOTICE (00000): table "journey_events_person_timeline_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.journey_events_workspace_event_time_idx
+NOTICE (00000): table "journey_events_workspace_event_time_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.journey_events_platform_order_idx
+NOTICE (00000): table "journey_events_platform_order_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.journey_events_transaction_idx
+NOTICE (00000): table "journey_events_transaction_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.journey_events_attribution_dims_idx
+NOTICE (00000): table "journey_events_attribution_dims_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.journeys_pkey
+NOTICE (00000): table "journeys_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.journeys_entry_event_uidx
+NOTICE (00000): table "journeys_entry_event_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.events_raw_pkey
+NOTICE (00000): table "events_raw_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.activity_group_events_pkey
+NOTICE (00000): table "activity_group_events_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.activity_group_events_group_event_uidx
+NOTICE (00000): table "activity_group_events_group_event_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.activity_group_events_workspace_group_idx
+NOTICE (00000): table "activity_group_events_workspace_group_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.journeys_person_timeline_idx
+NOTICE (00000): table "journeys_person_timeline_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.journeys_status_idx
+NOTICE (00000): table "journeys_status_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.journeys_active_idx
+NOTICE (00000): table "journeys_active_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.journey_events_journey_timeline_idx
+NOTICE (00000): table "journey_events_journey_timeline_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.journey_events_unassigned_backfill_idx
+NOTICE (00000): table "journey_events_unassigned_backfill_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.journey_attribution_credits_pkey
+NOTICE (00000): table "journey_attribution_credits_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.journey_attribution_credit_uidx
+NOTICE (00000): table "journey_attribution_credit_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.journey_attribution_unattributed_uidx
+NOTICE (00000): table "journey_attribution_unattributed_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.journey_attribution_journey_idx
+NOTICE (00000): table "journey_attribution_journey_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.journey_attribution_person_idx
+NOTICE (00000): table "journey_attribution_person_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.journey_attribution_touchpoint_idx
+NOTICE (00000): table "journey_attribution_touchpoint_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.journeys_attribution_backfill_idx
+NOTICE (00000): table "journeys_attribution_backfill_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.domain_event_consumer_state_lease_idx
+NOTICE (00000): table "domain_event_consumer_state_lease_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.domain_event_projection_failures_pkey
+NOTICE (00000): table "domain_event_projection_failures_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.domain_event_projection_failures_active_uidx
+NOTICE (00000): table "domain_event_projection_failures_active_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.domain_event_projection_failures_workspace_status_idx
+NOTICE (00000): table "domain_event_projection_failures_workspace_status_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.domain_event_projection_failures_event_idx
+NOTICE (00000): table "domain_event_projection_failures_event_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.domain_event_projection_audit_pkey
+NOTICE (00000): table "domain_event_projection_audit_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.workspace_attribution_policy_workspace_uidx
+NOTICE (00000): table "workspace_attribution_policy_workspace_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.domain_event_projection_audit_workspace_idx
+NOTICE (00000): table "domain_event_projection_audit_workspace_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.workspace_attribution_policy_pkey
+NOTICE (00000): table "workspace_attribution_policy_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.workspace_attribution_policy_status_idx
+NOTICE (00000): table "workspace_attribution_policy_status_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.browser_events_raw_workspace_event_uidx
+NOTICE (00000): table "browser_events_raw_workspace_event_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.events_raw_workspace_event_uidx
+NOTICE (00000): table "events_raw_workspace_event_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.events_raw_normalization_scan_idx
+NOTICE (00000): table "events_raw_normalization_scan_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.events_raw_workspace_tkid_event_time_idx
+NOTICE (00000): table "events_raw_workspace_tkid_event_time_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.events_raw_workspace_session_event_time_idx
+NOTICE (00000): table "events_raw_workspace_session_event_time_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.events_raw_workspace_event_time_idx
+NOTICE (00000): table "events_raw_workspace_event_time_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.browser_events_raw_normalization_scan_idx
+NOTICE (00000): table "browser_events_raw_normalization_scan_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.browser_event_sources_pkey
+NOTICE (00000): table "browser_event_sources_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.browser_events_raw_workspace_tkid_event_time_idx
+NOTICE (00000): table "browser_events_raw_workspace_tkid_event_time_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.browser_events_raw_workspace_session_event_time_idx
+NOTICE (00000): table "browser_events_raw_workspace_session_event_time_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.browser_events_raw_workspace_event_time_idx
+NOTICE (00000): table "browser_events_raw_workspace_event_time_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.browser_event_sources_active_idx
+NOTICE (00000): table "browser_event_sources_active_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.journey_events_browser_tkid_idx
+NOTICE (00000): table "journey_events_browser_tkid_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.conversions_wowsuite_refund_event_uidx
+NOTICE (00000): table "conversions_wowsuite_refund_event_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.browser_events_raw_pkey
+NOTICE (00000): table "browser_events_raw_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.browser_events_raw_normalized_journey_event_idx
+NOTICE (00000): table "browser_events_raw_normalized_journey_event_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.browser_events_raw_person_idx
+NOTICE (00000): table "browser_events_raw_person_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.browser_events_raw_journey_idx
+NOTICE (00000): table "browser_events_raw_journey_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.platform_orders_financial_issue_order_range_idx
+NOTICE (00000): table "platform_orders_financial_issue_order_range_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.platform_orders_financial_issue_status_idx
+NOTICE (00000): table "platform_orders_financial_issue_status_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.conversions_financial_issue_range_idx
+NOTICE (00000): table "conversions_financial_issue_range_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.affiliate_commissions_pkey
+NOTICE (00000): table "affiliate_commissions_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.conversions_chargeback_event_uidx
+NOTICE (00000): table "conversions_chargeback_event_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.conversions_chargeback_account_time_idx
+NOTICE (00000): table "conversions_chargeback_account_time_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.domain_events_id_uidx
+NOTICE (00000): table "domain_events_id_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.work_items_pkey
+NOTICE (00000): table "work_items_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.domain_events_workspace_position_idx
+NOTICE (00000): table "domain_events_workspace_position_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.domain_events_workspace_recorded_idx
+NOTICE (00000): table "domain_events_workspace_recorded_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.domain_events_workspace_type_idx
+NOTICE (00000): table "domain_events_workspace_type_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.work_items_workspace_source_uidx
+NOTICE (00000): table "work_items_workspace_source_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.work_items_workspace_status_priority_idx
+NOTICE (00000): table "work_items_workspace_status_priority_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.work_items_workspace_category_status_idx
+NOTICE (00000): table "work_items_workspace_category_status_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.work_items_workspace_assignee_status_idx
+NOTICE (00000): table "work_items_workspace_assignee_status_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.work_items_workspace_person_status_idx
+NOTICE (00000): table "work_items_workspace_person_status_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.work_items_workspace_order_status_idx
+NOTICE (00000): table "work_items_workspace_order_status_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.work_items_workspace_health_idx
+NOTICE (00000): table "work_items_workspace_health_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.work_item_activity_pkey
+NOTICE (00000): table "work_item_activity_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.work_item_activity_item_timeline_idx
+NOTICE (00000): table "work_item_activity_item_timeline_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.notification_states_workspace_work_item_idx
+NOTICE (00000): table "notification_states_workspace_work_item_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.domain_events_pkey
+NOTICE (00000): table "domain_events_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.domain_events_id_key
+NOTICE (00000): table "domain_events_id_key" does not exist, skipping
+NOTICE (00000): dropping table: public.domain_events_workspace_dedupe_uidx
+NOTICE (00000): table "domain_events_workspace_dedupe_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.domain_events_subject_idx
+NOTICE (00000): table "domain_events_subject_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.domain_events_correlation_idx
+NOTICE (00000): table "domain_events_correlation_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.tracekit_agency_client_assignment_agency_id_organization_id_key
+NOTICE (00000): table "tracekit_agency_client_assignment_agency_id_organization_id_key" does not exist, skipping
+NOTICE (00000): dropping table: public.tracekit_business_context_access_pkey
+NOTICE (00000): table "tracekit_business_context_access_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.tracekit_business_context_acc_membership_id_organization_id_key
+NOTICE (00000): table "tracekit_business_context_acc_membership_id_organization_id_key" does not exist, skipping
+NOTICE (00000): dropping table: public.tracekit_invitations_pkey
+NOTICE (00000): table "tracekit_invitations_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.tracekit_invitations_workos_invitation_id_key
+NOTICE (00000): table "tracekit_invitations_workos_invitation_id_key" does not exist, skipping
+NOTICE (00000): dropping table: public.tracekit_audit_events_pkey
+NOTICE (00000): table "tracekit_audit_events_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.tracekit_memberships_user_status_idx
+NOTICE (00000): table "tracekit_memberships_user_status_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.tracekit_memberships_org_status_idx
+NOTICE (00000): table "tracekit_memberships_org_status_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.tracekit_memberships_user_account_uidx
+NOTICE (00000): table "tracekit_memberships_user_account_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.tracekit_memberships_user_org_uidx
+NOTICE (00000): table "tracekit_memberships_user_org_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.tracekit_permission_overrides_membership_idx
+NOTICE (00000): table "tracekit_permission_overrides_membership_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.tracekit_audit_events_actor_time_idx
+NOTICE (00000): table "tracekit_audit_events_actor_time_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.tracekit_audit_events_org_time_idx
+NOTICE (00000): table "tracekit_audit_events_org_time_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.tracekit_business_contexts_pkey
+NOTICE (00000): table "tracekit_business_contexts_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.tracekit_business_contexts_org_id_uidx
+NOTICE (00000): table "tracekit_business_contexts_org_id_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.tracekit_organizations_account_id_uidx
+NOTICE (00000): table "tracekit_organizations_account_id_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.tracekit_organizations_id_account_uidx
+NOTICE (00000): table "tracekit_organizations_id_account_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_provider_connections_pkey
+NOTICE (00000): table "commerce_provider_connections_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_provider_connections_org_id_uidx
+NOTICE (00000): table "commerce_provider_connections_org_id_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_provider_connections_org_provider_idx
+NOTICE (00000): table "commerce_provider_connections_org_provider_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_provider_connections_external_account_uidx
+NOTICE (00000): table "commerce_provider_connections_external_account_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_provider_accounts_pkey
+NOTICE (00000): table "commerce_provider_accounts_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_provider_accounts_connection_id_provider_account_e_key
+NOTICE (00000): table "commerce_provider_accounts_connection_id_provider_account_e_key" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_provider_accounts_scope_id_uidx
+NOTICE (00000): table "commerce_provider_accounts_scope_id_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_provider_accounts_org_id_uidx
+NOTICE (00000): table "commerce_provider_accounts_org_id_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_provider_credentials_pkey
+NOTICE (00000): table "commerce_provider_credentials_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_provider_credentials_active_connection_uidx
+NOTICE (00000): table "commerce_provider_credentials_active_connection_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_provider_credentials_connection_history_idx
+NOTICE (00000): table "commerce_provider_credentials_connection_history_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_sync_runs_pkey
+NOTICE (00000): table "commerce_sync_runs_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_sync_runs_scope_id_uidx
+NOTICE (00000): table "commerce_sync_runs_scope_id_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_sync_runs_connection_status_idx
+NOTICE (00000): table "commerce_sync_runs_connection_status_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_sync_checkpoints_pkey
+NOTICE (00000): table "commerce_sync_checkpoints_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_sync_checkpoints_sync_run_id_resource_page_per_pag_key
+NOTICE (00000): table "commerce_sync_checkpoints_sync_run_id_resource_page_per_pag_key" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_evidence_records_pkey
+NOTICE (00000): table "commerce_evidence_records_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_evidence_records_connection_id_provider_account_id_key
+NOTICE (00000): table "commerce_evidence_records_connection_id_provider_account_id_key" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_evidence_records_storage_backend_storage_reference_key
+NOTICE (00000): table "commerce_evidence_records_storage_backend_storage_reference_key" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_evidence_records_org_id_uidx
+NOTICE (00000): table "commerce_evidence_records_org_id_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_source_mappings_pkey
+NOTICE (00000): table "commerce_source_mappings_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_source_mappings_connection_id_provider_account_id__key
+NOTICE (00000): table "commerce_source_mappings_connection_id_provider_account_id__key" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_source_mappings_org_id_uidx
+NOTICE (00000): table "commerce_source_mappings_org_id_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.canonical_offers_pkey
+NOTICE (00000): table "canonical_offers_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.canonical_offers_org_id_uidx
+NOTICE (00000): table "canonical_offers_org_id_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.canonical_offers_context_id_uidx
+NOTICE (00000): table "canonical_offers_context_id_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.offer_steps_pkey
+NOTICE (00000): table "offer_steps_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.offer_steps_org_id_uidx
+NOTICE (00000): table "offer_steps_org_id_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.offer_steps_offer_id_uidx
+NOTICE (00000): table "offer_steps_offer_id_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.offer_steps_offer_role_sequence_uidx
+NOTICE (00000): table "offer_steps_offer_role_sequence_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.offer_variants_pkey
+NOTICE (00000): table "offer_variants_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.offer_variants_org_id_uidx
+NOTICE (00000): table "offer_variants_org_id_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.offer_variants_step_id_uidx
+NOTICE (00000): table "offer_variants_step_id_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_provider_products_pkey
+NOTICE (00000): table "commerce_provider_products_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_provider_products_connection_id_provider_account_i_key
+NOTICE (00000): table "commerce_provider_products_connection_id_provider_account_i_key" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_provider_products_org_id_uidx
+NOTICE (00000): table "commerce_provider_products_org_id_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.people_organization_id_uidx
+NOTICE (00000): table "people_organization_id_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.person_source_identities_pkey
+NOTICE (00000): table "person_source_identities_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.person_source_identities_provider_customer_uidx
+NOTICE (00000): table "person_source_identities_provider_customer_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.person_source_identities_supporting_value_idx
+NOTICE (00000): table "person_source_identities_supporting_value_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.platform_orders_canonical_order_id_key
+NOTICE (00000): table "platform_orders_canonical_order_id_key" does not exist, skipping
+NOTICE (00000): dropping table: public.platform_orders_commerce_scope_idx
+NOTICE (00000): table "platform_orders_commerce_scope_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.platform_orders_commerce_source_mapping_uidx
+NOTICE (00000): table "platform_orders_commerce_source_mapping_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.conversions_commerce_idempotency_uidx
+NOTICE (00000): table "conversions_commerce_idempotency_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.conversions_commerce_order_idx
+NOTICE (00000): table "conversions_commerce_order_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_repository_activation_pkey
+NOTICE (00000): table "commerce_repository_activation_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_sync_runs_recoverable_lease_idx
+NOTICE (00000): table "commerce_sync_runs_recoverable_lease_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_provider_products_scope_id_uidx
+NOTICE (00000): table "commerce_provider_products_scope_id_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_product_mapping_decisions_pkey
+NOTICE (00000): table "commerce_product_mapping_decisions_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_product_mapping_decisions_product_time_idx
+NOTICE (00000): table "commerce_product_mapping_decisions_product_time_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.platform_orders_provider_source_uidx
+NOTICE (00000): table "platform_orders_provider_source_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.commerce_provider_connections_org_setup_request_uidx
+NOTICE (00000): table "commerce_provider_connections_org_setup_request_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.conversions_chargeback_dispute_idx
+NOTICE (00000): table "conversions_chargeback_dispute_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.financial_event_matches_pkey
+NOTICE (00000): table "financial_event_matches_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.financial_event_matches_active_uidx
+NOTICE (00000): table "financial_event_matches_active_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.financial_event_matches_idempotency_uidx
+NOTICE (00000): table "financial_event_matches_idempotency_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.financial_event_matches_event_history_idx
+NOTICE (00000): table "financial_event_matches_event_history_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.financial_event_matches_history_idx
+NOTICE (00000): table "financial_event_matches_history_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.financial_event_matches_platform_order_idx
+NOTICE (00000): table "financial_event_matches_platform_order_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.financial_event_matches_order_id_idx
+NOTICE (00000): table "financial_event_matches_order_id_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.tracekit_agencies_pkey
+NOTICE (00000): table "tracekit_agencies_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.tracekit_agencies_account_id_key
+NOTICE (00000): table "tracekit_agencies_account_id_key" does not exist, skipping
+NOTICE (00000): dropping table: public.conversions_financial_reconciliation_lookup_idx
+NOTICE (00000): table "conversions_financial_reconciliation_lookup_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.conversions_financial_reconciliation_source_idx
+NOTICE (00000): table "conversions_financial_reconciliation_source_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.tracekit_users_pkey
+NOTICE (00000): table "tracekit_users_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.tracekit_users_workos_user_id_key
+NOTICE (00000): table "tracekit_users_workos_user_id_key" does not exist, skipping
+NOTICE (00000): dropping table: public.tracekit_accounts_pkey
+NOTICE (00000): table "tracekit_accounts_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.tracekit_organizations_pkey
+NOTICE (00000): table "tracekit_organizations_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.tracekit_organizations_workos_organization_id_key
+NOTICE (00000): table "tracekit_organizations_workos_organization_id_key" does not exist, skipping
+NOTICE (00000): dropping table: public.tracekit_roles_pkey
+NOTICE (00000): table "tracekit_roles_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.tracekit_roles_role_key_key
+NOTICE (00000): table "tracekit_roles_role_key_key" does not exist, skipping
+NOTICE (00000): dropping table: public.tracekit_memberships_pkey
+NOTICE (00000): table "tracekit_memberships_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.tracekit_permission_overrides_pkey
+NOTICE (00000): table "tracekit_permission_overrides_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.tracekit_agency_client_assignments_pkey
+NOTICE (00000): table "tracekit_agency_client_assignments_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.notification_states_workspace_finding_idx
+NOTICE (00000): table "notification_states_workspace_finding_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.people_customer_explorer_updated_idx
+NOTICE (00000): table "people_customer_explorer_updated_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.person_identifiers_customer_explorer_value_idx
+NOTICE (00000): table "person_identifiers_customer_explorer_value_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.affiliate_commissions_event_uidx
+NOTICE (00000): table "affiliate_commissions_event_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.affiliate_commissions_conversion_uidx
+NOTICE (00000): table "affiliate_commissions_conversion_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.affiliate_commissions_workspace_status_idx
+NOTICE (00000): table "affiliate_commissions_workspace_status_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.affiliate_commissions_affiliate_idx
+NOTICE (00000): table "affiliate_commissions_affiliate_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.affiliate_commissions_conversion_idx
+NOTICE (00000): table "affiliate_commissions_conversion_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.journey_attribution_credits_payout_idx
+NOTICE (00000): table "journey_attribution_credits_payout_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.person_identifiers_customer_explorer_person_idx
+NOTICE (00000): table "person_identifiers_customer_explorer_person_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.workspace_onboarding_pkey
+NOTICE (00000): table "workspace_onboarding_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.platform_orders_customer_explorer_person_order_idx
+NOTICE (00000): table "platform_orders_customer_explorer_person_order_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.platform_orders_customer_explorer_order_id_idx
+NOTICE (00000): table "platform_orders_customer_explorer_order_id_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.workspace_onboarding_updated_idx
+NOTICE (00000): table "workspace_onboarding_updated_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.browser_events_raw_explorer_status_time_idx
+NOTICE (00000): table "browser_events_raw_explorer_status_time_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.browser_events_raw_explorer_type_time_idx
+NOTICE (00000): table "browser_events_raw_explorer_type_time_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.browser_events_raw_explorer_source_time_idx
+NOTICE (00000): table "browser_events_raw_explorer_source_time_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.journey_events_explorer_type_time_idx
+NOTICE (00000): table "journey_events_explorer_type_time_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.journey_events_explorer_source_platform_time_idx
+NOTICE (00000): table "journey_events_explorer_source_platform_time_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.journey_events_explorer_affiliate_time_idx
+NOTICE (00000): table "journey_events_explorer_affiliate_time_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.notification_states_pkey
+NOTICE (00000): table "notification_states_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.notification_states_workspace_updated_idx
+NOTICE (00000): table "notification_states_workspace_updated_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.platform_orders_customer_explorer_platform_order_idx
+NOTICE (00000): table "platform_orders_customer_explorer_platform_order_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.platform_orders_customer_explorer_transaction_idx
+NOTICE (00000): table "platform_orders_customer_explorer_transaction_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.platform_orders_customer_explorer_email_idx
+NOTICE (00000): table "platform_orders_customer_explorer_email_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.platform_orders_customer_explorer_affiliate_idx
+NOTICE (00000): table "platform_orders_customer_explorer_affiliate_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.journeys_customer_explorer_person_started_idx
+NOTICE (00000): table "journeys_customer_explorer_person_started_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.journeys_customer_explorer_status_started_idx
+NOTICE (00000): table "journeys_customer_explorer_status_started_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.journey_events_customer_explorer_journey_timeline_idx
+NOTICE (00000): table "journey_events_customer_explorer_journey_timeline_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.journey_attribution_credits_customer_explorer_person_idx
+NOTICE (00000): table "journey_attribution_credits_customer_explorer_person_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.journey_attribution_credits_customer_explorer_journey_idx
+NOTICE (00000): table "journey_attribution_credits_customer_explorer_journey_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.affiliate_commissions_customer_explorer_person_idx
+NOTICE (00000): table "affiliate_commissions_customer_explorer_person_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.affiliate_commissions_customer_explorer_journey_idx
+NOTICE (00000): table "affiliate_commissions_customer_explorer_journey_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.platform_orders_pkey
+NOTICE (00000): table "platform_orders_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.platform_orders_platform_order_id_key
+NOTICE (00000): table "platform_orders_platform_order_id_key" does not exist, skipping
+NOTICE (00000): dropping table: public.platform_orders_event_id_idx
+NOTICE (00000): table "platform_orders_event_id_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.platform_orders_platform_order_id_uidx
+NOTICE (00000): table "platform_orders_platform_order_id_uidx" does not exist, skipping
+NOTICE (00000): dropping table: public.platform_orders_status_norm_idx
+NOTICE (00000): table "platform_orders_status_norm_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.platform_orders_tid_idx
+NOTICE (00000): table "platform_orders_tid_idx" does not exist, skipping
+NOTICE (00000): dropping table: public.platform_orders_uq
+NOTICE (00000): table "platform_orders_uq" does not exist, skipping
+NOTICE (00000): dropping table: public.integration_import_jobs_pkey
+NOTICE (00000): table "integration_import_jobs_pkey" does not exist, skipping
+NOTICE (00000): dropping table: public.integration_import_jobs_platform_idx
+NOTICE (00000): table "integration_import_jobs_platform_idx" does not exist, skipping
+NOTICE (00000): truncating table: auth.users
+NOTICE (00000): truncating table: auth.audit_log_entries
+NOTICE (00000): truncating table: auth.refresh_tokens
+NOTICE (00000): truncating table: auth.instances
+NOTICE (00000): truncating table: supabase_migrations.schema_migrations
+Applying migration 000_tracekit_legacy_baseline.sql...
+Applying migration 001_tracekit_core_ledger.sql...
+NOTICE (42710): extension "pgcrypto" already exists, skipping
+Applying migration 002_profit_engine_rollups.sql...
+NOTICE (42710): extension "pgcrypto" already exists, skipping
+Applying migration 003_profit_order_rollup_persistence_key.sql...
+Applying migration 004_integrations_credentials_metadata.sql...
+Applying migration 005_payment_transaction_match_details.sql...
+Applying migration 006_import_jobs_progress.sql...
+Applying migration 007_paypal_platform_order_lookup_indexes.sql...
+Applying migration 008_commerce_reference_paypal_event_fields.sql...
+Applying migration 009_commerce_reference_maintenance_rpcs.sql...
+Applying migration 010_wowboost_commerce_reference_backfill_index.sql...
+Applying migration 011_connector_runtime_v1.sql...
+NOTICE (42710): extension "pgcrypto" already exists, skipping
+NOTICE (42701): column "retries" of relation "integration_import_jobs" already exists, skipping
+Applying migration 012_wowboost_runtime_targeted_staging.sql...
+NOTICE (42710): extension "pgcrypto" already exists, skipping
+Applying migration 013_wowboost_runtime_finalize_counts.sql...
+Applying migration 014_identity_service_v1.sql...
+NOTICE (42710): extension "pgcrypto" already exists, skipping
+Applying migration 015_identity_backfill_runtime_v1.sql...
+Applying migration 016_identity_backfill_finalize_count_indexes.sql...
+Applying migration 017_journey_events_ledger.sql...
+NOTICE (42710): extension "pgcrypto" already exists, skipping
+Applying migration 018_journeys_engine.sql...
+NOTICE (42710): extension "pgcrypto" already exists, skipping
+Applying migration 019_attribution_engine_v1.sql...
+NOTICE (42710): extension "pgcrypto" already exists, skipping
+Applying migration 020_browser_touchpoint_ingestion_v1.sql...
+NOTICE (42710): extension "pgcrypto" already exists, skipping
+Applying migration 021_browser_events_raw.sql...
+NOTICE (42710): extension "pgcrypto" already exists, skipping
+NOTICE (42701): column "event_id" of relation "browser_events_raw" already exists, skipping
+NOTICE (42701): column "workspace_id" of relation "browser_events_raw" already exists, skipping
+NOTICE (42701): column "received_at" of relation "browser_events_raw" already exists, skipping
+NOTICE (42701): column "event_time" of relation "browser_events_raw" already exists, skipping
+NOTICE (42701): column "event_type" of relation "browser_events_raw" already exists, skipping
+NOTICE (42701): column "normalized_event_type" of relation "browser_events_raw" already exists, skipping
+NOTICE (42701): column "tkid" of relation "browser_events_raw" already exists, skipping
+NOTICE (42701): column "session_id" of relation "browser_events_raw" already exists, skipping
+NOTICE (42701): column "person_id" of relation "browser_events_raw" already exists, skipping
+NOTICE (42701): column "journey_id" of relation "browser_events_raw" already exists, skipping
+NOTICE (42701): column "source" of relation "browser_events_raw" already exists, skipping
+NOTICE (42701): column "schema_version" of relation "browser_events_raw" already exists, skipping
+NOTICE (42701): column "raw_payload" of relation "browser_events_raw" already exists, skipping
+NOTICE (42701): column "request_context" of relation "browser_events_raw" already exists, skipping
+NOTICE (42701): column "payload_hash" of relation "browser_events_raw" already exists, skipping
+NOTICE (42701): column "normalization_status" of relation "browser_events_raw" already exists, skipping
+NOTICE (42701): column "normalization_error" of relation "browser_events_raw" already exists, skipping
+NOTICE (42701): column "normalization_attempts" of relation "browser_events_raw" already exists, skipping
+NOTICE (42701): column "normalization_job_id" of relation "browser_events_raw" already exists, skipping
+NOTICE (42701): column "normalized_journey_event_id" of relation "browser_events_raw" already exists, skipping
+NOTICE (42701): column "normalized_at" of relation "browser_events_raw" already exists, skipping
+NOTICE (42701): column "created_at" of relation "browser_events_raw" already exists, skipping
+NOTICE (42701): column "updated_at" of relation "browser_events_raw" already exists, skipping
+Applying migration 022_journey_events_identify_event_type.sql...
+Applying migration 023_browser_purchase_smoke_event.sql...
+Applying migration 024_payout_engine_v1.sql...
+NOTICE (42710): extension "pgcrypto" already exists, skipping
+NOTICE (42701): column "id" of relation "workspace_attribution_policy" already exists, skipping
+NOTICE (42701): column "workspace_id" of relation "workspace_attribution_policy" already exists, skipping
+NOTICE (42701): column "active_model" of relation "workspace_attribution_policy" already exists, skipping
+NOTICE (42701): column "model_version" of relation "workspace_attribution_policy" already exists, skipping
+NOTICE (42701): column "default_commission_rate" of relation "workspace_attribution_policy" already exists, skipping
+NOTICE (42701): column "status" of relation "workspace_attribution_policy" already exists, skipping
+NOTICE (42701): column "metadata" of relation "workspace_attribution_policy" already exists, skipping
+NOTICE (42701): column "created_at" of relation "workspace_attribution_policy" already exists, skipping
+NOTICE (42701): column "updated_at" of relation "workspace_attribution_policy" already exists, skipping
+NOTICE (00000): constraint "workspace_attribution_policy_model_check" of relation "workspace_attribution_policy" does not exist, skipping
+NOTICE (42701): column "publisher_id" of relation "affiliate_commissions" already exists, skipping
+NOTICE (42701): column "credit_amount" of relation "affiliate_commissions" already exists, skipping
+NOTICE (42701): column "generated_at" of relation "affiliate_commissions" already exists, skipping
+NOTICE (42701): column "policy_snapshot" of relation "affiliate_commissions" already exists, skipping
+NOTICE (00000): constraint "affiliate_commissions_model_check" of relation "affiliate_commissions" does not exist, skipping
+NOTICE (00000): constraint "affiliate_commissions_status_check" of relation "affiliate_commissions" does not exist, skipping
+Applying migration 025_workspace_onboarding_setup_wizard.sql...
+NOTICE (42701): column "workspace_name" of relation "workspace_onboarding" already exists, skipping
+NOTICE (42701): column "primary_website_url" of relation "workspace_onboarding" already exists, skipping
+NOTICE (42701): column "default_timezone" of relation "workspace_onboarding" already exists, skipping
+NOTICE (42701): column "default_currency" of relation "workspace_onboarding" already exists, skipping
+NOTICE (42701): column "current_step" of relation "workspace_onboarding" already exists, skipping
+NOTICE (42701): column "completed_steps" of relation "workspace_onboarding" already exists, skipping
+NOTICE (42701): column "dismissed_warnings" of relation "workspace_onboarding" already exists, skipping
+NOTICE (42701): column "completed_at" of relation "workspace_onboarding" already exists, skipping
+NOTICE (42701): column "metadata" of relation "workspace_onboarding" already exists, skipping
+NOTICE (42701): column "created_at" of relation "workspace_onboarding" already exists, skipping
+NOTICE (42701): column "updated_at" of relation "workspace_onboarding" already exists, skipping
+Applying migration 026_event_explorer_indexes.sql...
+Applying migration 027_notification_engine_state.sql...
+NOTICE (42701): column "workspace_id" of relation "notification_states" already exists, skipping
+NOTICE (42701): column "notification_id" of relation "notification_states" already exists, skipping
+NOTICE (42701): column "health_finding_id" of relation "notification_states" already exists, skipping
+NOTICE (42701): column "read_at" of relation "notification_states" already exists, skipping
+NOTICE (42701): column "dismissed_at" of relation "notification_states" already exists, skipping
+NOTICE (42701): column "archived_at" of relation "notification_states" already exists, skipping
+NOTICE (42701): column "metadata" of relation "notification_states" already exists, skipping
+NOTICE (42701): column "created_at" of relation "notification_states" already exists, skipping
+NOTICE (42701): column "updated_at" of relation "notification_states" already exists, skipping
+Applying migration 028_customer_journey_explorer_indexes.sql...
+Applying migration 029_operations_work_items.sql...
+NOTICE (42701): column "id" of relation "work_items" already exists, skipping
+NOTICE (42701): column "workspace_id" of relation "work_items" already exists, skipping
+NOTICE (42701): column "type" of relation "work_items" already exists, skipping
+NOTICE (42701): column "category" of relation "work_items" already exists, skipping
+NOTICE (42701): column "source" of relation "work_items" already exists, skipping
+NOTICE (42701): column "source_key" of relation "work_items" already exists, skipping
+NOTICE (42701): column "title" of relation "work_items" already exists, skipping
+NOTICE (42701): column "summary" of relation "work_items" already exists, skipping
+NOTICE (42701): column "severity" of relation "work_items" already exists, skipping
+NOTICE (42701): column "priority" of relation "work_items" already exists, skipping
+NOTICE (42701): column "status" of relation "work_items" already exists, skipping
+NOTICE (42701): column "lifecycle_state" of relation "work_items" already exists, skipping
+NOTICE (42701): column "assigned_to" of relation "work_items" already exists, skipping
+NOTICE (42701): column "related_person_id" of relation "work_items" already exists, skipping
+NOTICE (42701): column "related_journey_id" of relation "work_items" already exists, skipping
+NOTICE (42701): column "related_order_id" of relation "work_items" already exists, skipping
+NOTICE (42701): column "related_conversion_id" of relation "work_items" already exists, skipping
+NOTICE (42701): column "related_commission_id" of relation "work_items" already exists, skipping
+NOTICE (42701): column "related_connector_id" of relation "work_items" already exists, skipping
+NOTICE (42701): column "related_health_finding_id" of relation "work_items" already exists, skipping
+NOTICE (42701): column "related_notification_id" of relation "work_items" already exists, skipping
+NOTICE (42701): column "deep_link" of relation "work_items" already exists, skipping
+NOTICE (42701): column "evidence" of relation "work_items" already exists, skipping
+NOTICE (42701): column "resolution" of relation "work_items" already exists, skipping
+NOTICE (42701): column "first_detected_at" of relation "work_items" already exists, skipping
+NOTICE (42701): column "last_detected_at" of relation "work_items" already exists, skipping
+NOTICE (42701): column "acknowledged_at" of relation "work_items" already exists, skipping
+NOTICE (42701): column "resolved_at" of relation "work_items" already exists, skipping
+NOTICE (42701): column "dismissed_at" of relation "work_items" already exists, skipping
+NOTICE (42701): column "resolution_code" of relation "work_items" already exists, skipping
+NOTICE (42701): column "resolution_note" of relation "work_items" already exists, skipping
+NOTICE (42701): column "resolved_by" of relation "work_items" already exists, skipping
+NOTICE (42701): column "recurrence_count" of relation "work_items" already exists, skipping
+NOTICE (42701): column "metadata" of relation "work_items" already exists, skipping
+NOTICE (42701): column "created_at" of relation "work_items" already exists, skipping
+NOTICE (42701): column "updated_at" of relation "work_items" already exists, skipping
+NOTICE (42701): column "id" of relation "work_item_activity" already exists, skipping
+NOTICE (42701): column "workspace_id" of relation "work_item_activity" already exists, skipping
+NOTICE (42701): column "work_item_id" of relation "work_item_activity" already exists, skipping
+NOTICE (42701): column "activity_type" of relation "work_item_activity" already exists, skipping
+NOTICE (42701): column "actor_id" of relation "work_item_activity" already exists, skipping
+NOTICE (42701): column "body" of relation "work_item_activity" already exists, skipping
+NOTICE (42701): column "metadata" of relation "work_item_activity" already exists, skipping
+NOTICE (42701): column "created_at" of relation "work_item_activity" already exists, skipping
+Applying migration 030_live_workspace_domain_events.sql...
+NOTICE (42701): column "event_position" of relation "domain_events" already exists, skipping
+NOTICE (42701): column "id" of relation "domain_events" already exists, skipping
+NOTICE (42701): column "workspace_id" of relation "domain_events" already exists, skipping
+NOTICE (42701): column "type" of relation "domain_events" already exists, skipping
+NOTICE (42701): column "version" of relation "domain_events" already exists, skipping
+NOTICE (42701): column "occurred_at" of relation "domain_events" already exists, skipping
+NOTICE (42701): column "recorded_at" of relation "domain_events" already exists, skipping
+NOTICE (42701): column "actor" of relation "domain_events" already exists, skipping
+NOTICE (42701): column "subject_type" of relation "domain_events" already exists, skipping
+NOTICE (42701): column "subject_id" of relation "domain_events" already exists, skipping
+NOTICE (42701): column "subject_display_name" of relation "domain_events" already exists, skipping
+NOTICE (42701): column "subject" of relation "domain_events" already exists, skipping
+NOTICE (42701): column "related_entities" of relation "domain_events" already exists, skipping
+NOTICE (42701): column "source" of relation "domain_events" already exists, skipping
+NOTICE (42701): column "severity" of relation "domain_events" already exists, skipping
+NOTICE (42701): column "payload" of relation "domain_events" already exists, skipping
+NOTICE (42701): column "correlation_id" of relation "domain_events" already exists, skipping
+NOTICE (42701): column "causation_id" of relation "domain_events" already exists, skipping
+NOTICE (42701): column "trace_id" of relation "domain_events" already exists, skipping
+NOTICE (42701): column "deduplication_key" of relation "domain_events" already exists, skipping
+NOTICE (42701): column "created_at" of relation "domain_events" already exists, skipping
+NOTICE (42701): column "update_position" of relation "workspace_updates" already exists, skipping
+NOTICE (42701): column "id" of relation "workspace_updates" already exists, skipping
+NOTICE (42701): column "workspace_id" of relation "workspace_updates" already exists, skipping
+NOTICE (42701): column "domain_event_id" of relation "workspace_updates" already exists, skipping
+NOTICE (42701): column "domain_event_position" of relation "workspace_updates" already exists, skipping
+NOTICE (42701): column "type" of relation "workspace_updates" already exists, skipping
+NOTICE (42701): column "occurred_at" of relation "workspace_updates" already exists, skipping
+NOTICE (42701): column "entity_type" of relation "workspace_updates" already exists, skipping
+NOTICE (42701): column "entity_id" of relation "workspace_updates" already exists, skipping
+NOTICE (42701): column "changed_fields" of relation "workspace_updates" already exists, skipping
+NOTICE (42701): column "metric" of relation "workspace_updates" already exists, skipping
+NOTICE (42701): column "activity_group_id" of relation "workspace_updates" already exists, skipping
+NOTICE (42701): column "severity" of relation "workspace_updates" already exists, skipping
+NOTICE (42701): column "payload" of relation "workspace_updates" already exists, skipping
+NOTICE (42701): column "created_at" of relation "workspace_updates" already exists, skipping
+NOTICE (42701): column "id" of relation "activity_groups" already exists, skipping
+NOTICE (42701): column "workspace_id" of relation "activity_groups" already exists, skipping
+NOTICE (42701): column "group_type" of relation "activity_groups" already exists, skipping
+NOTICE (42701): column "status" of relation "activity_groups" already exists, skipping
+NOTICE (42701): column "correlation_id" of relation "activity_groups" already exists, skipping
+NOTICE (42701): column "primary_entity_type" of relation "activity_groups" already exists, skipping
+NOTICE (42701): column "primary_entity_id" of relation "activity_groups" already exists, skipping
+NOTICE (42701): column "primary_entity_display_name" of relation "activity_groups" already exists, skipping
+NOTICE (42701): column "related_entities" of relation "activity_groups" already exists, skipping
+NOTICE (42701): column "first_occurred_at" of relation "activity_groups" already exists, skipping
+NOTICE (42701): column "last_occurred_at" of relation "activity_groups" already exists, skipping
+NOTICE (42701): column "severity" of relation "activity_groups" already exists, skipping
+NOTICE (42701): column "title" of relation "activity_groups" already exists, skipping
+NOTICE (42701): column "summary" of relation "activity_groups" already exists, skipping
+NOTICE (42701): column "event_count" of relation "activity_groups" already exists, skipping
+NOTICE (42701): column "action" of relation "activity_groups" already exists, skipping
+NOTICE (42701): column "requires_action" of relation "activity_groups" already exists, skipping
+NOTICE (42701): column "metadata" of relation "activity_groups" already exists, skipping
+NOTICE (42701): column "created_at" of relation "activity_groups" already exists, skipping
+NOTICE (42701): column "updated_at" of relation "activity_groups" already exists, skipping
+NOTICE (42701): column "id" of relation "activity_group_events" already exists, skipping
+NOTICE (42701): column "workspace_id" of relation "activity_group_events" already exists, skipping
+NOTICE (42701): column "activity_group_id" of relation "activity_group_events" already exists, skipping
+NOTICE (42701): column "domain_event_id" of relation "activity_group_events" already exists, skipping
+NOTICE (42701): column "domain_event_position" of relation "activity_group_events" already exists, skipping
+NOTICE (42701): column "created_at" of relation "activity_group_events" already exists, skipping
+Applying migration 031_live_workspace_operational_hardening.sql...
+NOTICE (42701): column "id" of relation "domain_event_projection_failures" already exists, skipping
+NOTICE (42701): column "workspace_id" of relation "domain_event_projection_failures" already exists, skipping
+NOTICE (42701): column "consumer_name" of relation "domain_event_projection_failures" already exists, skipping
+NOTICE (42701): column "event_id" of relation "domain_event_projection_failures" already exists, skipping
+NOTICE (42701): column "event_position" of relation "domain_event_projection_failures" already exists, skipping
+NOTICE (42701): column "attempt_count" of relation "domain_event_projection_failures" already exists, skipping
+NOTICE (42701): column "first_failed_at" of relation "domain_event_projection_failures" already exists, skipping
+NOTICE (42701): column "last_failed_at" of relation "domain_event_projection_failures" already exists, skipping
+NOTICE (42701): column "next_retry_at" of relation "domain_event_projection_failures" already exists, skipping
+NOTICE (42701): column "status" of relation "domain_event_projection_failures" already exists, skipping
+NOTICE (42701): column "error_code" of relation "domain_event_projection_failures" already exists, skipping
+NOTICE (42701): column "safe_error_summary" of relation "domain_event_projection_failures" already exists, skipping
+NOTICE (42701): column "resolved_at" of relation "domain_event_projection_failures" already exists, skipping
+NOTICE (42701): column "resolved_by" of relation "domain_event_projection_failures" already exists, skipping
+NOTICE (42701): column "resolution_note" of relation "domain_event_projection_failures" already exists, skipping
+NOTICE (42701): column "created_at" of relation "domain_event_projection_failures" already exists, skipping
+NOTICE (42701): column "updated_at" of relation "domain_event_projection_failures" already exists, skipping
+NOTICE (42701): column "id" of relation "domain_event_projection_audit" already exists, skipping
+NOTICE (42701): column "workspace_id" of relation "domain_event_projection_audit" already exists, skipping
+NOTICE (42701): column "consumer_name" of relation "domain_event_projection_audit" already exists, skipping
+NOTICE (42701): column "action" of relation "domain_event_projection_audit" already exists, skipping
+NOTICE (42701): column "requested_from_position" of relation "domain_event_projection_audit" already exists, skipping
+NOTICE (42701): column "reason" of relation "domain_event_projection_audit" already exists, skipping
+NOTICE (42701): column "actor" of relation "domain_event_projection_audit" already exists, skipping
+NOTICE (42701): column "result" of relation "domain_event_projection_audit" already exists, skipping
+NOTICE (42701): column "created_at" of relation "domain_event_projection_audit" already exists, skipping
+Applying migration 032_live_workspace_claim_consumer_rpc_fix.sql...
+Applying migration 033_wowboost_receipt_refund_events.sql...
+Applying migration 034_financial_issue_analysis_indexes.sql...
+Applying migration 035_chargeback_ingestion_v1.sql...
+Applying migration 036_financial_event_matches.sql...
+NOTICE (42710): extension "pgcrypto" already exists, skipping
+NOTICE (42701): column "request_fingerprint" of relation "financial_event_matches" already exists, skipping
+NOTICE (00000): trigger "financial_event_matches_immutable_guard_trigger" for relation "public.financial_event_matches" does not exist, skipping
+Applying migration 037_integrations_settings_scheduled_import_columns.sql...
+Applying migration 038_persistent_identity_and_tenancy.sql...
+NOTICE (42710): extension "pgcrypto" already exists, skipping
+Applying migration 039_commerce_persistence_v1.sql...
+NOTICE (42710): extension "pgcrypto" already exists, skipping
+Applying migration 040_commerce_control_plane_v1.sql...
+Applying migration 041_commerce_connection_setup_idempotency.sql...
+Applying migration 042_commerce_evidence_storage_v1.sql...
+Applying migration 043_commerce_shadow_ingestion_v1.sql...
+Applying migration 044_commerce_refund_normalization_v1.sql...
+Applying migration 045_commerce_dispute_reconciliation_v1.sql...
+Applying migration 046_chargeback_investigation_foundation.sql...
+Applying migration 047_everflow_commas_linkage_v2.sql...
+Applying migration 048_investigation_runtime_v1.sql...
+Applying migration 049_investigation_branches_v1.sql...
+Applying migration 050_continuous_commerce_intelligence_v1.sql...
+Applying migration 051_tkid_journey_evidence_v1.sql...
+Applying migration 052_production_intelligence_readiness_v1.sql...
+Applying migration 053_production_worker_abuse_erasure_v1.sql...
+Applying migration 054_managed_tkid_origin_registry_v1.sql...
+Applying migration 055_tkid_continuity_relay_v1.sql...
+Applying migration 056_database_quiescence_observability_v1.sql...
+Applying migration 057_integration_credential_key_versioning_v1.sql...
+Applying migration 058_integrations_credentials_authorization_hardening.sql...
+Applying migration 059_integration_credential_legacy_lineages_v1.sql...
+Applying migration 060_systemic_service_role_table_acl_convergence.sql...
+Applying migration 061_systemic_function_acl_convergence.sql...
+Applying migration 062_tkid_relay_trigger_function_acl_convergence.sql...
+Applying migration 063_first_admin_bootstrap.sql...
+Applying migration 064_commerce_sync_frequency.sql...
+Applying migration 065_quota_bootstrap_retry_recovery.sql...
+Applying migration 066_quota_bootstrap_chain_recovery.sql...
+Applying migration 067_quota_bootstrap_root_self_reference_fix.sql...
+Applying migration 068_runtime_dispatch_diagnostic_replay.sql...
+Applying migration 069_early_ack_observability_replay.sql...
+Applying migration 070_workers_request_cache_fixed_replay.sql...
+Applying migration 071_commerce_dispute_webhooks_v1.sql...
+Applying migration 072_commerce_dispute_webhooks_071_recovery.sql...
+NOTICE (42P07): relation "commerce_dispute_webhook_events" already exists, skipping
+NOTICE (42P07): relation "commerce_provider_disputes" already exists, skipping
+NOTICE (42P07): relation "commerce_provider_dispute_lifecycle_events" already exists, skipping
+NOTICE (42P07): relation "commerce_dispute_webhook_events_dispute_idx" already exists, skipping
+NOTICE (42P07): relation "commerce_provider_disputes_transaction_idx" already exists, skipping
+NOTICE (42P07): relation "commerce_provider_dispute_lifecycle_idx" already exists, skipping
+Applying migration 073_commerce_dispute_webhook_acl_hardening.sql...
+Applying migration 074_historical_backfill_resumable_release.sql...
+Applying migration 075_legacy_historical_backfill_recovery.sql...
+Applying migration 076_legacy_historical_backfill_recovery_075_repair.sql...
+NOTICE (42P07): relation "commerce_historical_backfill_recovery_markers" already exists, skipping
+Applying migration 077_operator_one_shot_continuous_shadow.sql...
+Applying migration 078_requeue_stranded_operator_one_shot.sql...
+Applying migration 079_requeue_stranded_operator_one_shot_qualified.sql...
+Applying migration 080_provider_ordering_verification_dispatch.sql...
+Applying migration 081_ordering_evidence_only_recovery.sql...
+Applying migration 089_everflow_affiliates_v1.sql...
+Applying migration 090_everflow_advertisers_v1.sql...
+Applying migration 091_everflow_offers_v1.sql...
+Applying migration 092_everflow_conversion_api_ingestion.sql...
+Applying migration 093_everflow_event_reversal_history.sql...
+Applying migration 094_everflow_api_raw_evidence.sql...
+Applying migration 095_allow_normalized_evidence_hash_metadata.sql...
+Applying migration 096_everflow_scheduler_runtime.sql...
+NOTICE (00000): constraint "commerce_sync_schedules_lease_check" of relation "commerce_sync_schedules" does not exist, skipping
+Applying migration 20260829070453_commas_order_identity_projection.sql...
+NOTICE (00000): trigger "trg_project_platform_order_customer_identity_v1" for relation "public.platform_orders" does not exist, skipping
+Applying migration 20260830025716_everflow_batched_order_backfill.sql...
+Applying migration 20260830032255_everflow_order_linkage_v2.sql...
+Applying migration 20260830032304_everflow_order_linkage_v2_metadata_fix.sql...
+Applying migration 20260830041705_everflow_cron_runtime_telemetry.sql...
+Applying migration 20260830053340_everflow_reconciliation_lookup_indexes.sql...
+Applying migration 20260830053927_everflow_reconciliation_pg_cron.sql...
+Applying migration 20260830193227_product_mapping_intelligence_foundation.sql...
+Applying migration 20260830193240_expand_pbs_catalog_and_seed_mapping_intelligence.sql...
+Applying migration 20260830193247_correct_pbs_mapping_seed_normalization.sql...
+Applying migration 20260830193254_atomic_bulk_product_mapping_decisions.sql...
+Applying migration 20260830194215_everflow_financial_projection_idempotency.sql...
+Applying migration 20260830220012_add_product_mapping_price_evidence_and_correct_growth_partner.sql...
+Applying migration 20260830222732_everflow_checkout_bundle_linkage_v3.sql...
+NOTICE (42710): extension "pg_cron" already exists, skipping
+Applying migration 20260830224050_complete_commas_canonical_catalog.sql...
+Applying migration 20260830224941_add_millionaire_interview_order_bump.sql...
+Applying migration 20260831010201_add_commas_economic_order_allocations.sql...
+Applying migration 20260831014400_frozen_commas_economic_allocation_manifest.sql...
+Applying migration 20260831031559_everflow_linkage_refinements_v4.sql...
+Applying migration 20260831031651_everflow_duplicate_confidence_band.sql...
+Applying migration 20260831032600_recommend_5m6yv_oto2_platinum.sql...
+Applying migration 20260831040203_everflow_financial_reconciliation_v1.sql...
+Applying migration 20260831043314_everflow_financial_reconciliation_v2.sql...
+Applying migration 20260831054841_commas_deep_reconciliation_cadence_lifecycle.sql...
+Applying migration 20260902024816_everflow_click_events.sql...
+Applying migration 20260903054329_commas_provider_observed_attribution_foundation.sql...
+Applying migration 20260904052500_everflow_cron_deployment_provenance.sql...
+Applying migration 20260910161316_everflow_firehose_v1.sql...
+Applying migration 20260911211717_commas_dispute_overlap_idempotency.sql...
+Applying migration 20260913224039_reconcile_commas_provider_observations_v2.sql...
+Applying migration 20260914043832_commas_attribution_measurement_epoch_v1.sql...
+Applying migration 20260914043837_commas_attribution_quality_read_v1.sql...
+Applying migration 20260914045641_commas_attribution_conflicts_set_based_v2.sql...
+Applying migration 20260914203000_everflow_firehose_routing_observations.sql...
+Applying migration 20260915051911_commas_refund_seller_cost_correction_foundation.sql...
+Applying migration 20260915051929_commas_refund_seller_cost_correction_execution.sql...
+Applying migration 20260915051946_commas_refund_seller_cost_correction_fingerprint.sql...
+Applying migration 20260915054632_shopify_order_person_link.sql...
+NOTICE (00000): trigger "trg_link_shopify_platform_order_person" for relation "public.platform_orders" does not exist, skipping
+NOTICE (00000): trigger "trg_backfill_shopify_orders_for_customer_identity" for relation "public.person_source_identities" does not exist, skipping
+Applying migration 20260915152942_shopify_everflow_utm_normalization.sql...
+NOTICE (00000): trigger "tracekit_shopify_order_attribution_from_journey" for relation "public.platform_orders" does not exist, skipping
+Applying migration 20260917175606_commas_refund_forward_ownership_v1.sql...
+Applying migration 20260917175610_commas_refund_created_observations_v1.sql...
+Applying migration 20260917175616_commas_refund_transaction_epoch_guard.sql...
+Applying migration 20260917175617_commas_refund_created_financial_gate.sql...
+Applying migration 20260917213752_typed_credential_active_uniqueness.sql...
+Applying migration 20260917222939_restore_commerce_webhook_receipts.sql...
+Applying migration 20260918032437_restore_commerce_order_lines_id_default.sql...
+Applying migration 20260918051637_restore_next29_subscription_dispute_schema.sql...
+NOTICE (00000): constraint "commerce_provider_disputes_latest_observation_fk" of relation "commerce_provider_disputes" does not exist, skipping
+NOTICE (00000): constraint "commerce_provider_disputes_provenance_check" of relation "commerce_provider_disputes" does not exist, skipping
+NOTICE (00000): constraint "commerce_provider_dispute_lifecycle_observation_fk" of relation "commerce_provider_dispute_lifecycle_events" does not exist, skipping
+NOTICE (00000): constraint "commerce_provider_dispute_lifecycle_provenance_check" of relation "commerce_provider_dispute_lifecycle_events" does not exist, skipping
+Applying migration 20260918054652_restore_next29_scheduler_rpcs.sql...
+NOTICE (00000): constraint "commerce_sync_schedules_active_window_check" of relation "commerce_sync_schedules" does not exist, skipping
+NOTICE (00000): constraint "commerce_sync_schedules_last_error_code_check" of relation "commerce_sync_schedules" does not exist, skipping
+Applying migration 20260919053748_core_commerce_relationships_explain_v1.sql...
+Applying migration 20260919060613_backfill_explain_provider_relationships.sql...
+Applying migration 20260919062742_explain_method_relationship_safety.sql...
+Applying migration 20260919214602_commerce_transaction_relationship_evidence.sql...
+Applying migration 20260919233921_checkoutchamp_transaction_attribution_evidence.sql...
+Applying migration 20260920000304_checkoutchamp_managed_evidence_payload.sql...
+NOTICE (42701): column "payload" of relation "commerce_managed_evidence_payloads" already exists, skipping
+Applying migration 20260921222059_commas_direct_attribution_hardening.sql...
+Applying migration 20260922025056_commas_journey_assignment_repair.sql...
+Applying migration 20260922034620_fix_commas_journey_repair_status.sql...
+Applying migration 20260922034633_fix_commas_journey_repair_status.sql...
+Applying migration 20260922043023_commas_everflow_backfill_batched.sql...
+Applying migration 20260922054757_commas_everflow_fast_batch_v2.sql...
+Applying migration 20260923052449_commas_provider_tkid_contract.sql...
+Applying migration 20260923062629_push_button_tkid_source.sql...
+Applying migration 20260924024012_ecowatt_tkid_pilot_source.sql...
+Applying migration 20260924053000_converge_operational_product_health_state.sql...
+Applying migration 20260924053100_enable_subscription_source_mapping_type.sql...
+Applying migration 20260924053200_correct_typed_credential_rotation.sql...
+NOTICE (00000): constraint "commerce_provider_credentials_type_nonblank_check" of relation "commerce_provider_credentials" does not exist, skipping
+Applying migration 20260924055441_provision_tkid_origin_registry_access_v1.sql...
+Applying migration 20260926060810_tkid_bounded_proof_enforcement_v1.sql...
+Applying migration 20260926190838_tkid_retention_erasure_execution_v1.sql...
+Applying migration 20260926231339_mcp_action_authorization_atomic_consumption.sql...
+Applying migration 20260927023307_fix_mcp_action_authorization_rpc_ambiguity.sql...
+Applying migration 20260927023943_mcp_action_authorization_consumption_invariant.sql...
+Applying migration 20260927033211_mcp_internal_marker_execution_adapter.sql...
+Applying migration 20260927041927_tkid_interrupted_event_recovery_v1.sql...
+Applying migration 20260927175604_mcp_external_action_audit.sql...
+Applying migration 20260927180625_tkid_browser_instrumentation_config_v1.sql...
+Applying migration 20260927232349_mcp_external_mutation_audit_table.sql...
+Applying migration 20260927232403_mcp_external_mutation_audit_rpc.sql...
+Applying migration 20260928020850_mcp_action_execution_results.sql...
+Applying migration 20260928020904_mcp_action_execution_results_service_role_acl_hardening.sql...
+Applying migration 20260928023029_mcp_action_intents_confirmations.sql...
+Applying migration 20260928043149_mcp_authorization_envelope_created_at.sql...
+Applying migration 20260928053335_mcp_evidence_limit_acceptances.sql...
+Applying migration 20260928053346_mcp_evidence_limit_acceptances_acl_hardening.sql...
+Applying migration 20260929050225_ws016_m5_everflow_provider_order_reconciliation_v5.sql...
+Applying migration 20260929050643_ws016_m5_everflow_provider_order_reconciliation_v5_finalize.sql...
+Applying migration 20260929051428_ws016_m5_provider_agnostic_connection_pause.sql...
+Applying migration 20260929052158_ws016_m5_provider_account_bindings.sql...
+NOTICE (00000): trigger "commerce_provider_account_bindings_scope_guard" for relation "public.commerce_provider_account_bindings" does not exist, skipping
+Applying migration 20260929052231_ws016_m5_platform_order_tenancy_binding.sql...
+NOTICE (00000): trigger "platform_orders_apply_provider_account_binding" for relation "public.platform_orders" does not exist, skipping
+Applying migration 20260929055114_ws016_m5_platform_order_default_tenancy_binding.sql...
+Applying migration 20261001030159_ws016_m6_platform_owner_bootstrap.sql...
+Applying migration 20261001032507_m14_pbs_accufy_tenancy_convergence_v2_definition.sql...
+Applying migration 20261001034853_m14_pbs_accufy_uuid_fix_definition.sql...
+Applying migration 20261001053657_ws016_m6_platform_owner_service_execute.sql...
+Applying migration 20261001053738_m14_pbs_accufy_confidence_fix_definition.sql...
+Applying migration 20261001061138_mcp_provider_action_intents.sql...
+A new version of Supabase CLI is available: v2.121.0 (currently installed v2.109.1)
+We recommend updating regularly for new features and bug fixes: https://supabase.com/docs/guides/cli/getting-started#updating-the-supabase-cli
+BEGIN
+INSERT 0 2
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+INSERT 0 1
+DO
+COMMIT
+Connecting to remote database...
+Applying migration 20261001210243_m15_stem_labs_workspace_authorization.sql...
+Applying migration 20261001220612_m15_commerce_cron_runtime_telemetry.sql...
+Applying migration 20261001221715_ws016_m6_platform_org_catalog_rpc.sql...
+Applying migration 20261001222109_m15_resumable_scheduled_deep_chunks.sql...
+Applying migration 20261001231454_m15_shopify_mutation_recovery.sql...
+Applying migration 20261002002800_m15_shopify_confirmation_resolver.sql...
+Applying migration 20261002035918_ws016_marketing_authorization_foundation.sql...
+Applying migration 20261002040259_fix_scheduled_deep_completion_identity.sql...
+Applying migration 20261004024308_shopify_tenant_safe_order_identity.sql...
+Applying migration 20261004040000_edge_intelligence_v1_delivery_credentials.sql...
+Applying migration 20261004063517_20261004060000_atomic_governed_action_confirmation.sql...
+Applying migration 20261004175820_authoritative_shopify_execution_replay.sql...
+Applying migration 20261004182846_ws016_marketing_reporting_foundation.sql...
+Applying migration 20261004191407_ws016_marketing_incremental_runtime.sql...
+Applying migration 20261004193919_ws016_google_ads_scheduler_control_plane.sql...
+Applying migration 20261004200654_ws016_google_ads_one_shot_scheduler_proof.sql...
+Applying migration 20261004201500_runtime_schema_readiness_v1.sql...
+Applying migration 20261004202000_m5b_action_notification_state.sql...
+Applying migration 20261004204330_edge_intelligence_v1_ingestion.sql...
+Applying migration 20261004204336_fix_edge_intelligence_pgcrypto_resolution.sql...
+Applying migration 20261004204342_edge_intelligence_multitenant_delivery.sql...
+Applying migration 20261004222824_ws016_marketing_cron_runtime_telemetry.sql...
+Applying migration 20261007033258_m5b_action_notification_state_acl_hardening.sql...
+Applying migration 20261007045242_ws016_google_ads_daily_canary_activation.sql...
+Applying migration 20261007052825_ws019_m44_phase_b_acceptance_fixture.sql...
+Applying migration 20261007055014_ws020_customer_invitations.sql...
+Applying migration 20261007055158_ws021_platform_admin_provisioning.sql...
+Applying migration 20261007055937_ws020_canonical_customer_order_read_model.sql...
+Applying migration 20261007174059_ws020_invitation_email_delivery.sql...
+Applying migration 20261007175026_ws019_m44_phase_b_confirmation_boundary_repair.sql...
+Applying migration 20261009040000_ws016_google_ads_daily_due_alignment.sql...
+Applying migration 20261011213724_ws001_everflow_provider_order_lookup_index.sql...
+Applying migration 20261011214746_ws001_commas_refund_uuid_lookup.sql...
+Applying migration 20261012231715_ws001_everflow_source_coverage_certification.sql...
+Applying migration 20261013001508_ws001_everflow_certificate_safe_digest_references.sql...
+Applying migration 20261013175844_commas_refund_created_test_data_exclusions.sql...
+Applying migration 20261014034517_ws001_dispute_source_currency_contract.sql...
+{"applied":["/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261001210243_m15_stem_labs_workspace_authorization.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261001220612_m15_commerce_cron_runtime_telemetry.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261001221715_ws016_m6_platform_org_catalog_rpc.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261001222109_m15_resumable_scheduled_deep_chunks.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261001231454_m15_shopify_mutation_recovery.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261002002800_m15_shopify_confirmation_resolver.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261002035918_ws016_marketing_authorization_foundation.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261002040259_fix_scheduled_deep_completion_identity.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261004024308_shopify_tenant_safe_order_identity.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261004040000_edge_intelligence_v1_delivery_credentials.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261004063517_20261004060000_atomic_governed_action_confirmation.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261004175820_authoritative_shopify_execution_replay.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261004182846_ws016_marketing_reporting_foundation.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261004191407_ws016_marketing_incremental_runtime.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261004193919_ws016_google_ads_scheduler_control_plane.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261004200654_ws016_google_ads_one_shot_scheduler_proof.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261004201500_runtime_schema_readiness_v1.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261004202000_m5b_action_notification_state.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261004204330_edge_intelligence_v1_ingestion.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261004204336_fix_edge_intelligence_pgcrypto_resolution.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261004204342_edge_intelligence_multitenant_delivery.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261004222824_ws016_marketing_cron_runtime_telemetry.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261007033258_m5b_action_notification_state_acl_hardening.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261007045242_ws016_google_ads_daily_canary_activation.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261007052825_ws019_m44_phase_b_acceptance_fixture.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261007055014_ws020_customer_invitations.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261007055158_ws021_platform_admin_provisioning.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261007055937_ws020_canonical_customer_order_read_model.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261007174059_ws020_invitation_email_delivery.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261007175026_ws019_m44_phase_b_confirmation_boundary_repair.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261009040000_ws016_google_ads_daily_due_alignment.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261011213724_ws001_everflow_provider_order_lookup_index.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261011214746_ws001_commas_refund_uuid_lookup.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261012231715_ws001_everflow_source_coverage_certification.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261013001508_ws001_everflow_certificate_safe_digest_references.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261013175844_commas_refund_created_test_data_exclusions.sql","/private/tmp/tracekit-ws022-recovery-20261014/supabase/migrations/20261014034517_ws001_dispute_source_currency_contract.sql"],"message":"Migrations applied"}
+   set_config   
+----------------
+ 20261014034517
+(1 row)
+
+DO
+    version     |                       name                        
+----------------+---------------------------------------------------
+ 20261014034517 | ws001_dispute_source_currency_contract
+ 20261013175844 | commas_refund_created_test_data_exclusions
+ 20261013001508 | ws001_everflow_certificate_safe_digest_references
+ 20261012231715 | ws001_everflow_source_coverage_certification
+ 20261011214746 | ws001_commas_refund_uuid_lookup
+(5 rows)
+
+PASS: authoritative migration chain converged through 20261014034517

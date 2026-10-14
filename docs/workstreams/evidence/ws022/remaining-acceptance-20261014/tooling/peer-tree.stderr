@@ -1,0 +1,3 @@
+npm error code ELSPROBLEMS
+npm error invalid: eslint@10.12.0 /private/tmp/tracekit-ws022-recovery-20261014/ui/node_modules/eslint
+npm error A complete log of this run can be found in: /Users/nomadm/.npm/_logs/2026-10-14T20_52_12_979Z-debug-0.log

@@ -1,0 +1,80 @@
+{
+  "status": "REVIEW/HOLD",
+  "published_sha": "88f7411457b988e83e51fbc9bf7b4b5b76002fe7",
+  "draft_pr": "https://github.com/nomadinc/tracekit/pull/575",
+  "deployment": {
+    "id": "dpl_7kVc4eqTa3QseM9rMyRjGXkFhZ3U",
+    "url": "tracekit-staging-38p6rybzt-tracekit.vercel.app",
+    "readyState": "READY",
+    "projectId": "prj_KPHnqsNayx17VXmMIp7Rasrsp7gc",
+    "environment": "preview",
+    "team_id": "team_QFcd7GbqA7MfBH9bPM0kAqG9",
+    "commit": "88f7411457b988e83e51fbc9bf7b4b5b76002fe7",
+    "branch": "ws022/acceptance-hardening"
+  },
+  "main_baseline": "57eaec27b4b5022ec5ba5e81c0cdcb3182c150f3",
+  "recovered_head": "2db2ca87a6cfdb50c9768a5ed4860f520b38bcb2",
+  "archive_sha256": "a279cb46e168a8f2b4a48bc48fded4fc93427fc7e26c8074f2508f988c5155a3",
+  "archive_inner_hashes_verified": 11,
+  "independent_review": {
+    "reviewed_sha": "88f7411457b988e83e51fbc9bf7b4b5b76002fe7",
+    "finding_R1": "resolved",
+    "focused_pass": 26,
+    "focused_fail": 0,
+    "staging_certified": false
+  },
+  "tests": {
+    "exact_commit": "88f7411457b988e83e51fbc9bf7b4b5b76002fe7",
+    "ui": {
+      "pass": 1462,
+      "fail": 0,
+      "skip": 0
+    },
+    "api": {
+      "pass": 1111,
+      "fail": 0,
+      "skip": 4
+    },
+    "relay_worker": {
+      "pass": 2,
+      "fail": 0
+    },
+    "typescript_diagnostics": 0,
+    "lint_errors": 0,
+    "lint_warnings": 9,
+    "remote_production_mode_build": "PASS"
+  },
+  "audit": {
+    "ui_full_high_records": 5,
+    "ui_production_records": 0,
+    "other_independent_package_roots_full_records": 0,
+    "advisory": "GHSA-vfj7-8cjw-p6xm",
+    "eslint_peer_compatibility": "UNRESOLVED",
+    "risk_waiver": false,
+    "continuous_runtime": "shares API package lock; not an independent package"
+  },
+  "staging": {
+    "callback": "user registered; login succeeds",
+    "membership": "absent for tested identity",
+    "login_persistence": "observed",
+    "logout_cookie_cleared": "observed",
+    "relogin": "observed",
+    "logout_destination": "app.trace-kit.io/auth/signed-out; unresolved staging return destination",
+    "authenticated_tenant_matrix": "BLOCKED: existing Admin/client member identities needed"
+  },
+  "database": {
+    "fresh_execution": false,
+    "skips_closed": false,
+    "inherited_commits": [
+      "57eaec27b4b5022ec5ba5e81c0cdcb3182c150f3",
+      "6db91498f0b66a2b87509a3fe90155debb03d70c",
+      "18198adcfd710abd28de40d50a7b2ed8f56ddc39",
+      "f750a5f55845ad133b17504e519ab855b9c93c24",
+      "9fe121aad6f8e0842675907f7f651be0b9ddb785"
+    ]
+  },
+  "financial_reporting": "HOLD pending WS-001",
+  "meta": "INACTIVE/UNCERTIFIED",
+  "production_v1": "HOLD",
+  "production_authorized": false
+}
