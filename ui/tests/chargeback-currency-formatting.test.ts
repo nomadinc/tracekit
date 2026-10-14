@@ -39,8 +39,8 @@ test("detail currency null does not fall back to list currency", () => {
     "utf8"
   );
 
-  assert.match(source, /detail \? detail\.currency : selected\.currency/);
-  assert.match(source, /detail \? detail\.feeCurrency : selected\.feeCurrency/);
+  assert.match(source, /detail \? detail\.dispute\.currency : selected\.currency/);
+  assert.match(source, /detail \? detail\.dispute\.feeCurrency : selected\.feeCurrency/);
   assert.doesNotMatch(source, /detail\?\.currency\?\?selected\.currency/);
   assert.doesNotMatch(source, /currency:"USD"/);
 });
