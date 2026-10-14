@@ -67,3 +67,19 @@ Do not pass a payment-intent ID to the transaction endpoint as though it were a 
 The embedded checkout-session metadata field is documented to carry arbitrary JSON and return it in payment events. The payment.succeeded schema places those values at data.api_metadata.data. This is a separate path from product.purchased additional_params; neither event/schema nor their metadata containers should be silently substituted for the other. Future TKID setup must name the checkout implementation, field and event path actually used and verify the same value in retained evidence.
 
 The remaining live capability check is a bounded read of non-test transaction details, collecting redacted field paths and verifying each returned numeric/public parent identity. No direct authenticated Commas read tool is currently exposed to this session. Existing encrypted credentials are not exported, and no inspection endpoint is deployed to bypass the release hold. Live qualification remains pending access to an authorized read surface.
+
+## User-supplied authenticated MCP inspection
+
+On 2026-10-14 around 06:10 UTC, the user supplied Claude's read-only FanBasis MCP results. This report was not independently executed by WS-001. Production organization 562187 was observed on all ten webhook subscriptions; product checkout paths were accufy2. Organization name was not exposed.
+
+| Numeric transaction | Returned public ORD | Detail request ID |
+| --- | --- | --- |
+| 2814786 | ORD-7TSN-YMGB-9V03 | Root=1-6acf1ab7-20346f1a6a161c6149891e33 |
+| 2814694 | ORD-VAVJ-JTR2-ZWYS | Root=1-6acf1ab8-36c14c300d7ac32b4e3418ef |
+| 2814641 | ORD-YDAZ-Y5JH-8PHR | Root=1-6acf1ab9-434700337808094002d2036c |
+
+Each returned data.id matched. None exposed a processor payment-intent/charge reference, TKID, additional_params, custom fields, checkout-session identity or parent payment/order reference. Each api_metadata was an empty array, not an object containing data. Each servicePayment.id was a public hashid; its different shape alone does not prove a relationship or its absence, and no authoritative mapping was exposed. The three samples do not certify universal API absence or all payment paths.
+
+The MCP report found no documented payment-intent lookup in its tool/docs surface and made no guessed endpoint requests or writes. Its docs search did not expose the dispute schema. WS-001's separate direct public documentation inspection did find dispute.created and dispute.updated examples/schema with payment_intent_id; documentation surfaces therefore differ and must not be conflated.
+
+These samples verify numeric-to-public-order identity within their responses, not dispute-to-order identity. No production source mapping or reconciliation change is authorized from this report. Accufy remains fixed; retain unresolved disputes. A permanent standard API/webhook payment-to-order reference is the outstanding provider capability requirement, rather than recurring enriched exports.
