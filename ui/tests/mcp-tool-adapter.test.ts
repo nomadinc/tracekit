@@ -3,7 +3,7 @@ import test from "node:test";
 import { TRACEKIT_MCP_TOOLS, callTraceKitMcpTool, mcpToolResult } from "../lib/mcp/tool-adapter";
 
 test("M2 tool catalog preserves approved read-only core tools and explicitly named governed actions",()=>{
- const names=TRACEKIT_MCP_TOOLS.map(t=>t.name);
+ const names:string[]=TRACEKIT_MCP_TOOLS.map(t=>t.name);
  const core=["tracekit.list_customers","tracekit.get_customer","tracekit.list_orders","tracekit.get_order","tracekit.search"];
  for(const name of core){const tool=TRACEKIT_MCP_TOOLS.find(t=>t.name===name);assert.ok(tool,name);assert.equal(tool.annotations.readOnlyHint,true);assert.equal(tool.annotations.destructiveHint,false);}
  assert.equal(new Set(names).size,names.length,"tool names must be unique");
@@ -26,7 +26,7 @@ test("M2 adapter dispatches normalized arguments",async()=>{
 });
 test("M2 adapter rejects unknown tools, extra arguments, missing ids, and excessive limits",async()=>{
  const service:any={};
- await assert.rejects(()=>callTraceKitMcpTool(service,"tracekit.nope",{}),/tool_not_found/);
+ await assert.rejects(()=>callTraceKitMcpTool(service,"tracekit.nope" as Parameters<typeof callTraceKitMcpTool>[1],{}),/tool_not_found/);
  await assert.rejects(()=>callTraceKitMcpTool(service,"tracekit.get_order",{}),/invalid_arguments/);
  await assert.rejects(()=>callTraceKitMcpTool(service,"tracekit.list_customers",{limit:51}),/invalid_arguments/);
  await assert.rejects(()=>callTraceKitMcpTool(service,"tracekit.list_customers",{unexpected:true}),/invalid_arguments/);

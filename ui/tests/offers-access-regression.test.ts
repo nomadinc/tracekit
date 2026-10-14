@@ -127,7 +127,7 @@ test("persistent Offers use canonical catalog while development keeps reviewed m
     /session\.developmentOnly \? \([\s\S]*<OfferWorkspaceContent \/>[\s\S]*<PersistentOfferCatalog \/>/,
   );
   assert.match(workspace, /fetch\("\/api\/offers"/);
-  assert.match(workspace, /Canonical Offers/);
+  assert.match(workspace, /No canonical Offers/);
   assert.match(workspace, /offer\.name/);
   assert.match(workspace, /offer\.businessContextId/);
 });
