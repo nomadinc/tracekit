@@ -29,7 +29,11 @@ test("evidence factors become operator-readable labels", () => {
 test("review workspace keeps candidate resolution read-only", async () => {
   const { readFile } = await import("node:fs/promises");
   const source = await readFile(new URL("../components/chargebacks/chargeback-review-workspace.tsx", import.meta.url), "utf8");
-  assert.match(source, /Candidates are shown for human review/);
+  assert.match(source, /Historical relationships remain Suggested/);
+  assert.match(source, /MATCH_AUTHORITY_LABELS/);
+  const route = await readFile(new URL("../app/api/chargebacks/route.ts", import.meta.url), "utf8");
+  assert.match(route, /read_only_review/);
+  assert.match(route, /status:405/);
   assert.doesNotMatch(source, /apiPostJson|mutation|resolveCandidate/);
 });
 
@@ -45,9 +49,10 @@ test("live disputes do not present opaque buyer IDs as customers or assume curre
   const { readFile } = await import("node:fs/promises");
   const workspace = await readFile(new URL("../components/chargebacks/chargeback-review-workspace.tsx", import.meta.url), "utf8");
   const route = await readFile(new URL("../app/api/chargebacks/route.ts", import.meta.url), "utf8");
-  assert.match(route, /source: "live"[\s\S]*?customer: null/);
+  assert.match(route, /source:"live"[\s\S]*?customer:null/);
   assert.match(workspace, /Provider buyer reference not shown/);
-  assert.match(workspace, /Suggested match/);
+  assert.match(workspace, /MATCH_AUTHORITY_LABELS\[r\.matchAuthority\]/);
+  assert.match(workspace, /Historical relationships remain Suggested/);
   assert.doesNotMatch(workspace, /currency:"USD"|Matched order/);
 });
 
@@ -57,8 +62,10 @@ test("dispute review does not present unverified currency or provider buyer refe
   const route = await readFile(new URL("../app/api/chargebacks/route.ts", import.meta.url), "utf8");
   assert.doesNotMatch(workspace, /currency:"USD"/);
   assert.match(workspace, /Provider buyer reference not shown/);
-  assert.match(workspace, /Suggested match/);
-  assert.match(route, /customer: null, confidence: row\.reconciliation_state/);
+  assert.match(workspace, /MATCH_AUTHORITY_LABELS\[r\.matchAuthority\]/);
+  assert.match(workspace, /Historical relationships remain Suggested/);
+  assert.match(route, /customer:null/);
+  assert.match(route, /reconciliation_state/);
 });
 
 test("chargeback routes use same-origin JSON while Worker APIs keep their configured base", async () => {
@@ -70,7 +77,7 @@ test("chargeback routes use same-origin JSON while Worker APIs keep their config
   assert.match(api, /export async function sameOriginGetJson/);
   assert.match(api, /const url = pathAndQuery\.startsWith\("\/"\) \? pathAndQuery/);
   assert.match(api, /export async function apiGetJson/);
-  assert.match(api, /const base = getApiBaseUrl\(\)/);
+  assert.match(api, /const base = isProviderApplicationPath\(pathAndQuery\) \? "" : getApiBaseUrl\(\)/);
   assert.doesNotMatch(workspace, /NEXT_PUBLIC_API_BASE_URL|TK_SECRET_KEY|SUPABASE_SERVICE_ROLE_KEY/);
 });
 

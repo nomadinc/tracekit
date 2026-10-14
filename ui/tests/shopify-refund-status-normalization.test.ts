@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 import { normalizeShopifyOrderRecord } from "../lib/commerce/shopify-core/normalize";
 
-function record(payload: Record<string, unknown>) {
+function record(payload: { id: string; [key: string]: unknown }) {
   return {
     organizationId: "org",
     connectionId: "connection",
