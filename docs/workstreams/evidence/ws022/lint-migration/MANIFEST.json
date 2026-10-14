@@ -35,7 +35,24 @@
       "execution": "serial after independent fixture cleanup; exit0"
     }
   },
-  "finalHeadVerification": "Final evidence-only HEAD and serialized fresh commands/results will be recorded in the dependent draft PR verification comment; no claim that earlier logs tested a later commit.",
+  "finalHeadVerification": {
+    "execution": "serialized after second npm ci",
+    "allCommandsExit": 0,
+    "lockfileUnchanged": true,
+    "worktreeClean": true,
+    "rawLogs": "final-head/",
+    "commands": [
+      "npm ci",
+      "npm audit --json",
+      "npm audit --omit=dev --json",
+      "npm ls --all --json",
+      "npm run test:lint-contract",
+      "npm run lint",
+      "node_modules/.bin/tsc --noEmit",
+      "npm test",
+      "npm run build"
+    ]
+  },
   "holds": [
     "four repository-owned policy maintenance decision: frontend/tooling owner",
     "authenticated member acceptance: identity/application owner",
@@ -45,5 +62,6 @@
   ],
   "rollback": "COVERAGE.md",
   "independentReview": "INDEPENDENT-REVIEW.md",
-  "sensitiveMaterial": "No credentials, auth headers, .env files, member identities or provider payloads included."
+  "sensitiveMaterial": "No credentials, auth headers, .env files, member identities or provider payloads included.",
+  "finalTestedPRHead": "b563049ae88622441498ee7efb111ba65b02bbf4"
 }
