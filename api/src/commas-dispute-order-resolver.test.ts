@@ -41,21 +41,44 @@ test("malformed and unsafe numeric identifiers are not rounded or guessed",()=>{
 });
 test("identity-only enrichment does not emit status amounts currency or wallet changes",()=>{
  const before={...current,status:"won",amount:49,fee:15,currency:null};
- const copy=JSON.stringify(before);const p=plan(input,before,resolve(input,[numeric,ord]));
+ const copy=JSON.stringify(before);const p=plan(input,before,[numeric,ord]);
  assert.equal(p.state,"link");
  assert.deepEqual(p.patch,{matched_canonical_order_id:"order",reconciliation_state:"matched"});
  assert.equal(JSON.stringify(before),copy);
 });
 test("repeated and duplicate delivery produces a noop once linked",()=>{
  const linked={...current,canonicalOrderId:"order",reconciliationState:"matched"};
- assert.equal(plan(input,linked,resolve(input,[numeric,ord])).state,"noop");
- assert.equal(plan(input,linked,resolve(input,[numeric,numeric,ord])).state,"noop");
+ assert.equal(plan(input,linked,[numeric,ord]).state,"noop");
+ assert.equal(plan(input,linked,[numeric,numeric,ord]).state,"noop");
 });
 test("existing exact or suggested relationships cannot silently move to another order",()=>{
- assert.equal(plan(input,{...current,canonicalOrderId:"other"},resolve(input,[numeric,ord])).reason,"existing_order_link_conflict");
+ assert.equal(plan(input,{...current,canonicalOrderId:"other"},[numeric,ord]).reason,"existing_order_link_conflict");
 });
 test("dispute identity and current projection tenancy must agree",()=>{
- assert.equal(plan(input,{...current,providerDisputeId:"other"},resolve(input,[numeric,ord])).state,"hold");
- assert.equal(plan(input,{...current,organizationId:"other"},resolve(input,[numeric,ord])).state,"hold");
- assert.equal(plan(input,current,resolve({...input,lookupComplete:false},[])).state,"hold");
+ assert.equal(plan(input,{...current,providerDisputeId:"other"},[numeric,ord]).state,"hold");
+ assert.equal(plan(input,{...current,organizationId:"other"},[numeric,ord]).state,"hold");
+ assert.equal(plan({...input,lookupComplete:false},current,[]).state,"hold");
+});
+
+test("planner resolves current evidence rather than reusing a prior exact decision",()=>{
+ assert.equal(resolve(input,[numeric,ord]).state,"exact");
+ for(const changed of [
+  {...input,evidenceVerified:false},
+  {...input,lookupComplete:false},
+  {...input,numericTransactionId:"43"},
+  {...input,publicOrderId:"ORD-OTHER"},
+ ]) assert.equal(plan(changed,current,[numeric,ord]).state,"hold");
+});
+test("planner rejects every current projection scope mismatch",()=>{
+ for(const key of ["organizationId","connectionId","providerAccountId"] as const)
+  assert.equal(plan(input,{...current,[key]:"other"},[numeric,ord]).reason,"current_projection_identity_conflict");
+});
+test("older and equal identity evidence cannot modify terminal lifecycle or financial state",()=>{
+ for(const status of ["won","lost"]) for(const evidenceAt of [10,20]){
+  const before={...current,status,updatedAt:20,principal:49,fee:15,currency:null,feeCurrency:"EUR",walletLoss:null,refundIds:["refund"]};
+  const event={...input,evidenceAt};
+  const copy=JSON.stringify(before);
+  assert.deepEqual(plan(event,before,[numeric,ord]).patch,{matched_canonical_order_id:"order",reconciliation_state:"matched"});
+  assert.equal(JSON.stringify(before),copy);
+ }
 });
