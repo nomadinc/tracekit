@@ -1,0 +1,18 @@
+{
+  "team_verified": {
+    "name": "Tracekit",
+    "slug": "tracekit",
+    "id": "team_QFcd7GbqA7MfBH9bPM0kAqG9"
+  },
+  "project_search_count": 0,
+  "team_project_list_count": 0,
+  "combined_commit_deployment_count": 0,
+  "known_staging_project_lookup": {
+    "project": "tracekit-staging",
+    "status": 404
+  },
+  "new_deployment_authorized": false,
+  "deployment_created": false,
+  "browser_session_used": false,
+  "conclusion": "No authenticated staging acceptance performed. Project visibility and an explicitly authorized deployment of the exact candidate are required."
+}

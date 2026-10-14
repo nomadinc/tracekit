@@ -1,0 +1,19 @@
+✔ Edge request rejects missing or inactive service credentials before tenant access (26.711352ms)
+✔ Edge request rejects unbound tenant and nested IP before ingestion (3.274949ms)
+✔ Edge request uses bound organization instead of caller organization (1.914718ms)
+✔ Edge persistence parse errors cannot leak raw response text into logs (1.054341ms)
+✔ Edge delivery credentials store hashes only and are organization/tenant scoped (1.04062ms)
+✔ delivery derives tenancy from authenticated credential and validates contract (0.188354ms)
+✔ delivery does not expose persistence errors or raw credentials (0.217929ms)
+✔ Core validator accepts every pinned canonical Edge v1 fixture (2.696848ms)
+✔ Core validator rejects breaking version tenant mismatch and routing fields (0.497831ms)
+✔ Core validator preserves unknown provider identifiers (0.21239ms)
+✔ Core validator rejects raw IP even when hidden in an optional v1 field (0.250428ms)
+ℹ tests 11
+ℹ suites 0
+ℹ pass 11
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 193.50542

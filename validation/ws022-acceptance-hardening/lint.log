@@ -1,0 +1,33 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+
+> tracekit-ui@0.1.0 lint
+> eslint app components lib --ext .js,.jsx,.ts,.tsx
+
+
+/workspace/scratch/61a85fe6297b/ws022-currency-final/ui/app/invitations/[id]/invitation-acceptance.tsx
+  11:7  warning  Do not use `window.location.assign()` to navigate to internal Next.js pages. Use `redirect()` in the render phase, or `useRouter().push()` in Client Components' event handlers instead. See: https://nextjs.org/docs/messages/no-location-assign-relative-destination  @next/next/no-location-assign-relative-destination
+
+/workspace/scratch/61a85fe6297b/ws022-currency-final/ui/components/connections/connections-overview.tsx
+  8:1061  warning  Do not use `location.assign()` to navigate to internal Next.js pages. Use `redirect()` in the render phase, or `useRouter().push()` in Client Components' event handlers instead. See: https://nextjs.org/docs/messages/no-location-assign-relative-destination  @next/next/no-location-assign-relative-destination
+
+/workspace/scratch/61a85fe6297b/ws022-currency-final/ui/components/connections/everflow-admin-controls.tsx
+  26:206  warning  React Hook useEffect has a missing dependency: 'refreshStatus'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/workspace/scratch/61a85fe6297b/ws022-currency-final/ui/components/customers/customer-workspace.tsx
+  118:6  warning  React Hook React.useEffect has missing dependencies: 'session.activeBusinessContextId' and 'session.activeOrganizationId'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+/workspace/scratch/61a85fe6297b/ws022-currency-final/ui/components/layout/production-header.tsx
+   92:7   warning  Do not use `window.location.assign()` to navigate to internal Next.js pages. Use `redirect()` in the render phase, or `useRouter().push()` in Client Components' event handlers instead. See: https://nextjs.org/docs/messages/no-location-assign-relative-destination  @next/next/no-location-assign-relative-destination
+  234:27  warning  Do not use `window.location.assign()` to navigate to internal Next.js pages. Use `redirect()` in the render phase, or `useRouter().push()` in Client Components' event handlers instead. See: https://nextjs.org/docs/messages/no-location-assign-relative-destination  @next/next/no-location-assign-relative-destination
+
+/workspace/scratch/61a85fe6297b/ws022-currency-final/ui/components/offers/commerce-product-mapping-review.tsx
+  116:166  warning  React Hook React.useEffect has a missing dependency: 'group.products'. Either include it or remove the dependency array. If 'setSelected' needs the current value of 'group.products', you can also switch to useReducer instead of useState and read 'group.products' in the reducer  react-hooks/exhaustive-deps
+
+/workspace/scratch/61a85fe6297b/ws022-currency-final/ui/components/platform/admin-actions.tsx
+  161:13  warning  Do not use `window.location.assign()` to navigate to internal Next.js pages. Use `redirect()` in the render phase, or `useRouter().push()` in Client Components' event handlers instead. See: https://nextjs.org/docs/messages/no-location-assign-relative-destination  @next/next/no-location-assign-relative-destination
+
+/workspace/scratch/61a85fe6297b/ws022-currency-final/ui/components/platform/admin-client-view-banner.tsx
+  28:7  warning  Do not use `window.location.assign()` to navigate to internal Next.js pages. Use `redirect()` in the render phase, or `useRouter().push()` in Client Components' event handlers instead. See: https://nextjs.org/docs/messages/no-location-assign-relative-destination  @next/next/no-location-assign-relative-destination
+
+✖ 9 problems (0 errors, 9 warnings)
+

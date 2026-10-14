@@ -1,0 +1,34 @@
+✔ Edge request rejects missing or inactive service credentials before tenant access (32.75833ms)
+✔ Edge request rejects unbound tenant and nested IP before ingestion (3.362832ms)
+✔ Edge request uses bound organization instead of caller organization (2.616296ms)
+✖ Edge persistence parse errors cannot leak raw response text into logs (6.446963ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 3
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 300.714926
+
+✖ failing tests:
+
+test at tests/edge-delivery-request-boundaries.test.ts:1:3979
+✖ Edge persistence parse errors cannot leak raw response text into logs (6.446963ms)
+  AssertionError [ERR_ASSERTION]: The expression evaluated to a falsy value:
+  
+    assert.ok(!JSON.stringify(logs).includes('X_SECRET'))
+  
+      at <anonymous> (/workspace/scratch/61a85fe6297b/ws022-currency-final/ui/tests/edge-delivery-request-boundaries.test.ts:12:256)
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async run (/workspace/scratch/61a85fe6297b/ws022-currency-final/ui/tests/edge-delivery-request-boundaries.test.ts:8:1132)
+      at async TestContext.<anonymous> (/workspace/scratch/61a85fe6297b/ws022-currency-final/ui/tests/edge-delivery-request-boundaries.test.ts:12:88)
+      at async Test.run (node:internal/test_runner/test:1389:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:960:7) {
+    generatedMessage: true,
+    code: 'ERR_ASSERTION',
+    actual: false,
+    expected: true,
+    operator: '==',
+    diff: 'simple'
+  }
