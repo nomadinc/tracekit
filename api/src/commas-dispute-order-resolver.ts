@@ -53,9 +53,10 @@ export type CurrentDisputeOrderLink=DisputeOrderScope & {
  providerDisputeId:string;canonicalOrderId:string|null;reconciliationState:string;
 };
 /** Identity-only update plan. Caller must recheck under a lock/CAS before persisting. */
-export function planCommasDisputeOrderLink(input:DisputeOrderInput,current:CurrentDisputeOrderLink,result:DisputeOrderDecision){
+export function planCommasDisputeOrderLink(input:DisputeOrderInput,current:CurrentDisputeOrderLink,mappings:DisputeOrderMapping[]){
  if(!sameScope(input,current)||input.providerDisputeId!==current.providerDisputeId)
   return {state:"hold" as const,reason:"current_projection_identity_conflict",patch:null};
+ const result=resolveCommasDisputeOrder(input,mappings);
  if(result.state!=="exact"||!result.canonicalOrderId)return {state:"hold" as const,reason:result.reason,patch:null};
  if(current.canonicalOrderId&&current.canonicalOrderId!==result.canonicalOrderId)
   return {state:"hold" as const,reason:"existing_order_link_conflict",patch:null};
