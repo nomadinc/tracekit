@@ -22,6 +22,10 @@ export type HistoricalDisputeRow = {
   closedDate: string | null;
   amount: string;
   fee: string | null;
+  currency?: string | null;
+  currencySource?: string | null;
+  feeCurrency?: string | null;
+  feeCurrencySource?: string | null;
   paymentMethod: string | null;
   product: string;
 };
@@ -92,7 +96,7 @@ function normalizeRow(values: unknown[], rowNumber: number, workbookHash: string
   // The workbook hash identifies the import; the row number preserves the
   // original workbook identity independently of mutable display fields.
   const sourceId = createHash("sha256").update(`${workbookHash}\0row:${rowNumber}`).digest("hex");
-  return { sourceId, rowNumber, ...normalized };
+  return { sourceId, rowNumber, ...normalized, currency:null, currencySource:null, feeCurrency:null, feeCurrencySource:null };
 }
 
 function rowValues(row: ExcelJS.Row) { const values = row.values as unknown[]; return values.slice(1, RESOLUTION_CENTER_HEADERS.length + 1); }

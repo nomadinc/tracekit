@@ -27,9 +27,10 @@ test("Commas dispute envelope normalizes created and updated without inventing f
   assert.equal(event?.amount, 49);
   assert.equal(event?.fee, 15);
   assert.equal(event?.buyerReference, "user_1");
-  assert.equal(event?.currency, "USD");
+  assert.equal(event?.currency, null);
+  assert.equal(event?.feeCurrency,null);
   assert.equal(COMMAS_CURRENCY, "USD");
-  assert.equal(normalizeCommasDisputeEvent({ ...fixture, data: { ...fixture.data, currency: "EUR" } }), null);
+  assert.equal(normalizeCommasDisputeEvent({ ...fixture, data: { ...fixture.data, currency: "EUR" } })?.currency, "EUR");
   assert.equal(normalizeCommasDisputeEvent({ ...fixture, type: "payment.succeeded" }), null);
   assert.equal(normalizeCommasDisputeEvent({ ...fixture, id: undefined }), null);
   const updated = normalizeCommasDisputeEvent({ ...fixture, id: "event-2", type: "dispute.updated", data: { ...fixture.data, status: "won", updated_at: "2026-08-24T12:00:00Z" } });
@@ -157,7 +158,7 @@ test("migration 073 enforces the exact dispute-table ACL matrix without changing
 });
 
 test("overlap idempotency migration keys lifecycle effects by logical payload", async () => {
-  const source = await (await import("node:fs/promises")).readFile(new URL("../../supabase/migrations/20260911210000_commas_dispute_overlap_idempotency.sql", import.meta.url), "utf8");
+  const source = await (await import("node:fs/promises")).readFile(new URL("../../supabase/migrations/20260911211717_commas_dispute_overlap_idempotency.sql", import.meta.url), "utf8");
   assert.match(source, /add column if not exists payload_hash/);
   assert.match(source, /unique index if not exists commerce_provider_dispute_lifecycle_logical_uidx/);
   assert.match(source, /dispute_id, event_type, payload_hash/);
@@ -174,4 +175,13 @@ test("router exposes only the Commas webhook POST path and keeps scheduler/provi
   assert.equal(request.headers.get("x-webhook-signature"), signature);
   assert.doesNotMatch(source.slice(source.indexOf("async function handleCommasDisputeWebhook"), source.indexOf("function parseYmd")), /new Request|new Headers/);
   assert.doesNotMatch(source.slice(source.indexOf("async function handleCommasDisputeWebhook"), source.indexOf("function parseYmd")), /listTransactions|getTransaction|continuous_commerce\.send/);
+});
+
+test("currency comes only from explicit fields and preserves independent fee currency and zero fee",()=>{
+ const e=normalizeCommasDisputeEvent({...fixture,data:{...fixture.data,currency:" eur ",fee_currency:"GBP",dispute_fee:0}})!;
+ assert.equal(e.currency,"EUR");assert.equal(e.currencySource,"provider_payload.currency");
+ assert.equal(e.feeCurrency,"GBP");assert.equal(e.feeCurrencySource,"provider_payload.fee_currency");assert.equal(e.fee,0);
+ const unknown=normalizeCommasDisputeEvent({...fixture,data:{...fixture.data,currency:"$",locale:"en-US",account_currency:"USD"}})!;
+ assert.equal(unknown.currency,null);assert.equal(unknown.currencySource,null);assert.equal(unknown.feeCurrency,null);
+ assert.equal(normalizeCommasDisputeEvent({...fixture,data:{...fixture.data,currency:"USD"}})?.feeCurrency,null);
 });
