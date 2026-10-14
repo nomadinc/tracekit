@@ -55,3 +55,15 @@ For Accufy, use retained/API evidence and authoritative relationships already av
 ## Outstanding provider verification
 
 Determine whether the standard Commas transaction detail or purchase webhook exposes the processor payment-intent/charge identifier seen on dispute events. Determine which supported metadata/custom-field path returns TKID in both API and webhook evidence. These are separate checks. If the standard surface genuinely lacks the dispute-to-order bridge, clients cannot solve it by adding URL parameters; document a provider capability limitation and request a durable API/webhook improvement.
+
+## Standard API documentation review on 2026-10-14
+
+Source: https://commasdocs.com/ — Retrieve a Transaction, List Transactions, Create an Embedded Checkout Session, payment.succeeded, dispute.created and dispute.updated.
+
+The documented transaction detail is GET /public-api/transactions/:transactionId. Its response identifies the numeric transaction and a public servicePayment.id; it does not document a processor payment-intent field. The transaction list documents product_id, raw numeric customer_id and pagination filters, not a payment-intent lookup. The eight payment_intent_id occurrences in the inspected documentation are confined to dispute event examples/schema and the dispute webhook workflow. This establishes a documented gap, not exhaustive proof of live response absence.
+
+Do not pass a payment-intent ID to the transaction endpoint as though it were a documented transaction identifier. Do not equate servicePayment.id with payment_intent_id, or use a customer filter/cardinality as an exact payment bridge. Customer filters are documented to fail open when an unrecognized identifier is supplied, so every returned row must be independently scope checked.
+
+The embedded checkout-session metadata field is documented to carry arbitrary JSON and return it in payment events. The payment.succeeded schema places those values at data.api_metadata.data. This is a separate path from product.purchased additional_params; neither event/schema nor their metadata containers should be silently substituted for the other. Future TKID setup must name the checkout implementation, field and event path actually used and verify the same value in retained evidence.
+
+The remaining live capability check is a bounded read of non-test transaction details, collecting redacted field paths and verifying each returned numeric/public parent identity. No direct authenticated Commas read tool is currently exposed to this session. Existing encrypted credentials are not exported, and no inspection endpoint is deployed to bypass the release hold. Live qualification remains pending access to an authorized read surface.
