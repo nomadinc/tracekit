@@ -23,3 +23,16 @@ export async function completeInvitationDelivery(claim: DeliveryClaim, send: (em
   }
   return { state, provider: "workos", sendAccepted: state === "sent", mailboxDelivery: "unconfirmed" };
 }
+
+/** Log structured diagnostics only; never messages or provider response bodies. */
+export function invitationProviderDiagnostics(error: unknown) {
+  const value = error && typeof error === "object" ? error as Record<string, unknown> : {};
+  const code = typeof value.code === "string" && /^[a-z][a-z_]{0,79}$/.test(value.code) ? value.code : null;
+  const allowedFields = new Set(["email", "expires_in_days", "organization_id", "role_slug", "inviter_user_id", "locale"]);
+  const fields = Array.isArray(value.errors) ? value.errors.flatMap(item => {
+    if (!item || typeof item !== "object") return [];
+    const field = (item as Record<string, unknown>).field;
+    return typeof field === "string" && allowedFields.has(field) ? [field] : [];
+  }) : [];
+  return { code, fields: [...new Set(fields)] };
+}
