@@ -55,7 +55,7 @@ Baseline: `88f7411457b988e83e51fbc9bf7b4b5b76002fe7`. All 48 enabled entries bel
 
 ## Engine, resolver and ignore behavior
 
-Both engines run for `npm run lint`; `npm run build` runs that command before Next compilation. Native errors stop the build, proved with a synthetic sync-script error. Next's old partial ESLint integration is disabled only because this explicit full gate replaces it. Running `eslint` alone is incomplete.
+Run `test:lint-contract`, TypeScript and build serially: contract checks temporarily materialize synthetic source/page files and remove them in finally. Both engines run for `npm run lint`; `npm run build` runs that command before Next compilation. Native errors stop the build, proved with a synthetic sync-script error. Next's old partial ESLint integration is disabled only because this explicit full gate replaces it. Running `eslint` alone is incomplete.
 
 Baseline JS/JSX used the Next Babel parser; TS/TSX used typescript-eslint. The new JS/JSX/TS/TSX parser is typescript-eslint 8.71.2 plus native Oxc parsing. Both accept JSX, browser/Node globals and modules. No type-aware lint rules existed or were added. Representative effective configurations are exported separately for all four types.
 
@@ -73,11 +73,11 @@ Page-link discovery deliberately uses actual App Router `page` files and exclude
 
 ## Warning and dependency disposition
 
-The expected lint result remains zero errors and nine warnings: five Hooks dependency warnings and four relative-location warnings, at unchanged source locations. The four framework warning identifiers/messages change to the compatibility-policy name. No application source was changed to reduce warnings.
+The expected lint result remains zero errors and nine warnings: three Hooks dependency warnings and six relative-location warnings, at unchanged source locations. The six framework warning identifiers/messages change to the compatibility-policy name. No application source was changed to reduce warnings.
 
-The old five high package records traced to braces through eslint-config-next → @next/eslint-plugin-next/eslint-plugin-import → fast-glob → micromatch → braces. Removing this lint-only chain removes the advisory rather than suppressing it. The old React plugin peer excluded ESLint 10; Hooks 7.1.1 explicitly supports ESLint 10, typescript-eslint 8.71.2 supports ESLint 10, React-X supports ESLint *, and native Oxlint has no ESLint peer. Exact resolved versions and peers are recorded in the dependency tree. Existing production overrides are unchanged.
+The old five high package records traced to braces through eslint-config-next → @next/eslint-plugin-next → fast-glob → micromatch → braces. Removing this lint-only chain removes the advisory rather than suppressing it. The old React plugin peer excluded ESLint 10; Hooks 7.1.1 explicitly supports ESLint 10, typescript-eslint 8.71.2 supports ESLint 10, React-X supports ESLint *, and native Oxlint has no ESLint peer. Exact resolved versions and peers are recorded in the dependency tree. Existing production overrides are unchanged.
 
-Clean install may still print inherited package deprecation notices (ExcelJS/archive dependencies); audit findings and peer validity are assessed separately, not waived by those notices.
+Next compilation also emits inherited WorkOS SDK Edge-runtime warnings for CompressionStream/DecompressionStream; this migration does not change those runtime dependencies or certify their behavior. Clean install may still print inherited package deprecation notices (ExcelJS/archive dependencies); audit findings and peer validity are assessed separately, not waived by those notices.
 
 ## Rollback
 

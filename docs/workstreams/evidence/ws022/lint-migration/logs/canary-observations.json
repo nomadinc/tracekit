@@ -1,0 +1,646 @@
+[
+  {
+    "rule": "react/display-name",
+    "replacement": "react/display-name",
+    "kind": "invalid",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react/display-name",
+    "replacement": "react/display-name",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "react/jsx-key",
+    "replacement": "react/jsx-key",
+    "kind": "invalid",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react/jsx-key",
+    "replacement": "react/jsx-key",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "react/jsx-no-comment-textnodes",
+    "replacement": "react/jsx-no-comment-textnodes",
+    "kind": "invalid",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react/jsx-no-comment-textnodes",
+    "replacement": "react/jsx-no-comment-textnodes",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "react/jsx-no-duplicate-props",
+    "replacement": "react/jsx-no-duplicate-props",
+    "kind": "invalid",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react/jsx-no-duplicate-props",
+    "replacement": "react/jsx-no-duplicate-props",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "react/jsx-no-undef",
+    "replacement": "react/jsx-no-undef",
+    "kind": "invalid",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react/jsx-no-undef",
+    "replacement": "react/jsx-no-undef",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "react/no-children-prop",
+    "replacement": "react/no-children-prop",
+    "kind": "invalid",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react/no-children-prop",
+    "replacement": "react/no-children-prop",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "react/no-danger-with-children",
+    "replacement": "react/no-danger-with-children",
+    "kind": "invalid",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react/no-danger-with-children",
+    "replacement": "react/no-danger-with-children",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "react/no-deprecated",
+    "replacement": "ws022-policy/no-deprecated-react",
+    "kind": "invalid",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react/no-deprecated",
+    "replacement": "ws022-policy/no-deprecated-react",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "react/no-direct-mutation-state",
+    "replacement": "react/no-direct-mutation-state",
+    "kind": "invalid",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react/no-direct-mutation-state",
+    "replacement": "react/no-direct-mutation-state",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "react/no-find-dom-node",
+    "replacement": "react/no-find-dom-node",
+    "kind": "invalid",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react/no-find-dom-node",
+    "replacement": "react/no-find-dom-node",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "react/no-is-mounted",
+    "replacement": "react/no-is-mounted",
+    "kind": "invalid",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react/no-is-mounted",
+    "replacement": "react/no-is-mounted",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "react/no-render-return-value",
+    "replacement": "react/no-render-return-value",
+    "kind": "invalid",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react/no-render-return-value",
+    "replacement": "react/no-render-return-value",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "react/no-string-refs",
+    "replacement": "react/no-string-refs",
+    "kind": "invalid",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react/no-string-refs",
+    "replacement": "react/no-string-refs",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "react/no-unescaped-entities",
+    "replacement": "react/no-unescaped-entities",
+    "kind": "invalid",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react/no-unescaped-entities",
+    "replacement": "react/no-unescaped-entities",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "react/require-render-return",
+    "replacement": "react/require-render-return",
+    "kind": "invalid",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react/require-render-return",
+    "replacement": "react/require-render-return",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "react-hooks/rules-of-hooks",
+    "replacement": "react-hooks/rules-of-hooks",
+    "kind": "invalid",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react-hooks/rules-of-hooks",
+    "replacement": "react-hooks/rules-of-hooks",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "react-hooks/exhaustive-deps",
+    "replacement": "react-hooks/exhaustive-deps",
+    "kind": "invalid",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "react-hooks/exhaustive-deps",
+    "replacement": "react-hooks/exhaustive-deps",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "@next/next/google-font-display",
+    "replacement": "nextjs/google-font-display",
+    "kind": "invalid",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "@next/next/google-font-display",
+    "replacement": "nextjs/google-font-display",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "@next/next/google-font-preconnect",
+    "replacement": "nextjs/google-font-preconnect",
+    "kind": "invalid",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "@next/next/google-font-preconnect",
+    "replacement": "nextjs/google-font-preconnect",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "@next/next/next-script-for-ga",
+    "replacement": "nextjs/next-script-for-ga",
+    "kind": "invalid",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "@next/next/next-script-for-ga",
+    "replacement": "nextjs/next-script-for-ga",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "@next/next/no-async-client-component",
+    "replacement": "nextjs/no-async-client-component",
+    "kind": "invalid",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "@next/next/no-async-client-component",
+    "replacement": "nextjs/no-async-client-component",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "@next/next/no-before-interactive-script-outside-document",
+    "replacement": "nextjs/no-before-interactive-script-outside-document",
+    "kind": "invalid",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "@next/next/no-before-interactive-script-outside-document",
+    "replacement": "nextjs/no-before-interactive-script-outside-document",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "@next/next/no-css-tags",
+    "replacement": "nextjs/no-css-tags",
+    "kind": "invalid",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "@next/next/no-css-tags",
+    "replacement": "nextjs/no-css-tags",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "@next/next/no-head-element",
+    "replacement": "nextjs/no-head-element",
+    "kind": "invalid",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "@next/next/no-head-element",
+    "replacement": "nextjs/no-head-element",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "@next/next/no-html-link-for-pages",
+    "replacement": "ws022-policy/no-html-link-for-pages",
+    "kind": "invalid",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "@next/next/no-html-link-for-pages",
+    "replacement": "ws022-policy/no-html-link-for-pages",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "@next/next/no-img-element",
+    "replacement": "nextjs/no-img-element",
+    "kind": "invalid",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "@next/next/no-img-element",
+    "replacement": "nextjs/no-img-element",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "@next/next/no-location-assign-relative-destination",
+    "replacement": "ws022-policy/no-relative-location",
+    "kind": "invalid",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "@next/next/no-location-assign-relative-destination",
+    "replacement": "ws022-policy/no-relative-location",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "@next/next/no-page-custom-font",
+    "replacement": "nextjs/no-page-custom-font",
+    "kind": "invalid",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "@next/next/no-page-custom-font",
+    "replacement": "nextjs/no-page-custom-font",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "@next/next/no-styled-jsx-in-document",
+    "replacement": "nextjs/no-styled-jsx-in-document",
+    "kind": "invalid",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "@next/next/no-styled-jsx-in-document",
+    "replacement": "nextjs/no-styled-jsx-in-document",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "@next/next/no-sync-scripts",
+    "replacement": "nextjs/no-sync-scripts",
+    "kind": "invalid",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "@next/next/no-sync-scripts",
+    "replacement": "nextjs/no-sync-scripts",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "@next/next/no-title-in-document-head",
+    "replacement": "nextjs/no-title-in-document-head",
+    "kind": "invalid",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "@next/next/no-title-in-document-head",
+    "replacement": "nextjs/no-title-in-document-head",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "@next/next/no-typos",
+    "replacement": "nextjs/no-typos",
+    "kind": "invalid",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "@next/next/no-typos",
+    "replacement": "nextjs/no-typos",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "@next/next/no-unwanted-polyfillio",
+    "replacement": "nextjs/no-unwanted-polyfillio",
+    "kind": "invalid",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "@next/next/no-unwanted-polyfillio",
+    "replacement": "nextjs/no-unwanted-polyfillio",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "@next/next/inline-script-id",
+    "replacement": "nextjs/inline-script-id",
+    "kind": "invalid",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "@next/next/inline-script-id",
+    "replacement": "nextjs/inline-script-id",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "@next/next/no-assign-module-variable",
+    "replacement": "nextjs/no-assign-module-variable",
+    "kind": "invalid",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "@next/next/no-assign-module-variable",
+    "replacement": "nextjs/no-assign-module-variable",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "@next/next/no-document-import-in-page",
+    "replacement": "nextjs/no-document-import-in-page",
+    "kind": "invalid",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "@next/next/no-document-import-in-page",
+    "replacement": "nextjs/no-document-import-in-page",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "@next/next/no-duplicate-head",
+    "replacement": "nextjs/no-duplicate-head",
+    "kind": "invalid",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "@next/next/no-duplicate-head",
+    "replacement": "nextjs/no-duplicate-head",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "@next/next/no-head-import-in-document",
+    "replacement": "nextjs/no-head-import-in-document",
+    "kind": "invalid",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "@next/next/no-head-import-in-document",
+    "replacement": "nextjs/no-head-import-in-document",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "@next/next/no-script-component-in-head",
+    "replacement": "nextjs/no-script-component-in-head",
+    "kind": "invalid",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "@next/next/no-script-component-in-head",
+    "replacement": "nextjs/no-script-component-in-head",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "import/no-anonymous-default-export",
+    "replacement": "import/no-anonymous-default-export",
+    "kind": "invalid",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "import/no-anonymous-default-export",
+    "replacement": "import/no-anonymous-default-export",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "jsx-a11y/alt-text",
+    "replacement": "jsx-a11y/alt-text",
+    "kind": "invalid",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "jsx-a11y/alt-text",
+    "replacement": "jsx-a11y/alt-text",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "jsx-a11y/aria-props",
+    "replacement": "jsx-a11y/aria-props",
+    "kind": "invalid",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "jsx-a11y/aria-props",
+    "replacement": "jsx-a11y/aria-props",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "jsx-a11y/aria-proptypes",
+    "replacement": "jsx-a11y/aria-proptypes",
+    "kind": "invalid",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "jsx-a11y/aria-proptypes",
+    "replacement": "jsx-a11y/aria-proptypes",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "jsx-a11y/aria-unsupported-elements",
+    "replacement": "jsx-a11y/aria-unsupported-elements",
+    "kind": "invalid",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "jsx-a11y/aria-unsupported-elements",
+    "replacement": "jsx-a11y/aria-unsupported-elements",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "jsx-a11y/role-has-required-aria-props",
+    "replacement": "jsx-a11y/role-has-required-aria-props",
+    "kind": "invalid",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "jsx-a11y/role-has-required-aria-props",
+    "replacement": "jsx-a11y/role-has-required-aria-props",
+    "kind": "valid",
+    "severities": []
+  },
+  {
+    "rule": "jsx-a11y/role-supports-aria-props",
+    "replacement": "jsx-a11y/role-supports-aria-props",
+    "kind": "invalid",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "jsx-a11y/role-supports-aria-props",
+    "replacement": "jsx-a11y/role-supports-aria-props",
+    "kind": "valid",
+    "severities": []
+  }
+]
