@@ -1,0 +1,11 @@
+# Generated local output and review evidence are not deployment source.
+**/node_modules
+**/.next
+**/.next-build
+**/.wrangler
+**/.vercel
+**/*.tsbuildinfo
+**/.env*
+**/.dev.vars*
+validation
+docs
