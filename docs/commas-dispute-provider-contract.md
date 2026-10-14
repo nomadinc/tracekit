@@ -1,5 +1,10 @@
 # Commas dispute contract and financial firewall
 
+## Row currency qualification update
+
+The WS-001 review of 2026-10-14 supersedes use of the platform USD statement below as a default for missing row currency. Principal and fee currencies require explicit source fields and are independently nullable. Existing normalized values without provenance are preserved in storage but exposed as unknown. See `docs/operations/ws001-chargeback-financial-contract-20261014.md`. This changes no wallet posting or order identity authority.
+
+
 ## Provider confirmed
 
 | Capability | Live dispute webhook | Historical seller export |
