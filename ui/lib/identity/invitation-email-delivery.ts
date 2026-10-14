@@ -19,7 +19,7 @@ export async function completeInvitationDelivery(claim: DeliveryClaim, send: (em
       parameters = { p_state: state };
     }
     try { await finish({ p_operation: "finish", p_invitation_id: claim.id, p_attempt_id: claim.attemptId, ...parameters }); }
-    catch { state = "unknown"; } // No resend when the send or its durable acknowledgement is ambiguous.
+    catch { console.error("invitation_delivery_acknowledgement_failed", { invitationId: claim.id, attemptId: claim.attemptId, providerSendAccepted: state === "sent" }); state = "unknown"; } // No resend when the send or its durable acknowledgement is ambiguous.
   }
   return { state, provider: "workos", sendAccepted: state === "sent", mailboxDelivery: "unconfirmed" };
 }

@@ -3,6 +3,16 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 
+function deliveryMessage(state?: string) {
+  switch (state) {
+    case "sent": return "WorkOS accepted the email for sending; mailbox delivery is unconfirmed.";
+    case "failed": return "WorkOS rejected the send. Review the server diagnostics before retrying this invitation.";
+    case "sending": return "The send is in progress. Check delivery again; do not create another invitation.";
+    case "prepared": return "The invitation exists, but no email send has started.";
+    default: return "The send outcome is unknown. Review provider activity before retrying to avoid duplicate emails.";
+  }
+}
+
 type Context = { id: string; name: string };
 const fieldClass = "rounded-lg border border-white/15 bg-[#10131a] px-3 py-2 text-sm text-slate-100";
 
@@ -24,9 +34,7 @@ export function InviteClientUser({ organizationId, contexts }: { organizationId:
         const response = await fetch("/api/invitations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operation: "issue", organizationId, role: "client-read-only", intendedEmail: String(data.get("email") || ""), businessContextIds }) });
         const result = await response.json();
         if (!response.ok || !result.ok) throw new Error();
-        setMessage(result.delivery?.sendAccepted
-          ? "Invitation created. Email accepted for sending; mailbox delivery is unconfirmed."
-          : "Invitation created. Email delivery is not confirmed. Review delivery status before trying again.");
+        setMessage(`Invitation created. ${deliveryMessage(result.delivery?.state)}`);
         form.reset();
         router.refresh();
       } catch {
@@ -60,7 +68,7 @@ export function PendingInvitationActions({ organizationId, invitationId }: { org
       const response = await fetch("/api/invitations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operation, organizationId, invitationId }) });
       const result = await response.json();
       if (!response.ok || !result.ok) throw new Error();
-      setMessage(operation === "revoke" ? "Invitation revoked." : result.delivery?.sendAccepted ? "Email accepted for sending; mailbox delivery is unconfirmed." : "Email delivery is not confirmed.");
+      setMessage(operation === "revoke" ? "Invitation revoked." : deliveryMessage(result.delivery?.state));
       setConfirming(false);
       router.refresh();
     } catch { setMessage("Operation unavailable. Refresh to check the current invitation state."); }
