@@ -13,3 +13,10 @@ test("missing, invalid and unrecognized provenance never gain a currency",()=>{
  assert.equal(disputeCurrencyFields(row).currency,null);assert.equal(disputeCurrencyFields(row).feeCurrency,null);
  }
 });
+
+test("principal and fee reject each other's provenance categories",()=>{
+ const values=disputeCurrencyFields({currency:"EUR",currency_source:"provider_payload.fee_currency",fee_currency:"GBP",fee_currency_source:"provider_payload.currency"});
+ assert.deepEqual(values,{currency:null,currencySource:null,feeCurrency:null,feeCurrencySource:null});
+ const workbook=disputeCurrencyFields({currency:"EUR",currency_source:"workbook.Fee Currency",fee_currency:"GBP",fee_currency_source:"workbook.Currency"});
+ assert.deepEqual(workbook,values);
+});
