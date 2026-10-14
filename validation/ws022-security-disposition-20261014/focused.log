@@ -1,0 +1,33 @@
+✔ principal and fee retain independent currencies (49.828633ms)
+✔ unknown currency never defaults to USD (0.51051ms)
+✔ zero values and missing amounts remain distinct (0.220032ms)
+✔ detail currency null does not fall back to list currency (0.360063ms)
+✔ late A response cannot overwrite selected B (1.180781ms)
+✔ closing prevents late detail from returning (0.275706ms)
+✔ late A rejection cannot clear B (0.256336ms)
+✔ selection change immediately clears previous detail (0.375416ms)
+✔ old dispute detail is hidden immediately when selection changes (1.393753ms)
+✔ only matching dispute detail is displayed (0.252581ms)
+✔ default roles resolve to typed permission collections (6.148724ms)
+✔ shell variants follow Account type rather than role labels (0.234374ms)
+✔ Agency and Client Organization access remains membership scoped (6.179551ms)
+✔ Business Contexts are restricted to the active allowed Organization (1.105848ms)
+✔ session normalization removes inaccessible Organization and Business Context state (1.079518ms)
+✔ route authorization checks permission, Organization scope, and shell variant (1.52501ms)
+✔ persistent Organization UUIDs are authorized from membership scope without consulting mock IDs (0.759755ms)
+✔ each representative identity resolves the permissions that drive its navigation (0.229206ms)
+✔ M3 bearer parser accepts only bearer authorization (5.976569ms)
+✔ M3 MCP resource and OAuth challenge use canonical production endpoint (0.307854ms)
+✔ private read gateway denies unauthenticated, inactive, and foreign scope before Core transport (10.61482ms)
+✔ read gateway injects canonical tenant, retains pagination and projects restricted details (9.793982ms)
+✔ aggregate financial permission cannot authorize detailed financial reads or reconcile mutations (5.155766ms)
+✔ authorized detailed financial read preserves genuine zero (3.68615ms)
+✔ chargeback financial scope rejects read-only roles, expired membership and conflicting tenant hints (0.346613ms)
+ℹ tests 25
+ℹ suites 0
+ℹ pass 25
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 566.845193

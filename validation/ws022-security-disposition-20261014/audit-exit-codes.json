@@ -1,0 +1,10 @@
+{
+  "registry-braces": 0,
+  "registry-next-plugin": 0,
+  "registry-eslint-config": 0,
+  "ui-audit": 1,
+  "ui-production-audit": 0,
+  "api-audit": 0,
+  "relay-audit": 0,
+  "worker-audit": 0
+}

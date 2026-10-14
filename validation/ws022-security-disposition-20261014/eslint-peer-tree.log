@@ -1,0 +1,206 @@
+npm warn Unknown env config "http-proxy". This will stop working in the next major version of npm.
+npm error code ELSPROBLEMS
+npm error invalid: eslint@10.12.0 /workspace/scratch/61a85fe6297b/ws022-tooling-integration/ui/node_modules/eslint
+{
+  "version": "0.1.0",
+  "name": "tracekit-ui",
+  "problems": [
+    "invalid: eslint@10.12.0 /workspace/scratch/61a85fe6297b/ws022-tooling-integration/ui/node_modules/eslint"
+  ],
+  "dependencies": {
+    "eslint-config-next": {
+      "version": "16.4.0",
+      "resolved": "https://registry.npmjs.org/eslint-config-next/-/eslint-config-next-16.4.0.tgz",
+      "overridden": false,
+      "dependencies": {
+        "@next/eslint-plugin-next": {
+          "version": "16.4.0",
+          "resolved": "https://registry.npmjs.org/@next/eslint-plugin-next/-/eslint-plugin-next-16.4.0.tgz",
+          "overridden": false,
+          "dependencies": {
+            "@eslint-community/eslint-utils": {
+              "version": "4.9.1",
+              "resolved": "https://registry.npmjs.org/@eslint-community/eslint-utils/-/eslint-utils-4.9.1.tgz",
+              "overridden": false,
+              "dependencies": {
+                "eslint": {
+                  "version": "10.12.0",
+                  "invalid": "\"^2 || ^3 || ^4 || ^5 || ^6 || ^7.2.0 || ^8 || ^9\" from node_modules/eslint-config-next/node_modules/eslint-plugin-import, \"^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9\" from node_modules/eslint-config-next/node_modules/eslint-plugin-jsx-a11y, \"^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9.7\" from node_modules/eslint-config-next/node_modules/eslint-plugin-react",
+                  "problems": [
+                    "invalid: eslint@10.12.0 /workspace/scratch/61a85fe6297b/ws022-tooling-integration/ui/node_modules/eslint"
+                  ]
+                }
+              }
+            }
+          }
+        },
+        "eslint-import-resolver-typescript": {
+          "version": "3.10.1",
+          "resolved": "https://registry.npmjs.org/eslint-import-resolver-typescript/-/eslint-import-resolver-typescript-3.10.1.tgz",
+          "overridden": false,
+          "dependencies": {
+            "eslint": {
+              "version": "10.12.0"
+            }
+          }
+        },
+        "eslint-plugin-import": {
+          "version": "2.32.0",
+          "resolved": "https://registry.npmjs.org/eslint-plugin-import/-/eslint-plugin-import-2.32.0.tgz",
+          "overridden": false,
+          "dependencies": {
+            "eslint": {
+              "version": "10.12.0",
+              "invalid": "\"^2 || ^3 || ^4 || ^5 || ^6 || ^7.2.0 || ^8 || ^9\" from node_modules/eslint-config-next/node_modules/eslint-plugin-import",
+              "problems": [
+                "invalid: eslint@10.12.0 /workspace/scratch/61a85fe6297b/ws022-tooling-integration/ui/node_modules/eslint"
+              ]
+            }
+          }
+        },
+        "eslint-plugin-jsx-a11y": {
+          "version": "6.10.2",
+          "resolved": "https://registry.npmjs.org/eslint-plugin-jsx-a11y/-/eslint-plugin-jsx-a11y-6.10.2.tgz",
+          "overridden": false,
+          "dependencies": {
+            "eslint": {
+              "version": "10.12.0",
+              "invalid": "\"^2 || ^3 || ^4 || ^5 || ^6 || ^7.2.0 || ^8 || ^9\" from node_modules/eslint-config-next/node_modules/eslint-plugin-import, \"^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9\" from node_modules/eslint-config-next/node_modules/eslint-plugin-jsx-a11y",
+              "problems": [
+                "invalid: eslint@10.12.0 /workspace/scratch/61a85fe6297b/ws022-tooling-integration/ui/node_modules/eslint"
+              ]
+            }
+          }
+        },
+        "eslint-plugin-react-hooks": {
+          "version": "7.1.1",
+          "resolved": "https://registry.npmjs.org/eslint-plugin-react-hooks/-/eslint-plugin-react-hooks-7.1.1.tgz",
+          "overridden": false,
+          "dependencies": {
+            "eslint": {
+              "version": "10.12.0",
+              "invalid": "\"^2 || ^3 || ^4 || ^5 || ^6 || ^7.2.0 || ^8 || ^9\" from node_modules/eslint-config-next/node_modules/eslint-plugin-import, \"^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9\" from node_modules/eslint-config-next/node_modules/eslint-plugin-jsx-a11y",
+              "problems": [
+                "invalid: eslint@10.12.0 /workspace/scratch/61a85fe6297b/ws022-tooling-integration/ui/node_modules/eslint"
+              ]
+            }
+          }
+        },
+        "eslint-plugin-react": {
+          "version": "7.37.5",
+          "resolved": "https://registry.npmjs.org/eslint-plugin-react/-/eslint-plugin-react-7.37.5.tgz",
+          "overridden": false,
+          "dependencies": {
+            "eslint": {
+              "version": "10.12.0",
+              "invalid": "\"^2 || ^3 || ^4 || ^5 || ^6 || ^7.2.0 || ^8 || ^9\" from node_modules/eslint-config-next/node_modules/eslint-plugin-import, \"^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9\" from node_modules/eslint-config-next/node_modules/eslint-plugin-jsx-a11y, \"^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9.7\" from node_modules/eslint-config-next/node_modules/eslint-plugin-react",
+              "problems": [
+                "invalid: eslint@10.12.0 /workspace/scratch/61a85fe6297b/ws022-tooling-integration/ui/node_modules/eslint"
+              ]
+            }
+          }
+        },
+        "eslint": {
+          "version": "10.12.0"
+        },
+        "typescript-eslint": {
+          "version": "8.71.2",
+          "resolved": "https://registry.npmjs.org/typescript-eslint/-/typescript-eslint-8.71.2.tgz",
+          "overridden": false,
+          "dependencies": {
+            "@typescript-eslint/eslint-plugin": {
+              "version": "8.71.2",
+              "resolved": "https://registry.npmjs.org/@typescript-eslint/eslint-plugin/-/eslint-plugin-8.71.2.tgz",
+              "overridden": false,
+              "dependencies": {
+                "@typescript-eslint/type-utils": {
+                  "version": "8.71.2",
+                  "resolved": "https://registry.npmjs.org/@typescript-eslint/type-utils/-/type-utils-8.71.2.tgz",
+                  "overridden": false,
+                  "dependencies": {
+                    "eslint": {
+                      "version": "10.12.0",
+                      "invalid": "\"^2 || ^3 || ^4 || ^5 || ^6 || ^7.2.0 || ^8 || ^9\" from node_modules/eslint-config-next/node_modules/eslint-plugin-import, \"^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9\" from node_modules/eslint-config-next/node_modules/eslint-plugin-jsx-a11y, \"^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9.7\" from node_modules/eslint-config-next/node_modules/eslint-plugin-react",
+                      "problems": [
+                        "invalid: eslint@10.12.0 /workspace/scratch/61a85fe6297b/ws022-tooling-integration/ui/node_modules/eslint"
+                      ]
+                    }
+                  }
+                },
+                "eslint": {
+                  "version": "10.12.0",
+                  "invalid": "\"^2 || ^3 || ^4 || ^5 || ^6 || ^7.2.0 || ^8 || ^9\" from node_modules/eslint-config-next/node_modules/eslint-plugin-import, \"^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9\" from node_modules/eslint-config-next/node_modules/eslint-plugin-jsx-a11y, \"^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9.7\" from node_modules/eslint-config-next/node_modules/eslint-plugin-react",
+                  "problems": [
+                    "invalid: eslint@10.12.0 /workspace/scratch/61a85fe6297b/ws022-tooling-integration/ui/node_modules/eslint"
+                  ]
+                }
+              }
+            },
+            "@typescript-eslint/parser": {
+              "version": "8.71.2",
+              "resolved": "https://registry.npmjs.org/@typescript-eslint/parser/-/parser-8.71.2.tgz",
+              "overridden": false,
+              "dependencies": {
+                "eslint": {
+                  "version": "10.12.0",
+                  "invalid": "\"^2 || ^3 || ^4 || ^5 || ^6 || ^7.2.0 || ^8 || ^9\" from node_modules/eslint-config-next/node_modules/eslint-plugin-import, \"^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9\" from node_modules/eslint-config-next/node_modules/eslint-plugin-jsx-a11y, \"^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9.7\" from node_modules/eslint-config-next/node_modules/eslint-plugin-react",
+                  "problems": [
+                    "invalid: eslint@10.12.0 /workspace/scratch/61a85fe6297b/ws022-tooling-integration/ui/node_modules/eslint"
+                  ]
+                }
+              }
+            },
+            "@typescript-eslint/utils": {
+              "version": "8.71.2",
+              "resolved": "https://registry.npmjs.org/@typescript-eslint/utils/-/utils-8.71.2.tgz",
+              "overridden": false,
+              "dependencies": {
+                "eslint": {
+                  "version": "10.12.0",
+                  "invalid": "\"^2 || ^3 || ^4 || ^5 || ^6 || ^7.2.0 || ^8 || ^9\" from node_modules/eslint-config-next/node_modules/eslint-plugin-import, \"^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9\" from node_modules/eslint-config-next/node_modules/eslint-plugin-jsx-a11y, \"^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9.7\" from node_modules/eslint-config-next/node_modules/eslint-plugin-react",
+                  "problems": [
+                    "invalid: eslint@10.12.0 /workspace/scratch/61a85fe6297b/ws022-tooling-integration/ui/node_modules/eslint"
+                  ]
+                }
+              }
+            },
+            "eslint": {
+              "version": "10.12.0",
+              "invalid": "\"^2 || ^3 || ^4 || ^5 || ^6 || ^7.2.0 || ^8 || ^9\" from node_modules/eslint-config-next/node_modules/eslint-plugin-import, \"^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9\" from node_modules/eslint-config-next/node_modules/eslint-plugin-jsx-a11y, \"^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9.7\" from node_modules/eslint-config-next/node_modules/eslint-plugin-react",
+              "problems": [
+                "invalid: eslint@10.12.0 /workspace/scratch/61a85fe6297b/ws022-tooling-integration/ui/node_modules/eslint"
+              ]
+            }
+          }
+        }
+      }
+    },
+    "eslint": {
+      "version": "10.12.0",
+      "resolved": "https://registry.npmjs.org/eslint/-/eslint-10.12.0.tgz",
+      "overridden": false,
+      "dependencies": {
+        "@eslint-community/eslint-utils": {
+          "version": "4.10.1",
+          "resolved": "https://registry.npmjs.org/@eslint-community/eslint-utils/-/eslint-utils-4.10.1.tgz",
+          "overridden": false,
+          "dependencies": {
+            "eslint": {
+              "version": "10.12.0",
+              "invalid": "\"^2 || ^3 || ^4 || ^5 || ^6 || ^7.2.0 || ^8 || ^9\" from node_modules/eslint-config-next/node_modules/eslint-plugin-import, \"^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9\" from node_modules/eslint-config-next/node_modules/eslint-plugin-jsx-a11y, \"^3 || ^4 || ^5 || ^6 || ^7 || ^8 || ^9.7\" from node_modules/eslint-config-next/node_modules/eslint-plugin-react",
+              "problems": [
+                "invalid: eslint@10.12.0 /workspace/scratch/61a85fe6297b/ws022-tooling-integration/ui/node_modules/eslint"
+              ]
+            }
+          }
+        }
+      }
+    }
+  },
+  "error": {
+    "code": "ELSPROBLEMS",
+    "summary": "invalid: eslint@10.12.0 /workspace/scratch/61a85fe6297b/ws022-tooling-integration/ui/node_modules/eslint",
+    "detail": ""
+  }
+}
+npm error A complete log of this run can be found in: /root/.npm/_logs/2026-10-14T14_56_42_422Z-debug-0.log
