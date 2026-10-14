@@ -157,7 +157,7 @@ test("migration 073 enforces the exact dispute-table ACL matrix without changing
 });
 
 test("overlap idempotency migration keys lifecycle effects by logical payload", async () => {
-  const source = await (await import("node:fs/promises")).readFile(new URL("../../supabase/migrations/20260911210000_commas_dispute_overlap_idempotency.sql", import.meta.url), "utf8");
+  const source = await (await import("node:fs/promises")).readFile(new URL("../../supabase/migrations/20260911211717_commas_dispute_overlap_idempotency.sql", import.meta.url), "utf8");
   assert.match(source, /add column if not exists payload_hash/);
   assert.match(source, /unique index if not exists commerce_provider_dispute_lifecycle_logical_uidx/);
   assert.match(source, /dispute_id, event_type, payload_hash/);

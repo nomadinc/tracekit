@@ -9,9 +9,11 @@ const page = readFileSync(`${root}/app/(app)/settings/integrations/meta/page.tsx
 const hub = readFileSync(`${root}/app/(app)/settings/integrations/page.tsx`, "utf8");
 
 test("integrations hub exposes a dedicated Meta Ads advertising entry", () => {
+  assert.match(hub, /getPopulatedIntegrationCategories/);
   assert.match(hub, /title="Advertising"/);
-  assert.match(hub, /name:\s*"Meta Ads"/);
-  assert.match(hub, /href:\s*"\/settings\/integrations\/meta"/);
+  assert.match(hub, /Meta Ads/);
+  assert.match(hub, /href="\/settings\/integrations\/meta"/);
+  assert.match(hub, /Sync is off pending certification/);
   assert.match(page, /MetaIntegrationPanel/);
 });
 

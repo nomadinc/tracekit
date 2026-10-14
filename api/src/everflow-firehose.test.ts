@@ -225,7 +225,7 @@ test("network lookup distinguishes zero, one, and multiple eligible mappings", a
 
 test("migration codifies duplicate, out-of-order, stale-update, and poll convergence semantics", () => {
   const here = fileURLToPath(new URL(".", import.meta.url));
-  const sql = readFileSync(`${here}/../../supabase/migrations/20260910151937_everflow_firehose_v1.sql`, "utf8");
+  const sql = readFileSync(`${here}/../../supabase/migrations/20260910161316_everflow_firehose_v1.sql`, "utf8");
   assert.match(sql, /on conflict\(organization_id,connection_id,provider_account_id,transaction_id\)/i);
   assert.match(sql, /everflow_firehose_pending_updates/i);
   assert.match(sql, /provider_update_authoritative/i);
@@ -255,7 +255,9 @@ test("worker consumer retries failures and never logs raw payloads", () => {
   const branch = source.slice(start, source.indexOf("if (isQueueObservabilityTest", start));
   assert.match(branch, /msg\.retry\(\)/);
   assert.match(branch, /ctx\.waitUntil\(recordFirehoseMetric/);
-  assert.doesNotMatch(branch, /body\.payload|JSON\.stringify\(body/);
+  const logCalls = branch.match(/console\.(?:log|error|warn)\([\s\S]*?\);/g) || [];
+  assert.ok(logCalls.length > 0);
+  for (const call of logCalls) assert.doesNotMatch(call, /body\.payload|JSON\.stringify\(body|firehosePayload|transaction_id:\s*firehoseTransactionId/);
   assert.doesNotMatch(branch, /network_id:/);
 });
 

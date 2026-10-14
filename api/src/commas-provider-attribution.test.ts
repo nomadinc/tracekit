@@ -61,7 +61,7 @@ test("Everflow comparison is shadow-only and classifies exact and conflict", () 
 });
 
 test("migration is additive, service-role-only, shadow-only, and leaves attribution credits untouched", async () => {
-  const sql=await (await import("node:fs/promises")).readFile(new URL("../../supabase/migrations/20260903002350_commas_provider_observed_attribution_foundation.sql",import.meta.url),"utf8");
+  const sql=await (await import("node:fs/promises")).readFile(new URL("../../supabase/migrations/20260903054329_commas_provider_observed_attribution_foundation.sql",import.meta.url),"utf8");
   assert.match(sql,/commerce_provider_attribution_observations/);
   assert.match(sql,/commas_public_transaction/);
   assert.match(sql,/security invoker/i);
@@ -82,7 +82,7 @@ test("runtime persists immutable Evidence before invoking the observation projec
 });
 
 test("Evidence reconciliation remains service-role-only, exact-ORD-only, and credit-free",async()=>{
-  const sql=await (await import("node:fs/promises")).readFile(new URL("../../supabase/migrations/20260913223346_reconcile_commas_provider_observations_v2.sql",import.meta.url),"utf8");
+  const sql=await (await import("node:fs/promises")).readFile(new URL("../../supabase/migrations/20260913224039_reconcile_commas_provider_observations_v2.sql",import.meta.url),"utf8");
   assert.match(sql,/source_object_type='commas_attribution_webhook'/);
   assert.match(sql,/source_object_type='commas_public_transaction'/);
   assert.match(sql,/source_connector,source_record_id/);

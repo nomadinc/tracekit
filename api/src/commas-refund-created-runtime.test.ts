@@ -3,8 +3,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 
 const worker = readFileSync(new URL("./index.ts", import.meta.url), "utf8");
-const migration = readFileSync(new URL("../../supabase/migrations/20260917010000_commas_refund_transaction_epoch_guard.sql", import.meta.url), "utf8");
-const gate = readFileSync(new URL("../../supabase/migrations/20260917010100_commas_refund_created_financial_gate.sql", import.meta.url), "utf8");
+const migration = readFileSync(new URL("../../supabase/migrations/20260917175616_commas_refund_transaction_epoch_guard.sql", import.meta.url), "utf8");
+const gate = readFileSync(new URL("../../supabase/migrations/20260917175617_commas_refund_created_financial_gate.sql", import.meta.url), "utf8");
 
 test("verified refund dispatch precedes attribution and dispute dispatch", () => {
   const verify = worker.indexOf("verifyCommasWebhookSignatureAgainstSecrets(raw, suppliedSignature");

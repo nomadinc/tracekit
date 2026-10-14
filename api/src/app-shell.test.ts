@@ -217,7 +217,7 @@ test("decision home links to dedicated refund and chargeback analysis routes", (
   assert.match(worker, /href: "\/dashboard\/refunds"/);
   assert.match(worker, /href: "\/dashboard\/chargebacks"/);
   assert.match(refundPage, /<FinancialIssueAnalysisClient kind="refund" \/>/);
-  assert.match(chargebackPage, /<FinancialIssueAnalysisClient kind="chargeback" \/>/);
+  assert.match(chargebackPage, /<ChargebackReviewWorkspace \/>/);
   assert.match(analysisClient, /\/v1\/refunds\/analysis/);
   assert.match(analysisClient, /\/v1\/chargebacks\/analysis/);
   assert.match(analysisClient, /TimeIntervalPicker/);

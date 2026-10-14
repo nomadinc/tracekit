@@ -21,9 +21,9 @@ test("Everflow reruns classify created, updated, and unchanged rows by prior pay
 
 test("conversion sync snapshots evidence before ingest and finalizes metrics afterward", () => {
   const text = route();
-  const baseline = text.indexOf("captureEverflowConversionBaseline");
+  const baseline = text.indexOf("await captureEverflowConversionBaseline(");
   const sync = text.indexOf("syncEverflowConversions({");
-  const finalize = text.indexOf("finalizeEverflowConversionRunMetrics");
+  const finalize = text.indexOf("await finalizeEverflowConversionRunMetrics(");
   assert.ok(baseline >= 0 && sync > baseline && finalize > sync);
   assert.match(text, /createdByCount/);
   assert.match(text, /changeMetrics\.created !== createdByCount/);

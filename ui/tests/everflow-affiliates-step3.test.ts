@@ -51,7 +51,8 @@ test("affiliate endpoints use authenticated application routes", () => {
   const api = readFileSync(`${root}/lib/api.ts`, "utf8");
   const listRoute = readFileSync(`${root}/app/v1/integrations/everflow/affiliates/route.ts`, "utf8");
   const syncRoute = readFileSync(`${root}/app/v1/integrations/everflow/affiliates/sync/route.ts`, "utf8");
-  assert.match(api, /affiliates\(\?:\\\/sync\)\?/);
+  assert.match(api, /affiliates\|advertisers\|offers/);
+  assert.match(api, /\(\?:\\\/sync\)\?/);
   assert.match(listRoute, /resolveApplicationSession/);
   assert.match(listRoute, /plane\.getConnection/);
   assert.match(syncRoute, /resolveApplicationSession/);

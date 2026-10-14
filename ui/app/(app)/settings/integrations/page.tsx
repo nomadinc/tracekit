@@ -122,6 +122,11 @@ export default function IntegrationsHubPage() {
         </div>
       </Card>
 
+      <Card title="Advertising">
+        <Link href="/settings/integrations/meta" className="underline">Meta Ads</Link>
+        <p className="text-sm">Connection preparation only. Sync is off pending certification.</p>
+      </Card>
+
       {sections.map((section) => (
         <Card key={section.category} title={section.label}>
           <div className="space-y-3">

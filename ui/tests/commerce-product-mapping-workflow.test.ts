@@ -8,7 +8,7 @@ const component = readFileSync(new URL("../components/offers/commerce-product-ma
 const shellDrawer = readFileSync(new URL("../components/layout/shell-drawer.tsx", import.meta.url), "utf8");
 const intelligence = readFileSync(new URL("../lib/commerce/product-mapping-intelligence.ts", import.meta.url), "utf8");
 const intelligenceRepository = readFileSync(new URL("../lib/commerce/product-mapping-intelligence-repository.ts", import.meta.url), "utf8");
-const migration = readFileSync(new URL("../../supabase/migrations/20260830053413_commerce_product_mapping_review_workflow.sql", import.meta.url), "utf8");
+const migration = readFileSync(new URL("../../supabase/migrations/20260924053000_converge_operational_product_health_state.sql", import.meta.url), "utf8");
 const bulkMigration = readFileSync(new URL("../../supabase/migrations/20260830193254_atomic_bulk_product_mapping_decisions.sql", import.meta.url), "utf8");
 const priceSafetyMigration = readFileSync(new URL("../../supabase/migrations/20260830220012_add_product_mapping_price_evidence_and_correct_growth_partner.sql", import.meta.url), "utf8");
 const ingestion = readFileSync(new URL("../../supabase/migrations/043_commerce_shadow_ingestion_v1.sql", import.meta.url), "utf8");
@@ -89,10 +89,10 @@ test("recommendation confidence cannot bypass mapping-version concurrency", () =
 });
 
 test("review projection supplies ranked impact, refund, alert, and work-item state without PII", () => {
-  for (const field of ["order_count", "gross_revenue", "refund_count", "refund_amount", "first_seen_at", "last_seen_at", "alert_open", "work_item_open"]) assert.match(migration, new RegExp(field));
+  for (const field of ["order_count", "gross_revenue", "refund_count", "refund_amount", "first_seen_at", "last_seen_at", "alert_open", "work_item_open"]) assert.match(priceSafetyMigration, new RegExp(field));
   assert.match(route, /order=gross_revenue\.desc,order_count\.desc/);
-  assert.match(migration, /security_invoker=true/);
-  assert.match(migration, /grant select on public\.commerce_product_mapping_review_v1 to service_role/);
+  assert.match(priceSafetyMigration, /security_invoker\s*=\s*true/);
+  assert.match(priceSafetyMigration, /grant select on public\.commerce_product_mapping_review_v1 to service_role/);
   assert.doesNotMatch(route, /customer|email|phone|raw_payload/i);
 });
 

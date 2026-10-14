@@ -11,10 +11,12 @@ test("Everflow conversion sync persists observable run metrics", () => {
   assert.match(text, /commercePersistenceCount/);
   assert.match(text, /beforeCount/);
   assert.match(text, /afterCount/);
-  assert.match(text, /created = Math\.max\(0, afterCount - beforeCount\)/);
+  assert.match(text, /createdByCount = Math\.max\(0, afterCount - beforeCount\)/);
   assert.match(text, /pages_completed: input\.pages/);
   assert.match(text, /records_seen: input\.seen/);
-  assert.match(text, /records_created: input\.created/);
+  const metrics=readFileSync(`${root}/lib/integrations/everflow-conversion-run-metrics.ts`, "utf8");
+  assert.match(metrics, /records_created: created/);
+  assert.match(text, /await finalizeEverflowConversionRunMetrics/);
   assert.match(text, /provider_request_count: input\.pages/);
 });
 

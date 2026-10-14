@@ -17,8 +17,11 @@ test("Edge delivery credentials store hashes only and are organization/tenant sc
 test("delivery derives tenancy from authenticated credential and validates contract",()=>{
   assert.match(route,/hashToken\(token\)/);
   assert.match(route,/status=eq\.active/);
-  assert.match(route,/validateEdgeIntelligenceV1\(payload,\{tenantRef:credential\.tenant_ref\}\)/);
-  assert.match(route,/p_organization_id:credential\.organization_id/);
+  assert.match(route,/validateEdgeIntelligenceV1\(payload\)/);
+  assert.match(route,/tenantRef=validation\.value\.tenantRef/);
+  assert.match(route,/edge_intelligence_tenant_bindings\?tenant_ref=eq\./);
+  assert.match(route,/if\(!binding\)return response\(\{ok:false,code:"tenant_unbound"\},403\)/);
+  assert.match(route,/p_organization_id:binding\.organization_id/);
   assert.doesNotMatch(route,/p_organization_id:payload/);
 });
 
@@ -26,5 +29,5 @@ test("delivery does not expose persistence errors or raw credentials",()=>{
   assert.match(route,/code:"unauthorized"/);
   assert.match(route,/code:"delivery_unavailable"/);
   assert.match(route,/console\.error\("edge_intelligence_v1_delivery_failed"/);
-  assert.doesNotMatch(route,/console\.log\(token|token_hash.*response/i);
+  assert.doesNotMatch(route,/console\.(?:log|error|warn)\([^;]*(?:token_hash|token\))|response\(\{[^}]*token/i);
 });

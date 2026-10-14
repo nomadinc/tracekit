@@ -77,7 +77,7 @@ test("overlap reads are idempotent and cannot move a persisted event primary key
 test("conversion sync uses durable runs, checkpoints, leases, and the Step 6 order resolver", () => {
   const text = source();
   assert.match(text, /createSyncRun/);
-  assert.match(text, /"shadow", "everflow_conversions"/);
+  assert.match(text, /"shadow", input\.syncType \|\| "everflow_conversions"/);
   assert.match(text, /claimSyncRun/);
   assert.match(text, /beginCheckpoint/);
   assert.match(text, /completeCheckpoint/);

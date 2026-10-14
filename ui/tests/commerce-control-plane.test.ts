@@ -252,7 +252,7 @@ test("development state cannot substitute for a persistent authorized session", 
 });
 
 test("product mapping decisions are append-only, tenant-scoped, and expected-version guarded", () => {
-  const migration = readFileSync(new URL("../../supabase/migrations/20260830053413_commerce_product_mapping_review_workflow.sql", import.meta.url), "utf8");
+  const migration = readFileSync(new URL("../../supabase/migrations/20260924053000_converge_operational_product_health_state.sql", import.meta.url), "utf8");
   const original = readFileSync(new URL("../../supabase/migrations/040_commerce_control_plane_v1.sql", import.meta.url), "utf8");
   const repository = readFileSync(new URL("../lib/commerce/supabase-control-repository.ts", import.meta.url), "utf8");
 
@@ -273,7 +273,7 @@ test("product mapping decisions are append-only, tenant-scoped, and expected-ver
 
 test("normal imports preserve an explicit product mapping and historical order identity", () => {
   const ingestion = readFileSync(new URL("../../supabase/migrations/043_commerce_shadow_ingestion_v1.sql", import.meta.url), "utf8");
-  const decision = readFileSync(new URL("../../supabase/migrations/20260830044726_guard_commerce_product_mapping_decisions.sql", import.meta.url), "utf8");
+  const decision = readFileSync(new URL("../../supabase/migrations/20260924053000_converge_operational_product_health_state.sql", import.meta.url), "utf8");
   const providerUpsert = ingestion.match(/insert into public\.commerce_provider_products[\s\S]*?;\n/)?.[0] || "";
 
   assert.match(providerUpsert, /on conflict \(connection_id,provider_account_id,provider_product_id\) do update/);

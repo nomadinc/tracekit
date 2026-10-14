@@ -37,11 +37,12 @@ test("review workspace keeps candidate resolution read-only", async () => {
   assert.doesNotMatch(source, /apiPostJson|mutation|resolveCandidate/);
 });
 
-test("review workspace preserves the existing affiliate/source chargeback report", async () => {
+test("review workspace holds uncertified affiliate/source money reporting while preserving backend analysis", async () => {
   const { readFile } = await import("node:fs/promises");
   const source = await readFile(new URL("../components/chargebacks/chargeback-review-workspace.tsx", import.meta.url), "utf8");
-  assert.match(source, /FinancialIssueAnalysisClient/);
-  assert.match(source, /Affiliate &amp; source performance/);
+  assert.doesNotMatch(source, /FinancialIssueAnalysisClient/);
+  assert.doesNotMatch(source, /Affiliate &amp; source performance/);
+  assert.match(source, /without authoritative wallet movements/);
   assert.match(await readFile(new URL("../app/(app)/dashboard/financial-issue-analysis-client.tsx", import.meta.url), "utf8"), /\/v1\/chargebacks\/analysis/);
 });
 
