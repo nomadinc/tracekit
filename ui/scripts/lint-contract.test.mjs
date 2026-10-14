@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { ESLint } from 'eslint';
-import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, mkdirSync, writeFileSync, readFileSync, rmSync, existsSync, rmdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { spawnSync } from 'node:child_process';
 import { deprecatedReactPaths, routePattern } from './lint-policy.mjs';
@@ -39,6 +39,7 @@ test('every enabled baseline rule has explicit equal-severity/options coverage; 
 test('all 46 diagnostic rules catch invalid examples and accept valid controls', async () => {
   const directory = mkdtempSync(join(root, '.lint-contract-'));
   const page = join(root, 'pages/ws022-lint-contract-page.tsx');
+  const hadPagesDirectory = existsSync(dirname(page));
   mkdirSync(dirname(page), { recursive: true });
   writeFileSync(page, 'export default function ContractPage(){return null}');
   const observations = [];
@@ -66,7 +67,7 @@ test('all 46 diagnostic rules catch invalid examples and accept valid controls',
     if (process.env.WS022_LINT_OBSERVATIONS) writeFileSync(process.env.WS022_LINT_OBSERVATIONS, JSON.stringify(observations, null, 2));
     const failures = observations.filter(o => o.kind === 'invalid' ? !o.severities.includes(baseline.rules[o.rule][0]) : o.severities.length > 0);
     assert.deepEqual(failures, []);
-  } finally { rmSync(directory, { recursive: true, force: true }); rmSync(page, { force: true }); }
+  } finally { rmSync(directory, { recursive: true, force: true }); rmSync(page, { force: true }); if (!hadPagesDirectory) rmdirSync(dirname(page)); }
 });
 
 test('policy bridges preserve legacy APIs, scopes, lifecycle and relative-prefix behavior', async () => {
