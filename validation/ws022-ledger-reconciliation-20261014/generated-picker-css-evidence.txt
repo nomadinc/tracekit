@@ -1,0 +1,2 @@
+ui/.next-build/static/css/db004118e07900a6.css
+.dark *){color:var(--color-white)}.dark\:scheme-dark:is(.dark *){color-scheme:dark}.dark\:shadow-black\/4

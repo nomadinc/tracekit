@@ -1,0 +1,18 @@
+{
+  "matched": 33,
+  "new_unmatched": [],
+  "missing_unresolved": [],
+  "resolved": 130,
+  "unresolved": 33,
+  "supplemental_picker_finding": "resolved at 6092237b",
+  "api": {
+    "pass": 1099,
+    "fail": 9,
+    "skip": 4
+  },
+  "ui": {
+    "pass": 1399,
+    "fail": 24,
+    "skip": 0
+  }
+}
