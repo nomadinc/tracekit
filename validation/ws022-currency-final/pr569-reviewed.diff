@@ -1,0 +1,317 @@
+diff --git a/api/src/commas-dispute-webhook.test.ts b/api/src/commas-dispute-webhook.test.ts
+index 5da5c256..02ca3720 100644
+--- a/api/src/commas-dispute-webhook.test.ts
++++ b/api/src/commas-dispute-webhook.test.ts
+@@ -27,9 +27,10 @@ test("Commas dispute envelope normalizes created and updated without inventing f
+   assert.equal(event?.amount, 49);
+   assert.equal(event?.fee, 15);
+   assert.equal(event?.buyerReference, "user_1");
+-  assert.equal(event?.currency, "USD");
++  assert.equal(event?.currency, null);
++  assert.equal(event?.feeCurrency,null);
+   assert.equal(COMMAS_CURRENCY, "USD");
+-  assert.equal(normalizeCommasDisputeEvent({ ...fixture, data: { ...fixture.data, currency: "EUR" } }), null);
++  assert.equal(normalizeCommasDisputeEvent({ ...fixture, data: { ...fixture.data, currency: "EUR" } })?.currency, "EUR");
+   assert.equal(normalizeCommasDisputeEvent({ ...fixture, type: "payment.succeeded" }), null);
+   assert.equal(normalizeCommasDisputeEvent({ ...fixture, id: undefined }), null);
+   const updated = normalizeCommasDisputeEvent({ ...fixture, id: "event-2", type: "dispute.updated", data: { ...fixture.data, status: "won", updated_at: "2026-08-24T12:00:00Z" } });
+@@ -175,3 +176,12 @@ test("router exposes only the Commas webhook POST path and keeps scheduler/provi
+   assert.doesNotMatch(source.slice(source.indexOf("async function handleCommasDisputeWebhook"), source.indexOf("function parseYmd")), /new Request|new Headers/);
+   assert.doesNotMatch(source.slice(source.indexOf("async function handleCommasDisputeWebhook"), source.indexOf("function parseYmd")), /listTransactions|getTransaction|continuous_commerce\.send/);
+ });
++
++test("currency comes only from explicit fields and preserves independent fee currency and zero fee",()=>{
++ const e=normalizeCommasDisputeEvent({...fixture,data:{...fixture.data,currency:" eur ",fee_currency:"GBP",dispute_fee:0}})!;
++ assert.equal(e.currency,"EUR");assert.equal(e.currencySource,"provider_payload.currency");
++ assert.equal(e.feeCurrency,"GBP");assert.equal(e.feeCurrencySource,"provider_payload.fee_currency");assert.equal(e.fee,0);
++ const unknown=normalizeCommasDisputeEvent({...fixture,data:{...fixture.data,currency:"$",locale:"en-US",account_currency:"USD"}})!;
++ assert.equal(unknown.currency,null);assert.equal(unknown.currencySource,null);assert.equal(unknown.feeCurrency,null);
++ assert.equal(normalizeCommasDisputeEvent({...fixture,data:{...fixture.data,currency:"USD"}})?.feeCurrency,null);
++});
+diff --git a/api/src/commas-dispute-webhook.ts b/api/src/commas-dispute-webhook.ts
+index 3d3f62a7..675e738f 100644
+--- a/api/src/commas-dispute-webhook.ts
++++ b/api/src/commas-dispute-webhook.ts
+@@ -1,5 +1,5 @@
+ export const COMMAS_DISPUTE_EVENT_TYPES = ["dispute.created", "dispute.updated"] as const;
+-/** Provider-confirmed platform currency; never infer it from an absent payload field. */
++/** Historical platform-contract label only; never used as a dispute currency fallback. */
+ export const COMMAS_CURRENCY = "USD" as const;
+ export const LIVE_COMMAS_DISPUTE_RECOVERY_POSTING = "UNSUPPORTED" as const;
+ export const COMMAS_DISPUTE_WALLET_POSTING = "UNSUPPORTED" as const;
+@@ -31,6 +31,9 @@ export type NormalizedCommasDisputeEvent = {
+   externalOrderId: string | null;
+   amount: number | null;
+   currency: string | null;
++  currencySource?: string | null;
++  feeCurrency?: string | null;
++  feeCurrencySource?: string | null;
+   fee: number | null;
+   totalAmount: number | null;
+   status: string | null;
+@@ -59,8 +62,8 @@ export function normalizeCommasDisputeEvent(payload: unknown): NormalizedCommasD
+   if (!providerEventId || !providerDisputeId) return null;
+   const buyer = object(data.buyer || data.customer);
+   const product = object(data.product || data.item);
+-  const suppliedCurrency = text(data.currency)?.toUpperCase();
+-  if (suppliedCurrency && suppliedCurrency !== COMMAS_CURRENCY) return null;
++  const code=(value:unknown)=>{const v=text(value)?.toUpperCase();return v&&/^[A-Z]{3}$/.test(v)?v:null;};
++  const suppliedCurrency=code(data.currency),suppliedFeeCurrency=code(data.fee_currency);
+   return {
+     providerEventId,
+     eventType: eventType as CommasDisputeEventType,
+@@ -74,8 +77,11 @@ export function normalizeCommasDisputeEvent(payload: unknown): NormalizedCommasD
+     orderId: text(data.order_id),
+     externalOrderId: text(data.external_order_id || data.external_order_reference),
+     amount: numberValue(data.amount),
+-    currency: COMMAS_CURRENCY,
+-    fee: numberValue(data.dispute_fee || data.fee),
++    currency: suppliedCurrency,
++    currencySource: suppliedCurrency?"provider_payload.currency":null,
++    feeCurrency: suppliedFeeCurrency,
++    feeCurrencySource: suppliedFeeCurrency?"provider_payload.fee_currency":null,
++    fee: numberValue(data.dispute_fee ?? data.fee),
+     totalAmount: numberValue(data.total_amount),
+     status: text(data.status),
+     state: text(data.state),
+@@ -94,7 +100,7 @@ export type DisputeProjectionDecision = "create" | "advance" | "stale" | "safe_t
+ // Both warning variants are observed in retained lifecycle Evidence; their
+ // needs_response -> under_review transition has also been observed.
+ const statusRank: Record<string, number> = { needs_response: 0, warning_needs_response: 0, under_review: 1, warning_under_review: 1, won: 2, lost: 2 };
+-const stateFields = ["providerDisputeId", "processorDisputeId", "paymentIntentId", "paymentId", "providerTransactionId", "orderId", "externalOrderId", "amount", "currency", "fee", "totalAmount", "status", "state", "reason", "reasonCode", "responseDeadline", "openedAt", "closedAt", "buyerReference", "productReference"] as const;
++const stateFields = ["providerDisputeId", "processorDisputeId", "paymentIntentId", "paymentId", "providerTransactionId", "orderId", "externalOrderId", "amount", "currency", "currencySource", "feeCurrency", "feeCurrencySource", "fee", "totalAmount", "status", "state", "reason", "reasonCode", "responseDeadline", "openedAt", "closedAt", "buyerReference", "productReference"] as const;
+ export function classifyCommasDisputeProjection(incoming: NormalizedCommasDisputeEvent, current: NormalizedCommasDisputeEvent | null): DisputeProjectionDecision {
+   if (!current) return "create";
+   const nextTime = Date.parse(incoming.updatedAt || "");
+@@ -115,7 +121,7 @@ export function classifyCommasDisputeProjection(incoming: NormalizedCommasDisput
+ 
+ export function commasDisputeProjectionValues(event: NormalizedCommasDisputeEvent, scope: { organizationId: string; accountId: string; connectionId: string; providerAccountId: string; eventId: string; evidenceId: string }) {
+   if (!event.updatedAt || !Number.isFinite(Date.parse(event.updatedAt))) throw new Error("dispute_provider_state_unorderable");
+-  return { organization_id: scope.organizationId, account_id: scope.accountId, connection_id: scope.connectionId, provider_account_id: scope.providerAccountId, provider_dispute_id: event.providerDisputeId, latest_event_id: scope.eventId, latest_evidence_id: scope.evidenceId, provider_transaction_id: event.providerTransactionId, payment_intent_id: event.paymentIntentId, payment_id: event.paymentId, order_id: event.orderId, external_order_id: event.externalOrderId, amount: event.amount, currency: event.currency, fee: event.fee, status: event.status, state: event.state, reason: event.reason, reason_code: event.reasonCode, response_deadline: event.responseDeadline, opened_at: event.openedAt, updated_at: event.updatedAt, closed_at: event.closedAt, buyer_reference: event.buyerReference, product_reference: event.productReference };
++  return { organization_id: scope.organizationId, account_id: scope.accountId, connection_id: scope.connectionId, provider_account_id: scope.providerAccountId, provider_dispute_id: event.providerDisputeId, latest_event_id: scope.eventId, latest_evidence_id: scope.evidenceId, provider_transaction_id: event.providerTransactionId, payment_intent_id: event.paymentIntentId, payment_id: event.paymentId, order_id: event.orderId, external_order_id: event.externalOrderId, amount: event.amount, currency: event.currency, currency_source: event.currencySource??null, fee_currency: event.feeCurrency??null, fee_currency_source: event.feeCurrencySource??null, fee: event.fee, status: event.status, state: event.state, reason: event.reason, reason_code: event.reasonCode, response_deadline: event.responseDeadline, opened_at: event.openedAt, updated_at: event.updatedAt, closed_at: event.closedAt, buyer_reference: event.buyerReference, product_reference: event.productReference };
+ }
+ 
+ const encoder = new TextEncoder();
+diff --git a/api/src/connectors/commas/resolution-center-import.ts b/api/src/connectors/commas/resolution-center-import.ts
+index 031a3a1e..e98bb15f 100644
+--- a/api/src/connectors/commas/resolution-center-import.ts
++++ b/api/src/connectors/commas/resolution-center-import.ts
+@@ -22,6 +22,10 @@ export type HistoricalDisputeRow = {
+   closedDate: string | null;
+   amount: string;
+   fee: string | null;
++  currency?: string | null;
++  currencySource?: string | null;
++  feeCurrency?: string | null;
++  feeCurrencySource?: string | null;
+   paymentMethod: string | null;
+   product: string;
+ };
+@@ -92,7 +96,7 @@ function normalizeRow(values: unknown[], rowNumber: number, workbookHash: string
+   // The workbook hash identifies the import; the row number preserves the
+   // original workbook identity independently of mutable display fields.
+   const sourceId = createHash("sha256").update(`${workbookHash}\0row:${rowNumber}`).digest("hex");
+-  return { sourceId, rowNumber, ...normalized };
++  return { sourceId, rowNumber, ...normalized, currency:null, currencySource:null, feeCurrency:null, feeCurrencySource:null };
+ }
+ 
+ function rowValues(row: ExcelJS.Row) { const values = row.values as unknown[]; return values.slice(1, RESOLUTION_CENTER_HEADERS.length + 1); }
+diff --git a/api/src/connectors/next29/dispute-repository.ts b/api/src/connectors/next29/dispute-repository.ts
+index 93628b53..c1235e7a 100644
+--- a/api/src/connectors/next29/dispute-repository.ts
++++ b/api/src/connectors/next29/dispute-repository.ts
+@@ -98,6 +98,9 @@ export function next29ProviderDisputeRow(input: Next29DisputeScope & { accountId
+     order_id: input.normalized.providerOrderId,
+     amount: input.normalized.amount,
+     currency: input.normalized.currency,
++    currency_source: input.normalized.currency?"provider_payload.currency":null,
++    fee_currency: null,
++    fee_currency_source: null,
+     status: input.normalized.status,
+     state: input.normalized.type,
+     reason: input.normalized.resolutionOtherMessage,
+diff --git a/docs/commas-dispute-provider-contract.md b/docs/commas-dispute-provider-contract.md
+index eca0ff05..564c6dbc 100644
+--- a/docs/commas-dispute-provider-contract.md
++++ b/docs/commas-dispute-provider-contract.md
+@@ -1,5 +1,10 @@
+ # Commas dispute contract and financial firewall
+ 
++## Row currency qualification update
++
++The WS-001 review of 2026-10-14 supersedes use of the platform USD statement below as a default for missing row currency. Principal and fee currencies require explicit source fields and are independently nullable. Existing normalized values without provenance are preserved in storage but exposed as unknown. See `docs/operations/ws001-chargeback-financial-contract-20261014.md`. This changes no wallet posting or order identity authority.
++
++
+ ## Provider confirmed
+ 
+ | Capability | Live dispute webhook | Historical seller export |
+diff --git a/docs/operations/ws001-chargeback-financial-contract-20261014.md b/docs/operations/ws001-chargeback-financial-contract-20261014.md
+new file mode 100644
+index 00000000..32c516c7
+--- /dev/null
++++ b/docs/operations/ws001-chargeback-financial-contract-20261014.md
+@@ -0,0 +1,56 @@
++# WS-001 chargeback currency and source reporting contract
++
++Status: REVIEW. Baseline main `57eaec27b4b5022ec5ba5e81c0cdcb3182c150f3`. WS-022 owns release approval. No runtime deployment or main merge is authorized by this handoff. WS-023 retains UI formatting and test/harness ownership.
++
++## Verified currency findings
++
++| Path | Existing preservation | Authoritative row source | Principal and fee contract |
++| --- | --- | --- | --- |
++| Commas live dispute webhook | Live table already has nullable currency; normalizer filled missing currency with USD | Explicit currency fields in retained normalized dispute payload, if supplied | Missing principal currency stays null; fee currency is independent and null unless explicitly supplied |
++| Commas legacy historical export | Historical table had no currency field; approved workbook has exactly 12 columns, none currency | No currency source in this approved workbook | Principal and fee currencies both null |
++| 29Next live/API historical sync | Normalizer separately preserves source.currency and source.report_currency; shared live dispute projection preserves principal currency | source.currency for principal; report_currency is a separate report amount denomination | Principal can be source-backed; no fee field is established by this path |
++| Existing normalized rows | Legacy currency values do not include row-level provenance | Requires scoped retained evidence verification before qualifying for display | Preserve stored values; expose null when provenance is absent |
++
++A prior Commas document asserted a USD-only platform contract. The present bounded row contract does not turn that platform/provider statement into missing per-row principal or fee currency. Locale, provider, organization, account currency, order currency and a dollar symbol never supply dispute currency. An explicit principal currency does not supply a missing fee currency. Report currency does not replace transaction principal currency.
++
++Live database verification at 2026-10-14 03:43 UTC: 1,446 provider disputes across all scopes: 1,124 stored USD and 322 stored null. This count does not certify stored USD as source-backed. The historical table lacked currency before the additive change.
++
++## Prepared API contract
++
++List GET /api/chargebacks rows expose:
++- currency: string | null — dispute principal currency
++- feeCurrency: string | null — descriptive provider fee currency
++- currencySource: string | null
++- feeCurrencySource: string | null
++
++Detail GET /api/chargebacks/:id exposes these same camelCase fields and overrides legacy currency, currency_source, fee_currency and fee_currency_source with the qualified nullable values. Unknown stays null. Source provenance is allowlisted separately for principal and fee. No source payload, customer identifier or secret is added.
++
++The Commas normalizer now retains explicit payload currency instead of defaulting USD or rejecting a non-USD observation. Fee currency requires its own explicit field. The 29Next projection labels the principal source field and retains independent report currency in existing metadata. The approved historical workbook import explicitly writes null currency/provenance; a workbook with additional columns still requires separate contract review.
++
++## Database change already applied
++
++Migration 20261014034517 adds currency_source, fee_currency and fee_currency_source to commerce_provider_disputes, and nullable currency plus those provenance/fee fields to commerce_historical_disputes. Every new field is nullable with no default. Existing values, source evidence, permissions, dispute identity, matching and refund relationships were not rewritten.
++
++This additive database change was applied before the later WS-023 handoff explicitly withheld deployment/release authorization. Subsequent ingestion/API changes remain on the review branch. Do not merge main: the repository automatically deploys Workers for api or migration changes and Vercel deploys the UI/API.
++
++## Source and sub-ID reporting determination
++
++Source/sub-ID chargeback analysis remains a retained product requirement; it has not been removed by replacing the old page. The old implementation still exists:
++- API route /v1/chargebacks/analysis calls readFinancialIssueAnalysis and buildFinancialIssueAnalysis.
++- Source ranking uses an order source_id first, otherwise the first populated sub1–sub5, including aliases in raw_json. This is a precedence-selected grouping, not independent performance breakdowns for every sub-ID.
++- It combines conversion ledger rows with compatibility platform order sale/chargeback rows and uses order_id joins. Scan bounds and missing-denominator diagnostics apply.
++- Compatibility financial rows default absent currency to USD. Grouped source amounts are summed without currency partitioning or a returned currency qualifier.
++- The legacy client formats USD and is unmounted from the current chargeback page.
++- Current chargeback_exposure_v1 and chargeback_attribution_portfolio_v1 group historical suggested matches by affiliate. They sum descriptive disputed principal without currency qualification, not wallet movements. Neither supplies the requested source/sub-ID contract.
++
++Therefore backend presence is confirmed, but financial authority is NOT certified. Do not restore/remount the legacy panel or label source sums as wallet loss. A separately bounded WS-001 aggregation contract must provide currency partitions/unknown diagnostics, scoped authoritative relationships, clear count/rate denominators and distinct principal/fee/wallet semantics before source financial reporting is cleared.
++
++## WS-023 ownership clearance
++
++WS-023 may prepare bounded review list/detail formatting and test corrections against the nullable contract above: format only when the relevant source-backed currency is present; otherwise show the numeric value with an explicit unknown currency label. Principal and fee must each use their own code. Preserve redaction, tenant denial, suggested versus exact authority and informational refund overlap.
++
++Current exposure monetary formatting and legacy source panel restoration are NOT financially cleared by this review. Counts, maturity labels and suggested-match authority remain distinct from money. WS-001 owns aggregation qualification; WS-022 owns release and deployment.
++
++## Validation
++
++Three read-contract tests pass: legacy USD without provenance stays unknown, principal and fee retain independent codes, malformed/missing/unrecognized provenance stays unknown. Nine focused Commas normalization/lifecycle/signature tests pass, including unknown currency, explicit non-USD currency, independent fee currency, zero fee and unchanged wallet posting prohibition. New database columns verified nullable with no default. No dispute financial ledger or wallet posting was performed.
+diff --git a/supabase/migrations/20261014034517_ws001_dispute_source_currency_contract.sql b/supabase/migrations/20261014034517_ws001_dispute_source_currency_contract.sql
+new file mode 100644
+index 00000000..26748064
+--- /dev/null
++++ b/supabase/migrations/20261014034517_ws001_dispute_source_currency_contract.sql
+@@ -0,0 +1,15 @@
++-- Additive source-backed dispute currency contract. No existing values are rewritten.
++alter table public.commerce_provider_disputes
++ add column currency_source text,
++ add column fee_currency text,
++ add column fee_currency_source text;
++alter table public.commerce_historical_disputes
++ add column currency text,
++ add column currency_source text,
++ add column fee_currency text,
++ add column fee_currency_source text;
++comment on column public.commerce_provider_disputes.currency_source is 'Explicit normalized source-field provenance. NULL means currency is unverified; legacy currency alone must not be exposed as authoritative.';
++comment on column public.commerce_provider_disputes.fee_currency is 'Nullable source-backed currency of descriptive dispute fee; never inherited from principal/account/provider.';
++comment on column public.commerce_historical_disputes.currency is 'Nullable source-backed dispute principal currency. Approved legacy 12-column Resolution Center export has no currency field.';
++comment on column public.commerce_historical_disputes.currency_source is 'Currency source-field provenance; absent source evidence stays NULL.';
++comment on column public.commerce_historical_disputes.fee_currency is 'Nullable source-backed descriptive dispute fee currency; independent of principal and wallet loss.';
+diff --git a/ui/app/api/chargebacks/[id]/route.ts b/ui/app/api/chargebacks/[id]/route.ts
+index 9cb8d34d..615aac0a 100644
+--- a/ui/app/api/chargebacks/[id]/route.ts
++++ b/ui/app/api/chargebacks/[id]/route.ts
+@@ -1,3 +1,4 @@
++import { disputeCurrencyFields } from "@/lib/chargebacks/currency";
+ import { authorizedDetailedFinancialOrganization } from "@/lib/identity/financial-read-scope";
+ import { NextResponse } from "next/server";
+ import { resolveApplicationSession } from "@/lib/identity/application-session";
+@@ -15,5 +16,5 @@ async function everflowCoverage(organizationId:string){const rows=await commerce
+ async function orderRelationship(organizationId:string,canonicalOrderId:string|null){if(!canonicalOrderId)return null;const rows=await commercePersistenceRequest(`platform_orders?organization_id=eq.${enc(organizationId)}&canonical_order_id=eq.${enc(canonicalOrderId)}&select=canonical_order_id,provider_order_id,order_id,person_id,tkid,order_ts,gross_amount,receipt_total,currency,status,email,everflow_transaction_id,affiliate_id,everflow_offer_id&limit=1`) as Record<string,any>[];const order=rows[0];if(!order)return null;const providerOrderId=order.provider_order_id||order.order_id||null,tid=val(order.everflow_transaction_id),affiliateId=val(order.affiliate_id),offerId=val(order.everflow_offer_id);const orderAttribution=tid||affiliateId||offerId?{provider:"Everflow",transactionId:tid,affiliateId,affiliateName:null,offerId,offerName:null,authority:tid?"order_record":"order_fields",label:tid?"Order-linked Everflow attribution":"Order attribution fields"}:null;const evidence=await everflowEvidence(organizationId,canonicalOrderId,providerOrderId?String(providerOrderId):null,orderAttribution,order);if(!evidence.attribution){const coverage=await everflowCoverage(organizationId);const orderMs=Date.parse(String(order.order_ts||"")),earliestMs=coverage.earliest?Date.parse(coverage.earliest):NaN,latestMs=coverage.latest?Date.parse(coverage.latest):NaN;if(Number.isFinite(orderMs)&&((Number.isFinite(earliestMs)&&orderMs<earliestMs)||(Number.isFinite(latestMs)&&orderMs>latestMs))){evidence.diagnostic.resolution="outside_everflow_conversion_coverage";evidence.diagnostic.everflowCoverage=coverage;}}return{canonicalOrderId:order.canonical_order_id,providerOrderId,personId:order.person_id||null,tkid:order.tkid||null,orderTs:order.order_ts||null,grossAmount:order.gross_amount??null,currency:order.currency||null,status:order.status||null,orderHref:providerOrderId?`/orders/${encodeURIComponent(String(providerOrderId))}`:null,customerHref:order.person_id?`/customers/${encodeURIComponent(String(order.person_id))}`:null,journeyHref:order.tkid?`/journeys/${encodeURIComponent(String(order.tkid))}`:null,marketingAttribution:evidence.attribution,attributionDiagnostic:evidence.diagnostic};}
+ function attributionState(reconciliation:any,relationship:any){const candidates=Number(reconciliation?.candidate_count||0),matched=Boolean(reconciliation?.matched_canonical_order_id),resolution=String(relationship?.attributionDiagnostic?.resolution||"");if(!matched&&candidates>1)return{state:"ambiguous_order_relationship",label:"Ambiguous order relationship",detail:`${candidates} plausible orders remain. TraceKit will not assign marketing attribution until the commerce relationship is resolved.`};if(!matched)return{state:"no_related_order",label:"No related order",detail:"TraceKit does not have a defensible related order for this dispute, so marketing attribution is not assigned."};if(relationship?.marketingAttribution)return{state:"attributable",label:"Attributable",detail:"Marketing attribution is connected to the related canonical order."};if(["no_everflow_source_mapping","historical_email_time_30m_unmatched","no_mapping_or_exact_conversion_order_id"].includes(resolution))return{state:"attribution_pending",label:"Attribution pending",detail:"The related order is established, but Everflow evidence has not yet been reconciled into a canonical source mapping."};if(resolution==="outside_everflow_conversion_coverage")return{state:"no_everflow_evidence",label:"No Everflow evidence in coverage",detail:"The related order falls outside TraceKit's current Everflow conversion evidence coverage."};if(resolution.startsWith("ambiguous_"))return{state:"ambiguous_everflow_evidence",label:"Ambiguous Everflow evidence",detail:"Multiple Everflow observations could apply to the related order, so TraceKit will not choose one without a canonical mapping."};return{state:"no_everflow_evidence",label:"No canonical Everflow attribution",detail:"No defensible Everflow attribution is currently available for the related order."};}
+ async function refundOverlap(organizationId:string,canonicalOrderId:string|null){if(!canonicalOrderId)return null;const rows=await commercePersistenceRequest(`commerce_refund_created_observations?organization_id=eq.${enc(organizationId)}&canonical_order_id=eq.${enc(canonicalOrderId)}&order_match_state=eq.exact_ord&select=id,provider_refund_hashid,status,refund_type,buyer_amount,currency,provider_created_at,financial_state&order=provider_created_at.desc&limit=20`) as Record<string,any>[];if(!rows.length)return null;return{observed:true,count:rows.length,authority:"exact_order",label:"Refund also observed",events:rows.map(row=>({id:row.id,providerRefundId:row.provider_refund_hashid,status:row.status,refundType:row.refund_type,buyerAmount:row.buyer_amount,currency:row.currency,observedAt:row.provider_created_at,financialState:row.financial_state})),financialTreatment:"informational_only"};}
+-export async function GET(request:Request,context:{params:Promise<{id:string}>}){const resolution=await resolveApplicationSession();const organizationId=resolution.kind==="authenticated"?authorizedDetailedFinancialOrganization(resolution.session,request.url):null;if(!organizationId)return NextResponse.json({ok:false,error:"resource_unavailable"},{status:404});const id=(await context.params).id;try{if(id.startsWith("live:")){const liveId=id.slice(5);const rows=await commercePersistenceRequest(`commerce_provider_disputes?organization_id=eq.${enc(organizationId)}&id=eq.${enc(liveId)}&limit=1`) as Record<string,any>[];if(!rows[0])return NextResponse.json({ok:false,error:"not_found"},{status:404});const row=rows[0];const lifecycle=await commercePersistenceRequest(`commerce_provider_dispute_lifecycle_events?organization_id=eq.${enc(organizationId)}&connection_id=eq.${enc(String(row.connection_id))}&provider_account_id=eq.${enc(String(row.provider_account_id))}&dispute_id=eq.${enc(liveId)}&select=id,event_type,status,state,reason,reason_code,observed_at&order=observed_at.asc`) as Record<string,any>[];const matchedOrderId=row.matched_canonical_order_id||null;const [relationship,refund]=await Promise.all([orderRelationship(organizationId,matchedOrderId),refundOverlap(organizationId,matchedOrderId)]);const authority=matchAuthority({source:"live",matchedOrderId,reconciliationState:row.reconciliation_state});return NextResponse.json({ok:true,source:"live",dispute:{...row,buyer_reference:row.buyer_reference?"redacted":null,financial_semantics:{principal:"Provider-reported dispute principal",fee:"Provider-reported dispute fee",wallet_debit_available:false,recovery_available:false}},matchAuthority:authority,reconciliation:{confidence:row.reconciliation_state==="matched"?"high_confidence":row.reconciliation_state==="review"?"needs_review":"unmatched",score:null,candidateCount:0,matchedOrderId,factors:[]},lifecycle,relationship,refundOverlap:refund,candidates:[]});}
+-const disputes=await commercePersistenceRequest(`commerce_historical_disputes?organization_id=eq.${enc(organizationId)}&id=eq.${enc(id)}&limit=1`) as Record<string,any>[];const dispute=disputes[0];if(!dispute)return NextResponse.json({ok:false,error:"not_found"},{status:404});const recs=await commercePersistenceRequest(`commerce_dispute_reconciliations?organization_id=eq.${enc(organizationId)}&dispute_id=eq.${enc(id)}&algorithm_version=eq.historical-v1&limit=1`) as Record<string,any>[];const reconciliation=recs[0]||null;const matchedOrderId=reconciliation?.matched_canonical_order_id||null;const [relationship,refund]=await Promise.all([orderRelationship(organizationId,matchedOrderId),refundOverlap(organizationId,matchedOrderId)]);const attributionStatus=attributionState(reconciliation,relationship);return NextResponse.json({ok:true,source:"historical",dispute:{...dispute,customer_email_normalized:dispute.customer_email_normalized?String(dispute.customer_email_normalized).replace(/(^.).*(@.*$)/,"$1•••$2"):null},matchAuthority:matchAuthority({source:"historical",matchedOrderId}),reconciliation:reconciliation?{confidence:normalizeConfidence(reconciliation.confidence_band),score:reconciliation.numeric_score,candidateCount:reconciliation.candidate_count,matchedOrderId,factors:evidenceFactorLabels(reconciliation.evidence_factors)}:null,lifecycle:[],relationship,attributionStatus,refundOverlap:refund,candidates:[]});}catch{return NextResponse.json({ok:false,error:"chargeback_detail_unavailable"},{status:503});}}
++export async function GET(request:Request,context:{params:Promise<{id:string}>}){const resolution=await resolveApplicationSession();const organizationId=resolution.kind==="authenticated"?authorizedDetailedFinancialOrganization(resolution.session,request.url):null;if(!organizationId)return NextResponse.json({ok:false,error:"resource_unavailable"},{status:404});const id=(await context.params).id;try{if(id.startsWith("live:")){const liveId=id.slice(5);const rows=await commercePersistenceRequest(`commerce_provider_disputes?organization_id=eq.${enc(organizationId)}&id=eq.${enc(liveId)}&limit=1`) as Record<string,any>[];if(!rows[0])return NextResponse.json({ok:false,error:"not_found"},{status:404});const row=rows[0];const lifecycle=await commercePersistenceRequest(`commerce_provider_dispute_lifecycle_events?organization_id=eq.${enc(organizationId)}&connection_id=eq.${enc(String(row.connection_id))}&provider_account_id=eq.${enc(String(row.provider_account_id))}&dispute_id=eq.${enc(liveId)}&select=id,event_type,status,state,reason,reason_code,observed_at&order=observed_at.asc`) as Record<string,any>[];const matchedOrderId=row.matched_canonical_order_id||null;const [relationship,refund]=await Promise.all([orderRelationship(organizationId,matchedOrderId),refundOverlap(organizationId,matchedOrderId)]);const authority=matchAuthority({source:"live",matchedOrderId,reconciliationState:row.reconciliation_state});return NextResponse.json({ok:true,source:"live",dispute:{...row,...disputeCurrencyFields(row),fee_currency:disputeCurrencyFields(row).feeCurrency,currency_source:disputeCurrencyFields(row).currencySource,fee_currency_source:disputeCurrencyFields(row).feeCurrencySource,buyer_reference:row.buyer_reference?"redacted":null,financial_semantics:{principal:"Provider-reported dispute principal",fee:"Provider-reported dispute fee",wallet_debit_available:false,recovery_available:false}},matchAuthority:authority,reconciliation:{confidence:row.reconciliation_state==="matched"?"high_confidence":row.reconciliation_state==="review"?"needs_review":"unmatched",score:null,candidateCount:0,matchedOrderId,factors:[]},lifecycle,relationship,refundOverlap:refund,candidates:[]});}
++const disputes=await commercePersistenceRequest(`commerce_historical_disputes?organization_id=eq.${enc(organizationId)}&id=eq.${enc(id)}&limit=1`) as Record<string,any>[];const dispute=disputes[0];if(!dispute)return NextResponse.json({ok:false,error:"not_found"},{status:404});const recs=await commercePersistenceRequest(`commerce_dispute_reconciliations?organization_id=eq.${enc(organizationId)}&dispute_id=eq.${enc(id)}&algorithm_version=eq.historical-v1&limit=1`) as Record<string,any>[];const reconciliation=recs[0]||null;const matchedOrderId=reconciliation?.matched_canonical_order_id||null;const [relationship,refund]=await Promise.all([orderRelationship(organizationId,matchedOrderId),refundOverlap(organizationId,matchedOrderId)]);const attributionStatus=attributionState(reconciliation,relationship);return NextResponse.json({ok:true,source:"historical",dispute:{...dispute,...disputeCurrencyFields(dispute),fee_currency:disputeCurrencyFields(dispute).feeCurrency,currency_source:disputeCurrencyFields(dispute).currencySource,fee_currency_source:disputeCurrencyFields(dispute).feeCurrencySource,customer_email_normalized:dispute.customer_email_normalized?String(dispute.customer_email_normalized).replace(/(^.).*(@.*$)/,"$1•••$2"):null},matchAuthority:matchAuthority({source:"historical",matchedOrderId}),reconciliation:reconciliation?{confidence:normalizeConfidence(reconciliation.confidence_band),score:reconciliation.numeric_score,candidateCount:reconciliation.candidate_count,matchedOrderId,factors:evidenceFactorLabels(reconciliation.evidence_factors)}:null,lifecycle:[],relationship,attributionStatus,refundOverlap:refund,candidates:[]});}catch{return NextResponse.json({ok:false,error:"chargeback_detail_unavailable"},{status:503});}}
+diff --git a/ui/app/api/chargebacks/route.ts b/ui/app/api/chargebacks/route.ts
+index c8663a07..ea3fbf60 100644
+--- a/ui/app/api/chargebacks/route.ts
++++ b/ui/app/api/chargebacks/route.ts
+@@ -1,3 +1,4 @@
++import { disputeCurrencyFields } from "@/lib/chargebacks/currency";
+ import { authorizedDetailedFinancialOrganization } from "@/lib/identity/financial-read-scope";
+ import { NextResponse } from "next/server";
+ import { resolveApplicationSession } from "@/lib/identity/application-session";
+@@ -12,7 +13,7 @@ async function listReconciliations(org:string,ids:string[]){if(!ids.length)retur
+ async function historicalSummary(org:string,filters:ReturnType<typeof parseReviewFilters>){const p=[`organization_id=eq.${enc(org)}`];if(filters.status)p.push(`status=ilike.${enc(filters.status)}`);if(filters.reason)p.push(`reason=ilike.${enc(qLike(filters.reason))}`);if(filters.product)p.push(`product_evidence=ilike.${enc(qLike(filters.product))}`);if(filters.from)p.push(`dispute_date=gte.${enc(filters.from)}`);if(filters.to)p.push(`dispute_date=lte.${enc(filters.to)}`);if(filters.search)p.push(`or=(customer_email_normalized.ilike.${enc(qLike(filters.search))},product_evidence.ilike.${enc(qLike(filters.search))},source_row_identity.ilike.${enc(qLike(filters.search))})`);if(filters.matched==="matched")p.push("matching_state=in.(high_confidence,medium_confidence)");if(filters.matched==="unmatched")p.push("matching_state=eq.unmatched");if(["high_confidence","medium_confidence","needs_review","unmatched"].includes(filters.confidence))p.push(`matching_state=eq.${filters.confidence}`);const count=(extra="")=>commercePersistenceCount(`commerce_historical_disputes?select=id&${p.join("&")}${extra?`&${extra}`:""}&limit=1`);const statuses=["lost","won","needs_response","under_review"];const bands=["high_confidence","medium_confidence","needs_review","unmatched"];const [total,...counts]=await Promise.all([count(),...statuses.map(s=>count(`status=ilike.${enc(qLike(s.replace(/_/g," ")))}`)),...bands.map(b=>count(`matching_state=eq.${b}`))]);const statusCounts:Record<string,number>={};statuses.forEach((s,i)=>statusCounts[s]=counts[i]||0);const confidence:Record<string,number>={};bands.forEach((b,i)=>confidence[b]=counts[statuses.length+i]||0);return summaryFromExactCounts({total,statuses:statusCounts,confidence});}
+ async function liveSummary(org:string){const base=`organization_id=eq.${enc(org)}`;const count=(extra="")=>commercePersistenceCount(`commerce_provider_disputes?select=id&${base}${extra?`&${extra}`:""}&limit=1`);const statuses=["lost","won","needs_response","under_review"];const [total,...counts]=await Promise.all([count(),...statuses.map(s=>count(`status=ilike.${enc(qLike(s.replace(/_/g," ")))}`))]);const statusCounts:Record<string,number>={};statuses.forEach((s,i)=>statusCounts[s]=counts[i]||0);return {total,statuses:statusCounts};}
+ export async function GET(request:Request){const organizationId=await authorizedOrganization(request);if(!organizationId)return unavailable();const filters=parseReviewFilters(new URL(request.url).searchParams);try{const offset=(filters.page-1)*filters.pageSize;const parts=[`organization_id=eq.${enc(organizationId)}`,`order=dispute_date.desc.nullslast,created_at.desc`,`limit=${filters.pageSize}`,`offset=${offset}`];if(filters.status)parts.push(`status=ilike.${enc(filters.status)}`);if(filters.reason)parts.push(`reason=ilike.${enc(qLike(filters.reason))}`);if(filters.product)parts.push(`product_evidence=ilike.${enc(qLike(filters.product))}`);if(filters.from)parts.push(`dispute_date=gte.${enc(filters.from)}`);if(filters.to)parts.push(`dispute_date=lte.${enc(filters.to)}`);if(filters.search)parts.push(`or=(customer_email_normalized.ilike.${enc(qLike(filters.search))},product_evidence.ilike.${enc(qLike(filters.search))},source_row_identity.ilike.${enc(qLike(filters.search))})`);if(filters.matched==="matched")parts.push("matching_state=in.(high_confidence,medium_confidence)");if(filters.matched==="unmatched")parts.push("matching_state=eq.unmatched");if(["high_confidence","medium_confidence","needs_review","unmatched"].includes(filters.confidence))parts.push(`matching_state=eq.${filters.confidence}`);
+-const disputes=await commercePersistenceRequest(`commerce_historical_disputes?select=id,account_id,organization_id,connection_id,provider_account_id,status,state,transaction_date,dispute_date,closed_date,customer_email_normalized,product_evidence,amount,dispute_fee,payment_method,reason,matching_state&${parts.join("&")}`) as Row[];const recs=await listReconciliations(organizationId,disputes.map(r=>String(r.id)));const recBy=new Map(recs.map(r=>[String(r.dispute_id),r]));const rows=disputes.map(row=>{const rec=recBy.get(String(row.id));const matchedOrderId=rec?.matched_canonical_order_id||null;return{id:row.id,source:"historical",sourceLabel:"Historical Import",status:row.status||row.state,disputeDate:row.dispute_date,transactionDate:row.transaction_date,amount:row.amount,fee:row.dispute_fee,reason:row.reason,product:row.product_evidence,paymentMethod:row.payment_method,customer:row.customer_email_normalized?String(row.customer_email_normalized).replace(/(^.).*(@.*$)/,"$1•••$2"):null,confidence:normalizeConfidence(rec?.confidence_band||row.matching_state),matchAuthority:matchAuthority({source:"historical",matchedOrderId}),score:rec?.numeric_score??null,candidateCount:rec?.candidate_count??0,matchedOrderId,factors:rec?.evidence_factors||{}};});
+-const live=await commercePersistenceRequest(`commerce_provider_disputes?organization_id=eq.${enc(organizationId)}&order=opened_at.desc.nullslast,updated_at.desc&limit=${filters.pageSize}`) as Row[];const liveRows=live.map(row=>{const matchedOrderId=row.matched_canonical_order_id||null;return{id:`live:${row.id}`,source:"live",sourceLabel:"Live Provider Event",status:row.status||row.state,disputeDate:row.opened_at||row.updated_at,transactionDate:null,amount:row.amount,fee:row.fee,reason:row.reason||row.reason_code,product:row.product_reference,paymentMethod:null,customer:null,confidence:row.reconciliation_state==="matched"?"high_confidence":row.reconciliation_state==="review"?"needs_review":"unmatched",matchAuthority:matchAuthority({source:"live",matchedOrderId,reconciliationState:row.reconciliation_state}),score:null,candidateCount:0,matchedOrderId,factors:{}};});
++const disputes=await commercePersistenceRequest(`commerce_historical_disputes?select=id,account_id,organization_id,connection_id,provider_account_id,status,state,transaction_date,dispute_date,closed_date,customer_email_normalized,product_evidence,amount,dispute_fee,currency,currency_source,fee_currency,fee_currency_source,payment_method,reason,matching_state&${parts.join("&")}`) as Row[];const recs=await listReconciliations(organizationId,disputes.map(r=>String(r.id)));const recBy=new Map(recs.map(r=>[String(r.dispute_id),r]));const rows=disputes.map(row=>{const rec=recBy.get(String(row.id));const matchedOrderId=rec?.matched_canonical_order_id||null;return{id:row.id,source:"historical",sourceLabel:"Historical Import",status:row.status||row.state,disputeDate:row.dispute_date,transactionDate:row.transaction_date,amount:row.amount,fee:row.dispute_fee,...disputeCurrencyFields(row),reason:row.reason,product:row.product_evidence,paymentMethod:row.payment_method,customer:row.customer_email_normalized?String(row.customer_email_normalized).replace(/(^.).*(@.*$)/,"$1•••$2"):null,confidence:normalizeConfidence(rec?.confidence_band||row.matching_state),matchAuthority:matchAuthority({source:"historical",matchedOrderId}),score:rec?.numeric_score??null,candidateCount:rec?.candidate_count??0,matchedOrderId,factors:rec?.evidence_factors||{}};});
++const live=await commercePersistenceRequest(`commerce_provider_disputes?organization_id=eq.${enc(organizationId)}&order=opened_at.desc.nullslast,updated_at.desc&limit=${filters.pageSize}`) as Row[];const liveRows=live.map(row=>{const matchedOrderId=row.matched_canonical_order_id||null;return{id:`live:${row.id}`,source:"live",sourceLabel:"Live Provider Event",status:row.status||row.state,disputeDate:row.opened_at||row.updated_at,transactionDate:null,amount:row.amount,fee:row.fee,...disputeCurrencyFields(row),reason:row.reason||row.reason_code,product:row.product_reference,paymentMethod:null,customer:null,confidence:row.reconciliation_state==="matched"?"high_confidence":row.reconciliation_state==="review"?"needs_review":"unmatched",matchAuthority:matchAuthority({source:"live",matchedOrderId,reconciliationState:row.reconciliation_state}),score:null,candidateCount:0,matchedOrderId,factors:{}};});
+ const displayRows=[...rows,...liveRows].slice(0,filters.pageSize);const [historical,liveCounts]=await Promise.all([historicalSummary(organizationId,filters),liveSummary(organizationId)]);const combinedStatuses:Record<string,number>={};for(const s of ["lost","won","needs_response","under_review"])combinedStatuses[s]=(historical.statuses?.[s]||0)+(liveCounts.statuses[s]||0);const portfolioSummary={total:historical.total+liveCounts.total,statuses:combinedStatuses,confidence:historical.confidence,disputedAmount:null,fees:null,currencies:[],financialScope:"not_aggregated",historicalTotal:historical.total,liveTotal:liveCounts.total};return NextResponse.json({ok:true,rows:displayRows,pagination:{page:filters.page,pageSize:filters.pageSize,returned:displayRows.length,hasMore:rows.length===filters.pageSize||liveRows.length===filters.pageSize},summary:portfolioSummary,sourceCounts:{historical:historical.total,live:liveCounts.total},filters});}catch{return NextResponse.json({ok:false,error:"chargeback_review_unavailable"},{status:503});}}
+ export async function POST(){return NextResponse.json({ok:false,error:"read_only_review"},{status:405});}
+diff --git a/ui/lib/chargebacks/currency.ts b/ui/lib/chargebacks/currency.ts
+new file mode 100644
+index 00000000..ecc77083
+--- /dev/null
++++ b/ui/lib/chargebacks/currency.ts
+@@ -0,0 +1,11 @@
++/** Currency describes the reported principal/fee, never an actual wallet movement. */
++const principalSources=new Set(["provider_payload.currency","workbook.Currency"]);
++const feeSources=new Set(["provider_payload.fee_currency","workbook.Fee Currency"]);
++function backed(value:unknown,source:unknown,sources:Set<string>){
++ const code=typeof value==="string"?value.trim().toUpperCase():"";
++ return /^[A-Z]{3}$/.test(code)&&typeof source==="string"&&sources.has(source)?{value:code,source}:{value:null,source:null};
++}
++export function disputeCurrencyFields(row:Record<string,unknown>){
++ const principal=backed(row.currency,row.currency_source,principalSources),fee=backed(row.fee_currency,row.fee_currency_source,feeSources);
++ return {currency:principal.value,currencySource:principal.source,feeCurrency:fee.value,feeCurrencySource:fee.source};
++}
+diff --git a/ui/scripts/import-commas-historical-disputes.ts b/ui/scripts/import-commas-historical-disputes.ts
+index 18de186a..54c71c7a 100644
+--- a/ui/scripts/import-commas-historical-disputes.ts
++++ b/ui/scripts/import-commas-historical-disputes.ts
+@@ -119,7 +119,7 @@ async function main() {
+   await db("commerce_historical_dispute_imports?on_conflict=connection_id,provider_account_id,workbook_hash", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=representation" }, body: JSON.stringify({ id: importId, account_id: accountId, organization_id: organizationId, connection_id: connectionId, provider_account_id: providerAccountId, sync_run_id: runId, evidence_id: evidenceId, import_identity: `resolution-center:${summary.workbookHash}`, workbook_hash: summary.workbookHash, source_filename: "resolution_center_disputes.xlsx", accepted_rows: summary.accepted, rejected_rows: summary.rejected, metadata: { schema_version: "resolution-center-v1" } }) });
+ 
+   for (let offset = 0; offset < rows.length; offset += 250) {
+-    const batch = rows.slice(offset, offset + 250).map((row) => ({ id: uuid("commas-historical-dispute", row.sourceId), account_id: accountId, organization_id: organizationId, connection_id: connectionId, provider_account_id: providerAccountId, import_id: importId, evidence_id: evidenceId, source_row_identity: row.sourceId, source_row_number: row.rowNumber, state: row.state, status: row.status, transaction_date: row.transactionDate.slice(0, 10), dispute_date: row.disputeDate.slice(0, 10), closed_date: row.closedDate?.slice(0, 10) ?? null, customer_email_normalized: row.normalizedEmail, product_evidence: row.product, amount: row.amount, dispute_fee: row.fee, payment_method: row.paymentMethod, reason: row.reason }));
++    const batch = rows.slice(offset, offset + 250).map((row) => ({ id: uuid("commas-historical-dispute", row.sourceId), account_id: accountId, organization_id: organizationId, connection_id: connectionId, provider_account_id: providerAccountId, import_id: importId, evidence_id: evidenceId, source_row_identity: row.sourceId, source_row_number: row.rowNumber, state: row.state, status: row.status, transaction_date: row.transactionDate.slice(0, 10), dispute_date: row.disputeDate.slice(0, 10), closed_date: row.closedDate?.slice(0, 10) ?? null, customer_email_normalized: row.normalizedEmail, product_evidence: row.product, amount: row.amount, dispute_fee: row.fee, currency:row.currency??null, currency_source:row.currencySource??null, fee_currency:row.feeCurrency??null, fee_currency_source:row.feeCurrencySource??null, payment_method: row.paymentMethod, reason: row.reason }));
+     await db("commerce_historical_disputes?on_conflict=import_id,source_row_identity", { method: "POST", headers: { Prefer: "resolution=merge-duplicates,return=minimal" }, body: JSON.stringify(batch) });
+   }
+   const reconciliation = await db("rpc/reconcile_commerce_historical_disputes_v1", { method: "POST", body: JSON.stringify({ p_organization_id: organizationId, p_connection_id: connectionId }) });
+diff --git a/ui/tests/dispute-currency-contract.test.ts b/ui/tests/dispute-currency-contract.test.ts
+new file mode 100644
+index 00000000..c33847ea
+--- /dev/null
++++ b/ui/tests/dispute-currency-contract.test.ts
+@@ -0,0 +1,15 @@
++import test from "node:test";
++import assert from "node:assert/strict";
++import {disputeCurrencyFields} from "../lib/chargebacks/currency.ts";
++test("legacy USD without provenance remains unknown",()=>{
++ assert.deepEqual(disputeCurrencyFields({currency:"USD",fee:15,provider:"commas",locale:"en-US"}),{currency:null,currencySource:null,feeCurrency:null,feeCurrencySource:null});
++});
++test("principal and fee preserve independent source-backed codes",()=>{
++ assert.deepEqual(disputeCurrencyFields({currency:"eur",currency_source:"provider_payload.currency",fee_currency:"GBP",fee_currency_source:"provider_payload.fee_currency"}),{currency:"EUR",currencySource:"provider_payload.currency",feeCurrency:"GBP",feeCurrencySource:"provider_payload.fee_currency"});
++ assert.equal(disputeCurrencyFields({currency:"USD",currency_source:"provider_payload.currency"}).feeCurrency,null);
++});
++test("missing, invalid and unrecognized provenance never gain a currency",()=>{
++ for(const row of [{},{currency:"$",currency_source:"provider_payload.currency"},{currency:"USD",currency_source:"account"},{fee_currency:"USD",fee_currency_source:"locale"}]){
++ assert.equal(disputeCurrencyFields(row).currency,null);assert.equal(disputeCurrencyFields(row).feeCurrency,null);
++ }
++});
