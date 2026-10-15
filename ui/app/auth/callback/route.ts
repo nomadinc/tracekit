@@ -1,25 +1,7 @@
 import { handleAuth } from "@workos-inc/authkit-nextjs";
 import { recordAuthenticationSuccess } from "@/lib/identity/application-session";
 
-function authErrorDiagnostic(value: unknown) {
-  if (value instanceof Error) {
-    return {
-      name: value.name,
-      message: value.message,
-      code: typeof (value as Error & { code?: unknown }).code === "string" ? (value as Error & { code?: string }).code : null,
-    };
-  }
-  if (value && typeof value === "object") {
-    const source = value as Record<string, unknown>;
-    return {
-      name: typeof source.name === "string" ? source.name : null,
-      message: typeof source.message === "string" ? source.message : null,
-      code: typeof source.code === "string" ? source.code : null,
-      status: typeof source.status === "number" ? source.status : null,
-    };
-  }
-  return { name: null, message: typeof value === "string" ? value : null, code: null };
-}
+import { authErrorDiagnostic } from "@/lib/identity/auth-error-diagnostic";
 
 export const GET = handleAuth({
   returnPathname: "/",
@@ -35,6 +17,6 @@ export const GET = handleAuth({
   },
   onError: (...args: unknown[]) => {
     console.error("workos_auth_callback_failed", authErrorDiagnostic(args[0]));
-    return new Response("Authentication could not be completed.", { status: 400 });
+    return new Response('<!doctype html><html lang="en"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Sign-in needs to restart</title><main><h1>Sign-in needs to restart</h1><p>Your sign-in session could not be verified. Please start again.</p><a href="/">Start sign-in again</a></main></html>', { status: 400, headers: { "Content-Type": "text/html; charset=utf-8" } });
   },
 });

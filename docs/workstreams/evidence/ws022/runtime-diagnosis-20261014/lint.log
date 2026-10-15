@@ -1,0 +1,33 @@
+
+> tracekit-ui@0.1.0 lint
+> node scripts/lint.mjs
+
+
+/private/tmp/tracekit-ws022-runtime/ui/app/invitations/[id]/invitation-acceptance.tsx
+  11:7  warning  Use a Next.js router or redirect for relative location navigation  ws022-policy/no-relative-location
+
+/private/tmp/tracekit-ws022-runtime/ui/components/connections/connections-overview.tsx
+  8:1061  warning  Use a Next.js router or redirect for relative location navigation  ws022-policy/no-relative-location
+
+/private/tmp/tracekit-ws022-runtime/ui/components/connections/everflow-admin-controls.tsx
+  26:206  warning  React Hook useEffect has a missing dependency: 'refreshStatus'. Either include it or remove the dependency array  react-hooks/exhaustive-deps
+
+/private/tmp/tracekit-ws022-runtime/ui/components/customers/customer-workspace.tsx
+  118:6  warning  React Hook React.useEffect has missing dependencies: 'session.activeBusinessContextId' and 'session.activeOrganizationId'. Either include them or remove the dependency array  react-hooks/exhaustive-deps
+
+/private/tmp/tracekit-ws022-runtime/ui/components/layout/production-header.tsx
+   92:7   warning  Use a Next.js router or redirect for relative location navigation  ws022-policy/no-relative-location
+  234:27  warning  Use a Next.js router or redirect for relative location navigation  ws022-policy/no-relative-location
+
+/private/tmp/tracekit-ws022-runtime/ui/components/offers/commerce-product-mapping-review.tsx
+  116:166  warning  React Hook React.useEffect has a missing dependency: 'group.products'. Either include it or remove the dependency array. If 'setSelected' needs the current value of 'group.products', you can also switch to useReducer instead of useState and read 'group.products' in the reducer  react-hooks/exhaustive-deps
+
+/private/tmp/tracekit-ws022-runtime/ui/components/platform/admin-actions.tsx
+  161:13  warning  Use a Next.js router or redirect for relative location navigation  ws022-policy/no-relative-location
+
+/private/tmp/tracekit-ws022-runtime/ui/components/platform/admin-client-view-banner.tsx
+  28:7  warning  Use a Next.js router or redirect for relative location navigation  ws022-policy/no-relative-location
+
+✖ 9 problems (0 errors, 9 warnings)
+
+Combined lint: 0 errors, 9 warnings.

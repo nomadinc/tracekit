@@ -31,6 +31,7 @@ import type {
   OrderSummary,
   OrderWorkspaceSnapshot,
 } from "@/lib/orders/types";
+import { loadOrderList } from "@/lib/orders/load-list";
 import { OrderDrawerContent } from "./order-drawer-content";
 const cash = (v: number) => `${v >= 0 ? "+" : "-"}$${Math.abs(v).toFixed(2)}`;
 export function OrderWorkspace() {
@@ -53,6 +54,7 @@ function OrderWorkspaceContent() {
     [snap, setSnap] = React.useState<OrderWorkspaceSnapshot | null>(null),
     [filter, setFilter] = React.useState<OrderListFilter>({ state: "all" }),
     [loading, setLoading] = React.useState(true),
+    [listUnavailable, setListUnavailable] = React.useState(false),
     [listOpen, setListOpen] = React.useState(false),
     [replaying, setReplaying] = React.useState(false),
     [replayIndex, setReplayIndex] = React.useState(0);
@@ -71,14 +73,18 @@ function OrderWorkspaceContent() {
   React.useEffect(() => {
     let on = true;
     setLoading(true);
-    orderRepository
-      .listOrders(scope, {
+    setListUnavailable(false);
+    loadOrderList(() => orderRepository.listOrders(scope, {
         ...filter,
         offerId: requested.offerId,
         customerId: requested.customerId,
+      }))
+      .then((result) => {
+        if (!on) return;
+        setListUnavailable(result.kind === "unavailable");
+        setOrders(result.kind === "loaded" ? result.orders : []);
+        if (result.kind === "unavailable") setSnap(null);
       })
-      .then((v) => on && setOrders(v))
-      .catch(() => on && setOrders([]))
       .finally(() => on && setLoading(false));
     return () => {
       on = false;
@@ -171,6 +177,7 @@ function OrderWorkspaceContent() {
     if (r) drawer.openDrawer(<OrderDrawerContent record={r} />, r.title);
   };
   if (loading && !snap) return <State text="Loading Order Workspace…" />;
+  if (listUnavailable) return <State text="Order Workspace unavailable. Please try again later." />;
   if (!orders.length && requested.orderId) {
     return <State text={`Order ${requested.orderId} could not be loaded from the production Order read path`} />;
   }
