@@ -1,0 +1,31 @@
+{
+  "candidate": "775cbec41b1d937ea59a56d47276ae1a0ecc1c36",
+  "base": "bcd856c39a5ab6dfbf6bdd8418afef78f931e5b6",
+  "draftPR": "https://github.com/nomadinc/tracekit/pull/577",
+  "deployment": {
+    "id": "dpl_7k7MGrKLWRNWYhJwMhMED6GU9cbK",
+    "url": "https://tracekit-staging-12hzpje48-tracekit.vercel.app",
+    "environment": "Preview",
+    "state": "READY",
+    "gitSourceVerified": true
+  },
+  "freshExactCommitUI": {
+    "passed": 1465,
+    "failed": 0,
+    "skipped": 0
+  },
+  "independentFinalCommitSourceReview": "confirmed; no new blocking finding; independent focused3/0/0 before type-only test annotation",
+  "configurationApplied": false,
+  "authenticatedUpdatedPreviewAcceptance": "PENDING; branch-specific Core selector and exact WorkOS Staging URLs awaiting user coordination",
+  "coreUnauthenticatedReadProbes": {
+    "/v1/customers": {
+      "status": 401,
+      "error": "unauthorized"
+    },
+    "/v1/customer-orders": {
+      "status": 401,
+      "error": "unauthorized"
+    }
+  },
+  "priorEvidencePreserved": true
+}
