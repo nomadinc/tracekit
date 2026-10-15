@@ -1,0 +1,21 @@
+# Client re-login and authenticated foreign-resource denial
+
+Exact candidate `bcd856c39a5ab6dfbf6bdd8418afef78f931e5b6`, READY Preview deployment `dpl_6v7oRFdwYX3TbGpz5PwgsPQCUytF`, https://tracekit-staging-50e8hokzy-tracekit.vercel.app. No implementation, deployment, membership or credential change.
+
+The user completed the client password challenge. The long-waiting callback initially displayed Authentication could not be completed. A fresh authorization from the preview root recovered successfully through the established AuthKit session; reload and account-menu inspection confirmed client-read-only and the same allowed organization/workspace. The callback failure is retained, not silently relabeled a successful callback. Installed SDK sets PKCE cookie max-age600seconds; expiration is consistent with the long wait but runtime cause is not asserted without logs. No stale authorization code was replayed or security control weakened.
+
+Read-only SELECT inspected existing connector IDs/organization/provider/status only. A connected allowed-tenant Next29 resource loaded its detail. Two existing connected foreign resources (one in each previously identified active foreign organization) were directly addressed through `/connections/commerce/<id>` and each rendered404/no detail. Returning home retained client role and original organization/workspace. This is authenticated resource-level foreign-tenant denial with an allowed positive control, not an anonymous/nonexistent-ID test. Private member/tenant/resource IDs and provider payloads are excluded from public artifacts.
+
+Customer API attempts are tracked separately: direct top-level JSON API navigation was blocked by Chrome ERR_BLOCKED_BY_CLIENT; no browser protection bypassed and this is not a server-denial result. The current customer workspace UI showed unavailable for the allowed scope. Its modern component derives scope from the session and does not use the legacy customers-client component; a query-parameter UI attempt cannot be represented as a forwarded forged-tenant API probe. Customer availability remains an OPEN Core/customer integration issue until diagnosed. Connector positive/foreign controls provide the completed tenant-denial evidence independently.
+
+Client was then signed out; Staging AuthKit retained exact preview callback. The read-only-identified existing platform-owner email was entered and its existing-password challenge is ready for user authentication. No invitation, role/membership change, bootstrap, credential reset or save. Remaining Admin/client matrix, governed controls and privileged chargeback acceptance depend on that browser authentication. No live financial/provider writes or Meta activation.
+
+## Correction to earlier preparation note
+
+Installed AuthKit uses state-hashed per-flow PKCE cookie names and supports up tofive pending cookies. Earlier wording that concurrent flows necessarily overwrite the client's PKCE cookie was imprecise. Sequential identities preserve test order; no blanket concurrent-flow defect is claimed. Both original preparation and this correction are retained.
+
+Previous51 exact-candidate synthetic boundary/API-to-render checks, full UI/audit/build atb563049a, API1115/0/0 at88f7411 and inherited WS-024 provenance remain separate. Both PRs remain draft; WS-001 reporting held; Meta inactive/uncertified; Production V1 HOLD.
+
+## Independent source review
+
+The separate lint_independent_review reviewer inspected the connection authorization path: authenticated active-organization session and connectors.view are required; connection queries bind organization_id to the active organization, and an ID outside that scoped collection becomes notFound(). This supports the limited two-resource denial result with its allowed positive control. The reviewer did not perform independent browser acceptance. Customer browser blocking is not authorization evidence, and allowed-scope customer unavailability remains open. SDK review confirmed a 600-second PKCE lifetime, state-specific cookies and a five-cookie limit; concurrent flows do not inherently overwrite one shared cookie. Expiration remains an unconfirmed explanation for the initial callback failure.

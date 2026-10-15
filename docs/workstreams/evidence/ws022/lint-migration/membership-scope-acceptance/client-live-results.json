@@ -1,0 +1,58 @@
+{
+  "candidate": "bcd856c39a5ab6dfbf6bdd8418afef78f931e5b6",
+  "deployment": "dpl_6v7oRFdwYX3TbGpz5PwgsPQCUytF",
+  "observations": "executor live browser plus read-only DB existence/scope inspection; not independent staged certification",
+  "privateIdentifiersPublished": false,
+  "cases": [
+    {
+      "id": "CLIENT-RELOGIN",
+      "result": "PASS after fresh authorization",
+      "detail": "Waiting callback initially returned Authentication could not be completed; fresh preview-root authorization recovered into existing client session. No old authorization code replayed."
+    },
+    {
+      "id": "CLIENT-PERSISTENCE",
+      "result": "PASS",
+      "detail": "Reload and account menu confirmed client-read-only, client account, same allowed organization/workspace."
+    },
+    {
+      "id": "CLIENT-OWN-CONNECTION",
+      "result": "PASS",
+      "detail": "Read-only DB-confirmed existing connected Next29 resource in the allowed organization loaded its connection detail."
+    },
+    {
+      "id": "CLIENT-FOREIGN-CONNECTION-A",
+      "result": "PASS denial",
+      "detail": "Read-only DB-confirmed connected resource in active foreign organization A returned404page; no foreign detail rendered."
+    },
+    {
+      "id": "CLIENT-FOREIGN-CONNECTION-B",
+      "result": "PASS denial",
+      "detail": "Read-only DB-confirmed connected resource in active foreign organization B returned404page; no foreign detail rendered."
+    },
+    {
+      "id": "CLIENT-SCOPE-INTEGRITY",
+      "result": "PASS",
+      "detail": "Returning home and reopening account menu retained original role/organization/workspace after both foreign requests."
+    },
+    {
+      "id": "CLIENT-LOGOUT-AGAIN",
+      "result": "PASS",
+      "detail": "Sign Out returned to Staging AuthKit with exact preview callback."
+    },
+    {
+      "id": "CUSTOMER-DIRECT-API-PROBE",
+      "result": "BLOCKED by browser",
+      "detail": "Chrome ERR_BLOCKED_BY_CLIENT for direct JSON API navigation; not counted as application tenant denial; no protection bypassed."
+    },
+    {
+      "id": "CUSTOMER-ALLOWED-UI",
+      "result": "FAIL functional availability",
+      "detail": "Current customer workspace UI showed Customer Workspace unavailable / requested resource unavailable for allowed client scope. Cause unverified; separate Core/customer integration investigation. Not counted as foreign-tenant proof."
+    },
+    {
+      "id": "ADMIN-AUTHENTICATION",
+      "result": "PENDING user browser authentication",
+      "detail": "Existing effective platform-owner email entered; existing-password challenge ready. No credential read/reset/change or membership bootstrap."
+    }
+  ]
+}

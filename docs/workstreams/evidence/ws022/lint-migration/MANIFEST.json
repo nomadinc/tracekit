@@ -164,8 +164,9 @@
     "workspace": "active allowed selection persisted; only one workspace available; no cross-workspace proof",
     "logout": "PASS; authenticated logout reached Staging AuthKit with exact callback",
     "postLogoutProtectedNavigation": "PASS; sign-in required again",
-    "emailRelogin": "existing password challenge reached; awaiting user completion",
-    "AdminAndCrossTenant": "BLOCKED; existing Admin login and valid allowed/denied target scopes required"
+    "emailRelogin": "PASS after fresh authorization recovery; waiting callback failure retained",
+    "AdminAndCrossTenant": "Admin browser authentication pending; client foreign-connector denial completed; remaining privileged/API matrix not certified",
+    "foreignTenantDenial": "PASS for two existing connected foreign resources with allowed resource positive control; selected scope retained"
   },
   "readOnlyMembershipInspection": {
     "existingClientMemberships": 1,
@@ -176,8 +177,15 @@
     "existingEffectivePlatformOwnerIdentified": true,
     "queries": "SELECT only; no mutation or impersonation",
     "privateIdentifiersPublished": false,
-    "clientBrowserAuthentication": "still at existing-password challenge",
-    "foreignTenantLiveProbe": "pending client authentication",
-    "AdminSignIn": "existing identity identified; queued after client checks to avoid concurrent PKCE flow"
+    "clientBrowserAuthentication": "completed; fresh callback recovery and reload persistence pass",
+    "foreignTenantLiveProbe": "two existing foreign connection resources denied; allowed connection loaded",
+    "AdminSignIn": "existing platform-owner password challenge ready; user authentication pending"
+  },
+  "customerReadAvailability": {
+    "status": "OPEN",
+    "observed": "allowed client customer workspace UI unavailable; direct JSON navigation browser-blocked",
+    "cause": "unverified",
+    "owner": "Core/customer integration owner / WS-022 diagnosis",
+    "notTenantDenialEvidence": true
   }
 }
