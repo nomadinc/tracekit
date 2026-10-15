@@ -1,17 +1,11 @@
 name: WS-001 disposable dispute validation
 
 on:
-  push:
-    branches: [ws001/dispute-order-resolver-preparation-20261014]
+  pull_request:
     paths:
       - '.github/workflows/ws001-dispute-validation.yml'
       - 'api/src/commas-*.ts'
       - 'api/src/commas-*.mjs'
-      - 'scripts/*commas*'
-      - 'docs/operations/prepared/*.sql'
-  pull_request:
-    paths:
-      - '.github/workflows/ws001-dispute-validation.yml'
       - 'scripts/*commas*'
       - 'docs/operations/prepared/*.sql'
 
@@ -41,6 +35,8 @@ jobs:
           node-version: '24'
       - name: Install pinned disposable test tools
         run: |
+          sudo apt-get update
+          sudo apt-get install -y ripgrep
           npm install --prefix "$RUNNER_TEMP/ws001-tools" --no-audit --no-fund supabase@2.121.0 pg@8.16.3 @electric-sql/pglite@0.5.10
           echo "$RUNNER_TEMP/ws001-tools/node_modules/.bin" >> "$GITHUB_PATH"
           echo "WS001_PG_MODULE=$RUNNER_TEMP/ws001-tools/node_modules/pg/lib/index.js" >> "$GITHUB_ENV"
@@ -49,6 +45,7 @@ jobs:
         run: |
           mkdir -p "$RUNNER_TEMP/ws001-stack"
           supabase init --workdir "$RUNNER_TEMP/ws001-stack" --yes
+          sed -i 's/^project_id = .*/project_id = "tracekit"/' "$RUNNER_TEMP/ws001-stack/supabase/config.toml"
           supabase start --workdir "$RUNNER_TEMP/ws001-stack" --exclude studio,imgproxy,edge-runtime,logflare,vector
       - name: Load exact reviewed currency dependency
         run: |
