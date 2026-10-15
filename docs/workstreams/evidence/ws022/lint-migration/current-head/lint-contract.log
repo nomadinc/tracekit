@@ -1,0 +1,38 @@
+
+> tracekit-ui@0.1.0 test:lint-contract
+> node --test scripts/lint-contract.test.mjs
+
+TAP version 13
+# Subtest: every enabled baseline rule has explicit equal-severity/options coverage; Compiler deferrals remain off
+ok 1 - every enabled baseline rule has explicit equal-severity/options coverage; Compiler deferrals remain off
+  ---
+  duration_ms: 701.525291
+  type: 'test'
+  ...
+# Subtest: all 46 diagnostic rules catch invalid examples and accept valid controls
+ok 2 - all 46 diagnostic rules catch invalid examples and accept valid controls
+  ---
+  duration_ms: 1650.900875
+  type: 'test'
+  ...
+# Subtest: policy bridges preserve legacy APIs, scopes, lifecycle and relative-prefix behavior
+ok 3 - policy bridges preserve legacy APIs, scopes, lifecycle and relative-prefix behavior
+  ---
+  duration_ms: 557.345792
+  type: 'test'
+  ...
+# Subtest: native errors fail the combined command and build before Next compilation
+ok 4 - native errors fail the combined command and build before Next compilation
+  ---
+  duration_ms: 10823.527167
+  type: 'test'
+  ...
+1..4
+# tests 4
+# suites 0
+# pass 4
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 13940.198208

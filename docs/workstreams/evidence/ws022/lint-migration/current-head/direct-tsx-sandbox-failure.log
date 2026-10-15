@@ -1,0 +1,20 @@
+node:net:1918
+      const error = new UVExceptionWithHostPort(rval, 'listen', address, port);
+                    ^
+
+Error: listen EPERM: operation not permitted /var/folders/rw/ndsrnj415rz0rq7jn2nmfw3c0000gn/T/tsx-501/59964.pipe
+    at Server.setupListenHandle [as _listen2] (node:net:1918:21)
+    at listenInCluster (node:net:1997:12)
+    at Server.listen (node:net:2119:5)
+    at file:///private/tmp/tracekit-ws022-lint-migration/ui/node_modules/tsx/dist/cli.mjs:53:31472
+    at new Promise (<anonymous>)
+    at createIpcServer (file:///private/tmp/tracekit-ws022-lint-migration/ui/node_modules/tsx/dist/cli.mjs:53:31450)
+    at async file:///private/tmp/tracekit-ws022-lint-migration/ui/node_modules/tsx/dist/cli.mjs:55:500 {
+  code: 'EPERM',
+  errno: -1,
+  syscall: 'listen',
+  address: '/var/folders/rw/ndsrnj415rz0rq7jn2nmfw3c0000gn/T/tsx-501/59964.pipe',
+  port: -1
+}
+
+Node.js v22.22.1

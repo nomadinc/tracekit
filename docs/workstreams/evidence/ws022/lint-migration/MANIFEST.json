@@ -54,14 +54,87 @@
     ]
   },
   "holds": [
-    "four repository-owned policy maintenance decision: frontend/tooling owner",
     "authenticated member acceptance: identity/application owner",
     "WS-001 affiliate/source certification",
     "Meta inactive/uncertified",
-    "Production V1 HOLD"
+    "Production V1 HOLD",
+    "exact preview WorkOS Staging callback/sign-out registration: action-time user confirmation pending"
   ],
   "rollback": "COVERAGE.md",
   "independentReview": "INDEPENDENT-REVIEW.md",
   "sensitiveMaterial": "No credentials, auth headers, .env files, member identities or provider payloads included.",
-  "finalTestedPRHead": "b563049ae88622441498ee7efb111ba65b02bbf4"
+  "finalTestedPRHead": "b563049ae88622441498ee7efb111ba65b02bbf4",
+  "compatibilityMaintenance": {
+    "owner": "WS-022",
+    "acceptedBy": "explicit user instruction",
+    "acceptedOn": "2026-10-14",
+    "checks": [
+      "React deprecations",
+      "Relative navigation",
+      "Page links",
+      "Anonymous default-wrapper names"
+    ],
+    "obligations": [
+      "maintain regression tests",
+      "review compatibility whenever React, Next.js or lint dependencies change",
+      "preserve rule coverage",
+      "document future replacement or ownership transfer"
+    ],
+    "securityWaiver": false,
+    "mergeAuthorized": false,
+    "productionDeploymentAuthorized": false
+  },
+  "currentCandidate": "bcd856c39a5ab6dfbf6bdd8418afef78f931e5b6",
+  "currentCandidateDiff": "documentation only; no application, dependency, lint configuration or regression-test changes",
+  "currentCandidateChecks": {
+    "lintContract": {
+      "pass": 4,
+      "fail": 0,
+      "skip": 0
+    },
+    "lint": {
+      "errors": 0,
+      "warnings": 9
+    },
+    "typescriptDiagnostics": 0,
+    "focusedAcceptance": {
+      "pass": 51,
+      "fail": 0,
+      "skip": 0,
+      "command": "node scripts/run-tests.mjs (11 explicitly selected boundary test files)",
+      "log": "current-head/focused-acceptance.log"
+    },
+    "independentDocumentationReview": "separate reviewer confirmed ownership/provenance changes, no accuracy blocker"
+  },
+  "priorDisposableDatabaseAcceptance": {
+    "candidate": "88f7411457b988e83e51fbc9bf7b4b5b76002fe7",
+    "evidenceCommit": "4def7a82567f28db686e992a6ba72d688da2aca1",
+    "focused": {
+      "pass": 4,
+      "fail": 0,
+      "skip": 0
+    },
+    "fullAPI": {
+      "pass": 1115,
+      "fail": 0,
+      "skip": 0
+    },
+    "freshInThisPass": false,
+    "WS024": "inherited separately with original commits"
+  },
+  "currentDeployment": {
+    "id": "dpl_6v7oRFdwYX3TbGpz5PwgsPQCUytF",
+    "url": "tracekit-staging-50e8hokzy-tracekit.vercel.app",
+    "readyState": "READY",
+    "projectId": "prj_KPHnqsNayx17VXmMIp7Rasrsp7gc",
+    "ownerId": "team_QFcd7GbqA7MfBH9bPM0kAqG9",
+    "gitSource": {
+      "ref": "ws022/maintained-lint-stack",
+      "repoId": 1231312336,
+      "sha": "bcd856c39a5ab6dfbf6bdd8418afef78f931e5b6",
+      "type": "github",
+      "prId": null
+    },
+    "environment": "preview"
+  }
 }

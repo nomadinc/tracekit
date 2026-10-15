@@ -1,0 +1,326 @@
+TAP version 13
+# Subtest: production logout supplies an absolute same-origin signed-out destination
+ok 1 - production logout supplies an absolute same-origin signed-out destination
+  ---
+  duration_ms: 0.401833
+  type: 'test'
+  ...
+# Subtest: preview authentication keeps its explicitly configured deployment origin
+ok 2 - preview authentication keeps its explicitly configured deployment origin
+  ---
+  duration_ms: 0.110792
+  type: 'test'
+  ...
+# Subtest: untrusted origins, credentials and protocol downgrade cannot become return destinations
+ok 3 - untrusted origins, credentials and protocol downgrade cannot become return destinations
+  ---
+  duration_ms: 0.13475
+  type: 'test'
+  ...
+# Subtest: local development remains available without authorizing production localhost
+ok 4 - local development remains available without authorizing production localhost
+  ---
+  duration_ms: 0.0635
+  type: 'test'
+  ...
+# Subtest: a stale preview callback configuration cannot redirect a production logout
+ok 5 - a stale preview callback configuration cannot redirect a production logout
+  ---
+  duration_ms: 0.100875
+  type: 'test'
+  ...
+# Subtest: actual detail response renders independent currencies, null authority and selection races
+ok 6 - actual detail response renders independent currencies, null authority and selection races
+  ---
+  duration_ms: 260.764208
+  type: 'test'
+  ...
+# Subtest: late A response cannot overwrite selected B
+ok 7 - late A response cannot overwrite selected B
+  ---
+  duration_ms: 0.793458
+  type: 'test'
+  ...
+# Subtest: closing prevents late detail from returning
+ok 8 - closing prevents late detail from returning
+  ---
+  duration_ms: 0.105875
+  type: 'test'
+  ...
+# Subtest: late A rejection cannot clear B
+ok 9 - late A rejection cannot clear B
+  ---
+  duration_ms: 0.088875
+  type: 'test'
+  ...
+# Subtest: selection change immediately clears previous detail
+ok 10 - selection change immediately clears previous detail
+  ---
+  duration_ms: 0.062834
+  type: 'test'
+  ...
+# Subtest: old dispute detail is hidden immediately when selection changes
+ok 11 - old dispute detail is hidden immediately when selection changes
+  ---
+  duration_ms: 0.3735
+  type: 'test'
+  ...
+# Subtest: only matching dispute detail is displayed
+ok 12 - only matching dispute detail is displayed
+  ---
+  duration_ms: 0.059958
+  type: 'test'
+  ...
+# Subtest: Edge request rejects missing or inactive service credentials before tenant access
+ok 13 - Edge request rejects missing or inactive service credentials before tenant access
+  ---
+  duration_ms: 54.956583
+  type: 'test'
+  ...
+# Subtest: Edge request rejects unbound tenant and nested IP before ingestion
+ok 14 - Edge request rejects unbound tenant and nested IP before ingestion
+  ---
+  duration_ms: 4.295542
+  type: 'test'
+  ...
+# Subtest: Edge request uses bound organization instead of caller organization
+ok 15 - Edge request uses bound organization instead of caller organization
+  ---
+  duration_ms: 6.714916
+  type: 'test'
+  ...
+# Subtest: Edge persistence parse errors cannot leak raw response text into logs
+ok 16 - Edge persistence parse errors cannot leak raw response text into logs
+  ---
+  duration_ms: 1.426542
+  type: 'test'
+  ...
+# Subtest: Edge tenant binding control plane uses the canonical authorization gateway
+ok 17 - Edge tenant binding control plane uses the canonical authorization gateway
+  ---
+  duration_ms: 1.070792
+  type: 'test'
+  ...
+# Subtest: binding writes resolve only canonical active TraceKit organizations
+ok 18 - binding writes resolve only canonical active TraceKit organizations
+  ---
+  duration_ms: 0.342959
+  type: 'test'
+  ...
+# Subtest: binding lifecycle supports active and disabled without deleting evidence
+ok 19 - binding lifecycle supports active and disabled without deleting evidence
+  ---
+  duration_ms: 0.119083
+  type: 'test'
+  ...
+# Subtest: tenant reference remains opaque and bounded
+ok 20 - tenant reference remains opaque and bounded
+  ---
+  duration_ms: 0.141083
+  type: 'test'
+  ...
+# Subtest: Edge tenant identity is deterministic, opaque, and organization specific
+ok 21 - Edge tenant identity is deterministic, opaque, and organization specific
+  ---
+  duration_ms: 1.069625
+  type: 'test'
+  ...
+# Subtest: control plane no longer accepts a caller-selected tenantRef on write
+ok 22 - control plane no longer accepts a caller-selected tenantRef on write
+  ---
+  duration_ms: 0.07975
+  type: 'test'
+  ...
+# Subtest: invalid organization identifiers cannot derive Edge tenant identity
+ok 23 - invalid organization identifiers cannot derive Edge tenant identity
+  ---
+  duration_ms: 0.511834
+  type: 'test'
+  ...
+# Subtest: M4.2 preserves the authoritative execution and audit role policy
+ok 24 - M4.2 preserves the authoritative execution and audit role policy
+  ---
+  duration_ms: 1.119958
+  type: 'test'
+  ...
+# Subtest: M4.2 operational permissions are explicit and do not broaden provider execution
+ok 25 - M4.2 operational permissions are explicit and do not broaden provider execution
+  ---
+  duration_ms: 1.164125
+  type: 'test'
+  ...
+# Subtest: M4.2 rejects foreign malformed tenant and spoofed actor hints
+ok 26 - M4.2 rejects foreign malformed tenant and spoofed actor hints
+  ---
+  duration_ms: 0.194833
+  type: 'test'
+  ...
+# Subtest: M4.2 Work Item and Notification routes derive scope and actor before the admin-secret boundary
+ok 27 - M4.2 Work Item and Notification routes derive scope and actor before the admin-secret boundary
+  ---
+  duration_ms: 5.230625
+  type: 'test'
+  ...
+# Subtest: M4.2 foreign object IDs remain non-disclosing under server workspace scope
+ok 28 - M4.2 foreign object IDs remain non-disclosing under server workspace scope
+  ---
+  duration_ms: 1.850792
+  type: 'test'
+  ...
+# Subtest: M4.2 Work Item transitions retain graph checks and authenticated activity actor
+ok 29 - M4.2 Work Item transitions retain graph checks and authenticated activity actor
+  ---
+  duration_ms: 0.631
+  type: 'test'
+  ...
+# Subtest: M4.2 audit view is permission bounded paginated and Admin Client View tenant-scoped
+ok 30 - M4.2 audit view is permission bounded paginated and Admin Client View tenant-scoped
+  ---
+  duration_ms: 1.714167
+  type: 'test'
+  ...
+# Subtest: M4.2 release evaluator exposes each production evidence gate independently
+ok 31 - M4.2 release evaluator exposes each production evidence gate independently
+  ---
+  duration_ms: 0.102917
+  type: 'test'
+  ...
+# Subtest: integrations hub exposes a dedicated Meta Ads advertising entry
+ok 32 - integrations hub exposes a dedicated Meta Ads advertising entry
+  ---
+  duration_ms: 0.437583
+  type: 'test'
+  ...
+# Subtest: Meta UI starts OAuth through the bounded server route and explains read-only scope
+ok 33 - Meta UI starts OAuth through the bounded server route and explains read-only scope
+  ---
+  duration_ms: 0.071208
+  type: 'test'
+  ...
+# Subtest: Meta UI preserves multiple connections and account selections independently
+ok 34 - Meta UI preserves multiple connections and account selections independently
+  ---
+  duration_ms: 0.152542
+  type: 'test'
+  ...
+# Subtest: Meta account rows expose durable account identity and operational context
+ok 35 - Meta account rows expose durable account identity and operational context
+  ---
+  duration_ms: 0.093917
+  type: 'test'
+  ...
+# Subtest: saving account selection explicitly does not activate sync
+ok 36 - saving account selection explicitly does not activate sync
+  ---
+  duration_ms: 0.111417
+  type: 'test'
+  ...
+# Subtest: Meta status denies missing authentication organization and permission before service access
+ok 37 - Meta status denies missing authentication organization and permission before service access
+  ---
+  duration_ms: 60.504708
+  type: 'test'
+  ...
+# Subtest: Meta status allowlists fields and strips nested account metadata
+ok 38 - Meta status allowlists fields and strips nested account metadata
+  ---
+  duration_ms: 33.664625
+  type: 'test'
+  ...
+# Subtest: Meta account writes deny cross-origin and missing-origin requests before service access
+ok 39 - Meta account writes deny cross-origin and missing-origin requests before service access
+  ---
+  duration_ms: 28.902625
+  type: 'test'
+  ...
+# Subtest: Meta account writes reject malformed IDs duplicates and oversized selections
+ok 40 - Meta account writes reject malformed IDs duplicates and oversized selections
+  ---
+  duration_ms: 25.479292
+  type: 'test'
+  ...
+# Subtest: Meta selection uses session scope ignores caller organization and never enables schedules
+ok 41 - Meta selection uses session scope ignores caller organization and never enables schedules
+  ---
+  duration_ms: 14.199667
+  type: 'test'
+  ...
+# Subtest: Actual Meta selection service denies foreign connection and permission before repository writes
+ok 42 - Actual Meta selection service denies foreign connection and permission before repository writes
+  ---
+  duration_ms: 18.528791
+  type: 'test'
+  ...
+1..42
+# tests 42
+# suites 0
+# pass 42
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 607.457625
+TAP version 13
+# Subtest: Meta adapter uses the Facebook Login for Business configuration
+ok 1 - Meta adapter uses the Facebook Login for Business configuration
+  ---
+  duration_ms: 1.567625
+  type: 'test'
+  ...
+# Subtest: OAuth state is signed, tenant/user bound, time bounded, and tamper evident
+ok 2 - OAuth state is signed, tenant/user bound, time bounded, and tamper evident
+  ---
+  duration_ms: 1.074666
+  type: 'test'
+  ...
+# Subtest: Graph reads use bearer authorization and never place the access token in URLs
+ok 3 - Graph reads use bearer authorization and never place the access token in URLs
+  ---
+  duration_ms: 18.0395
+  type: 'test'
+  ...
+# Subtest: ad-account discovery is cursor bounded, deduplicated, and preserves multiple accounts
+ok 4 - ad-account discovery is cursor bounded, deduplicated, and preserves multiple accounts
+  ---
+  duration_ms: 2.481625
+  type: 'test'
+  ...
+# Subtest: OAuth routes require connector management and bind callback to an HttpOnly state cookie
+ok 5 - OAuth routes require connector management and bind callback to an HttpOnly state cookie
+  ---
+  duration_ms: 1.061041
+  type: 'test'
+  ...
+# Subtest: connection completion validates provider data before persistence and requires ads_read
+ok 6 - connection completion validates provider data before persistence and requires ads_read
+  ---
+  duration_ms: 0.162917
+  type: 'test'
+  ...
+# Subtest: credentials are encrypted at connection scope and provider accounts default unselected
+ok 7 - credentials are encrypted at connection scope and provider accounts default unselected
+  ---
+  duration_ms: 0.380666
+  type: 'test'
+  ...
+# Subtest: account selection accepts many internal account IDs and never activates schedules
+ok 8 - account selection accepts many internal account IDs and never activates schedules
+  ---
+  duration_ms: 0.182416
+  type: 'test'
+  ...
+# Subtest: status presentation is tenant scoped and returns no credential material
+ok 9 - status presentation is tenant scoped and returns no credential material
+  ---
+  duration_ms: 0.255209
+  type: 'test'
+  ...
+1..9
+# tests 9
+# suites 0
+# pass 9
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 224.70475

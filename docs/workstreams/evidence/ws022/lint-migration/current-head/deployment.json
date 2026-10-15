@@ -1,0 +1,15 @@
+{
+  "id": "dpl_6v7oRFdwYX3TbGpz5PwgsPQCUytF",
+  "url": "tracekit-staging-50e8hokzy-tracekit.vercel.app",
+  "readyState": "READY",
+  "projectId": "prj_KPHnqsNayx17VXmMIp7Rasrsp7gc",
+  "ownerId": "team_QFcd7GbqA7MfBH9bPM0kAqG9",
+  "gitSource": {
+    "ref": "ws022/maintained-lint-stack",
+    "repoId": 1231312336,
+    "sha": "bcd856c39a5ab6dfbf6bdd8418afef78f931e5b6",
+    "type": "github",
+    "prId": null
+  },
+  "environment": "preview"
+}
