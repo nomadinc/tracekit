@@ -109,9 +109,15 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
   const membership = requestedOrganizationMembership || preferredMembership;
 
   const organizationMemberships = activeMemberships.filter((candidate) => Boolean(candidate.organizationId));
+  const selectedAccount = membership.accountId ? await repository.accountById(membership.accountId) : null;
+  const selectedAgency = selectedAccount?.accountType === "agency" && selectedAccount.status === "active"
+    ? await repository.agencyByAccountId(selectedAccount.id) : null;
+  if (selectedAccount?.accountType === "agency" && (!selectedAgency || selectedAgency.status !== "active")) return { kind: "no-membership" };
+  const agencyOrganizations = selectedAgency?.status === "active"
+    ? await repository.organizationsForMembership(membership, selectedAgency) : [];
   const organizationRecords = (
     await Promise.all(organizationMemberships.map((candidate) => repository.organizationsForMembership(candidate, null)))
-  ).flat();
+  ).flat().concat(agencyOrganizations).filter(organization => organization.status === "active");
   const organizationById = new Map(organizationRecords.map((organization) => [organization.id, organization]));
   const organizations = Array.from(organizationById.values()).map((organization) => ({
     id: organization.id,
@@ -137,16 +143,18 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
   const adminViewOrganization = adminViewRecord
     ? { id: adminViewRecord.id, name: adminViewRecord.name, mark: adminViewRecord.name.slice(0, 2).toUpperCase(), accountId: adminViewRecord.owningAccountId }
     : null;
-  const effectiveOrganizations = adminViewOrganization ? [adminViewOrganization] : platformMode ? [] : organizations;
+  const effectiveOrganizations = adminViewOrganization ? [adminViewOrganization] : platformMode ? [] : selectedAgency
+    ? organizations.filter(organization => agencyOrganizations.some(assigned => assigned.id === organization.id)) : organizations;
   const activeOrganization = adminViewOrganization || (platformMode ? null : effectiveOrganizations.find((organization) => organization.id === requestedOrganizationId) || effectiveOrganizations.find((organization) => organization.id === membership.organizationId) || effectiveOrganizations[0] || null);
-  const activeOrganizationMembership = activeOrganization && !adminViewOrganization
+  const activeOrganizationMembership = activeOrganization && !adminViewOrganization && !selectedAgency
     ? organizationMemberships.find((candidate) => candidate.organizationId === activeOrganization.id) || membership
     : membership;
   const activeOverrides = activeOrganizationMembership.id === membership.id
     ? overrides
     : await repository.permissionOverrides(activeOrganizationMembership.id);
   const activePermissions = Array.from(resolveEffectivePermissions(activeOrganizationMembership, activeOverrides));
-  const activeAccountId = activeOrganization?.accountId || activeOrganizationMembership.accountId;
+  const activeAccountId = !adminViewOrganization && selectedAgency
+    ? selectedAgency.accountId : activeOrganization?.accountId || activeOrganizationMembership.accountId;
   if (!activeAccountId) return { kind: "no-membership" };
   const account = await repository.accountById(activeAccountId);
   if (!account || account.status !== "active") return { kind: "no-membership" };

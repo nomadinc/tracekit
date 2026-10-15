@@ -5,10 +5,10 @@ import { runInNewContext } from "node:vm";
 import { createRequire } from "node:module";
 import { invitationState } from "../lib/identity/invitation-onboarding";
 const nativeRequire = createRequire(import.meta.url);
-async function loadRoute(path: string, mocks: Record<string, unknown>) {
+async function loadRoute(path: string, mocks: Record<string, unknown>, env: Record<string, string> = {}) {
   const result = await build({ entryPoints: [new URL(path, import.meta.url).pathname], bundle: true, write: false, platform: "node", format: "cjs", external: ["@workos-inc/authkit-nextjs", "next/server", "next/headers", "@/lib/identity/active-organization-cookie", "@/lib/identity/application-session", "@/lib/identity/supabase-identity-repository"] });
   const module = { exports: {} as any };
-  runInNewContext(result.outputFiles[0].text, { module, exports: module.exports, require: (name: string) => name in mocks ? mocks[name] : nativeRequire(name), Response, URL, process: { env: { NODE_ENV: "production" } }, console: { error() {} } });
+  runInNewContext(result.outputFiles[0].text, { module, exports: module.exports, require: (name: string) => name in mocks ? mocks[name] : nativeRequire(name), Response, URL, process: { env: { NODE_ENV: "production", ...env } }, console: { error() {} } });
   return module.exports;
 }
 test("sign-in forwards the token while retaining SDK PKCE URL and sealed invitation identity", async () => {
@@ -87,4 +87,17 @@ test("callback accepts only the exact persisted invite and skips impersonated or
   assert.match(await stopped.text(), /Continue to TraceKit/);
   const mismatch = await route.GET.onError({ error: { code: "state_mismatch" }, request });
   assert.equal(mismatch.status, 400);
+});
+
+test("preview sign-in binds callback to a trusted Vercel origin and rejects forged hosts",async()=>{
+ let options:any;
+ const route=await loadRoute("../app/auth/sign-in/route.ts",{
+  "@workos-inc/authkit-nextjs":{getSignInUrl:async(value:any)=>{options=value;return "https://auth.example.test/authorize";}},
+  "next/server":{NextResponse:{redirect:(url:URL)=>new Response(null,{status:307,headers:{location:String(url)}}),json:(value:any,init:any)=>Response.json(value,init)}},
+ },{VERCEL_ENV:"preview",VERCEL_BRANCH_URL:"branch.example.test",VERCEL_URL:"build.example.test"});
+ assert.equal((await route.GET(new Request("https://branch.example.test/auth/sign-in"))).status,307);
+ assert.equal(options.redirectUri,"https://branch.example.test/auth/callback");
+ assert.equal((await route.GET(new Request("https://build.example.test/auth/sign-in"))).status,307);
+ assert.equal(options.redirectUri,"https://build.example.test/auth/callback");
+ for(const url of ["https://evil.example.test/auth/sign-in","http://branch.example.test/auth/sign-in"]) assert.equal((await route.GET(new Request(url))).status,400);
 });
