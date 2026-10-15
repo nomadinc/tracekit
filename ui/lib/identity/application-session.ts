@@ -115,9 +115,14 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
   if (selectedAccount?.accountType === "agency" && (!selectedAgency || selectedAgency.status !== "active")) return { kind: "no-membership" };
   const agencyOrganizations = selectedAgency?.status === "active"
     ? await repository.organizationsForMembership(membership, selectedAgency) : [];
-  const organizationRecords = (
+  const candidateOrganizationRecords = (
     await Promise.all(organizationMemberships.map((candidate) => repository.organizationsForMembership(candidate, null)))
   ).flat().concat(agencyOrganizations).filter(organization => organization.status === "active");
+  // An assignment or membership must not reactivate a suspended client account.
+  const owningAccountIds = Array.from(new Set(candidateOrganizationRecords.map(organization => organization.owningAccountId)));
+  const owningAccounts = await Promise.all(owningAccountIds.map(id => repository.accountById(id)));
+  const activeClientAccountIds = new Set(owningAccounts.filter(account => account?.status === "active" && account.accountType === "client").map(account => account!.id));
+  const organizationRecords = candidateOrganizationRecords.filter(organization => activeClientAccountIds.has(organization.owningAccountId));
   const organizationById = new Map(organizationRecords.map((organization) => [organization.id, organization]));
   const organizations = Array.from(organizationById.values()).map((organization) => ({
     id: organization.id,

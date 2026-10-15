@@ -65,3 +65,11 @@ The persistent session resolver previously enumerated direct organization member
 Agency invitation issuance/acceptance and existing-user notification are still open; the current customer invitation RPC only supports client-read-only organization invitations. A client user of an agency's client remains an organization-scoped customer; an agency team member requires an agency account membership. Do not substitute one for the other or automatically assign agency-owner.
 
 Validation: 56 focused tests passed before adding the explicit preview-host regression test; that new test also passed. These are mocked provider/database tests, not live agency certification.
+
+### October 15 scope and acceptance follow-up
+
+Session resolution now excludes organizations whose owning client account is inactive or has a non-client account type, including organizations reached through agency assignments. Suspending the client account removes its organization and workspace from the agency session while preserving the active agency account.
+
+Explicit in-app invitation acceptance now selects the organization returned by the successful persisted acceptance RPC, using a signed user-bound cookie, and clears the previous business-context selection. Rejected or unverified acceptance sets no selection cookie, and callers cannot supply a target organization for acceptance.
+
+Validation: 58 focused tests pass; targeted lint and full production build pass. Tests use isolated provider/repository mocks and do not establish live tenant isolation or agency invitation support. Agency issuance/acceptance, existing-user notification and live mobile/denial verification remain open.

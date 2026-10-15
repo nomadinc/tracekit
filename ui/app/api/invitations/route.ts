@@ -2,6 +2,8 @@ import { completeInvitationDelivery } from "@/lib/identity/invitation-email-deli
 import { sendWorkOSInvitation } from "@/lib/identity/workos-invitation-delivery";
 import { randomUUID } from "node:crypto";
 import { NextResponse } from "next/server";
+import { ACTIVE_ORGANIZATION_COOKIE, sealActiveOrganization } from "@/lib/identity/active-organization-cookie";
+import { ACTIVE_BUSINESS_CONTEXT_COOKIE } from "@/lib/identity/active-business-context-cookie";
 import { resolveApplicationSession, resolveAuthenticatedPersistentIdentity } from "@/lib/identity/application-session";
 import { authorizeCustomerInvitation } from "@/lib/identity/customer-invitation-policy";
 import { resolveInvitationTargetAccess } from "@/lib/identity/invitation-target-access";
@@ -22,7 +24,14 @@ export async function POST(request: Request) {
       const identity = await resolveAuthenticatedPersistentIdentity();
       if (!identity || identity.user.status !== "active") return unavailable();
       const result = await repository.customerInvitation({ p_operation: "accept", p_actor_id: identity.user.id, p_identity_id: identity.externalWorkosUserId, p_correlation_id: randomUUID(), p_invitation_id: body.invitationId, p_email_verified: identity.emailVerified });
-      return result.ok ? NextResponse.json({ ok: true, organizationId: result.organizationId }) : unavailable();
+      if (!result.ok) return unavailable();
+      const response = NextResponse.json({ ok: true, organizationId: result.organizationId });
+      if (result.organizationId) {
+        const maxAge = 60 * 60 * 24 * 30;
+        response.cookies.set(ACTIVE_ORGANIZATION_COOKIE, sealActiveOrganization({ userId: identity.user.id, organizationId: result.organizationId, expiresAt: Date.now() + maxAge * 1000 }), { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge });
+        response.cookies.set(ACTIVE_BUSINESS_CONTEXT_COOKIE, "", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 0 });
+      }
+      return response;
     }
     const resolution = await resolveApplicationSession();
     if (resolution.kind !== "authenticated") return unavailable();
