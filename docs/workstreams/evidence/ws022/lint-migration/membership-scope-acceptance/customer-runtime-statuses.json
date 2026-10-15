@@ -1,0 +1,24 @@
+{
+  "deploymentId": "dpl_6v7oRFdwYX3TbGpz5PwgsPQCUytF",
+  "query": "/api/customers; preceding1h; limit100",
+  "records": [
+    {
+      "timestamp": 1792040082296,
+      "requestPath": "/api/customers",
+      "responseStatusCode": 401,
+      "source": "serverless"
+    },
+    {
+      "timestamp": 1792039076903,
+      "requestPath": "/api/customers",
+      "responseStatusCode": 401,
+      "source": "edge-middleware"
+    },
+    {
+      "timestamp": 1792039028786,
+      "requestPath": "/api/customers",
+      "responseStatusCode": 404,
+      "source": "serverless"
+    }
+  ]
+}

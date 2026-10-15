@@ -1,0 +1,302 @@
+TAP version 13
+# Subtest: principal and fee retain independent currencies
+ok 1 - principal and fee retain independent currencies
+  ---
+  duration_ms: 38.829084
+  type: 'test'
+  ...
+# Subtest: unknown currency never defaults to USD
+ok 2 - unknown currency never defaults to USD
+  ---
+  duration_ms: 0.150709
+  type: 'test'
+  ...
+# Subtest: zero values and missing amounts remain distinct
+ok 3 - zero values and missing amounts remain distinct
+  ---
+  duration_ms: 0.067958
+  type: 'test'
+  ...
+# Subtest: detail currency null does not fall back to list currency
+ok 4 - detail currency null does not fall back to list currency
+  ---
+  duration_ms: 0.409625
+  type: 'test'
+  ...
+# Subtest: actual detail response renders independent currencies, null authority and selection races
+ok 5 - actual detail response renders independent currencies, null authority and selection races
+  ---
+  duration_ms: 261.907917
+  type: 'test'
+  ...
+# Subtest: late A response cannot overwrite selected B
+ok 6 - late A response cannot overwrite selected B
+  ---
+  duration_ms: 0.89225
+  type: 'test'
+  ...
+# Subtest: closing prevents late detail from returning
+ok 7 - closing prevents late detail from returning
+  ---
+  duration_ms: 0.201167
+  type: 'test'
+  ...
+# Subtest: late A rejection cannot clear B
+ok 8 - late A rejection cannot clear B
+  ---
+  duration_ms: 0.1685
+  type: 'test'
+  ...
+# Subtest: selection change immediately clears previous detail
+ok 9 - selection change immediately clears previous detail
+  ---
+  duration_ms: 0.121667
+  type: 'test'
+  ...
+# Subtest: reason normalization preserves distinct evidence families
+ok 10 - reason normalization preserves distinct evidence families
+  ---
+  duration_ms: 0.390208
+  type: 'test'
+  ...
+# Subtest: timing and percentile calculations are deterministic
+ok 11 - timing and percentile calculations are deterministic
+  ---
+  duration_ms: 0.360959
+  type: 'test'
+  ...
+# Subtest: distribution comparison requires an explicit control
+ok 12 - distribution comparison requires an explicit control
+  ---
+  duration_ms: 0.122584
+  type: 'test'
+  ...
+# Subtest: maturity windows prevent immature cohort claims
+ok 13 - maturity windows prevent immature cohort claims
+  ---
+  duration_ms: 0.742125
+  type: 'test'
+  ...
+# Subtest: Journey construction is ordered, partial, and exposes evidence gaps
+ok 14 - Journey construction is ordered, partial, and exposes evidence gaps
+  ---
+  duration_ms: 6.099125
+  type: 'test'
+  ...
+# Subtest: Investigation identity and output are replay deterministic
+ok 15 - Investigation identity and output are replay deterministic
+  ---
+  duration_ms: 0.274125
+  type: 'test'
+  ...
+# Subtest: old dispute detail is hidden immediately when selection changes
+ok 16 - old dispute detail is hidden immediately when selection changes
+  ---
+  duration_ms: 1.192042
+  type: 'test'
+  ...
+# Subtest: only matching dispute detail is displayed
+ok 17 - only matching dispute detail is displayed
+  ---
+  duration_ms: 0.195583
+  type: 'test'
+  ...
+# Subtest: default roles resolve to typed permission collections
+ok 18 - default roles resolve to typed permission collections
+  ---
+  duration_ms: 1.159458
+  type: 'test'
+  ...
+# Subtest: shell variants follow Account type rather than role labels
+ok 19 - shell variants follow Account type rather than role labels
+  ---
+  duration_ms: 0.2065
+  type: 'test'
+  ...
+# Subtest: Agency and Client Organization access remains membership scoped
+ok 20 - Agency and Client Organization access remains membership scoped
+  ---
+  duration_ms: 0.796375
+  type: 'test'
+  ...
+# Subtest: Business Contexts are restricted to the active allowed Organization
+ok 21 - Business Contexts are restricted to the active allowed Organization
+  ---
+  duration_ms: 0.161333
+  type: 'test'
+  ...
+# Subtest: session normalization removes inaccessible Organization and Business Context state
+ok 22 - session normalization removes inaccessible Organization and Business Context state
+  ---
+  duration_ms: 0.116542
+  type: 'test'
+  ...
+# Subtest: route authorization checks permission, Organization scope, and shell variant
+ok 23 - route authorization checks permission, Organization scope, and shell variant
+  ---
+  duration_ms: 0.104
+  type: 'test'
+  ...
+# Subtest: persistent Organization UUIDs are authorized from membership scope without consulting mock IDs
+ok 24 - persistent Organization UUIDs are authorized from membership scope without consulting mock IDs
+  ---
+  duration_ms: 0.099292
+  type: 'test'
+  ...
+# Subtest: each representative identity resolves the permissions that drive its navigation
+ok 25 - each representative identity resolves the permissions that drive its navigation
+  ---
+  duration_ms: 0.074334
+  type: 'test'
+  ...
+# Subtest: integrations hub exposes a dedicated Meta Ads advertising entry
+ok 26 - integrations hub exposes a dedicated Meta Ads advertising entry
+  ---
+  duration_ms: 0.988125
+  type: 'test'
+  ...
+# Subtest: Meta UI starts OAuth through the bounded server route and explains read-only scope
+ok 27 - Meta UI starts OAuth through the bounded server route and explains read-only scope
+  ---
+  duration_ms: 0.131167
+  type: 'test'
+  ...
+# Subtest: Meta UI preserves multiple connections and account selections independently
+ok 28 - Meta UI preserves multiple connections and account selections independently
+  ---
+  duration_ms: 0.518166
+  type: 'test'
+  ...
+# Subtest: Meta account rows expose durable account identity and operational context
+ok 29 - Meta account rows expose durable account identity and operational context
+  ---
+  duration_ms: 0.135459
+  type: 'test'
+  ...
+# Subtest: saving account selection explicitly does not activate sync
+ok 30 - saving account selection explicitly does not activate sync
+  ---
+  duration_ms: 0.197334
+  type: 'test'
+  ...
+# Subtest: Meta status denies missing authentication organization and permission before service access
+ok 31 - Meta status denies missing authentication organization and permission before service access
+  ---
+  duration_ms: 38.57125
+  type: 'test'
+  ...
+# Subtest: Meta status allowlists fields and strips nested account metadata
+ok 32 - Meta status allowlists fields and strips nested account metadata
+  ---
+  duration_ms: 17.920083
+  type: 'test'
+  ...
+# Subtest: Meta account writes deny cross-origin and missing-origin requests before service access
+ok 33 - Meta account writes deny cross-origin and missing-origin requests before service access
+  ---
+  duration_ms: 18.914083
+  type: 'test'
+  ...
+# Subtest: Meta account writes reject malformed IDs duplicates and oversized selections
+ok 34 - Meta account writes reject malformed IDs duplicates and oversized selections
+  ---
+  duration_ms: 14.682792
+  type: 'test'
+  ...
+# Subtest: Meta selection uses session scope ignores caller organization and never enables schedules
+ok 35 - Meta selection uses session scope ignores caller organization and never enables schedules
+  ---
+  duration_ms: 15.222958
+  type: 'test'
+  ...
+# Subtest: Actual Meta selection service denies foreign connection and permission before repository writes
+ok 36 - Actual Meta selection service denies foreign connection and permission before repository writes
+  ---
+  duration_ms: 12.618958
+  type: 'test'
+  ...
+1..36
+# tests 36
+# suites 0
+# pass 36
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 640.516542
+TAP version 13
+# Subtest: Meta adapter uses the Facebook Login for Business configuration
+ok 1 - Meta adapter uses the Facebook Login for Business configuration
+  ---
+  duration_ms: 1.304042
+  type: 'test'
+  ...
+# Subtest: OAuth state is signed, tenant/user bound, time bounded, and tamper evident
+ok 2 - OAuth state is signed, tenant/user bound, time bounded, and tamper evident
+  ---
+  duration_ms: 0.648
+  type: 'test'
+  ...
+# Subtest: Graph reads use bearer authorization and never place the access token in URLs
+ok 3 - Graph reads use bearer authorization and never place the access token in URLs
+  ---
+  duration_ms: 12.521
+  type: 'test'
+  ...
+# Subtest: ad-account discovery is cursor bounded, deduplicated, and preserves multiple accounts
+ok 4 - ad-account discovery is cursor bounded, deduplicated, and preserves multiple accounts
+  ---
+  duration_ms: 0.883334
+  type: 'test'
+  ...
+# Subtest: OAuth routes require connector management and bind callback to an HttpOnly state cookie
+ok 5 - OAuth routes require connector management and bind callback to an HttpOnly state cookie
+  ---
+  duration_ms: 0.625541
+  type: 'test'
+  ...
+# Subtest: connection completion validates provider data before persistence and requires ads_read
+ok 6 - connection completion validates provider data before persistence and requires ads_read
+  ---
+  duration_ms: 0.123125
+  type: 'test'
+  ...
+# Subtest: credentials are encrypted at connection scope and provider accounts default unselected
+ok 7 - credentials are encrypted at connection scope and provider accounts default unselected
+  ---
+  duration_ms: 0.33925
+  type: 'test'
+  ...
+# Subtest: account selection accepts many internal account IDs and never activates schedules
+ok 8 - account selection accepts many internal account IDs and never activates schedules
+  ---
+  duration_ms: 0.209875
+  type: 'test'
+  ...
+# Subtest: status presentation is tenant scoped and returns no credential material
+ok 9 - status presentation is tenant scoped and returns no credential material
+  ---
+  duration_ms: 0.292291
+  type: 'test'
+  ...
+# Subtest: client-read-only cannot reach persistence or provider calls through any MCP action method
+ok 10 - client-read-only cannot reach persistence or provider calls through any MCP action method
+  ---
+  duration_ms: 1.084959
+  type: 'test'
+  ...
+# Subtest: forged action permission cannot bypass expired membership or unavailable organization
+ok 11 - forged action permission cannot bypass expired membership or unavailable organization
+  ---
+  duration_ms: 0.495583
+  type: 'test'
+  ...
+1..11
+# tests 11
+# suites 0
+# pass 11
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 253.978416

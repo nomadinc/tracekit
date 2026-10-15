@@ -54,7 +54,9 @@
     ]
   },
   "holds": [
-    "authenticated member acceptance: identity/application owner",
+    "allowed customer/Core read availability and Orders/governed UI acceptance: Core/Staging owners",
+    "delayed callback diagnosis: Authentication owner / WS-022",
+    "broader live API/race acceptance: WS-022",
     "WS-001 affiliate/source certification",
     "Meta inactive/uncertified",
     "Production V1 HOLD"
@@ -165,7 +167,7 @@
     "logout": "PASS; authenticated logout reached Staging AuthKit with exact callback",
     "postLogoutProtectedNavigation": "PASS; sign-in required again",
     "emailRelogin": "PASS after fresh authorization recovery; waiting callback failure retained",
-    "AdminAndCrossTenant": "Admin browser authentication pending; client foreign-connector denial completed; remaining privileged/API matrix not certified",
+    "AdminAndCrossTenant": "Admin authenticated; platform and two support scopes verified; selected-tenant foreign connection denied. Broader live API/governed matrix not certified.",
     "foreignTenantDenial": "PASS for two existing connected foreign resources with allowed resource positive control; selected scope retained"
   },
   "readOnlyMembershipInspection": {
@@ -179,13 +181,34 @@
     "privateIdentifiersPublished": false,
     "clientBrowserAuthentication": "completed; fresh callback recovery and reload persistence pass",
     "foreignTenantLiveProbe": "two existing foreign connection resources denied; allowed connection loaded",
-    "AdminSignIn": "existing platform-owner password challenge ready; user authentication pending"
+    "AdminSignIn": "completed; platform-owner confirmed; fresh authorization recovered waiting callback failure"
   },
   "customerReadAvailability": {
     "status": "OPEN",
-    "observed": "allowed client customer workspace UI unavailable; direct JSON navigation browser-blocked",
-    "cause": "unverified",
+    "observed": "allowed customer UI unavailable for ordinary client and Admin; preview serverless /api/customers401 during Admin check; Orders No accessible Orders in second scope",
+    "cause": "unverified; upstream Core rejection consistent with proxy status propagation",
     "owner": "Core/customer integration owner / WS-022 diagnosis",
     "notTenantDenialEvidence": true
+  },
+  "stagingAdminAcceptance": {
+    "report": "membership-scope-acceptance/ADMIN-LIVE-REPORT.md",
+    "role": "platform-owner",
+    "platformAccess": "PASS",
+    "explicitSupportScopeAndPersistence": "PASS two existing orgs; reload retained second",
+    "foreignConnectionInSelectedScope": "PASS404",
+    "privilegedChargebacks": "PASS list/detail reads; unknown currency explicit",
+    "governedLiveActions": "not submitted; Orders unavailable; synthetic boundaries pass",
+    "Meta": "setup visible SyncOff; no provider actions",
+    "independentReview": "independent source review; no independent live acceptance"
+  },
+  "freshAdminAcceptanceChecks": {
+    "sha": "bcd856c39a5ab6dfbf6bdd8418afef78f931e5b6",
+    "passed": 63,
+    "failed": 0,
+    "skipped": 0,
+    "logs": [
+      "membership-scope-acceptance/admin-focused-tests.log",
+      "membership-scope-acceptance/admin-governed-tests.log"
+    ]
   }
 }
