@@ -57,8 +57,7 @@
     "authenticated member acceptance: identity/application owner",
     "WS-001 affiliate/source certification",
     "Meta inactive/uncertified",
-    "Production V1 HOLD",
-    "exact preview WorkOS Staging callback/sign-out registration: action-time user confirmation pending"
+    "Production V1 HOLD"
   ],
   "rollback": "COVERAGE.md",
   "independentReview": "INDEPENDENT-REVIEW.md",
@@ -136,5 +135,36 @@
       "prId": null
     },
     "environment": "preview"
+  },
+  "stagingConfiguration": {
+    "environment": "WorkOS Staging",
+    "environmentId": "environment_01KZ1RW7BEJ57BNJNPP5JRQD7G",
+    "applicationId": "app_01KZ1RW86NFKPDAG16GW5FJTRA",
+    "approval": "explicit user instruction for these two exact URLs",
+    "addedCallback": "https://tracekit-staging-50e8hokzy-tracekit.vercel.app/auth/callback",
+    "addedSignOut": "https://tracekit-staging-50e8hokzy-tracekit.vercel.app/",
+    "callbacksBefore": 15,
+    "callbacksAfter": 16,
+    "signOutBefore": 4,
+    "signOutAfter": 5,
+    "existingEntriesAndDefaultsPreserved": true,
+    "savedAndReopened": true,
+    "productionConfigurationChanged": false
+  },
+  "stagingClientAcceptance": {
+    "identity": "existing authorized client A; private identifiers excluded",
+    "role": "client-read-only",
+    "accountType": "client",
+    "authorizedOrganizationAndWorkspace": "observed active allowed scope; private labels excluded",
+    "login": "existing WorkOS session completed callback into current exact preview",
+    "reloadPersistence": "PASS",
+    "directAdminNavigation": "denied with404 UI",
+    "MetaSettings": "access denied; missing required permission",
+    "chargebackDetailedFinancialAccess": "API404 resource_unavailable; expected role lacks orders.view_financials",
+    "workspace": "active allowed selection persisted; only one workspace available; no cross-workspace proof",
+    "logout": "PASS; authenticated logout reached Staging AuthKit with exact callback",
+    "postLogoutProtectedNavigation": "PASS; sign-in required again",
+    "emailRelogin": "existing password challenge reached; awaiting user completion",
+    "AdminAndCrossTenant": "BLOCKED; existing Admin login and valid allowed/denied target scopes required"
   }
 }

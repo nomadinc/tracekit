@@ -1,3 +1,5 @@
+> Follow-up: the callback/sign-out configuration prerequisite below is now CLOSED by explicit user authorization and verified additions. See staging-allowlist-acceptance/REPORT.md for fresh client-session evidence and remaining identity blockers. Earlier observations below are retained as historical evidence.
+
 # WS-022 maintenance acceptance and exact-preview follow-up
 
 PR576 head `bcd856c39a5ab6dfbf6bdd8418afef78f931e5b6` records the explicit user decision: WS-022 owns React deprecations, relative navigation, page links and anonymous default-wrapper names. Maintain regression tests; review compatibility on React/Next.js/lint dependency changes; preserve coverage; document replacements/transfers. Ownership decision CLOSED. No security waiver, merge or production deployment authorization. Both PRs remain draft.
