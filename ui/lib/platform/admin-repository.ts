@@ -1,6 +1,6 @@
 import { tenantInvitationsEnabled } from "../identity/tenant-invitation-feature";
 import "server-only";
-import { commercePersistenceRequest as request } from "../commerce/supabase-control-repository";
+import { commercePersistenceRequest as request, CommercePersistenceError } from "../commerce/supabase-control-repository";
 import type { TraceKitSessionContext } from "../identity/persistent-types";
 import { assertCanonicalPlatformMembership } from "./platform-access";
 import { requirePlatformAdmin } from "./admin-policy";
@@ -98,6 +98,7 @@ export async function loadClientDetail(
         try { invitationContexts = await resolveAgencyInvitationTargetAccess(session, new SupabaseIdentityTenancyRepository(), accountId); }
         catch (error) { if (!(error instanceof AuthorizationDeniedError)) throw error; }
       }
+      let connectionsUnavailable = false;
       const [memberships, invitations, contexts, offers, connections] =
         await Promise.all([
           session.effectivePermissions.includes("users.view")
@@ -122,7 +123,14 @@ export async function loadClientDetail(
             : Promise.resolve(null),
           organizationId &&
           session.effectivePermissions.includes("connectors.view")
-            ? loadAdminConnections(session, organizationId)
+            ? loadAdminConnections(session, organizationId).catch(error => {
+                // An absent optional connector catalog must not disable user onboarding.
+                if (error instanceof CommercePersistenceError && error.resource === "marketing_provider_connections" && ["PGRST205", "42P01"].includes(error.databaseCode)) {
+                  connectionsUnavailable = true;
+                  return null;
+                }
+                throw error;
+              })
             : Promise.resolve(null),
         ]);
       return {
@@ -136,6 +144,7 @@ export async function loadClientDetail(
         contexts,
         offers,
         connections,
+        connectionsUnavailable,
       };
     }),
   );

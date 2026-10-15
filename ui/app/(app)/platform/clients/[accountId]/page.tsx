@@ -178,7 +178,9 @@ export default async function ClientDetailPage({
                 </section>
                 <section id={`connections-${group.organizationId}`} className="scroll-mt-24 rounded-xl border border-white/10 p-5">
                   <h3 className="mb-2 font-semibold">Connections</h3>
-                  {group.connections === null ? (
+                  {group.connectionsUnavailable ? (
+                    <p className="text-sm text-amber-200">Connection status is unavailable. User invitations remain available.</p>
+                  ) : group.connections === null ? (
                     <p>Access required.</p>
                   ) : group.connections.length ? (
                     group.connections.map((row) => (
