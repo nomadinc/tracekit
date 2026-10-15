@@ -1,3 +1,5 @@
+import { ACTIVE_ACCOUNT_COOKIE, sealActiveAccount } from "@/lib/identity/active-account-cookie";
+import { ACTIVE_BUSINESS_CONTEXT_COOKIE } from "@/lib/identity/active-business-context-cookie";
 import { handleAuth, getWorkOS } from "@workos-inc/authkit-nextjs";
 import { recordAuthenticationSuccess } from "@/lib/identity/application-session";
 import { randomUUID } from "node:crypto";
@@ -56,7 +58,14 @@ export const GET = handleAuth({
         if (!invitationId) return;
         const result = await repository.customerInvitation({ p_operation: "accept", p_actor_id: identity.id, p_identity_id: user.id, p_correlation_id: randomUUID(), p_invitation_id: invitationId, p_email_verified: true });
         if (!result.ok) console.error("customer_invitation_completion_failed", { reason: "acceptance_denied" });
-        else if (result.organizationId) {
+        else if (result.accountId) {
+          const maxAge = 60 * 60 * 24 * 30;
+          const jar = await cookies();
+          jar.set(ACTIVE_ACCOUNT_COOKIE, sealActiveAccount({ userId: identity.id, accountId: result.accountId, expiresAt: Date.now() + maxAge * 1000 }), { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge });
+          jar.set(ACTIVE_ORGANIZATION_COOKIE, "", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 0 });
+          jar.set(ACTIVE_BUSINESS_CONTEXT_COOKIE, "", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 0 });
+        } else if (result.organizationId) {
+          (await cookies()).set(ACTIVE_ACCOUNT_COOKIE, "", { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge: 0 });
           const maxAge = 60 * 60 * 24 * 30;
           (await cookies()).set(ACTIVE_ORGANIZATION_COOKIE, sealActiveOrganization({ userId: identity.id, organizationId: result.organizationId, expiresAt: Date.now() + maxAge * 1000 }), { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge });
         }

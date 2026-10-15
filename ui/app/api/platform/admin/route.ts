@@ -1,3 +1,4 @@
+import { tenantInvitationsEnabled } from "@/lib/identity/tenant-invitation-feature";
 import { NextResponse } from "next/server";
 import { resolveApplicationSession } from "@/lib/identity/application-session";
 import {
@@ -47,6 +48,12 @@ export async function POST(request: Request) {
     const accountId = String(body.accountId),
       organizationId =
         body.organizationId == null ? null : String(body.organizationId);
+    if (body.action === "agency-assignment" && organizationId && typeof body.remove === "boolean" && tenantInvitationsEnabled()) {
+      requirePlatformAdmin(session, "organizations.manage");
+      await assertCanonicalPlatformMembership(session, "organizations.manage");
+      await adminRpc(session, "ws021_assign_agency_client", { p_account: accountId, p_org: organizationId, p_remove: body.remove });
+      return NextResponse.json({ ok: true });
+    }
     if (
       ["role", "remove"].includes(String(body.action)) &&
       uuid(body.membershipId)

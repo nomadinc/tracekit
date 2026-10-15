@@ -1,3 +1,4 @@
+import { ACTIVE_ACCOUNT_COOKIE, readActiveAccount } from "./active-account-cookie";
 import { requirePersistedPlatformAccess } from "./platform-catalog-access";
 import { randomUUID } from "node:crypto";
 import { withAuth } from "@workos-inc/authkit-nextjs";
@@ -98,12 +99,15 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
   const memberships = await repository.membershipsForUser(user.id);
   const activeMemberships = memberships.filter((candidate) => isMembershipEffective(candidate));
   const requestedOrganizationId = readActiveOrganization(jar.get(ACTIVE_ORGANIZATION_COOKIE)?.value, user.id);
-  const preferredMembership = selectSessionMembership(memberships);
+  const requestedAccountId = readActiveAccount(jar.get(ACTIVE_ACCOUNT_COOKIE)?.value, user.id);
+  const defaultMembership = selectSessionMembership(memberships);
+  const preferredMembership = defaultMembership && ["platform-owner", "platform-admin"].includes(defaultMembership.role)
+    ? defaultMembership : activeMemberships.find(candidate => candidate.accountId === requestedAccountId) || defaultMembership;
   if (!preferredMembership) return resolveUnaffiliatedSessionState(() => repository.isEmptyInstallation());
   const platformMode =
     !preferredMembership.organizationId &&
     (preferredMembership.role === "platform-owner" || preferredMembership.role === "platform-admin");
-  const requestedOrganizationMembership = !platformMode && requestedOrganizationId
+  const requestedOrganizationMembership = !platformMode && !requestedAccountId && requestedOrganizationId
     ? activeMemberships.find((candidate) => candidate.organizationId === requestedOrganizationId) || null
     : null;
   const membership = requestedOrganizationMembership || preferredMembership;
@@ -131,6 +135,8 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
     accountId: organization.owningAccountId,
   }));
 
+  const agencyContextGroups = selectedAgency ? await Promise.all(organizationRecords.filter(org => agencyOrganizations.some(assigned => assigned.id === org.id)).map(async org => ({ organizationId: org.id, contexts: await repository.businessContexts(membership.id, org.id) }))) : [];
+  const agencyContexts = new Map(agencyContextGroups.map(group => [group.organizationId, group.contexts]));
   const overrides = await repository.permissionOverrides(membership.id);
   const permissions = Array.from(resolveEffectivePermissions(membership, overrides));
   const requestedAdminViewId = permissions.includes("admin.impersonate")
@@ -149,7 +155,7 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
     ? { id: adminViewRecord.id, name: adminViewRecord.name, mark: adminViewRecord.name.slice(0, 2).toUpperCase(), accountId: adminViewRecord.owningAccountId }
     : null;
   const effectiveOrganizations = adminViewOrganization ? [adminViewOrganization] : platformMode ? [] : selectedAgency
-    ? organizations.filter(organization => agencyOrganizations.some(assigned => assigned.id === organization.id)) : organizations;
+    ? organizations.filter(organization => (agencyContexts.get(organization.id)?.length || 0) > 0) : organizations;
   const activeOrganization = adminViewOrganization || (platformMode ? null : effectiveOrganizations.find((organization) => organization.id === requestedOrganizationId) || effectiveOrganizations.find((organization) => organization.id === membership.organizationId) || effectiveOrganizations[0] || null);
   const activeOrganizationMembership = activeOrganization && !adminViewOrganization && !selectedAgency
     ? organizationMemberships.find((candidate) => candidate.organizationId === activeOrganization.id) || membership
@@ -168,7 +174,7 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
   const persistentContexts = activeOrganization
     ? adminViewOrganization
       ? await repository.activeBusinessContextsForOrganization(activeOrganization.id)
-      : await repository.businessContexts(activeOrganizationMembership.id, activeOrganization.id)
+      : selectedAgency ? agencyContexts.get(activeOrganization.id) || [] : await repository.businessContexts(activeOrganizationMembership.id, activeOrganization.id)
     : [];
   const businessContexts = persistentBusinessContextsWithDisplay(persistentContexts, MOCK_BUSINESS_CONTEXTS);
   const requestedBusinessContextId = activeOrganization ? readActiveBusinessContext(jar.get(ACTIVE_BUSINESS_CONTEXT_COOKIE)?.value, user.id, activeOrganization.id) : null;

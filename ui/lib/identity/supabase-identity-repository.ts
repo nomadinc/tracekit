@@ -1,3 +1,4 @@
+import { tenantInvitationsEnabled } from "./tenant-invitation-feature";
 import type { IdentityTenancyRepository, AuditEventInput, FirstAdminBootstrapInput, PersistentOrganizationRecord } from "./persistent-repository";
 import { redactAuditMetadata } from "./persistent-repository";
 import type { PermissionOverride, PersistentAccount, PersistentAgency, PersistentMembership, PersistentUser, WorkOSIdentityInput } from "./persistent-types";
@@ -59,7 +60,7 @@ export class SupabaseIdentityTenancyRepository implements IdentityTenancyReposit
     return rows.length === 1 ? String(rows[0].id) : null;
   }
   async invitationDelivery(input: Record<string, unknown>) {
-    return rest("rpc/tracekit_invitation_delivery", { method: "POST", body: JSON.stringify(input) });
+    return rest(tenantInvitationsEnabled() ? "rpc/tracekit_tenant_invitation" : "rpc/tracekit_invitation_delivery", { method: "POST", body: JSON.stringify(input) });
   }
 
   async pendingInvitationsForVerifiedEmail(email: string) {
@@ -67,8 +68,8 @@ export class SupabaseIdentityTenancyRepository implements IdentityTenancyReposit
     return rows.map(row => ({ id: String(row.id), expiresAt: String(row.expires_at) }));
   }
 
-  async customerInvitation(input: Record<string, unknown>): Promise<{ ok: boolean; reason: string | null; id: string | null; organizationId: string | null }> {
-    return rest("rpc/tracekit_customer_invitation", { method: "POST", body: JSON.stringify(input) });
+  async customerInvitation(input: Record<string, unknown>): Promise<{ ok: boolean; reason: string | null; id: string | null; organizationId: string | null; accountId?: string | null }> {
+    return rest(tenantInvitationsEnabled() ? "rpc/tracekit_tenant_invitation" : "rpc/tracekit_customer_invitation", { method: "POST", body: JSON.stringify(input) });
   }
 
   async userByWorkOSId(workosUserId: string) {

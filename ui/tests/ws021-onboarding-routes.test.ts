@@ -7,9 +7,9 @@ import { invitationState } from "../lib/identity/invitation-onboarding";
 const nativeRequire = createRequire(import.meta.url);
 async function loadRoute(path: string, mocks: Record<string, unknown>, env: Record<string, string> = {}) {
   const result = await build({ entryPoints: [new URL(path, import.meta.url).pathname], bundle: true, write: false, platform: "node", format: "cjs", external: ["@workos-inc/authkit-nextjs", "next/server", "next/headers", "@/lib/identity/active-organization-cookie", "@/lib/identity/application-session", "@/lib/identity/supabase-identity-repository"] });
-  const module = { exports: {} as any };
-  runInNewContext(result.outputFiles[0].text, { module, exports: module.exports, require: (name: string) => name in mocks ? mocks[name] : nativeRequire(name), Response, URL, process: { env: { NODE_ENV: "production", ...env } }, console: { error() {} } });
-  return module.exports;
+  const bundledModule = { exports: {} as any };
+  runInNewContext(result.outputFiles[0].text, { module: bundledModule, exports: bundledModule.exports, require: (name: string) => name in mocks ? mocks[name] : nativeRequire(name), Response, URL, process: { env: { NODE_ENV: "production", ...env } }, console: { error() {} } });
+  return bundledModule.exports;
 }
 test("sign-in forwards the token while retaining SDK PKCE URL and sealed invitation identity", async () => {
   let options: any;
@@ -56,10 +56,10 @@ test("callback accepts only the exact persisted invite and skips impersonated or
   assert.equal(calls[1].p_actor_id, "persistent-user");
   assert.equal(calls[1].p_email_verified, true);
   assert.equal(calls[1].p_context_ids, undefined);
-  assert.equal(selected.length, 1);
-  assert.equal(JSON.parse(selected[0][1]).organizationId, "invited-organization");
-  assert.equal(JSON.parse(selected[0][1]).userId, "persistent-user");
-  assert.equal(selected[0][2].httpOnly, true);
+  assert.equal(selected.length, 2);
+  assert.equal(JSON.parse(selected.find(entry => entry[0] === "active-organization")[1]).organizationId, "invited-organization");
+  assert.equal(JSON.parse(selected.find(entry => entry[0] === "active-organization")[1]).userId, "persistent-user");
+  assert.equal(selected.find(entry => entry[0] === "active-organization")[2].httpOnly, true);
   selected.length = 0;
   calls.length = 0;
   await route.GET.onSuccess({ ...input, impersonator: { email: "admin@example.test" } });
@@ -71,7 +71,7 @@ test("callback accepts only the exact persisted invite and skips impersonated or
   await route.GET.onSuccess({ ...input, state: undefined });
   assert.equal(calls.length, 2);
   assert.equal(calls[1].p_invitation_id, "tracekit-invite");
-  assert.equal(selected.length, 1);
+  assert.equal(selected.length, 2);
   calls.length = 0;
   selected.length = 0;
   candidates = ["invitation_123", "invitation_other"];

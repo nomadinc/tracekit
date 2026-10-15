@@ -8,21 +8,24 @@ const nativeRequire = createRequire(import.meta.url);
 test("persisted agency session uses assigned clients, agency account and agency role", async () => {
   let requested: string | null = null;
   let agencyActive = true;
+  let requestedAccount: string | null = null;
+  let mixed = false;
   let clientActive = true;
   const lookups: string[] = [];
   class Repository {
     async synchronizeUser() { return { id: "user", primaryEmail: "agency@example.test", displayName: "Agency member", status: "active" }; }
-    async membershipsForUser() { return [{ id: "member", userId: "user", accountId: "agency-account", organizationId: null, role: "agency-read-only", status: "active" }]; }
+    async membershipsForUser() { return [...(mixed ? [{ id: "direct", userId: "user", accountId: null, organizationId: "direct-org", role: "client-read-only", status: "active" }] : []), { id: "member", userId: "user", accountId: "agency-account", organizationId: null, role: "agency-read-only", status: "active" }]; }
     async accountById(id: string) { assert.ok(["agency-account", "client-account"].includes(id)); return {id, accountType:id === "agency-account" ? "agency" : "client",name:"Account",status:id === "client-account" && !clientActive ? "suspended" : "active"}; }
     async agencyByAccountId() { return {id:"agency",accountId:"agency-account",name:"Agency",status:agencyActive ? "active" : "suspended"}; }
-    async organizationsForMembership(_membership: unknown, agency: unknown) { assert.ok(agency); return [{id:"assigned",name:"Assigned client",owningAccountId:"client-account",status:"active"},{id:"suspended",name:"Suspended",owningAccountId:"other-account",status:"suspended"}]; }
+    async organizationsForMembership(_membership: unknown, agency: unknown) { if (!agency) return [{id:"direct-org",name:"Direct client",owningAccountId:"client-account",status:"active"}]; return [{id:"assigned",name:"Assigned client",owningAccountId:"client-account",status:"active"},{id:"suspended",name:"Suspended",owningAccountId:"other-account",status:"suspended"}]; }
     async permissionOverrides() { return []; }
     async businessContexts(member: string, organization: string) { lookups.push(`${member}:${organization}`); return [{id:"workspace",organizationId:organization,name:"Allowed workspace"}]; }
     async recordAuditEvent() {}
   }
-  const output = await build({entryPoints:[new URL("../lib/identity/application-session.ts",import.meta.url).pathname],bundle:true,write:false,platform:"node",format:"cjs",external:["@workos-inc/authkit-nextjs","next/headers"],plugins:[{name:"session-mocks",setup(b){b.onResolve({filter:/supabase-identity-repository|active-organization-cookie/},args=>({path:args.path.includes("supabase") ? "repository" : "organization-cookie",external:true}));}}]});
+  const output = await build({entryPoints:[new URL("../lib/identity/application-session.ts",import.meta.url).pathname],bundle:true,write:false,platform:"node",format:"cjs",external:["@workos-inc/authkit-nextjs","next/headers"],plugins:[{name:"session-mocks",setup(b){b.onResolve({filter:/supabase-identity-repository|active-organization-cookie|active-account-cookie/},args=>({path:args.path.includes("supabase") ? "repository" : args.path.includes("active-account") ? "account-cookie" : "organization-cookie",external:true}));}}]});
   const mocks: Record<string, unknown> = {
     repository:{SupabaseIdentityTenancyRepository:Repository},
+    "account-cookie":{ACTIVE_ACCOUNT_COOKIE:"active-account",readActiveAccount:()=>requestedAccount},
     "organization-cookie":{ACTIVE_ORGANIZATION_COOKIE:"active-org",readActiveOrganization:()=>requested},
     "@workos-inc/authkit-nextjs":{withAuth:async()=>({user:{id:"provider-user",email:"agency@example.test",emailVerified:true}})},
     "next/headers":{headers:async()=>({get:()=>null}),cookies:async()=>({get:()=>undefined,has:()=>false})},
@@ -47,6 +50,14 @@ test("persisted agency session uses assigned clients, agency account and agency 
   assert.equal(suspendedClient.session.activeOrganization,null);
   assert.equal(suspendedClient.session.availableOrganizations.length,0);
   assert.equal(suspendedClient.session.accessibleBusinessContexts.length,0);
+  clientActive=true;
+  mixed=true;
+  requested="direct-org";
+  requestedAccount="agency-account";
+  const mixedSession=await bundledModule.exports.resolveApplicationSession();
+  assert.equal(mixedSession.session.activeAccount.id,"agency-account");
+  assert.equal(mixedSession.session.role,"agency-read-only");
+  assert.equal(mixedSession.session.activeOrganization.id,"assigned");
   agencyActive=false;
   const result=await bundledModule.exports.resolveApplicationSession();
   assert.equal(result.kind,"no-membership");

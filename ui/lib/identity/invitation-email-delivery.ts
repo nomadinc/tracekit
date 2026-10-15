@@ -1,8 +1,9 @@
-export type DeliveryState = "prepared" | "sending" | "sent" | "failed" | "unknown";
-export type DeliveryClaim = { ok: boolean; id: string; email: string; expiresAt: string; state: DeliveryState; claimed: boolean; attemptId: string };
-export type DeliveryOutcome = { state: DeliveryState; provider: "workos"; sendAccepted: boolean; mailboxDelivery: "unconfirmed" };
+export type DeliveryState = "prepared" | "sending" | "sent" | "failed" | "unknown" | "sign-in-required";
+export type DeliveryClaim = { ok: boolean; id: string; email: string; expiresAt: string; state: DeliveryState; claimed: boolean; attemptId: string; canRetry?: boolean };
+export type DeliveryOutcome = { state: DeliveryState; provider: "workos"; sendAccepted: boolean; mailboxDelivery: "unconfirmed"; canRetry: boolean };
 type ProviderResult = { id: string; email: string; state: "pending" | "accepted" | "expired" | "revoked"; organizationId: string | null };
 export class InvitationProviderRejected extends Error {}
+export class InvitationExistingUser extends InvitationProviderRejected {}
 /** Provider credentials, invitation tokens and provider error bodies never enter audit/client payloads. */
 export async function completeInvitationDelivery(claim: DeliveryClaim, send: (email: string, days: number) => Promise<ProviderResult>, finish: (parameters: Record<string, unknown>) => Promise<unknown>): Promise<DeliveryOutcome> {
   let state = claim.state;
@@ -15,13 +16,13 @@ export async function completeInvitationDelivery(claim: DeliveryClaim, send: (em
       state = "sent";
       parameters = { p_state: state, p_provider_id: result.id, p_provider_state: result.state };
     } catch (error) {
-      state = error instanceof InvitationProviderRejected ? "failed" : "unknown";
+      state = error instanceof InvitationExistingUser ? "sign-in-required" : error instanceof InvitationProviderRejected ? "failed" : "unknown";
       parameters = { p_state: state };
     }
-    try { await finish({ p_operation: "finish", p_invitation_id: claim.id, p_attempt_id: claim.attemptId, ...parameters }); }
+    try { const acknowledgement = await finish({ p_operation: "finish", p_invitation_id: claim.id, p_attempt_id: claim.attemptId, ...parameters }); if (acknowledgement && typeof acknowledgement === "object" && "ok" in acknowledgement && acknowledgement.ok !== true) throw new Error("Delivery acknowledgement rejected"); }
     catch { console.error("invitation_delivery_acknowledgement_failed", { invitationId: claim.id, attemptId: claim.attemptId, providerSendAccepted: state === "sent" }); state = "unknown"; } // No resend when the send or its durable acknowledgement is ambiguous.
   }
-  return { state, provider: "workos", sendAccepted: state === "sent", mailboxDelivery: "unconfirmed" };
+  return { state, provider: "workos", sendAccepted: state === "sent", mailboxDelivery: "unconfirmed", canRetry: !claim.claimed && (claim.canRetry ?? ["prepared", "failed"].includes(state)) === true };
 }
 
 /** Log structured diagnostics only; never messages or provider response bodies. */

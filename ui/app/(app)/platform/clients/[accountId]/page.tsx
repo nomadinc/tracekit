@@ -2,7 +2,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { platformSession } from "@/lib/platform/admin-server";
 import { loadClientDetail, type Row } from "@/lib/platform/admin-repository";
-import { InviteClientUser, PendingInvitationActions } from "@/components/platform/client-invitations";
+import { InviteClientUser, PendingInvitationActions, AgencyClientAssignments } from "@/components/platform/client-invitations";
 import {
   AdminForm,
   ClientViewButton,
@@ -38,6 +38,7 @@ export default async function ClientDetailPage({
           {String(detail.account.status)}
         </p>
       </header>
+      {writable && detail.account.account_type === "agency" && detail.assignmentOptions.length && session.effectivePermissions.includes("organizations.manage") ? <AgencyClientAssignments accountId={accountId} organizations={detail.assignmentOptions.map(org => ({id: org.id, name: org.name}))} assignedIds={detail.assignments.map(row => String(row.organization_id))} /> : null}
       {detail.groups.map((group) => {
         const orgActive =
           !group.organizationId ||
@@ -51,9 +52,9 @@ export default async function ClientDetailPage({
             <div className="flex flex-wrap items-center justify-between gap-4">
               <h2 className="text-xl font-semibold">{group.name}</h2>
               <div className="flex flex-wrap items-center gap-3">
-                {writable && orgActive && group.organizationId && group.invitationContexts !== null ? (
-                  <a href={`#invitations-${group.organizationId}`} className="tk-primary-action rounded-lg px-4 py-2 text-sm">Invite user</a>
-                ) : <p className="text-xs text-slate-400">{!group.organizationId ? "Agency invitations are not supported yet." : !orgActive || !writable ? "Invitations require an active client and platform administrator." : "Invitation permission required."}</p>}
+                {writable && orgActive && group.invitationContexts !== null ? (
+                  <a href={`#invitations-${group.organizationId || accountId}`} className="tk-primary-action rounded-lg px-4 py-2 text-sm">Invite user</a>
+                ) : <p className="text-xs text-slate-400">{!orgActive || !writable ? "Invitations require an active client and platform administrator." : "Invitation permission required."}</p>}
               {group.organizationId && orgActive ? (
                 <ClientViewButton
                   organizationId={group.organizationId}
@@ -125,8 +126,8 @@ export default async function ClientDetailPage({
             <section id={`invitations-${group.organizationId || accountId}`} className="scroll-mt-24 rounded-xl border border-white/10 p-5">
               <h3 className="mb-1 text-lg font-semibold">Invitations</h3>
               <p className="mb-4 text-sm text-slate-400">Invite new users and review invitation history.</p>
-              {writable && orgActive && group.organizationId && group.invitationContexts !== null ? (
-                <InviteClientUser organizationId={group.organizationId} contexts={group.invitationContexts} />
+              {writable && orgActive && group.invitationContexts !== null ? (
+                <InviteClientUser organizationId={group.organizationId || undefined} accountId={!group.organizationId ? accountId : undefined} contexts={group.invitationContexts} />
               ) : null}
               {group.invitations === null ? (
                 <p>Access required.</p>
@@ -145,8 +146,8 @@ export default async function ClientDetailPage({
                         : String(row.status)}{" "}
                       {row.status === "pending" ? ` · Expires ${new Date(String(row.expires_at)).toLocaleDateString()}` : ""}
                     </p>
-                    {writable && orgActive && group.organizationId && group.invitationContexts !== null && row.status === "pending" && Date.parse(String(row.expires_at)) > Date.now() ? (
-                      <PendingInvitationActions organizationId={group.organizationId} invitationId={String(row.id)} />
+                    {writable && orgActive && group.invitationContexts !== null && row.status === "pending" && Date.parse(String(row.expires_at)) > Date.now() ? (
+                      <PendingInvitationActions organizationId={group.organizationId || undefined} accountId={!group.organizationId ? accountId : undefined} invitationId={String(row.id)} />
                     ) : null}
                   </article>
                 ))
