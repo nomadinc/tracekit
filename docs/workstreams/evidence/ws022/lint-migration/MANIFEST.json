@@ -166,5 +166,18 @@
     "postLogoutProtectedNavigation": "PASS; sign-in required again",
     "emailRelogin": "existing password challenge reached; awaiting user completion",
     "AdminAndCrossTenant": "BLOCKED; existing Admin login and valid allowed/denied target scopes required"
+  },
+  "readOnlyMembershipInspection": {
+    "existingClientMemberships": 1,
+    "activeAllowedOrganizations": 1,
+    "activeGrantedWorkspaces": 1,
+    "permissionOverrides": 0,
+    "realForeignTargetsIdentified": 2,
+    "existingEffectivePlatformOwnerIdentified": true,
+    "queries": "SELECT only; no mutation or impersonation",
+    "privateIdentifiersPublished": false,
+    "clientBrowserAuthentication": "still at existing-password challenge",
+    "foreignTenantLiveProbe": "pending client authentication",
+    "AdminSignIn": "existing identity identified; queued after client checks to avoid concurrent PKCE flow"
   }
 }
