@@ -1,0 +1,324 @@
+[
+  {
+    "id": "react/display-name",
+    "rule": "react/display-name",
+    "source": "import React from \"react\"; import ReactDOM from \"react-dom\";export default React.memo(()=> <div/>);",
+    "file": "components/Probe.tsx",
+    "severity": 2
+  },
+  {
+    "id": "react/jsx-key",
+    "rule": "react/jsx-key",
+    "source": "export function Demo(){return [<div/>] }",
+    "file": "components/Probe.tsx",
+    "severity": 2
+  },
+  {
+    "id": "react/jsx-no-comment-textnodes",
+    "rule": "react/jsx-no-comment-textnodes",
+    "source": "export const Demo=()=> <div>// bad comment</div>;",
+    "file": "components/Probe.tsx",
+    "severity": 2
+  },
+  {
+    "id": "react/jsx-no-duplicate-props",
+    "rule": "react/jsx-no-duplicate-props",
+    "source": "export const Demo=()=> <div id=\"a\" id=\"b\"/>;",
+    "file": "components/Probe.tsx",
+    "severity": 2
+  },
+  {
+    "id": "react/jsx-no-undef",
+    "rule": "react/jsx-no-undef",
+    "source": "export const Demo=()=> <Missing/>;",
+    "file": "components/Probe.tsx",
+    "severity": 2
+  },
+  {
+    "id": "react/no-children-prop",
+    "rule": "react/no-children-prop",
+    "source": "export const Demo=()=> <div children=\"x\"/>;",
+    "file": "components/Probe.tsx",
+    "severity": 2
+  },
+  {
+    "id": "react/no-danger-with-children",
+    "rule": "react/no-danger-with-children",
+    "source": "export const Demo=()=> <div dangerouslySetInnerHTML={{__html:\"x\"}}>child</div>;",
+    "file": "components/Probe.tsx",
+    "severity": 2
+  },
+  {
+    "id": "react/no-deprecated",
+    "rule": "react/no-deprecated",
+    "source": "import React from \"react\"; import ReactDOM from \"react-dom\";ReactDOM.render;",
+    "file": "components/Probe.tsx",
+    "severity": 2
+  },
+  {
+    "id": "react/no-direct-mutation-state",
+    "rule": "react/no-direct-mutation-state",
+    "source": "import React from \"react\"; import ReactDOM from \"react-dom\";class Demo extends React.Component { render(){this.state.x=1;return null} }",
+    "file": "components/Probe.tsx",
+    "severity": 2
+  },
+  {
+    "id": "react/no-find-dom-node",
+    "rule": "react/no-find-dom-node",
+    "source": "import React from \"react\"; import ReactDOM from \"react-dom\";ReactDOM.findDOMNode(this);",
+    "file": "components/Probe.tsx",
+    "severity": 2
+  },
+  {
+    "id": "react/no-is-mounted",
+    "rule": "react/no-is-mounted",
+    "source": "import React from \"react\"; import ReactDOM from \"react-dom\";class Demo extends React.Component {render(){this.isMounted();return null}}",
+    "file": "components/Probe.tsx",
+    "severity": 2
+  },
+  {
+    "id": "react/no-render-return-value",
+    "rule": "react/no-render-return-value",
+    "source": "import React from \"react\"; import ReactDOM from \"react-dom\";const result=ReactDOM.render(<div/>, document.body);",
+    "file": "components/Probe.tsx",
+    "severity": 2
+  },
+  {
+    "id": "react/no-string-refs",
+    "rule": "react/no-string-refs",
+    "source": "import React from \"react\"; import ReactDOM from \"react-dom\";class Demo extends React.Component {render(){return <div ref=\"bad\"/>}}",
+    "file": "components/Probe.tsx",
+    "severity": 2
+  },
+  {
+    "id": "react/no-unescaped-entities",
+    "rule": "react/no-unescaped-entities",
+    "source": "export const Demo=()=> <div>don't</div>;",
+    "file": "components/Probe.tsx",
+    "severity": 2
+  },
+  {
+    "id": "react/require-render-return",
+    "rule": "react/require-render-return",
+    "source": "import React from \"react\"; import ReactDOM from \"react-dom\";class Demo extends React.Component {render(){const x=1;}}",
+    "file": "components/Probe.tsx",
+    "severity": 2
+  },
+  {
+    "id": "react-hooks/rules-of-hooks",
+    "rule": "react-hooks/rules-of-hooks",
+    "source": "import {useState} from \"react\";function Demo({ok}){if(ok)useState(0);return null}",
+    "file": "components/Probe.tsx",
+    "severity": 2
+  },
+  {
+    "id": "react-hooks/exhaustive-deps",
+    "rule": "react-hooks/exhaustive-deps",
+    "source": "import {useEffect} from \"react\";function Demo({value}){useEffect(()=>console.log(value),[]);return null}",
+    "file": "components/Probe.tsx",
+    "severity": 1
+  },
+  {
+    "id": "@next/next/google-font-display",
+    "rule": "@next/next/google-font-display",
+    "source": "export const Demo=()=> <link href=\"https://fonts.googleapis.com/css?family=Roboto\" rel=\"stylesheet\"/>;",
+    "file": "components/Probe.tsx",
+    "severity": 1
+  },
+  {
+    "id": "@next/next/google-font-preconnect",
+    "rule": "@next/next/google-font-preconnect",
+    "source": "export const Demo=()=> <link href=\"https://fonts.gstatic.com\"/>;",
+    "file": "components/Probe.tsx",
+    "severity": 1
+  },
+  {
+    "id": "@next/next/next-script-for-ga",
+    "rule": "@next/next/next-script-for-ga",
+    "source": "export const Demo=()=> <script src=\"https://www.google-analytics.com/analytics.js\"/>;",
+    "file": "components/Probe.tsx",
+    "severity": 1
+  },
+  {
+    "id": "@next/next/no-async-client-component",
+    "rule": "@next/next/no-async-client-component",
+    "source": "\"use client\"; export default async function Demo(){return <div/>}",
+    "file": "components/Probe.tsx",
+    "severity": 1
+  },
+  {
+    "id": "@next/next/no-before-interactive-script-outside-document",
+    "rule": "@next/next/no-before-interactive-script-outside-document",
+    "source": "import Script from \"next/script\";export const Demo=()=> <Script src=\"https://example.invalid/x.js\" strategy=\"beforeInteractive\"/>;",
+    "file": "components/Probe.tsx",
+    "severity": 1
+  },
+  {
+    "id": "@next/next/no-css-tags",
+    "rule": "@next/next/no-css-tags",
+    "source": "export const Demo=()=> <link rel=\"stylesheet\" href=\"/a.css\"/>;",
+    "file": "components/Probe.tsx",
+    "severity": 1
+  },
+  {
+    "id": "@next/next/no-head-element",
+    "rule": "@next/next/no-head-element",
+    "source": "export const Demo=()=> <head/>;",
+    "file": "components/Probe.tsx",
+    "severity": 1
+  },
+  {
+    "id": "@next/next/no-html-link-for-pages",
+    "rule": "@next/next/no-html-link-for-pages",
+    "source": "export const Demo=()=> <a href=\"/ws022-lint-contract-page\">Dashboard</a>;",
+    "file": "components/Probe.tsx",
+    "severity": 2
+  },
+  {
+    "id": "@next/next/no-img-element",
+    "rule": "@next/next/no-img-element",
+    "source": "export const Demo=()=> <img src=\"/a.png\" alt=\"Good description\"/>;",
+    "file": "components/Probe.tsx",
+    "severity": 1
+  },
+  {
+    "id": "@next/next/no-location-assign-relative-destination",
+    "rule": "@next/next/no-location-assign-relative-destination",
+    "source": "window.location.assign(\"/dashboard\");",
+    "file": "components/Probe.tsx",
+    "severity": 1
+  },
+  {
+    "id": "@next/next/no-page-custom-font",
+    "rule": "@next/next/no-page-custom-font",
+    "source": "export const Demo=()=> <link href=\"https://fonts.googleapis.com/css?family=Roboto&display=swap\" rel=\"stylesheet\"/>;",
+    "file": "pages/index.tsx",
+    "severity": 1
+  },
+  {
+    "id": "@next/next/no-styled-jsx-in-document",
+    "rule": "@next/next/no-styled-jsx-in-document",
+    "source": "export const Demo=()=> <style jsx>{\"div{}\"}</style>;",
+    "file": "pages/_document.tsx",
+    "severity": 1
+  },
+  {
+    "id": "@next/next/no-sync-scripts",
+    "rule": "@next/next/no-sync-scripts",
+    "source": "export const Demo=()=> <script src=\"https://example.invalid/a.js\"/>;",
+    "file": "components/Probe.tsx",
+    "severity": 2
+  },
+  {
+    "id": "@next/next/no-title-in-document-head",
+    "rule": "@next/next/no-title-in-document-head",
+    "source": "import {Head} from \"next/document\";export const Demo=()=> <Head><title>Bad</title></Head>;",
+    "file": "pages/_document.tsx",
+    "severity": 1
+  },
+  {
+    "id": "@next/next/no-typos",
+    "rule": "@next/next/no-typos",
+    "source": "export const getStaticProp=async()=>({props:{}});",
+    "file": "pages/index.tsx",
+    "severity": 1
+  },
+  {
+    "id": "@next/next/no-unwanted-polyfillio",
+    "rule": "@next/next/no-unwanted-polyfillio",
+    "source": "export const Demo=()=> <script src=\"https://polyfill.io/v3/polyfill.min.js?features=Promise\"/>;",
+    "file": "components/Probe.tsx",
+    "severity": 1
+  },
+  {
+    "id": "@next/next/inline-script-id",
+    "rule": "@next/next/inline-script-id",
+    "source": "import Script from \"next/script\";export const Demo=()=> <Script>{\"console.log(1)\"}</Script>;",
+    "file": "components/Probe.tsx",
+    "severity": 2
+  },
+  {
+    "id": "@next/next/no-assign-module-variable",
+    "rule": "@next/next/no-assign-module-variable",
+    "source": "const module={};",
+    "file": "components/Probe.tsx",
+    "severity": 2
+  },
+  {
+    "id": "@next/next/no-document-import-in-page",
+    "rule": "@next/next/no-document-import-in-page",
+    "source": "import Document from \"next/document\";export default Document;",
+    "file": "pages/index.tsx",
+    "severity": 2
+  },
+  {
+    "id": "@next/next/no-duplicate-head",
+    "rule": "@next/next/no-duplicate-head",
+    "source": "import Document,{Head} from \"next/document\";export default class Demo extends Document{render(){return <html><Head/><Head/></html>}}",
+    "file": "pages/_document.tsx",
+    "severity": 2
+  },
+  {
+    "id": "@next/next/no-head-import-in-document",
+    "rule": "@next/next/no-head-import-in-document",
+    "source": "import Head from \"next/head\";export default Head;",
+    "file": "pages/_document.tsx",
+    "severity": 2
+  },
+  {
+    "id": "@next/next/no-script-component-in-head",
+    "rule": "@next/next/no-script-component-in-head",
+    "source": "import Head from \"next/head\";import Script from \"next/script\";export const Demo=()=> <Head><Script src=\"https://example.invalid/a.js\"/></Head>;",
+    "file": "components/Probe.tsx",
+    "severity": 2
+  },
+  {
+    "id": "import/no-anonymous-default-export",
+    "rule": "import/no-anonymous-default-export",
+    "source": "export default {};",
+    "file": "components/Probe.tsx",
+    "severity": 1
+  },
+  {
+    "id": "jsx-a11y/alt-text",
+    "rule": "jsx-a11y/alt-text",
+    "source": "import Image from \"next/image\";export const Demo=()=> <Image src=\"/a.png\"/>;",
+    "file": "components/Probe.tsx",
+    "severity": 1
+  },
+  {
+    "id": "jsx-a11y/aria-props",
+    "rule": "jsx-a11y/aria-props",
+    "source": "export const Demo=()=> <div aria-bad=\"true\"/>;",
+    "file": "components/Probe.tsx",
+    "severity": 1
+  },
+  {
+    "id": "jsx-a11y/aria-proptypes",
+    "rule": "jsx-a11y/aria-proptypes",
+    "source": "export const Demo=()=> <div aria-hidden=\"bad\"/>;",
+    "file": "components/Probe.tsx",
+    "severity": 1
+  },
+  {
+    "id": "jsx-a11y/aria-unsupported-elements",
+    "rule": "jsx-a11y/aria-unsupported-elements",
+    "source": "export const Demo=()=> <meta aria-hidden=\"true\"/>;",
+    "file": "components/Probe.tsx",
+    "severity": 1
+  },
+  {
+    "id": "jsx-a11y/role-has-required-aria-props",
+    "rule": "jsx-a11y/role-has-required-aria-props",
+    "source": "export const Demo=()=> <div role=\"checkbox\"/>;",
+    "file": "components/Probe.tsx",
+    "severity": 1
+  },
+  {
+    "id": "jsx-a11y/role-supports-aria-props",
+    "rule": "jsx-a11y/role-supports-aria-props",
+    "source": "export const Demo=()=> <div role=\"button\" aria-checked=\"true\"/>;",
+    "file": "components/Probe.tsx",
+    "severity": 1
+  }
+]

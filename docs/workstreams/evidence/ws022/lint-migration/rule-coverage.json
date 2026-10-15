@@ -1,0 +1,441 @@
+[
+  {
+    "baseline": "react/display-name",
+    "severity": 2,
+    "options": [],
+    "replacement": [
+      "react/display-name",
+      "react-x/no-missing-component-display-name",
+      "ws022-policy/default-wrapper-display-name"
+    ],
+    "coverage": "explicit compatibility policy; maintenance owner decision required"
+  },
+  {
+    "baseline": "react/jsx-key",
+    "severity": 2,
+    "options": [],
+    "replacement": [
+      "react/jsx-key"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "react/jsx-no-comment-textnodes",
+    "severity": 2,
+    "options": [],
+    "replacement": [
+      "react/jsx-no-comment-textnodes"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "react/jsx-no-duplicate-props",
+    "severity": 2,
+    "options": [],
+    "replacement": [
+      "react/jsx-no-duplicate-props"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "react/jsx-no-undef",
+    "severity": 2,
+    "options": [],
+    "replacement": [
+      "react/jsx-no-undef"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "react/jsx-uses-react",
+    "severity": 2,
+    "options": [],
+    "replacement": [],
+    "coverage": "semantic JSX binding marker; neither configuration enables unused-variable diagnostics"
+  },
+  {
+    "baseline": "react/jsx-uses-vars",
+    "severity": 2,
+    "options": [],
+    "replacement": [],
+    "coverage": "semantic JSX binding marker; neither configuration enables unused-variable diagnostics"
+  },
+  {
+    "baseline": "react/no-children-prop",
+    "severity": 2,
+    "options": [],
+    "replacement": [
+      "react/no-children-prop"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "react/no-danger-with-children",
+    "severity": 2,
+    "options": [],
+    "replacement": [
+      "react/no-danger-with-children"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "react/no-deprecated",
+    "severity": 2,
+    "options": [],
+    "replacement": [
+      "ws022-policy/no-deprecated-react"
+    ],
+    "coverage": "explicit compatibility policy; maintenance owner decision required"
+  },
+  {
+    "baseline": "react/no-direct-mutation-state",
+    "severity": 2,
+    "options": [],
+    "replacement": [
+      "react/no-direct-mutation-state"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "react/no-find-dom-node",
+    "severity": 2,
+    "options": [],
+    "replacement": [
+      "react/no-find-dom-node"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "react/no-is-mounted",
+    "severity": 2,
+    "options": [],
+    "replacement": [
+      "react/no-is-mounted"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "react/no-render-return-value",
+    "severity": 2,
+    "options": [],
+    "replacement": [
+      "react/no-render-return-value"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "react/no-string-refs",
+    "severity": 2,
+    "options": [],
+    "replacement": [
+      "react/no-string-refs"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "react/no-unescaped-entities",
+    "severity": 2,
+    "options": [],
+    "replacement": [
+      "react/no-unescaped-entities"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "react/require-render-return",
+    "severity": 2,
+    "options": [],
+    "replacement": [
+      "react/require-render-return"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "react-hooks/rules-of-hooks",
+    "severity": 2,
+    "options": [],
+    "replacement": [
+      "react-hooks/rules-of-hooks"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "react-hooks/exhaustive-deps",
+    "severity": 1,
+    "options": [],
+    "replacement": [
+      "react-hooks/exhaustive-deps"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "@next/next/google-font-display",
+    "severity": 1,
+    "options": [],
+    "replacement": [
+      "nextjs/google-font-display"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "@next/next/google-font-preconnect",
+    "severity": 1,
+    "options": [],
+    "replacement": [
+      "nextjs/google-font-preconnect"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "@next/next/next-script-for-ga",
+    "severity": 1,
+    "options": [],
+    "replacement": [
+      "nextjs/next-script-for-ga"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "@next/next/no-async-client-component",
+    "severity": 1,
+    "options": [],
+    "replacement": [
+      "nextjs/no-async-client-component"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "@next/next/no-before-interactive-script-outside-document",
+    "severity": 1,
+    "options": [],
+    "replacement": [
+      "nextjs/no-before-interactive-script-outside-document"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "@next/next/no-css-tags",
+    "severity": 1,
+    "options": [],
+    "replacement": [
+      "nextjs/no-css-tags"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "@next/next/no-head-element",
+    "severity": 1,
+    "options": [],
+    "replacement": [
+      "nextjs/no-head-element"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "@next/next/no-html-link-for-pages",
+    "severity": 2,
+    "options": [],
+    "replacement": [
+      "ws022-policy/no-html-link-for-pages"
+    ],
+    "coverage": "explicit compatibility policy; maintenance owner decision required"
+  },
+  {
+    "baseline": "@next/next/no-img-element",
+    "severity": 1,
+    "options": [],
+    "replacement": [
+      "nextjs/no-img-element"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "@next/next/no-location-assign-relative-destination",
+    "severity": 1,
+    "options": [],
+    "replacement": [
+      "ws022-policy/no-relative-location"
+    ],
+    "coverage": "explicit compatibility policy; maintenance owner decision required"
+  },
+  {
+    "baseline": "@next/next/no-page-custom-font",
+    "severity": 1,
+    "options": [],
+    "replacement": [
+      "nextjs/no-page-custom-font"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "@next/next/no-styled-jsx-in-document",
+    "severity": 1,
+    "options": [],
+    "replacement": [
+      "nextjs/no-styled-jsx-in-document"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "@next/next/no-sync-scripts",
+    "severity": 2,
+    "options": [],
+    "replacement": [
+      "nextjs/no-sync-scripts"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "@next/next/no-title-in-document-head",
+    "severity": 1,
+    "options": [],
+    "replacement": [
+      "nextjs/no-title-in-document-head"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "@next/next/no-typos",
+    "severity": 1,
+    "options": [],
+    "replacement": [
+      "nextjs/no-typos"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "@next/next/no-unwanted-polyfillio",
+    "severity": 1,
+    "options": [],
+    "replacement": [
+      "nextjs/no-unwanted-polyfillio"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "@next/next/inline-script-id",
+    "severity": 2,
+    "options": [],
+    "replacement": [
+      "nextjs/inline-script-id"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "@next/next/no-assign-module-variable",
+    "severity": 2,
+    "options": [],
+    "replacement": [
+      "nextjs/no-assign-module-variable"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "@next/next/no-document-import-in-page",
+    "severity": 2,
+    "options": [],
+    "replacement": [
+      "nextjs/no-document-import-in-page"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "@next/next/no-duplicate-head",
+    "severity": 2,
+    "options": [],
+    "replacement": [
+      "nextjs/no-duplicate-head"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "@next/next/no-head-import-in-document",
+    "severity": 2,
+    "options": [],
+    "replacement": [
+      "nextjs/no-head-import-in-document"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "@next/next/no-script-component-in-head",
+    "severity": 2,
+    "options": [],
+    "replacement": [
+      "nextjs/no-script-component-in-head"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "import/no-anonymous-default-export",
+    "severity": 1,
+    "options": [],
+    "replacement": [
+      "import/no-anonymous-default-export"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "jsx-a11y/alt-text",
+    "severity": 1,
+    "options": [
+      {
+        "elements": [
+          "img"
+        ],
+        "img": [
+          "Image"
+        ]
+      }
+    ],
+    "replacement": [
+      "jsx-a11y/alt-text"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "jsx-a11y/aria-props",
+    "severity": 1,
+    "options": [],
+    "replacement": [
+      "jsx-a11y/aria-props"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "jsx-a11y/aria-proptypes",
+    "severity": 1,
+    "options": [],
+    "replacement": [
+      "jsx-a11y/aria-proptypes"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "jsx-a11y/aria-unsupported-elements",
+    "severity": 1,
+    "options": [],
+    "replacement": [
+      "jsx-a11y/aria-unsupported-elements"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "jsx-a11y/role-has-required-aria-props",
+    "severity": 1,
+    "options": [],
+    "replacement": [
+      "jsx-a11y/role-has-required-aria-props"
+    ],
+    "coverage": "native maintained implementation"
+  },
+  {
+    "baseline": "jsx-a11y/role-supports-aria-props",
+    "severity": 1,
+    "options": [],
+    "replacement": [
+      "jsx-a11y/role-supports-aria-props"
+    ],
+    "coverage": "native maintained implementation"
+  }
+]

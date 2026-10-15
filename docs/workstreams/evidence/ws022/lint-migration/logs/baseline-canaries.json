@@ -1,0 +1,278 @@
+[
+  {
+    "rule": "react/display-name",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react/jsx-key",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react/jsx-no-comment-textnodes",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react/jsx-no-duplicate-props",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react/jsx-no-undef",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react/no-children-prop",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react/no-danger-with-children",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react/no-deprecated",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react/no-direct-mutation-state",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react/no-find-dom-node",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react/no-is-mounted",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react/no-render-return-value",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react/no-string-refs",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react/no-unescaped-entities",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react/require-render-return",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react-hooks/rules-of-hooks",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "react-hooks/exhaustive-deps",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "@next/next/google-font-display",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "@next/next/google-font-preconnect",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "@next/next/next-script-for-ga",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "@next/next/no-async-client-component",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "@next/next/no-before-interactive-script-outside-document",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "@next/next/no-css-tags",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "@next/next/no-head-element",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "@next/next/no-html-link-for-pages",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "@next/next/no-img-element",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "@next/next/no-location-assign-relative-destination",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "@next/next/no-page-custom-font",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "@next/next/no-styled-jsx-in-document",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "@next/next/no-sync-scripts",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "@next/next/no-title-in-document-head",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "@next/next/no-typos",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "@next/next/no-unwanted-polyfillio",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "@next/next/inline-script-id",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "@next/next/no-assign-module-variable",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "@next/next/no-document-import-in-page",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "@next/next/no-duplicate-head",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "@next/next/no-head-import-in-document",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "@next/next/no-script-component-in-head",
+    "severities": [
+      2
+    ]
+  },
+  {
+    "rule": "import/no-anonymous-default-export",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "jsx-a11y/alt-text",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "jsx-a11y/aria-props",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "jsx-a11y/aria-proptypes",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "jsx-a11y/aria-unsupported-elements",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "jsx-a11y/role-has-required-aria-props",
+    "severities": [
+      1
+    ]
+  },
+  {
+    "rule": "jsx-a11y/role-supports-aria-props",
+    "severities": [
+      1
+    ]
+  }
+]

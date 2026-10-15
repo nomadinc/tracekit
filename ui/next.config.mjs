@@ -1,4 +1,7 @@
 const nextConfig = {
+  // npm run build runs the complete ESLint + Oxlint gate before compilation.
+  // Next15's ESLint-only integration cannot run the native half of that gate.
+  eslint: { ignoreDuringBuilds: true },
   distDir: process.env.NEXT_DIST_DIR || ".next",
   async headers() {
     const immutable = [

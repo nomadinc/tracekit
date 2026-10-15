@@ -1,0 +1,68 @@
+{
+  "baselineCommit": "88f7411457b988e83e51fbc9bf7b4b5b76002fe7",
+  "implementationCommit": "e1a6a38bf9694fc4356963f1a5ffe8c99520720f",
+  "finalCodeCommit": "65d5cdef3d0d3021d256f88c1abb7122fb5a1486",
+  "dependentOnPR": 575,
+  "node": "22.22.1",
+  "npm": "10.9.4",
+  "checks": {
+    "ui": {
+      "passed": 1462,
+      "failed": 0,
+      "skipped": 0
+    },
+    "lint": {
+      "errors": 0,
+      "warnings": 9
+    },
+    "lintContract": {
+      "passed": 4,
+      "failed": 0,
+      "skipped": 0,
+      "diagnosticRules": 46,
+      "validInvalidProbes": 92
+    },
+    "baselineEnabledRules": 48,
+    "compilerDeferralsUnchanged": 14,
+    "filesBothEngines": 576,
+    "fullAuditVulnerabilities": 0,
+    "productionAuditVulnerabilities": 0,
+    "dependencyTree": "valid; no peer errors",
+    "build": "passed after synthetic Pages cleanup",
+    "typescript": {
+      "diagnostics": 0,
+      "command": "node_modules/.bin/tsc --noEmit",
+      "execution": "serial after independent fixture cleanup; exit0"
+    }
+  },
+  "finalHeadVerification": "Final evidence-only HEAD and serialized fresh commands/results will be recorded in the dependent draft PR verification comment; no claim that earlier logs tested a later commit.",
+  "holds": [
+    "authenticated member acceptance: identity/application owner",
+    "WS-001 affiliate/source certification",
+    "Meta inactive/uncertified",
+    "Production V1 HOLD"
+  ],
+  "rollback": "COVERAGE.md",
+  "independentReview": "INDEPENDENT-REVIEW.md",
+  "sensitiveMaterial": "No credentials, auth headers, .env files, member identities or provider payloads included.",
+  "compatibilityMaintenance": {
+    "owner": "WS-022",
+    "acceptedBy": "explicit user instruction",
+    "acceptedOn": "2026-10-14",
+    "checks": [
+      "React deprecations",
+      "Relative navigation",
+      "Page links",
+      "Anonymous default-wrapper names"
+    ],
+    "obligations": [
+      "maintain regression tests",
+      "review compatibility whenever React, Next.js or lint dependencies change",
+      "preserve rule coverage",
+      "document future replacement or ownership transfer"
+    ],
+    "securityWaiver": false,
+    "mergeAuthorized": false,
+    "productionDeploymentAuthorized": false
+  }
+}

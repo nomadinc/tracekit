@@ -1,0 +1,165 @@
+[
+  {
+    "path": "app/invitations/[id]/invitation-acceptance.tsx",
+    "messages": [
+      {
+        "ruleId": "@next/next/no-location-assign-relative-destination",
+        "severity": 1,
+        "message": "Do not use `window.location.assign()` to navigate to internal Next.js pages. Use `redirect()` in the render phase, or `useRouter().push()` in Client Components' event handlers instead. See: https://nextjs.org/docs/messages/no-location-assign-relative-destination",
+        "line": 11,
+        "column": 7,
+        "messageId": "noLocationAssign",
+        "endLine": 11,
+        "endColumn": 34
+      }
+    ]
+  },
+  {
+    "path": "components/connections/connections-overview.tsx",
+    "messages": [
+      {
+        "ruleId": "@next/next/no-location-assign-relative-destination",
+        "severity": 1,
+        "message": "Do not use `location.assign()` to navigate to internal Next.js pages. Use `redirect()` in the render phase, or `useRouter().push()` in Client Components' event handlers instead. See: https://nextjs.org/docs/messages/no-location-assign-relative-destination",
+        "line": 8,
+        "column": 1061,
+        "messageId": "noLocationAssign",
+        "endLine": 8,
+        "endColumn": 1109
+      }
+    ]
+  },
+  {
+    "path": "components/connections/everflow-admin-controls.tsx",
+    "messages": [
+      {
+        "ruleId": "react-hooks/exhaustive-deps",
+        "severity": 1,
+        "message": "React Hook useEffect has a missing dependency: 'refreshStatus'. Either include it or remove the dependency array.",
+        "line": 26,
+        "column": 206,
+        "endLine": 26,
+        "endColumn": 262,
+        "suggestions": [
+          {
+            "desc": "Update the dependencies array to be: [connection.id, connection.provider, connection.canManage, refreshStatus]",
+            "fix": {
+              "range": [
+                4425,
+                4481
+              ],
+              "text": "[connection.id, connection.provider, connection.canManage, refreshStatus]"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "path": "components/customers/customer-workspace.tsx",
+    "messages": [
+      {
+        "ruleId": "react-hooks/exhaustive-deps",
+        "severity": 1,
+        "message": "React Hook React.useEffect has missing dependencies: 'session.activeBusinessContextId' and 'session.activeOrganizationId'. Either include them or remove the dependency array.",
+        "line": 118,
+        "column": 6,
+        "endLine": 125,
+        "endColumn": 4,
+        "suggestions": [
+          {
+            "desc": "Update the dependencies array to be: [customers, requested.customerId, scope, session.activeBusinessContextId, session.activeOrganizationId, session.developmentOnly, setActiveBusinessContext, setActiveOrganization]",
+            "fix": {
+              "range": [
+                4235,
+                4378
+              ],
+              "text": "[customers, requested.customerId, scope, session.activeBusinessContextId, session.activeOrganizationId, session.developmentOnly, setActiveBusinessContext, setActiveOrganization]"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "path": "components/layout/production-header.tsx",
+    "messages": [
+      {
+        "ruleId": "@next/next/no-location-assign-relative-destination",
+        "severity": 1,
+        "message": "Do not use `window.location.assign()` to navigate to internal Next.js pages. Use `redirect()` in the render phase, or `useRouter().push()` in Client Components' event handlers instead. See: https://nextjs.org/docs/messages/no-location-assign-relative-destination",
+        "line": 92,
+        "column": 7,
+        "messageId": "noLocationAssign",
+        "endLine": 92,
+        "endColumn": 45
+      },
+      {
+        "ruleId": "@next/next/no-location-assign-relative-destination",
+        "severity": 1,
+        "message": "Do not use `window.location.assign()` to navigate to internal Next.js pages. Use `redirect()` in the render phase, or `useRouter().push()` in Client Components' event handlers instead. See: https://nextjs.org/docs/messages/no-location-assign-relative-destination",
+        "line": 234,
+        "column": 27,
+        "messageId": "noLocationAssign",
+        "endLine": 234,
+        "endColumn": 70
+      }
+    ]
+  },
+  {
+    "path": "components/offers/commerce-product-mapping-review.tsx",
+    "messages": [
+      {
+        "ruleId": "react-hooks/exhaustive-deps",
+        "severity": 1,
+        "message": "React Hook React.useEffect has a missing dependency: 'group.products'. Either include it or remove the dependency array. If 'setSelected' needs the current value of 'group.products', you can also switch to useReducer instead of useState and read 'group.products' in the reducer.",
+        "line": 116,
+        "column": 166,
+        "endLine": 116,
+        "endColumn": 177,
+        "suggestions": [
+          {
+            "desc": "Update the dependencies array to be: [group.key, group.products]",
+            "fix": {
+              "range": [
+                10758,
+                10769
+              ],
+              "text": "[group.key, group.products]"
+            }
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "path": "components/platform/admin-actions.tsx",
+    "messages": [
+      {
+        "ruleId": "@next/next/no-location-assign-relative-destination",
+        "severity": 1,
+        "message": "Do not use `window.location.assign()` to navigate to internal Next.js pages. Use `redirect()` in the render phase, or `useRouter().push()` in Client Components' event handlers instead. See: https://nextjs.org/docs/messages/no-location-assign-relative-destination",
+        "line": 161,
+        "column": 13,
+        "messageId": "noLocationAssign",
+        "endLine": 161,
+        "endColumn": 51
+      }
+    ]
+  },
+  {
+    "path": "components/platform/admin-client-view-banner.tsx",
+    "messages": [
+      {
+        "ruleId": "@next/next/no-location-assign-relative-destination",
+        "severity": 1,
+        "message": "Do not use `window.location.assign()` to navigate to internal Next.js pages. Use `redirect()` in the render phase, or `useRouter().push()` in Client Components' event handlers instead. See: https://nextjs.org/docs/messages/no-location-assign-relative-destination",
+        "line": 28,
+        "column": 7,
+        "messageId": "noLocationAssign",
+        "endLine": 28,
+        "endColumn": 50
+      }
+    ]
+  }
+]
