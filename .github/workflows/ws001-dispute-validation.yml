@@ -1,0 +1,67 @@
+name: WS-001 disposable dispute validation
+
+on:
+  push:
+    branches: [ws001/dispute-order-resolver-preparation-20261014]
+    paths:
+      - '.github/workflows/ws001-dispute-validation.yml'
+      - 'api/src/commas-*.ts'
+      - 'api/src/commas-*.mjs'
+      - 'scripts/*commas*'
+      - 'docs/operations/prepared/*.sql'
+  pull_request:
+    paths:
+      - '.github/workflows/ws001-dispute-validation.yml'
+      - 'scripts/*commas*'
+      - 'docs/operations/prepared/*.sql'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ws001-dispute-validation-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  disposable-database:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    env:
+      SUPABASE_TELEMETRY_DISABLED: '1'
+      TRACEKIT_MIGRATION_TEST_DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      TRACEKIT_MIGRATION_TEST_DISPOSABLE: '1'
+      WS001_CONCURRENCY_DB_URL: postgresql://postgres:postgres@127.0.0.1:54322/postgres
+      WS001_CONCURRENCY_DISPOSABLE: '1'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+      - name: Install pinned disposable test tools
+        run: |
+          npm install --prefix "$RUNNER_TEMP/ws001-tools" --no-audit --no-fund supabase@2.121.0 pg@8.16.3 @electric-sql/pglite@0.5.10
+          echo "$RUNNER_TEMP/ws001-tools/node_modules/.bin" >> "$GITHUB_PATH"
+          echo "WS001_PG_MODULE=$RUNNER_TEMP/ws001-tools/node_modules/pg/lib/index.js" >> "$GITHUB_ENV"
+          echo "WS001_PGLITE_MODULE=$RUNNER_TEMP/ws001-tools/node_modules/@electric-sql/pglite/dist/index.js" >> "$GITHUB_ENV"
+      - name: Start isolated Supabase prerequisites with no repository migrations
+        run: |
+          mkdir -p "$RUNNER_TEMP/ws001-stack"
+          supabase init --workdir "$RUNNER_TEMP/ws001-stack" --yes
+          supabase start --workdir "$RUNNER_TEMP/ws001-stack" --exclude studio,imgproxy,edge-runtime,logflare,vector
+      - name: Load exact reviewed currency dependency
+        run: |
+          git fetch --no-tags origin 6c39974abcf031fb0198c049d37f478a55387485
+          git show 6c39974abcf031fb0198c049d37f478a55387485:supabase/migrations/20261014034517_ws001_dispute_source_currency_contract.sql > "$RUNNER_TEMP/20261014034517_ws001_dispute_source_currency_contract.sql"
+          echo "WS001_CURRENCY_MIGRATION_FILE=$RUNNER_TEMP/20261014034517_ws001_dispute_source_currency_contract.sql" >> "$GITHUB_ENV"
+      - name: Replay authoritative chain and compile disabled preparation
+        run: bash scripts/test-commas-prepared-full-chain.sh
+      - name: Prove native concurrent-session behavior
+        run: node scripts/test-commas-prepared-concurrency.mjs
+      - name: Run focused contracts and regressions
+        run: |
+          node --test api/src/commas-dispute-order-resolver.test.ts api/src/commas-dispute-order-persistence.test.mjs api/src/commas-dispute-customer-read-preparation.test.ts api/src/commas-customer-dispute-api.test.ts api/src/commas-customer-dispute-read-database.test.mjs api/src/commas-source-dispute-report.test.ts api/src/customer-explorer.test.ts ui/tests/migration-ledger-full-convergence.test.ts
+      - name: Stop disposable stack
+        if: always()
+        run: supabase stop --workdir "$RUNNER_TEMP/ws001-stack" --no-backup
