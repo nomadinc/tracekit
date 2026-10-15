@@ -54,9 +54,9 @@
     ]
   },
   "holds": [
-    "allowed customer/Core read availability and Orders/governed UI acceptance: Core/Staging owners",
-    "delayed callback diagnosis: Authentication owner / WS-022",
-    "broader live API/race acceptance: WS-022",
+    "Preview Supabase identity credential rejected UNAUTHORIZED_INVALID_API_KEY: Staging/Supabase owner",
+    "Customers/Orders Core and affected client/Admin acceptance blocked until identity storage restored: WS-022/Core",
+    "delayed browser cookie expiry/eviction cause not fully reproduced: Authentication owner/WS-022",
     "WS-001 affiliate/source certification",
     "Meta inactive/uncertified",
     "Production V1 HOLD"
@@ -241,5 +241,70 @@
       }
     },
     "priorEvidencePreserved": true
+  },
+  "authorizedConfigurationRedeployAcceptance": {
+    "candidate": "775cbec41b1d937ea59a56d47276ae1a0ecc1c36",
+    "deployment": {
+      "id": "dpl_A1VTcr4pBbYmMGn2xFEXYUjnX3wR",
+      "url": "https://tracekit-staging-d9dh83u8a-tracekit.vercel.app",
+      "environment": "Preview",
+      "readyState": "READY",
+      "gitCommitRef": "ws022/acceptance-runtime-diagnosis",
+      "gitCommitSha": "775cbec41b1d937ea59a56d47276ae1a0ecc1c36"
+    },
+    "selector": {
+      "project": "tracekit-staging",
+      "key": "TRACEKIT_USE_STAGING_CORE_CREDENTIAL",
+      "value": "enabled",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "ws022/acceptance-runtime-diagnosis",
+      "id": "3VHIVjYLeGJXF9GR",
+      "preexistingEntries": 38,
+      "entriesAfter": 39,
+      "preexistingMetadataChanges": 0,
+      "credentialsReadOrChanged": false
+    },
+    "workos": {
+      "environment": "Staging",
+      "callbackCountBefore": 16,
+      "callbackCountAfter": 18,
+      "signoutCountBefore": 5,
+      "signoutCountAfter": 7,
+      "added": [
+        "https://tracekit-staging-12hzpje48-tracekit.vercel.app/auth/callback",
+        "https://tracekit-staging-12hzpje48-tracekit.vercel.app/",
+        "https://tracekit-staging-d9dh83u8a-tracekit.vercel.app/auth/callback",
+        "https://tracekit-staging-d9dh83u8a-tracekit.vercel.app/"
+      ],
+      "savedAndReopened": true,
+      "existingEntriesAndDefaultsPreserved": true
+    },
+    "liveResults": {
+      "callbackMissingParameterRecoveryPage": "PASS visible400 restart link",
+      "freshAuthKitCallback": "PASS307 through existing Admin SSO",
+      "applicationIdentityResolution": "FAIL root500 Persistent identity storage failed(401)",
+      "CustomersOrdersUpstreamAuthentication": "BLOCKED by identity storage before Core proxy; not certified",
+      "clientAdminWorkspaceAvailability": "BLOCKED; no fresh role-specific acceptance",
+      "foreignTenantDenial": "BLOCKED on updated preview; earlier evidence retained separately",
+      "delayedBrowserExpiryReproduction": "NOT RUN; earlier missing-cookie logs and synthetic rejection proof retained"
+    },
+    "supabaseGatewayEvidence": {
+      "project": "uoeosoiegatlqtzemsfv",
+      "windowStart": "2026-10-15T05:54:00Z",
+      "windowEnd": "2026-10-15T05:55:30Z",
+      "path": "/rest/v1/tracekit_users",
+      "method": "PATCH",
+      "count": 2,
+      "status": 401,
+      "unauthorizedHintErrorCode": "UNAUTHORIZED_INVALID_API_KEY",
+      "responseErrorCode": "UNAUTHORIZED_INVALID_API_KEY",
+      "queryType": "read-only aggregate; no credential/header/identity values selected"
+    },
+    "blockerOwner": "Staging/Supabase configuration owner: restore or confirm valid existing Preview service credential/project pairing; no key rotation or production changes authorized",
+    "productionConfigurationChanged": false,
+    "membershipsChanged": false,
+    "financialProviderActions": false
   }
 }
