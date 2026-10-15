@@ -37,7 +37,6 @@
   },
   "finalHeadVerification": "Final evidence-only HEAD and serialized fresh commands/results will be recorded in the dependent draft PR verification comment; no claim that earlier logs tested a later commit.",
   "holds": [
-    "four repository-owned policy maintenance decision: frontend/tooling owner",
     "authenticated member acceptance: identity/application owner",
     "WS-001 affiliate/source certification",
     "Meta inactive/uncertified",
@@ -45,5 +44,25 @@
   ],
   "rollback": "COVERAGE.md",
   "independentReview": "INDEPENDENT-REVIEW.md",
-  "sensitiveMaterial": "No credentials, auth headers, .env files, member identities or provider payloads included."
+  "sensitiveMaterial": "No credentials, auth headers, .env files, member identities or provider payloads included.",
+  "compatibilityMaintenance": {
+    "owner": "WS-022",
+    "acceptedBy": "explicit user instruction",
+    "acceptedOn": "2026-10-14",
+    "checks": [
+      "React deprecations",
+      "Relative navigation",
+      "Page links",
+      "Anonymous default-wrapper names"
+    ],
+    "obligations": [
+      "maintain regression tests",
+      "review compatibility whenever React, Next.js or lint dependencies change",
+      "preserve rule coverage",
+      "document future replacement or ownership transfer"
+    ],
+    "securityWaiver": false,
+    "mergeAuthorized": false,
+    "productionDeploymentAuthorized": false
+  }
 }
