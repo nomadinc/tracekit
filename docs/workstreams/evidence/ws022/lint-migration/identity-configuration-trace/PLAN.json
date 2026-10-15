@@ -1,0 +1,44 @@
+{
+  "deploymentId": "dpl_A1VTcr4pBbYmMGn2xFEXYUjnX3wR",
+  "candidate": "775cbec41b1d937ea59a56d47276ae1a0ecc1c36",
+  "vercelProject": "tracekit-staging",
+  "environment": "Preview",
+  "branch": "ws022/acceptance-runtime-diagnosis",
+  "supabaseProject": "uoeosoiegatlqtzemsfv",
+  "variables": [
+    {
+      "name": "NEXT_PUBLIC_SUPABASE_URL",
+      "selectedScope": "general Preview; no matching branch override",
+      "classification": "public project URL; stored as sensitive in Vercel; value not retrieved"
+    },
+    {
+      "name": "SUPABASE_SERVICE_ROLE_KEY",
+      "selectedScope": "general Preview; no matching branch override",
+      "classification": "server-only secret; value not retrieved"
+    }
+  ],
+  "otherBranchOverrides": {
+    "workstream/29next": [
+      "NEXT_PUBLIC_SUPABASE_URL",
+      "SUPABASE_SERVICE_ROLE_KEY"
+    ],
+    "ws021/invitation-onboarding-recovery": [
+      "NEXT_PUBLIC_SUPABASE_URL"
+    ]
+  },
+  "correctionProposal": {
+    "operation": "create one branch-specific secret override after owner verification and explicit approval",
+    "name": "SUPABASE_SERVICE_ROLE_KEY",
+    "target": [
+      "preview"
+    ],
+    "gitBranch": "ws022/acceptance-runtime-diagnosis",
+    "credentialSource": "existing owner-verified valid credential for project uoeosoiegatlqtzemsfv; secure owner entry only",
+    "changeURL": false,
+    "changeGeneralPreviewOrProduction": false,
+    "rotateKeys": false,
+    "applied": false
+  },
+  "ownerVerification": "pending named custodian/channel; no named owner in repository",
+  "postCorrectionAcceptance": "pending owner verification and correction approval; no redundant broken redeploy"
+}
