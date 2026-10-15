@@ -1,4 +1,5 @@
 import { cleanText } from "./identity-normalization.ts";
+import {PREPARED_CUSTOMER_DISPUTES_ENABLED,readPreparedCustomerDisputes} from './commas-customer-dispute-api.ts';
 import { normalizeJourneyMetadata, normalizeJourneyTimestamp } from "./journey-events.ts";
 import { aggregateJourneyAttributionEvidence, JOURNEY_EVIDENCE_MAX_EVENTS } from "./journey-attribution-evidence.ts";
 import { evaluateJourneyRiskSignals } from "./risk-signals.ts";
@@ -1621,8 +1622,10 @@ async function getPersonOrThrow(supabase: any, workspaceId: string, personId: st
   return person;
 }
 
-export async function getCustomerDetail(supabase: any, args: { workspace_id: string; person_id: string }) {
+export async function getCustomerDetail(supabase: any, args: { workspace_id: string; person_id: string }, preparation: {enabled?:boolean} = {}) {
   const person = await getPersonOrThrow(supabase, args.workspace_id, args.person_id);
+  // Person authorization precedes the new read. No route passes an enable flag.
+  const providerDisputes = await readPreparedCustomerDisputes(supabase,{organizationId:args.workspace_id,personId:args.person_id},{enabled:preparation.enabled??PREPARED_CUSTOMER_DISPUTES_ENABLED});
   const [identifiers, identityEvents, journeys, orders, credits, commissions, workItems] = await Promise.all([
     supabaseRows(
       supabase.from("person_identifiers").select(IDENTIFIER_SELECT).eq("workspace_id", args.workspace_id).eq("person_id", args.person_id).order("is_primary", { ascending: false }).order("updated_at", { ascending: false }).limit(200),
@@ -1666,6 +1669,7 @@ export async function getCustomerDetail(supabase: any, args: { workspace_id: str
     ok: true,
     workspace_id: args.workspace_id,
     customer: compactPerson(person, identifiers),
+    provider_disputes: providerDisputes,
     identifiers: compactIdentifiers,
     identity_events: identityEvents.map(compactIdentityEvent),
     journeys: compactJourneys,
