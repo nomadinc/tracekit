@@ -1,0 +1,9 @@
+{
+  "comparisonDeployment": "dpl_6v7oRFdwYX3TbGpz5PwgsPQCUytF",
+  "comparisonSHA": "bcd856c39a5ab6dfbf6bdd8418afef78f931e5b6",
+  "checkedUTC": "2026-10-16T20:46:26.142293+00:00",
+  "authenticatedControlCenterLoaded": true,
+  "existingFourClientSelectorVisible": true,
+  "inspection": "read-only page navigation; no support-view, provider or financial action invoked",
+  "recoveryDeploymentAcceptance": "pending exact WorkOS URL registration; no substitution of comparison evidence"
+}

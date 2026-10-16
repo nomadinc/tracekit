@@ -23,3 +23,7 @@ WorkOS dashboard is not authenticated. Its existing password attempt showed inva
 Until registration, identity/membership loading, Customers, Orders, client/Admin separation, foreign-tenant denial, financial read permission boundaries, persistence, logout/re-login and callback recovery on the new recovery deployment remain pending. Previous case results and commits remain inherited evidence, not substitutes for this deployment. Only required browser authentication is being handed off; no Supabase key request or recovery-access blocker remains.
 
 All PRs remain draft. No membership/provider/financial mutations, key rotation, database substitution, security waiver or production deployment. WS001 monetary certification HOLD; Meta inactive/uncertified; ProductionV1 HOLD. Prior database/WS024 evidence remains attributed to original tested commits. Recovery rollback removes only its branch Secret if separately requested; preflight rollback removes only standalone tooling/operator instructions.
+
+## Fresh comparison application check
+
+The known-working bcd deployment was freshly checked again in the current browser: authenticated Client Health Control Center loaded and the existing four-client selector was visible. This is actual application access, beyond a READY/build indicator. It remains comparison evidence and does not certify the recovery deployment. WorkOS dashboard remains on its email-code challenge; only browser authentication is pending. Exact helper source/test commit: d84b6e53560d5186600daaf85b8611d8f9a06c29, post-commit tests6/0/0.
