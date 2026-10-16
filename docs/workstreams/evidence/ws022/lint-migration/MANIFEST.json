@@ -470,5 +470,27 @@
     "sourceChanged": false,
     "newFullSuiteRun": false,
     "independentReview": "recovery-admin-acceptance-20261016/INDEPENDENT-REVIEW.md"
+  },
+  "recoveryClientAcceptance": {
+    "candidate": "775cbec41b1d937ea59a56d47276ae1a0ecc1c36",
+    "deployment": "dpl_21SY95PQASdmA9RiDoANK6VebD8s",
+    "report": "recovery-client-acceptance-20261016/REPORT.md",
+    "role": "client-read-only",
+    "allowedScope": "Stem Labs",
+    "foreignConnectorDenials": 2,
+    "adminRoute": "404",
+    "customersOrders": "rendered",
+    "chargebacks": "404 resource_unavailable",
+    "meta": "scope denial",
+    "governed": "no prepare controls; required permission missing",
+    "logout": "Staging sign-in; protected Orders requires authentication",
+    "finalRelogin": "pending browser authentication",
+    "freshFocusedChecks": {
+      "passed": 34,
+      "failed": 0,
+      "skipped": 0
+    },
+    "sourceChanged": false,
+    "independentReview": "recovery-client-acceptance-20261016/INDEPENDENT-REVIEW.md"
   }
 }
