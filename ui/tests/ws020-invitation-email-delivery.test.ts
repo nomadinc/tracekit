@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { readFileSync } from "node:fs";
-import { completeInvitationDelivery, InvitationProviderRejected, type DeliveryClaim } from "../lib/identity/invitation-email-delivery";
+import { completeInvitationDelivery, invitationProviderDiagnostics, InvitationProviderRejected, InvitationExistingUser, type DeliveryClaim } from "../lib/identity/invitation-email-delivery";
 const claim: DeliveryClaim = { ok:true,id:"canonical",email:"customer@example.test",expiresAt:new Date(Date.now()+86400000).toISOString(),state:"sending",claimed:true,attemptId:"lease" };
 test("successful provider send is durably settled without exposing provider tokens or granting membership",async()=>{
  let calls=0;let saved:any;
@@ -26,4 +26,24 @@ test("no-membership landing provides verified-email discovery outside the member
  const shell=readFileSync(new URL("../components/identity/authenticated-app-shell.tsx",import.meta.url),"utf8");assert.ok(shell.includes('href="/invitations"'));
  const route=readFileSync(new URL("../app/api/invitations/route.ts",import.meta.url),"utf8");assert.ok(route.indexOf('body.operation === "accept"')<route.indexOf("resolveApplicationSession();"));assert.ok(route.includes("identity.emailVerified"));
  const sender=readFileSync(new URL("../lib/identity/workos-invitation-delivery.ts",import.meta.url),"utf8");assert.ok(sender.includes("sendInvitation({ email, expiresInDays })"));assert.ok(!sender.includes("organizationId:"));assert.ok(!sender.includes("roleSlug:"));
+});
+
+test("provider diagnostics exclude messages, tokens and unexpected fields",()=>{
+ assert.deepEqual(invitationProviderDiagnostics({code:"invalid_request",message:"SECRET",errors:[{field:"expires_in_days",message:"SECRET"},{field:"token"}],rawData:{token:"SECRET"}}),{code:"invalid_request",fields:["expires_in_days"]});
+ assert.deepEqual(invitationProviderDiagnostics({code:"sk_SECRET123",errors:[null,"SECRET"]}),{code:null,fields:[]});
+ assert.deepEqual(invitationProviderDiagnostics(null),{code:null,fields:[]});
+});
+
+test("existing WorkOS identity preserves the invitation and requires sign-in without reporting an email send",async()=>{
+ let saved:any;
+ const result=await completeInvitationDelivery(claim,async()=>{throw new InvitationExistingUser()},async(p)=>{saved=p});
+ assert.equal(result.state,"sign-in-required");assert.equal(result.sendAccepted,false);assert.equal(result.canRetry,false);assert.equal(saved.p_state,"sign-in-required");
+ let sends=0;
+ await completeInvitationDelivery({...claim,claimed:false,state:"sign-in-required"},async()=>{sends++;throw Error()},async()=>{});
+ assert.equal(sends,0);
+});
+
+test("a rejected durable settlement cannot report a successful email send",async()=>{
+ const result=await completeInvitationDelivery(claim,async email=>({id:"invitation_x",email,state:"pending",organizationId:null}),async()=>({ok:false}));
+ assert.equal(result.state,"unknown");assert.equal(result.sendAccepted,false);assert.equal(result.canRetry,false);
 });

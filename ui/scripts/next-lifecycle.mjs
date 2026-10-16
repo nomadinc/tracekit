@@ -1,3 +1,4 @@
+import { verifyWS021Staging } from "./ws021-staging-check.mjs";
 import { spawn } from "node:child_process";
 import { readFileSync, rmSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -73,6 +74,7 @@ if (mode === "dev") {
     process.exitCode = 1;
   });
 } else if (mode === "build") {
+  await verifyWS021Staging();
   requireNoNextProcesses();
   rmSync(buildDirectory, { recursive: true, force: true });
   const originalEnvironmentTypes = readFileSync(nextEnvironmentTypes, "utf8");

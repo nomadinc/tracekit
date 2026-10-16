@@ -17,7 +17,7 @@ export async function AuthenticatedMissionControl() {
     return <SessionState title="Sign in required" description="Authenticate to continue." signIn />;
   if (resolution.kind === "bootstrap") return <FirstAdminBootstrap />;
   if (resolution.kind === "no-membership")
-    return <SessionState title="No TraceKit access" description="Your identity is verified, but no active TraceKit account membership is assigned." />;
+    return <SessionState title="Complete your invitation" description="No active TraceKit account membership is assigned. Review your pending invitation to activate the access selected by your administrator." invitations />;
 
   if (resolution.kind === "development") {
     const snapshot = await missionControlRepository.getMissionControl();
@@ -47,20 +47,23 @@ function SessionState({
   title,
   description,
   signIn = false,
+  invitations = false,
 }: {
   title: string;
   description: string;
   signIn?: boolean;
+  invitations?: boolean;
 }) {
   return (
     <main className="mx-auto flex min-h-dvh max-w-lg flex-col items-center justify-center gap-4 p-6 text-center">
       <p className="text-xs font-semibold uppercase tracking-widest text-slate-500">TraceKit identity</p>
       <h1 className="text-2xl font-semibold">{title}</h1>
       <p className="text-sm text-slate-400">{description}</p>
+      {invitations ? <Link className="tk-primary-action rounded-lg px-4 py-2 text-sm" href="/invitations">Review pending invitations</Link> : null}
       {signIn ? (
-        <Link className="tk-primary-action rounded-lg px-4 py-2 text-sm" href="/auth/sign-in">
+        <a className="tk-primary-action rounded-lg px-4 py-2 text-sm" href="/auth/sign-in">
           Sign in
-        </Link>
+        </a>
       ) : null}
     </main>
   );

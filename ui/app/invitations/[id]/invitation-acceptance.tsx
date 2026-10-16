@@ -7,7 +7,7 @@ export function InvitationAcceptance({ id }: { id: string }) {
     setPending(true);
     try {
       const response = await fetch("/api/invitations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operation: "accept", invitationId: id }) });
-      if (!response.ok) { setMessage("Invitation unavailable. Confirm you signed in with the intended verified email and the invitation is still pending."); return; }
+      if (!response.ok) { setMessage("This invitation cannot be accepted again or is unavailable for this sign-in. If you already accepted it, use ‘Already accepted? Open TraceKit’ above. Otherwise, sign in with the intended verified email and confirm the invitation is still pending."); return; }
       window.location.assign("/");
     } catch { setMessage("Invitation processing is unavailable. Try again later."); }
     finally { setPending(false); }

@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { resolveInvitationTargetAccess } from "../lib/identity/invitation-target-access";
+import { resolveInvitationTargetAccess, resolveAgencyInvitationTargetAccess } from "../lib/identity/invitation-target-access";
 import { authorizeCustomerInvitation } from "../lib/identity/customer-invitation-policy";
 import { ROLE_PERMISSIONS } from "../lib/identity/permissions";
 import type { TraceKitSessionContext } from "../lib/identity/persistent-types";
@@ -36,4 +36,22 @@ test("customer scopes never expand or query platform catalog",async()=>{
  const repository=repo();assert.equal(await resolveInvitationTargetAccess(customer,repository.value,"stem"),customer);
  await assert.rejects(resolveInvitationTargetAccess(customer,repository.value,"foreign"));assert.equal(repository.reads(),0);
  await assert.rejects(resolveInvitationTargetAccess({...customer,effectivePermissions:[...ROLE_PERMISSIONS["client-read-only"]]},repository.value,"stem"));
+});
+
+test("agency invitation targets require active assigned clients, explicit workspace grants and invitation authority",async()=>{
+ const previous=process.env.TRACEKIT_TENANT_INVITATIONS_ENABLED;
+ process.env.TRACEKIT_TENANT_INVITATIONS_ENABLED="true";
+ try {
+  const agencySession={...session,role:"agency-admin",membership:{...membership,accountId:"agency-account",role:"agency-admin"},effectivePermissions:["users.invite"],permissionOverrides:[]} as unknown as TraceKitSessionContext;
+  const repository={...repo().value,accountById:async(id:string)=>({id,accountType:id==="agency-account"?"agency":"client",status:"active"}),agencyByAccountId:async()=>({id:"agency",accountId:"agency-account",status:"active"}),organizationsForMembership:async()=>[organization],businessContexts:async()=>[{id:"allowed",name:"Allowed",organizationId:"stem"},{id:"foreign",name:"Foreign",organizationId:"foreign"}]};
+  assert.deepEqual((await resolveAgencyInvitationTargetAccess(agencySession,repository,"agency-account")).map(c=>c.id),["allowed"]);
+  await assert.rejects(resolveAgencyInvitationTargetAccess(agencySession,repository,"other-agency"));
+  await assert.rejects(resolveAgencyInvitationTargetAccess({...agencySession,role:"agency-read-only"},repository,"agency-account"));
+  await assert.rejects(resolveAgencyInvitationTargetAccess({...agencySession,effectivePermissions:[]},repository,"agency-account"));
+  await assert.rejects(resolveAgencyInvitationTargetAccess(agencySession,{...repository,agencyByAccountId:async()=>({status:"suspended"})},"agency-account"));
+  assert.equal((await resolveAgencyInvitationTargetAccess(agencySession,{...repository,organizationsForMembership:async()=>[]},"agency-account")).length,0);
+  assert.equal((await resolveAgencyInvitationTargetAccess(agencySession,{...repository,accountById:async(id:string)=>({id,accountType:id==="agency-account"?"agency":"client",status:id==="client"?"suspended":"active"})},"agency-account")).length,0);
+  process.env.TRACEKIT_TENANT_INVITATIONS_ENABLED="false";
+  await assert.rejects(resolveAgencyInvitationTargetAccess(agencySession,repository,"agency-account"));
+ } finally { if(previous===undefined) delete process.env.TRACEKIT_TENANT_INVITATIONS_ENABLED; else process.env.TRACEKIT_TENANT_INVITATIONS_ENABLED=previous; }
 });

@@ -1,9 +1,10 @@
+import { tenantInvitationsEnabled } from "../identity/tenant-invitation-feature";
 import "server-only";
-import { commercePersistenceRequest as request } from "../commerce/supabase-control-repository";
+import { commercePersistenceRequest as request, CommercePersistenceError } from "../commerce/supabase-control-repository";
 import type { TraceKitSessionContext } from "../identity/persistent-types";
 import { assertCanonicalPlatformMembership } from "./platform-access";
 import { requirePlatformAdmin } from "./admin-policy";
-import { resolveInvitationTargetAccess } from "../identity/invitation-target-access";
+import { resolveInvitationTargetAccess, resolveAgencyInvitationTargetAccess } from "../identity/invitation-target-access";
 import { SupabaseIdentityTenancyRepository } from "../identity/supabase-identity-repository";
 import { AuthorizationDeniedError } from "../identity/authorization-gateway";
 
@@ -93,6 +94,11 @@ export async function loadClientDetail(
           invitationContexts = target.accessibleBusinessContexts.map(context => ({ id: context.id, name: context.name }));
         } catch (error) { if (!(error instanceof AuthorizationDeniedError)) throw error; }
       }
+      if (!organizationId && account.account_type === "agency" && session.effectivePermissions.includes("users.invite")) {
+        try { invitationContexts = await resolveAgencyInvitationTargetAccess(session, new SupabaseIdentityTenancyRepository(), accountId); }
+        catch (error) { if (!(error instanceof AuthorizationDeniedError)) throw error; }
+      }
+      let connectionsUnavailable = false;
       const [memberships, invitations, contexts, offers, connections] =
         await Promise.all([
           session.effectivePermissions.includes("users.view")
@@ -117,7 +123,14 @@ export async function loadClientDetail(
             : Promise.resolve(null),
           organizationId &&
           session.effectivePermissions.includes("connectors.view")
-            ? loadAdminConnections(session, organizationId)
+            ? loadAdminConnections(session, organizationId).catch(error => {
+                // An absent optional connector catalog must not disable user onboarding.
+                if (error instanceof CommercePersistenceError && error.resource === "marketing_provider_connections" && ["PGRST205", "42P01"].includes(error.databaseCode)) {
+                  connectionsUnavailable = true;
+                  return null;
+                }
+                throw error;
+              })
             : Promise.resolve(null),
         ]);
       return {
@@ -131,13 +144,17 @@ export async function loadClientDetail(
         contexts,
         offers,
         connections,
+        connectionsUnavailable,
       };
     }),
   );
   const roles = await request(
     `tracekit_roles?account_type=eq.${account.account_type}&select=role_key,name&order=name.asc`,
   );
-  return { account, organizations, groups, roles };
+  const agency = account.account_type === "agency" && tenantInvitationsEnabled() ? await new SupabaseIdentityTenancyRepository().agencyByAccountId(accountId) : null;
+  const assignmentOptions = agency ? (await new SupabaseIdentityTenancyRepository().allActiveOrganizations()).filter(org => org.status === "active") : [];
+  const assignments = agency ? await all(`tracekit_agency_client_assignments?agency_id=eq.${encodeURIComponent(agency.id)}&status=eq.active&select=organization_id&order=organization_id.asc`) : [];
+  return { account, organizations, groups, roles, assignmentOptions, assignments };
 }
 export async function adminRpc(
   session: TraceKitSessionContext,

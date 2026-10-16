@@ -1,3 +1,4 @@
+import { ACTIVE_ACCOUNT_COOKIE, readActiveAccount } from "./active-account-cookie";
 import { requirePersistedPlatformAccess } from "./platform-catalog-access";
 import { randomUUID } from "node:crypto";
 import { withAuth } from "@workos-inc/authkit-nextjs";
@@ -98,20 +99,34 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
   const memberships = await repository.membershipsForUser(user.id);
   const activeMemberships = memberships.filter((candidate) => isMembershipEffective(candidate));
   const requestedOrganizationId = readActiveOrganization(jar.get(ACTIVE_ORGANIZATION_COOKIE)?.value, user.id);
-  const preferredMembership = selectSessionMembership(memberships);
+  const requestedAccountId = readActiveAccount(jar.get(ACTIVE_ACCOUNT_COOKIE)?.value, user.id);
+  const defaultMembership = selectSessionMembership(memberships);
+  const preferredMembership = defaultMembership && ["platform-owner", "platform-admin"].includes(defaultMembership.role)
+    ? defaultMembership : activeMemberships.find(candidate => candidate.accountId === requestedAccountId) || defaultMembership;
   if (!preferredMembership) return resolveUnaffiliatedSessionState(() => repository.isEmptyInstallation());
   const platformMode =
     !preferredMembership.organizationId &&
     (preferredMembership.role === "platform-owner" || preferredMembership.role === "platform-admin");
-  const requestedOrganizationMembership = !platformMode && requestedOrganizationId
+  const requestedOrganizationMembership = !platformMode && !requestedAccountId && requestedOrganizationId
     ? activeMemberships.find((candidate) => candidate.organizationId === requestedOrganizationId) || null
     : null;
   const membership = requestedOrganizationMembership || preferredMembership;
 
   const organizationMemberships = activeMemberships.filter((candidate) => Boolean(candidate.organizationId));
-  const organizationRecords = (
+  const selectedAccount = membership.accountId ? await repository.accountById(membership.accountId) : null;
+  const selectedAgency = selectedAccount?.accountType === "agency" && selectedAccount.status === "active"
+    ? await repository.agencyByAccountId(selectedAccount.id) : null;
+  if (selectedAccount?.accountType === "agency" && (!selectedAgency || selectedAgency.status !== "active")) return { kind: "no-membership" };
+  const agencyOrganizations = selectedAgency?.status === "active"
+    ? await repository.organizationsForMembership(membership, selectedAgency) : [];
+  const candidateOrganizationRecords = (
     await Promise.all(organizationMemberships.map((candidate) => repository.organizationsForMembership(candidate, null)))
-  ).flat();
+  ).flat().concat(agencyOrganizations).filter(organization => organization.status === "active");
+  // An assignment or membership must not reactivate a suspended client account.
+  const owningAccountIds = Array.from(new Set(candidateOrganizationRecords.map(organization => organization.owningAccountId)));
+  const owningAccounts = await Promise.all(owningAccountIds.map(id => repository.accountById(id)));
+  const activeClientAccountIds = new Set(owningAccounts.filter(account => account?.status === "active" && account.accountType === "client").map(account => account!.id));
+  const organizationRecords = candidateOrganizationRecords.filter(organization => activeClientAccountIds.has(organization.owningAccountId));
   const organizationById = new Map(organizationRecords.map((organization) => [organization.id, organization]));
   const organizations = Array.from(organizationById.values()).map((organization) => ({
     id: organization.id,
@@ -120,6 +135,8 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
     accountId: organization.owningAccountId,
   }));
 
+  const agencyContextGroups = selectedAgency ? await Promise.all(organizationRecords.filter(org => agencyOrganizations.some(assigned => assigned.id === org.id)).map(async org => ({ organizationId: org.id, contexts: await repository.businessContexts(membership.id, org.id) }))) : [];
+  const agencyContexts = new Map(agencyContextGroups.map(group => [group.organizationId, group.contexts]));
   const overrides = await repository.permissionOverrides(membership.id);
   const permissions = Array.from(resolveEffectivePermissions(membership, overrides));
   const requestedAdminViewId = permissions.includes("admin.impersonate")
@@ -137,16 +154,18 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
   const adminViewOrganization = adminViewRecord
     ? { id: adminViewRecord.id, name: adminViewRecord.name, mark: adminViewRecord.name.slice(0, 2).toUpperCase(), accountId: adminViewRecord.owningAccountId }
     : null;
-  const effectiveOrganizations = adminViewOrganization ? [adminViewOrganization] : platformMode ? [] : organizations;
+  const effectiveOrganizations = adminViewOrganization ? [adminViewOrganization] : platformMode ? [] : selectedAgency
+    ? organizations.filter(organization => (agencyContexts.get(organization.id)?.length || 0) > 0) : organizations;
   const activeOrganization = adminViewOrganization || (platformMode ? null : effectiveOrganizations.find((organization) => organization.id === requestedOrganizationId) || effectiveOrganizations.find((organization) => organization.id === membership.organizationId) || effectiveOrganizations[0] || null);
-  const activeOrganizationMembership = activeOrganization && !adminViewOrganization
+  const activeOrganizationMembership = activeOrganization && !adminViewOrganization && !selectedAgency
     ? organizationMemberships.find((candidate) => candidate.organizationId === activeOrganization.id) || membership
     : membership;
   const activeOverrides = activeOrganizationMembership.id === membership.id
     ? overrides
     : await repository.permissionOverrides(activeOrganizationMembership.id);
   const activePermissions = Array.from(resolveEffectivePermissions(activeOrganizationMembership, activeOverrides));
-  const activeAccountId = activeOrganization?.accountId || activeOrganizationMembership.accountId;
+  const activeAccountId = !adminViewOrganization && selectedAgency
+    ? selectedAgency.accountId : activeOrganization?.accountId || activeOrganizationMembership.accountId;
   if (!activeAccountId) return { kind: "no-membership" };
   const account = await repository.accountById(activeAccountId);
   if (!account || account.status !== "active") return { kind: "no-membership" };
@@ -155,7 +174,7 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
   const persistentContexts = activeOrganization
     ? adminViewOrganization
       ? await repository.activeBusinessContextsForOrganization(activeOrganization.id)
-      : await repository.businessContexts(activeOrganizationMembership.id, activeOrganization.id)
+      : selectedAgency ? agencyContexts.get(activeOrganization.id) || [] : await repository.businessContexts(activeOrganizationMembership.id, activeOrganization.id)
     : [];
   const businessContexts = persistentBusinessContextsWithDisplay(persistentContexts, MOCK_BUSINESS_CONTEXTS);
   const requestedBusinessContextId = activeOrganization ? readActiveBusinessContext(jar.get(ACTIVE_BUSINESS_CONTEXT_COOKIE)?.value, user.id, activeOrganization.id) : null;

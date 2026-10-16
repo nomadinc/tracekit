@@ -1,3 +1,4 @@
+import { tenantInvitationsEnabled } from "./tenant-invitation-feature";
 import type { IdentityTenancyRepository, AuditEventInput, FirstAdminBootstrapInput, PersistentOrganizationRecord } from "./persistent-repository";
 import { redactAuditMetadata } from "./persistent-repository";
 import type { PermissionOverride, PersistentAccount, PersistentAgency, PersistentMembership, PersistentUser, WorkOSIdentityInput } from "./persistent-types";
@@ -47,8 +48,19 @@ async function rest(path: string, init: RequestInit = {}) {
 const user = (row: Row): PersistentUser => ({ id: String(row.id), workosUserId: String(row.workos_user_id), primaryEmail: String(row.primary_email), displayName: String(row.display_name), avatarUrl: row.avatar_url ? String(row.avatar_url) : null, status: row.status as PersistentUser["status"] });
 
 export class SupabaseIdentityTenancyRepository implements IdentityTenancyRepository {
+  async pendingProviderInvitationIdsForVerifiedEmail(email: string): Promise<string[]> {
+    const rows = await rest(`tracekit_invitation_deliveries?state=eq.sent&select=provider_invitation_id,tracekit_invitations!inner(id)&tracekit_invitations.intended_email=eq.${encodeURIComponent(email.trim().toLowerCase())}&tracekit_invitations.status=eq.pending&tracekit_invitations.expires_at=gt.${encodeURIComponent(new Date().toISOString())}&limit=2`) as Row[];
+    return rows.flatMap(row => typeof row.provider_invitation_id === "string" ? [row.provider_invitation_id] : []);
+  }
+
+  async invitationIdForProvider(providerId: string, email: string): Promise<string | null> {
+    const deliveries = await rest(`tracekit_invitation_deliveries?provider_invitation_id=eq.${encodeURIComponent(providerId)}&state=eq.sent&select=invitation_id&limit=2`) as Row[];
+    if (deliveries.length !== 1) return null;
+    const rows = await rest(`tracekit_invitations?id=eq.${encodeURIComponent(String(deliveries[0].invitation_id))}&intended_email=eq.${encodeURIComponent(email.trim().toLowerCase())}&status=eq.pending&expires_at=gt.${encodeURIComponent(new Date().toISOString())}&select=id&limit=2`) as Row[];
+    return rows.length === 1 ? String(rows[0].id) : null;
+  }
   async invitationDelivery(input: Record<string, unknown>) {
-    return rest("rpc/tracekit_invitation_delivery", { method: "POST", body: JSON.stringify(input) });
+    return rest(tenantInvitationsEnabled() ? "rpc/tracekit_tenant_invitation" : "rpc/tracekit_invitation_delivery", { method: "POST", body: JSON.stringify(input) });
   }
 
   async pendingInvitationsForVerifiedEmail(email: string) {
@@ -56,8 +68,8 @@ export class SupabaseIdentityTenancyRepository implements IdentityTenancyReposit
     return rows.map(row => ({ id: String(row.id), expiresAt: String(row.expires_at) }));
   }
 
-  async customerInvitation(input: Record<string, unknown>): Promise<{ ok: boolean; reason: string | null; id: string | null; organizationId: string | null }> {
-    return rest("rpc/tracekit_customer_invitation", { method: "POST", body: JSON.stringify(input) });
+  async customerInvitation(input: Record<string, unknown>): Promise<{ ok: boolean; reason: string | null; id: string | null; organizationId: string | null; accountId?: string | null }> {
+    return rest(tenantInvitationsEnabled() ? "rpc/tracekit_tenant_invitation" : "rpc/tracekit_customer_invitation", { method: "POST", body: JSON.stringify(input) });
   }
 
   async userByWorkOSId(workosUserId: string) {
