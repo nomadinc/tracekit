@@ -484,13 +484,14 @@
     "meta": "scope denial",
     "governed": "no prepare controls; required permission missing",
     "logout": "Staging sign-in; protected Orders requires authentication",
-    "finalRelogin": "pending browser authentication",
+    "finalRelogin": "PASS: unchanged client-read-only Stem Labs scope; Orders renders before and after full reload",
     "freshFocusedChecks": {
       "passed": 34,
       "failed": 0,
       "skipped": 0
     },
     "sourceChanged": false,
-    "independentReview": "recovery-client-acceptance-20261016/INDEPENDENT-REVIEW.md"
+    "independentReview": "recovery-client-acceptance-20261016/INDEPENDENT-REVIEW.md",
+    "reloginEvidence": "recovery-client-acceptance-20261016/RELOGIN.md"
   }
 }

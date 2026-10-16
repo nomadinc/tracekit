@@ -1,3 +1,5 @@
+> Client logout/re-login and post-login reload persistence are now CLOSED on exact775 recovery Preview. See [closure](recovery-client-acceptance-20261016/RELOGIN.md); prior pending wording below is historical.
+
 > Latest exact775 ordinary-client results: [REPORT](recovery-client-acceptance-20261016/REPORT.md). Client identity, persistence, workspace access and tested denial boundaries pass. Final logout/re-login awaits user authentication.
 
 > Latest exact775 recovery-preview Admin results: [REPORT](recovery-admin-acceptance-20261016/REPORT.md). Identity storage and Stem Labs Customers/Orders now pass for Admin. Client authentication is pending; earlier observations below retain their original commits.

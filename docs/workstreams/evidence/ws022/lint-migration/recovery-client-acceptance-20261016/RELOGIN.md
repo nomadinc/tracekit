@@ -1,0 +1,7 @@
+# Client logout/re-login closure — 2026-10-16
+
+Exact unchanged candidate775cbec41b1d937ea59a56d47276ae1a0ecc1c36, Preview dpl_21SY95PQASdmA9RiDoANK6VebD8s, https://tracekit-staging-5bmzzfyf8-tracekit.vercel.app.
+
+After the recorded Sign Out and protected Orders challenge, user completed existing client browser authentication. Orders rendered on the exact recovery host. A full reload remained authenticated and Orders subsequently rendered again. Account menu confirmed unchanged client-read-only role, Stem Labs organization and business context; financial details remain unavailable. No Admin support banner or scope expansion. This closes pending ordinary-client logout/re-login/persistence behavior. No credentials/cookies inspected or configuration/membership/provider/financial writes performed.
+
+REPORT.md pending re-login entry is historical and superseded by this addendum. Other ledger gaps remain open: Admin positive governed discovery and incomplete Accufy Orders observation (WS-022 acceptance), transient not-found during detail loading (WS-022 frontend), forced browser race (WS-022 acceptance; deterministic regression already passes), delayed callback cause (Authentication/WS-022), trusted preflight managed-runner integration (Platform-CI), WS-001 monetary certification, Meta inactive/uncertified, Production V1 HOLD. All PRs remain draft. No new source changes or test execution in this closure pass; focused34/0/0 and earlier full-suite/database provenance unchanged.

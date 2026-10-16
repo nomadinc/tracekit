@@ -43,3 +43,7 @@ Supersedes pending Admin/identity wording above for deployment dpl_21SY95PQASdmA
 ## Recovery-preview ordinary-client update — 2026-10-16
 
 Exact775/dpl_21...5bm: client-read-only Stem Labs identity and reload persistence PASS; allowed connector PASS; two foreign connectors404; platform404; Customers/Orders render with financial details unavailable; chargebacks404 resource_unavailable; Meta scope denial; governed discovery no prepare controls and missing-permission reason. Client logout + protected Orders redirect PASS. Final re-login pending user browser authentication. Fresh affected regressions34/0/0; no source change or new full-suite execution. See recovery-client-acceptance-20261016/REPORT.md. Admin positive governed discovery, forced browser race, transient detail-loading state, Accufy Orders settling and delayed callback cause remain open with owners.
+
+## Client re-login closure — 2026-10-16
+
+CLOSED final browser authentication prerequisite: existing client re-login restored exact5bm Orders, unchanged client-read-only Stem Labs scope; full reload persisted and rendered Orders. Session lifecycle behavior PASS. RELOGIN.md supersedes earlier pending entries only for this check. Other owner gaps unchanged; Production V1 HOLD.
