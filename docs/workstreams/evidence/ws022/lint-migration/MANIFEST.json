@@ -54,9 +54,9 @@
     ]
   },
   "holds": [
-    "WorkOS dashboard authentication for exact recovery-preview URL registration: user; no key entry needed",
-    "recovery-preview identity/Customers/Orders/client/Admin acceptance pending exact callback registration: WS-022",
+    "Existing Admin/client application browser authentication and exact-preview acceptance: user / WS-022",
     "delayed callback expiry/eviction cause not fully reproduced: Authentication owner/WS-022",
+    "future trusted managed preflight-runner integration: Platform/CI",
     "WS-001 affiliate/source certification",
     "Meta inactive/uncertified",
     "Production V1 HOLD"
@@ -436,5 +436,27 @@
     },
     "browserAuthentication": "WorkOS email-code challenge pending user",
     "automaticGateInstalled": false
+  },
+  "recoveryURLRegistration": {
+    "candidate": "775cbec41b1d937ea59a56d47276ae1a0ecc1c36",
+    "deploymentId": "dpl_21SY95PQASdmA9RiDoANK6VebD8s",
+    "preview": "https://tracekit-staging-5bmzzfyf8-tracekit.vercel.app",
+    "environment": "Preview",
+    "workosEnvironment": "Staging",
+    "application": "app_01KZ1RW86NFKPDAG16GW5FJTRA",
+    "addedCallback": "https://tracekit-staging-5bmzzfyf8-tracekit.vercel.app/auth/callback",
+    "addedSignout": "https://tracekit-staging-5bmzzfyf8-tracekit.vercel.app/",
+    "callbacksBefore": 18,
+    "callbacksAfter": 19,
+    "signoutBefore": 8,
+    "signoutAfter": 9,
+    "savedAndReopened": true,
+    "existingDefaultsAndEntriesPreserved": true,
+    "productionConfigurationChanged": false,
+    "dashboardAuthentication": "completed by user",
+    "applicationAuthentication": "existing Admin email/password challenge prepared; user browser authentication required",
+    "membershipChanges": false,
+    "providerFinancialActions": false,
+    "liveAcceptance": "pending application sign-in; no application acceptance inferred from dashboard login"
   }
 }
