@@ -87,3 +87,37 @@ test("agency invitation API binds the account, role and selected workspaces befo
   for(const change of [{role:"agency-owner"},{organizationId:"foreign"},{businessContextIds:["foreign"]},{businessContextIds:[]}]) assert.equal((await bundledModule.exports.POST(request(change))).status,404);
   assert.equal(sends,1);assert.equal(calls.length,2);
 });
+
+test("actual agency permission denial returns 404 before storage or delivery; storage failures remain 503", async () => {
+  let storageFailed = false;
+  let storageCalls = 0;
+  let sends = 0;
+  class Repository {
+    constructor() { storageCalls++; }
+  }
+  const output = await build({ entryPoints: [new URL("../app/api/invitations/route.ts", import.meta.url).pathname], bundle: true, write: false, platform: "node", format: "cjs", plugins: [{ name: "denial-route-mocks", setup(b) {
+    b.onResolve({ filter: /application-session|supabase-identity-repository|workos-invitation-delivery|next\/server/ }, args => ({ path: args.path.split("/").pop()!, external: true }));
+  } }] });
+  const mocks: Record<string, unknown> = {
+    "application-session": { resolveApplicationSession: async () => {
+      if (storageFailed) throw new Error("private database failure");
+      return { kind: "authenticated", session: { user: { id: "recipient" }, externalWorkosUserId: "provider", correlationId: "test", membership: { id: "member", accountId: "agency", organizationId: null, role: "agency-read-only" }, role: "agency-read-only", effectivePermissions: [] } };
+    } },
+    "supabase-identity-repository": { SupabaseIdentityTenancyRepository: Repository },
+    "workos-invitation-delivery": { sendWorkOSInvitation: async () => { sends++; throw new Error("must not send"); } },
+    server: { NextResponse: { json: (body: unknown, options?: {status?: number}) => ({ body, status: options?.status ?? 200 }) } },
+  };
+  const bundledModule = { exports: {} as any };
+  runInNewContext(output.outputFiles[0].text, { module: bundledModule, exports: bundledModule.exports, require: (name: string) => name in mocks ? mocks[name] : nativeRequire(name), process: { env: { NODE_ENV: "production", TRACEKIT_TENANT_INVITATIONS_ENABLED: "true" } }, URL, Date, console });
+  const request = () => new Request("https://staging.example.test/api/invitations", { method: "POST", headers: { origin: "https://staging.example.test", "content-type": "application/json" }, body: JSON.stringify({ operation: "issue", accountId: "agency", role: "agency-read-only", intendedEmail: "probe@example.invalid", businessContextIds: ["assigned"] }) });
+  const denied = await bundledModule.exports.POST(request());
+  assert.equal(denied.status, 404);
+  assert.equal(denied.body.error, "The requested resource is unavailable.");
+  assert.equal(storageCalls, 1); // Only construction: any repository method would throw.
+  assert.equal(sends, 0);
+  storageFailed = true;
+  const unavailable = await bundledModule.exports.POST(request());
+  assert.equal(unavailable.status, 503);
+  assert.equal(unavailable.body.error, "Invitation processing is unavailable.");
+  assert.equal(sends, 0);
+});

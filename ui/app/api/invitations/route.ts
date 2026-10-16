@@ -8,7 +8,7 @@ import { ACTIVE_BUSINESS_CONTEXT_COOKIE } from "@/lib/identity/active-business-c
 import { resolveApplicationSession, resolveAuthenticatedPersistentIdentity } from "@/lib/identity/application-session";
 import { authorizeCustomerInvitation } from "@/lib/identity/customer-invitation-policy";
 import { resolveInvitationTargetAccess, resolveAgencyInvitationTargetAccess } from "@/lib/identity/invitation-target-access";
-import { requireResourceScope } from "@/lib/identity/authorization-gateway";
+import { AuthorizationDeniedError, requireResourceScope } from "@/lib/identity/authorization-gateway";
 import { SupabaseIdentityTenancyRepository } from "@/lib/identity/supabase-identity-repository";
 
 const unavailable = () => NextResponse.json({ error: "The requested resource is unavailable." }, { status: 404 });
@@ -94,7 +94,8 @@ export async function POST(request: Request) {
       return result.ok ? NextResponse.json({ ok: true }) : unavailable();
     }
     return unavailable();
-  } catch {
+  } catch (error) {
+    if (error instanceof AuthorizationDeniedError) return unavailable();
     return NextResponse.json({ error: "Invitation processing is unavailable." }, { status: 503 });
   }
 }
