@@ -1,0 +1,7 @@
+{
+  "project": "uoeosoiegatlqtzemsfv",
+  "managedCredential": "existing service_role",
+  "retrievable": true,
+  "mutation": false,
+  "status": 401
+}

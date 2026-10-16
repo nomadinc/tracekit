@@ -54,9 +54,9 @@
     ]
   },
   "holds": [
-    "Preview Supabase identity credential rejected UNAUTHORIZED_INVALID_API_KEY: Staging/Supabase owner",
-    "Customers/Orders Core and affected client/Admin acceptance blocked until identity storage restored: WS-022/Core",
-    "delayed browser cookie expiry/eviction cause not fully reproduced: Authentication owner/WS-022",
+    "WorkOS dashboard authentication for exact recovery-preview URL registration: user; no key entry needed",
+    "recovery-preview identity/Customers/Orders/client/Admin acceptance pending exact callback registration: WS-022",
+    "delayed callback expiry/eviction cause not fully reproduced: Authentication owner/WS-022",
     "WS-001 affiliate/source certification",
     "Meta inactive/uncertified",
     "Production V1 HOLD"
@@ -350,5 +350,72 @@
     },
     "ownerVerification": "pending named custodian/channel; no named owner in repository",
     "postCorrectionAcceptance": "pending owner verification and correction approval; no redundant broken redeploy"
+  },
+  "managedCredentialRecovery": {
+    "candidate": "775cbec41b1d937ea59a56d47276ae1a0ecc1c36",
+    "deployment": {
+      "id": "dpl_21SY95PQASdmA9RiDoANK6VebD8s",
+      "url": "https://tracekit-staging-5bmzzfyf8-tracekit.vercel.app",
+      "environment": "Preview",
+      "readyState": "READY",
+      "exactSHAAndBranchVerified": true
+    },
+    "workingComparison": {
+      "id": "dpl_6v7oRFdwYX3TbGpz5PwgsPQCUytF",
+      "sha": "bcd856c39a5ab6dfbf6bdd8418afef78f931e5b6",
+      "project": "tracekit-staging",
+      "branch": "ws022/maintained-lint-stack",
+      "createdUTC": "2026-10-15T02:30:23.440Z",
+      "freshObservation": "authenticated Control Center loaded; read-only navigation"
+    },
+    "previousFailure": {
+      "id": "dpl_A1VTcr4pBbYmMGn2xFEXYUjnX3wR",
+      "project": "tracekit-staging",
+      "branch": "ws022/acceptance-runtime-diagnosis",
+      "createdUTC": "2026-10-15T05:52:15.208Z",
+      "supabaseGatewayError": "UNAUTHORIZED_INVALID_API_KEY"
+    },
+    "generalPreviewIdentityKeyUpdatedUTC": "2026-10-15T05:00:09.656Z",
+    "variables": {
+      "url": "NEXT_PUBLIC_SUPABASE_URL",
+      "serverKey": "SUPABASE_SERVICE_ROLE_KEY"
+    },
+    "supabaseProject": "uoeosoiegatlqtzemsfv",
+    "additionalProjectComparison": {
+      "vercelProject": "tracekit",
+      "id": "prj_vHEklwWR4NABtKnmlasXrDNbudfH",
+      "productionEndpointProject": "uoeosoiegatlqtzemsfv",
+      "identityVariableNamesSame": true,
+      "productionAndPreviewEntriesSeparate": true,
+      "mutation": false,
+      "freshApplicationAcceptance": "not performed for this separate project"
+    },
+    "recovery": {
+      "source": "existing managed TraceKit server secret via already-authorized Supabase management access",
+      "existingModernSecretsReadChecks": {
+        "passed": 2,
+        "failed": 0,
+        "status": 200,
+        "returnedMemberRows": 0
+      },
+      "existingLegacyReadCheck": 401,
+      "entryCreated": {
+        "id": "t4sxLPrCSTGrmUCO",
+        "name": "SUPABASE_SERVICE_ROLE_KEY",
+        "type": "sensitive",
+        "target": [
+          "preview"
+        ],
+        "gitBranch": "ws022/acceptance-runtime-diagnosis"
+      },
+      "appliedUnderPriorConditionalAuthorization": true,
+      "secretValuesPrinted": false,
+      "keysCreatedOrRotated": false,
+      "credentialBearingTemporaryInputsRemoved": true,
+      "generalPreviewProductionOtherBranchesChanged": false
+    },
+    "remainingAccess": "WorkOS dashboard session expired in current browser; user authentication requested to register exact new callback/root URLs",
+    "newApplicationAcceptance": "pending WorkOS registration and role authentication; managed zero-row read is not full application acceptance",
+    "independentAssessment": "separate reviewer corroborated minimality and evidence limits; no independent live acceptance"
   }
 }

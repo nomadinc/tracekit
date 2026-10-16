@@ -1,0 +1,17 @@
+{
+  "before": 39,
+  "after": 40,
+  "allPriorEntriesPreserved": true,
+  "priorMetadataChanged": 0,
+  "added": [
+    {
+      "id": "t4sxLPrCSTGrmUCO",
+      "key": "SUPABASE_SERVICE_ROLE_KEY",
+      "type": "sensitive",
+      "target": [
+        "preview"
+      ],
+      "gitBranch": "ws022/acceptance-runtime-diagnosis"
+    }
+  ]
+}
