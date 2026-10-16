@@ -1,0 +1,9 @@
+{
+  "project": "uoeosoiegatlqtzemsfv",
+  "source": "existing managed TraceKit server credential",
+  "check": "zero-row identity read",
+  "checkedUTC": "2026-10-16T20:37:09.330930+00:00",
+  "credentialsPrinted": false,
+  "status": 200,
+  "returnedRows": 0
+}

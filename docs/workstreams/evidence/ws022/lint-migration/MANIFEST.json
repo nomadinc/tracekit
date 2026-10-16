@@ -417,5 +417,24 @@
     "remainingAccess": "WorkOS dashboard session expired in current browser; user authentication requested to register exact new callback/root URLs",
     "newApplicationAcceptance": "pending WorkOS registration and role authentication; managed zero-row read is not full application acceptance",
     "independentAssessment": "separate reviewer corroborated minimality and evidence limits; no independent live acceptance"
+  },
+  "acceptancePreflight": {
+    "candidate": "775cbec41b1d937ea59a56d47276ae1a0ecc1c36",
+    "source": "tools/ws022/preview-preflight.mjs",
+    "tests": {
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0
+    },
+    "independentReview": "three initial findings corrected and independently rerun6/0/0",
+    "currentMetadataCheck": "PASS; application unchecked",
+    "actualDeploymentRuntimeCheck": "not run; trusted managed invocation required",
+    "freshManagedRead": {
+      "status": 200,
+      "returnedRows": 0,
+      "checkedUTC": "2026-10-16T20:37:09.330930Z"
+    },
+    "browserAuthentication": "WorkOS email-code challenge pending user",
+    "automaticGateInstalled": false
   }
 }
