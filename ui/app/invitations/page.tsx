@@ -8,6 +8,6 @@ export default async function PendingInvitationsPage() {
   if (!identity) redirect("/auth/sign-in?returnTo=%2Finvitations");
   if (!identity.emailVerified || identity.user.status !== "active") return <main className="p-8">Verify your intended email before reviewing invitations.</main>;
   const invitations = await new SupabaseIdentityTenancyRepository().pendingInvitationsForVerifiedEmail(identity.user.primaryEmail);
-  if (!invitations.length && (await identity.repository.membershipsForUser(identity.user.id)).some(isMembershipEffective)) redirect("/");
+  if (!invitations.length && (await identity.repository.membershipsForUser(identity.user.id)).some(membership => isMembershipEffective(membership))) redirect("/");
   return <main className="mx-auto max-w-xl p-8"><h1 className="text-2xl font-semibold">Pending customer invitations</h1><p className="my-4">Review and explicitly accept an invitation to create your scoped customer access.</p>{invitations.length ? <ul>{invitations.map(invitation => <li key={invitation.id}><Link className="underline" href={`/invitations/${invitation.id}`}>Review customer invitation</Link></li>)}</ul> : <p>No pending, unexpired invitations match your verified email.</p>}</main>;
 }
