@@ -35,3 +35,7 @@ Baseline reviewed candidate: 88f7411457b988e83e51fbc9bf7b4b5b76002fe7 (PR #575, 
 | Production V1 | HOLD; no merge, production deployment or risk exception. | Release owner |
 
 Rollback is in COVERAGE.md. The dependent draft PR must remain draft pending broader WS-022 acceptance; maintenance ownership is accepted; green tooling checks do not clear the parent release holds.
+
+## Recovery-preview Admin update — 2026-10-16
+
+Supersedes pending Admin/identity wording above for deployment dpl_21SY95PQASdmA9RiDoANK6VebD8s only. Identity storage CLOSED for tested Admin application session; Stem Labs Customers/Orders Core401 CLOSED for tested reads, both list/detail200 and rendered. Foreign support-scope resource404, allowed resource/persistence PASS. Chargeback reads PASS (Stem0, Accufy50); unknown currency explicit; forced race unproven. Meta Sync Off. Logout reaches Staging authentication, not production. Ordinary-client exact-preview matrix awaits browser authentication. New temporary not-found loading defect OPEN (WS-022 frontend); Accufy Orders settling and governed control matrix INCOMPLETE. Delayed callback cause remains OPEN (Authentication/WS-022). See recovery-admin-acceptance-20261016/REPORT.md. No code change or new full suite claimed.

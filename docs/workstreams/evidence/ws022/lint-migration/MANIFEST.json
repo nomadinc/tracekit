@@ -458,5 +458,17 @@
     "membershipChanges": false,
     "providerFinancialActions": false,
     "liveAcceptance": "pending application sign-in; no application acceptance inferred from dashboard login"
+  },
+  "recoveryAdminAcceptance": {
+    "candidate": "775cbec41b1d937ea59a56d47276ae1a0ecc1c36",
+    "deployment": "dpl_21SY95PQASdmA9RiDoANK6VebD8s",
+    "report": "recovery-admin-acceptance-20261016/REPORT.md",
+    "identity": "pass persisted platform-owner and four-client catalog",
+    "customers": "Stem Labs list/detail200 and rendered",
+    "orders": "Stem Labs list/detail200 and rendered; Accufy incomplete",
+    "client": "awaiting existing client browser authentication",
+    "sourceChanged": false,
+    "newFullSuiteRun": false,
+    "independentReview": "recovery-admin-acceptance-20261016/INDEPENDENT-REVIEW.md"
   }
 }

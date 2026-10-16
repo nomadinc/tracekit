@@ -1,3 +1,5 @@
+> Latest exact775 recovery-preview Admin results: [REPORT](recovery-admin-acceptance-20261016/REPORT.md). Identity storage and Stem Labs Customers/Orders now pass for Admin. Client authentication is pending; earlier observations below retain their original commits.
+
 > Follow-up: the callback/sign-out configuration prerequisite below is now CLOSED by explicit user authorization and verified additions. See staging-allowlist-acceptance/REPORT.md for fresh client-session evidence and remaining identity blockers. Earlier observations below are retained as historical evidence.
 
 # WS-022 maintenance acceptance and exact-preview follow-up
