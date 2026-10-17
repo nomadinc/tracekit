@@ -29,10 +29,17 @@ export interface AuthoritativeSnapshot {
 export interface AuthoritativeProvider {
   /** Atomic, current server-side snapshot for the request's persistent session. */
   load():Promise<AuthoritativeSnapshot|null>;
+  /** WS-001 must compare against current active authoritative bindings AND the
+   * approved tenant-set epochs, under the snapshot versions. Missing, revoked,
+   * stale, mismatched or ambiguous evidence must return false. Never self-attest
+   * by comparing the supplied snapshot to itself. */
+  verifyBindingEpochs(snapshot:AuthoritativeSnapshot):Promise<boolean>;
 }
-export const UNAVAILABLE_PROVIDER:AuthoritativeProvider=Object.freeze({load:async()=>null});
+export const UNAVAILABLE_PROVIDER:AuthoritativeProvider=Object.freeze({load:async()=>null,verifyBindingEpochs:async()=>false});
 export interface AuthorizedReadScope {organizationId:string;tenantRefs:readonly string[];authorizationVersion:string}
 const id=(v:unknown):v is string=>typeof v==="string"&&/^[A-Za-z0-9_-]{1,128}$/.test(v);
+// Canonical lowercase hyphenated UUID text; do not normalize caller values.
+const bindingEpoch=(v:unknown):v is string=>typeof v==="string"&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(v)&&v!=="00000000-0000-0000-0000-000000000000";
 const keys=(v:unknown,expected:string[])=>record(v)&&Object.keys(v).length===expected.length&&expected.every(k=>Object.hasOwn(v,k));
 function effective(v:Effective,now:number){return v.status==="active"&&timestamp(v.validFrom)&&timestamp(v.expiresAt)&&Date.parse(v.validFrom)<=now&&now<Date.parse(v.expiresAt);}
 function fingerprint(s:AuthoritativeSnapshot){return createHash("sha256").update(JSON.stringify(s)).digest("hex");}
@@ -49,7 +56,7 @@ function checked(raw:unknown,now:number):AuthoritativeSnapshot {
   if(!keys(s.versions,["identity","account","organization","membership","permissions","entitlement","tenantBindings","workspaceMappings"])||!Object.values(s.versions).every(id))return deny();
   const ts=s.tenantSet;
   if(!keys(ts,["version","organizationId","completeOrganizationCoverage","tenants"])||!id(ts.version)||ts.version!==e.approvedTenantSetVersion||ts.organizationId!==s.organization.id||ts.completeOrganizationCoverage!==true||!Array.isArray(ts.tenants)||!ts.tenants.length||ts.tenants.length>256)return deny();
-  if(!ts.tenants.every(t=>keys(t,["tenantRef","organizationId","status","bindingEpoch"])&&typeof t.tenantRef==="string"&&/^tenant_[A-Za-z0-9_-]{8,128}$/.test(t.tenantRef)&&t.organizationId===s.organization.id&&t.status==="active"&&id(t.bindingEpoch))||new Set(ts.tenants.map(t=>t.tenantRef)).size!==ts.tenants.length)return deny();
+  if(!ts.tenants.every(t=>keys(t,["tenantRef","organizationId","status","bindingEpoch"])&&typeof t.tenantRef==="string"&&/^tenant_[A-Za-z0-9_-]{8,128}$/.test(t.tenantRef)&&t.organizationId===s.organization.id&&t.status==="active"&&bindingEpoch(t.bindingEpoch))||new Set(ts.tenants.map(t=>t.tenantRef)).size!==ts.tenants.length)return deny();
   if(!Array.isArray(s.decisions)||s.decisions.length>256)return deny();let granted=false;
   for(const d of s.decisions){
     if(!keys(d,["capability","effect","scope"])||!id(d.capability.replace(/\./g,"_"))||!["allow","deny"].includes(d.effect)||!record(d.scope)||!id(d.scope.organizationId))return deny();
@@ -67,7 +74,9 @@ function checked(raw:unknown,now:number):AuthoritativeSnapshot {
   if(!granted)return deny();return s;
 }
 function hints(params:URLSearchParams,s:AuthoritativeSnapshot){
-  const orgKeys=["organization_id","organizationId","workspace_id","workspaceId"];
+  // Organization-only V1 never interprets workspace selectors as organizations.
+  for(const key of ["workspaceId","workspace_id"])if(params.has(key))throw new NetworkAuthorizationDenied();
+  const orgKeys=["organization_id","organizationId"];
   for(const key of orgKeys){const values=params.getAll(key);if(values.length>1||values.some(v=>v!==s.organization.id))throw new NetworkAuthorizationDenied();}
   for(const key of ["tenant","tenant_ref","tenantRef","tenant_id","tenantId","business_context_id","businessContextId"])if(params.has(key))throw new NetworkAuthorizationDenied();
 }
@@ -81,11 +90,11 @@ export async function withAuthorizedNetworkRead<T>(
   now:()=>number=Date.now,
 ):Promise<T> {
   let initial:AuthoritativeSnapshot;
-  try{initial=checked(await provider.load(),now());hints(params,initial);}catch{throw new NetworkAuthorizationDenied();}
+  try{initial=checked(await provider.load(),now());hints(params,initial);if(await provider.verifyBindingEpochs(structuredClone(initial))!==true)throw new NetworkAuthorizationDenied();}catch{throw new NetworkAuthorizationDenied();}
   const authVersion=fingerprint(initial);
   const scope=Object.freeze({organizationId:initial.organization.id,tenantRefs:Object.freeze(initial.tenantSet.tenants.map(t=>t.tenantRef).sort()),authorizationVersion:authVersion});
   let result:T;
   try{result=await read(scope);}catch{throw new NetworkDataUnavailable();}
-  try{const final=checked(await provider.load(),now());hints(params,final);if(fingerprint(final)!==authVersion)throw new NetworkAuthorizationDenied();}catch{throw new NetworkAuthorizationDenied();}
+  try{const final=checked(await provider.load(),now());hints(params,final);if(await provider.verifyBindingEpochs(structuredClone(final))!==true)throw new NetworkAuthorizationDenied();if(fingerprint(final)!==authVersion)throw new NetworkAuthorizationDenied();}catch{throw new NetworkAuthorizationDenied();}
   return result;
 }

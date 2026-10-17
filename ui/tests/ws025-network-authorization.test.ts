@@ -3,11 +3,11 @@ import test from "node:test";
 import { withAuthorizedNetworkRead,NetworkAuthorizationDenied,type AuthoritativeSnapshot } from "../lib/network-intelligence/read-authorization";
 import { ROLE_PERMISSIONS } from "../lib/identity/permissions";
 import { NetworkDataUnavailable } from "../lib/network-intelligence/contracts";
-import { AT,auth } from "./ws025-network-fixtures";
+import { AT,auth,BINDING_EPOCH,testProvider } from "./ws025-network-fixtures";
 
 async function denied(edit:(s:AuthoritativeSnapshot)=>void,params=new URLSearchParams()){
   const s=auth();edit(s);let calls=0;
-  await assert.rejects(withAuthorizedNetworkRead(params,async()=>{calls++;return "foreign-data";},{load:async()=>s},()=>Date.parse(AT)),e=>e instanceof NetworkAuthorizationDenied&&e.status===404&&e.code==="RESOURCE_UNAVAILABLE"&&e.message==="The requested resource is unavailable.");
+  await assert.rejects(withAuthorizedNetworkRead(params,async()=>{calls++;return "foreign-data";},testProvider(async()=>s),()=>Date.parse(AT)),e=>e instanceof NetworkAuthorizationDenied&&e.status===404&&e.code==="RESOURCE_UNAVAILABLE"&&e.message==="The requested resource is unavailable.");
   assert.equal(calls,0);
 }
 test("default unavailable authoritative provider denies before read",async()=>{
@@ -43,27 +43,60 @@ for(const [name,edit] of cases)test(name,()=>denied(edit));
 for(const query of ["organization_id=foreign","workspaceId=foreign","tenantRef=tenant_foreign_0001","tenant_id=tenant_foreign_0001","organization_id=org_a&organization_id=foreign","organization_id=org_a&organization_id=org_a","organization_id=org_a&workspace_id=foreign"]){test("reject forged/conflicting hints: "+query,()=>denied(()=>{},new URLSearchParams(query)));}
 test("irrelevant foreign deny does not grant or deny local scope",async()=>{
   const s=auth();s.decisions.push({capability:"network_intelligence.view",effect:"deny",scope:{kind:"ORGANIZATION",organizationId:"foreign"}});
-  const result=await withAuthorizedNetworkRead(new URLSearchParams(),async scope=>scope,{load:async()=>s},()=>Date.parse(AT));assert.equal(result.organizationId,"org_a");assert.deepEqual(result.tenantRefs,["tenant_synthetic_00000001"]);
+  const result=await withAuthorizedNetworkRead(new URLSearchParams(),async scope=>scope,testProvider(async()=>s),()=>Date.parse(AT));assert.equal(result.organizationId,"org_a");assert.deepEqual(result.tenantRefs,["tenant_synthetic_00000001"]);
 });
 for(const role of Object.keys(ROLE_PERMISSIONS) as Array<keyof typeof ROLE_PERMISSIONS>){test("no automatic network grant: "+role,async()=>{
   assert.equal((ROLE_PERMISSIONS[role] as readonly string[]).includes("network_intelligence.view"),false);
   await denied(s=>{s.decisions=(ROLE_PERMISSIONS[role] as readonly string[]).map(capability=>({capability,effect:"allow",scope:{kind:"ORGANIZATION",organizationId:"org_a"}}));});
 });}
 test("provider errors fail closed without leaking details",async()=>{
-  await assert.rejects(withAuthorizedNetworkRead(new URLSearchParams(),async()=>null,{load:async()=>{throw new Error("synthetic-private-provider-error");}}),e=>e instanceof NetworkAuthorizationDenied&&!e.message.includes("synthetic"));
+  await assert.rejects(withAuthorizedNetworkRead(new URLSearchParams(),async()=>null,testProvider(async()=>{throw new Error("synthetic-private-provider-error");})),e=>e instanceof NetworkAuthorizationDenied&&!e.message.includes("synthetic"));
 });
 for(const [name,edit] of [
   ["revocation",(s:AuthoritativeSnapshot)=>{s.entitlement.revokedAt=AT;}],
-  ["binding epoch change",(s:AuthoritativeSnapshot)=>{s.tenantSet.tenants[0].bindingEpoch="v2";}],
+  ["binding epoch change",(s:AuthoritativeSnapshot)=>{s.tenantSet.tenants[0].bindingEpoch="12345678-1234-4234-8234-123456789abd";}],
   ["permission version change",(s:AuthoritativeSnapshot)=>{s.versions.permissions="v2";}],
   ["session switch",(s:AuthoritativeSnapshot)=>{s.identity.sessionId="session_b";}],
 ] as const){test("final revalidation discards response on "+name,async()=>{
   let loads=0;const initial=auth();const changed=auth();edit(changed);let reads=0;
-  await assert.rejects(withAuthorizedNetworkRead(new URLSearchParams(),async()=>{reads++;return {count:999};},{load:async()=>++loads===1?initial:changed},()=>Date.parse(AT)),NetworkAuthorizationDenied);assert.equal(reads,1);assert.equal(loads,2);
+  await assert.rejects(withAuthorizedNetworkRead(new URLSearchParams(),async()=>{reads++;return {count:999};},testProvider(async()=>++loads===1?initial:changed),()=>Date.parse(AT)),NetworkAuthorizationDenied);assert.equal(reads,1);assert.equal(loads,2);
 });}
 test("reader failures cannot expose persistence errors",async()=>{
-  await assert.rejects(withAuthorizedNetworkRead(new URLSearchParams(),async()=>{throw new Error("synthetic-private-database-error");},{load:async()=>auth()},()=>Date.parse(AT)),e=>e instanceof NetworkDataUnavailable&&!e.message.includes("synthetic"));
+  await assert.rejects(withAuthorizedNetworkRead(new URLSearchParams(),async()=>{throw new Error("synthetic-private-database-error");},testProvider(),()=>Date.parse(AT)),e=>e instanceof NetworkDataUnavailable&&!e.message.includes("synthetic"));
 });
 test("provider disappearance on final validation discards completed data",async()=>{
-  let loads=0;await assert.rejects(withAuthorizedNetworkRead(new URLSearchParams(),async()=>({count:1}),{load:async()=>++loads===1?auth():null},()=>Date.parse(AT)),NetworkAuthorizationDenied);
+  let loads=0;await assert.rejects(withAuthorizedNetworkRead(new URLSearchParams(),async()=>({count:1}),testProvider(async()=>++loads===1?auth():null),()=>Date.parse(AT)),NetworkAuthorizationDenied);
+});
+
+for(const key of ["workspaceId","workspace_id"]){
+  for(const value of ["org_a","workspace_a","foreign_workspace","","{malformed}"]){
+    for(const org of ["","&organization_id=org_a"]){
+      test("M2A-SEC-001 rejects supplied workspace selector: "+key+"="+value+org,
+        ()=>denied(()=>{},new URLSearchParams(key+"="+encodeURIComponent(value)+org)));
+    }
+  }
+}
+const invalidEpochs:unknown[]=[undefined,null,"","not_a_uuid","binding_v1",
+  "12345678-1234-4234-8234-123456789ab",BINDING_EPOCH.toUpperCase(),
+  "{"+BINDING_EPOCH+"}",BINDING_EPOCH.replaceAll("-","")," "+BINDING_EPOCH,
+  "00000000-0000-0000-0000-000000000000",[BINDING_EPOCH]];
+for(const epoch of invalidEpochs){
+  test("M2A-SEC-002 denies invalid/noncanonical epoch: "+JSON.stringify(epoch),()=>denied(s=>{
+    if(epoch===undefined)delete (s.tenantSet.tenants[0] as Partial<typeof s.tenantSet.tenants[number]>).bindingEpoch;
+    else s.tenantSet.tenants[0].bindingEpoch=epoch as string;
+  }));
+}
+test("M2A-SEC-002 valid canonical epoch permits scoped read",async()=>{
+  let calls=0;await withAuthorizedNetworkRead(new URLSearchParams(),async()=>{calls++;},testProvider(),()=>Date.parse(AT));assert.equal(calls,1);
+});
+test("M2A-SEC-002 canonical but mismatched epoch denies before read",()=>denied(s=>{s.tenantSet.tenants[0].bindingEpoch="12345678-1234-4234-8234-123456789abd";}));
+test("M2A-SEC-002 stale tenant-set epoch denies before read",()=>denied(s=>{s.tenantSet.version="tenants_old";}));
+test("M2A-SEC-002 revoked binding denies before read",()=>denied(s=>{s.tenantSet.tenants[0].status="inactive";}));
+test("M2A-SEC-002 unavailable authoritative epoch verification denies before read",async()=>{
+  let calls=0;await assert.rejects(withAuthorizedNetworkRead(new URLSearchParams(),async()=>{calls++;},
+    {...testProvider(),verifyBindingEpochs:async()=>{throw new Error("synthetic-private-binding-error");}},()=>Date.parse(AT)),NetworkAuthorizationDenied);assert.equal(calls,0);
+});
+test("M2A-SEC-002 missing authoritative epoch verifier denies before read",async()=>{
+  let calls=0;await assert.rejects(withAuthorizedNetworkRead(new URLSearchParams(),async()=>{calls++;},
+    {load:async()=>auth()} as unknown as ReturnType<typeof testProvider>,()=>Date.parse(AT)),NetworkAuthorizationDenied);assert.equal(calls,0);
 });
