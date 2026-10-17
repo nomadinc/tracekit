@@ -38,8 +38,9 @@ export interface AuthoritativeProvider {
 export const UNAVAILABLE_PROVIDER:AuthoritativeProvider=Object.freeze({load:async()=>null,verifyBindingEpochs:async()=>false});
 export interface AuthorizedReadScope {organizationId:string;tenantRefs:readonly string[];authorizationVersion:string}
 const id=(v:unknown):v is string=>typeof v==="string"&&/^[A-Za-z0-9_-]{1,128}$/.test(v);
-// Canonical lowercase hyphenated UUID text; do not normalize caller values.
-const bindingEpoch=(v:unknown):v is string=>typeof v==="string"&&/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/.test(v)&&v!=="00000000-0000-0000-0000-000000000000";
+// Repository-compatible UUID versions 1-5 and RFC variant, canonical lowercase.
+// Do not trim, normalize or repair authoritative epoch values.
+const bindingEpoch=(v:unknown):v is string=>typeof v==="string"&&v.length===36&&/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(v);
 const keys=(v:unknown,expected:string[])=>record(v)&&Object.keys(v).length===expected.length&&expected.every(k=>Object.hasOwn(v,k));
 function effective(v:Effective,now:number){return v.status==="active"&&timestamp(v.validFrom)&&timestamp(v.expiresAt)&&Date.parse(v.validFrom)<=now&&now<Date.parse(v.expiresAt);}
 function fingerprint(s:AuthoritativeSnapshot){return createHash("sha256").update(JSON.stringify(s)).digest("hex");}
@@ -75,10 +76,10 @@ function checked(raw:unknown,now:number):AuthoritativeSnapshot {
 }
 function hints(params:URLSearchParams,s:AuthoritativeSnapshot){
   // Organization-only V1 never interprets workspace selectors as organizations.
-  for(const key of ["workspaceId","workspace_id"])if(params.has(key))throw new NetworkAuthorizationDenied();
+  for(const key of ["workspaceId","workspace_id","businessContextId","business_context_id"])if(params.has(key))throw new NetworkAuthorizationDenied();
   const orgKeys=["organization_id","organizationId"];
   for(const key of orgKeys){const values=params.getAll(key);if(values.length>1||values.some(v=>v!==s.organization.id))throw new NetworkAuthorizationDenied();}
-  for(const key of ["tenant","tenant_ref","tenantRef","tenant_id","tenantId","business_context_id","businessContextId"])if(params.has(key))throw new NetworkAuthorizationDenied();
+  for(const key of ["tenant","tenant_ref","tenantRef","tenant_id","tenantId"])if(params.has(key))throw new NetworkAuthorizationDenied();
 }
 /** Execute a non-streaming read and revalidate before returning its result.
  * No production provider exists here: the default ALWAYS denies access.
