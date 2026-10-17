@@ -51,3 +51,11 @@ CLOSED final browser authentication prerequisite: existing client re-login resto
 ## Reviewed remaining-hardening candidate — local2026-10-16 / UTC2026-10-17
 
 Published1ea9c54852c5e0e894139a54ba26474cb6002198, READY dpl_CShzXP2iCnAbXS7gVNhTBMEcXJ8v / jc36knwwd Preview. Fixed transientdetail state and explicit scope/request binding; forced synthetic actual-browser row/scope races PASS. Managed npm prebuild gate executed remotely200zero rows; metadata preflightPASS. Postcommit fullUI1467/0/0, lint0errors9unchangedwarnings, tsc0, localbuildPASS. Separate review no remaining blocking implementation finding. New exact WorkOS callback/root saved/reopened19→20,9→10; defaults preserved. PositiveAdmingoverned andAccufyOrders wait finalbrowserauthentication; delayedoriginalcookieabsencecause remainsunresolved. Preserve775client and88DB/WS024provenance. See remaining-hardening-20261016/LEDGER.md; all PRs draft; Production V1 HOLD.
+
+## Final Admin live acceptance at 1ea9c548 — 2026-10-17 UTC
+
+The existing platform-owner authenticated on the exact jc36 Preview; reload persistence passed. Stem Labs governed discovery returned200, Shopify was AVAILABLE with one untouched Prepare control and required fresh confirmation. Accufy Shopify readiness was blocked by approved scope; Commas remains intentionally disabled before permission evaluation. Positive Admin discovery is CLOSED without provider execution.
+
+Accufy Orders remains an OPEN load-completion/performance gap owned by WS-022 frontend/Core pagination:176 non-empty HTTP200 pages over127seconds, through offset17500, next17600; the UI remained loading. It was neither empty nor an observed request failure.
+
+Final Stem Labs Customers/Orders render. An Accufy connector returned404 under Stem Labs support scope. Accufy chargebacks loaded50rows and detail with unknown currency explicit; Stem Labs returned0shown after scope navigation. Meta remains Sync Off. Fresh governed checks20/0/0 at exact1ea9. Original delayed-callback cause remains OPEN with Authentication/WS-022; prior client evidence remains at775. All PRs draft; Production V1 HOLD.

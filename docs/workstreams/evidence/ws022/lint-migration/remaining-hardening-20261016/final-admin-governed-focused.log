@@ -1,0 +1,134 @@
+
+> tracekit-ui@0.1.0 test
+> node scripts/run-tests.mjs m16-provider-action-discovery.test.ts m16-provider-action-contract.test.ts m15-shopify-controlled-proof-readiness.test.ts m12-execution-permission-gate.test.ts
+
+TAP version 13
+# Subtest: M12 customers.view alone cannot cross execution orchestration gate
+ok 1 - M12 customers.view alone cannot cross execution orchestration gate
+  ---
+  duration_ms: 0.6125
+  type: 'test'
+  ...
+# Subtest: M12 actions.execute alone does not replace plan read permission
+ok 2 - M12 actions.execute alone does not replace plan read permission
+  ---
+  duration_ms: 0.138875
+  type: 'test'
+  ...
+# Subtest: M12 both permissions and fresh confirmation reach isolated durable execution
+ok 3 - M12 both permissions and fresh confirmation reach isolated durable execution
+  ---
+  duration_ms: 15.932292
+  type: 'test'
+  ...
+# Subtest: M15 Shopify readiness tool is read-only and accepts no target arguments
+ok 4 - M15 Shopify readiness tool is read-only and accepts no target arguments
+  ---
+  duration_ms: 0.405708
+  type: 'test'
+  ...
+# Subtest: M15 readiness is hard-bound to current Stem Labs Shopify tenancy
+ok 5 - M15 readiness is hard-bound to current Stem Labs Shopify tenancy
+  ---
+  duration_ms: 0.062334
+  type: 'test'
+  ...
+# Subtest: M15 readiness derives an HTTPS callback from server runtime origin
+ok 6 - M15 readiness derives an HTTPS callback from server runtime origin
+  ---
+  duration_ms: 0.104917
+  type: 'test'
+  ...
+# Subtest: M15 readiness proves proof-only topic absence without mutation
+ok 7 - M15 readiness proves proof-only topic absence without mutation
+  ---
+  duration_ms: 0.085958
+  type: 'test'
+  ...
+# Subtest: M15 readiness requires governed credential envelope and decrypt
+ok 8 - M15 readiness requires governed credential envelope and decrypt
+  ---
+  duration_ms: 0.044208
+  type: 'test'
+  ...
+# Subtest: M16 contracts describe both proven provider actions and match capability governance
+ok 9 - M16 contracts describe both proven provider actions and match capability governance
+  ---
+  duration_ms: 1.02275
+  type: 'test'
+  ...
+# Subtest: M16 contracts preserve materially different verification and recovery semantics
+ok 10 - M16 contracts preserve materially different verification and recovery semantics
+  ---
+  duration_ms: 0.123084
+  type: 'test'
+  ...
+# Subtest: M16 contract registry is declarative and contains no provider execution escape hatch
+ok 11 - M16 contract registry is declarative and contains no provider execution escape hatch
+  ---
+  duration_ms: 0.482
+  type: 'test'
+  ...
+# Subtest: M16 does not register inspect_evidence as an external provider action
+ok 12 - M16 does not register inspect_evidence as an external provider action
+  ---
+  duration_ms: 0.081458
+  type: 'test'
+  ...
+# Subtest: M16 provider exposure requires complete matching governance contract
+ok 13 - M16 provider exposure requires complete matching governance contract
+  ---
+  duration_ms: 0.529417
+  type: 'test'
+  ...
+# Subtest: M16 named provider action service enforces contracts without generic execution surface
+ok 14 - M16 named provider action service enforces contracts without generic execution surface
+  ---
+  duration_ms: 0.960167
+  type: 'test'
+  ...
+# Subtest: M16 provider action discovery is contract and readiness backed
+ok 15 - M16 provider action discovery is contract and readiness backed
+  ---
+  duration_ms: 0.366
+  type: 'test'
+  ...
+# Subtest: M16 discovery cannot prepare confirm authorize or execute
+ok 16 - M16 discovery cannot prepare confirm authorize or execute
+  ---
+  duration_ms: 0.20775
+  type: 'test'
+  ...
+# Subtest: M16 discovery MCP tool is read only and caller blind
+ok 17 - M16 discovery MCP tool is read only and caller blind
+  ---
+  duration_ms: 2.288959
+  type: 'test'
+  ...
+# Subtest: M16 discovery does not merge provider readiness across organizations
+ok 18 - M16 discovery does not merge provider readiness across organizations
+  ---
+  duration_ms: 0.209459
+  type: 'test'
+  ...
+# Subtest: M16 discovery touched TypeScript sources contain no escaped newline artifacts
+ok 19 - M16 discovery touched TypeScript sources contain no escaped newline artifacts
+  ---
+  duration_ms: 0.690083
+  type: 'test'
+  ...
+# Subtest: M16 discovery handoff names only caller-blind prepare tools
+ok 20 - M16 discovery handoff names only caller-blind prepare tools
+  ---
+  duration_ms: 0.13925
+  type: 'test'
+  ...
+1..20
+# tests 20
+# suites 0
+# pass 20
+# fail 0
+# cancelled 0
+# skipped 0
+# todo 0
+# duration_ms 293.076291

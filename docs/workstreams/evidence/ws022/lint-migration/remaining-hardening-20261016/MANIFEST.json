@@ -46,7 +46,38 @@
     "savedAndReopened": true,
     "existingEntriesDefaultsPreserved": true
   },
-  "liveFinalPreview": "PENDING existing Admin browser authentication; no updated role certification inferred",
+  "liveFinalPreview": {
+    "adminRole": "platform-owner",
+    "scope": "explicit Admin support view, Accufy and Stem Labs",
+    "discoveryAccufy": "200; Commas intentionally disabled, Shopify rejects wrong approved scope",
+    "discoveryStemLabs": "200; Shopify available, one untouched Prepare button, fresh confirmation required",
+    "governedMutationsPerformed": false,
+    "accufyOrders": {
+      "result": "incomplete full-list pagination; not empty or request failure",
+      "pages": 176,
+      "statuses": [
+        200
+      ],
+      "lastOffset": 17500,
+      "lastPageRows": 100,
+      "nextOffset": 17600,
+      "elapsedSeconds": 127,
+      "ui": "Loading Order Workspace",
+      "owner": "WS-022 frontend / Core pagination"
+    },
+    "stemCustomersOrders": "rendered after loading",
+    "adminPersistence": "reload passed",
+    "foreignConnection": "Accufy-owned connector404 under Stem Labs",
+    "chargebacks": "Accufy50rows/detail reads; Stem Labs0shown after scope navigation; unknown currency explicit",
+    "meta": "Sync Off; no connect/save",
+    "report": "FINAL-ADMIN-LIVE.md"
+  },
   "clientEvidencePreservedAt": "a17b6e6312dd34afc9cf44f8918d0f605bb5eccf",
-  "security": "No memberships, credentials, general Preview, other workstreams or Production changed. No provider/financial actions. Meta inactive."
+  "security": "No memberships, credentials, general Preview, other workstreams or Production changed. No provider/financial actions. Meta inactive.",
+  "freshGovernedChecks": {
+    "passed": 20,
+    "failed": 0,
+    "skipped": 0,
+    "sha": "1ea9c54852c5e0e894139a54ba26474cb6002198"
+  }
 }

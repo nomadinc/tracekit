@@ -1,3 +1,5 @@
+> Final1ea9 Admin live checks now completed: [report](remaining-hardening-20261016/FINAL-ADMIN-LIVE.md). Positive governed discovery PASS in Stem Labs; Accufy Orders shows incomplete large-portfolio pagination (176 HTTP200 pages/127seconds), not empty/request failure. Remaining owners: WS-022 frontend/Core load completion; Authentication historical delayed-cookie cause. Older pending authentication wording below is superseded for these checks.
+
 > Latest reviewed candidate is1ea9c54852c5e0e894139a54ba26474cb6002198; READY jc36knwwd Preview, managed preflight200, exact UI1467/0/0. See [remaining acceptance](remaining-hardening-20261016/LEDGER.md). Final Admin browser authentication pending; completed775 client results remain inherited with original provenance.
 
 > Client logout/re-login and post-login reload persistence are now CLOSED on exact775 recovery Preview. See [closure](recovery-client-acceptance-20261016/RELOGIN.md); prior pending wording below is historical.
