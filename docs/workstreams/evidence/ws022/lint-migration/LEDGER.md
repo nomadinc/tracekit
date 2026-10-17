@@ -47,3 +47,7 @@ Exact775/dpl_21...5bm: client-read-only Stem Labs identity and reload persistenc
 ## Client re-login closure — 2026-10-16
 
 CLOSED final browser authentication prerequisite: existing client re-login restored exact5bm Orders, unchanged client-read-only Stem Labs scope; full reload persisted and rendered Orders. Session lifecycle behavior PASS. RELOGIN.md supersedes earlier pending entries only for this check. Other owner gaps unchanged; Production V1 HOLD.
+
+## Reviewed remaining-hardening candidate — local2026-10-16 / UTC2026-10-17
+
+Published1ea9c54852c5e0e894139a54ba26474cb6002198, READY dpl_CShzXP2iCnAbXS7gVNhTBMEcXJ8v / jc36knwwd Preview. Fixed transientdetail state and explicit scope/request binding; forced synthetic actual-browser row/scope races PASS. Managed npm prebuild gate executed remotely200zero rows; metadata preflightPASS. Postcommit fullUI1467/0/0, lint0errors9unchangedwarnings, tsc0, localbuildPASS. Separate review no remaining blocking implementation finding. New exact WorkOS callback/root saved/reopened19→20,9→10; defaults preserved. PositiveAdmingoverned andAccufyOrders wait finalbrowserauthentication; delayedoriginalcookieabsencecause remainsunresolved. Preserve775client and88DB/WS024provenance. See remaining-hardening-20261016/LEDGER.md; all PRs draft; Production V1 HOLD.

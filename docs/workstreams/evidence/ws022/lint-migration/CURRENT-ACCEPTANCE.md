@@ -1,3 +1,5 @@
+> Latest reviewed candidate is1ea9c54852c5e0e894139a54ba26474cb6002198; READY jc36knwwd Preview, managed preflight200, exact UI1467/0/0. See [remaining acceptance](remaining-hardening-20261016/LEDGER.md). Final Admin browser authentication pending; completed775 client results remain inherited with original provenance.
+
 > Client logout/re-login and post-login reload persistence are now CLOSED on exact775 recovery Preview. See [closure](recovery-client-acceptance-20261016/RELOGIN.md); prior pending wording below is historical.
 
 > Latest exact775 ordinary-client results: [REPORT](recovery-client-acceptance-20261016/REPORT.md). Client identity, persistence, workspace access and tested denial boundaries pass. Final logout/re-login awaits user authentication.

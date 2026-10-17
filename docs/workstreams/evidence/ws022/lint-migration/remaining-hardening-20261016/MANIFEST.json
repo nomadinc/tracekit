@@ -1,0 +1,52 @@
+{
+  "sourceCommit": "1ea9c54852c5e0e894139a54ba26474cb6002198",
+  "base": "775cbec41b1d937ea59a56d47276ae1a0ecc1c36",
+  "deployment": {
+    "id": "dpl_CShzXP2iCnAbXS7gVNhTBMEcXJ8v",
+    "url": "tracekit-staging-jc36knwwd-tracekit.vercel.app",
+    "readyState": "READY",
+    "projectId": "prj_KPHnqsNayx17VXmMIp7Rasrsp7gc",
+    "target": null,
+    "sourceSHA": "1ea9c54852c5e0e894139a54ba26474cb6002198",
+    "branch": "ws022/acceptance-runtime-diagnosis"
+  },
+  "environment": "Preview",
+  "managedBuildPreflight": {
+    "executedUTC": "2026-10-17T05:30:14.252Z",
+    "databaseProject": "uoeosoiegatlqtzemsfv",
+    "status": 200,
+    "returnedRows": 0,
+    "result": "PASS; npm prebuild gate executed in Vercel managed environment"
+  },
+  "metadataPreflight": "PASS: branch Preview secret and Core selector; general Preview URL",
+  "checks": {
+    "ui": {
+      "passed": 1467,
+      "failed": 0,
+      "skipped": 0,
+      "execution": "post-commit exact SHA"
+    },
+    "lint": {
+      "errors": 0,
+      "warnings": 9,
+      "changedWarnings": 0
+    },
+    "typescriptDiagnostics": 0,
+    "localBuild": "PASS after fixture shutdown and network-enabled fonts retry",
+    "remoteBuild": "READY; managed preflight PASS"
+  },
+  "workos": {
+    "environment": "Staging",
+    "callbacksBefore": 19,
+    "callbacksAfter": 20,
+    "signoutsBefore": 9,
+    "signoutsAfter": 10,
+    "newCallback": "https://tracekit-staging-jc36knwwd-tracekit.vercel.app/auth/callback",
+    "newSignout": "https://tracekit-staging-jc36knwwd-tracekit.vercel.app/",
+    "savedAndReopened": true,
+    "existingEntriesDefaultsPreserved": true
+  },
+  "liveFinalPreview": "PENDING existing Admin browser authentication; no updated role certification inferred",
+  "clientEvidencePreservedAt": "a17b6e6312dd34afc9cf44f8918d0f605bb5eccf",
+  "security": "No memberships, credentials, general Preview, other workstreams or Production changed. No provider/financial actions. Meta inactive."
+}
