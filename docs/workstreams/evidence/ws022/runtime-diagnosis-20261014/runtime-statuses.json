@@ -1,0 +1,61 @@
+{
+  "baselineDeployment": "dpl_6v7oRFdwYX3TbGpz5PwgsPQCUytF",
+  "records": [
+    {
+      "timestamp": 1792040082296,
+      "requestPath": "/api/customers",
+      "responseStatusCode": 401,
+      "source": "serverless",
+      "knownCallbackCode": null
+    },
+    {
+      "timestamp": 1792039076903,
+      "requestPath": "/api/customers",
+      "responseStatusCode": 401,
+      "source": "edge-middleware",
+      "knownCallbackCode": null
+    },
+    {
+      "timestamp": 1792039028786,
+      "requestPath": "/api/customers",
+      "responseStatusCode": 404,
+      "source": "serverless",
+      "knownCallbackCode": null
+    },
+    {
+      "timestamp": 1792041533306,
+      "requestPath": "/api/customer-orders",
+      "responseStatusCode": 401,
+      "source": "serverless",
+      "knownCallbackCode": null
+    },
+    {
+      "timestamp": 1792040056551,
+      "requestPath": "/auth/callback",
+      "responseStatusCode": 307,
+      "source": "serverless",
+      "knownCallbackCode": null
+    },
+    {
+      "timestamp": 1792040032193,
+      "requestPath": "/auth/callback",
+      "responseStatusCode": 400,
+      "source": "edge-middleware",
+      "knownCallbackCode": "missing_pkce_cookie"
+    },
+    {
+      "timestamp": 1792039001422,
+      "requestPath": "/auth/callback",
+      "responseStatusCode": 307,
+      "source": "serverless",
+      "knownCallbackCode": null
+    },
+    {
+      "timestamp": 1792038946903,
+      "requestPath": "/auth/callback",
+      "responseStatusCode": 400,
+      "source": "serverless",
+      "knownCallbackCode": "missing_pkce_cookie"
+    }
+  ]
+}

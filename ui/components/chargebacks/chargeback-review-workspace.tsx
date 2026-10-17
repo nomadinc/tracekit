@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import { useIdentity } from "@/components/identity/identity-provider";
 import * as React from "react";
 import { sameOriginGetJson } from "@/lib/api";
 import { formatDisputeAmount } from "@/lib/chargebacks/format-currency";
@@ -17,8 +18,13 @@ const label=(v:any)=>String(v||"Unknown").replace(/[_-]+/g," ").replace(/\b\w/g,
 const tone=(v:MatchAuthority)=>v==="exact"?"border-emerald-200 bg-emerald-50 text-emerald-800":v==="suggested"?"border-amber-200 bg-amber-50 text-amber-800":"border-slate-200 bg-slate-100 text-slate-700";
 function Metric({name,value,note}:{name:string;value:string;note?:string}){return <div className="rounded-xl border bg-white p-4"><div className="text-[10px] font-semibold uppercase text-slate-500">{name}</div><div className="mt-2 text-2xl font-semibold">{value}</div>{note&&<div className="mt-1 text-xs text-slate-500">{note}</div>}</div>}
 export function ChargebackReviewWorkspace(){
+ const { session } = useIdentity();
+ const scopeKey = JSON.stringify([session.identity.id, session.activeOrganizationId, session.activeBusinessContextId, session.identity.membership]);
+ return <ScopedChargebackReviewWorkspace key={scopeKey} />;
+}
+function ScopedChargebackReviewWorkspace(){
  const[page,setPage]=React.useState(1),[data,setData]=React.useState<Data|null>(null),[selected,setSelected]=React.useState<Row|null>(null),[loadedDetail,setLoadedDetail]=React.useState<{id:string;value:Detail}|null>(null),[error,setError]=React.useState<string|null>(null);
- React.useEffect(()=>{setError(null);sameOriginGetJson<Data>(`/api/chargebacks?page=${page}&page_size=50`).then(setData).catch(e=>setError(e?.message||"Chargebacks unavailable"))},[page]);
+ React.useEffect(()=>{let active=true;setError(null);setData(null);setSelected(null);sameOriginGetJson<Data>(`/api/chargebacks?page=${page}&page_size=50`).then(value=>{if(active)setData(value)}).catch(()=>{if(active)setError("Chargebacks unavailable")});return()=>{active=false}},[page]);
  const coordinator = React.useMemo(
   () => createDetailRequestCoordinator<{id:string;value:Detail}>(
     async id => ({

@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import { useWorkspaceDetail } from "@/components/identity/use-workspace-detail";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
@@ -29,9 +30,10 @@ import type {
   OrderDeepLinkState,
   OrderListFilter,
   OrderSummary,
-  OrderWorkspaceSnapshot,
 } from "@/lib/orders/types";
+import { loadOrderList } from "@/lib/orders/load-list";
 import { OrderDrawerContent } from "./order-drawer-content";
+const loadWorkspaceDetail = (scope: Parameters<typeof orderRepository.loadWorkspace>[0], id: string) => orderRepository.loadWorkspace(scope, id);
 const cash = (v: number) => `${v >= 0 ? "+" : "-"}$${Math.abs(v).toFixed(2)}`;
 export function OrderWorkspace() {
   return (
@@ -49,13 +51,18 @@ function OrderWorkspaceContent() {
   const activeOrganization = organizations.find((organization) => organization.id === session.activeOrganizationId) || organizations[0] || null;
   const scope = React.useMemo(() => ({ authenticated: session.authenticated, workspaceId: session.activeOrganizationId || "", organizationId: session.activeOrganizationId, businessContextId: session.activeBusinessContextId, session }), [session]);
   const requested = React.useMemo(() => parseOrderDeepLink(params), [params]);
-  const [orders, setOrders] = React.useState<OrderSummary[]>([]),
-    [snap, setSnap] = React.useState<OrderWorkspaceSnapshot | null>(null),
+  const [listRows, setOrders] = React.useState<OrderSummary[]>([]),
     [filter, setFilter] = React.useState<OrderListFilter>({ state: "all" }),
     [loading, setLoading] = React.useState(true),
+    [listUnavailable, setListUnavailable] = React.useState(false),
     [listOpen, setListOpen] = React.useState(false),
     [replaying, setReplaying] = React.useState(false),
     [replayIndex, setReplayIndex] = React.useState(0);
+  const [listScope, setListScope] = React.useState<typeof scope | null>(null);
+  const orders = React.useMemo(() => listScope === scope ? listRows : [], [listScope, scope, listRows]);
+  const selectedId = orders.some(row => row.id === requested.orderId) ? requested.orderId : orders[0]?.id || null;
+  const detail = useWorkspaceDetail(scope, selectedId, loadWorkspaceDetail);
+  const snap = detail.value;
   const normalized = React.useMemo(
     () => normalizeOrderDeepLink(requested, orders, snap),
     [requested, orders, snap],
@@ -71,15 +78,18 @@ function OrderWorkspaceContent() {
   React.useEffect(() => {
     let on = true;
     setLoading(true);
-    orderRepository
-      .listOrders(scope, {
+    setListUnavailable(false);
+    loadOrderList(() => orderRepository.listOrders(scope, {
         ...filter,
         offerId: requested.offerId,
         customerId: requested.customerId,
+      }))
+      .then((result) => {
+        if (!on) return;
+        setListUnavailable(result.kind === "unavailable");
+        setOrders(result.kind === "loaded" ? result.orders : []);
       })
-      .then((v) => on && setOrders(v))
-      .catch(() => on && setOrders([]))
-      .finally(() => on && setLoading(false));
+      .finally(() => { if (on) { setListScope(scope); setLoading(false); } });
     return () => {
       on = false;
     };
@@ -108,19 +118,6 @@ function OrderWorkspaceContent() {
     setActiveBusinessContext,
     setActiveOrganization,
   ]);
-  React.useEffect(() => {
-    if (!normalized.orderId) {
-      setSnap(null);
-      return;
-    }
-    let on = true;
-    orderRepository
-      .loadWorkspace(scope, normalized.orderId)
-      .then((v) => on && setSnap(v));
-    return () => {
-      on = false;
-    };
-  }, [normalized.orderId, scope]);
   React.useEffect(() => {
     setReplaying(false);
     setReplayIndex(0);
@@ -170,11 +167,14 @@ function OrderWorkspaceContent() {
     const r = await orderRepository.loadDrawer(scope, snap.order.id, id);
     if (r) drawer.openDrawer(<OrderDrawerContent record={r} />, r.title);
   };
-  if (loading && !snap) return <State text="Loading Order Workspace…" />;
+  if ((loading || listScope !== scope) && !snap) return <State text="Loading Order Workspace…" />;
+  if (listUnavailable) return <State text="Order Workspace unavailable. Please try again later." />;
   if (!orders.length && requested.orderId) {
     return <State text={`Order ${requested.orderId} could not be loaded from the production Order read path`} />;
   }
   if (!orders.length) return <State text="No accessible Orders" />;
+  if (detail.status === "loading") return <State text="Loading Order Workspace…" />;
+  if (detail.status === "unavailable") return <State text="Order Workspace unavailable. Please try again later." />;
   if (!snap) return <State text="Order not found" />;
   const active = snap.timeline[replayIndex];
   return (

@@ -46,6 +46,7 @@ test("actual detail response renders independent currencies, null authority and 
     const states = [1, null, selected, { id: loadedId, value }, null];
     const ui = await bundle("components/chargebacks/chargeback-review-workspace.tsx", {
       react: `let index=0; const states=${JSON.stringify(states)}; export const useState=()=>[states[index++],()=>{}]; export const useEffect=()=>{}; export const useMemo=f=>f();`,
+      "@/components/identity/identity-provider": 'export const useIdentity=()=>({session:{identity:{id:"synthetic-user",membership:{role:"platform-owner"}},activeOrganizationId:"synthetic-org",activeBusinessContextId:"synthetic-workspace"}})',
       "next/link": 'export default function Link(){return null}',
       "@/lib/api": 'export const sameOriginGetJson=()=>{throw Error("No network allowed")}',
     });

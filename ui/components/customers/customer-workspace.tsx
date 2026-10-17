@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import { useWorkspaceDetail } from "@/components/identity/use-workspace-detail";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
@@ -28,9 +29,9 @@ import type {
   CustomerDeepLinkState,
   CustomerListFilter,
   CustomerSummary,
-  CustomerWorkspaceSnapshot,
 } from "@/lib/customers/types";
 import { CustomerDrawerContent } from "./customer-drawer-content";
+const loadWorkspaceDetail = (scope: Parameters<typeof customerRepository.loadWorkspace>[0], id: string) => customerRepository.loadWorkspace(scope, id);
 const money = (v: number) =>
   new Intl.NumberFormat("en-US", {
     style: "currency",
@@ -56,16 +57,18 @@ function CustomerWorkspaceContent() {
     () => parseCustomerDeepLink(params),
     [params],
   );
-  const [customers, setCustomers] = React.useState<CustomerSummary[]>([]),
-    [snapshot, setSnapshot] = React.useState<CustomerWorkspaceSnapshot | null>(
-      null,
-    ),
+  const [listRows, setCustomers] = React.useState<CustomerSummary[]>([]),
     [filter, setFilter] = React.useState<CustomerListFilter>({ state: "all" }),
     [loading, setLoading] = React.useState(true),
     [error, setError] = React.useState<string | null>(null),
     [listOpen, setListOpen] = React.useState(false),
     [replaying, setReplaying] = React.useState(false),
     [replayIndex, setReplayIndex] = React.useState(0);
+  const [listScope, setListScope] = React.useState<typeof scope | null>(null);
+  const customers = React.useMemo(() => listScope === scope ? listRows : [], [listScope, scope, listRows]);
+  const selectedId = customers.some(row => row.id === requested.customerId) ? requested.customerId : customers[0]?.id || null;
+  const detail = useWorkspaceDetail(scope, selectedId, loadWorkspaceDetail);
+  const snapshot = detail.value;
   const normalized = React.useMemo(
     () => normalizeCustomerDeepLink(requested, customers, snapshot),
     [requested, customers, snapshot],
@@ -84,15 +87,16 @@ function CustomerWorkspaceContent() {
   React.useEffect(() => {
     let on = true;
     setLoading(true);
+    setError(null);
     customerRepository
       .listCustomers(scope, { ...filter, offerId: requested.offerId })
       .then((v) => on && setCustomers(v))
       .catch(
-        (e) =>
-          on &&
-          setError(e instanceof Error ? e.message : "Repository unavailable"),
+        () => {
+          if (on) { setCustomers([]); setError("Please try again later."); }
+        },
       )
-      .finally(() => on && setLoading(false));
+      .finally(() => { if (on) { setListScope(scope); setLoading(false); } });
     return () => {
       on = false;
     };
@@ -123,19 +127,6 @@ function CustomerWorkspaceContent() {
     setActiveBusinessContext,
     setActiveOrganization,
   ]);
-  React.useEffect(() => {
-    if (!normalized.customerId) {
-      setSnapshot(null);
-      return;
-    }
-    let on = true;
-    customerRepository
-      .loadWorkspace(scope, normalized.customerId)
-      .then((v) => on && setSnapshot(v));
-    return () => {
-      on = false;
-    };
-  }, [normalized.customerId, scope]);
   React.useEffect(() => {
     setReplaying(false);
     setReplayIndex(0);
@@ -189,12 +180,14 @@ function CustomerWorkspaceContent() {
     );
     if (r) drawer.openDrawer(<CustomerDrawerContent record={r} />, r.title);
   };
-  if (loading && !snapshot)
+  if ((loading || listScope !== scope) && !snapshot)
     return <State title="Loading Customer Workspace…" />;
   if (error)
     return <State title="Customer Workspace unavailable" detail={error} />;
   if (!customers.length && !String(filter.query || "").trim())
     return <State title="No customers available" detail="There are no customers available in the current workspace." />;
+  if (detail.status === "loading") return <State title="Loading Customer Workspace…" />;
+  if (detail.status === "unavailable") return <State title="Customer Workspace unavailable" detail="Please try again later." />;
   if (!snapshot && customers.length) return <State title="Customer not found" />;
   const active = snapshot?.journey[replayIndex] || null;
   return (

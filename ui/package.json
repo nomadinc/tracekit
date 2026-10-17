@@ -34,7 +34,9 @@
     "audit:commas:raw-readonly": "tsx scripts/audit-commas-raw-transactions-readonly.ts",
     "prove:edge-intelligence-staging": "node --env-file-if-exists=.env.local ./node_modules/tsx/dist/cli.mjs scripts/prove-edge-intelligence-v1-staging.ts --confirm-edge-intelligence-staging-proof",
     "verify:intelligence-production-v1": "tsx scripts/verify-production-v1-acceptance.ts",
-    "test:lint-contract": "node --test scripts/lint-contract.test.mjs"
+    "test:lint-contract": "node --test scripts/lint-contract.test.mjs",
+    "prebuild": "node scripts/verify-managed-preview.mjs",
+    "verify:preview-config": "node scripts/verify-managed-preview.mjs"
   },
   "dependencies": {
     "@workos-inc/authkit-nextjs": "^4.3.1",

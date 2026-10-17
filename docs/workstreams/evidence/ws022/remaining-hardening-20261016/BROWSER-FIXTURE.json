@@ -1,0 +1,29 @@
+{
+  "base": "775cbec41b1d937ea59a56d47276ae1a0ecc1c36",
+  "mode": "loopback actual components/repositories with synthetic API and identity boundaries",
+  "executor": "primary agent via CUA browser",
+  "independentLiveAcceptance": false,
+  "baseline": {
+    "customerHeldDetail": "Customer not found",
+    "orderHeldDetail": "Order not found"
+  },
+  "candidate": {
+    "customerHeldDetail": "Loading Customer Workspace\u2026",
+    "orderHeldDetail": "Loading Order Workspace\u2026",
+    "customerBThenLateA": "B retained",
+    "orderNewScopeWaitThenLateOldA": "loading retained; new scope B renders only after release",
+    "orderEmptyList": "No accessible Orders",
+    "orderList503": "Order Workspace unavailable",
+    "orderDetail503": "Order Workspace unavailable",
+    "chargebackRowChange": "B retained after late A",
+    "chargebackScopeChange": "old dialog removed; late old A cannot restore; new B only",
+    "chargebackCurrency": {
+      "principal": "EUR200.00",
+      "fee": "GBP5.00",
+      "nullCurrency": "currency unknown"
+    }
+  },
+  "providerCalls": 0,
+  "databaseCalls": 0,
+  "credentialsUsed": false
+}
