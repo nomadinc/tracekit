@@ -36,7 +36,8 @@ test("real AuthKit callback distinguishes missing cookie, state mismatch and exp
     finally { Date.now=now; }
     const expiry=await handler(request(`https://synthetic.invalid/auth/callback?code=synthetic&state=${encodeURIComponent(expired!)}`,`wos-auth-verifier=${expired!}`));
     assert.equal(expiry.status,400);
-    assert.equal(authErrorDiagnostic(error).code,"unclassified"); // Invalid unsealed-state schema, distinct from cookie absent.
+    assert.equal(authErrorDiagnostic(error).code,"unclassified");
+    assert.equal(authErrorDiagnostic(error).category,"state_unseal_or_schema_rejected"); // Present expired seal is distinct from absent cookie; category is not expiry-only.
     assert.equal(calls,0);
   } finally {globalThis.fetch=originalFetch;console.error=originalLog;if(saved===undefined)delete process.env.WORKOS_COOKIE_PASSWORD;else process.env.WORKOS_COOKIE_PASSWORD=saved;}
 });
