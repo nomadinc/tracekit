@@ -1,0 +1,73 @@
+STATUS: PARTIAL — original 32-case helper correction and tested implemented boundaries independently validated; missing controls are NOT IMPLEMENTED, not PASS. Production V1 remains HOLD.
+
+EXACT REVIEWED SHA: e8d2252637945bb5eea685566585320d376a7c3b
+PREVIOUS REVIEWED SHA: 55759aa3d9724b49f09850cd3a2d9395471ec51f
+WS-024 SOURCE/PREPARATION: 676e4d49fe1ea15f81f5bbc41699228d75ed5e61; exact-failure extraction f337192d7a92ed522b68dbcd6acb29b7e7c473f1.
+
+BUNDLE / CONTRACT HASH:
+ws001-ni-db-002-boundaries.bundle: 93dd7766f70aa3bb1168243f02579de180e2110604000f2b8e15550bccebb06b.
+NI-AUTH-001/Model-B/v1 — review-assembly-2: 9a0baa2812a6b4825b1e378f6a695e37458363d8575fbffcf6b8300f8123ca71.
+Bundle independently hashed; git bundle verify confirms complete history and exact branch ref. Separate detached checkout /private/tmp/ws024-boundary-candidate; git fsck --full passes. Contract, original vectors and supabase/migrations have no diff from 55759aa. Candidate tracked files remain unchanged; only an untracked ui/node_modules symlink to the retained WS-024 dependency tree was added. No clean dependency installation is claimed.
+
+NATIVE POSTGRESQL:
+PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2), aarch64, new dedicated ws024-ni-db002-boundary-postgres container, loopback-only host port 56852. Fresh ni_disposable_boundary_suite and ni_disposable_boundary_independent databases. No prior database was modified. Local synthetic-only trust authentication; this is not a production authentication transport acceptance claim. Candidate source migrations/prepared SQL installed only into these disposable databases. Existing cluster roles were reused by the second database, suppressing only duplicate CREATE ROLE source statements in memory; all function/trigger/constraint SQL is unmodified. Source files are copied verbatim in fixtures/.
+
+32 NEGATIVE VECTOR RESULTS:
+PASS 32/32. The independent replay executed each original preserved SQL SELECT byte-for-byte under ni_integrity_writer, against populated synthetic state, requiring exact SQLSTATE 22023. Every call returned 22023/invalid_record; none returned a digest. Counts and hashes of all complete sorted rows in TEN protected tables matched before/after every rejection. Source raw JSON, original SQL and SHA-256 are retained per case in cases.json; cases.csv is the flat index. All 32 candidate reconstructed fixtures also match original raw input bytes, type and REJECT expectation. No negative vector, expected rejection or assertion was weakened.
+
+AUTHORITATIVE WRITER RESULTS:
+PASS within explicitly tested implemented scope:
+- Ten exact original invalid grant, binding, current projection and journey-link states were submitted to the real internal ni_security.audit writer through JSONB parameters, under ni_controller_writer or ni_integrity_writer as appropriate. All returned 22023 and preserved ten-table snapshots. These are internal writer-path tests; application roles cannot invoke this writer directly.
+- Four exact original invalid authorization/observation audit bodies were injected immediately before audit INSERT during permitted proof-aware ingestion. Final-row guards returned 22023 with exact rollback. These are final-row fault tests, not an exposed arbitrary-body application RPC.
+- Four original observation/source-evidence case objects have no arbitrary internal-record JSON parameter on ingest. Ingestion constructs these records and validates named digests. Related null-epoch, forged source digest and forged full observation digest faults are independently rejected by the actual final-row boundary. Their exact helper rejection is PASS; no equivalent claim of submitting these objects as permitted RPC arguments is made.
+- The remaining fourteen cases concern missing/partial authoritative representations. Their helper rejection passes; their complete authoritative writer controls are NOT IMPLEMENTED/PARTIAL, not PASS. Per-case distinctions are in cases.json and the preserved candidate matrix.
+
+DIRECT RPC DENIAL:
+PASS 20/20 direct native SQL function calls: ni_delivery_executor, ni_authorization_controller, service_role, anon and authenticated each returned 42501 for digest, record_value, canonical and audit. Every denial preserved ten-table snapshots. Authorized proof-aware ingest succeeded before negative tests and again after every rejected fault. Runtime/controller roles are not members of either internal writer role. Internal writer roles are NOLOGIN, NOSUPERUSER, NOBYPASSRLS. The suite also reproduced proof-free legacy RPC denial, scope/expiry checks and historical mutation denial. These are actual native database role/RPC tests via SET ROLE, not a newly deployed PostgREST/HTTP endpoint test. No gateway or production route was activated. native-catalog.jsonl records function ACLs and triggers AFTER the final safe pause; permitted execution before pause is evidenced by the successful requests and runtime-role tests.
+
+FINAL-ROW GUARDS:
+PASS 14/14 independently injected faults, all exact SQLSTATE 22023 and zero protected-row changes:
+- Observation null binding epoch, forged record digest, forged source digest.
+- Projection revision zero; journey-link NULL evidence.
+- Audit extra body field; physical audit sequence/body mismatch.
+- Outbox forged event digest against retained audit.
+- Grant NULL epoch during actual governed revoke RPC; binding NULL epoch during governed disable RPC.
+- Four exact original missing/extra authorization/observation audit bodies.
+Disposable BEFORE triggers named aa_ws024_fault ran before the candidate zz_ni_record_boundary guards and were removed in finally. This tests final row validation after synthetic builder faults. It does not claim protection against owner/superuser DDL, trigger disabling, or a malicious privileged trigger installed after the guard. No jsonb_populate_record operation silently dropped unknown keys as a substitute for manifest rejection.
+
+ZERO-WRITE / AUDIT INTEGRITY:
+PASS for tested rejection paths. Snapshots include observations, current pointers, links, deliveries, audit, outbox, audit_streams, grants, bindings and service-credential rows. Complete content hashes/counts include sequence and digest state. All rejection snapshots match; accepted synthetic baseline/concurrency operations are separately identified and are not mislabeled zero-write calls. Admission checkpoint was explicitly refreshed as disposable fixture setup before the second phase, outside assertion snapshots, and logged.
+Final read-only verification AFTER concurrency and safe pause reports zero audit/outbox, stream-counter, observation-digest, source-digest, current-pointer and journey-scope mismatches (final-integrity.json). This verifies the implemented reference outbox/counter only, not missing complete S4 destination/state serialization.
+
+CONCURRENCY / ATOMICITY:
+PASS in reproduced focused scope. Both persistent-session lock orderings captured actual pg_blocking_pids: ingestion-first blocked controller on backend 101, then ingestion committed and controller resumed successfully (controller transaction rolled back); revocation-first blocked ingestion on backend 102, revocation committed and delivery failed 42501 with no ingestion state changes. Audit/outbox and all ten protected snapshots remain consistent. Final safe pause revoked ingestion/controller execution and preserved snapshots. The unmodified candidate suite also passed outbox failure atomicity, duplicate expiry rollback, authorization scope/expiry/revocation, history immutability and pause checks.
+
+POSITIVE VECTORS / EXECUTION ACCOUNTING:
+- Unmodified candidate native suite: 53 PASS / 1 FAIL / 0 SKIP, 54 tests, exit 1, 65.301 seconds. All exact-case, internal writer, final-row and role-denial subtests passed. Original log is retained in full.
+- Its one failure is the existing observation assertion that round-trips PostgreSQL timestamps through JavaScript Date. Actual recomputation 87478a898b7d7db74cfe79f99860f2452f5ecc2f645547a0502ed3ade3c522e4 differs from stored expected 353bfaa5191837ba2857879b53042b38d8545b7c3afe7866a2a2e742bb14a83b. The separate lossless read-only assertion preserves six digits and matches all three stored digests, plus microsecond boundary checks. Candidate tests were not edited and the original failure is not relabeled PASS.
+- Initial independent run: 39 completed PASS (baseline, 32 exact negatives, six positive vectors), then an aborted literal-SQL authorization-audit golden query with backend 57014 under the configured eight-second timeout; process exit 2. Its exact query/exception and position are retained in literal-positive-timeout.json. It did not reach writer tests. No client elapsed measurement was captured, and no cause is asserted.
+- The remaining writer phase was separately executed: 55 PASS / 0 FAIL, process exit 0.
+- Parameterized positive replay: 32/32 golden canonical bytes and digests PASS, read-only under ni_integrity_writer with the eight-second setting unchanged. The same authorization-audit golden vector completed in 41.766 ms in that run. Parameterization changes only the positive query representation, not inputs or expected bytes/hashes. This does not erase or explain the literal-query timeout and does not close NI-DB-001.
+No failed execution was replaced by a later passing sample. execution-summary.json distinguishes every phase and process result.
+
+NOT IMPLEMENTED:
+- Governed credential-authorization/verifier-commitment provisioning and persistence.
+- Tenant-binding issuance/provisioning (binding disable is implemented and tested).
+- Independent receipt persistence/acknowledgement and NI-CRYPTO-001 trust integration.
+- Durable quarantine receipt storage / queue destination integration.
+- Export-state/acknowledgement writer.
+- Complete S4 destination outbox body and full audit_stream_state representation. Only reference outbox/counter integrity is implemented/tested.
+- Arbitrary internal record objects are not an input of the constructed observation/source writer; no missing writer interface is fabricated for these cases.
+Missing controls remain explicitly unavailable. Their manifest helpers passing do not establish persisted-boundary implementation or activation readiness.
+
+NI-DB-002 VERDICT:
+The original 32 invalid named-record digest failures are independently CORRECTED (22023), and the tested implemented writer/final-row/role boundaries PASS. Full S4 authoritative persistence coverage remains PARTIAL because the controls above are not implemented. Recommend WS-022 accept the scoped correction evidence, while making its own closure/severity decision and retaining explicit activation blockers. This report does not independently declare all NI-DB-002 boundaries complete.
+
+WS-022 ACCEPTANCE READINESS:
+Ready for independent review of the scoped correction, NOT ready for blanket security acceptance or customer activation. NI-DB-001 and NI-CRYPTO-001 remain separate acceptance gates, as directed. Native test precision defect and literal positive-query timeout are retained. Production V1 HOLD; versioned production writes remain disabled.
+
+EVIDENCE PACKAGE / SHA-256:
+ws024-ni-db002-boundary-e8d2252.tar.gz; sibling .sha256 gives the exact external archive hash. SHA256SUMS covers every payload file except itself; the archive hash covers the manifest as well. Full logs, case inventories, original input fixtures, candidate source copies and independent harnesses are included. Previous evidence hashes/archives remain unchanged (prior-evidence-integrity.json). No external publication or messaging was performed for this candidate; local package is prepared for Master/WS-022 review. No destination/visibility authorization is inferred from the prior public handoff.
+
+NEXT ACTION:
+Master/WS-022 review exact per-case scope and decide acceptance of the corrected helper finding and implemented boundaries. WS-001 retains responsibility for missing authoritative controls and the native assertion defect; deadline/crypto acceptance remains separate. A concrete shared destination and visibility decision is required before any external upload of this new evidence. No WS-001-owned source/migrations, production data/grants/credentials, Edge canaries, merge, deployment or customer activation changed. Evidence-only commit SHA and archive SHA are supplied in the final handoff to avoid self-reference.

@@ -1,0 +1,18 @@
+WS-024 publication of existing NI-DB-002 native boundary evidence
+
+Reviewed candidate: e8d2252637945bb5eea685566585320d376a7c3b
+Source local evidence commit: 4272a3b3777efcbee6042970c9acfc22e80da459
+Contract: NI-AUTH-001/Model-B/v1 — review-assembly-2
+Contract SHA-256: 9a0baa2812a6b4825b1e378f6a695e37458363d8575fbffcf6b8300f8123ca71
+Archive: ws024-ni-db002-boundary-e8d2252.tar.gz
+Archive SHA-256: 41573ab246c0fa68d9bbbd9566019e5596fa02b66ac81419aa783e6d574ef706
+
+Publication-only action. No tests were repeated; no implementation, schema, grants, credentials or original evidence changed. The archive and full REPORT.txt are copied byte-for-byte from the source evidence commit. All 42 payload hashes and all 43 archive file members (including SHA256SUMS) were verified against that commit before publication.
+
+The full report remains an immutable historical validation record. Its statements that evidence was local and not externally published describe the original validation capture. This authorized publication does not alter those historical fields or reclassify any result.
+
+Native suite result remains 53 PASS / 1 FAIL. The timestamp-precision failure and the separate initial literal-query timeout remain preserved. All original 32 negative assertions, inputs and execution logs remain intact. Missing provisioning, receipt/quarantine/export persistence, complete destination outbox and full S4 audit-stream representation remain explicitly NOT IMPLEMENTED/PARTIAL. NI-DB-001 and NI-CRYPTO-001 remain separate acceptance gates. Publication is not security acceptance.
+
+Master and WS-022 can download the archive and sibling .sha256 file at a commit-pinned URL, verify the archive checksum, then verify SHA256SUMS from the extracted archive. The final publication receipt records an independently downloaded archive hash.
+
+No merge, deployment, production mutation, credential rotation, Edge canary change or customer activation is included. Production V1 remains HOLD.
