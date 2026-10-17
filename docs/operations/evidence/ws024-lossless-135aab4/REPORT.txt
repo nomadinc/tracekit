@@ -1,0 +1,66 @@
+STATUS: TIMESTAMP CORRECTION PASS — independent native timestamp regression complete. NI-DB-001 remains OPEN; Production V1 HOLD.
+
+EXACT CANDIDATE SHA: 135aab4467ab8b4d48f73695d6b88af6802db69f
+BASE CANDIDATE: e8d2252637945bb5eea685566585320d376a7c3b
+BUNDLE: ws001-lossless-timestamp.bundle
+BUNDLE HASH: e52606facaf8e55b2fe2d55fd23a6f879057bd9835493a984b6797319a5575b5
+CONTRACT: NI-AUTH-001/Model-B/v1 — review-assembly-2
+CONTRACT HASH: 9a0baa2812a6b4825b1e378f6a695e37458363d8575fbffcf6b8300f8123ca71
+
+Bundle hash independently matches; git bundle verify reports complete history and exact branch reference. Separate detached candidate checkout /private/tmp/ws024-timestamp-candidate; git fsck --full passes. The diff from e8d2252 changes only tests and handoff evidence. Runtime code, prepared SQL, migrations, frozen vectors and contract are unchanged. No WS-001-owned file was edited. ui/node_modules is an untracked symlink to the retained WS-024 dependency tree; no fresh dependency install is claimed.
+
+TIMESTAMP ASSERTION: PASS, not weakened.
+The new test selects complete retained observation JSON as PostgreSQL text, excludes the same source_digest/record_digest fields, uses parseExact instead of the driver's JSON decoder or JavaScript Date, normalizes timestamps through the frozen manifest and recomputes the observation digest. It now requires exactly three retained rows and checks all three instead of limiting verification to one row. Stored expected hashes are unchanged; no digest expectation is rounded, replaced or relaxed. PostgreSQL may omit trailing fractional zeroes in JSON text; exact timestamp normalization pads to six digits without losing the represented value. Date occurs only in the deliberately lossy boundary negative control, never in the retained-record digest path. assertion-diff.patch and copied source make this directly reviewable.
+
+NATIVE TEST RESULTS:
+Corrected unmodified suite: 55 PASS / 0 FAIL / 0 SKIP, exit 0, 28.492 seconds. Fresh ni_disposable_lossless_suite database in new ws024-lossless-timestamp-postgres / PostgreSQL 17.11 (Debian 17.11-1.pgdg13+2), aarch64, published only at 127.0.0.1:56862. Synthetic local trust authentication; no production credentials. Only suite fixture setup created schema/roles in this dedicated disposable cluster. No existing database, production schema/grant or implementation was changed.
+
+Historical 53 PASS / 1 FAIL suite result and archive remain unchanged. Historical archive SHA-256 remains 41573ab246c0fa68d9bbbd9566019e5596fa02b66ac81419aa783e6d574ef706. Its complete original native output is copied verbatim; historical-integrity.json records the original log/hash and result. The new 55/0 result is a separate run at this new SHA, not a reclassification of that historical failure.
+
+LOSSLESS DIGEST RESULTS: PASS 3/3 in the corrected suite and independent read-only verification. Exact native record_json text, extracted/normalized timestamps, stored hashes and TypeScript recomputations are retained in timestamp-results.json and timestamps.log. Independent results:
+revision 1: received_at=2026-10-17T23:22:52.645420Z; stored=recomputed=159186106a1e42597834869e49c3119c8ae8a1e234300abf0dbb9859d4746423; PASS.
+revision 2: received_at=2026-10-17T23:22:52.708192Z; stored=recomputed=4943b9b624a66707b4847a91771be63fc4b67626cc98def3ff936f03a12e2fb5; PASS.
+revision 3: received_at=2026-10-17T23:22:52.681336Z; stored=recomputed=d5fac5ae54ae387e13e04bc9fe5c65ea9540a2ea4fd39d2967d619ef1d640124; PASS.
+
+MICROSECOND BOUNDARIES: PASS .000001 / .123456 / .999999.
+All three roundtrip as PostgreSQL timestamptz -> JSON text -> parseExact -> normalizeTimestamp, preserving exact six-digit UTC values. Each Date negative control loses precision and is asserted unequal to the required value. These checks are present in the corrected native suite and independently captured with raw PostgreSQL JSON text. The independent verification ran BEGIN READ ONLY / ROLLBACK, exit 0.
+
+NI-DB-001: OPEN — separate investigation, not acceptance through timestamp tests.
+The original literal authorization-audit golden SELECT and historical 57014 exception are preserved byte-for-byte in literal-query.original.sql and historical-literal-timeout.original.json. The exact query was replayed in a separate backend under ni_integrity_writer with an eight-second setting; planning-only and parameterized controls were recorded without modifying any function or query expectations.
+
+Current bounded observations (all timings client monotonic, not inferred backend elapsed). Error codes 57014/25P02 are copied from pg driver exceptions; 00000 is the runner standard label for successful completion, not an emitted server exception diagnostic:
+- literal-original-cold: SQLSTATE 00000, elapsed 49.753 ms.
+- literal-explain-no-analyze: SQLSTATE 00000, elapsed 4.275 ms.
+- parameterized-identical-shape: SQLSTATE 00000, elapsed 7.510 ms.
+- parameterized-generic-identical-shape: SQLSTATE 00000, elapsed 6.075 ms.
+- parameterized-generic-explain: SQLSTATE 00000, elapsed 10.716 ms.
+- parameterized-direct-digest: SQLSTATE 00000, elapsed 8.500 ms.
+- literal-original-warm: SQLSTATE 00000, elapsed 10.102 ms.
+- prearmed-read-only-control: SQLSTATE 57014, elapsed 9337.421 ms.
+- same-command-read-only-setting: SQLSTATE 00000, elapsed 9933.012 ms.
+
+The literal timeout did not reproduce in these cold/warm samples. The two EXPLAIN-without-ANALYZE results and exact returned plans are retained; they show folded literal expressions in this run and do not establish the cause of the historical timeout. Requested force_generic_plan settings are recorded as controls, not a claimed repair. No statement-timeout limit was raised to obtain the successful literal/parameterized samples. This is bounded evidence, not proof that the earlier failure is fixed or impossible.
+
+The pre-armed read-only sleep control returned 57014 / canceling statement due to statement timeout and aborted the transaction (25P02). Its 9337.421 ms client duration FAILS the unchanged prior 7000 <= elapsed < 9000 ms window. This new NI-DB-001 timing miss is preserved even though the corrected suite's ingestion deadline check passed. No backend elapsed or scheduling cause was measured; no cause is asserted. The diagnostic script exits 0 after recording controls; that process completion is not a deadline gate PASS.
+
+The same-command read-only control starts with timeout 0, calls set_config('statement_timeout','8s',true) inside the running command, then pg_sleep(9). It completed with SQLSTATE 00000 after 9933.012 ms: changing the GUC inside the command did not provide the separately pre-armed cancellation. This is a read-only timer-semantics control, not a fresh authoritative ingestion-bypass or Core-adapter test. All ten protected-table counts/full-content hashes before/after the investigation match; no ingestion or persisted write was attempted.
+
+Enforcement layers remain distinguished:
+1. Actual Core adapter: historical real TLS native execution on source 55759aa returned HTTP 503 around 8.1s, disposed the connection and preserved rollback; the exact historical execution log is included without reclassification. connection.ts/core.ts/route.ts are byte-identical at the new SHA (transport-source-comparison.json). Their startup statement/query limits, separate transaction SET LOCAL commands and total transaction watchdog remain visible in copied source. No fresh actual Core/TLS route request was executed in this bounded timestamp task. Source equality is not claimed as new runtime transport acceptance. Client query_timeout and server statement_timeout can race, so a sanitized HTTP response alone does not establish which won.
+2. Function-local setting: historical function-only deadline failure on 548bcca is preserved in the original log and is not rerun or relabeled. The current ingest function's proconfig contains lock_timeout=2s, not a function-local hard statement timer. The current deadline_not_armed guard is a configuration check, not proof of backend timer arming. Its separate-command cases are covered by the corrected native suite.
+3. Same-command setting: the new read-only control above demonstrates why matching a setting value is not equivalent to a pre-armed timer. The prior ingestion-specific same-command limitation remains separate historical evidence; no current writer rejection/acceptance is inferred from pg_sleep alone.
+
+NEW FINDINGS:
+- No timestamp parsing/digest/microsecond failure reproduced at this SHA; the corrected native suite is all-pass.
+- New read-only pre-armed client timing sample misses the prior window despite backend cancellation and transaction abort. NI-DB-001 remains unresolved.
+- Historical literal-query timeout remains unexplained and was not reproduced by these samples; no optimizer, scheduling or implementation cause has been established.
+No evidence is discarded, no timing window relaxed and no failed historical result overwritten.
+
+REMAINING BLOCKERS:
+NI-DB-001 and NI-CRYPTO-001 remain separate OPEN acceptance gates. Missing provisioning, receipt/quarantine/export persistence and complete S4 outbox/audit-stream writers remain the previously identified activation blockers; no additional S4 writer was implemented or claimed tested. The candidate handoff's statement about owner acceptance at the prior SHA is an owner-reported claim, not a new WS-024 acceptance decision. Timestamp correction success does not confer full security acceptance or customer activation readiness.
+
+EVIDENCE PACKAGE:
+ws024-lossless-135aab4.tar.gz with sibling SHA-256 sidecar. SHA256SUMS covers every payload file except itself; the external archive hash covers the manifest. It includes full native output, independent exact timestamp records, historical failed assertion/logs, original literal SQL/exception, every timeout control and returned plan, source/diff/provenance and reproduction commands. Evidence-only commit and archive SHA-256 are reported externally to avoid self-reference. All prior evidence remains unchanged. No external publication or communication was performed for this candidate.
+
+NEXT ACTION:
+Master/WS-022 review and accept the scoped native timestamp correction independently. Continue NI-DB-001 investigation with original failed literal SQL and all retained timing samples; actual governed transport, function-local semantics and same-command behavior must not be conflated. Keep NI-CRYPTO-001 and unavailable persistence controls separate and open. No production mutation, credential rotation, Edge canary change, merge, deployment, customer activation or new S4 persistence writer occurred. Production V1 remains HOLD.

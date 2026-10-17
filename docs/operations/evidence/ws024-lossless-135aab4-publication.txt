@@ -1,0 +1,16 @@
+WS-024 publication of completed lossless timestamp native evidence
+
+Reviewed candidate: 135aab4467ab8b4d48f73695d6b88af6802db69f
+Source evidence commit: f408592c6078538002e4cdb9ac1b9634abd1af4b
+Contract: NI-AUTH-001/Model-B/v1 — review-assembly-2
+Contract SHA-256: 9a0baa2812a6b4825b1e378f6a695e37458363d8575fbffcf6b8300f8123ca71
+Archive: ws024-lossless-135aab4.tar.gz
+Archive SHA-256: c132e3075839c836460d4edc785d222f1c9754db59847aeb6955fe8e5688e032
+
+Publication only: no tests rerun or implementation/migration changes. Archive and full report are byte-for-byte source evidence. All 32 manifest payload hashes and 33 archive files including SHA256SUMS match the source commit.
+
+Historical 53 PASS / 1 FAIL and new 55 PASS / 0 FAIL native results remain unchanged. All three retained digests and .000001/.123456/.999999 boundaries pass the timestamp regression. NI-DB-001 remains OPEN: the 9.337-second pre-armed client sample fails the prior 7–9 second window; the same-command control completed around 9.933 seconds without cancellation. The historical literal-query timeout remains unexplained and did not reproduce in the recorded bounded samples. Diagnostic process exit zero is NOT deadline acceptance. No deadline test is reclassified as PASS.
+
+Original local-only/no-external-publication fields describe the validation capture. This newly authorized publication is recorded separately without editing those historical report fields or the sealed archive. Master and WS-022 can verify the commit-pinned archive against its sibling checksum and the internal SHA256SUMS.
+
+NI-DB-001, NI-CRYPTO-001 and missing authoritative persistence controls remain separate acceptance gates. Publication is not security acceptance. No production mutation, schema/grant change, credential rotation, Edge canary modification, merge, deployment or customer activation. Production V1 remains HOLD.
