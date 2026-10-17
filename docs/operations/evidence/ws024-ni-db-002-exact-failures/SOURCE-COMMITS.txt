@@ -1,0 +1,15 @@
+Repository: nomadinc/tracekit
+Contract: NI-AUTH-001/Model-B/v1 — review-assembly-2
+Contract SHA-256: 9a0baa2812a6b4825b1e378f6a695e37458363d8575fbffcf6b8300f8123ca71
+WS-001 base: 548bcca0a166b7e2b64f4d86ca5ff15573c5a9df
+WS-001 reviewed candidate and copied prepared SQL/setup source: 55759aa3d9724b49f09850cd3a2d9395471ec51f
+Verified corrected bundle SHA-256: 646ae857036aff195bfc36c22266d598882560045b06331fd2fc023a5c14a96d
+Original WS-024 baseline evidence: 73625f090bd42325ace43cd050c53e4703d2f002
+WS-024 corrected independent evidence: 281f1ea7bc3db5a7994dfdc3e7f0cfb47145d3f0
+WS-024 preparation and original negative runner/assertions: 676e4d49fe1ea15f81f5bbc41699228d75ed5e61
+All named original inputs, expectations, statements and runner/assertion files are byte-for-byte copies; extraction-derived case records and the new read-only replay are labeled separately.
+Exact Git verification commands/results: logs/source-verification.json
+Exact copied file provenance and source blob hashes: logs/file-provenance.json
+Installed helper definitions and version: logs/handoff-replay-results.json
+The extraction/publication commit SHA and final archive SHA-256 are supplied in the external publication receipt to avoid self-reference.
+This tar archive does not contain a Git bundle and makes no claim of distributing full Git history. Complete source histories were independently checked with git fsck in the source checkouts.
