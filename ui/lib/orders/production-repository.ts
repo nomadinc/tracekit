@@ -1,3 +1,4 @@
+import { assessOrderFinancialEvidence } from "./ws026-financial-evidence";
 import type { OrderRepository } from "./repository";
 import type {
   OrderDeepLinkState, OrderDrawerRecord, OrderListFilter, OrderSearchResult,
@@ -173,8 +174,15 @@ export class ProductionOrderRepository {
     const purchaseTs=Date.parse(String(explicitPurchaseRow?.event_time || explicitPurchaseRow?.occurred_at || ""));
     const deltaMs=Number.isFinite(clickTs)&&Number.isFinite(purchaseTs)&&purchaseTs>=clickTs ? purchaseTs-clickTs : null;
     const clickPurchaseDelta=deltaMs===null ? "Not calculated" : `${Math.floor(deltaMs/60000)}m ${Math.floor((deltaMs%60000)/1000)}s`;
+    const financialEvidence = assessOrderFinancialEvidence({
+      currency: typeof raw.currency === "string" ? raw.currency : null,
+      grossRevenue: null, refunds: null, affiliateCommission: null,
+      landedCogs: null, processingFees: null, reconciliation: null,
+      sourceCurrent: false,
+    });
     return {
       order:o,
+      financialEvidence: { status: financialEvidence.status, missing: financialEvidence.missing, currency: financialEvidence.currency },
       commercial:{mainProduct:"Not available from current Order read model",orderBumps:[],upsells:[],shippingCharged:0,taxCollected:0,discounts:0,quantity:0},
       ledger:[],
       shipping:{charged:0,actual:0,packaging:0,margin:0},
