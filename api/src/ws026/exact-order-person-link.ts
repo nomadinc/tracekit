@@ -44,8 +44,9 @@ export function decideExactOrderPersonLink(
   if (matches.length === 0) return { status: "unavailable", reason: "missing_identity" };
   if (matches.length !== 1) return { status: "unavailable", reason: "ambiguous_identity" };
   const identity = matches[0];
-  const person = people.find(p => p.id === identity.personId);
-  if (!person) return { status: "unavailable", reason: "missing_person" };
+  const personMatches = people.filter(p => p.id === identity.personId);
+  if (personMatches.length !== 1) return { status: "unavailable", reason: "missing_person" };
+  const person = personMatches[0];
   if (person.organizationId !== order.organizationId) return { status: "unavailable", reason: "foreign_scope" };
   if (order.personId && order.personId !== identity.personId)
     return { status: "unavailable", reason: "conflicting_person" };
