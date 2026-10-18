@@ -1,3 +1,4 @@
+import { collectCoreTimelinePages } from "./ws026-core-timeline-pages";
 import { selectCustomerJourney, type CustomerJourneyChoice } from "./ws026-journey-choice";
 import type { CustomerRepository } from "./repository";
 import type {
@@ -179,7 +180,18 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
     const selection = selectCustomerJourney(journeyOptions, requestedJourneyId);
     const selectedJourney = selection.selectedId ? journeys.find((row: any) => String(row?.id) === selection.selectedId) : null;
     let journeyDetail: any = null;
-    if (selectedJourney?.id) journeyDetail = await get(`/api/customers/${encodeURIComponent(customerId)}/journeys/${encodeURIComponent(selectedJourney.id)}?${qs(scope, { limit: 100 })}`,scope);
+    let timelineCoverage = "No journey selected";
+    if (selectedJourney?.id) {
+      const path = `/api/customers/${encodeURIComponent(customerId)}/journeys/${encodeURIComponent(selectedJourney.id)}`;
+      const pages = await collectCoreTimelinePages(async cursor => {
+        const page = await get(`${path}?${qs(scope, { limit: 100, ...(cursor ? { cursor } : {}) })}`, scope);
+        if (!journeyDetail) journeyDetail = page;
+        return { events: page.events, next_cursor: page.next_cursor };
+      });
+      if (pages.status === "unavailable") throw new Error(`Journey pagination unavailable: ${pages.reason}`);
+      journeyDetail = { ...journeyDetail, events: pages.events };
+      timelineCoverage = pages.status === "complete" ? "Core cursor exhausted; no stable snapshot watermark" : "Timeline incomplete: page budget reached";
+    }
     const listLike = {
       customer: detail.customer,
       last_activity_at: detail.summary?.last_seen_at,
@@ -212,7 +224,7 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
       lastPurchase: orders[0]?.date || "No linked purchase",
       journeyId: String(selectedJourney?.id || "No selected canonical journey"),
       journeyOptions,
-      journeySelectionReason: selection.reason,
+      journeySelectionReason: `${selection.reason}. ${timelineCoverage}`,
       journey: story,
       orders: enrichedOrders,
       offers: attributedOffer ? [{ id: attributedOffer, name: `Offer ${attributedOffer}`, firstTouch: firstCredit?.affiliate_id ? `Affiliate ${firstCredit.affiliate_id}` : "Attributed Journey" }] : [],
