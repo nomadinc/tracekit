@@ -19,7 +19,7 @@ export type OrderFinancialReadiness = {
   reconciledProfitDisplay: string | null;
 };
 function validDecimal(value: string): boolean {
-  return /^-?(?:0|[1-9]\\d*)\\.\\d{2}$/.test(value);
+  return /^-?(?:0|[1-9]\d*)\.\d{2}$/.test(value);
 }
 export function assessOrderFinancialEvidence(e: OrderFinancialEvidence): OrderFinancialReadiness {
   const missing: string[] = [];
