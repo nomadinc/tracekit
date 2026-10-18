@@ -4,7 +4,7 @@ import { collectCoreTimelinePages } from "./ws026-core-timeline-pages.ts";
 test("collects multiple Core cursor pages", async () => {
  const result = await collectCoreTimelinePages(async cursor => cursor ? { events: [{ id: "b" }], next_cursor: null } : { events: [{ id: "a" }], next_cursor: "next" });
  assert.equal(result.status, "complete");
- if (result.status !== "unavailable") assert.deepEqual(result.events, [{ id: "a" }, { id: "b" }]);
+ assert.deepEqual(result.events, [{ id: "a" }, { id: "b" }]);
 });
 test("repeated cursor fails closed", async () => {
  const result = await collectCoreTimelinePages(async () => ({ events: [{ id: "a" }], next_cursor: "same" }));
