@@ -13,7 +13,11 @@ test("Shopify M6 scheduler reuses the certified incremental runtime with bounded
   assert.match(worker, /runShopifyIncrementalResource/);
   assert.match(worker, /SHOPIFY_RESOURCES.*products.*customers.*orders/s);
   assert.match(worker, /maxPages:\s*1/);
-  assert.match(worker, /pageSize:\s*50/);
+  // Source-contract assertions only; execution behavior is validated separately.
+  assert.match(worker, /const LIVE_PAGE_SIZE = 50;/);
+  assert.match(worker, /const ORDER_PAGE_SIZE = 25;/);
+  assert.match(worker, /pageSize:\s*pageSizeForResource\(schedule\.resource, LIVE_PAGE_SIZE\)/);
+  assert.match(worker, /return resource === "orders" \? ORDER_PAGE_SIZE : defaultSize;/);
   assert.match(worker, /lease_owner/);
   assert.match(worker, /lease_expires_at/);
   assert.match(worker, /last_enqueued_at/);
