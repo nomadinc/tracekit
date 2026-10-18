@@ -5,6 +5,7 @@ import type {
 } from "./types";
 import { normalizeOrderDeepLink, orderDeepLinkHref } from "./deep-link";
 import { withDevelopmentIdentity } from "@/lib/identity/development-state";
+import { resolveOrderJourney } from "./ws026-journey-selection";
 
 type ProductionScope = {
   authenticated: boolean;
@@ -143,10 +144,15 @@ export class ProductionOrderRepository {
     let detail:any=raw ? {customer:entry.customer,orders:[raw],journeys:[]} : null;
     if (entry?.customer?.id) detail=await customerDetail(scope,entry.customer.id);
     if(!detail||!raw) return null;
+    if (!scope.authenticated || !scope.organizationId || !scope.workspaceId) return null;
     const o=summary(raw,detail.customer,scope);
     const journeys=Array.isArray(detail.journeys)?detail.journeys:[];
+    const canonicalOrderId = typeof raw.canonical_order_id === "string" ? raw.canonical_order_id : null;
+    const explicitLinks = Array.isArray(detail.order_journey_links) ? detail.order_journey_links : [];
+    const resolution = resolveOrderJourney({ canonicalOrderId, organizationId: scope.organizationId,
+      workspaceId: scope.workspaceId, journeys, references: explicitLinks });
     let jd:any=null;
-    if(journeys[0]?.id) jd=await get(`/api/customers/${encodeURIComponent(o.customerId)}/journeys/${encodeURIComponent(journeys[0].id)}?${qs(scope,{limit:100})}`).catch(()=>null);
+    if(resolution.status === "linked") jd=await get(`/api/customers/${encodeURIComponent(o.customerId)}/journeys/${encodeURIComponent(resolution.journeyId)}?${qs(scope,{limit:100})}`).catch(()=>null);
     const rows=Array.isArray(jd?.events)?jd.events:Array.isArray(jd?.activity)?jd.activity:[];
     const credits=Array.isArray(jd?.attribution)?jd.attribution:[];
     const timeline: OrderTimelineEvent[] = rows.map((r:any)=>event(r,o,credits));
@@ -177,7 +183,9 @@ export class ProductionOrderRepository {
       timeline, identifiers:timeline.flatMap(x=>x.identifiers),
       relatedCustomer:{id:o.customerId,name:o.customerName},
       relatedOffer:{id:String(credit?.offer_id||""),name:offer},
-      trackingExplanation: timeline.length ? "Retained production Journey evidence is available." : "No canonical Journey evidence was returned for this Order.",
+      trackingExplanation: resolution.status !== "linked"
+        ? `Order journey unresolved: ${resolution.reason}. No unrelated journey events were included.`
+        : timeline.length ? "Verified order-linked Journey evidence is available." : "No events were returned for the verified order-linked Journey.",
       waitingOn:[], intelligence:[],
     };
   }
