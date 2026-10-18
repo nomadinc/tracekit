@@ -167,7 +167,7 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
       return { organizationId: scope.organizationId || "", businessContextId: scope.businessContextId, customerId };
     } catch { return null; }
   }
-  async loadWorkspace(scope: ProductionCustomerScope, customerId: string): Promise<CustomerWorkspaceSnapshot | null> {
+  async loadWorkspace(scope: ProductionCustomerScope, customerId: string, requestedJourneyId: string | null = null): Promise<CustomerWorkspaceSnapshot | null> {
     if (!scope.authenticated || !customerId) return null;
     const detail = await get(`/api/customers/${encodeURIComponent(customerId)}?${qs(scope)}`,scope);
     const journeys = Array.isArray(detail.journeys) ? detail.journeys : [];
@@ -176,7 +176,7 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
       eventCount: Number(row?.event_count || 0), nextCursor: null,
       explanation: "Canonical journey summary; detail is not loaded until selected",
     }));
-    const selection = selectCustomerJourney(journeyOptions, null);
+    const selection = selectCustomerJourney(journeyOptions, requestedJourneyId);
     const selectedJourney = selection.selectedId ? journeys.find((row: any) => String(row?.id) === selection.selectedId) : null;
     let journeyDetail: any = null;
     if (selectedJourney?.id) journeyDetail = await get(`/api/customers/${encodeURIComponent(customerId)}/journeys/${encodeURIComponent(selectedJourney.id)}?${qs(scope, { limit: 100 })}`,scope);
