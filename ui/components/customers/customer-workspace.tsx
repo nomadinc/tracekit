@@ -65,7 +65,9 @@ function CustomerWorkspaceContent() {
     [error, setError] = React.useState<string | null>(null),
     [listOpen, setListOpen] = React.useState(false),
     [replaying, setReplaying] = React.useState(false),
-    [replayIndex, setReplayIndex] = React.useState(0);
+    [replayIndex, setReplayIndex] = React.useState(0),
+    [selectedJourneyId, setSelectedJourneyId] = React.useState<string | null>(null),
+    [journeyLoading, setJourneyLoading] = React.useState(false);
   const normalized = React.useMemo(
     () => normalizeCustomerDeepLink(requested, customers, snapshot),
     [requested, customers, snapshot],
@@ -129,16 +131,20 @@ function CustomerWorkspaceContent() {
       return;
     }
     let on = true;
+    setJourneyLoading(true);
     customerRepository
-      .loadWorkspace(scope, normalized.customerId)
-      .then((v) => on && setSnapshot(v));
+      .loadWorkspace(scope, normalized.customerId, selectedJourneyId)
+      .then((v) => { if (on) { setSnapshot(v); setError(null); } })
+      .catch((e) => { if (on) { setSnapshot(null); setError(e instanceof Error ? e.message : "Journey unavailable"); } })
+      .finally(() => { if (on) setJourneyLoading(false); });
     return () => {
       on = false;
     };
-  }, [normalized.customerId, scope]);
+  }, [normalized.customerId, scope, selectedJourneyId]);
   React.useEffect(() => {
     setReplaying(false);
     setReplayIndex(0);
+    setSelectedJourneyId(null);
     drawer.closeDrawer();
   }, [normalized.customerId, drawer]);
   React.useEffect(() => {
@@ -321,6 +327,17 @@ function CustomerWorkspaceContent() {
               </button>
             </div>
           </div>
+          {snapshot.journeyOptions && snapshot.journeyOptions.length > 1 && (
+            <label className="mt-3 block text-xs font-semibold">
+              Canonical journey
+              <select aria-label="Select canonical journey" className="ml-2 rounded border bg-transparent p-2" value={snapshot.journeyId === "No selected canonical journey" ? "" : snapshot.journeyId}
+                onChange={(e) => { setReplaying(false); setReplayIndex(0); setSelectedJourneyId(e.target.value || null); }}>
+                <option value="">Select a journey</option>
+                {snapshot.journeyOptions.map((j) => <option key={j.id} value={j.id} disabled={j.status !== "ready"}>{j.id} ({j.status})</option>)}
+              </select>
+              {journeyLoading ? <span role="status" className="ml-2">Loading journey…</span> : null}
+            </label>
+          )}
           {snapshot.journeyOptions && snapshot.journeyOptions.length > 1 && (
             <p className="mt-3 text-xs text-amber-700 dark:text-amber-300" role="status">
               {snapshot.journeyOptions.length} canonical journeys found. {snapshot.journeySelectionReason || "A verified selection is required."} No first-journey fallback is applied.
