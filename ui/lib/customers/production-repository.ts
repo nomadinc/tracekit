@@ -1,3 +1,4 @@
+import { selectCustomerJourney, type CustomerJourneyChoice } from "./ws026-journey-choice";
 import type { CustomerRepository } from "./repository";
 import type {
   CustomerDeepLinkState,
@@ -170,7 +171,13 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
     if (!scope.authenticated || !customerId) return null;
     const detail = await get(`/api/customers/${encodeURIComponent(customerId)}?${qs(scope)}`,scope);
     const journeys = Array.isArray(detail.journeys) ? detail.journeys : [];
-    const selectedJourney = journeys[0] || null;
+    const journeyOptions: CustomerJourneyChoice[] = journeys.map((row: any) => ({
+      id: String(row?.id || ""), status: row?.id ? "ready" : "unresolved",
+      eventCount: Number(row?.event_count || 0), nextCursor: null,
+      explanation: "Canonical journey summary; detail is not loaded until selected",
+    }));
+    const selection = selectCustomerJourney(journeyOptions, null);
+    const selectedJourney = selection.selectedId ? journeys.find((row: any) => String(row?.id) === selection.selectedId) : null;
     let journeyDetail: any = null;
     if (selectedJourney?.id) journeyDetail = await get(`/api/customers/${encodeURIComponent(customerId)}/journeys/${encodeURIComponent(selectedJourney.id)}?${qs(scope, { limit: 100 })}`,scope);
     const listLike = {
@@ -203,7 +210,9 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
       customerSince: when(detail.summary?.first_seen_at),
       firstTouch: firstSource ? (firstCredit?.affiliate_id && !firstCredit?.source ? `Affiliate ${firstCredit.affiliate_id}${firstCredit.offer_id ? ` · Offer ${firstCredit.offer_id}` : ""}` : String(firstSource)) : "No retained attribution conclusion",
       lastPurchase: orders[0]?.date || "No linked purchase",
-      journeyId: String(selectedJourney?.id || "No canonical journey"),
+      journeyId: String(selectedJourney?.id || "No selected canonical journey"),
+      journeyOptions,
+      journeySelectionReason: selection.reason,
       journey: story,
       orders: enrichedOrders,
       offers: attributedOffer ? [{ id: attributedOffer, name: `Offer ${attributedOffer}`, firstTouch: firstCredit?.affiliate_id ? `Affiliate ${firstCredit.affiliate_id}` : "Attributed Journey" }] : [],
