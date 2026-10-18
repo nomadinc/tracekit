@@ -122,6 +122,8 @@ function CustomerWorkspaceContent() {
     requested.customerId,
     scope,
     session.developmentOnly,
+    session.activeBusinessContextId,
+    session.activeOrganizationId,
     setActiveBusinessContext,
     setActiveOrganization,
   ]);
