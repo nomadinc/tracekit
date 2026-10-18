@@ -21,7 +21,7 @@ export function resolveOrderJourney(input: {
   if (candidates.some(r => !scoped(r))) return { status: "unresolved", reason: "foreign_scope" };
   if (candidates.some(r => r.status === "ambiguous")) return { status: "unresolved", reason: "ambiguous_link" };
   const verified = candidates.filter(r => r.status === "verified" && Boolean(r.journey_id));
-  const ids = [...new Set(verified.map(r => r.journey_id))];
+  const ids = Array.from(new Set(verified.map(r => r.journey_id)));
   if (ids.length > 1) return { status: "unresolved", reason: "ambiguous_link" };
   if (!ids.length) return { status: "unresolved", reason: "missing_link" };
   const matches = input.journeys.filter(j => j.id === ids[0]);
