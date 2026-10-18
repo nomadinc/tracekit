@@ -260,7 +260,7 @@ function OrderWorkspaceContent() {
             {snap.financialEvidence && (
               <div className="mt-3 text-xs text-slate-500" role="status">
                 <p>Financial evidence: {snap.financialEvidence.status === "incomplete" ? "Incomplete" : "Unavailable"}</p>
-                <p>Missing: {snap.financialEvidence.missing.join(", ").replaceAll("_", " ")}</p>
+                <p>Missing: {snap.financialEvidence.missing.join(", ").replace(/_/g, " ")}</p>
                 <p>Currency: {snap.financialEvidence.currency || "Not verified"}</p>
               </div>
             )}
