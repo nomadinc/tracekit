@@ -20,3 +20,7 @@ test("identity decision never changes attribution or source evidence", () => {
  decideExactOrderPersonLink(order, "customer-123", [identity], people);
  assert.equal(JSON.stringify({ order, identity, people }), original);
 });
+
+test("duplicate canonical person evidence is rejected", () => {
+ assert.deepEqual(decideExactOrderPersonLink(order, "customer-123", [identity], [people[0], people[0]]), { status: "unavailable", reason: "missing_person" });
+});
