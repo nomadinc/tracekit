@@ -22,3 +22,29 @@ test("repeat application is deterministic and input is unchanged", () => {
  assert.deepEqual(calculateLandedCogs(line, [rule]), calculateLandedCogs(line, [rule]));
  assert.equal(JSON.stringify({ line, rule }), before);
 });
+
+test("Stem Labs approved landed package costs remain per package, not per treatment", () => {
+  const packages = [
+    ["4-treatments", 902],
+    ["12-treatments", 1932],
+    ["20-treatments", 2801],
+    ["eye-patches", 350],
+  ] as const;
+  for (const [providerProductId, packageCostCents] of packages) {
+    const actual = calculateLandedCogs({ ...line, providerProductId, quantity: 1 }, [{ ...rule, providerProductId, packageCostCents }]);
+    assert.deepEqual(actual, { status: "ready", amountCents: packageCostCents, ruleId: "v1", quantity: 1 });
+  }
+});
+test("rejects malformed dates, reversed effective intervals and fractional costs", () => {
+  assert.deepEqual(calculateLandedCogs(line, [{ ...rule, effectiveFrom: "yesterday" }]), { status: "unavailable", reason: "invalid_rule" });
+  assert.deepEqual(calculateLandedCogs(line, [{ ...rule, effectiveTo: "2026-08-01T00:00:00Z" }]), { status: "unavailable", reason: "invalid_rule" });
+  assert.deepEqual(calculateLandedCogs(line, [{ ...rule, packageCostCents: 9.02 }]), { status: "unavailable", reason: "invalid_rule" });
+  assert.deepEqual(calculateLandedCogs({ ...line, occurredAt: "October 15" }, [rule]), { status: "unavailable", reason: "invalid_input" });
+});
+test("rejects unsafe integer overflow", () => {
+  assert.deepEqual(calculateLandedCogs({ ...line, quantity: Number.MAX_SAFE_INTEGER }, [rule]), { status: "unavailable", reason: "amount_overflow" });
+});
+test("rejects currency mismatch and foreign connection without fallback", () => {
+  assert.deepEqual(calculateLandedCogs({ ...line, currency: "EUR" }, [rule]), { status: "unavailable", reason: "missing_rule" });
+  assert.deepEqual(calculateLandedCogs({ ...line, connectionId: "other" }, [rule]), { status: "unavailable", reason: "missing_rule" });
+});
