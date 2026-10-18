@@ -257,6 +257,13 @@ function OrderWorkspaceContent() {
             <p className="mt-2 text-sm text-slate-500">
               TraceKit has not asserted an authoritative Order profit read model for this Order.
             </p>
+            {snap.financialEvidence && (
+              <div className="mt-3 text-xs text-slate-500" role="status">
+                <p>Financial evidence: {snap.financialEvidence.status === "incomplete" ? "Incomplete" : "Unavailable"}</p>
+                <p>Missing: {snap.financialEvidence.missing.join(", ").replaceAll("_", " ")}</p>
+                <p>Currency: {snap.financialEvidence.currency || "Not verified"}</p>
+              </div>
+            )}
           </section>
         ) : (
           <section className="m-5 overflow-hidden rounded-xl border-2 border-slate-900 dark:border-white">
