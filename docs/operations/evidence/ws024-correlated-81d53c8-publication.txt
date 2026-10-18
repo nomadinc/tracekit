@@ -1,0 +1,13 @@
+WS-024 NI-DB-001 correlated diagnostic evidence publication
+
+Reviewed candidate: 81d53c89d48e272685b65a7c36f40d0cb6244b6b
+Local evidence source commit: cd1cb3a7d87dc0bdb9deb1508a5a89a42fc5b3b5
+Archive SHA-256: 43c5cbf352d79af3425dfdb1f4d761802e3bcf83f3a8387962184691a1fa67c4
+Contract: NI-AUTH-001/Model-B/v1 — review-assembly-2
+Contract SHA-256: 9a0baa2812a6b4825b1e378f6a695e37458363d8575fbffcf6b8300f8123ca71
+
+This publication contains the unchanged archive, unchanged complete report and original archive checksum. The report's no-external-publication statement records validation-time status; this separate notice records the subsequently authorized evidence publication. No tests were rerun, source implementation changed, or results reclassified. All 99 payload hashes were verified against the archive and exact local evidence commit before publication.
+
+Preserved: native 55 PASS / 0 FAIL; all twelve cancellation samples with 10 PASS / 2 timing FAIL; candidate TLS 1 PASS / 2 FAIL; additional Core FAIL; server/client/scheduler/clock diagnostics and unresolved clock uncertainty. NI-DB-001 remains OPEN. Production V1 remains HOLD.
+
+The publication commit is evidence-only, based on public main, referenced by a dedicated evidence tag. Main is unchanged; no merge or deployment is requested. Private TLS keys, runtime connection configuration and raw server logs are excluded as documented in the unchanged evidence package.
