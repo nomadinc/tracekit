@@ -11,6 +11,7 @@ const required = ["sale", "affiliate_commission", "landed_cogs", "processing_fee
 export function presentOrderFinancials(input: {
   currency: string; components: readonly FinancialComponent[]; knownAbsent: readonly string[];
   reconciled: boolean; sourceCurrent: boolean; includesShippingInLandedCogs: boolean;
+  reconciliationEvidenceId?: string;
 }): FinancialReadResult {
   if (!/^[A-Z]{3}$/.test(input.currency) || input.components.some(c => !c.id || !c.evidenceId ||
       !Number.isSafeInteger(c.amountCents) || c.amountCents < 0)) return { status: "unavailable", reason: "invalid_input" };
@@ -34,5 +35,5 @@ export function presentOrderFinancials(input: {
   const complete = missing.length === 0 && !components.some(c => c.source === "estimated");
   return { status: complete ? "ready" : "limited", currency: input.currency, grossRevenueCents, netRevenueCents,
     operationalProfitCents: complete ? operational : null,
-    reconciledProfitCents: complete && input.reconciled ? operational : null, missing, components };
+    reconciledProfitCents: complete && input.reconciled && Boolean(input.reconciliationEvidenceId) ? operational : null, missing, components };
 }
