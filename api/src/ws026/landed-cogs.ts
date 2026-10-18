@@ -1,7 +1,7 @@
 /**
- * WS-026 M2-A2: pure, read-only landed COGS selection.
- * No database writes, default costs, or heuristic product matching.
- * Amounts are integer minor units (cents).
+ * WS-026 M2-A2: pure landed-cost calculation. No database writes.
+ * All monetary values are integer cents; effective intervals are [from, to).
+ * A result is not a financial posting or an authorization to backfill.
  */
 export type CostRule = {
   id: string;
@@ -25,11 +25,19 @@ export type CostLine = {
 };
 export type CostResult =
   | { status: "ready"; amountCents: number; ruleId: string; quantity: number }
-  | { status: "unavailable"; reason: "invalid_input" | "missing_rule" | "ambiguous_rule" | "amount_overflow" };
+  | { status: "unavailable"; reason: "invalid_input" | "missing_rule" | "ambiguous_rule" | "invalid_rule" | "amount_overflow" };
 
 function validTime(value: string): number | null {
+  if (typeof value !== "string" || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:\d{2})$/.test(value)) return null;
   const n = Date.parse(value);
   return Number.isFinite(n) ? n : null;
+}
+function sameIdentity(line: CostLine, rule: CostRule): boolean {
+  return rule.organizationId === line.organizationId &&
+    rule.connectionId === line.connectionId &&
+    rule.providerAccountId === line.providerAccountId &&
+    rule.providerProductId === line.providerProductId &&
+    rule.currency === line.currency;
 }
 export function calculateLandedCogs(line: CostLine, rules: readonly CostRule[]): CostResult {
   const at = validTime(line.occurredAt);
@@ -38,18 +46,19 @@ export function calculateLandedCogs(line: CostLine, rules: readonly CostRule[]):
       !line.providerProductId || !/^[A-Z]{3}$/.test(line.currency)) {
     return { status: "unavailable", reason: "invalid_input" };
   }
+  let invalidApplicableRule = false;
   const matches = rules.filter((rule) => {
+    if (!sameIdentity(line, rule)) return false;
     const from = validTime(rule.effectiveFrom);
     const to = rule.effectiveTo === null ? null : validTime(rule.effectiveTo);
-    return rule.organizationId === line.organizationId &&
-      rule.connectionId === line.connectionId &&
-      rule.providerAccountId === line.providerAccountId &&
-      rule.providerProductId === line.providerProductId &&
-      rule.currency === line.currency &&
-      from !== null && (rule.effectiveTo === null || to !== null) &&
-      Number.isSafeInteger(rule.packageCostCents) && rule.packageCostCents >= 0 &&
-      from <= at && (to === null || at < to);
+    const valid = Boolean(rule.id) && from !== null &&
+      (rule.effectiveTo === null || to !== null) &&
+      (to === null || (from !== null && to > from)) &&
+      Number.isSafeInteger(rule.packageCostCents) && rule.packageCostCents >= 0;
+    if (!valid) { invalidApplicableRule = true; return false; }
+    return from! <= at && (to === null || at < to);
   });
+  if (invalidApplicableRule) return { status: "unavailable", reason: "invalid_rule" };
   if (matches.length === 0) return { status: "unavailable", reason: "missing_rule" };
   if (matches.length > 1) return { status: "unavailable", reason: "ambiguous_rule" };
   const amountCents = matches[0].packageCostCents * line.quantity;
