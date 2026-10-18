@@ -15,5 +15,7 @@ test("UI offers selectable canonical journey choices and loading state", () => {
 });
 test("journey detail uses existing scoped customer API", () => {
  assert.match(repo, /encodeURIComponent\(selectedJourney\.id\)/);
- assert.match(repo, /qs\(scope, \{ limit: 100 \}\)/);
+ assert.match(repo, /collectCoreTimelinePages/);
+ assert.match(repo, /next_cursor/);
+ assert.match(repo, /cursor/);
 });
