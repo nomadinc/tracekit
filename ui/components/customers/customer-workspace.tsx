@@ -321,6 +321,16 @@ function CustomerWorkspaceContent() {
               </button>
             </div>
           </div>
+          {snapshot.journeyOptions && snapshot.journeyOptions.length > 1 && (
+            <p className="mt-3 text-xs text-amber-700 dark:text-amber-300" role="status">
+              {snapshot.journeyOptions.length} canonical journeys found. {snapshot.journeySelectionReason || "A verified selection is required."} No first-journey fallback is applied.
+            </p>
+          )}
+          {!snapshot.journey.length && (
+            <p className="mt-3 text-xs text-slate-500" role="status">
+              {snapshot.journeySelectionReason || "No canonical journey events available."}
+            </p>
+          )}
           <div className="mt-5 flex gap-2 overflow-x-auto pb-3">
             {snapshot.journey.map((e, i) => (
               <button
