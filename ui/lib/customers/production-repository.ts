@@ -190,7 +190,7 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
       const pages = await collectCoreTimelinePages(async cursor => {
         const page = await get(`${path}?${qs(scope, { limit: 100, ...(cursor ? { cursor } : {}) })}`, scope);
         if (!journeyDetail) journeyDetail = page;
-        return { events: page.events, next_cursor: page.next_cursor };
+        return { events: page.events, next_cursor: page.page?.next_cursor ?? page.next_cursor };
       });
       if (pages.status === "unavailable") throw new Error(`Journey pagination unavailable: ${pages.reason}`);
       journeyDetail = { ...journeyDetail, events: pages.events };
