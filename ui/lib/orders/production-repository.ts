@@ -7,6 +7,7 @@ import type {
 import { normalizeOrderDeepLink, orderDeepLinkHref } from "./deep-link";
 import { withDevelopmentIdentity } from "@/lib/identity/development-state";
 import { resolveOrderJourney } from "./ws026-journey-selection";
+import { sourceMoney } from "./ws026-source-money";
 
 type ProductionScope = {
   authenticated: boolean;
@@ -54,6 +55,7 @@ function status(v: unknown): OrderSummary["status"] {
 function orderId(row: any) { return String(row?.platform_order_id || row?.order_id || row?.id || ""); }
 function summary(row: any, customer: any, scope: ProductionScope): OrderSummary {
   const id = orderId(row);
+  const revenueEvidence = sourceMoney(row?.amount ?? row?.gross_amount, row?.currency);
   return {
     id,
     organizationId: scope.organizationId || "",
@@ -69,8 +71,9 @@ function summary(row: any, customer: any, scope: ProductionScope): OrderSummary 
     status: status(row?.status_norm || row?.status),
     profitStatus: "Estimated",
     profit: null,
-    revenue: num(row?.amount ?? row?.gross_amount),
-    revenueAvailable: row?.amount !== undefined || row?.gross_amount !== undefined,
+    revenue: revenueEvidence?.amount ?? 0,
+    revenueAvailable: revenueEvidence !== null,
+    revenueCurrency: revenueEvidence?.currency ?? null,
     trackingHealth: "Unknown",
     shippingLoss: false, highFee: false, highAffiliate: false,
   };
