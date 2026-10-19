@@ -3,7 +3,7 @@ export type SourceMoney = { amount: number; currency: string } | null;
 export function sourceMoney(amount: unknown, currency: unknown): SourceMoney {
   if (amount === null || amount === undefined || amount === "" || typeof amount === "boolean") return null;
   if (typeof currency !== "string" || !/^[A-Z]{3}$/.test(currency)) return null;
-  if (typeof amount !== "number" && (typeof amount !== "string" || !/^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$/.test(amount.trim()))) return null;
+  if (typeof amount !== "number" && (typeof amount !== "string" || !/^-?(?:0|[1-9]\d*)(?:\.\d+)?$/.test(amount.trim()))) return null;
   const value = Number(amount);
   return Number.isFinite(value) ? { amount: value, currency } : null;
 }
