@@ -21,3 +21,8 @@ test("missing tenant and provider evidence fails closed",()=>{
 });
 test("canonical evidence matches only canonical namespace",()=>assert.equal(hasExactOrderIdentity({...evidence,provider_order_id:null,canonical_order_id:"canonical-12"},order,scope),true));
 test("untrusted metadata and labels cannot establish identity",()=>assert.equal(hasExactOrderIdentity({...evidence,provider_order_id:null,technical:{order_id:"12"},title:"Order 12"},order,scope),false));
+
+test("contradictory provider ID rejects matching canonical ID",()=>assert.equal(hasExactOrderIdentity({...evidence,canonical_order_id:"canonical-12",provider_order_id:"foreign"},order,scope),false));
+test("contradictory canonical ID rejects matching provider ID",()=>assert.equal(hasExactOrderIdentity({...evidence,canonical_order_id:"foreign"},order,scope),false));
+test("legitimate provider-only match remains valid",()=>assert.equal(hasExactOrderIdentity(evidence,order,scope),true));
+test("legitimate canonical-only match remains valid",()=>assert.equal(hasExactOrderIdentity({...evidence,provider_order_id:null,canonical_order_id:"canonical-12"},order,scope),true));
