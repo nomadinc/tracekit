@@ -31,6 +31,14 @@ const qs = (scope: ProductionScope, extra: Record<string, unknown> = {}) => {
   for (const [k,v] of Object.entries(extra)) if (v !== null && v !== undefined && v !== "") p.set(k, String(v));
   return p.toString();
 };
+/** Exact source-backed order identity only; no substring, labels, or heuristic matching. */
+export function hasExactOrderIdentity(row: any, order: { id: string; number: string }, scope?: { organizationId?: string | null; workspaceId?: string | null }): boolean {
+  if (scope?.organizationId && row?.organization_id && row.organization_id !== scope.organizationId) return false;
+  if (scope?.workspaceId && row?.workspace_id && row.workspace_id !== scope.workspaceId) return false;
+  const identifiers = [row?.canonical_order_id, row?.related_order_id, row?.order_id, row?.platform_order_id]
+    .filter((value): value is string => typeof value === "string" && value.length > 0);
+  return identifiers.some(value => value === order.id || value === order.number);
+}
 const num = (v: unknown) => Number.isFinite(Number(v)) ? Number(v) : 0;
 const when = (v: unknown) => {
   const s = String(v || "").trim(); if (!s) return "Not observed";
@@ -79,12 +87,7 @@ function event(row: any, order: OrderSummary, credits: any[] = []): OrderTimelin
   const attributed = matchingCredits.find((credit:any) => credit?.status === "attributed") || null;
   const affiliateId = row?.affiliate_id || attributed?.affiliate_id;
   const offerId = row?.offer_id || attributed?.offer_id;
-  const relationshipValues = [
-    row?.related_order_id, row?.order_id, row?.platform_order_id,
-    ...(Array.isArray(row?.relationships) ? row.relationships.flatMap((rel:any) => [rel?.id, rel?.label, rel?.record_id]) : []),
-    ...Object.values(tech),
-  ];
-  const explicitOrder = relationshipValues.some((v:any) => String(v || "").includes(order.number));
+  const explicitOrder = hasExactOrderIdentity(row, order);
   const baseLabel = String(row?.title || row?.event_type || row?.activity_type || "Evidence").replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
   const label = eventType === "click" && source === "everflow" ? "Everflow Affiliate Click" : baseLabel;
   const sourceLabel = source ? (source === "commas" ? "Commas" : source === "everflow" ? "Everflow" : source) : "";
@@ -166,9 +169,7 @@ export class ProductionOrderRepository {
     const clickRow = rows.find((r:any)=>String(r?.event_type || r?.activity_type || "").toLowerCase()==="click");
     const explicitPurchaseRow = rows.find((r:any)=>{
       const type=String(r?.event_type || r?.activity_type || "").toLowerCase();
-      const tech=r?.technical_evidence || r?.technical || {};
-      const values=[r?.related_order_id,r?.order_id,r?.platform_order_id,...(Array.isArray(r?.relationships)?r.relationships.flatMap((rel:any)=>[rel?.id,rel?.label,rel?.record_id]):[]),...Object.values(tech)];
-      return type==="purchase" && values.some((v:any)=>String(v || "").includes(o.number));
+      return type==="purchase" && hasExactOrderIdentity(r, o, { organizationId: scope.organizationId, workspaceId: scope.workspaceId });
     });
     const clickTs=Date.parse(String(clickRow?.event_time || clickRow?.occurred_at || ""));
     const purchaseTs=Date.parse(String(explicitPurchaseRow?.event_time || explicitPurchaseRow?.occurred_at || ""));
