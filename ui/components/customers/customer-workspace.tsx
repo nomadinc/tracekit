@@ -436,7 +436,7 @@ function CustomerWorkspaceContent() {
                   </span>
                 </span>
                 <span className="text-right text-xs">
-                  <strong>{money(o.amount)}</strong>
+                  <strong>{o.amountAvailable === false || !o.amountCurrency ? "Unavailable" : new Intl.NumberFormat("en-US", { style: "currency", currency: o.amountCurrency }).format(o.amount)}</strong>
                   <span className="block">
                     {o.profit === null ? "Profit not available" : money(o.profit)}
                   </span>
