@@ -27,3 +27,14 @@ test("five-second timestamp proximity cannot link a purchase to an order", () =>
  assert.doesNotMatch(repo, /Math\.abs\(orderTime - eventTime\) <= 5000/);
  assert.match(repo, /eventIds\.some/);
 });
+
+test("Customer observed revenue requires valid amount and source currency", () => {
+ assert.match(repo, /lifetimeRevenueAvailable: sourceMoney/);
+ assert.match(repo, /lifetimeRevenueCurrency: sourceMoney/);
+ assert.match(ui, /snapshot\.lifetimeRevenueAvailable === false \|\| !snapshot\.lifetimeRevenueCurrency/);
+ assert.match(ui, /currency: snapshot\.lifetimeRevenueCurrency/);
+});
+test("related Customer orders retain explicit unavailable amount status", () => {
+ assert.match(repo, /amountAvailable: sourceMoney/);
+ assert.match(repo, /amountCurrency: sourceMoney/);
+});
