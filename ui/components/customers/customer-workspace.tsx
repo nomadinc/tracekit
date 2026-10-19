@@ -269,7 +269,7 @@ function CustomerWorkspaceContent() {
           </div>
           <div className="mt-5 grid gap-4 border-t pt-4 sm:grid-cols-3 lg:grid-cols-6 dark:border-white/10">
             {[
-              ["Observed revenue", money(snapshot.lifetimeRevenue)],
+              ["Observed revenue", snapshot.lifetimeRevenueAvailable === false || !snapshot.lifetimeRevenueCurrency ? "Unavailable" : new Intl.NumberFormat("en-US", { style: "currency", currency: snapshot.lifetimeRevenueCurrency }).format(snapshot.lifetimeRevenue)],
               ["First observed", snapshot.customerSince],
               ["Attribution evidence", snapshot.firstTouch],
               ["Last linked purchase", snapshot.lastPurchase],
