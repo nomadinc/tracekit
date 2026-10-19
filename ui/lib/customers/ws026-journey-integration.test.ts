@@ -19,3 +19,11 @@ test("journey detail uses existing scoped customer API", () => {
  assert.match(repo, /next_cursor/);
  assert.match(repo, /cursor/);
 });
+
+test("repository consumes nested Core page cursor rather than assuming top-level cursor", () => {
+ assert.match(repo, /page\.page\?\.next_cursor \?\? page\.next_cursor/);
+});
+test("five-second timestamp proximity cannot link a purchase to an order", () => {
+ assert.doesNotMatch(repo, /Math\.abs\(orderTime - eventTime\) <= 5000/);
+ assert.match(repo, /eventIds\.some/);
+});
