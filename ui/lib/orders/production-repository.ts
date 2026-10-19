@@ -32,13 +32,33 @@ const qs = (scope: ProductionScope, extra: Record<string, unknown> = {}) => {
   for (const [k,v] of Object.entries(extra)) if (v !== null && v !== undefined && v !== "") p.set(k, String(v));
   return p.toString();
 };
-/** Exact source-backed order identity only; no substring, labels, or heuristic matching. */
-export function hasExactOrderIdentity(row: any, order: { id: string; number: string }, scope?: { organizationId?: string | null; workspaceId?: string | null }): boolean {
-  if (scope?.organizationId && row?.organization_id && row.organization_id !== scope.organizationId) return false;
-  if (scope?.workspaceId && row?.workspace_id && row.workspace_id !== scope.workspaceId) return false;
-  const identifiers = [row?.canonical_order_id, row?.related_order_id, row?.order_id, row?.platform_order_id]
-    .filter((value): value is string => typeof value === "string" && value.length > 0);
-  return identifiers.some(value => value === order.id || value === order.number);
+/** Exact, namespace-separated order evidence. Unknown scope never verifies a link. */
+export type OrderIdentityScope = {
+ organizationId: string; workspaceId: string;
+ provider: string; connectionId: string; providerAccountId: string;
+};
+export type ScopedOrderIdentity = OrderIdentityScope & {
+ canonicalOrderId?: string | null; providerOrderId?: string | null;
+};
+export function hasExactOrderIdentity(row: any, order: ScopedOrderIdentity, scope: OrderIdentityScope): boolean {
+ const required = ["organizationId", "workspaceId", "provider", "connectionId", "providerAccountId"] as const;
+ if (required.some(key => !scope[key]?.trim() || order[key] !== scope[key])) return false;
+ const source = [
+  [row?.organization_id, scope.organizationId],
+  [row?.workspace_id, scope.workspaceId],
+  [row?.source_platform, scope.provider],
+  [row?.connection_id, scope.connectionId],
+  [row?.provider_account_id, scope.providerAccountId],
+ ] as const;
+ if (source.some(([actual, expected]) => typeof actual !== "string" || !actual.trim() || actual !== expected)) return false;
+ const canonical = typeof row?.canonical_order_id === "string" && row.canonical_order_id.length > 0 &&
+   typeof order.canonicalOrderId === "string" && order.canonicalOrderId.length > 0 &&
+   row.canonical_order_id === order.canonicalOrderId;
+ const provider = typeof row?.provider_order_id === "string" && row.provider_order_id.length > 0 &&
+   typeof order.providerOrderId === "string" && order.providerOrderId.length > 0 &&
+   row.provider_order_id === order.providerOrderId;
+ // Display order numbers, platform aliases, and other namespaces are never proof.
+ return canonical || provider;
 }
 const num = (v: unknown) => Number.isFinite(Number(v)) ? Number(v) : 0;
 const when = (v: unknown) => {
@@ -81,7 +101,7 @@ function summary(row: any, customer: any, scope: ProductionScope): OrderSummary 
 async function customerDetail(scope: ProductionScope, customerId: string) {
   return get(`/api/customers/${encodeURIComponent(customerId)}?${qs(scope)}`);
 }
-function event(row: any, order: OrderSummary, credits: any[] = []): OrderTimelineEvent {
+function event(row: any, order: OrderSummary, identity: ScopedOrderIdentity, scope: OrderIdentityScope, credits: any[] = []): OrderTimelineEvent {
   const tech = row?.technical_evidence || row?.technical || {};
   const id = String(row?.id || crypto.randomUUID());
   const eventType = String(row?.event_type || row?.activity_type || "").toLowerCase();
@@ -90,7 +110,7 @@ function event(row: any, order: OrderSummary, credits: any[] = []): OrderTimelin
   const attributed = matchingCredits.find((credit:any) => credit?.status === "attributed") || null;
   const affiliateId = row?.affiliate_id || attributed?.affiliate_id;
   const offerId = row?.offer_id || attributed?.offer_id;
-  const explicitOrder = hasExactOrderIdentity(row, order);
+  const explicitOrder = hasExactOrderIdentity(row, identity, scope);
   const baseLabel = String(row?.title || row?.event_type || row?.activity_type || "Evidence").replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
   const label = eventType === "click" && source === "everflow" ? "Everflow Affiliate Click" : baseLabel;
   const sourceLabel = source ? (source === "commas" ? "Commas" : source === "everflow" ? "Everflow" : source) : "";
@@ -162,7 +182,12 @@ export class ProductionOrderRepository {
     if(resolution.status === "linked") jd=await get(`/api/customers/${encodeURIComponent(o.customerId)}/journeys/${encodeURIComponent(resolution.journeyId)}?${qs(scope,{limit:100})}`).catch(()=>null);
     const rows=Array.isArray(jd?.events)?jd.events:Array.isArray(jd?.activity)?jd.activity:[];
     const credits=Array.isArray(jd?.attribution)?jd.attribution:[];
-    const timeline: OrderTimelineEvent[] = rows.map((r:any)=>event(r,o,credits)); // Journey-context events without exact order identity retain no Order relationship.
+    const identityScope: OrderIdentityScope = { organizationId: scope.organizationId, workspaceId: scope.workspaceId,
+      provider: String(raw?.source_platform || ""), connectionId: String(raw?.connection_id || ""), providerAccountId: String(raw?.provider_account_id || "") };
+    const identity: ScopedOrderIdentity = { ...identityScope,
+      canonicalOrderId: typeof raw?.canonical_order_id === "string" ? raw.canonical_order_id : null,
+      providerOrderId: typeof raw?.provider_order_id === "string" ? raw.provider_order_id : null };
+    const timeline: OrderTimelineEvent[] = rows.map((r:any)=>event(r,o,identity,identityScope,credits)); // Journey-context events without exact order identity retain no Order relationship.
     const credit=credits.find((c:any)=>c?.status==="attributed")||{};
     const affiliate=credit?.affiliate_id ? `Affiliate ${credit.affiliate_id}` : "Not observed";
     const offer=credit?.offer_id ? `Offer ${credit.offer_id}` : "Not observed";
@@ -172,7 +197,7 @@ export class ProductionOrderRepository {
     const clickRow = rows.find((r:any)=>String(r?.event_type || r?.activity_type || "").toLowerCase()==="click");
     const explicitPurchaseRow = rows.find((r:any)=>{
       const type=String(r?.event_type || r?.activity_type || "").toLowerCase();
-      return type==="purchase" && hasExactOrderIdentity(r, o, { organizationId: scope.organizationId, workspaceId: scope.workspaceId });
+      return type==="purchase" && hasExactOrderIdentity(r, identity, identityScope);
     });
     const clickTs=Date.parse(String(clickRow?.event_time || clickRow?.occurred_at || ""));
     const purchaseTs=Date.parse(String(explicitPurchaseRow?.event_time || explicitPurchaseRow?.occurred_at || ""));
