@@ -44,3 +44,13 @@ test("related-order rendering gates missing amounts and unknown currency", () =>
  assert.match(ui, /currency: o\.amountCurrency/);
  assert.doesNotMatch(ui, /money\(o\.amount\)/);
 });
+
+test("actual customer mapper delegates to scoped namespace-safe order matching", () => {
+ assert.match(repo, /orders\.filter\(\(order: any\) =>/);
+ assert.match(repo, /hasExactOrderIdentity\(row,/);
+ assert.match(repo, /canonicalOrderId: order\?\.canonical_order_id/);
+ assert.match(repo, /providerOrderId: order\?\.provider_order_id/);
+ assert.match(repo, /providerAccountId: String\(order\?\.provider_account_id/);
+ assert.match(repo, /relatedOrders\.length === 1 \? relatedOrders\[0\] : null/);
+ assert.doesNotMatch(repo, /row\?\.related_order_id \? \[\{ type: "Order"/);
+});
