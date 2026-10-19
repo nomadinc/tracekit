@@ -15,3 +15,13 @@ test("shipping UI distinguishes unknown values from zero", () => {
  for (const field of ["charged", "actual", "packaging", "margin"])
   assert.ok(view.includes(`snap.shipping.${field} === null ? "Unavailable"`));
 });
+
+test("production revenue requires validated source money and currency", () => {
+ assert.match(repo, /sourceMoney\(row\?\.amount \?\? row\?\.gross_amount, row\?\.currency\)/);
+ assert.match(repo, /revenueAvailable: revenueEvidence !== null/);
+ assert.match(repo, /revenueCurrency: revenueEvidence\?\.currency \?\? null/);
+});
+test("Order Workspace never assumes USD for revenue", () => {
+ assert.match(view, /currency: snap\.order\.revenueCurrency/);
+ assert.doesNotMatch(view, /\$\{snap\.order\.revenue\.toFixed\(2\)\}/);
+});
