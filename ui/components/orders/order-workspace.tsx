@@ -342,19 +342,19 @@ function OrderWorkspaceContent() {
             >
               <span>Shipping Charged</span>
               <strong className="text-right">
-                {cash(snap.shipping.charged)}
+                {snap.shipping.charged === null ? "Unavailable" : cash(snap.shipping.charged)}
               </strong>
               <span>Actual Shipping Cost</span>
               <strong className="text-right">
-                {cash(-snap.shipping.actual)}
+                {snap.shipping.actual === null ? "Unavailable" : cash(-snap.shipping.actual)}
               </strong>
               <span>Packaging</span>
               <strong className="text-right">
-                {cash(-snap.shipping.packaging)}
+                {snap.shipping.packaging === null ? "Unavailable" : cash(-snap.shipping.packaging)}
               </strong>
               <span className="border-t pt-2">Net Shipping Margin</span>
               <strong className="border-t pt-2 text-right">
-                {cash(snap.shipping.margin)}
+                {snap.shipping.margin === null ? "Unavailable" : cash(snap.shipping.margin)}
               </strong>
             </button>
           </section>
