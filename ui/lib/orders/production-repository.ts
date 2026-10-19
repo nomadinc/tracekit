@@ -107,7 +107,7 @@ function event(row: any, order: OrderSummary, credits: any[] = []): OrderTimelin
     originalUrl: String(row?.url || row?.display_fields?.url || ""), referrer: "", destinationUrl: "",
     queryParameters: {}, identifiers, redirects: [], diagnostics: [],
     evidence: Object.entries(tech).filter(([,v])=>v !== null && v !== undefined && typeof v !== "object").slice(0,8).map(([k,v])=>`${k}: ${String(v)}`),
-    relationships: [{ type: "Order", id: order.id, label: order.number }],
+    relationships: explicitOrder ? [{ type: "Order", id: order.id, label: order.number }] : [],
   };
 }
 
@@ -159,7 +159,7 @@ export class ProductionOrderRepository {
     if(resolution.status === "linked") jd=await get(`/api/customers/${encodeURIComponent(o.customerId)}/journeys/${encodeURIComponent(resolution.journeyId)}?${qs(scope,{limit:100})}`).catch(()=>null);
     const rows=Array.isArray(jd?.events)?jd.events:Array.isArray(jd?.activity)?jd.activity:[];
     const credits=Array.isArray(jd?.attribution)?jd.attribution:[];
-    const timeline: OrderTimelineEvent[] = rows.map((r:any)=>event(r,o,credits));
+    const timeline: OrderTimelineEvent[] = rows.map((r:any)=>event(r,o,credits)); // Journey-context events without exact order identity retain no Order relationship.
     const credit=credits.find((c:any)=>c?.status==="attributed")||{};
     const affiliate=credit?.affiliate_id ? `Affiliate ${credit.affiliate_id}` : "Not observed";
     const offer=credit?.offer_id ? `Offer ${credit.offer_id}` : "Not observed";
