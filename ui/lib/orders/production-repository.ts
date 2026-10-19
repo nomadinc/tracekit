@@ -51,12 +51,14 @@ export function hasExactOrderIdentity(row: any, order: ScopedOrderIdentity, scop
   [row?.provider_account_id, scope.providerAccountId],
  ] as const;
  if (source.some(([actual, expected]) => typeof actual !== "string" || !actual.trim() || actual !== expected)) return false;
- const canonical = typeof row?.canonical_order_id === "string" && row.canonical_order_id.length > 0 &&
-   typeof order.canonicalOrderId === "string" && order.canonicalOrderId.length > 0 &&
-   row.canonical_order_id === order.canonicalOrderId;
- const provider = typeof row?.provider_order_id === "string" && row.provider_order_id.length > 0 &&
-   typeof order.providerOrderId === "string" && order.providerOrderId.length > 0 &&
-   row.provider_order_id === order.providerOrderId;
+ const canonicalProvided = typeof row?.canonical_order_id === "string" && row.canonical_order_id.trim().length > 0;
+ const providerProvided = typeof row?.provider_order_id === "string" && row.provider_order_id.trim().length > 0;
+ const canonical = canonicalProvided && typeof order.canonicalOrderId === "string" &&
+   order.canonicalOrderId.trim().length > 0 && row.canonical_order_id === order.canonicalOrderId;
+ const provider = providerProvided && typeof order.providerOrderId === "string" &&
+   order.providerOrderId.trim().length > 0 && row.provider_order_id === order.providerOrderId;
+ // Any contradictory supplied authoritative identifier blocks an otherwise matching one.
+ if ((canonicalProvided && !canonical) || (providerProvided && !provider)) return false;
  // Display order numbers, platform aliases, and other namespaces are never proof.
  return canonical || provider;
 }
