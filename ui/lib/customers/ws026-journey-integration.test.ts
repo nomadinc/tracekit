@@ -25,7 +25,8 @@ test("repository consumes nested Core page cursor rather than assuming top-level
 });
 test("five-second timestamp proximity cannot link a purchase to an order", () => {
  assert.doesNotMatch(repo, /Math\.abs\(orderTime - eventTime\) <= 5000/);
- assert.match(repo, /eventIds\.some/);
+ assert.match(repo, /hasExactOrderIdentity\(row,/);
+ assert.match(repo, /relatedOrders\.length === 1/);
 });
 
 test("Customer observed revenue requires valid amount and source currency", () => {
