@@ -86,9 +86,13 @@ function mapEvent(row: any, identity: any, credits: any[] = [], orders: any[] = 
   const matchingCredits = credits.filter((credit: any) => String(credit?.touchpoint_event_id || "") === eventId || String(credit?.conversion_event_id || "") === eventId);
   const attributedCredit = matchingCredits.find((credit: any) => credit?.status === "attributed");
   const relatedOrder = eventType === "purchase" ? orders.find((order: any) => {
-    const orderTime = Date.parse(String(order?.created_at || ""));
-    const eventTime = Date.parse(String(row?.event_time || row?.occurred_at || ""));
-    return Number.isFinite(orderTime) && Number.isFinite(eventTime) && Math.abs(orderTime - eventTime) <= 5000;
+    const orderIds = [order?.canonical_order_id, order?.order_id, order?.platform_order_id]
+      .filter((value: unknown): value is string => typeof value === "string" && value.length > 0);
+    const eventIds = [row?.canonical_order_id, row?.related_order_id, row?.order_id, row?.platform_order_id]
+      .filter((value: unknown): value is string => typeof value === "string" && value.length > 0);
+    const sameTenant = (!row?.organization_id || row.organization_id === order?.organization_id) &&
+      (!row?.workspace_id || row.workspace_id === order?.workspace_id);
+    return sameTenant && eventIds.some((id: string) => orderIds.includes(id));
   }) : null;
   const eventAmount = n(row?.amount);
   const sourceLabel = String(row?.source_platform || tech?.source_platform || "TraceKit");
