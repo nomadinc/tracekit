@@ -117,6 +117,11 @@ const JOURNEY_EVENT_SELECT = [
 
 const PLATFORM_ORDER_SELECT = [
   "workspace_id",
+  "organization_id",
+  "canonical_order_id",
+  "connection_id",
+  "provider_account_id",
+  "provider_order_id",
   "person_id:resolved_person_id",
   "source_person_id:person_id",
   "resolved_person_id",
@@ -553,7 +558,46 @@ function compactJourney(row: any) {
   };
 }
 
-function compactOrder(row: any) {
+// Read authority comes from both scoped persisted parents, never from labels or metadata.
+export async function resolveOrderReadAuthority(supabase: any, workspaceId: string, rows: any[]) {
+  const cache = new Map<string, Promise<string | null>>();
+  return Promise.all(rows.map(async (row: any) => {
+    const identity = {
+      workspace_id: row.workspace_id ?? null,
+      organization_id: row.organization_id ?? null,
+      canonical_order_id: row.canonical_order_id ?? null,
+      connection_id: row.connection_id ?? null,
+      provider_account_id: row.provider_account_id ?? null,
+      provider_order_id: row.provider_order_id ?? null,
+    };
+    const valid = (value: unknown): value is string => typeof value === "string" && value.trim().length > 0;
+    let provider: string | null = null;
+    if (workspaceId && row.workspace_id === workspaceId && row.organization_id === workspaceId &&
+        valid(row.connection_id) && valid(row.provider_account_id)) {
+      const key = JSON.stringify([workspaceId, row.connection_id, row.provider_account_id]);
+      if (!cache.has(key)) cache.set(key, (async () => {
+        const [connections, accounts] = await Promise.all([
+          supabaseRows(supabase.from("commerce_provider_connections").select("id,organization_id,provider")
+            .eq("organization_id", workspaceId).eq("id", row.connection_id).limit(2), "Order provider authority lookup"),
+          supabaseRows(supabase.from("commerce_provider_accounts").select("id,organization_id,connection_id")
+            .eq("organization_id", workspaceId).eq("connection_id", row.connection_id).eq("id", row.provider_account_id).limit(2), "Order account authority lookup"),
+        ]);
+        const c = connections[0], a = accounts[0];
+        if (connections.length !== 1 || accounts.length !== 1 || c.id !== row.connection_id ||
+            c.organization_id !== workspaceId || a.id !== row.provider_account_id ||
+            a.organization_id !== workspaceId || a.connection_id !== row.connection_id ||
+            !valid(c.provider)) return null;
+        return c.provider;
+      })());
+      const authority = await cache.get(key)!;
+      // A conflicting persisted label must not be silently converted into a match.
+      if (authority && row.platform === authority) provider = authority;
+    }
+    return { ...row, ...identity, source_platform: provider };
+  }));
+}
+
+export function compactOrder(row: any) {
   const raw = row.raw_json && typeof row.raw_json === "object" ? row.raw_json : {};
   const products = Array.isArray(raw.line_items)
     ? raw.line_items
@@ -563,6 +607,13 @@ function compactOrder(row: any) {
         ? raw.products
         : [];
   return {
+    workspace_id: row.workspace_id ?? null,
+    organization_id: row.organization_id ?? null,
+    canonical_order_id: row.canonical_order_id ?? null,
+    connection_id: row.connection_id ?? null,
+    provider_account_id: row.provider_account_id ?? null,
+    provider_order_id: row.provider_order_id ?? null,
+    source_platform: row.source_platform ?? null,
     platform: row.platform || null,
     platform_order_id: row.platform_order_id || null,
     order_id: row.order_id || null,
@@ -1657,7 +1708,7 @@ export async function getCustomerDetail(supabase: any, args: { workspace_id: str
   ]);
   const compactIdentifiers = identifiers.map(compactIdentifier);
   const compactJourneys = journeys.map(compactJourney);
-  const compactOrders = orders.map(compactOrder);
+  const compactOrders = (await resolveOrderReadAuthority(supabase, args.workspace_id, orders)).map(compactOrder);
   const compactCredits = credits.map((credit: any) => compactAttributionCredit(credit));
   const compactCommissions = commissions.map(compactCommission);
   const sourceSystems = uniqueSourceSystems(identifiers, orders);
@@ -1821,7 +1872,7 @@ export async function getCustomerJourneyDetail(supabase: any, params: CustomerJo
     activity,
     activity_summary: buildJourneyActivitySummary(journey, activity, allCredits, commissions),
     touchpoints,
-    orders: orders.map(compactOrder),
+    orders: (await resolveOrderReadAuthority(supabase, params.workspace_id, orders)).map(compactOrder),
     attribution: allCredits.map((credit: any) => compactAttributionCredit(credit, eventById)),
     attribution_explanations: buildAttributionExplanations(allCredits, eventById),
     commissions: commissions.map(compactCommission),
@@ -1848,12 +1899,12 @@ export async function listCustomerOrders(supabase: any, args: { workspace_id: st
   const limit = Math.max(1, Math.min(100, Math.floor(args.limit || 50)));
   const offset = Math.max(0, Math.floor(args.offset || 0));
   let query = supabase.from("tracekit_customer_order_read_model")
-    .select("workspace_id,organization_id,person_id,resolved_person_id,identity_resolution,platform,platform_order_id,order_id,order_ts,status,status_norm,gross_amount,currency,evidence_id")
+    .select("workspace_id,organization_id,canonical_order_id,connection_id,provider_account_id,provider_order_id,person_id,resolved_person_id,identity_resolution,platform,platform_order_id,order_id,order_ts,status,status_norm,gross_amount,currency,evidence_id")
     .eq("workspace_id", args.workspace_id).eq("organization_id", args.workspace_id);
   if (args.order_id) query = query.eq("platform_order_id", args.order_id);
   if (args.person_id) query = query.eq("resolved_person_id", args.person_id);
   const { data, error } = await query.order("order_ts", { ascending: false }).order("platform_order_id", { ascending: false }).range(offset, offset + limit);
   if (error) throw new Error("Customer order evidence is unavailable.");
-  const rows = (data || []).slice(0, limit);
+  const rows = await resolveOrderReadAuthority(supabase, args.workspace_id, (data || []).slice(0, limit));
   return { ok: true, orders: rows.map((order: any) => ({ order, customer: order.resolved_person_id ? { id: order.resolved_person_id } : null, identity_state: order.identity_resolution || "unresolved" })), next_offset: (data || []).length > limit ? offset + limit : null };
 }

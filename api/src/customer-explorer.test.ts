@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { existsSync, readFileSync } from "node:fs";
 import { buildCustomer360 } from "./explanations.ts";
+import { projectCoreCustomerRead } from "../../ui/lib/identity/core-read-projection.ts";
 import {
   buildJourneyActivity,
   buildJourneyActivitySummary,
@@ -15,7 +16,23 @@ import {
   normalizeCustomerJourneyDetailParams,
   normalizeCustomerListParams,
   redactTechnicalMetadata,
+  compactOrder,
 } from "./customer-explorer.ts";
+
+test("scoped order identity survives read-only projection while financial and sensitive evidence remains restricted", () => {
+ const order=compactOrder({workspace_id:"org",organization_id:"org",canonical_order_id:"canonical",provider_order_id:"provider",connection_id:"connection",provider_account_id:"account",source_platform:"next29",gross_amount:12,currency:"EUR",customer_email:"synthetic@example.test",raw_json:{token:"synthetic-protected"}});
+ const body:any=projectCoreCustomerRead({orders:[order]}, {effectivePermissions:["customers.view"]} as any);
+ assert.equal(body.orders[0].canonical_order_id,"canonical");assert.equal(body.orders[0].provider_order_id,"provider");assert.equal(body.orders[0].source_platform,"next29");
+ assert.ok(!("amount" in body.orders[0]));assert.ok(!("customer_email" in body.orders[0]));assert.ok(!JSON.stringify(body).includes("synthetic-protected"));
+});
+test("order DTO additions do not manufacture journey event identity or verified links", () => {
+ const source=readFileSync(new URL("./customer-explorer.ts",import.meta.url),"utf8");
+ const timeline=source.slice(source.indexOf("function compactTimelineEvent("),source.indexOf("function summarizeCommissionStatus("));
+ assert.doesNotMatch(timeline,/canonical_order_id:|connection_id:|provider_account_id:|provider_order_id:/);
+ const order=compactOrder({order_id:"display",platform_order_id:"compat"});
+ assert.equal(order.canonical_order_id,null);assert.equal(order.provider_order_id,null);assert.equal(order.source_platform,null);
+ assert.ok(!("order_journey_links" in order));
+});
 
 test("customer explorer routes are canonical and method-safe", () => {
   assert.deepEqual(matchCustomerExplorerRoute("GET", "/v1/customers"), { kind: "customer_list" });
