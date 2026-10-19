@@ -57,3 +57,22 @@ test("missing person and stale source explicit", () => {
  assert.deepEqual(assembleJourneys({ ...base, personId: null }), { status: "unresolved", reason: "missing_person" });
  assert.deepEqual(assembleJourneys({ ...base, sourceCurrent: false }), { status: "unresolved", reason: "stale_source" });
 });
+
+test("observed-only relationship cannot establish an order journey", () => {
+ const result = assembleJourneys({ ...base, orderId: "order1", links: [{ ...links[0], status: "observed" }] });
+ assert.equal(result.status, "ready");
+ if (result.status === "ready") {
+  assert.deepEqual(result.journeys, []);
+  assert.deepEqual(result.unresolved, ["missing_order_journey_link"]);
+ }
+});
+test("verified link without evidence cannot establish an order journey", () => {
+ const result = assembleJourneys({ ...base, orderId: "order1", links: [{ ...links[0], evidenceId: "" }] });
+ assert.equal(result.status, "ready");
+ if (result.status === "ready") assert.deepEqual(result.unresolved, ["missing_order_journey_link"]);
+});
+test("observed second journey never overrides verified first journey", () => {
+ const result = assembleJourneys({ ...base, orderId: "order1", links: [...links, { ...links[0], journeyId: "j2", status: "observed" }] });
+ assert.equal(result.status, "ready");
+ if (result.status === "ready") assert.deepEqual(result.journeys.map(j => j.journey.id), ["j1"]);
+});
