@@ -38,3 +38,9 @@ test("related Customer orders retain explicit unavailable amount status", () => 
  assert.match(repo, /amountAvailable: sourceMoney/);
  assert.match(repo, /amountCurrency: sourceMoney/);
 });
+
+test("related-order rendering gates missing amounts and unknown currency", () => {
+ assert.match(ui, /o\.amountAvailable === false \|\| !o\.amountCurrency/);
+ assert.match(ui, /currency: o\.amountCurrency/);
+ assert.doesNotMatch(ui, /money\(o\.amount\)/);
+});
