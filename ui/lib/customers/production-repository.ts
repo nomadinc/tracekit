@@ -1,3 +1,4 @@
+import { hasExactOrderIdentity } from "@/lib/orders/production-repository";
 import { collectCoreTimelinePages } from "./ws026-core-timeline-pages";
 import { selectCustomerJourney, type CustomerJourneyChoice } from "./ws026-journey-choice";
 import { sourceMoney } from "@/lib/orders/ws026-source-money";
@@ -86,15 +87,23 @@ function mapEvent(row: any, identity: any, credits: any[] = [], orders: any[] = 
   const eventType = String(row?.event_type || row?.activity_type || "").toLowerCase();
   const matchingCredits = credits.filter((credit: any) => String(credit?.touchpoint_event_id || "") === eventId || String(credit?.conversion_event_id || "") === eventId);
   const attributedCredit = matchingCredits.find((credit: any) => credit?.status === "attributed");
-  const relatedOrder = eventType === "purchase" ? orders.find((order: any) => {
-    const orderIds = [order?.canonical_order_id, order?.order_id, order?.platform_order_id]
-      .filter((value: unknown): value is string => typeof value === "string" && value.length > 0);
-    const eventIds = [row?.canonical_order_id, row?.related_order_id, row?.order_id, row?.platform_order_id]
-      .filter((value: unknown): value is string => typeof value === "string" && value.length > 0);
-    const sameTenant = (!row?.organization_id || row.organization_id === order?.organization_id) &&
-      (!row?.workspace_id || row.workspace_id === order?.workspace_id);
-    return sameTenant && eventIds.some((id: string) => orderIds.includes(id));
-  }) : null;
+  // A contextual journey event is not an authoritative Order link without exact
+  // namespace-matched, tenant/provider/connection/account-scoped source evidence.
+  const relatedOrders = eventType === "purchase" ? orders.filter((order: any) => {
+    const scope = {
+      organizationId: String(order?.organization_id || ""),
+      workspaceId: String(order?.workspace_id || ""),
+      provider: String(order?.source_platform || ""),
+      connectionId: String(order?.connection_id || ""),
+      providerAccountId: String(order?.provider_account_id || ""),
+    };
+    return hasExactOrderIdentity(row, {
+      ...scope,
+      canonicalOrderId: order?.canonical_order_id,
+      providerOrderId: order?.provider_order_id,
+    }, scope);
+  }) : [];
+  const relatedOrder = relatedOrders.length === 1 ? relatedOrders[0] : null;
   const eventAmount = n(row?.amount);
   const sourceLabel = String(row?.source_platform || tech?.source_platform || "TraceKit");
   const affiliate = row?.affiliate_id || attributedCredit?.affiliate_id;
@@ -129,7 +138,6 @@ function mapEvent(row: any, identity: any, credits: any[] = [], orders: any[] = 
     redirects: [],
     diagnostics: [],
     relationships: [
-      ...(row?.related_order_id ? [{ type: "Order", id: String(row.related_order_id), label: String(row.related_order_id) }] : []),
       ...(relatedOrder ? [{ type: "Order", id: String(relatedOrder.platform_order_id || relatedOrder.order_id), label: String(relatedOrder.order_id || relatedOrder.platform_order_id) }] : []),
       ...(tech?.journey_id ? [{ type: "Journey", id: String(tech.journey_id), label: String(tech.journey_id) }] : []),
     ],
