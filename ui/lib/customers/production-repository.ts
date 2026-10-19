@@ -1,5 +1,6 @@
 import { collectCoreTimelinePages } from "./ws026-core-timeline-pages";
 import { selectCustomerJourney, type CustomerJourneyChoice } from "./ws026-journey-choice";
+import { sourceMoney } from "@/lib/orders/ws026-source-money";
 import type { CustomerRepository } from "./repository";
 import type {
   CustomerDeepLinkState,
@@ -145,7 +146,9 @@ function orderRow(row: any) {
     id,
     number: String(row?.order_id || row?.platform_order_id || "Order"),
     date: when(row?.created_at),
-    amount: n(row?.amount),
+    amount: sourceMoney(row?.amount, row?.currency)?.amount ?? 0,
+    amountAvailable: sourceMoney(row?.amount, row?.currency) !== null,
+    amountCurrency: sourceMoney(row?.amount, row?.currency)?.currency ?? null,
     profit: null,
     profitStatus: "Estimated" as const,
     profitAvailable: false,
@@ -222,7 +225,9 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
     }));
     return {
       customer,
-      lifetimeRevenue: n(detail.summary?.lifetime_revenue),
+      lifetimeRevenue: sourceMoney(detail.summary?.lifetime_revenue, detail.summary?.currency)?.amount ?? 0,
+      lifetimeRevenueAvailable: sourceMoney(detail.summary?.lifetime_revenue, detail.summary?.currency) !== null,
+      lifetimeRevenueCurrency: sourceMoney(detail.summary?.lifetime_revenue, detail.summary?.currency)?.currency ?? null,
       customerSince: when(detail.summary?.first_seen_at),
       firstTouch: firstSource ? (firstCredit?.affiliate_id && !firstCredit?.source ? `Affiliate ${firstCredit.affiliate_id}${firstCredit.offer_id ? ` · Offer ${firstCredit.offer_id}` : ""}` : String(firstSource)) : "No retained attribution conclusion",
       lastPurchase: orders[0]?.date || "No linked purchase",
