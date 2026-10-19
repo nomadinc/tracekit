@@ -30,7 +30,7 @@ export function assembleJourneys(input: {
   if (journeyIds.size !== journeys.length) return { status: "unresolved", reason: "invalid_scope" };
   let selected = journeys;
   if (input.orderId) {
-    const matches = input.links.filter(l => l.canonicalOrderId === input.orderId && journeyIds.has(l.journeyId) && l.status !== "ambiguous");
+    const matches = input.links.filter(l => l.canonicalOrderId === input.orderId && journeyIds.has(l.journeyId) && l.status === "verified" && Boolean(l.evidenceId));
     if (input.links.some(l => l.canonicalOrderId === input.orderId && l.status === "ambiguous") ||
         new Set(matches.map(l => l.journeyId)).size > 1) return { status: "unresolved", reason: "ambiguous_order_link" };
     selected = journeys.filter(j => matches.some(m => m.journeyId === j.id));
