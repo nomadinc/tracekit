@@ -656,6 +656,10 @@ export class MockOrderRepository implements OrderRepository {
     const w = await this.loadWorkspace(scope, id);
     if (!w) return null;
     const [k, key] = drawerId.split(":", 2);
+    const knownAmount = (amount: number | null, sign = "") => amount === null ? "Unavailable" : `${sign}${amount.toFixed(2)}`;
+    const shippingFormula = [w.shipping.charged, w.shipping.actual, w.shipping.packaging].every((amount) => amount !== null)
+      ? `${w.shipping.charged!.toFixed(2)} − ${w.shipping.actual!.toFixed(2)} − ${w.shipping.packaging!.toFixed(2)}`
+      : "Unavailable — missing shipping evidence";
     if (k === "financial" || k === "financial-line" || k === "shipping-analysis" || k === "processor-fee") {
       const l = w.ledger.find((x) => x.id === key);
       if (!l) return null;
@@ -670,7 +674,7 @@ export class MockOrderRepository implements OrderRepository {
         formula: processor
           ? w.processorFee.pricingRule
           : key === "net-shipping"
-            ? `${w.shipping.charged.toFixed(2)} − ${w.shipping.actual.toFixed(2)} − ${w.shipping.packaging.toFixed(2)}`
+            ? shippingFormula
             : `Qualified ${l.label} inputs`,
         source: l.source,
         status: w.order.profitStatus,
@@ -697,19 +701,19 @@ export class MockOrderRepository implements OrderRepository {
             ? [
                 {
                   label: "Shipping Charged",
-                  value: `+$${w.shipping.charged.toFixed(2)}`,
+                  value: knownAmount(w.shipping.charged, "+"),
                 },
                 {
                   label: "Actual Shipping Cost",
-                  value: `-$${w.shipping.actual.toFixed(2)}`,
+                  value: knownAmount(w.shipping.actual, "-"),
                 },
                 {
                   label: "Packaging",
-                  value: `-$${w.shipping.packaging.toFixed(2)}`,
+                  value: knownAmount(w.shipping.packaging, "-"),
                 },
                 {
                   label: "Net Shipping Margin",
-                  value: `${w.shipping.margin >= 0 ? "+" : ""}$${w.shipping.margin.toFixed(2)}`,
+                  value: w.shipping.margin === null ? "Unavailable" : knownAmount(w.shipping.margin, w.shipping.margin >= 0 ? "+" : ""),
                 },
               ]
             : [
