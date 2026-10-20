@@ -26,7 +26,7 @@ function coreBase(){return String(process.env.TRACEKIT_API_BASE_URL||process.env
 function coreSecret(){
   if(String(process.env.TRACEKIT_USE_STAGING_CORE_CREDENTIAL||"").trim()==="enabled"){
     const raw=process.env.TK_SECRET_KEY_STAGING;
-    if(!raw || /[\s\u0000-\u001f\u007f]/u.test(raw))throw new Error("tracekit_staging_core_credential_unavailable");
+    if(!raw || /[\s\u0000-\u001f\u007f]/.test(raw))throw new Error("tracekit_staging_core_credential_unavailable");
   }
   return traceKitCoreAdminSecret();
 }
