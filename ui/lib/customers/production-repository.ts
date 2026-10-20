@@ -1,3 +1,4 @@
+import { traceKitCoreAdminSecret } from "@/lib/core/admin-credential";
 import { hasExactOrderIdentity } from "@/lib/orders/production-repository";
 import { collectCoreTimelinePages } from "./ws026-core-timeline-pages";
 import { selectCustomerJourney, type CustomerJourneyChoice } from "./ws026-journey-choice";
@@ -22,7 +23,13 @@ async function readJson(res: Response) {
   return body;
 }
 function coreBase(){return String(process.env.TRACEKIT_API_BASE_URL||process.env.NEXT_PUBLIC_API_BASE_URL||process.env.NEXT_PUBLIC_API_BASE||"http://127.0.0.1:8787").replace(/\/+$/,"");}
-function coreSecret(){return String(process.env.TK_SECRET_KEY||process.env.TRACEKIT_TK_SECRET||"").trim();}
+function coreSecret(){
+  if(String(process.env.TRACEKIT_USE_STAGING_CORE_CREDENTIAL||"").trim()==="enabled"){
+    const raw=process.env.TK_SECRET_KEY_STAGING;
+    if(!raw || /[\s\u0000-\u001f\u007f]/u.test(raw))throw new Error("tracekit_staging_core_credential_unavailable");
+  }
+  return traceKitCoreAdminSecret();
+}
 function coreFailure(status:number){return new Error(`customer_repository_core_http_${status}`);}
 async function get(path:string,scope?:ProductionCustomerScope){
   if(typeof window!=="undefined")return readJson(await fetch(path,{method:"GET",cache:"no-store",headers:{accept:"application/json"}}));
