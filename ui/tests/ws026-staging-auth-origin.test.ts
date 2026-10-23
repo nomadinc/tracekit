@@ -11,7 +11,7 @@ test("unconfigured branches retain existing behavior",()=>assert.deepEqual(decid
 test("double slash paths cannot change the approved redirect host",()=>{const result=decide("https://other.invalid//evil.invalid/path?code=fixture",env);assert.equal(result.kind,"redirect");if(result.kind==="redirect"){assert.equal(new URL(result.url).origin,origin);assert.equal(new URL(result.url).search,"");}});
 
 test("committed staging URLs are exact literal HTTPS origins",()=>{
-  assert.equal(origin,"https://tracekit-staging-git-workstream-ws-026-product-8e47b1-tracekit.vercel.app");
+  assert.equal(origin,"https://staging.trace-kit.io");
   assert.equal(new URL(origin).origin,origin);
   assert.equal(env.NEXT_PUBLIC_SUPABASE_URL,"https://joahiwgidfbzwzyslrbq.supabase.co");
   assert.equal(new URL(env.NEXT_PUBLIC_SUPABASE_URL!).origin,env.NEXT_PUBLIC_SUPABASE_URL);

@@ -1,5 +1,5 @@
 // Opt-in WS-026 guard: run before AuthKit can issue PKCE cookies or sync identity.
-export const WS026_AUTH_ORIGIN = "https://tracekit-staging-git-workstream-ws-026-product-8e47b1-tracekit.vercel.app";
+export const WS026_AUTH_ORIGIN = "https://staging.trace-kit.io";
 export function stagingAuthOriginDecision(requestUrl: string, env: NodeJS.ProcessEnv = process.env):
   | { kind: "continue" } | { kind: "unavailable" } | { kind: "reject-callback" } | { kind: "redirect"; url: string } {
   if (!env.TRACEKIT_STAGING_AUTH_ORIGIN) return { kind: "continue" };
