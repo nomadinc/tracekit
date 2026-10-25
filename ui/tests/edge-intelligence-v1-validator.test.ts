@@ -7,7 +7,7 @@ export function canonicalScenarios(input: unknown): Record<string, Record<string
   if (!input || typeof input !== "object" || Array.isArray(input)) throw new Error("fixture_root_invalid");
   const root = input as Record<string, unknown>;
   if (root.schemaVersion !== "1.0" || root.sanitized !== true) throw new Error("fixture_metadata_invalid");
-  if (Object.keys(root).some(key => !["schemaVersion", "sanitized", "scenarios"].includes(key)))
+  if (Object.keys(root).some(key => !["schemaVersion", "sanitized", "scenarios", "revisionSequence"].includes(key)))
     throw new Error("fixture_root_unexpected_field");
   const scenarios = root.scenarios;
   if (!scenarios || typeof scenarios !== "object" || Array.isArray(scenarios))

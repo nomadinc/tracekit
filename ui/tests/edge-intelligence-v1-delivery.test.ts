@@ -94,19 +94,30 @@ test("missing tenant binding denies before ingest",async()=>{
     assert.equal(ingestions,0);
   });
 });
-test("substituted or missing tenant identity cannot reach ingestion",async()=>{
-  for(const tenantRef of [undefined,"tenant_fixture_b"]){
-    const payload=valid();if(tenantRef===undefined)delete payload.tenantRef;else payload.tenantRef=tenantRef;
+for (const scenario of [
+  {name:"missing tenant identity", tenantRef:undefined},
+  {name:"substituted tenant identity", tenantRef:"tenant_fixture_b"}
+]) {
+  test(`${scenario.name} cannot reach ingestion`,async()=>{
+    const payload=valid();
+    if(scenario.tenantRef===undefined)delete payload.tenantRef;
+    else payload.tenantRef=scenario.tenantRef;
+
     let ingestions=0;
     await mock(async url=>{
-      if(url.includes("edge_intelligence_service_credentials?"))return response([{id:"credential-a",token_hash:hash,tenant_ref:"tenant_fixture_a",organization_id:"org-a"}]);
-      if(url.includes("edge_intelligence_tenant_bindings?"))return response([{tenant_ref:"tenant_fixture_b",organization_id:"org-b"}]);
-      if(url.includes("rpc/ingest_edge_intelligence_v1")){ingestions++;return response({outcome:"accepted",revision:1});}
+      if(url.includes("edge_intelligence_service_credentials?"))
+        return response([{id:"credential-a",token_hash:hash,tenant_ref:"tenant_fixture_a",organization_id:"org-a"}]);
+      if(url.includes("edge_intelligence_tenant_bindings?"))
+        return response([{tenant_ref:"tenant_fixture_b",organization_id:"org-b"}]);
+      if(url.includes("rpc/ingest_edge_intelligence_v1")){
+        ingestions++;
+        return response({outcome:"accepted",revision:1});
+      }
       return response(null);
     },async()=>{
       const result=await POST(request(payload));
       assert.notEqual(result.status,201);
       assert.equal(ingestions,0);
     });
-  }
-});
+  });
+}
