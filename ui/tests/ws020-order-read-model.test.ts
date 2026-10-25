@@ -9,7 +9,7 @@ test("Orders consume every canonical page including exact provider identities wi
    assert.equal(url.searchParams.get('workspace_id'),'tenant');
    const offset=Number(url.searchParams.get('offset')||0);
    const count=offset===0?17:9;
-   return Response.json({orders:Array.from({length:count},(_,i)=>({order:{platform_order_id:`next29:${offset+i}`,order_id:String(offset+i),person_id:offset===0?'direct':null,evidence_id:'retained',status:'paid',gross_amount:0},customer:{id:offset===0?'direct':'exact-provider'},identity_state:offset===0?'linked':'exact_provider_identity'})),next_offset:offset===0?17:null});
+   return Response.json({orders:Array.from({length:count},(_,i)=>({order:{platform_order_id:`next29:${offset+i}`,order_id:String(offset+i),person_id:offset===0?'direct':null,evidence_id:'retained',status:'paid',gross_amount:0,currency:'USD'},customer:{id:offset===0?'direct':'exact-provider'},identity_state:offset===0?'linked':'exact_provider_identity'})),next_offset:offset===0?17:null});
  };
  try {
    const rows=await new ProductionOrderRepository().listOrders({authenticated:true,workspaceId:'tenant',organizationId:'tenant',businessContextId:'context',session:{}},{});
@@ -18,4 +18,39 @@ test("Orders consume every canonical page including exact provider identities wi
    assert.ok(rows.every(row=>row.revenue===0&&row.revenueAvailable===true));
    assert.deepEqual(requests,['/api/customer-orders','/api/customer-orders']);
  } finally {globalThis.fetch=originalFetch;}
+});
+
+test("zero amount without source currency remains unavailable", async () => {
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async () =>
+    Response.json({
+      orders: [{
+        order: {
+          platform_order_id: "next29:unknown-currency",
+          order_id: "unknown-currency",
+          gross_amount: 0,
+          status: "paid"
+        }
+      }],
+      next_offset: null
+    });
+
+  try {
+    const rows = await new ProductionOrderRepository().listOrders(
+      {
+        authenticated: true,
+        workspaceId: "tenant",
+        organizationId: "tenant",
+        businessContextId: "context",
+        session: {}
+      },
+      {}
+    );
+
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].revenueAvailable, false);
+    assert.equal(rows[0].revenueCurrency, null);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
 });
