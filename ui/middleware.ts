@@ -6,6 +6,10 @@ import { developmentIdentityById } from "@/lib/identity/development-state";
 export const DEVELOPMENT_REVIEW_HEADER = "x-tracekit-development-review";
 
 export default function middleware(request: NextRequest, event: NextFetchEvent) {
+  // WS-030: fixed denial before session resolution, environment-based gates, or dispatch.
+  if (/^\/api\/(?:edge\/intelligence-v1|admin\/edge-tenant-bindings|internal\/edge-intelligence-v1-staging-proof)(?:\/|$)/.test(request.nextUrl.pathname)) {
+    return NextResponse.json({ error: "The requested resource is unavailable." }, { status: 404, headers: { "Cache-Control": "no-store" } });
+  }
   const localDevelopment = process.env.NODE_ENV !== "production" && process.env.TRACEKIT_IDENTITY_MODE === "development" && process.env.TRACEKIT_ENABLE_DEV_IDENTITIES === "true";
   const hasWorkOSSession = request.cookies.has(process.env.WORKOS_COOKIE_NAME || "wos-session");
   const requestedDevelopmentIdentity = request.nextUrl.searchParams.get("dev_identity");
@@ -15,10 +19,6 @@ export default function middleware(request: NextRequest, event: NextFetchEvent) 
       requestedDevelopmentIdentity &&
       developmentIdentityById(requestedDevelopmentIdentity),
   );
-  // WS-030: fixed denial before session resolution, environment-based gates, or dispatch.
-  if (/^\/api\/(?:edge\/intelligence-v1|admin\/edge-tenant-bindings|internal\/edge-intelligence-v1-staging-proof)(?:\/|$)/.test(request.nextUrl.pathname)) {
-    return NextResponse.json({ error: "The requested resource is unavailable." }, { status: 404, headers: { "Cache-Control": "no-store" } });
-  }
   if (shouldBlockLegacyRealDataProxy(request.nextUrl.pathname, process.env.TRACEKIT_REAL_DATA_ENABLED === "true")) {
     return NextResponse.json({ error: "Real-data proxy access remains blocked pending tenant-scoped repository authorization." }, { status: 503 });
   }
