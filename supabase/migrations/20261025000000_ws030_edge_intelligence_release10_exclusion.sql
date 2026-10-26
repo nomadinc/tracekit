@@ -3,6 +3,21 @@
 -- Historical Edge evidence is retained. Do not DROP functions or tables.
 BEGIN;
 
+-- Defense in depth: replace the owner-callable ingestion implementation with a
+-- permanent Release 1.0 denial. This also blocks wrappers that invoke this RPC
+-- with elevated privileges, even when their grants bypass the REVOKE below.
+-- It does NOT block a privileged owner writing tables directly.
+CREATE OR REPLACE FUNCTION public.ingest_edge_intelligence_v1(
+  p_organization_id uuid, p_payload jsonb
+) RETURNS jsonb LANGUAGE plpgsql SECURITY INVOKER
+SET search_path = public, pg_temp
+AS $ws030_denied$
+BEGIN
+  RAISE EXCEPTION 'Edge Intelligence ingestion excluded from Core Release 1.0'
+    USING ERRCODE = '42501';
+END;
+$ws030_denied$;
+
 -- Direct RPC entry is no longer available to application runtime roles.
 REVOKE ALL ON FUNCTION public.ingest_edge_intelligence_v1(uuid, jsonb)
   FROM PUBLIC, anon, authenticated, authenticator, service_role;
