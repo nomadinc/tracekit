@@ -40,6 +40,8 @@ test("WS-030 migration includes effective privilege checks and preserves histori
   for (const name of ["current", "ingest_credentials", "journey_links", "observations", "service_credentials", "tenant_bindings"]) assert.ok(source.includes(`public.edge_intelligence_${name}`));
   assert.ok(source.includes("service_role"));
   assert.ok(source.includes("has_function_privilege"));
+  assert.ok(source.includes("CREATE OR REPLACE FUNCTION public.ingest_edge_intelligence_v1"));
+  assert.ok(source.includes("Edge Intelligence ingestion excluded from Core Release 1.0"));
   assert.ok(source.includes("has_table_privilege"));
   assert.ok(!/\bDROP\s+(?:TABLE|FUNCTION)\b/i.test(source));
 });
