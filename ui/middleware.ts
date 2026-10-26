@@ -6,6 +6,10 @@ import { developmentIdentityById } from "@/lib/identity/development-state";
 export const DEVELOPMENT_REVIEW_HEADER = "x-tracekit-development-review";
 
 export default function middleware(request: NextRequest, event: NextFetchEvent) {
+  // WS-030: fixed denial before session resolution, environment-based gates, or dispatch.
+  if (/^\/api\/(?:edge\/intelligence-v1|admin\/edge-tenant-bindings|internal\/edge-intelligence-v1-staging-proof)(?:\/|$)/.test(request.nextUrl.pathname)) {
+    return NextResponse.json({ error: "The requested resource is unavailable." }, { status: 404, headers: { "Cache-Control": "no-store" } });
+  }
   const localDevelopment = process.env.NODE_ENV !== "production" && process.env.TRACEKIT_IDENTITY_MODE === "development" && process.env.TRACEKIT_ENABLE_DEV_IDENTITIES === "true";
   const hasWorkOSSession = request.cookies.has(process.env.WORKOS_COOKIE_NAME || "wos-session");
   const requestedDevelopmentIdentity = request.nextUrl.searchParams.get("dev_identity");
@@ -35,7 +39,7 @@ export default function middleware(request: NextRequest, event: NextFetchEvent) 
     redirectUri,
     middlewareAuth: {
       enabled: true,
-      unauthenticatedPaths: ["/auth/:path*", "/api/health", "/api/cron/:path*", "/api/webhooks/shopify", "/api/next29/webhook/:path*", "/api/edge/intelligence-v1", "/api/internal/next29-credential-repair", "/api/mcp", "/.well-known/oauth-protected-resource"],
+      unauthenticatedPaths: ["/auth/:path*", "/api/health", "/api/cron/:path*", "/api/webhooks/shopify", "/api/next29/webhook/:path*", "/api/internal/next29-credential-repair", "/api/mcp", "/.well-known/oauth-protected-resource"],
     },
   })(request, event);
 }
