@@ -1,0 +1,21 @@
+{
+  "parent": "3d4b0c12dcb93b9d00e7f8d2ed965e4d98c9b4d5",
+  "reported_reproduction_shape": {
+    "distinct_same_day_rollups": 1001,
+    "expected_total": 1999,
+    "old_accepted_total": 1001
+  },
+  "corrected_complete_total": 1999,
+  "duplicate_response": "DENIED_503",
+  "focused_tests": {
+    "pass": 70,
+    "fail": 0,
+    "skip": 0
+  },
+  "existing_Core_regressions": "27 PASS retained from immediately preceding correction; unchanged inputs",
+  "native_snapshot_verification": "NOT RUN; activation gate remains off",
+  "historical_fixture_files": {
+    "api/tests/fixtures/ws001-profit-c921/columns.json": "81dd839eb8100abd23f1f36c47bdc86e7a5499e4189bcb43740a7dc527e6ad88",
+    "api/tests/fixtures/ws001-profit-c921/profit.ts.txt": "47597eb6a9784aecb5f094d413862fe5a7139645ddad6a39f5e4d3487097f3eb"
+  }
+}
