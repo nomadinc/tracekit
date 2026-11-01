@@ -14,7 +14,7 @@ export function createRestrictedStagingGet(config:{environment:string|undefined;
   const body=await issued.json();if(typeof body.token!=='string'||typeof body.subject!=='string')return unavailable();
   const active=await ports.activeOrganization(body.subject);if(active!==workspace)return unavailable(403);
   params.set('organization',workspace);params.set('workspace',workspace);
-  const response=await ports.fetch(new URL('/reporting/'+operation+'?'+params,core),{method:'GET',redirect:'error',cache:'no-store',headers:{authorization:`Bearer ${body.token}`,accept:'application/json'}});if(!response.ok)return unavailable(response.status===403?403:503);return {status:200,body:await response.json()};
+  const response=await ports.fetch(new URL('/reporting/'+operation+'?'+params,core),{method:'GET',redirect:'error',cache:'no-store',headers:{authorization:`Bearer ${body.token}`,accept:'application/json'}});if(!response.ok){if(response.status===422){const error=await response.json();if(['profit_offer_identity_unresolved','profit_currency_qualification_required','profit_executive_unverified'].includes(error.error))return {status:422,body:error};}return unavailable(response.status===403?403:503);}return {status:200,body:await response.json()};
  }catch{return unavailable();}
 }
 }

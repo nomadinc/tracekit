@@ -1,0 +1,19 @@
+{
+  "prior_candidate": "b5a9dbc59a9303f52b0b8e206372c54dd851f29f",
+  "combined_source": "e44b59c37873fd70d1a0154304edcdf8fd5eb684",
+  "restricted_tests": {
+    "pass": 53,
+    "fail": 0,
+    "skip": 0
+  },
+  "existing_Core_regressions": {
+    "pass": 27,
+    "fail": 0,
+    "skip": 0
+  },
+  "typescript": "Only two unchanged baseline health.ts diagnostics; not full PASS",
+  "SQL_syntax": "97 base +7 optional statements parsed, not executed",
+  "native_tests": "NOT RUN",
+  "WS022": "PENDING",
+  "activation": "HOLD"
+}

@@ -7,6 +7,7 @@ export function guardedReportingFetch(c:Readonly<Claims>,publishableKey:string,t
  return async(input,options)=>{
   const request=new Request(input,options),u=new URL(request.url),table=u.pathname.replace('/rest/v1/',''),spec=Object.hasOwn(SOURCE_COLUMNS,table)?(SOURCE_COLUMNS as any)[table]:undefined;
   if(u.origin!=='https://joahiwgidfbzwzyslrbq.supabase.co'||request.method!=='GET'||!u.pathname.startsWith('/rest/v1/')||!spec||u.pathname.includes('/rpc/')||c.organization_id!==c.workspace_id)throw new ReportingDenied();
+  if(table==='profit_daily_rollups'&&!financial(c))throw new ReportingDenied();
   if(table==='affiliate_commissions'&&!financial(c))return Response.json([]);
   if(table==='tracekit_customer_order_read_model'&&!c.permissions.includes('orders.view'))return Response.json([]);
   const select=u.searchParams.get('select');if(!select)throw new ReportingDenied();

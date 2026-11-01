@@ -186,7 +186,8 @@ BEGIN
  ELSE
   IF c->>'purpose' IS DISTINCT FROM 'tracekit-staging-reporting'
    OR coalesce(nullif(current_setting('request.headers',true),'')::jsonb->>'accept-profile','public')<>'public'
-   OR p IS NULL OR p NOT IN ('/people','/person_identifiers','/identity_resolution_events','/journeys','/journey_events','/tracekit_customer_order_read_model','/journey_attribution_credits','/affiliate_commissions')
+   OR (p='/profit_daily_rollups' AND current_user<>'tk_stg_financial_reader')
+   OR p IS NULL OR p NOT IN ('/profit_daily_rollups','/people','/person_identifiers','/identity_resolution_events','/journeys','/journey_events','/tracekit_customer_order_read_model','/journey_attribution_credits','/affiliate_commissions')
   THEN RAISE EXCEPTION USING ERRCODE='42501',MESSAGE='Reporting route denied';END IF;
  END IF;
  PERFORM set_config('response.headers',json_build_array(
@@ -204,7 +205,8 @@ ALTER ROLE authenticator SET pgrst.db_pre_request='staging_reporting_private.rep
 -- BLOCKING: no order-view grant is proposed. Its source is SECURITY INVOKER
 -- and requires platform_orders/person_source_identities privileges outside the
 -- approved eight-object scope. Do not convert it to an owner-bypass view.
--- BLOCKING: Profit Summary requires profit_daily_rollups outside this scope.
+-- Profit addendum is separately reviewable in profit-read-proposal.sql.
+-- It is not installed or activated by this proposal.
 -- No authenticator membership, API schema exposure, signing key or credentials
 -- are activated. Review the installed role graph/PUBLIC grants, view definition,
 -- key/audience compatibility and identity registry issuer before execution.

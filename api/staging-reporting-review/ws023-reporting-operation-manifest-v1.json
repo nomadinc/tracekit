@@ -1,0 +1,504 @@
+{
+  "schema_version": "ws023.reporting-operations.v1",
+  "source_commit": "e44b59c37873fd70d1a0154304edcdf8fd5eb684",
+  "purpose": "WS-001 restricted staging reporting operation contract",
+  "approval": "SOURCE_EXTRACT_ONLY_NOT_GRANT_AUTHORIZATION",
+  "default_policy": "DENY",
+  "transport": {
+    "current": "UI scopedCoreGet / customer production repository use x-tk-secret privileged Core transport",
+    "required": "signed scoped reporting transport with current membership and no privileged fallback",
+    "status": "BLOCKED_NOT_CUT_OVER"
+  },
+  "operations": [
+    {
+      "id": "customer.list",
+      "ui": [
+        "GET /api/customers"
+      ],
+      "core": "GET /v1/customers",
+      "permissions_all": [
+        "customers.view"
+      ],
+      "kind": "core_computed",
+      "relations": [
+        "people",
+        "person_identifiers",
+        "journeys",
+        "tracekit_customer_order_read_model",
+        "journey_attribution_credits",
+        "affiliate_commissions"
+      ],
+      "scope": [
+        "workspace_id = authenticated organization",
+        "order view additionally organization_id = workspace_id"
+      ],
+      "object_rules": [
+        "resolved_person_id from retained evidence",
+        "no heuristic identity joining"
+      ],
+      "projection": "Customer Explorer listing; sensitive financial and PII fields must be projected/redacted",
+      "status": "BLOCKED_PENDING_EXACT_QUERY_AND_PROJECTION_REVIEW"
+    },
+    {
+      "id": "customer.detail",
+      "ui": [
+        "GET /api/customers/{customerId}"
+      ],
+      "core": "GET /v1/customers/{person_id}",
+      "permissions_all": [
+        "customers.view"
+      ],
+      "kind": "core_computed",
+      "relations": [
+        "people",
+        "person_identifiers",
+        "identity_resolution_events",
+        "journeys",
+        "tracekit_customer_order_read_model",
+        "journey_attribution_credits",
+        "affiliate_commissions",
+        "work_items"
+      ],
+      "scope": [
+        "workspace_id = authenticated organization",
+        "person_id = requested person",
+        "order view organization_id = workspace_id"
+      ],
+      "object_rules": [
+        "person must exist in tenant",
+        "work items filtered related_person_id"
+      ],
+      "projection": "Customer 360 and work-item summaries; apply financial and sensitive identity redaction",
+      "status": "BLOCKED_PENDING_WORK_ITEM_COLUMNS_AND_PROJECTION_REVIEW"
+    },
+    {
+      "id": "customer.journey.detail",
+      "ui": [
+        "GET /api/customers/{customerId}/journeys/{journeyId}"
+      ],
+      "core": "GET /v1/customers/{person_id}/journeys/{journey_id}",
+      "permissions_all": [
+        "customers.view"
+      ],
+      "kind": "core_computed",
+      "relations": [
+        "people",
+        "journeys",
+        "journey_events",
+        "identity_resolution_events",
+        "tracekit_customer_order_read_model",
+        "person_identifiers",
+        "journey_attribution_credits",
+        "affiliate_commissions"
+      ],
+      "scope": [
+        "workspace_id = authenticated organization",
+        "journeys.person_id = requested person",
+        "journeys.id = requested journey",
+        "journey_events.journey_id = requested journey",
+        "orders.resolved_person_id = requested person",
+        "orders.organization_id = workspace_id"
+      ],
+      "object_rules": [
+        "person and journey must match",
+        "date-bounded order and identity events",
+        "unresolved orders remain unresolved"
+      ],
+      "projection": "Bounded timeline, attribution, orders, commissions and identity evidence; financial redaction required",
+      "status": "BLOCKED_PENDING_PROJECTION_AND_VIEW_RLS_REVIEW"
+    },
+    {
+      "id": "customer.orders",
+      "ui": [
+        "GET /api/customer-orders"
+      ],
+      "core": "GET /v1/customer-orders",
+      "permissions_all": [
+        "orders.view"
+      ],
+      "kind": "core_computed",
+      "relations": [
+        "tracekit_customer_order_read_model"
+      ],
+      "scope": [
+        "workspace_id = authenticated organization",
+        "organization_id = workspace_id",
+        "optional platform_order_id = order_id filter",
+        "optional resolved_person_id = person_id filter"
+      ],
+      "object_rules": [
+        "unresolved person remains null",
+        "limit 1..100; offset >=0"
+      ],
+      "projection": "order plus resolved customer id and identity_state; gross_amount deleted unless BOTH financial permissions",
+      "status": "BLOCKED_PENDING_RESTRICTED_VIEW_VERIFICATION"
+    },
+    {
+      "id": "profit.summary",
+      "ui": [
+        "GET /api/profit/summary"
+      ],
+      "core": "GET /v1/profit/summary",
+      "permissions_all": [
+        "financials.view",
+        "orders.view_financials"
+      ],
+      "kind": "core_computed",
+      "relations": [
+        "profit_daily_rollups"
+      ],
+      "scope": [
+        "workspace_id = authenticated organization",
+        "optional day >= from",
+        "optional day <= to",
+        "optional connector_id",
+        "optional platform",
+        "optional event_source",
+        "optional currency"
+      ],
+      "object_rules": [
+        "offer_id returns HTTP 422 before database access",
+        "mixed or unidentified currency returns HTTP 422",
+        "empty period data_available=false",
+        "financial_status=operational_unreconciled"
+      ],
+      "projection": "Summed ProfitTotals, qualified currency, data_available, status; Cache-Control no-store",
+      "status": "BLOCKED_PENDING_RESTRICTED_RUNTIME_AUTHORITY"
+    },
+    {
+      "id": "profit.summary.executive_expansion",
+      "ui": [
+        "GET /api/profit/summary?include_executive_performance=1"
+      ],
+      "core": "GET /v1/profit/summary?include_executive_performance=1",
+      "permissions_all": [
+        "financials.view",
+        "orders.view_financials"
+      ],
+      "kind": "core_computed",
+      "relations": [],
+      "scope": [
+        "authenticated workspace; additional source filters require separate proof"
+      ],
+      "projection": "ExecutivePerformancePayload",
+      "status": "BLOCKED_UNVERIFIED_ADDITIONAL_READ_GRAPH"
+    },
+    {
+      "id": "profit.summary.offer",
+      "ui": [
+        "GET /api/profit/summary?offer_id=..."
+      ],
+      "core": "GET /v1/profit/summary?offer_id=...",
+      "permissions_all": [
+        "financials.view",
+        "orders.view_financials"
+      ],
+      "kind": "unsupported",
+      "relations": [],
+      "scope": [
+        "no database read permitted"
+      ],
+      "projection": "HTTP 422 profit_offer_identity_unresolved",
+      "status": "BLOCKED_MISSING_VERIFIED_FINANCIAL_TO_OFFER_IDENTITY"
+    }
+  ],
+  "relation_columns_source_select": {
+    "people": [
+      "id",
+      "workspace_id",
+      "status",
+      "display_name",
+      "primary_email",
+      "primary_phone",
+      "first_name",
+      "last_name",
+      "first_seen_at",
+      "last_seen_at",
+      "created_at",
+      "updated_at",
+      "metadata"
+    ],
+    "person_identifiers": [
+      "id",
+      "workspace_id",
+      "person_id",
+      "identifier_type",
+      "raw_value",
+      "normalized_value",
+      "source_platform",
+      "source_record_type",
+      "source_record_id",
+      "source_connector_id",
+      "verification_status",
+      "confidence",
+      "is_primary",
+      "first_seen_at",
+      "last_seen_at",
+      "created_at",
+      "updated_at",
+      "metadata"
+    ],
+    "identity_resolution_events": [
+      "id",
+      "workspace_id",
+      "person_id",
+      "candidate_person_ids",
+      "resolution_action",
+      "resolution_reason",
+      "confidence",
+      "source_platform",
+      "source_record_type",
+      "source_record_id",
+      "created_at",
+      "metadata"
+    ],
+    "journeys": [
+      "id",
+      "workspace_id",
+      "person_id",
+      "started_at",
+      "ended_at",
+      "status",
+      "entry_event_id",
+      "conversion_event_id",
+      "conversion_count",
+      "purchase_count",
+      "total_revenue",
+      "event_count",
+      "is_active",
+      "boundary_version",
+      "boundary_timeout_seconds",
+      "attribution_window_config",
+      "metadata",
+      "created_at",
+      "updated_at"
+    ],
+    "journey_events": [
+      "id",
+      "workspace_id",
+      "person_id",
+      "journey_id",
+      "platform_order_id",
+      "session_id",
+      "touchpoint_id",
+      "event_type",
+      "event_time",
+      "source_platform",
+      "source_connector",
+      "source_record_id",
+      "amount",
+      "currency",
+      "affiliate_id",
+      "offer_id",
+      "campaign_id",
+      "source",
+      "medium",
+      "sub1",
+      "sub2",
+      "sub3",
+      "sub4",
+      "sub5",
+      "transaction_id",
+      "metadata",
+      "created_at",
+      "updated_at"
+    ],
+    "tracekit_customer_order_read_model": [
+      "workspace_id",
+      "resolved_person_id",
+      "person_id",
+      "identity_resolution",
+      "platform",
+      "platform_order_id",
+      "platform_store_id",
+      "order_id",
+      "order_ts",
+      "status",
+      "status_norm",
+      "gross_amount",
+      "receipt_total",
+      "currency",
+      "transaction_id",
+      "everflow_transaction_id",
+      "affiliate_id",
+      "everflow_offer_id",
+      "source_id",
+      "sub1",
+      "sub2",
+      "sub3",
+      "sub4",
+      "sub5",
+      "product_subtotal",
+      "shipping_amount",
+      "tax_amount",
+      "customer_email",
+      "customer_email_normalized",
+      "commerce_reference",
+      "raw_json",
+      "created_at"
+    ],
+    "journey_attribution_credits": [
+      "id",
+      "workspace_id",
+      "journey_id",
+      "person_id",
+      "conversion_event_id",
+      "touchpoint_event_id",
+      "conversion_event_time",
+      "touchpoint_event_time",
+      "model",
+      "model_version",
+      "touchpoint_eligibility_version",
+      "status",
+      "reason",
+      "credit_fraction",
+      "credit_percent",
+      "credit_amount",
+      "currency",
+      "touchpoint_channel",
+      "source",
+      "medium",
+      "campaign_id",
+      "affiliate_id",
+      "offer_id",
+      "calculated_at",
+      "metadata",
+      "created_at"
+    ],
+    "affiliate_commissions": [
+      "id",
+      "workspace_id",
+      "commission_event_id",
+      "journey_attribution_credit_id",
+      "journey_id",
+      "person_id",
+      "conversion_event_id",
+      "touchpoint_event_id",
+      "conversion_event_time",
+      "touchpoint_event_time",
+      "affiliate_id",
+      "publisher_id",
+      "offer_id",
+      "campaign_id",
+      "touchpoint_source",
+      "touchpoint_medium",
+      "model",
+      "model_version",
+      "credit_fraction",
+      "credit_percent",
+      "credit_amount",
+      "attributed_amount",
+      "currency",
+      "commission_rate",
+      "commission_amount",
+      "status",
+      "source",
+      "source_credit_created_at",
+      "generated_at",
+      "policy_snapshot",
+      "metadata",
+      "created_at"
+    ],
+    "profit_daily_rollups": [
+      "workspace_id",
+      "day",
+      "platform",
+      "event_source",
+      "connector_id",
+      "currency",
+      "gross_revenue",
+      "refunds",
+      "chargebacks",
+      "chargeback_fees",
+      "processor_fees",
+      "bank_fees",
+      "shipping_cost",
+      "tax",
+      "cogs",
+      "affiliate_payout",
+      "ad_spend",
+      "reversals",
+      "adjustments",
+      "net_revenue",
+      "total_costs",
+      "net_profit",
+      "profit_margin_pct",
+      "order_count",
+      "event_count"
+    ]
+  },
+  "additional_exact_selects": {
+    "customer.orders": [
+      "workspace_id",
+      "organization_id",
+      "person_id",
+      "resolved_person_id",
+      "identity_resolution",
+      "platform",
+      "platform_order_id",
+      "order_id",
+      "order_ts",
+      "status",
+      "status_norm",
+      "gross_amount",
+      "currency",
+      "evidence_id"
+    ],
+    "customer.journey.evidence_events": [
+      "id",
+      "event_time",
+      "metadata"
+    ],
+    "customer.search.order_identity": [
+      "resolved_person_id",
+      "platform_order_id",
+      "order_id",
+      "transaction_id",
+      "everflow_transaction_id",
+      "commerce_reference",
+      "affiliate_id",
+      "customer_email_normalized"
+    ]
+  },
+  "work_item_dependency": {
+    "function": "getWorkItemsForPerson",
+    "source": "api/src/work-items.ts",
+    "relation": "work_items",
+    "select_constant": "WORK_ITEM_SELECT",
+    "predicates": [
+      "workspace_id = authenticated organization",
+      "related_person_id = person_id",
+      "status in (open, acknowledged, in_progress) OR status = resolved"
+    ],
+    "ordering": [
+      "updated_at desc",
+      "resolved_at desc"
+    ],
+    "limits": [
+      "open_limit default 10",
+      "resolved_limit default 5"
+    ],
+    "status": "BLOCKED_EXACT_COLUMNS_NOT_YET_EXTRACTED"
+  },
+  "joins": {
+    "customer_orders": "read model resolved_person_id to people.id, only when deterministic; order view also organization_id=workspace_id",
+    "journey": "journeys.person_id to people.id, journey_events.journey_id to journeys.id, credits/commissions by exact journey_id and event IDs",
+    "profit_offer": "NO VERIFIED JOIN; DO NOT ENABLE"
+  },
+  "rpcs_for_listed_customer_explorer_and_base_profit_summary": [],
+  "security_gates": [
+    "trusted issuer and current membership",
+    "restricted PostgREST token compatibility",
+    "exact view ownership and RLS",
+    "inherited and PUBLIC privileges",
+    "financial and PII response projections",
+    "no privileged fallback",
+    "no write/RPC grants",
+    "independent WS-001 and WS-022 acceptance"
+  ],
+  "notes": [
+    "SELECT columns describe legacy Core source needs, not approved grants",
+    "customer listing has additional search/filter SELECT variants; operation remains blocked until enumerated",
+    "no database or runtime validation performed"
+  ]
+}

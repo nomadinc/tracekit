@@ -10,7 +10,7 @@ export default {async fetch(request:Request,env:Env):Promise<Response> {
  try{
   const url=new URL(request.url),m=/^\/reporting\/([a-zA-Z0-9_-]+)$/.exec(url.pathname);
   if(!m||!Object.hasOwn(OPERATIONS,m[1])||url.searchParams.getAll('organization').length!==1||url.searchParams.getAll('workspace').length!==1)throw new ReportingDenied();
-  const allowed=new Set(['organization','workspace','person_id','journey_id','order_id','offset','limit','search','cursor','from','to','journey_status','has_purchase','has_attribution','has_commission','identity_status','source','source_platform','affiliate_id','offer_id','currency']);
+  const allowed=new Set(['organization','workspace','connector_id','platform','event_source','include_executive_performance','includeExecutivePerformance','person_id','journey_id','order_id','offset','limit','search','cursor','from','to','journey_status','has_purchase','has_attribution','has_commission','identity_status','source','source_platform','affiliate_id','offer_id','currency']);
   for(const key of url.searchParams.keys())if(!allowed.has(key)||url.searchParams.getAll(key).length!==1)throw new ReportingDenied();
   const h=request.headers.get('authorization');if(!h?.startsWith('Bearer ')||!env.REPORTING_AUTHORITY)throw new ReportingDenied();
   const client=createReportingClient({origin:env.REPORTING_SUPABASE_URL,publishableKey:env.REPORTING_PUBLISHABLE_KEY,issuer:env.REPORTING_ISSUER,publicJwk:JSON.parse(env.REPORTING_PUBLIC_JWK)},REPORTING_MANIFEST,{fetch,now:()=>Math.floor(Date.now()/1000),currentMembership:async(token:string,c:Readonly<Claims>)=>{
@@ -22,5 +22,5 @@ export default {async fetch(request:Request,env:Env):Promise<Response> {
   const revalidate=()=>client.revalidate(token,c,permissions);
   const result=await compute(operation,url,c,token,env.REPORTING_PUBLISHABLE_KEY,revalidate);
   await revalidate();return reply(200,projectReportingRead(result,{effectivePermissions:c.permissions}));
- }catch(e){return reply(e instanceof ReportingDenied?e.status:(e as any)?.status===404?404:503,{error:'reporting_unavailable'});}
+ }catch(e){return reply(e instanceof ReportingDenied?e.status:(e as any)?.status===404?404:503,{error:(e as any)?.publicCode||'reporting_unavailable'});}
 }};

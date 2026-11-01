@@ -1,0 +1,26 @@
+{
+  "parent": "b5a9dbc59a9303f52b0b8e206372c54dd851f29f",
+  "files": {
+    "api/src/staging-reporting/columns.json": "81dd839eb8100abd23f1f36c47bdc86e7a5499e4189bcb43740a7dc527e6ad88",
+    "api/src/staging-reporting/computed.test.ts": "adb0b479b94cef19ed50841d155a029e5602f1b6353345901619d77b1dc19b80",
+    "api/src/staging-reporting/computed.ts": "597f9936dc097ac1cdf3129303c370d42c3e61089a273fee36be48abfa8f9d76",
+    "api/src/staging-reporting/manifest.ts": "59fe497119f1a5f8ea74a96b9db83c5ed4c67de222bb7e62272409fd9d0681c9",
+    "api/src/staging-reporting/profit.test.ts": "59454d9c4866e84bbeddc5263e274e0482e6220321406441dea790945ad0b19e",
+    "api/src/staging-reporting/profit.ts": "47597eb6a9784aecb5f094d413862fe5a7139645ddad6a39f5e4d3487097f3eb",
+    "api/src/staging-reporting/repository.ts": "3622838cb076a3f1e040f91205590e71d557ef541833168f7e3cbb385cb31f91",
+    "api/src/staging-reporting/worker.ts": "8f782aa071e459529f27719664e0b7fee723b1a5c4d203e575acf6ba9e027033",
+    "api/staging-reporting-review/MANIFEST-INTEGRATION.md": "a28ce14073816075faa55a9040addd997acf8d94023a4b20fedb8cc84424d1e8",
+    "api/staging-reporting-review/README.md": "939f2bc013b6622afdcbdfede09be68d204fe514952851b713943acc787b3ad1",
+    "api/staging-reporting-review/SOURCE-HASHES.json": "f6690ae19ebcc6bce0c885312b55be57824f7f40d63d05c4c56158aea4abf1c1",
+    "api/staging-reporting-review/manifest-binding.json": "b799b15bbfb2700fc0ac7246d1b76c63a1300dcc4d3afd07ee36edb6a3b0e173",
+    "api/staging-reporting-review/profit-read-proposal.sql": "21a37eec519d58f4e7f88878d39dceadbfa1e0759d91a560a3c835c180700677",
+    "api/staging-reporting-review/roles-and-authority.sql": "e1a54b059bd6878cb6b09359c992fedfe9a5f3ec35a40bd04067706c3b435593",
+    "api/staging-reporting-review/ws023-reporting-operation-manifest-v1.json": "41444fdb1d83e2a136f3c18779ffb908c1ec0c72bf3bc285186fe44af263a908",
+    "docs/operations/evidence/ws001-staging-reporting-integration/MANIFEST-DELTA-RESULTS.json": "2c3b472a2b131cc77264d080068ec78a6a3bf49f5a96eac631feabb9f656a2d8",
+    "docs/operations/evidence/ws001-staging-reporting-integration/manifest-delta-core.txt": "aa7695f731db4eeb1f35220e7091e6dd6cb5774e72d5117ea2dbf9b103a9732e",
+    "docs/operations/evidence/ws001-staging-reporting-integration/manifest-delta-tests.txt": "7f0d18f91b113d9d0178efdd04e6e41c1fd554c4af80ae8d75fe6f927057244c",
+    "docs/operations/evidence/ws001-staging-reporting-integration/manifest-delta-types.txt": "b6c2960f2a7fdd0a6aa1afa7196bea1e790947518f76ca74d5de013687e31771",
+    "ui/lib/identity/staging-reporting-runtime.ts": "08bd6ecf8355f987514054b30a5912ed3e42f9c6cd97b1cfb7484c38106f9869",
+    "ui/tests/ws001-staging-reporting-cutover.test.ts": "10e19ec5d049ea13be3cc82488d9c2ed0bb3643f186d1c5ee5f40070657fab3b"
+  }
+}

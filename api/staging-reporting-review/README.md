@@ -1,3 +1,5 @@
+Current manifest delta: see MANIFEST-INTEGRATION.md and manifest-binding.json. Base Profit is now implemented under the attached source contract; the prior outside-scope blocker below is superseded. Native activation remains HOLD.
+
 # Restricted reporting integration — independent review required
 
 Exact combined source: e44b59c37873fd70d1a0154304edcdf8fd5eb684 (tree 0090e73fc4cc715449d423c54ffb87bbcdacfe9c). Recovered through GitHub Git data, with exact blob, tree and raw commit hashes verified. Earlier ancestry is shallow; no claim of recovered full history. Restricted source input: f3090f62b6d67d03830b70c1f3a2e5c7f3c7a2f3. Original repair branch is not overwritten; this is a separate WS-001 integration branch.

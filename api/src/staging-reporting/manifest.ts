@@ -1,5 +1,6 @@
 import type { Manifest } from "./client.ts";
 export const SOURCE_COLUMNS = {
+  "profit_daily_rollups": {"source_constant": "PROFIT_ROLLUP_SELECT", "source_projection": ["workspace_id", "day", "platform", "event_source", "connector_id", "currency", "gross_revenue", "refunds", "chargebacks", "chargeback_fees", "processor_fees", "bank_fees", "shipping_cost", "tax", "cogs", "affiliate_payout", "ad_spend", "reversals", "adjustments", "net_revenue", "total_costs", "net_profit", "profit_margin_pct", "order_count", "event_count"], "columns": ["workspace_id", "day", "platform", "event_source", "connector_id", "currency", "gross_revenue", "refunds", "chargebacks", "chargeback_fees", "processor_fees", "bank_fees", "shipping_cost", "tax", "cogs", "affiliate_payout", "ad_spend", "reversals", "adjustments", "net_revenue", "total_costs", "net_profit", "profit_margin_pct", "order_count", "event_count"], "workspaceColumn": "workspace_id", "organizationColumn": null},
   "people": {
     "source_constant": "PEOPLE_SELECT",
     "source_projection": [

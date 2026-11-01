@@ -1,0 +1,99 @@
+{
+  "sha256": "41444fdb1d83e2a136f3c18779ffb908c1ec0c72bf3bc285186fe44af263a908",
+  "source_commit": "e44b59c37873fd70d1a0154304edcdf8fd5eb684",
+  "approval": "SOURCE_EXTRACT_ONLY_NOT_GRANT_AUTHORIZATION",
+  "profit_projection_exact_source_match": true,
+  "operations": [
+    {
+      "id": "customer.list",
+      "kind": "core_computed",
+      "status": "BLOCKED_PENDING_EXACT_QUERY_AND_PROJECTION_REVIEW"
+    },
+    {
+      "id": "customer.detail",
+      "kind": "core_computed",
+      "status": "BLOCKED_PENDING_WORK_ITEM_COLUMNS_AND_PROJECTION_REVIEW"
+    },
+    {
+      "id": "customer.journey.detail",
+      "kind": "core_computed",
+      "status": "BLOCKED_PENDING_PROJECTION_AND_VIEW_RLS_REVIEW"
+    },
+    {
+      "id": "customer.orders",
+      "kind": "core_computed",
+      "status": "BLOCKED_PENDING_RESTRICTED_VIEW_VERIFICATION"
+    },
+    {
+      "id": "profit.summary",
+      "kind": "core_computed",
+      "status": "BLOCKED_PENDING_RESTRICTED_RUNTIME_AUTHORITY"
+    },
+    {
+      "id": "profit.summary.executive_expansion",
+      "kind": "core_computed",
+      "status": "BLOCKED_UNVERIFIED_ADDITIONAL_READ_GRAPH"
+    },
+    {
+      "id": "profit.summary.offer",
+      "kind": "unsupported",
+      "status": "BLOCKED_MISSING_VERIFIED_FINANCIAL_TO_OFFER_IDENTITY"
+    }
+  ],
+  "relation_projection_comparison": {
+    "people": {
+      "manifest_count": 13,
+      "implemented_source_count": 13,
+      "missing_from_implemented_source": [],
+      "additional_implemented_source": []
+    },
+    "person_identifiers": {
+      "manifest_count": 18,
+      "implemented_source_count": 18,
+      "missing_from_implemented_source": [],
+      "additional_implemented_source": []
+    },
+    "identity_resolution_events": {
+      "manifest_count": 12,
+      "implemented_source_count": 12,
+      "missing_from_implemented_source": [],
+      "additional_implemented_source": []
+    },
+    "journeys": {
+      "manifest_count": 19,
+      "implemented_source_count": 19,
+      "missing_from_implemented_source": [],
+      "additional_implemented_source": []
+    },
+    "journey_events": {
+      "manifest_count": 28,
+      "implemented_source_count": 28,
+      "missing_from_implemented_source": [],
+      "additional_implemented_source": []
+    },
+    "tracekit_customer_order_read_model": {
+      "manifest_count": 32,
+      "implemented_source_count": 33,
+      "missing_from_implemented_source": [],
+      "additional_implemented_source": []
+    },
+    "journey_attribution_credits": {
+      "manifest_count": 26,
+      "implemented_source_count": 26,
+      "missing_from_implemented_source": [],
+      "additional_implemented_source": []
+    },
+    "affiliate_commissions": {
+      "manifest_count": 32,
+      "implemented_source_count": 32,
+      "missing_from_implemented_source": [],
+      "additional_implemented_source": []
+    },
+    "profit_daily_rollups": {
+      "manifest_count": 25,
+      "implemented_source_count": 25,
+      "missing_from_implemented_source": [],
+      "additional_implemented_source": []
+    }
+  }
+}
