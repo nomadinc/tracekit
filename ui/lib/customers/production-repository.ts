@@ -30,8 +30,14 @@ async function get(path:string,scope?:ProductionCustomerScope){
   let res:Response;try{res=await fetch(`${coreBase()}${internalPath}?${params.toString()}`,{method:"GET",cache:"no-store",headers:{accept:"application/json","x-tk-secret":secret}});}catch{throw new Error("customer_repository_core_fetch_failed");}if(!res.ok)throw coreFailure(res.status);return readJson(res);
 }
 const n = (value: unknown) => {
+  if (value === null || value === undefined || value === "") return 0;
   const parsed = Number(value);
   return Number.isFinite(parsed) ? parsed : 0;
+};
+const monetary = (value: unknown): number | null => {
+  if (value === null || value === undefined || value === "") return null;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : null;
 };
 const when = (value: unknown) => {
   const text = String(value || "").trim();
@@ -140,7 +146,7 @@ function orderRow(row: any) {
     id,
     number: String(row?.order_id || row?.platform_order_id || "Order"),
     date: when(row?.created_at),
-    amount: n(row?.amount),
+    amount: monetary(row?.amount),
     profit: null,
     profitStatus: "Estimated" as const,
     profitAvailable: false,
@@ -228,7 +234,7 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
     }));
     return {
       customer,
-      lifetimeRevenue: n(detail.summary?.lifetime_revenue),
+      lifetimeRevenue: monetary(detail.summary?.lifetime_revenue),
       customerSince: when(detail.summary?.first_seen_at),
       firstTouch: firstSource ? (firstCredit?.affiliate_id && !firstCredit?.source ? `Affiliate ${firstCredit.affiliate_id}${firstCredit.offer_id ? ` · Offer ${firstCredit.offer_id}` : ""}` : String(firstSource)) : "No retained attribution conclusion",
       lastPurchase: orders[0]?.date || "No linked purchase",
@@ -276,7 +282,7 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
         id: drawerId, kind: "order", title: order.number,
         question: "Which commercial record is linked to this customer?",
         summary: `${order.status} · ${order.date}`,
-        facts: [{ label: "Amount", value: String(order.amount) }, { label: "Profit", value: "Not asserted in Customer Workspace" }],
+        facts: [{ label: "Amount", value: order.amount === null ? "Unavailable" : String(order.amount) }, { label: "Profit", value: "Not asserted in Customer Workspace" }],
         evidence: ["Linked by the production Customer Explorer commerce relationship."],
         relationships: [{ type: "Customer", id: customerId, label: snapshot.customer.name }, { type: "Order", id: order.id, label: order.number }],
       };
