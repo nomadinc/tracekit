@@ -1,3 +1,5 @@
+Current order-view/session delta: see ORDER-VIEW-INTEGRATION.md and consolidated-staging-review.sql. All SQL remains unexecuted and activation is HOLD.
+
 Current manifest delta: see MANIFEST-INTEGRATION.md and manifest-binding.json. Base Profit is now implemented under the attached source contract; the prior outside-scope blocker below is superseded. Native activation remains HOLD.
 
 # Restricted reporting integration — independent review required

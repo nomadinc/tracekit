@@ -1,3 +1,4 @@
+import {restrictedIdentityBoundary,assertIdentityWritesAllowed} from "./staging-session-boundary";
 import { requirePersistedPlatformAccess } from "./platform-catalog-access";
 import { randomUUID } from "node:crypto";
 import { withAuth } from "@workos-inc/authkit-nextjs";
@@ -32,11 +33,13 @@ function configured() {
 }
 
 export async function synchronizeWorkOSUser(identity: WorkOSIdentityInput) {
+  assertIdentityWritesAllowed(process.env);
   const repository = new SupabaseIdentityTenancyRepository();
   return repository.synchronizeUser(identity);
 }
 
 export async function recordAuthenticationSuccess(identity: WorkOSIdentityInput) {
+  assertIdentityWritesAllowed(process.env);
   const repository = new SupabaseIdentityTenancyRepository();
   const user = await repository.synchronizeUser(identity);
   await repository.recordAuditEvent({ actorUserId: user.id, authenticatedIdentityId: identity.id, accountId: null, organizationId: null, action: "authentication.sign_in.succeeded", result: "success", correlationId: randomUUID(), metadata: { provider: "workos" } });
@@ -44,6 +47,7 @@ export async function recordAuthenticationSuccess(identity: WorkOSIdentityInput)
 }
 
 export async function resolveAuthenticatedPersistentIdentity() {
+  if (restrictedIdentityBoundary(process.env)) return null;
   if (!configured()) return null;
   let auth: Awaited<ReturnType<typeof withAuth>>;
   try {
@@ -64,6 +68,8 @@ export async function resolveAuthenticatedPersistentIdentity() {
 }
 
 export async function resolveApplicationSession(): Promise<ApplicationSessionResolution> {
+  // No privileged repository fallback while WS-021 read-only session enrollment is pending.
+  if (restrictedIdentityBoundary(process.env)) return { kind: "provider-unavailable" };
   const requestHeaders = await headers();
   const requestedDevelopmentIdentity = requestHeaders.get(
     DEVELOPMENT_REVIEW_HEADER,

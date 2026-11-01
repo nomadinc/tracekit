@@ -1,0 +1,17 @@
+{
+  "parent": "c921b3e98cd78a6db2f1cb1d0c9f4b808a209ccc",
+  "focused_tests": {
+    "pass": 59,
+    "fail": 0,
+    "skip": 0
+  },
+  "session_boundary_typescript": "PASS (focused standalone module only)",
+  "consolidated_SQL": "119 statements syntax parsed only; functions parsed",
+  "native_database_tests": "NOT RUN",
+  "grants_applied": false,
+  "issuer_credentials_assigned": false,
+  "read_only_page_session": "BLOCKED; privileged fallback explicitly denied",
+  "WS021_coordination": "Handoff prepared, acknowledgment pending",
+  "WS022": "Focused review pending",
+  "migration_preservation": 224
+}

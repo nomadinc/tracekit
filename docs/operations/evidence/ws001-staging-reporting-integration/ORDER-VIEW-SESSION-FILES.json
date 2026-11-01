@@ -1,0 +1,19 @@
+{
+  "parent": "c921b3e98cd78a6db2f1cb1d0c9f4b808a209ccc",
+  "files": {
+    "api/src/staging-reporting/order-view.test.ts": "660dccef4c127a7b8b357841743874ecc3531e1a4acf22d873761b9b3b78a9ec",
+    "api/staging-reporting-review/ORDER-VIEW-INTEGRATION.md": "77515a5ca689d748efc950af1c91b6d8988aca5c25d627b0eff1f806f68eb2c0",
+    "api/staging-reporting-review/README.md": "7dbb2186ed5af8236ca7ed32d3ef283c4c1bc2555ceac0de5b72327e7a5bbc12",
+    "api/staging-reporting-review/SOURCE-HASHES.json": "a5a92de474313902bc41aa8bba93e84ebefdd27635b16b61499213c48fc54b0a",
+    "api/staging-reporting-review/WS021-SESSION-BOOTSTRAP-HANDOFF.md": "07bf737f143748dbad3334957285e71633e8d8e0f0addb5e1aee076b8835d97e",
+    "api/staging-reporting-review/consolidated-staging-review.sql": "4b761e15bc267f94bbe3a0dda9bb6c351d64b5c644dc8df5d385cbc7902939be",
+    "api/staging-reporting-review/effective-integration-column-manifest.json": "2d3e2512422902ef0f540eb4e869d3deda0a49f92ccf4f976656f1b16bdb55c7",
+    "api/staging-reporting-review/order-view-dependency-contract.json": "2099b69564e19053215d7d429cbfc5c387c5ffe36e78bbff15c3cec668cc3a30",
+    "api/staging-reporting-review/order-view-read-proposal.sql": "f7d6a587c67981f909bf8d14da2ab7a1bdf4e82906405e230fce3d1f36471052",
+    "docs/operations/evidence/ws001-staging-reporting-integration/ORDER-VIEW-SESSION-RESULTS.json": "a749c29a8b2c9d829b61aa4964bae78a11e2334f7a846ac9b88f5212f1546cf2",
+    "docs/operations/evidence/ws001-staging-reporting-integration/order-view-session-tests.txt": "cea436f814dcc8ecc923cb3c91ec2f6db1673e6914282de1aedac58ea40db85b",
+    "ui/lib/identity/application-session.ts": "c4ffd9f55aac5115ceba3f78e3f5ef6077e34d9b36e7fedce8a3d6dd595d14ae",
+    "ui/lib/identity/staging-session-boundary.ts": "31506ecc94a2992aec4b3b1acdef9a6158b9c07dc0931314b6c068108efaf5d7",
+    "ui/tests/ws001-staging-session-boundary.test.ts": "7d895d0b21e64365336e41e40886ef6a7f2d1d6f04bfc02f976ca0c95d887f63"
+  }
+}

@@ -1,11 +1,17 @@
 {
   "api/staging-reporting-review/MANIFEST-INTEGRATION.md": "a28ce14073816075faa55a9040addd997acf8d94023a4b20fedb8cc84424d1e8",
-  "api/staging-reporting-review/README.md": "939f2bc013b6622afdcbdfede09be68d204fe514952851b713943acc787b3ad1",
+  "api/staging-reporting-review/ORDER-VIEW-INTEGRATION.md": "77515a5ca689d748efc950af1c91b6d8988aca5c25d627b0eff1f806f68eb2c0",
+  "api/staging-reporting-review/README.md": "7dbb2186ed5af8236ca7ed32d3ef283c4c1bc2555ceac0de5b72327e7a5bbc12",
+  "api/staging-reporting-review/WS021-SESSION-BOOTSTRAP-HANDOFF.md": "07bf737f143748dbad3334957285e71633e8d8e0f0addb5e1aee076b8835d97e",
   "api/staging-reporting-review/WS023-WS021-HANDOFF.md": "81e2b5286d0d47c65ba7926130ae63ee81831fcb69a1db82b394c2ab7743a015",
   "api/staging-reporting-review/actual-schema-comparison.json": "221102381b59c3126585139f611c7c4b3431743f7e2828ddca3f695f47a09d34",
+  "api/staging-reporting-review/consolidated-staging-review.sql": "4b761e15bc267f94bbe3a0dda9bb6c351d64b5c644dc8df5d385cbc7902939be",
   "api/staging-reporting-review/effective-column-manifest.json": "d34d7cb9d1cad87fcddc5fde9ed2e6cc74198a50fafa6cf578f86351a77367cc",
+  "api/staging-reporting-review/effective-integration-column-manifest.json": "2d3e2512422902ef0f540eb4e869d3deda0a49f92ccf4f976656f1b16bdb55c7",
   "api/staging-reporting-review/manifest-binding.json": "b799b15bbfb2700fc0ac7246d1b76c63a1300dcc4d3afd07ee36edb6a3b0e173",
   "api/staging-reporting-review/offline-tests.txt": "4d5cff20718da0a673f66ec78cc642fac659eb3eef8f381bb9d4785517e7906d",
+  "api/staging-reporting-review/order-view-dependency-contract.json": "2099b69564e19053215d7d429cbfc5c387c5ffe36e78bbff15c3cec668cc3a30",
+  "api/staging-reporting-review/order-view-read-proposal.sql": "f7d6a587c67981f909bf8d14da2ab7a1bdf4e82906405e230fce3d1f36471052",
   "api/staging-reporting-review/profit-read-proposal.sql": "21a37eec519d58f4e7f88878d39dceadbfa1e0759d91a560a3c835c180700677",
   "api/staging-reporting-review/roles-and-authority.sql": "e1a54b059bd6878cb6b09359c992fedfe9a5f3ec35a40bd04067706c3b435593",
   "api/staging-reporting-review/ws023-reporting-operation-manifest-v1.json": "41444fdb1d83e2a136f3c18779ffb908c1ec0c72bf3bc285186fe44af263a908"
