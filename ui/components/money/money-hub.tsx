@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Landmark, RefreshCcw, ShieldAlert } from "lucide-react";
+import { ArrowRight, Landmark, RefreshCcw, ShieldAlert, TrendingUp } from "lucide-react";
 import { AccessBoundary } from "@/components/identity/access-control";
 import { useIdentity } from "@/components/identity/identity-provider";
 
@@ -38,6 +38,14 @@ function MoneyHubContent() {
       </section>
 
       <section className="grid gap-4 lg:grid-cols-2">
+        <Destination
+          href="/money/profit"
+          icon={<TrendingUp className="h-5 w-5" />}
+          eyebrow="Operational reporting"
+          title="Profit Reporting"
+          description="Review currency-qualified operational revenue, costs, and Profit. Financial results remain unreconciled until required evidence is verified."
+          action="Open Profit Reporting"
+        />
         <Destination
           href="/dashboard/financial-reconciliation"
           icon={<RefreshCcw className="h-5 w-5" />}
