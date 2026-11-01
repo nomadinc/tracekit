@@ -261,7 +261,7 @@ function CustomerWorkspaceContent() {
           </div>
           <div className="mt-5 grid gap-4 border-t pt-4 sm:grid-cols-3 lg:grid-cols-6 dark:border-white/10">
             {[
-              ["Observed revenue", money(snapshot.lifetimeRevenue)],
+              ["Observed revenue", snapshot.lifetimeRevenue === null ? "Unavailable" : money(snapshot.lifetimeRevenue)],
               ["First observed", snapshot.customerSince],
               ["Attribution evidence", snapshot.firstTouch],
               ["Last linked purchase", snapshot.lastPurchase],
@@ -407,7 +407,7 @@ function CustomerWorkspaceContent() {
                   </span>
                 </span>
                 <span className="text-right text-xs">
-                  <strong>{money(o.amount)}</strong>
+                  <strong>{o.amount === null ? "Unavailable" : money(o.amount)}</strong>
                   <span className="block">
                     {o.profit === null ? "Profit not available" : money(o.profit)}
                   </span>
