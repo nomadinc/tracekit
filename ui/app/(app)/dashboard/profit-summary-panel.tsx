@@ -6,6 +6,9 @@ import { useSearchParams } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { KpiCard } from "@/components/ui/kpi-card";
 import { sameOriginGetJson } from "@/lib/api";
+import { useIdentity } from "@/components/identity/identity-provider";
+import { profitReportContext } from "@/lib/identity/profit-report-context";
+import { ProfitRequestController } from "@/lib/identity/profit-request-controller";
 import type { ProfitSummaryResponse } from "@/lib/profit-types";
 
 function isoDateLocal(d: Date) {
@@ -84,9 +87,27 @@ function useDashboardDateRange() {
 
 export function ProfitSummaryPanel() {
   const range = useDashboardDateRange();
-  const [summary, setSummary] = React.useState<ProfitSummaryResponse | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
-  const [loading, setLoading] = React.useState(false);
+  const { session } = useIdentity();
+  const context = profitReportContext(session);
+  const contextKey = JSON.stringify({
+    identity: context.key,
+    from: range.from,
+    to: range.to,
+  });
+  const authorized = context.authorized;
+  const controllerRef = React.useRef<ProfitRequestController<ProfitSummaryResponse> | null>(null);
+
+  if (!controllerRef.current) {
+    controllerRef.current = new ProfitRequestController<ProfitSummaryResponse>();
+  }
+
+  const controller = controllerRef.current;
+  const [, forceUpdate] = React.useReducer((value: number) => value + 1, 0);
+
+  const state = controller.snapshot(contextKey, authorized);
+  const summary = state.data;
+  const error = state.error;
+  const loading = state.loading;
 
   const reportCurrency = summary?.currency || undefined;
   const reportHasData = summary?.data_available === true;
@@ -112,43 +133,42 @@ export function ProfitSummaryPanel() {
       : "Unavailable";
 
   React.useEffect(() => {
-    let cancelled = false;
+    return controller.subscribe(forceUpdate);
+  }, [controller]);
 
-    async function run() {
-      const params = new URLSearchParams({
-        from: range.from,
-        to: range.to,
-      });
-
-      try {
-        setLoading(true);
-        setError(null);
-
-        const json = await sameOriginGetJson<ProfitSummaryResponse>(
-          `/api/profit/summary?${params.toString()}`,
-        );
-
-        if (json?.ok === false) {
-          throw new Error(json.message || json.error || "Profit summary unavailable");
-        }
-
-        if (!cancelled) setSummary(json);
-      } catch (e: any) {
-        if (!cancelled) {
-          setSummary(null);
-          setError(e?.message || "Failed to load profit summary");
-        }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
+  React.useEffect(() => {
+    if (!authorized) {
+      controller.invalidate();
+      return;
     }
 
-    run();
+    const params = new URLSearchParams({
+      from: range.from,
+      to: range.to,
+    });
 
-    return () => {
-      cancelled = true;
-    };
-  }, [range.from, range.to]);
+    const operation = controller.start(
+      contextKey,
+      authorized,
+      (signal) => sameOriginGetJson<ProfitSummaryResponse>(
+        `/api/profit/summary?${params.toString()}`,
+        { signal }
+      ).then((json) => {
+        if (json?.ok === false) {
+          throw new Error(
+            json.message || json.error || "Profit summary unavailable"
+          );
+        }
+        return json;
+      })
+    );
+
+    return () => operation.cancel();
+  }, [controller, contextKey, authorized, range.from, range.to]);
+
+  React.useEffect(() => {
+    return () => controller.dispose();
+  }, [controller]);
 
   const rows = [
     { label: "Refunds", value: summary?.refunds, treatment: "Deduction" },
@@ -182,7 +202,13 @@ export function ProfitSummaryPanel() {
         coverage, accounting definitions, or reporting periods.
       </div>
 
-      {error ? (
+      {!authorized ? (
+        <p role="status" className="mb-4 text-sm text-slate-500">
+          Detailed Profit Reporting is unavailable for the current access context.
+        </p>
+      ) : null}
+
+      {authorized && error ? (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
           <span className="font-semibold">Profit summary unavailable.</span>{" "}
           <span className="font-mono text-xs opacity-80">{error}</span>
