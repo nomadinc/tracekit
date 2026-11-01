@@ -5,7 +5,7 @@ import { useSearchParams } from "next/navigation";
 
 import { Card } from "@/components/ui/card";
 import { KpiCard } from "@/components/ui/kpi-card";
-import { apiGetJson } from "@/lib/api";
+import { sameOriginGetJson } from "@/lib/api";
 import type { ProfitSummaryResponse } from "@/lib/profit-types";
 
 function isoDateLocal(d: Date) {
@@ -23,38 +23,41 @@ function parseYmdLocal(v: string | null): Date | null {
   return Number.isFinite(dt.getTime()) ? dt : null;
 }
 
+function availableNumber(value: unknown): number | null {
+  if (value === null || value === undefined || value === "") return null;
+  if (typeof value !== "number" && typeof value !== "string") return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+
 function formatMoney(value: unknown, currency = "USD") {
-  const n = Number(value ?? 0);
+  const n = availableNumber(value);
+  if (n === null) return "Unavailable";
   return n.toLocaleString("en-US", { style: "currency", currency });
 }
 
 function formatSignedMoney(value: unknown, currency = "USD") {
-  const n = Number(value ?? 0);
+  const n = availableNumber(value);
+  if (n === null) return "Unavailable";
   const formatted = Math.abs(n).toLocaleString("en-US", {
     style: "currency",
     currency,
   });
-
-  if (n < 0) return `-${formatted}`;
-  if (n > 0) return `+${formatted}`;
-  return formatted;
+  return n < 0 ? `-${formatted}` : n > 0 ? `+${formatted}` : formatted;
 }
 
 function formatPositiveMoney(value: unknown, currency = "USD") {
-  return Math.abs(Number(value ?? 0)).toLocaleString("en-US", {
+  const n = availableNumber(value);
+  if (n === null) return "Unavailable";
+  return Math.abs(n).toLocaleString("en-US", {
     style: "currency",
     currency,
   });
 }
 
 function formatProfitMargin(value: unknown) {
-  const n = Number(value);
-  return Number.isFinite(n) ? `${n.toFixed(1)}%` : "—";
-}
-
-function num(value: unknown) {
-  const n = Number(value ?? 0);
-  return Number.isFinite(n) ? n : 0;
+  const n = availableNumber(value);
+  return n === null ? "Unavailable" : `${n.toFixed(1)}%`;
 }
 
 function useDashboardDateRange() {
@@ -85,12 +88,34 @@ export function ProfitSummaryPanel() {
   const [error, setError] = React.useState<string | null>(null);
   const [loading, setLoading] = React.useState(false);
 
+  const reportCurrency = summary?.currency || undefined;
+  const reportHasData = summary?.data_available === true;
+
+  const displayMoney = (value: unknown) =>
+    reportHasData && reportCurrency
+      ? formatMoney(value, reportCurrency)
+      : "Unavailable";
+
+  const displayPositiveMoney = (value: unknown) =>
+    reportHasData && reportCurrency
+      ? formatPositiveMoney(value, reportCurrency)
+      : "Unavailable";
+
+  const displaySignedMoney = (value: unknown) =>
+    reportHasData && reportCurrency
+      ? formatSignedMoney(value, reportCurrency)
+      : "Unavailable";
+
+  const displayMargin = (value: unknown) =>
+    reportHasData && reportCurrency
+      ? formatProfitMargin(value)
+      : "Unavailable";
+
   React.useEffect(() => {
     let cancelled = false;
 
     async function run() {
       const params = new URLSearchParams({
-        workspace_id: "default",
         from: range.from,
         to: range.to,
       });
@@ -99,8 +124,8 @@ export function ProfitSummaryPanel() {
         setLoading(true);
         setError(null);
 
-        const json = await apiGetJson<ProfitSummaryResponse>(
-          `/v1/profit/summary?${params.toString()}`,
+        const json = await sameOriginGetJson<ProfitSummaryResponse>(
+          `/api/profit/summary?${params.toString()}`,
         );
 
         if (json?.ok === false) {
@@ -147,6 +172,12 @@ export function ProfitSummaryPanel() {
         </span>
       }
     >
+      <div className="mb-4 text-xs text-slate-500">
+        Financial status: Operational — Unreconciled.
+        Calculated totals do not establish complete cost coverage
+        or period reconciliation.
+      </div>
+
       {error ? (
         <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-200">
           <span className="font-semibold">Profit summary unavailable.</span>{" "}
@@ -157,19 +188,19 @@ export function ProfitSummaryPanel() {
       <div className="grid gap-4 grid-cols-1 md:grid-cols-2 xl:grid-cols-4">
         <KpiCard
           label="Net Revenue"
-          value={summary ? formatMoney(summary.net_revenue) : "—"}
+          value={displayMoney(summary?.net_revenue)}
         />
         <KpiCard
           label="Operating Costs"
-          value={summary ? formatPositiveMoney(summary.total_costs) : "—"}
+          value={displayPositiveMoney(summary?.total_costs)}
         />
         <KpiCard
           label="Net Profit"
-          value={summary ? formatMoney(summary.net_profit) : "—"}
+          value={displayMoney(summary?.net_profit)}
         />
         <KpiCard
           label="Profit Margin"
-          value={summary ? formatProfitMargin(summary.profit_margin_pct) : "—"}
+          value={displayMargin(summary?.profit_margin_pct)}
         />
       </div>
 
@@ -187,7 +218,7 @@ export function ProfitSummaryPanel() {
               <td className="px-4 py-2 font-medium">Gross Revenue</td>
               <td className="px-4 py-2 text-slate-500">Revenue</td>
               <td className="px-4 py-2 text-right font-mono">
-                {summary ? formatMoney(summary.gross_revenue) : "—"}
+                {displayMoney(summary?.gross_revenue)}
               </td>
             </tr>
             {rows.map((row) => (
@@ -195,7 +226,7 @@ export function ProfitSummaryPanel() {
                 <td className="px-4 py-2 font-medium">{row.label}</td>
                 <td className="px-4 py-2 text-slate-500">{row.treatment}</td>
                 <td className="px-4 py-2 text-right font-mono">
-                  {summary ? formatSignedMoney(num(row.value)) : "—"}
+                  {displaySignedMoney(row.value)}
                 </td>
               </tr>
             ))}
@@ -203,7 +234,7 @@ export function ProfitSummaryPanel() {
               <td className="px-4 py-2 font-semibold">Net Profit</td>
               <td className="px-4 py-2 text-slate-500">Result</td>
               <td className="px-4 py-2 text-right font-mono font-semibold">
-                {summary ? formatMoney(summary.net_profit) : "—"}
+                {displayMoney(summary?.net_profit)}
               </td>
             </tr>
           </tbody>

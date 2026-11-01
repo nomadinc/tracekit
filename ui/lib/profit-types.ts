@@ -34,6 +34,10 @@ export type ProfitSummaryResponse = {
   ok?: boolean;
   error?: string;
   message?: string;
+  currency?: string | null;
+  currencies?: string[];
+  data_available?: boolean;
+  financial_status?: "operational_unreconciled";
   gross_revenue?: number | null;
   refunds?: number | null;
   chargebacks?: number | null;

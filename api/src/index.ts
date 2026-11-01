@@ -429,6 +429,7 @@ import {
   summarizePaypalDisputeNormalizationDiagnostics,
   type NormalizedChargebackEvent,
 } from "./chargebacks";
+import { qualifyProfitCurrency } from "./profit-currency-qualification";
 import {
   WOWBOOST_ORDER_REFERENCE_DEBUG_EXPECTED,
   WOWBOOST_PLATFORM_VALUES,
@@ -18627,6 +18628,18 @@ async function router(req: Request, env: Env): Promise<Response> {
         event_source: url.searchParams.get("event_source"),
         currency: url.searchParams.get("currency"),
       });
+      const qualification = qualifyProfitCurrency(rows);
+
+      if (!qualification.valid) {
+        return json({
+          ok: false,
+          error: "profit_currency_qualification_required",
+          message:
+            "Profit contains multiple or unidentified currencies. Select a single verified currency.",
+          currencies: qualification.currencies,
+        }, 422);
+      }
+
       const summary = summarizeProfitRollups(rows);
       const includeExecutivePerformance =
         url.searchParams.get("include_executive_performance") === "1" ||
@@ -18638,6 +18651,10 @@ async function router(req: Request, env: Env): Promise<Response> {
       return json({
         ok: true,
         ...summary,
+        currency: qualification.currency,
+        currencies: qualification.currencies,
+        data_available: qualification.data_available,
+        financial_status: "operational_unreconciled",
         ...(executivePerformance ? { executive_performance: executivePerformance } : {}),
       });
     } catch (e: any) {
