@@ -3,7 +3,7 @@ import { OPERATIONS,REPORTING_MANIFEST } from './manifest.ts';
 import {compute,type Operation} from './computed.ts';
 import {financial} from './repository.ts';
 import {projectReportingRead} from './projection.ts';
-type Env={REPORTING_SUPABASE_URL:string;REPORTING_PUBLISHABLE_KEY:string;REPORTING_ISSUER:string;REPORTING_PUBLIC_JWK:string;REPORTING_AUTHORITY?:{fetch:typeof fetch}};
+type Env={REPORTING_PROFIT_SNAPSHOT_CONTRACT?:string;REPORTING_SUPABASE_URL:string;REPORTING_PUBLISHABLE_KEY:string;REPORTING_ISSUER:string;REPORTING_PUBLIC_JWK:string;REPORTING_AUTHORITY?:{fetch:typeof fetch}};
 export default {async fetch(request:Request,env:Env):Promise<Response> {
  const reply=(status:number,body:unknown)=>Response.json(body,{status,headers:{'cache-control':'no-store','x-content-type-options':'nosniff'}});
  if(request.method!=='GET')return reply(405,{error:'reporting_unavailable'});
@@ -20,7 +20,7 @@ export default {async fetch(request:Request,env:Env):Promise<Response> {
   const token=h.slice(7),operation=m[1] as Operation,permissions=OPERATIONS[operation],c=await client.authorize(token,{organization:url.searchParams.get('organization')!,workspace:url.searchParams.get('workspace')!},permissions);
   if(url.searchParams.has('has_commission')&&!financial(c))throw new ReportingDenied();if(url.searchParams.has('has_purchase')&&!c.permissions.includes('orders.view'))throw new ReportingDenied();
   const revalidate=()=>client.revalidate(token,c,permissions);
-  const result=await compute(operation,url,c,token,env.REPORTING_PUBLISHABLE_KEY,revalidate);
+  const result=await compute(operation,url,c,token,env.REPORTING_PUBLISHABLE_KEY,revalidate,fetch,env.REPORTING_PROFIT_SNAPSHOT_CONTRACT==='single-statement-exact-count-v1');
   await revalidate();return reply(200,projectReportingRead(result,{effectivePermissions:c.permissions}));
  }catch(e){return reply(e instanceof ReportingDenied?e.status:(e as any)?.status===404?404:503,{error:(e as any)?.publicCode||'reporting_unavailable'});}
 }};

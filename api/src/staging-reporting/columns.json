@@ -467,6 +467,7 @@
         "event_count"
       ],
       "columns": [
+        "id",
         "workspace_id",
         "day",
         "platform",
@@ -494,7 +495,8 @@
         "event_count"
       ],
       "workspaceColumn": "workspace_id",
-      "organizationColumn": null
+      "organizationColumn": null,
+      "identity_source": "002_profit_engine_rollups.sql and installed primary key"
     }
   }
 }

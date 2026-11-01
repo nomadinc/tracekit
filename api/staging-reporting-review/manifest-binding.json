@@ -95,5 +95,12 @@
       "missing_from_implemented_source": [],
       "additional_implemented_source": []
     }
+  },
+  "profit_identity_addition": {
+    "column": "id",
+    "type": "uuid NOT NULL",
+    "constraint": "profit_daily_rollups_pkey PRIMARY KEY(id)",
+    "original_financial_projection": "unchanged 25 fields",
+    "verification": "migration 002 + current staging catalog"
   }
 }

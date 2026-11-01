@@ -1,0 +1,28 @@
+{
+  "parent": "734223e28c4633768283744af2873804d07dc43d",
+  "affected_source": "c921b3e98cd78a6db2f1cb1d0c9f4b808a209ccc",
+  "original_security_assertion": {
+    "expected": 1050,
+    "accepted_wrong_total": 1001,
+    "verdict": "FAIL_REPRODUCED"
+  },
+  "corrected_complete_total": 1050,
+  "corrected_duplicate_result": "DENIED_503",
+  "focused_tests": {
+    "pass": 69,
+    "fail": 0,
+    "skip": 0
+  },
+  "unchanged_Core_regressions": {
+    "pass": 27,
+    "fail": 0,
+    "skip": 0
+  },
+  "typescript": "Only two unchanged health.ts baseline diagnostics; no full build PASS",
+  "native_concurrency": "NOT RUN; snapshot gate DISABLED by default",
+  "staging_catalog": "read-only SELECT: order view absent; rollup id UUID NOT NULL PRIMARY KEY confirmed",
+  "SQL_writes": false,
+  "grants": false,
+  "credentials_activated": false,
+  "WS022": "review pending"
+}

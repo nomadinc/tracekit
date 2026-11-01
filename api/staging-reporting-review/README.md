@@ -1,3 +1,5 @@
+Current focused fix: PROFIT-COMPLETENESS-CORRECTION.md. Profit uses one exact-count response and remains disabled until deployed snapshot verification. Staging order view is currently absent.
+
 Current order-view/session delta: see ORDER-VIEW-INTEGRATION.md and consolidated-staging-review.sql. All SQL remains unexecuted and activation is HOLD.
 
 Current manifest delta: see MANIFEST-INTEGRATION.md and manifest-binding.json. Base Profit is now implemented under the attached source contract; the prior outside-scope blocker below is superseded. Native activation remains HOLD.

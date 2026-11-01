@@ -5,10 +5,10 @@ import {guardedReportingFetch,financial} from './repository.ts';
 import {ReportingDenied,type Claims} from './client.ts';
 import {OPERATIONS} from './manifest.ts';
 export type Operation=keyof typeof OPERATIONS;
-export async function compute(operation:Operation,url:URL,c:Claims,token:string,publishableKey:string,revalidate:()=>Promise<void>,transport:typeof fetch=fetch){
+export async function compute(operation:Operation,url:URL,c:Claims,token:string,publishableKey:string,revalidate:()=>Promise<void>,transport:typeof fetch=fetch,snapshotVerified=false){
  const db=createClient('https://joahiwgidfbzwzyslrbq.supabase.co',publishableKey,{auth:{persistSession:false,autoRefreshToken:false,detectSessionInUrl:false},global:{fetch:guardedReportingFetch(c,publishableKey,token,transport,revalidate)}});
  const workspace_id=c.workspace_id,person_id=url.searchParams.get('person_id')||'',journey_id=url.searchParams.get('journey_id')||'';
- if(operation==='profit_summary'){if(!financial(c))throw new ReportingDenied();return computeBaseProfit(db,url,c,revalidate);}
+ if(operation==='profit_summary'){if(!financial(c))throw new ReportingDenied();return computeBaseProfit(db,url,c,revalidate,snapshotVerified);}
  let data:any;
  if(operation==='customer_list')data=await listCustomers(db,normalizeCustomerListParams({...Object.fromEntries(url.searchParams),workspace_id}));
  else if(operation==='customer_orders')data=await listCustomerOrders(db,{workspace_id,person_id,order_id:url.searchParams.get('order_id')||undefined,offset:Number(url.searchParams.get('offset')||0),limit:Number(url.searchParams.get('limit')||50)});

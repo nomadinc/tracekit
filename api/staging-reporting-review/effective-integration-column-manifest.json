@@ -428,6 +428,7 @@
       "evidence_id"
     ],
     "profit_daily_rollups": [
+      "id",
       "workspace_id",
       "day",
       "platform",

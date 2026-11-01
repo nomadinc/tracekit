@@ -1,0 +1,27 @@
+{
+  "parent": "734223e28c4633768283744af2873804d07dc43d",
+  "files": {
+    "api/src/staging-reporting/columns.json": "1f0ddc3ba44bdb39a6712a6efba4a770821017a64a0e16d80e5d9a449eb9c5b4",
+    "api/src/staging-reporting/computed.ts": "d7c69957230adb842ce8938f9ec8d5b706372cbc9fcc1b1524a603bc5eb1b3a5",
+    "api/src/staging-reporting/manifest.ts": "e3c6ae0556f78f0d4f634245e02e816964346bd5f048173245bac57b4ff78504",
+    "api/src/staging-reporting/profit-pagination.test.ts": "97c0b6f8a3ed92309c909d7a3b3556b2aec7be70ee8849107a89abae705c22d4",
+    "api/src/staging-reporting/profit.test.ts": "f34951d749b92c91b0062e67b4250d2c8de3bbf13dfb719317c593046b2e4106",
+    "api/src/staging-reporting/profit.ts": "3d8884446331805dd353d001ddaaaa66cb579fe8f4ade73963a3bf7c27671414",
+    "api/src/staging-reporting/repository.ts": "7902b7f6fcad4b599b7e71f50d53d99982a13f5a9b100c9ee75a31e3e1f5a753",
+    "api/src/staging-reporting/worker.ts": "b30c1a740c71e550e8afd768dd007eca0e99ea6802c5d46ebe1a0080a04a2fb0",
+    "api/staging-reporting-review/PROFIT-COMPLETENESS-CORRECTION.md": "762b8a9c76525d5bf1233ca565a180b5f98fa005eceea5ecf2e141f2064d518a",
+    "api/staging-reporting-review/README.md": "68c614655a1abbd67840cdf24d7eb24b297c8e318e13eb299e44bd9c0f58b9ca",
+    "api/staging-reporting-review/SOURCE-HASHES.json": "1f6f6c108cf0ab85cb938a2b7e550bdd496492e37da0640af03e0d6921de2a3b",
+    "api/staging-reporting-review/consolidated-staging-review.sql": "3a03fadd5b1b060b03396ba28bf4fc9779038d292c756a63bb74aad3fc30d0ed",
+    "api/staging-reporting-review/effective-integration-column-manifest.json": "8347c1da811a3df1eaabcb6433a34a2caf2df834fb3134d1c7ef6c7c527bfb27",
+    "api/staging-reporting-review/installed-order-profit-catalog-result.json": "18cf4975ee6c064c5949d06b78151b8ce063bf130cb8fd8c37e8ac320ca62ad9",
+    "api/staging-reporting-review/manifest-binding.json": "406c74796d3299d012288fbd0a7443e799c3d7c967d2c4165a472b634e9f9488",
+    "api/staging-reporting-review/order-view-dependency-contract.json": "203aa384248327250b59cce0e5e0e0e2418e30dccf611881b8283f78aaa24aaa",
+    "api/staging-reporting-review/profit-read-proposal.sql": "a7539ebf334945dc67d0711a58ca735f5aad80713f01ebd2409ee41cb9a21a33",
+    "docs/operations/evidence/ws001-staging-reporting-integration/PAGINATION-RESULTS.json": "8d4d3befa7f6279c992284f93f98fde5a7316767dbf96d7fc8dd3e14549abc63",
+    "docs/operations/evidence/ws001-staging-reporting-integration/pagination-core-regressions.txt": "bae0b8750213966c83af7489b03d22c6d9cae3274becfb6b90e2b9045e1ed804",
+    "docs/operations/evidence/ws001-staging-reporting-integration/pagination-original-reproduction.txt": "3a495341a2322150c3dbb9b3b4aec9d735e1ff810034f350626dbba1b1f83dec",
+    "docs/operations/evidence/ws001-staging-reporting-integration/pagination-tests.txt": "8ab7c1487813ff4007e611377f53193fa885e9d73d37ba179ff3ef80ee87d8c6",
+    "docs/operations/evidence/ws001-staging-reporting-integration/pagination-typescript.txt": "b6c2960f2a7fdd0a6aa1afa7196bea1e790947518f76ca74d5de013687e31771"
+  }
+}

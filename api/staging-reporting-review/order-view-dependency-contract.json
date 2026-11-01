@@ -319,5 +319,6 @@
         "updated_at"
       ]
     }
-  }
+  },
+  "current_installed_view_status": "ABSENT: fresh pg_class query across all schemas returned null; source semantics only, native grant proposal BLOCKED"
 }

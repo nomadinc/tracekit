@@ -1,0 +1,24 @@
+(node:13) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./")); register("../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+ORIGINAL SECURITY ASSERTION FAIL: expected 1050, accepted 1001 (duplicate boundary)
+(node:13) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+✔ ORIGINAL c921b3e reproduction: repeated boundary yields accepted wrong totals (41.398124ms)
+✔ 1201 equal-day rows aggregate once with verified UUID ordering (33.662231ms)
+✔ repeated boundary UUID rejects instead of returning totals (15.535653ms)
+✔ missing, malformed and out-of-order UUID keys reject (3.872897ms)
+✔ server cap never starts another page; count proves result incomplete (6.26359ms)
+✔ missing or substituted count/range evidence rejects (3.966999ms)
+✔ concurrent insert/update/delete never compose snapshots across requests (61.382647ms)
+✔ unverified snapshot backend remains disabled before fetch (0.565793ms)
+✔ UNKNOWN network result never retries or reports totals (0.847037ms)
+(node:13) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 493.120101

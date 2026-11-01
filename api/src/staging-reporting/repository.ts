@@ -10,6 +10,8 @@ export function guardedReportingFetch(c:Readonly<Claims>,publishableKey:string,t
   if(table==='profit_daily_rollups'&&!financial(c))throw new ReportingDenied();
   if(table==='affiliate_commissions'&&!financial(c))return Response.json([]);
   if(table==='tracekit_customer_order_read_model'&&!c.permissions.includes('orders.view'))return Response.json([]);
+  const profit=table==='profit_daily_rollups';
+  if(profit&&(request.headers.get('prefer')!=='count=exact'||u.searchParams.get('order')!=='id.asc'||u.searchParams.get('offset')!=='0'||u.searchParams.get('limit')!=='5000'))throw new ReportingDenied();
   const select=u.searchParams.get('select');if(!select)throw new ReportingDenied();
   const columns=select.split(',').filter(Boolean);
   if(columns.some(column=>!/^([a-z_]+:)?[a-z_]+$/.test(column)||!spec.columns.includes(column.split(':').at(-1))))throw new ReportingDenied();
@@ -22,10 +24,11 @@ export function guardedReportingFetch(c:Readonly<Claims>,publishableKey:string,t
   }
   u.searchParams.set('workspace_id',`eq.${c.workspace_id}`);if(spec.organizationColumn)u.searchParams.set('organization_id',`eq.${c.organization_id}`);
   await revalidate();let response:Response;
-  try{response=await transport(u,{method:'GET',cache:'no-store',redirect:'error',headers:{apikey:publishableKey,authorization:`Bearer ${token}`,accept:'application/json','accept-profile':'public',...(request.headers.get('range')?{range:request.headers.get('range')!}:{})}});}catch{throw new ReportingDenied(503)}
+  try{response=await transport(u,{method:'GET',cache:'no-store',redirect:'error',headers:{apikey:publishableKey,authorization:`Bearer ${token}`,accept:'application/json','accept-profile':'public',...(profit?{prefer:'count=exact'}:{}),...(request.headers.get('range')?{range:request.headers.get('range')!}:{})}});}catch{throw new ReportingDenied(503)}
   if(response.headers.get('x-tracekit-db-login')!=='authenticator'||response.headers.get('x-tracekit-db-session-authorization')!=='authenticator'||response.headers.get('x-tracekit-db-role')!==c.role)throw new ReportingDenied(503);
   if(!response.ok)throw new ReportingDenied(response.status===401||response.status===403?403:503);
   const body=await response.json();if(!Array.isArray(body)||body.length>5000)throw new ReportingDenied(503);
+  if(profit){if(response.headers.get('preference-applied')!=='count=exact')throw new ReportingDenied(503);const range=response.headers.get('content-range'),expected=body.length?`0-${body.length-1}/${body.length}`:'*/0';if(range!==expected)throw new ReportingDenied(503);}
   for(const row of body)if(row.workspace_id!==c.workspace_id||(spec.organizationColumn&&row.organization_id!==c.organization_id))throw new ReportingDenied();
   await revalidate();
   // Only selected keys survive even if an upstream view unexpectedly broadens.
