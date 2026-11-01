@@ -83,11 +83,12 @@ function mapEvent(row: any, identity: any, credits: any[] = [], orders: any[] = 
   const eventType = String(row?.event_type || row?.activity_type || "").toLowerCase();
   const matchingCredits = credits.filter((credit: any) => String(credit?.touchpoint_event_id || "") === eventId || String(credit?.conversion_event_id || "") === eventId);
   const attributedCredit = matchingCredits.find((credit: any) => credit?.status === "attributed");
-  const relatedOrder = eventType === "purchase" ? orders.find((order: any) => {
-    const orderTime = Date.parse(String(order?.created_at || ""));
-    const eventTime = Date.parse(String(row?.event_time || row?.occurred_at || ""));
-    return Number.isFinite(orderTime) && Number.isFinite(eventTime) && Math.abs(orderTime - eventTime) <= 5000;
-  }) : null;
+  // Timestamp proximity is not deterministic order identity.
+  const explicitOrderId = String(row?.related_order_id || "").trim();
+  const relatedOrder = explicitOrderId ? orders.find((order: any) =>
+    [order?.platform_order_id, order?.order_id, order?.canonical_order_id]
+      .some((value) => value != null && String(value) === explicitOrderId)
+  ) : null;
   const eventAmount = n(row?.amount);
   const sourceLabel = String(row?.source_platform || tech?.source_platform || "TraceKit");
   const affiliate = row?.affiliate_id || attributedCredit?.affiliate_id;
@@ -189,7 +190,35 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
     const orders = rawOrders.map(orderRow);
     const acquisition = detail.customer_360?.acquisition || {};
     const attribution = Array.isArray(journeyDetail?.attribution) ? journeyDetail.attribution : [];
-    const story = timeline.length ? timeline.map((row: any) => mapEvent(row, journeyDetail?.identity_context, attribution, rawOrders)) : activity.map((row: any) => mapEvent(row, journeyDetail?.identity_context, attribution, rawOrders));
+    const canonicalStory = timeline.length ? timeline.map((row: any) => mapEvent(row, journeyDetail?.identity_context, attribution, rawOrders)) : activity.map((row: any) => mapEvent(row, journeyDetail?.identity_context, attribution, rawOrders));
+    const commerceOnlyStory: CustomerJourneyEvent[] = !selectedJourney ? rawOrders
+      .filter((order: any) => order?.order_id || order?.platform_order_id)
+      .map((order: any) => {
+        const orderId = String(order.platform_order_id || order.order_id);
+        const orderNumber = String(order.order_id || order.platform_order_id);
+        const source = String(order.platform || order.source_platform || "Commerce");
+        return {
+          id: `commerce-order:${orderId}`,
+          name: `Recorded order ${orderNumber}`,
+          timestamp: when(order.created_at || order.order_ts),
+          domain: source,
+          role: "commerce_order_evidence",
+          status: "Observed",
+          confidence: "Order evidence only - canonical Journey unresolved",
+          trackingHealth: "Unknown",
+          trackingStatus: "Observed",
+          originalUrl: "", referrer: "", destinationUrl: "",
+          queryParameters: {}, identifiers: [], redirects: [],
+          diagnostics: [],
+          relationships: [{ type: "Order", id: orderId, label: orderNumber }],
+          explanation: {
+            conclusion: "A source order is linked to this customer; no canonical Journey relationship is asserted.",
+            reason: "Retained Customer/Order relationship, not inferred attribution.",
+            evidence: [`Order ID: ${orderNumber}`, `Source: ${source}`],
+          },
+        } as CustomerJourneyEvent;
+      }) : [];
+    const story = [...canonicalStory, ...commerceOnlyStory];
     const firstCredit = attribution.find((credit: any) => credit?.status === "attributed" && credit?.model === "first_touch") || attribution.find((credit: any) => credit?.status === "attributed");
     const firstSource = acquisition?.first_attributed_source?.source || acquisition?.first_attributed_source?.affiliate_id || firstCredit?.source || firstCredit?.affiliate_id;
     const attributedOffer = firstCredit?.offer_id ? String(firstCredit.offer_id) : "";
@@ -210,7 +239,7 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
       privacySignals: [],
       trackingExplanation: detail.customer_360?.evidence_limits?.length
         ? String(detail.customer_360.evidence_limits.join(" "))
-        : story.length ? "Production Journey evidence is available. Inspect an event to review retained evidence." : "No canonical Journey events are available for this customer.",
+        : canonicalStory.length ? "Production Journey evidence is available. Inspect an event to review retained evidence." : commerceOnlyStory.length ? "Order evidence is available, but no canonical Journey events or verified acquisition relationship were returned." : "No canonical Journey events are available for this customer.",
     };
   }
   async loadJourney(scope: ProductionCustomerScope, customerId: string) {
