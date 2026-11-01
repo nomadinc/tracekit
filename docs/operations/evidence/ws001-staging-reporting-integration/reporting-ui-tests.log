@@ -1,0 +1,85 @@
+(node:12) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("../../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./")); register("../../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ timestamp proximity cannot establish order identity (1.125478ms)
+✔ missing canonical Journey retains order-only evidence (0.148154ms)
+(node:12) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:13) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("../../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./")); register("../../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ authorized financial values remain available (4.410773ms)
+✔ restricted financial values are removed before serialization (0.730963ms)
+✔ authorized genuine zero remains zero (0.297769ms)
+✔ restricted genuine zero is still redacted (0.308826ms)
+(node:13) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("../../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./")); register("../../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ journey listing uses existing Customer Explorer (1.427653ms)
+✔ TKID deep links remain present and fail closed without deterministic resolution (0.19938ms)
+✔ no fabricated journey finances or default workspace identity (0.202215ms)
+(node:14) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:20) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("../../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./")); register("../../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ authorized $87.29 remains available (9.610397ms)
+✔ redacted monetary fields remain unavailable (0.858345ms)
+✔ genuine authorized zero remains zero (0.54329ms)
+(node:20) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("../../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./")); register("../../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ Money hub links to dedicated Profit Reporting (1.35233ms)
+✔ Profit page mounts the repaired summary component (0.2322ms)
+✔ Profit API requires detailed financial permissions (0.165851ms)
+✔ Profit report preserves unreconciled qualification (0.287894ms)
+(node:21) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("../../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./")); register("../../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ finance role is authorized for detailed Profit (1.148272ms)
+✔ client-read-only cannot access detailed Profit (0.196176ms)
+✔ organization switch changes Profit context key (0.323498ms)
+✔ business-context switch changes Profit context key (2.256909ms)
+✔ permission revocation changes key and denies Profit (0.2714ms)
+✔ foreign organization is denied (0.177878ms)
+✔ authentication loss denies Profit and changes context (0.249156ms)
+(node:27) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:28) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("../../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./")); register("../../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ unauthenticated Profit requests are denied before Core (0.912196ms)
+✔ client-read-only cannot access detailed Profit (0.497551ms)
+✔ authorized Profit request uses authenticated organization (3.16206ms)
+✔ foreign workspace is denied before Core (0.264519ms)
+✔ conflicting duplicate workspace hints are denied (0.22561ms)
+✔ Core transport failure remains unavailable (0.434996ms)
+(node:28) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:103) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("../../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./")); register("../../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ organization A to B hides A immediately with unchanged dates (1.041442ms)
+✔ organization switch aborts a pending request (0.23174ms)
+✔ late response from A cannot overwrite B (0.285861ms)
+✔ financial permission revocation hides visible Profit immediately (0.175355ms)
+✔ business-context switch hides data without remount (0.130778ms)
+✔ date change hides previous reporting period (0.151749ms)
+✔ obsolete cleanup cannot invalidate a newer request (0.290868ms)
+✔ delayed old cleanup cannot cancel newer request (0.389748ms)
+(node:103) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ℹ tests 37
+ℹ suites 0
+ℹ pass 37
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 502.228877

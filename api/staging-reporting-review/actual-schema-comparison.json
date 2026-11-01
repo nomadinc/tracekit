@@ -1,0 +1,653 @@
+{
+  "people": {
+    "kind": "table",
+    "missing_columns": [],
+    "rls_enabled": true,
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid"
+      },
+      {
+        "name": "workspace_id",
+        "type": "text"
+      },
+      {
+        "name": "status",
+        "type": "text"
+      },
+      {
+        "name": "display_name",
+        "type": "text"
+      },
+      {
+        "name": "primary_email",
+        "type": "text"
+      },
+      {
+        "name": "primary_phone",
+        "type": "text"
+      },
+      {
+        "name": "first_name",
+        "type": "text"
+      },
+      {
+        "name": "last_name",
+        "type": "text"
+      },
+      {
+        "name": "first_seen_at",
+        "type": "timestamp with time zone"
+      },
+      {
+        "name": "last_seen_at",
+        "type": "timestamp with time zone"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone"
+      },
+      {
+        "name": "metadata",
+        "type": "jsonb"
+      },
+      {
+        "name": "organization_id",
+        "type": "uuid"
+      }
+    ]
+  },
+  "person_identifiers": {
+    "kind": "table",
+    "missing_columns": [],
+    "rls_enabled": true,
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid"
+      },
+      {
+        "name": "workspace_id",
+        "type": "text"
+      },
+      {
+        "name": "person_id",
+        "type": "uuid"
+      },
+      {
+        "name": "identifier_type",
+        "type": "text"
+      },
+      {
+        "name": "raw_value",
+        "type": "text"
+      },
+      {
+        "name": "normalized_value",
+        "type": "text"
+      },
+      {
+        "name": "source_platform",
+        "type": "text"
+      },
+      {
+        "name": "source_record_type",
+        "type": "text"
+      },
+      {
+        "name": "source_record_id",
+        "type": "text"
+      },
+      {
+        "name": "source_connector_id",
+        "type": "text"
+      },
+      {
+        "name": "verification_status",
+        "type": "text"
+      },
+      {
+        "name": "confidence",
+        "type": "numeric"
+      },
+      {
+        "name": "is_primary",
+        "type": "boolean"
+      },
+      {
+        "name": "first_seen_at",
+        "type": "timestamp with time zone"
+      },
+      {
+        "name": "last_seen_at",
+        "type": "timestamp with time zone"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone"
+      },
+      {
+        "name": "metadata",
+        "type": "jsonb"
+      }
+    ]
+  },
+  "identity_resolution_events": {
+    "kind": "table",
+    "missing_columns": [],
+    "rls_enabled": true,
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid"
+      },
+      {
+        "name": "workspace_id",
+        "type": "text"
+      },
+      {
+        "name": "person_id",
+        "type": "uuid"
+      },
+      {
+        "name": "candidate_person_ids",
+        "type": "jsonb"
+      },
+      {
+        "name": "resolution_action",
+        "type": "text"
+      },
+      {
+        "name": "resolution_reason",
+        "type": "text"
+      },
+      {
+        "name": "confidence",
+        "type": "numeric"
+      },
+      {
+        "name": "source_platform",
+        "type": "text"
+      },
+      {
+        "name": "source_record_type",
+        "type": "text"
+      },
+      {
+        "name": "source_record_id",
+        "type": "text"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone"
+      },
+      {
+        "name": "metadata",
+        "type": "jsonb"
+      }
+    ]
+  },
+  "journeys": {
+    "kind": "table",
+    "missing_columns": [],
+    "rls_enabled": true,
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid"
+      },
+      {
+        "name": "workspace_id",
+        "type": "text"
+      },
+      {
+        "name": "person_id",
+        "type": "uuid"
+      },
+      {
+        "name": "started_at",
+        "type": "timestamp with time zone"
+      },
+      {
+        "name": "ended_at",
+        "type": "timestamp with time zone"
+      },
+      {
+        "name": "status",
+        "type": "text"
+      },
+      {
+        "name": "entry_event_id",
+        "type": "uuid"
+      },
+      {
+        "name": "conversion_event_id",
+        "type": "uuid"
+      },
+      {
+        "name": "conversion_count",
+        "type": "integer"
+      },
+      {
+        "name": "purchase_count",
+        "type": "integer"
+      },
+      {
+        "name": "total_revenue",
+        "type": "numeric"
+      },
+      {
+        "name": "event_count",
+        "type": "integer"
+      },
+      {
+        "name": "is_active",
+        "type": "boolean"
+      },
+      {
+        "name": "boundary_version",
+        "type": "text"
+      },
+      {
+        "name": "boundary_timeout_seconds",
+        "type": "integer"
+      },
+      {
+        "name": "attribution_window_config",
+        "type": "jsonb"
+      },
+      {
+        "name": "metadata",
+        "type": "jsonb"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone"
+      }
+    ]
+  },
+  "journey_events": {
+    "kind": "table",
+    "missing_columns": [],
+    "rls_enabled": true,
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid"
+      },
+      {
+        "name": "workspace_id",
+        "type": "text"
+      },
+      {
+        "name": "person_id",
+        "type": "uuid"
+      },
+      {
+        "name": "platform_order_id",
+        "type": "text"
+      },
+      {
+        "name": "session_id",
+        "type": "text"
+      },
+      {
+        "name": "touchpoint_id",
+        "type": "text"
+      },
+      {
+        "name": "event_type",
+        "type": "text"
+      },
+      {
+        "name": "event_time",
+        "type": "timestamp with time zone"
+      },
+      {
+        "name": "source_platform",
+        "type": "text"
+      },
+      {
+        "name": "source_connector",
+        "type": "text"
+      },
+      {
+        "name": "source_record_id",
+        "type": "text"
+      },
+      {
+        "name": "amount",
+        "type": "numeric"
+      },
+      {
+        "name": "currency",
+        "type": "text"
+      },
+      {
+        "name": "affiliate_id",
+        "type": "text"
+      },
+      {
+        "name": "offer_id",
+        "type": "text"
+      },
+      {
+        "name": "campaign_id",
+        "type": "text"
+      },
+      {
+        "name": "source",
+        "type": "text"
+      },
+      {
+        "name": "medium",
+        "type": "text"
+      },
+      {
+        "name": "sub1",
+        "type": "text"
+      },
+      {
+        "name": "sub2",
+        "type": "text"
+      },
+      {
+        "name": "sub3",
+        "type": "text"
+      },
+      {
+        "name": "sub4",
+        "type": "text"
+      },
+      {
+        "name": "sub5",
+        "type": "text"
+      },
+      {
+        "name": "transaction_id",
+        "type": "text"
+      },
+      {
+        "name": "metadata",
+        "type": "jsonb"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone"
+      },
+      {
+        "name": "updated_at",
+        "type": "timestamp with time zone"
+      },
+      {
+        "name": "journey_id",
+        "type": "uuid"
+      }
+    ]
+  },
+  "tracekit_customer_order_read_model": {
+    "kind": "view_not_covered_by_list_tables",
+    "missing_columns": [],
+    "rls_enabled": null,
+    "columns": []
+  },
+  "journey_attribution_credits": {
+    "kind": "table",
+    "missing_columns": [],
+    "rls_enabled": true,
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid"
+      },
+      {
+        "name": "workspace_id",
+        "type": "text"
+      },
+      {
+        "name": "journey_id",
+        "type": "uuid"
+      },
+      {
+        "name": "person_id",
+        "type": "uuid"
+      },
+      {
+        "name": "conversion_event_id",
+        "type": "uuid"
+      },
+      {
+        "name": "touchpoint_event_id",
+        "type": "uuid"
+      },
+      {
+        "name": "conversion_event_time",
+        "type": "timestamp with time zone"
+      },
+      {
+        "name": "touchpoint_event_time",
+        "type": "timestamp with time zone"
+      },
+      {
+        "name": "model",
+        "type": "text"
+      },
+      {
+        "name": "model_version",
+        "type": "text"
+      },
+      {
+        "name": "touchpoint_eligibility_version",
+        "type": "text"
+      },
+      {
+        "name": "status",
+        "type": "text"
+      },
+      {
+        "name": "reason",
+        "type": "text"
+      },
+      {
+        "name": "credit_fraction",
+        "type": "numeric"
+      },
+      {
+        "name": "credit_percent",
+        "type": "numeric"
+      },
+      {
+        "name": "credit_amount",
+        "type": "numeric"
+      },
+      {
+        "name": "currency",
+        "type": "text"
+      },
+      {
+        "name": "touchpoint_channel",
+        "type": "text"
+      },
+      {
+        "name": "source",
+        "type": "text"
+      },
+      {
+        "name": "medium",
+        "type": "text"
+      },
+      {
+        "name": "campaign_id",
+        "type": "text"
+      },
+      {
+        "name": "affiliate_id",
+        "type": "text"
+      },
+      {
+        "name": "offer_id",
+        "type": "text"
+      },
+      {
+        "name": "calculated_at",
+        "type": "timestamp with time zone"
+      },
+      {
+        "name": "metadata",
+        "type": "jsonb"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone"
+      }
+    ]
+  },
+  "affiliate_commissions": {
+    "kind": "table",
+    "missing_columns": [],
+    "rls_enabled": true,
+    "columns": [
+      {
+        "name": "id",
+        "type": "uuid"
+      },
+      {
+        "name": "workspace_id",
+        "type": "text"
+      },
+      {
+        "name": "commission_event_id",
+        "type": "text"
+      },
+      {
+        "name": "journey_attribution_credit_id",
+        "type": "uuid"
+      },
+      {
+        "name": "journey_id",
+        "type": "uuid"
+      },
+      {
+        "name": "person_id",
+        "type": "uuid"
+      },
+      {
+        "name": "conversion_event_id",
+        "type": "uuid"
+      },
+      {
+        "name": "touchpoint_event_id",
+        "type": "uuid"
+      },
+      {
+        "name": "conversion_event_time",
+        "type": "timestamp with time zone"
+      },
+      {
+        "name": "touchpoint_event_time",
+        "type": "timestamp with time zone"
+      },
+      {
+        "name": "affiliate_id",
+        "type": "text"
+      },
+      {
+        "name": "offer_id",
+        "type": "text"
+      },
+      {
+        "name": "campaign_id",
+        "type": "text"
+      },
+      {
+        "name": "touchpoint_source",
+        "type": "text"
+      },
+      {
+        "name": "touchpoint_medium",
+        "type": "text"
+      },
+      {
+        "name": "model",
+        "type": "text"
+      },
+      {
+        "name": "model_version",
+        "type": "text"
+      },
+      {
+        "name": "credit_fraction",
+        "type": "numeric"
+      },
+      {
+        "name": "credit_percent",
+        "type": "numeric"
+      },
+      {
+        "name": "attributed_amount",
+        "type": "numeric"
+      },
+      {
+        "name": "currency",
+        "type": "text"
+      },
+      {
+        "name": "commission_rate",
+        "type": "numeric"
+      },
+      {
+        "name": "commission_amount",
+        "type": "numeric"
+      },
+      {
+        "name": "status",
+        "type": "text"
+      },
+      {
+        "name": "source",
+        "type": "text"
+      },
+      {
+        "name": "source_credit_created_at",
+        "type": "timestamp with time zone"
+      },
+      {
+        "name": "metadata",
+        "type": "jsonb"
+      },
+      {
+        "name": "created_at",
+        "type": "timestamp with time zone"
+      },
+      {
+        "name": "publisher_id",
+        "type": "text"
+      },
+      {
+        "name": "credit_amount",
+        "type": "numeric"
+      },
+      {
+        "name": "generated_at",
+        "type": "timestamp with time zone"
+      },
+      {
+        "name": "policy_snapshot",
+        "type": "jsonb"
+      }
+    ]
+  }
+}

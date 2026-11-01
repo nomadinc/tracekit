@@ -1,0 +1,29 @@
+{
+  "new_reporting_integration": {
+    "pass": 40,
+    "fail": 0,
+    "skip": 0
+  },
+  "combined_customer_profit_api": {
+    "pass": 27,
+    "fail": 0,
+    "skip": 0
+  },
+  "combined_UI_reporting": {
+    "pass": 37,
+    "fail": 0,
+    "skip": 0
+  },
+  "new_UI_cutover": {
+    "pass": 5,
+    "fail": 0,
+    "skip": 0
+  },
+  "focused_security_typescript": "PASS",
+  "import_graph_typescript": "two baseline health.ts diagnostics unchanged",
+  "SQL_syntax_statements": 97,
+  "PLPGSQL_bodies": 4,
+  "native_database_tests": "NOT_RUN",
+  "WS022": "PENDING",
+  "role_header_identity": "expected contract only; missing/privileged headers denied in mocks"
+}

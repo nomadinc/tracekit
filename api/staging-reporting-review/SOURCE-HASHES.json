@@ -1,0 +1,21 @@
+{
+  "api/src/staging-reporting/authority-worker.ts": "d4fea29b934d395e23b498dd2262408ef676070d05184d89f3d6e3a380180f24",
+  "api/src/staging-reporting/authority.test.ts": "6a624a5bb5930e2b99e92957fb303312d87c717adda0d10b2f71263242f85a53",
+  "api/src/staging-reporting/authority.ts": "a1498741df1af1968f532c4558ed5093b71c04cd3ce038fca9d0a4d416ef3349",
+  "api/src/staging-reporting/client.test.ts": "f206f51356fbec41922091613fb6392116d7fdaabfb8956bb46c2e9f84b5d35e",
+  "api/src/staging-reporting/client.ts": "d628aa8233727db967d44dd0bcd6279ddb959c1c54fa7cae8eb3621511085c96",
+  "api/src/staging-reporting/columns.json": "3d2ca0d007c23bbc4c4ca0d2d9f52b82ff66d13aeba0b98dc45a1be3eb494136",
+  "api/src/staging-reporting/computed.test.ts": "e63a3aa183547f5a9bd2e054ebe390ecde9276e2b2f2a52ad3f530e2be77fa1b",
+  "api/src/staging-reporting/computed.ts": "c320be77e25415b44abb3ce25bb6dd0227c56d5d3f2d87716754e4d44079d2ae",
+  "api/src/staging-reporting/manifest.ts": "63591c769169f3dd546b1080dce21e0494a07f244649d36b65f46dc9397728f0",
+  "api/src/staging-reporting/projection.ts": "53a8f38e81b9beb162b7d0b160820a137cb84e7ff47355fae31fef191d27d87f",
+  "api/src/staging-reporting/repository.test.ts": "fde7efd8a1f49ad5dd9388505a0b8b97e07dea682d4dd793ae907977268de2d2",
+  "api/src/staging-reporting/repository.ts": "5661398b46e371fdaa4f58786008481a7367feba21d6c54bd902a928253acd14",
+  "api/src/staging-reporting/worker.ts": "ddb312ff99dd9216416e938c8b05b580b33adfbfa4d62410e1588bc88bc758fa",
+  "api/staging-reporting-review/README.md": "f4fb918948ee68be04044969dad64a3cca71aa362880e6136b049a2d486754b8",
+  "api/staging-reporting-review/WS023-WS021-HANDOFF.md": "81e2b5286d0d47c65ba7926130ae63ee81831fcb69a1db82b394c2ab7743a015",
+  "api/staging-reporting-review/actual-schema-comparison.json": "221102381b59c3126585139f611c7c4b3431743f7e2828ddca3f695f47a09d34",
+  "api/staging-reporting-review/effective-column-manifest.json": "d34d7cb9d1cad87fcddc5fde9ed2e6cc74198a50fafa6cf578f86351a77367cc",
+  "api/staging-reporting-review/offline-tests.txt": "4d5cff20718da0a673f66ec78cc642fac659eb3eef8f381bb9d4785517e7906d",
+  "api/staging-reporting-review/roles-and-authority.sql": "7a88a7d6d41ed3b5d98af872f681b11d82a390304df7c50adb18e5fe9ebf77f0"
+}

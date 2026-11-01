@@ -1621,7 +1621,7 @@ async function getPersonOrThrow(supabase: any, workspaceId: string, personId: st
   return person;
 }
 
-export async function getCustomerDetail(supabase: any, args: { workspace_id: string; person_id: string }) {
+export async function getCustomerDetail(supabase: any, args: { workspace_id: string; person_id: string; include_work_items?: boolean }) {
   const person = await getPersonOrThrow(supabase, args.workspace_id, args.person_id);
   const [identifiers, identityEvents, journeys, orders, credits, commissions, workItems] = await Promise.all([
     supabaseRows(
@@ -1648,7 +1648,7 @@ export async function getCustomerDetail(supabase: any, args: { workspace_id: str
       supabase.from("affiliate_commissions").select(COMMISSION_SELECT).eq("workspace_id", args.workspace_id).eq("person_id", args.person_id).order("conversion_event_time", { ascending: false }).limit(1000),
       "Customer commissions lookup",
     ),
-    getWorkItemsForPerson(supabase, {
+    args.include_work_items === false ? Promise.resolve({ open: [], recent_resolved: [] }) : getWorkItemsForPerson(supabase, {
       workspace_id: args.workspace_id,
       person_id: args.person_id,
       open_limit: 10,

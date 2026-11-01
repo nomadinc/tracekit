@@ -1,0 +1,15 @@
+{
+  "base": "e44b59c37873fd70d1a0154304edcdf8fd5eb684",
+  "unchanged_migrations": 222,
+  "source_tree": "0090e73fc4cc715449d423c54ffb87bbcdacfe9c",
+  "SQL_executed": false,
+  "grants_applied": false,
+  "credentials_assigned": false,
+  "native_tests": 0,
+  "restored_accepted_migrations_from_9834295": [
+    "supabase/migrations/20261025000000_ws030_edge_intelligence_release10_exclusion.sql",
+    "supabase/migrations/20261028043828_ws001_next29_refund_financial_integrity.sql"
+  ],
+  "frozen_9834295_migrations_unchanged": 224,
+  "accepted_V6_state": "Separate accepted artifact unchanged; not modified or imported into reporting runtime"
+}

@@ -1,0 +1,50 @@
+(node:80) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./")); register("../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ customer explorer routes are canonical and method-safe (2.547816ms)
+✔ customer list params are workspace scoped bounded and preserve real filters (1.087886ms)
+✔ customer explorer cursors round-trip deterministically (0.317801ms)
+✔ customer journey detail params are bounded and reject missing IDs (0.597204ms)
+✔ customer display prefers useful deterministic identifiers over generic unknowns (0.720611ms)
+✔ customer explorer is wired through read-only authenticated backend routes (7.802716ms)
+✔ narrative activity feed composes mixed subsystem events in stable story order (28.617352ms)
+✔ journey activity summary uses stored metrics without inferring journey outcome (0.773801ms)
+✔ narrative labels and evidence redaction are deterministic and safe (0.592056ms)
+✔ customer 360 aggregates commercial value attribution commissions and risk without duplicate event counting (12.345682ms)
+✔ customer 360 omits unsupported subscription and records limited-evidence explanations (0.670955ms)
+(node:80) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:81) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./")); register("../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ USD-only records are qualified (2.370337ms)
+✔ GBP-only records are qualified (0.289568ms)
+✔ EUR-only records are qualified (0.177639ms)
+✔ mixed currencies are rejected (0.214895ms)
+✔ missing currency is rejected (0.174694ms)
+✔ empty reporting periods remain unavailable (0.16532ms)
+(node:81) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:87) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./")); register("../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ USD Profit summary returns qualified HTTP 200 (21.65636ms)
+✔ GBP Profit summary returns qualified HTTP 200 (2.152036ms)
+✔ EUR Profit summary returns qualified HTTP 200 (1.516385ms)
+✔ mixed currencies return HTTP 422 without aggregated profit (2.924395ms)
+✔ missing currency returns HTTP 422 (1.64617ms)
+✔ empty period reports no data, not a qualified currency (0.873823ms)
+✔ unauthenticated Profit request is denied before database access (0.478634ms)
+✔ missing workspace is rejected before database access (0.295407ms)
+✔ date, connector, platform and currency filters reach PostgREST (1.465447ms)
+✔ offer-scoped Profit fails closed without database access (0.958681ms)
+(node:87) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ℹ tests 27
+ℹ suites 0
+ℹ pass 27
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 686.451893

@@ -1,0 +1,30 @@
+(node:13) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./")); register("../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ customer-ID substitution checks the tenant-scoped person lookup (9.270655ms)
+✔ authorized customer detail uses real computation without work_items (22.475773ms)
+✔ Profit requires an explicit additional source contract; no financial approximation (0.774356ms)
+(node:13) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./")); register("../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ scoped explicit projection omits financial and raw metadata columns (5.76946ms)
+✔ closed relation denies work_items (0.435486ms)
+✔ closed relation denies rpc/ingest_edge_intelligence_v1 (0.214413ms)
+✔ closed relation denies integrations_credentials (0.186301ms)
+✔ prohibited writes do not reach transport (0.635437ms)
+✔ foreign workspace filter denied (0.334674ms)
+✔ unknown column and unrestricted SELECT denied (0.655457ms)
+✔ commission and order reads without permission are skipped without network (1.684728ms)
+✔ financial zero preserved for authorized role (3.336676ms)
+(node:14) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ℹ tests 12
+ℹ suites 0
+ℹ pass 12
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 378.344742

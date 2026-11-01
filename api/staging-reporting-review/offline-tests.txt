@@ -1,0 +1,68 @@
+(node:21) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./")); register("../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:21) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ issuer verifies WorkOS proof, reads only registry and returns bound short token (46.912071ms)
+✔ revoked membership prevents issuance (58.503505ms)
+✔ foreign registry substitution prevents issuance (49.236904ms)
+✔ invalid expiry fails closed (24.496197ms)
+✔ current membership version must match issued token (98.591195ms)
+(node:22) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./")); register("../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ authorized explicit projection, GET only, strips unselected fields (20.400048ms)
+✔ foreign organization denies before transport (5.886503ms)
+✔ foreign workspace denies before transport (3.416259ms)
+✔ financial positive preserves genuine zero (3.753119ms)
+✔ reader cannot request financial projection (1.567643ms)
+✔ both financial permissions required (1.286276ms)
+✔ expired token (1.386708ms)
+✔ revoked membership (1.312265ms)
+✔ stale membership version (1.834296ms)
+✔ closed operation denies delete (0.863496ms)
+✔ closed operation denies rpc/admin (0.368648ms)
+✔ closed operation denies toString (0.413065ms)
+✔ closed operation denies __proto__ (0.362479ms)
+✔ foreign returned row denied (1.395481ms)
+✔ unavailable amount remains null (2.24666ms)
+✔ invalid signature denies (0.869356ms)
+✔ no service credential fallback (0.296538ms)
+✔ unknown manifest denies all reads (0.676173ms)
+✔ membership revoked after response blocks transmission (1.472779ms)
+✔ issuer, audience and privileged-role substitutions deny (3.360655ms)
+✔ missing membership evidence denies (1.371185ms)
+✔ financial permission loss without version bump still denies stale token (0.83295ms)
+(node:23) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./")); register("../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ customer-ID substitution checks the tenant-scoped person lookup (8.958075ms)
+✔ authorized customer detail uses real computation without work_items (21.038935ms)
+✔ Profit requires an explicit additional source contract; no financial approximation (0.811207ms)
+(node:23) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:29) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./")); register("../ws001-payment-fast-track/ui/tests/ws001-next29-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ scoped explicit projection omits financial and raw metadata columns (6.795362ms)
+✔ closed relation denies work_items (0.521299ms)
+✔ closed relation denies rpc/ingest_edge_intelligence_v1 (0.321857ms)
+✔ closed relation denies integrations_credentials (0.173392ms)
+✔ prohibited writes do not reach transport (0.532095ms)
+✔ foreign workspace filter denied (0.307656ms)
+✔ unknown column and unrestricted SELECT denied (1.565229ms)
+✔ commission and order reads without permission are skipped without network (0.565566ms)
+✔ financial zero preserved for authorized role (1.873635ms)
+✔ unverified effective database identity fails closed (2.886397ms)
+(node:29) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ℹ tests 40
+ℹ suites 0
+ℹ pass 40
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 556.207241
