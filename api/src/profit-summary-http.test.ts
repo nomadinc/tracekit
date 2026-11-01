@@ -154,3 +154,18 @@ test("date, connector, platform and currency filters reach PostgREST", async () 
   assert.ok(filters.some(([key, value]) => key === "day" && value === "gte.2026-10-01"));
   assert.ok(filters.some(([key, value]) => key === "day" && value === "lte.2026-10-31"));
 });
+
+test("offer-scoped Profit fails closed without database access", async () => {
+  for (const offerId of ["67", "foreign-offer"]) {
+    const result = await request(
+      [row("USD")],
+      `workspace_id=stem&offer_id=${encodeURIComponent(offerId)}`
+    );
+
+    assert.equal(result.status, 422);
+    assert.equal(result.body.error, "profit_offer_identity_unresolved");
+    assert.equal(result.body.data_available, false);
+    assert.equal(result.body.net_profit, undefined);
+    assert.equal(result.calls.length, 0);
+  }
+});

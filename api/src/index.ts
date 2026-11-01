@@ -18618,6 +18618,20 @@ async function router(req: Request, env: Env): Promise<Response> {
 
   if (path === "/v1/profit/summary" && req.method === "GET") {
     try {
+      const offerId = String(url.searchParams.get("offer_id") || "").trim();
+
+      if (offerId) {
+        return json({
+          ok: false,
+          error: "profit_offer_identity_unresolved",
+          message:
+            "Offer-level Profit is unavailable because a verified order-to-offer financial relationship has not been established.",
+          offer_id: offerId,
+          data_available: false,
+          financial_status: "operational_unreconciled",
+        }, 422);
+      }
+
       const supabase = getSupabase(env);
       const rows = await selectProfitDailyRollups(supabase, {
         workspace_id: url.searchParams.get("workspace_id") || "default",

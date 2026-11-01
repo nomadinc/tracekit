@@ -175,7 +175,11 @@ export function ProfitSummaryPanel() {
       <div className="mb-4 text-xs text-slate-500">
         Financial status: Operational — Unreconciled.
         Calculated totals do not establish complete cost coverage
-        or period reconciliation.
+        or period reconciliation. This report uses financial ledger
+        revenue, recorded costs, refunds, chargebacks, and affiliate
+        payouts. Mission Control uses commerce-based sales and separately
+        accrued affiliate commissions. Differences may reflect source
+        coverage, accounting definitions, or reporting periods.
       </div>
 
       {error ? (
