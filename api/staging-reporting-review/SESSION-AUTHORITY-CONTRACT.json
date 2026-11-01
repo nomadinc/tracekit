@@ -1,0 +1,50 @@
+{
+  "WS021_source": "cb22a20efef2f442f458f0e472b5d1c6cb49801b",
+  "WS021_base": "e44b59c37873fd70d1a0154304edcdf8fd5eb684",
+  "bundle_SHA256": "d72bce5551a0a383da8836323e1ea903ff0de10f5006fd14ed018d92c3574b15",
+  "shared_validator": "ui/lib/identity/staging-read-only-session.ts",
+  "validator_SHA256": "5838b2577e14749c31c15fcf679b75e4685c31e98034455b86cce734b2603991",
+  "endpoint": "GET /v1/session",
+  "request": "WorkOS Bearer access token; no query parameters or caller scope/role overrides",
+  "source_relation": "staging_reporting_private.current_memberships",
+  "required_additional_column": {
+    "name": "session_context",
+    "type": "jsonb",
+    "installation": "NOT IMPLEMENTED OR EXECUTED; reviewed authority projection required",
+    "source": "protected current user/account/organization/membership/context records; never browser metadata",
+    "shape": "exact WS021 envelope context; live stamps supplied by endpoint; nested user.emailVerified=true and organization.status=active also required as protected input only",
+    "consistency": [
+      "subject == row.subject",
+      "user.id == row.application_user_id",
+      "organization.id == workspaceId == row.organization_id == row.workspace_id",
+      "membershipVersion == row.version",
+      "permissions == exact read-only subset of row.permissions",
+      "user/account/organization/membership active",
+      "all nested account/user/organization/context references agree",
+      "one unique current binding; multiple rows deny"
+    ],
+    "administration": "existing separately custodied registry administrator; current status/version/context updates must be atomic; no endpoint writes"
+  },
+  "required_select_columns": [
+    "subject",
+    "application_user_id",
+    "organization_id",
+    "workspace_id",
+    "version",
+    "permissions",
+    "active",
+    "valid_until",
+    "session_context"
+  ],
+  "effective_reader": "tk_stg_membership_verifier; protected schema profile only; no reporting role receives session_context",
+  "required_native_gates": [
+    "protected projection and authoritative update/revocation ownership",
+    "column SELECT only for exact verifier; no PUBLIC/inherited/mutation authority",
+    "actual physical/effective role, JWT issuer/audience/key compatibility",
+    "staging-only WorkOS identity/custody and authority HTTPS binding",
+    "Cloudflare nodejs_compat for exact shared WS021 validator node:crypto dependency",
+    "WS021 application entrypoint composition with existing WS001 fail-closed fence",
+    "independent WS022 acceptance"
+  ],
+  "applied_database_changes": false
+}

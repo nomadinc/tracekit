@@ -1,0 +1,11 @@
+ui/lib/identity/staging-read-only-session.ts(1,28): error TS2307: Cannot find module 'node:crypto' or its corresponding type declarations.
+ui/lib/identity/staging-read-only-session.ts(2,62): error TS2835: Relative import paths need explicit file extensions in ECMAScript imports when '--moduleResolution' is 'node16' or 'nodenext'. Did you mean './permissions.js'?
+ui/lib/identity/staging-read-only-session.ts(3,72): error TS2835: Relative import paths need explicit file extensions in ECMAScript imports when '--moduleResolution' is 'node16' or 'nodenext'. Did you mean './persistent-types.js'?
+ui/lib/identity/staging-read-only-session.ts(4,51): error TS2835: Relative import paths need explicit file extensions in ECMAScript imports when '--moduleResolution' is 'node16' or 'nodenext'. Did you mean './application-session.js'?
+ui/lib/identity/staging-read-only-session.ts(5,39): error TS2835: Relative import paths need explicit file extensions in ECMAScript imports when '--moduleResolution' is 'node16' or 'nodenext'. Did you mean './persistent-authorization.js'?
+ui/lib/identity/staging-read-only-session.ts(6,68): error TS2835: Relative import paths need explicit file extensions in ECMAScript imports when '--moduleResolution' is 'node16' or 'nodenext'. Did you mean './active-organization-cookie.js'?
+ui/lib/identity/staging-read-only-session.ts(7,75): error TS2835: Relative import paths need explicit file extensions in ECMAScript imports when '--moduleResolution' is 'node16' or 'nodenext'. Did you mean './active-business-context-cookie.js'?
+ui/lib/identity/staging-read-only-session.ts(20,72): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+ui/lib/identity/staging-read-only-session.ts(113,27): error TS2580: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node`.
+ui/lib/identity/staging-read-only-session.ts(131,52): error TS7006: Parameter 'c' implicitly has an 'any' type.
+ui/lib/identity/staging-read-only-session.ts(142,60): error TS7006: Parameter 'p' implicitly has an 'any' type.

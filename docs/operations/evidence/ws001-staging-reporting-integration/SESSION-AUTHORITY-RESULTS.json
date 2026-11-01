@@ -1,0 +1,16 @@
+{
+  "parent": "9d1cc0ff68b5f69ed4948aaa88b561b770e1885c",
+  "WS021": "cb22a20efef2f442f458f0e472b5d1c6cb49801b",
+  "focused_tests": {
+    "pass": 82,
+    "fail": 0,
+    "skip": 0
+  },
+  "session_tests": 12,
+  "authority_bundle": "PASS; no legacy repository/synchronization/audit-write/service-role symbols",
+  "typescript": "NOT PASSED: ad hoc NodeNext configuration/imported UI dependencies; see log",
+  "database_SQL": "NONE",
+  "grants": "NONE",
+  "native_credential_authority": "NOT VERIFIED",
+  "WS022": "PENDING"
+}

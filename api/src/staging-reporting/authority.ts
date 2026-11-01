@@ -1,3 +1,4 @@
+import {readAuthoritySession} from './session.ts';
 import {createReportingClient,ReportingDenied,PROJECT,type Claims} from './client.ts';
 type Member={subject:string;application_user_id:string;organization_id:string;workspace_id:string;version:string;permissions:string[];active:boolean;valid_until:string};
 export type AuthorityEnv={REPORTING_PUBLIC_JWK:string;REPORTING_PRIVATE_JWK:string;REPORTING_ISSUER:string;REPORTING_PUBLISHABLE_KEY:string;MEMBERSHIP_READER_TOKEN:string;WORKOS_REPORTING_JWKS:string;WORKOS_REPORTING_ISSUER:string;WORKOS_CLIENT_ID:string};
@@ -11,7 +12,7 @@ async function workos(token:string,e:AuthorityEnv,now:number){
  const algorithm=h.alg==='RS256'?{name:'RSASSA-PKCS1-v1_5',hash:'SHA-256'}:{name:'ECDSA',namedCurve:'P-256'};
  const key=await crypto.subtle.importKey('jwk',keys[0],algorithm,false,['verify']);
  const verify=h.alg==='RS256'?{name:'RSASSA-PKCS1-v1_5'}:{name:'ECDSA',hash:'SHA-256'};
- if(!await crypto.subtle.verify(verify,key,decode(p[2]),new TextEncoder().encode(p[0]+'.'+p[1]))||c.iss!==e.WORKOS_REPORTING_ISSUER||!(c.aud===e.WORKOS_CLIENT_ID||Array.isArray(c.aud)&&c.aud.includes(e.WORKOS_CLIENT_ID))||typeof c.sub!=='string'||!Number.isSafeInteger(c.exp)||c.exp<=now||(c.nbf&&c.nbf>now))throw new ReportingDenied();return c;
+ if(!await crypto.subtle.verify(verify,key,decode(p[2]),new TextEncoder().encode(p[0]+'.'+p[1]))||c.iss!==e.WORKOS_REPORTING_ISSUER||!(c.aud===e.WORKOS_CLIENT_ID||Array.isArray(c.aud)&&c.aud.includes(e.WORKOS_CLIENT_ID))||typeof c.sub!=='string'||!Number.isSafeInteger(c.exp)||c.exp<=now||(c.nbf!==undefined&&(!Number.isSafeInteger(c.nbf)||c.nbf>now))||(c.iat!==undefined&&(!Number.isSafeInteger(c.iat)||c.iat>now)))throw new ReportingDenied();return c;
 }
 export function createAuthority(e:AuthorityEnv,transport:typeof fetch=fetch,now=()=>Math.floor(Date.now()/1000)){
  async function lookup(subject:string,organization:string,workspace:string,application=false):Promise<Member>{
@@ -27,7 +28,9 @@ export function createAuthority(e:AuthorityEnv,transport:typeof fetch=fetch,now=
  return {async fetch(request:Request){
   const reply=(status:number,body:unknown)=>Response.json(body,{status,headers:{'cache-control':'no-store'}});
   try{
-   const path=new URL(request.url).pathname;if(request.method==='GET'&&path==='/.well-known/jwks.json'){const key=JSON.parse(e.REPORTING_PUBLIC_JWK);if(key.d||key.kty!=='OKP'||key.crv!=='Ed25519')throw new ReportingDenied(503);return reply(200,{keys:[key]});}if(request.method!=='POST'||!['/issue','/current-membership'].includes(path))throw new ReportingDenied();
+   const requestUrl=new URL(request.url),path=requestUrl.pathname;
+   if(path==='/v1/session'){if(request.method!=='GET'||requestUrl.search)throw new ReportingDenied();const auth=request.headers.get('authorization');if(!auth?.startsWith('Bearer '))throw new ReportingDenied();const identity=await workos(auth.slice(7),e,now());return reply(200,await readAuthoritySession(e,identity.sub,identity.exp,transport,now));}
+   if(request.method==='GET'&&path==='/.well-known/jwks.json'){const key=JSON.parse(e.REPORTING_PUBLIC_JWK);if(key.d||key.kty!=='OKP'||key.crv!=='Ed25519')throw new ReportingDenied(503);return reply(200,{keys:[key]});}if(request.method!=='POST'||!['/issue','/current-membership'].includes(path))throw new ReportingDenied();
    const auth=request.headers.get('authorization');if(!auth?.startsWith('Bearer '))throw new ReportingDenied();const token=auth.slice(7),body=await request.json() as any;
    if(path==='/issue'){
     const identity=await workos(token,e,now());if(Object.keys(body).sort().join(',')!=='organization,workspace')throw new ReportingDenied();

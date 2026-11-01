@@ -1,0 +1,16 @@
+{
+  "parent": "9d1cc0ff68b5f69ed4948aaa88b561b770e1885c",
+  "files": {
+    "api/src/staging-reporting/authority.ts": "a684a25e763332581f562bfedfb34703486ad512adf0d00ca6ea906adf90b581",
+    "api/src/staging-reporting/session.test.ts": "6d70e3b9f7df053fbd47d1aaa1487cd44593092b1a0068efdebbb12be8db19a0",
+    "api/src/staging-reporting/session.ts": "6f289cc0ef2932ba7a60ae056849b24a299ea703435548765314fc34cff0a253",
+    "api/staging-reporting-review/SESSION-AUTHORITY-CONTRACT.json": "28e243d696e377c8fb4382db04a35f4d61a54258df50ff5b5200f93ca81899ac",
+    "api/staging-reporting-review/SESSION-AUTHORITY-HANDOFF.md": "b7141c5283304f7b945e5129b203fcaf0e22ab4dd7c3d6c89bb4d57566d6a94c",
+    "api/staging-reporting-review/SOURCE-HASHES.json": "e3f5d668822e8369a5ee816cec0e2b507f35b1ed42f5566adf98cb3599662d08",
+    "docs/operations/evidence/ws001-staging-reporting-integration/SESSION-AUTHORITY-RESULTS.json": "40949314285c0be21de3e5e44aadb7c3f67f02f5e098d6f219b1f15a893cc793",
+    "docs/operations/evidence/ws001-staging-reporting-integration/session-authority-build.txt": "99262da02c45c6a8cda7f39db523edcaa007dd7b0cb50c7ba9c87f5b6fcb81c6",
+    "docs/operations/evidence/ws001-staging-reporting-integration/session-authority-tests.txt": "a355412e8bf86fe5345db78a6d86de236353beb4fd513abfe89365c39d6a0627",
+    "docs/operations/evidence/ws001-staging-reporting-integration/session-authority-types.txt": "9b29b683e8716fcbb2288724ca5f9dbdc7782440f17597bd210303fbc4e2439e",
+    "ui/lib/identity/staging-read-only-session.ts": "5838b2577e14749c31c15fcf679b75e4685c31e98034455b86cce734b2603991"
+  }
+}

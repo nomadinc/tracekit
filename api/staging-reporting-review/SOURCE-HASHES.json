@@ -1,8 +1,11 @@
 {
   "api/staging-reporting-review/MANIFEST-INTEGRATION.md": "a28ce14073816075faa55a9040addd997acf8d94023a4b20fedb8cc84424d1e8",
   "api/staging-reporting-review/ORDER-VIEW-INTEGRATION.md": "77515a5ca689d748efc950af1c91b6d8988aca5c25d627b0eff1f806f68eb2c0",
+  "api/staging-reporting-review/PROFIT-1999-REPRODUCTION.md": "345f62489a145c9e55c6d8d4631fbe5f2eaef2a4e0486a3ed6d3185368a15e3c",
   "api/staging-reporting-review/PROFIT-COMPLETENESS-CORRECTION.md": "762b8a9c76525d5bf1233ca565a180b5f98fa005eceea5ecf2e141f2064d518a",
   "api/staging-reporting-review/README.md": "68c614655a1abbd67840cdf24d7eb24b297c8e318e13eb299e44bd9c0f58b9ca",
+  "api/staging-reporting-review/SESSION-AUTHORITY-CONTRACT.json": "28e243d696e377c8fb4382db04a35f4d61a54258df50ff5b5200f93ca81899ac",
+  "api/staging-reporting-review/SESSION-AUTHORITY-HANDOFF.md": "b7141c5283304f7b945e5129b203fcaf0e22ab4dd7c3d6c89bb4d57566d6a94c",
   "api/staging-reporting-review/WS021-SESSION-BOOTSTRAP-HANDOFF.md": "07bf737f143748dbad3334957285e71633e8d8e0f0addb5e1aee076b8835d97e",
   "api/staging-reporting-review/WS023-WS021-HANDOFF.md": "81e2b5286d0d47c65ba7926130ae63ee81831fcb69a1db82b394c2ab7743a015",
   "api/staging-reporting-review/actual-schema-comparison.json": "221102381b59c3126585139f611c7c4b3431743f7e2828ddca3f695f47a09d34",

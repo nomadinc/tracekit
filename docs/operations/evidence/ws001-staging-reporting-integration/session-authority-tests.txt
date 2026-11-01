@@ -1,0 +1,142 @@
+(node:13) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./")); register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:13) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ issuer verifies WorkOS proof, reads only registry and returns bound short token (113.239013ms)
+✔ revoked membership prevents issuance (58.776564ms)
+✔ foreign registry substitution prevents issuance (40.503101ms)
+✔ invalid expiry fails closed (54.985397ms)
+✔ current membership version must match issued token (80.047221ms)
+(node:14) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./")); register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ authorized explicit projection, GET only, strips unselected fields (34.177111ms)
+✔ foreign organization denies before transport (12.495919ms)
+✔ foreign workspace denies before transport (9.056722ms)
+✔ financial positive preserves genuine zero (7.52694ms)
+✔ reader cannot request financial projection (8.472123ms)
+✔ both financial permissions required (9.291116ms)
+✔ expired token (3.168579ms)
+✔ revoked membership (1.735081ms)
+✔ stale membership version (6.018834ms)
+✔ closed operation denies delete (1.125634ms)
+✔ closed operation denies rpc/admin (0.459142ms)
+✔ closed operation denies toString (1.89314ms)
+✔ closed operation denies __proto__ (1.073215ms)
+✔ foreign returned row denied (12.462451ms)
+✔ unavailable amount remains null (7.720972ms)
+✔ invalid signature denies (6.150969ms)
+✔ no service credential fallback (0.336306ms)
+✔ unknown manifest denies all reads (1.127617ms)
+✔ membership revoked after response blocks transmission (1.618767ms)
+✔ issuer, audience and privileged-role substitutions deny (15.990269ms)
+✔ missing membership evidence denies (2.308324ms)
+✔ financial permission loss without version bump still denies stale token (1.584314ms)
+(node:15) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./")); register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ customer-ID substitution checks the tenant-scoped person lookup (13.211447ms)
+✔ authorized customer detail uses real computation without work_items (36.263902ms)
+✔ Profit without both financial permissions performs no database access (0.982599ms)
+(node:15) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:22) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./")); register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ order evidence preserves unresolved identity, excludes money and raw proof (12.339204ms)
+✔ cross-organization view results deny even with matching workspace (3.22175ms)
+✔ internal dependency tables cannot be directly requested by reporting transport (0.675106ms)
+✔ source-bound view retains exact scoped proof and invoker security (0.469557ms)
+(node:22) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:27) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./")); register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+ORIGINAL SECURITY ASSERTION FAIL: expected 1999, accepted 1001 (duplicate boundary)
+(node:27) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+✔ ORIGINAL c921b3e reproduction: repeated boundary yields accepted wrong totals (84.631963ms)
+✔ 1201 equal-day rows aggregate once with verified UUID ordering (44.948508ms)
+✔ repeated boundary UUID rejects instead of returning totals (25.976561ms)
+✔ missing, malformed and out-of-order UUID keys reject (7.180579ms)
+✔ server cap never starts another page; count proves result incomplete (10.044009ms)
+✔ missing or substituted count/range evidence rejects (10.437876ms)
+✔ concurrent insert/update/delete never compose snapshots across requests (92.647934ms)
+✔ unverified snapshot backend remains disabled before fetch (0.532161ms)
+✔ UNKNOWN network result never retries or reports totals (0.854256ms)
+✔ exact original 1001 identities return 1050 once, substituted boundary rejects (37.961232ms)
+✔ mandatory 1001 distinct same-day rollups total exactly 1999 (45.733871ms)
+(node:27) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:28) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./")); register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ base Profit preserves genuine zero and qualified currency (22.583259ms)
+✔ empty Profit is unavailable, not evidence of a genuine zero period (3.68651ms)
+✔ mixed and unknown currency rejected (9.89897ms)
+✔ unknown money never becomes zero (1.943315ms)
+✔ foreign workspace rejected before totals (1.344163ms)
+✔ offer and executive expansion reject before transport (1.281849ms)
+✔ permission loss rejects Profit before transport (0.665181ms)
+(node:28) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:29) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./")); register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ scoped explicit projection omits financial and raw metadata columns (13.412128ms)
+✔ closed relation denies work_items (1.864847ms)
+✔ closed relation denies rpc/ingest_edge_intelligence_v1 (0.416567ms)
+✔ closed relation denies integrations_credentials (0.314173ms)
+✔ prohibited writes do not reach transport (1.270983ms)
+✔ foreign workspace filter denied (0.49203ms)
+✔ unknown column and unrestricted SELECT denied (0.824531ms)
+✔ commission and order reads without permission are skipped without network (8.856221ms)
+✔ financial zero preserved for authorized role (0.913124ms)
+✔ unverified effective database identity fails closed (10.872227ms)
+(node:29) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:104) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./")); register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:104) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ authorized session uses exact WS021 contract and GET-only protected registry read (144.669094ms)
+✔ signed wrong issuer/audience, expired token and malformed time claims reject before registry (72.674965ms)
+✔ invalid signature and missing bearer reject without any registry access (20.983876ms)
+✔ foreign tenant, application user, account and business-context substitutions reject (282.735089ms)
+✔ revoked membership, inactive user/account/organization and stale context version reject (368.187105ms)
+✔ missing or multiple current bindings reject rather than choosing a default (14.241679ms)
+✔ missing context, expiry and unverified protected email evidence reject (166.788149ms)
+✔ POST, mutation paths and browser tenant overrides cannot cause writes (38.99344ms)
+✔ missing issuer configuration or reporting credential never falls back (57.018247ms)
+✔ WS021 resolver consumes real authority output without a competing session model (38.654985ms)
+✔ expiry while waiting for registry read denies stale session issuance (50.854519ms)
+✔ privileged or substituted database effective role rejects (102.809244ms)
+(node:110) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./")); register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ staging uses issuer then restricted Core, never TK secret (8.719795ms)
+✔ foreign active organization blocks before Core data read (1.628161ms)
+✔ missing credentials/configuration has no legacy fallback (0.693524ms)
+✔ journey identity is encoded as exact person and journey parameters (0.873204ms)
+✔ maintenance and unsupported paths deny (0.1729ms)
+✔ restricted Profit preserves only closed safe 422 identity errors (2.582587ms)
+(node:110) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:126) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./")); register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ preview and restricted mode forbid identity writes with no default enablement (1.233207ms)
+✔ all application session paths fence before privileged repository construction (0.673694ms)
+(node:126) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ℹ tests 82
+ℹ suites 0
+ℹ pass 82
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2204.047205
