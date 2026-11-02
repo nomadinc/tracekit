@@ -1,0 +1,29 @@
+{
+  "parent": "4e468b3e64b6f3c8616bd2cf55399b9d6e03f436",
+  "historical_source": "656536a5690b16731109fa352dc04f40a3db5aa1",
+  "before": {
+    "registry_total": 2,
+    "returned": 1,
+    "old_session_issued": true
+  },
+  "after": {
+    "status": 503,
+    "session_issued": false,
+    "registry_requests_before_denial": 1
+  },
+  "focused_tests": {
+    "pass": 10,
+    "fail": 0,
+    "skip": 0
+  },
+  "full_focused": {
+    "pass": 105,
+    "fail": 0,
+    "skip": 0
+  },
+  "native_snapshot_and_roles": "NOT VERIFIED",
+  "SQL_executed": false,
+  "grants": false,
+  "credential_activation": false,
+  "WS022": "PENDING"
+}

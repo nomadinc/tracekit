@@ -1,0 +1,25 @@
+(node:13) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./")); register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:13) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ORIGINAL SECURITY FAIL: total=2, returned=1, old656 issued session
+(node:13) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+✔ ORIGINAL656 issues a session for a capped one-of-two active binding response (68.796797ms)
+✔ exactly one complete scoped binding admits an existing valid session (79.941381ms)
+✔ two complete registry bindings deny, including identical duplicate records (71.113958ms)
+✔ original one-of-two capped registry response rejects before any session issuance (72.693831ms)
+✔ missing exact count and inconsistent registry count/body reject (229.696227ms)
+✔ multiple canonical WorkOS-to-user bindings cannot hide behind a capped user read (172.141276ms)
+✔ visible concurrent registry insertion or version change rejects mixed authority (75.346514ms)
+✔ repeated missing-count responses never establish registry completeness (53.553314ms)
+✔ revoked and foreign-tenant registry evidence still deny (156.821268ms)
+✔ missing or concurrently deleted registry binding denies issuance (108.51877ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1380.449738

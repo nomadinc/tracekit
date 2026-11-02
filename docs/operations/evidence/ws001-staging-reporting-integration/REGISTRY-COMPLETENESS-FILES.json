@@ -1,0 +1,15 @@
+{
+  "parent": "4e468b3e64b6f3c8616bd2cf55399b9d6e03f436",
+  "files": {
+    "api/src/staging-reporting/completeness.ts": "cb1abf2a9142930a1ab982986d6798d93f33e3c2b2edbd45c526d624efbcb254",
+    "api/src/staging-reporting/registry-completeness.test.ts": "6a31bfef33f4a84ba4e13ca91087d15f2e523106098398f4628ddee223173cf8",
+    "api/staging-reporting-review/REGISTRY-COMPLETENESS-CORRECTION.md": "6b88526537142e405685a30557f153c5c64184444473303da9b05c0877f68f9a",
+    "api/staging-reporting-review/SOURCE-HASHES.json": "97f36f153198db094a5eb78d413a0156a357dba24161be6f047c2f86aa27a04a",
+    "api/tests/fixtures/ws001-656-session/session.ts.txt": "6f289cc0ef2932ba7a60ae056849b24a299ea703435548765314fc34cff0a253",
+    "api/tests/fixtures/ws001-656-session/ws021-contract.ts.txt": "5838b2577e14749c31c15fcf679b75e4685c31e98034455b86cce734b2603991",
+    "api/tests/session-authority-fixture.ts": "66a39f4a38dfbc78d8d6a1786ca6fe42bf41824a25fe9f833c2c2d11b6c0fb3b",
+    "docs/operations/evidence/ws001-staging-reporting-integration/REGISTRY-COMPLETENESS-RESULTS.json": "93bbe7e9d8dfc4adf5545797e9220dd926048623a8d50d61b7063a7c31dd56e0",
+    "docs/operations/evidence/ws001-staging-reporting-integration/registry-completeness-full.txt": "e8c15d8dc0c5ef6df494a5452ec6239d828efecee2f0fe6e4551bb3c55259911",
+    "docs/operations/evidence/ws001-staging-reporting-integration/registry-completeness-tests.txt": "f73c98ab201f101c9fff5c2128fcfdb18d54794acc03715808672d9e69b59015"
+  }
+}

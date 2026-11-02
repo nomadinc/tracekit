@@ -10,4 +10,4 @@ export async function completeRead(response:Response,table:string,role:string,ma
  verified.set(rows,{proof:Object.freeze({table,rowCount:rows.length,total:rows.length}),body:JSON.stringify(rows)});return rows as Record<string,unknown>[];
 }
 export function readProof(value:object,table:string):Proof{const r=verified.get(value);if(!r||r.proof.table!==table||r.body!==JSON.stringify(value))throw new ReportingDenied(503);return r.proof;}
-export function singleComplete(rows:Record<string,unknown>[],table:string){const proof=readProof(rows,table);if(rows.length!==1)throw new ReportingDenied();const row=rows[0];verified.set(row,{proof,body:JSON.stringify(row)});return row;}
+export function singleComplete(rows:Record<string,unknown>[],table:string){const proof=readProof(rows,table);if(proof.total!==1||proof.rowCount!==1||rows.length!==1)throw new ReportingDenied();const row=rows[0];verified.set(row,{proof,body:JSON.stringify(row)});return row;}
