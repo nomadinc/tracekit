@@ -1,0 +1,7 @@
+Runtime candidate: 96c852b08c35856645488fc908eb128195fa9b9e
+Retained test source: 02936c622cad36d21e3b46894b91f6255b3c4e25
+Original test blob: 54551412f27394616fe7060f237415bf05f9f983
+The retained test was absent from the runtime candidate tree.
+Test: real application entrypoints bypass every legacy repository and callback write in restricted mode
+Original line 192:
+    await assert.rejects(app.recordAuthenticationSuccess({ id: auth.user.id, email: "test@example.test" }), /identity synchronization is disabled/);

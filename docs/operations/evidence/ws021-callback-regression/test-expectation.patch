@@ -1,0 +1,14 @@
+--- a/ui/tests/ws021-read-only-staging-session.test.ts
++++ b/ui/tests/ws021-read-only-staging-session.test.ts
+@@ -189,7 +189,10 @@
+     globalThis.fetch = async () => { const data = fixture(); data.membership.effectiveFrom = new Date(Date.now() - 10_000).toISOString();
+       return Response.json({ ...data, issuedAt: Date.now() - 1000, expiresAt: Date.now() + 40_000 }); };
+     assert.equal((await app.resolveApplicationSession()).kind, "authenticated");
+-    await assert.rejects(app.recordAuthenticationSuccess({ id: auth.user.id, email: "test@example.test" }), /identity synchronization is disabled/);
++    assert.equal(await app.recordAuthenticationSuccess({ id: auth.user.id, email: "test@example.test" }), undefined);
++    assert.equal(state.repositories, 0); // Silent callback completion performs no persistence.
++    globalThis.fetch = async () => Response.json({}, { status: 403 });
++    assert.deepEqual(await app.resolveApplicationSession(), { kind: "no-membership" }); // Callback cannot grant access.
+     await assert.rejects(app.synchronizeWorkOSUser({ id: auth.user.id, email: "test@example.test" }), /identity synchronization is disabled/);
+     assert.equal(await app.resolveAuthenticatedPersistentIdentity(), null);
+     assert.equal(state.repositories, 0);

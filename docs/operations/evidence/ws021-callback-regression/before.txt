@@ -1,0 +1,40 @@
+✔ authorized existing login resolves through GET only without inferred role grants (8.658204ms)
+✔ revoked and missing memberships deny without fallback (2.226817ms)
+✔ missing, capped or conflicting authority completeness evidence cannot create a session (1.553552ms)
+✔ stale, future and overlong membership assertions deny (2.717788ms)
+✔ foreign subject, application identity, tenant, account and business context deny (1.530988ms)
+✔ foreign organization or business-context selection cannot substitute scope (1.215092ms)
+✔ missing configuration and production targeting stop before token transmission (0.629309ms)
+✔ unverified email and missing access token deny without authority requests (0.173612ms)
+✔ mutation or platform permissions and roles cannot enter read-only sessions (1.104375ms)
+✔ refresh and re-login re-read membership rather than reusing an assertion (0.555968ms)
+✔ signed organization selection is revalidated against the authority before switching scope (0.837353ms)
+✔ provider failures never expose error text or trigger a second transport (0.324609ms)
+✔ WS-001 boundary fences Preview and remains opt-in elsewhere (0.249306ms)
+✖ real application entrypoints bypass every legacy repository and callback write in restricted mode (33.349968ms)
+✔ organization POST writes only signed cookies after authority approval and denies foreign requests (25.01334ms)
+ℹ tests 15
+ℹ suites 0
+ℹ pass 14
+ℹ fail 1
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 259.042395
+
+✖ failing tests:
+
+test at tests/ws021-read-only-staging-session.test.ts:1:11098
+✖ real application entrypoints bypass every legacy repository and callback write in restricted mode (33.349968ms)
+  AssertionError [ERR_ASSERTION]: Missing expected rejection.
+      at process.processTicksAndRejections (node:internal/process/task_queues:104:5)
+      at async TestContext.<anonymous> (/workspace/scratch/8fcad6ecceba/tracekit-session-bootstrap/ui/tests/ws021-read-only-staging-session.test.ts:192:5)
+      at async Test.run (node:internal/test_runner/test:1409:7)
+      at async Test.processPendingSubtests (node:internal/test_runner/test:974:7) {
+    generatedMessage: false,
+    code: 'ERR_ASSERTION',
+    actual: undefined,
+    expected: /identity synchronization is disabled/,
+    operator: 'rejects',
+    diff: 'simple'
+  }
