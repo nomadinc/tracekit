@@ -1,0 +1,25 @@
+(node:13) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./")); register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:13) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ORIGINAL SECURITY FAIL: server-capped overrides omitted deny orders.view; old session included orders.view
+(node:13) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+✔ ORIGINAL omitted-denial reproduction grants orders.view despite a complete-source deny (90.483523ms)
+✔ complete override set gives denial precedence over defaults and registry grants (27.469265ms)
+✔ same omitted-denial response now rejects, even when repeated identically (54.776507ms)
+✔ missing exact count or server-capped membership and permission responses reject (135.768438ms)
+✔ duplicated and conflicting overrides reject even with distinct database IDs (140.255481ms)
+✔ missing/malformed permission evidence and unverified raw read arrays reject (53.994748ms)
+✔ permission change during collection rejects mixed authorization (41.872552ms)
+✔ organization switching reuses completeness checks (43.901277ms)
+✔ UI refuses absent or incomplete authority receipts before constructing session (34.585944ms)
+✔ reporting token issuance cannot bypass session permission denials (38.045844ms)
+ℹ tests 10
+ℹ suites 0
+ℹ pass 10
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 918.838444

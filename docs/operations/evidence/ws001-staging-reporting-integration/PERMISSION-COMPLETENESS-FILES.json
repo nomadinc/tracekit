@@ -1,0 +1,26 @@
+{
+  "parent": "5208115d6739000f11040b91fbb5daca5e3e97ff",
+  "files": {
+    "api/src/staging-reporting/authority.test.ts": "149360b00e2ab845eae9f70160976b4ec9f1248e31b776353f9d256ed1e6824b",
+    "api/src/staging-reporting/authority.ts": "8887108b18c0ba234b3c3f062dde191cde09d61480d7eced14c31c7a648115ec",
+    "api/src/staging-reporting/completeness.ts": "36b0ded4f8fdc8b224231ba01fba9123dc6cc28025a9065b4103baa6bcaac355",
+    "api/src/staging-reporting/page-session.ts": "2b691492cd1f35555e3bf439768d65bb35a11b8bd060c37778697d887fdada6d",
+    "api/src/staging-reporting/permission-completeness.test.ts": "27b7c92a11039f54b8b3184b5b4ab29a5c6efe5bbf4ebd80a2708b4be149f402",
+    "api/src/staging-reporting/session.test.ts": "6f12b0359476cb01cf600306c4e83c972d02c6302bb5cb6579eb1da7427ff009",
+    "api/src/staging-reporting/session.ts": "DELETED",
+    "api/staging-reporting-review/README.md": "096a3423c4f738451ae766ea2dcfa98f5cef6e1de45eed75d1914a232da3bfe3",
+    "api/staging-reporting-review/SESSION-AUTHORITY-CONTRACT.json": "06fd52322f237d3557676815a87192bbb9a5107ead094ec3299e47b64e675fa0",
+    "api/staging-reporting-review/SESSION-PERMISSION-COMPLETENESS.md": "6968848bbdb92505fc8dd1d258d778f4f71de5f3440e5e34315f12f715158cbd",
+    "api/staging-reporting-review/SOURCE-HASHES.json": "b8bf8e67c5b84dde524652834cb8a5b1f8a0e4fcfbd628c8201f47a3968fa444",
+    "api/tests/fixtures/ws021-183/page-session.ts.txt": "94ba7f42c5aa987e1e03d567d1d2a4ccaf2baccfee7be371099e0f5b336960a5",
+    "api/tests/session-authority-fixture.ts": "555f1a051c34da523211a9c3d90c5361874494c69609adc65ca82a8811bed59d",
+    "docs/operations/evidence/ws001-staging-reporting-integration/PERMISSION-COMPLETENESS-RESULTS.json": "4afb94eedd450d0f001456c1f4aba41f5845bb4c2629d737958f44a7b239814c",
+    "docs/operations/evidence/ws001-staging-reporting-integration/permission-completeness-build.txt": "c907ddc2bca5cba7dfdc01c56771c55116ca7b26cbf82c1aeb7ce1e8f436686d",
+    "docs/operations/evidence/ws001-staging-reporting-integration/permission-completeness-focused.txt": "860491364c0f81f8644d065863df5f69aa0947b902a94b47bd7956f7aa055351",
+    "docs/operations/evidence/ws001-staging-reporting-integration/permission-completeness-full.txt": "97911744ba38c53669ccbee4542f12705ff9bb6a01b486cfae705c5136b12d7d",
+    "docs/operations/evidence/ws001-staging-reporting-integration/permission-completeness-original.txt": "847adbb5b04aa5c3a072bbab2cb879e0356603364082004079ba03717be74777",
+    "ui/app/api/session/organization/route.ts": "aae43a5c3bdef94fc119684e132a020d6c5e4fcd9be2254eab56d6f2b8090cd0",
+    "ui/lib/identity/application-session.ts": "79005819d4aaca0c415e1cfa4320ade851e285bc478d3ce2ef4c37c143964a09",
+    "ui/lib/identity/staging-read-only-session.ts": "4aeb518a9a6ab7e949c1a06f776d749e910b7d1eb68bb5e92e9b49716dd1885c"
+  }
+}

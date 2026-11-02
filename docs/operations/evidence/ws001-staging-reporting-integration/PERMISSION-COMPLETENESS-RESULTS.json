@@ -1,0 +1,28 @@
+{
+  "parent": "5208115d6739000f11040b91fbb5daca5e3e97ff",
+  "affected_WS021": "1832473b54b8735c5d1686b864376a3f47999820",
+  "original": {
+    "source": "exact retained donor page-session.ts",
+    "expected_orders_view": false,
+    "old_orders_view": true,
+    "outcome": "FAIL REPRODUCED"
+  },
+  "corrected_capped_response": "DENIED503; no session",
+  "complete_denial_response": "200 session; orders.view absent",
+  "focused_authorization": {
+    "pass": 30,
+    "fail": 0,
+    "skip": 0
+  },
+  "full_focused": {
+    "pass": 95,
+    "fail": 0,
+    "skip": 0
+  },
+  "bundle": "syntax PASS; no privileged legacy paths",
+  "accepted_Profit_files": "byte-identical to9d1cc0f",
+  "native_snapshot_visibility_and_roles": "NOT VERIFIED; remains HOLD",
+  "SQL_executed": false,
+  "credentials_activated": false,
+  "WS021_WS022_review": "PENDING"
+}

@@ -1,0 +1,55 @@
+(node:13) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./")); register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:13) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ issuer verifies WorkOS proof and complete protected effective authority (86.585943ms)
+✔ revoked membership prevents issuance (76.400341ms)
+✔ foreign registry substitution prevents issuance (89.179879ms)
+✔ invalid expiry fails closed (30.024156ms)
+✔ current membership version must match issued token (29.233234ms)
+(node:14) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./")); register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+ORIGINAL SECURITY FAIL: server-capped overrides omitted deny orders.view; old session included orders.view
+(node:14) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+✔ ORIGINAL omitted-denial reproduction grants orders.view despite a complete-source deny (78.281312ms)
+✔ complete override set gives denial precedence over defaults and registry grants (66.818808ms)
+✔ same omitted-denial response now rejects, even when repeated identically (32.923006ms)
+✔ missing exact count or server-capped membership and permission responses reject (216.785738ms)
+✔ duplicated and conflicting overrides reject even with distinct database IDs (152.145769ms)
+✔ missing/malformed permission evidence and unverified raw read arrays reject (58.570345ms)
+✔ permission change during collection rejects mixed authorization (57.262909ms)
+✔ organization switching reuses completeness checks (80.490125ms)
+✔ UI refuses absent or incomplete authority receipts before constructing session (80.815166ms)
+✔ reporting token issuance cannot bypass session permission denials (31.937996ms)
+✔ exact counts are required specifically for override and registry reads (91.935447ms)
+✔ WS021 organization switch rejects incomplete authority without creating a session (98.388054ms)
+(node:15) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./")); register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:15) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ authorized exact WS021 response uses complete read-only protected graph (40.648411ms)
+✔ signed wrong issuer/audience and invalid token time reject before reads (80.956633ms)
+✔ invalid signatures and missing bearer reject (96.325596ms)
+✔ foreign tenant, application user, account and context substitutions reject (235.367821ms)
+✔ revoked or inactive user/account/organization/membership evidence rejects (230.050558ms)
+✔ missing and ambiguous identity bindings reject (133.840182ms)
+✔ missing contexts and expired membership reject (66.549342ms)
+✔ POST, mutation routes and unregistered query overrides cannot write (17.06378ms)
+✔ missing authority credentials/configuration has no fallback (72.696977ms)
+✔ WS021 resolver consumes real authority complete evidence (38.508786ms)
+✔ expiry during protected read wait denies stale issuance (26.20488ms)
+✔ privileged substituted effective role rejects (30.611402ms)
+✔ refresh applies new explicit denial without cached or inherited grants (29.83387ms)
+ℹ tests 30
+ℹ suites 0
+ℹ pass 30
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1416.492905

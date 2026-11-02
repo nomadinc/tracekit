@@ -15,12 +15,6 @@ const READ_PERMISSIONS: readonly string[] = [
   "orders.view", "orders.view_financials", "financials.view",
 ];
 
-// A configured but invalid mode must deny, never select the legacy write path.
-// Production behavior changes only if someone explicitly installs this opt-in.
-export function restrictedStagingSessionMode(env: SessionEnvironment = process.env) {
-  return env.TRACEKIT_REPORTING_MODE !== undefined;
-}
-
 type Auth = { user?: { id: string; emailVerified?: boolean } | null; accessToken?: string; impersonator?: unknown };
 type CookieJar = { get(name: string): { value: string } | undefined };
 export type ReadOnlySessionDependencies = {
@@ -29,6 +23,7 @@ export type ReadOnlySessionDependencies = {
   fetch: typeof fetch;
   env?: SessionEnvironment;
   now?: () => number;
+  organizationId?: string;
 };
 
 function authorityEndpoint(env: SessionEnvironment) {
@@ -61,10 +56,18 @@ function timestamp(value: unknown) {
   return value;
 }
 
+const AUTHORITY_TABLES=['tracekit_users','tracekit_memberships','tracekit_roles','tracekit_accounts','tracekit_organizations','tracekit_permission_overrides','tracekit_business_context_access','tracekit_business_contexts'];
+function requireCompleteAuthority(value:unknown){
+ const e=object(value);if(e.version!==1||e.kind!=='exact-count-authority-v1'||!Array.isArray(e.reads)||e.reads.length<18||e.reads.length>116||e.readCount!==e.reads.length)throw new Error('incomplete_authority');
+ for(const collection of [0,1]){const reads=e.reads.map(object).filter(r=>r.collection===collection);for(const table of AUTHORITY_TABLES)if(reads.filter(r=>r.table===table).length!==1)throw new Error('incomplete_authority');if(!reads.some(r=>r.table==='current_memberships'))throw new Error('incomplete_authority');}
+ for(const raw of e.reads){const r=object(raw);if(![0,1].includes(r.collection as number)||![...AUTHORITY_TABLES,'current_memberships'].includes(r.table as string)||!Number.isSafeInteger(r.rowCount)||r.rowCount!==r.total||(r.rowCount as number)<0||(r.rowCount as number)>50||(r.table==='current_memberships'&&r.rowCount!==1))throw new Error('incomplete_authority');}
+}
+
 // The authority is responsible for verified WorkOS JWTs and live protected
 // registry reads. The UI has no database credential and accepts no browser roles.
 export function projectReadOnlySession(value: unknown, subject: string, now: number): TraceKitSessionContext {
   const data = object(value);
+  requireCompleteAuthority(data.authorityEvidence);
   const issuedAt = timestamp(data.issuedAt);
   const expiresAt = timestamp(data.expiresAt);
   if (data.version !== 1 || data.subject !== subject || !text(data.membershipVersion)
@@ -77,7 +80,7 @@ export function projectReadOnlySession(value: unknown, subject: string, now: num
     || ["platform-owner", "platform-admin", "support", "billing", "read-only-operations"].includes(role)
     || u.workosUserId !== subject || u.status !== "active" || a.status !== "active"
     || !["client", "agency"].includes(String(a.accountType))
-    || o.accountId !== accountId || m.accountId !== accountId || m.userId !== userId
+    || o.status !== "active" || o.accountId !== accountId || m.accountId !== accountId || m.userId !== userId
     || m.organizationId !== organizationId || data.workspaceId !== organizationId
     || m.status !== "active") throw new Error("invalid_session");
   const membership = {
@@ -98,11 +101,19 @@ export function projectReadOnlySession(value: unknown, subject: string, now: num
   if (new Set(contexts.map(c => c.id)).size !== contexts.length
     || !contexts.some(c => c.id === data.activeBusinessContextId)) throw new Error("invalid_session");
   const organization = { id: organizationId, accountId, name: text(o.name), mark: text(o.mark, 16) };
+  if (!Array.isArray(data.availableOrganizations) || !data.availableOrganizations.length || data.availableOrganizations.length > 50) throw new Error("invalid_session");
+  const availableOrganizations = data.availableOrganizations.map(value => {
+    const entry = object(value);
+    if (entry.status !== "active") throw new Error("invalid_session");
+    return { id: text(entry.id), accountId: text(entry.accountId), name: text(entry.name), mark: text(entry.mark,16) };
+  });
+  if (new Set(availableOrganizations.map(o => o.id)).size !== availableOrganizations.length
+    || !availableOrganizations.some(o => o.id === organizationId && o.accountId === accountId)) throw new Error("invalid_session");
   return {
     user: { id: userId, workosUserId: subject, primaryEmail: text(u.primaryEmail), displayName: text(u.displayName), avatarUrl: null, status: "active" },
     externalWorkosUserId: subject,
     activeAccount: { id: accountId, name: text(a.name), accountType: a.accountType as "client" | "agency", status: "active" },
-    activeAgency: null, activeOrganization: organization, availableOrganizations: [organization],
+    activeAgency: null, activeOrganization: organization, availableOrganizations,
     membership, role, effectivePermissions: permissions, permissionOverrides: [],
     accessibleBusinessContexts: contexts, activeBusinessContextId: data.activeBusinessContextId as string,
     assurance: { authenticationMethod: null, impersonated: false }, correlationId: randomUUID(),
@@ -116,17 +127,30 @@ export async function resolveReadOnlyStagingSession(deps: ReadOnlySessionDepende
     const auth = await deps.authenticate();
     if (!auth.user) return { kind: "unauthenticated" };
     if (!auth.user.emailVerified || auth.impersonator || !auth.accessToken) return { kind: "no-membership" };
-    const response = await deps.fetch(endpoint, {
-      method: "GET", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(5000),
-      headers: { accept: "application/json", authorization: `Bearer ${auth.accessToken}` },
-    });
-    if ([401, 403, 404].includes(response.status)) return { kind: "no-membership" };
-    if (!response.ok) return { kind: "provider-unavailable" };
-    const session = projectReadOnlySession(await response.json(), auth.user.id, clock());
+    const readSession = async (organizationId?: string) => {
+      const url = new URL(endpoint);
+      if (organizationId) url.searchParams.set("organization_id", organizationId);
+      const response = await deps.fetch(url.href, {
+        method: "GET", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(5000),
+        headers: { accept: "application/json", authorization: `Bearer ${auth.accessToken}` },
+      });
+      if (!response.ok) return { denied: [401,403,404].includes(response.status) };
+      const session = projectReadOnlySession(await response.json(), auth.user!.id, clock());
+      if (organizationId && session.activeOrganization!.id !== organizationId) throw new Error("invalid_session");
+      return { session };
+    };
+    const initial = await readSession(deps.organizationId);
+    if (!initial.session) return { kind: initial.denied ? "no-membership" : "provider-unavailable" };
+    let session = initial.session;
     const jar = await deps.cookieJar();
-    const organization = readActiveOrganization(jar.get(ACTIVE_ORGANIZATION_COOKIE)?.value, session.user.id, clock());
-    if (organization && organization !== session.activeOrganization!.id) return { kind: "no-membership" };
-    const context = readActiveBusinessContext(jar.get(ACTIVE_BUSINESS_CONTEXT_COOKIE)?.value, session.user.id, session.activeOrganization!.id, clock());
+    const organization = deps.organizationId || readActiveOrganization(jar.get(ACTIVE_ORGANIZATION_COOKIE)?.value, session.user.id, clock());
+    if (organization && organization !== session.activeOrganization!.id) {
+      if (!session.availableOrganizations.some(o => o.id === organization)) return { kind: "no-membership" };
+      const next = await readSession(organization);
+      if (!next.session || next.session.user.id !== session.user.id) return { kind: "no-membership" };
+      session = next.session;
+    }
+    const context = deps.organizationId ? null : readActiveBusinessContext(jar.get(ACTIVE_BUSINESS_CONTEXT_COOKIE)?.value, session.user.id, session.activeOrganization!.id, clock());
     if (context) {
       if (!session.accessibleBusinessContexts.some(c => c.id === context)) return { kind: "no-membership" };
       session.activeBusinessContextId = context;

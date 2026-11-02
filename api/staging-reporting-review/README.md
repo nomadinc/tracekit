@@ -1,3 +1,5 @@
+Current session correction: SESSION-PERMISSION-COMPLETENESS.md and updated SESSION-AUTHORITY-CONTRACT.json supersede the prior session_context proposal. Relational permission/membership reads require checked exact-count receipts; native activation remains HOLD.
+
 Current focused fix: PROFIT-COMPLETENESS-CORRECTION.md. Profit uses one exact-count response and remains disabled until deployed snapshot verification. Staging order view is currently absent.
 
 Current order-view/session delta: see ORDER-VIEW-INTEGRATION.md and consolidated-staging-review.sql. All SQL remains unexecuted and activation is HOLD.

@@ -1,3 +1,4 @@
+import {resolveReadOnlyStagingSession} from './staging-read-only-session';
 import {restrictedIdentityBoundary,assertIdentityWritesAllowed} from "./staging-session-boundary";
 import { requirePersistedPlatformAccess } from "./platform-catalog-access";
 import { randomUUID } from "node:crypto";
@@ -39,7 +40,7 @@ export async function synchronizeWorkOSUser(identity: WorkOSIdentityInput) {
 }
 
 export async function recordAuthenticationSuccess(identity: WorkOSIdentityInput) {
-  assertIdentityWritesAllowed(process.env);
+  if (restrictedIdentityBoundary(process.env)) return;
   const repository = new SupabaseIdentityTenancyRepository();
   const user = await repository.synchronizeUser(identity);
   await repository.recordAuditEvent({ actorUserId: user.id, authenticatedIdentityId: identity.id, accountId: null, organizationId: null, action: "authentication.sign_in.succeeded", result: "success", correlationId: randomUUID(), metadata: { provider: "workos" } });
@@ -69,7 +70,7 @@ export async function resolveAuthenticatedPersistentIdentity() {
 
 export async function resolveApplicationSession(): Promise<ApplicationSessionResolution> {
   // No privileged repository fallback while WS-021 read-only session enrollment is pending.
-  if (restrictedIdentityBoundary(process.env)) return { kind: "provider-unavailable" };
+  if (restrictedIdentityBoundary(process.env)) return resolveReadOnlyStagingSession({authenticate:withAuth,cookieJar:cookies,fetch});
   const requestHeaders = await headers();
   const requestedDevelopmentIdentity = requestHeaders.get(
     DEVELOPMENT_REVIEW_HEADER,
