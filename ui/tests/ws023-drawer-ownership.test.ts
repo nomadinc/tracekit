@@ -161,3 +161,33 @@ test("Customer Workspace revokes lease before closing drawer", () => {
     /revokeDrawerOwnerLease\(lease\);[\s\S]*?drawer\.closeDrawer\(drawerOwner\)/
   );
 });
+
+test("drawer context includes allowed organization membership", () => {
+  assert.match(
+    providerSource,
+    /allowedOrganizations:\s*\[[\s\S]*?session\.identity\.membership\.organizationIds[\s\S]*?\]\.sort\(\)/
+  );
+});
+
+test("revoked organization context immediately hides prior drawer", () => {
+  const before = JSON.stringify({
+    identityId: "user-1",
+    membershipId: "membership-1",
+    organizationId: "org-A",
+    permissions: ["customers.view"],
+    allowedOrganizations: ["org-A", "org-B"],
+  });
+
+  const after = JSON.stringify({
+    identityId: "user-1",
+    membershipId: "membership-1",
+    organizationId: "org-A",
+    permissions: ["customers.view"],
+    allowedOrganizations: ["org-B"],
+  });
+
+  const drawer = openOwnedDrawer(before, "owner-A", "Customer A");
+
+  assert.equal(visibleOwnedDrawer(drawer, before)?.value, "Customer A");
+  assert.equal(visibleOwnedDrawer(drawer, after), null);
+});

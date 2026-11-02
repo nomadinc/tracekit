@@ -40,6 +40,9 @@ export function ShellDrawerProvider({
     membershipId: session.identity.membership.id,
     organizationId: session.activeOrganizationId,
     businessContextId: session.activeBusinessContextId,
+    allowedOrganizations: [
+      ...session.identity.membership.organizationIds
+    ].sort(),
     permissions: Array.from(effectivePermissions(session.identity)).sort(),
   });
 
