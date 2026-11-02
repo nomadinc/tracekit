@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 
 import { Card } from "@/components/ui/card";
 import { KpiCard } from "@/components/ui/kpi-card";
@@ -10,6 +10,11 @@ import { useIdentity } from "@/components/identity/identity-provider";
 import { profitReportContext } from "@/lib/identity/profit-report-context";
 import { ProfitRequestController } from "@/lib/identity/profit-request-controller";
 import type { ProfitSummaryResponse } from "@/lib/profit-types";
+import {
+  profitReportQuery,
+  validateProfitReportFilters,
+} from "@/lib/profit-report-filters";
+
 
 function isoDateLocal(d: Date) {
   const yyyy = d.getFullYear();
@@ -87,14 +92,46 @@ function useDashboardDateRange() {
 
 export function ProfitSummaryPanel() {
   const range = useDashboardDateRange();
+  const searchParams = useSearchParams();
+  const router = useRouter();
+  const pathname = usePathname();
+
+  const filters = {
+    from: searchParams.get("from") ?? range.from,
+    to: searchParams.get("to") ?? range.to,
+    currency: (searchParams.get("currency") ?? "").trim().toUpperCase(),
+    connector_id: (searchParams.get("connector_id") ?? "").trim(),
+    platform: (searchParams.get("platform") ?? "").trim(),
+    event_source: (searchParams.get("event_source") ?? "").trim(),
+  };
+
+  const filterError = validateProfitReportFilters(filters);
+  const filterQuery = filterError ? "" : profitReportQuery(filters);
+
+  const [draft, setDraft] = React.useState(filters);
+
+  React.useEffect(() => {
+    setDraft(filters);
+  }, [filterQuery, filterError]);
+
+  const applyFilters = (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+
+    const validation = validateProfitReportFilters(draft);
+    if (validation) return;
+
+    const query = profitReportQuery(draft);
+    router.push(`${pathname}?${query}`, { scroll: false });
+  };
+
   const { session } = useIdentity();
   const context = profitReportContext(session);
   const contextKey = JSON.stringify({
     identity: context.key,
-    from: range.from,
-    to: range.to,
+    query: filterQuery,
+    filterError,
   });
-  const authorized = context.authorized;
+  const authorized = context.authorized && !filterError;
   const controllerRef = React.useRef<ProfitRequestController<ProfitSummaryResponse> | null>(null);
 
   if (!controllerRef.current) {
@@ -111,6 +148,20 @@ export function ProfitSummaryPanel() {
 
   const reportCurrency = summary?.currency || undefined;
   const reportHasData = summary?.data_available === true;
+  const reportReady = authorized && reportHasData && Boolean(reportCurrency);
+
+  const costFields = [
+    summary?.processor_fees,
+    summary?.chargeback_fees,
+    summary?.bank_fees,
+    summary?.shipping_cost ?? summary?.shipping,
+    summary?.cogs,
+    summary?.affiliate_payout,
+    summary?.ad_spend,
+  ];
+
+  const missingRecordedCosts =
+    reportReady && costFields.some((value) => availableNumber(value) === null);
 
   const displayMoney = (value: unknown) =>
     reportHasData && reportCurrency
@@ -142,16 +193,13 @@ export function ProfitSummaryPanel() {
       return;
     }
 
-    const params = new URLSearchParams({
-      from: range.from,
-      to: range.to,
-    });
+    const params = filterQuery;
 
     const operation = controller.start(
       contextKey,
       authorized,
       (signal) => sameOriginGetJson<ProfitSummaryResponse>(
-        `/api/profit/summary?${params.toString()}`,
+        `/api/profit/summary?${params}`,
         { signal }
       ).then((json) => {
         if (json?.ok === false) {
@@ -164,7 +212,7 @@ export function ProfitSummaryPanel() {
     );
 
     return () => operation.cancel();
-  }, [controller, contextKey, authorized, range.from, range.to]);
+  }, [controller, contextKey, authorized, filterQuery]);
 
   React.useEffect(() => {
     return () => controller.dispose();
@@ -192,6 +240,44 @@ export function ProfitSummaryPanel() {
         </span>
       }
     >
+      <form
+        onSubmit={applyFilters}
+        className="mb-5 grid gap-3 rounded-xl border p-4 sm:grid-cols-2 xl:grid-cols-3"
+      >
+        {([
+          ["from", "From", "date"],
+          ["to", "To", "date"],
+          ["currency", "Currency (USD, GBP, EUR)", "text"],
+          ["connector_id", "Connector ID", "text"],
+          ["platform", "Platform", "text"],
+          ["event_source", "Event source", "text"],
+        ] as const).map(([key, label, type]) => (
+          <label key={key} className="text-xs font-medium">
+            {label}
+            <input
+              type={type}
+              value={draft[key]}
+              onChange={(event) =>
+                setDraft((current) => ({
+                  ...current,
+                  [key]: event.target.value,
+                }))
+              }
+              className="mt-1 block w-full rounded-lg border bg-transparent px-3 py-2 text-sm"
+            />
+          </label>
+        ))}
+        <div className="flex items-end">
+          <button
+            type="submit"
+            disabled={Boolean(validateProfitReportFilters(draft))}
+            className="rounded-lg bg-slate-900 px-4 py-2 text-xs font-semibold text-white disabled:opacity-40 dark:bg-white dark:text-slate-900"
+          >
+            Apply filters
+          </button>
+        </div>
+      </form>
+
       <div className="mb-4 text-xs text-slate-500">
         Financial status: Operational — Unreconciled.
         Calculated totals do not establish complete cost coverage
@@ -201,6 +287,45 @@ export function ProfitSummaryPanel() {
         accrued affiliate commissions. Differences may reflect source
         coverage, accounting definitions, or reporting periods.
       </div>
+
+      {authorized && loading ? (
+        <p role="status" className="mb-4 text-sm text-slate-500">
+          Loading financial evidence for the selected period…
+        </p>
+      ) : null}
+
+      {authorized && !loading && !error && !reportHasData ? (
+        <p role="status" className="mb-4 text-sm text-slate-500">
+          No qualified financial records are available for the selected period.
+        </p>
+      ) : null}
+
+      {reportReady && missingRecordedCosts ? (
+        <p role="status" className="mb-4 text-sm text-amber-700 dark:text-amber-300">
+          Some recorded cost categories are unavailable. Profit remains
+          operational and unreconciled; missing costs are not confirmed zero.
+        </p>
+      ) : null}
+
+      {filterError ? (
+        <p role="alert" className="mb-4 text-sm text-amber-700">
+          {filterError}
+        </p>
+      ) : null}
+
+      {!filterError && (filters.currency ||
+        filters.connector_id ||
+        filters.platform ||
+        filters.event_source) ? (
+        <p className="mb-4 text-xs text-slate-500">
+          Active filters: {[
+            filters.currency && `Currency: ${filters.currency}`,
+            filters.connector_id && `Connector: ${filters.connector_id}`,
+            filters.platform && `Platform: ${filters.platform}`,
+            filters.event_source && `Source: ${filters.event_source}`,
+          ].filter(Boolean).join(" · ")}
+        </p>
+      ) : null}
 
       {!authorized ? (
         <p role="status" className="mb-4 text-sm text-slate-500">

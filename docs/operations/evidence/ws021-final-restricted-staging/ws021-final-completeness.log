@@ -1,0 +1,37 @@
+ORIGINAL SECURITY FAIL: server-capped overrides omitted deny orders.view; old session included orders.view
+(node:12) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ ORIGINAL omitted-denial reproduction grants orders.view despite a complete-source deny (101.751994ms)
+✔ complete override set gives denial precedence over defaults and registry grants (68.624253ms)
+✔ same omitted-denial response now rejects, even when repeated identically (26.71225ms)
+✔ missing exact count or server-capped membership and permission responses reject (156.303359ms)
+✔ duplicated and conflicting overrides reject even with distinct database IDs (129.624426ms)
+✔ missing/malformed permission evidence and unverified raw read arrays reject (69.045202ms)
+✔ permission change during collection rejects mixed authorization (28.49828ms)
+✔ organization switching reuses completeness checks (32.498343ms)
+✔ UI refuses absent or incomplete authority receipts before constructing session (159.10799ms)
+✔ reporting token issuance cannot bypass session permission denials (63.894256ms)
+✔ exact counts are required specifically for override and registry reads (175.616892ms)
+✔ WS021 organization switch rejects incomplete authority without creating a session (86.627266ms)
+✔ accepted authorization gate remains disabled unless explicitly configured (16.647766ms)
+ORIGINAL SECURITY FAIL: total=2, returned=1, old656 issued session
+(node:13) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ ORIGINAL656 issues a session for a capped one-of-two active binding response (102.028675ms)
+✔ exactly one complete scoped binding admits an existing valid session (65.026566ms)
+✔ two complete registry bindings deny, including identical duplicate records (120.729203ms)
+✔ original one-of-two capped registry response rejects before any session issuance (28.825974ms)
+✔ missing exact count and inconsistent registry count/body reject (231.172784ms)
+✔ multiple canonical WorkOS-to-user bindings cannot hide behind a capped user read (77.691471ms)
+✔ visible concurrent registry insertion or version change rejects mixed authority (57.14294ms)
+✔ repeated missing-count responses never establish registry completeness (26.601244ms)
+✔ revoked and foreign-tenant registry evidence still deny (131.965197ms)
+✔ missing or concurrently deleted registry binding denies issuance (96.088441ms)
+ℹ tests 23
+ℹ suites 0
+ℹ pass 23
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1405.512281

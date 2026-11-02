@@ -1,0 +1,21 @@
+✔ authorized exact WS021 response uses complete read-only protected graph (67.109523ms)
+✔ signed wrong issuer/audience and invalid token time reject before reads (59.981102ms)
+✔ invalid signatures and missing bearer reject (50.812895ms)
+✔ foreign tenant, application user, account and context substitutions reject (186.714769ms)
+✔ revoked or inactive user/account/organization/membership evidence rejects (295.113316ms)
+✔ missing and ambiguous identity bindings reject (77.279041ms)
+✔ missing contexts and expired membership reject (174.918251ms)
+✔ POST, mutation routes and unregistered query overrides cannot write (44.636919ms)
+✔ missing authority credentials/configuration has no fallback (39.540572ms)
+✔ WS021 resolver consumes real authority complete evidence (26.543627ms)
+✔ expiry during protected read wait denies stale issuance (46.284394ms)
+✔ privileged substituted effective role rejects (53.884253ms)
+✔ refresh applies new explicit denial without cached or inherited grants (64.712855ms)
+ℹ tests 13
+ℹ suites 0
+ℹ pass 13
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1480.801756

@@ -70,7 +70,7 @@ function ReviewContent() {
     drawer.openDrawer(<ProductDecisionDrawer providerProductId={providerProductId} onChanged={loadList} />, "Product mapping review");
   }
   function openBulkReview(group: BulkGroup) {
-    drawer.openDrawer(<BulkDecisionPanel group={group} onCancel={drawer.closeDrawer} onChanged={async () => { drawer.closeDrawer(); await loadList(); }} />, `Bulk mapping · ${group.label}`);
+    drawer.openDrawer(<BulkDecisionPanel group={group} onCancel={() => drawer.closeDrawer()} onChanged={async () => { drawer.closeDrawer(); await loadList(); }} />, `Bulk mapping · ${group.label}`);
   }
 
   return <section className="space-y-5 rounded-2xl border border-slate-200 bg-white p-5 shadow-sm dark:border-white/10 dark:bg-white/[.035]" aria-labelledby="commerce-product-review-title">

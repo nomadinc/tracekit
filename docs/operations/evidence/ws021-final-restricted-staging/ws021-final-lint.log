@@ -1,0 +1,18 @@
+`next lint` is deprecated and will be removed in Next.js 16.
+For new projects, use create-next-app to choose your preferred linter.
+For existing projects, migrate to the ESLint CLI:
+npx @next/codemod@canary next-lint-to-eslint-cli .
+
+
+./components/customers/customer-workspace.tsx
+134:6  Warning: React Hook React.useEffect has missing dependencies: 'session.activeBusinessContextId' and 'session.activeOrganizationId'. Either include them or remove the dependency array.  react-hooks/exhaustive-deps
+159:6  Warning: React Hook React.useEffect has a missing dependency: 'drawerOwner'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+186:6  Warning: React Hook React.useEffect has a missing dependency: 'drawerOwner'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./app/(app)/dashboard/profit-summary-panel.tsx
+115:6  Warning: React Hook React.useEffect has a missing dependency: 'filters'. Either include it or remove the dependency array.  react-hooks/exhaustive-deps
+
+./components/offers/commerce-product-mapping-review.tsx
+116:166  Warning: React Hook React.useEffect has a missing dependency: 'group.products'. Either include it or remove the dependency array. If 'setSelected' needs the current value of 'group.products', you can also switch to useReducer instead of useState and read 'group.products' in the reducer.  react-hooks/exhaustive-deps
+
+info  - Need to disable some ESLint rules? Learn more here: https://nextjs.org/docs/app/api-reference/config/eslint#disabling-rules

@@ -4,14 +4,22 @@ import * as React from "react";
 import { X } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { useIdentity } from "@/components/identity/identity-provider";
+import { effectivePermissions } from "@/lib/identity/authorization";
+import {
+  admitOwnedDrawer,
+  admitLeasedDrawer,
+  closeOwnedDrawer,
+  visibleOwnedDrawer,
+  type DrawerOwnerLease,
+} from "@/lib/identity/drawer-ownership";
 
 type ShellDrawerContextValue = {
   openDrawer: (
     content: React.ReactNode,
     title: string,
-    options?: { onDismiss?: () => void },
+    options?: { onDismiss?: () => void; owner?: string; lease?: DrawerOwnerLease },
   ) => void;
-  closeDrawer: () => void;
+  closeDrawer: (owner?: string) => void;
 };
 
 const ShellDrawerContext = React.createContext<ShellDrawerContextValue | null>(
@@ -25,45 +33,47 @@ export function ShellDrawerProvider({
 }) {
   const pathname = usePathname();
   const { session } = useIdentity();
-  const [drawer, setDrawer] = React.useState<{
+  const contextKey = JSON.stringify({
+    pathname,
+    authenticated: session.authenticated,
+    identityId: session.identity.id,
+    membershipId: session.identity.membership.id,
+    organizationId: session.activeOrganizationId,
+    businessContextId: session.activeBusinessContextId,
+    allowedOrganizations: [
+      ...session.identity.membership.organizationIds
+    ].sort(),
+    permissions: Array.from(effectivePermissions(session.identity)).sort(),
+  });
+
+  const activeContextRef = React.useRef(contextKey);
+  activeContextRef.current = contextKey;
+
+  type DrawerValue = {
     title: string;
     content: React.ReactNode;
     onDismiss?: () => void;
-  } | null>(null);
+  };
+
+  const [storedDrawer, setDrawer] =
+    React.useState<import("@/lib/identity/drawer-ownership").OwnedDrawer<DrawerValue> | null>(null);
+
+  const drawer = visibleOwnedDrawer(storedDrawer, contextKey);
+
   const dismissDrawer = React.useCallback(() => {
-    drawer?.onDismiss?.();
-    setDrawer(null);
+    if (!drawer) return;
+    setDrawer((current) =>
+      current === drawer ? null : current
+    );
+    drawer.value.onDismiss?.();
   }, [drawer]);
-  const previousRef = React.useRef({
-    pathname,
-    identityId: session.identity.id,
-    organizationId: session.activeOrganizationId,
-    businessContextId: session.activeBusinessContextId,
-  });
+
   React.useEffect(() => {
-    const next = {
-      pathname,
-      identityId: session.identity.id,
-      organizationId: session.activeOrganizationId,
-      businessContextId: session.activeBusinessContextId,
-    };
-    const previous = previousRef.current;
-    if (
-      drawer &&
-      (previous.pathname !== next.pathname ||
-        previous.identityId !== next.identityId ||
-        previous.organizationId !== next.organizationId ||
-        previous.businessContextId !== next.businessContextId)
-    )
-      setDrawer(null);
-    previousRef.current = next;
-  }, [
-    drawer,
-    pathname,
-    session.activeBusinessContextId,
-    session.activeOrganizationId,
-    session.identity.id,
-  ]);
+    setDrawer((current) =>
+      current && current.contextKey !== contextKey ? null : current
+    );
+  }, [contextKey]);
+
   React.useEffect(() => {
     if (!drawer) return;
     function onKeyDown(event: KeyboardEvent) {
@@ -77,11 +87,36 @@ export function ShellDrawerProvider({
       openDrawer: (
         content: React.ReactNode,
         title: string,
-        options?: { onDismiss?: () => void },
-      ) => setDrawer({ content, title, onDismiss: options?.onDismiss }),
-      closeDrawer: () => setDrawer(null),
+        options?: { onDismiss?: () => void; owner?: string; lease?: DrawerOwnerLease },
+      ) => {
+        setDrawer((current) => {
+          const value = {
+            content,
+            title,
+            onDismiss: options?.onDismiss,
+          };
+
+          return options?.lease
+            ? admitLeasedDrawer(
+                current,
+                activeContextRef.current,
+                contextKey,
+                options.lease,
+                value
+              )
+            : admitOwnedDrawer(
+                current,
+                activeContextRef.current,
+                contextKey,
+                options?.owner ?? null,
+                value
+              );
+        });
+      },
+      closeDrawer: (owner?: string) =>
+        setDrawer((current) => closeOwnedDrawer(current, owner)),
     }),
-    [],
+    [contextKey],
   );
   return (
     <ShellDrawerContext.Provider value={value}>
@@ -97,7 +132,7 @@ export function ShellDrawerProvider({
           <aside
             role="dialog"
             aria-modal="true"
-            aria-label={drawer.title}
+            aria-label={drawer.value.title}
             className="absolute inset-y-0 right-0 flex w-full flex-col border-l bg-white shadow-2xl dark:border-white/10 dark:bg-ink sm:max-w-[460px]"
           >
             <header className="flex h-16 items-center justify-between border-b px-5 dark:border-white/10">
@@ -105,7 +140,7 @@ export function ShellDrawerProvider({
                 <div className="text-[9px] font-semibold uppercase tracking-[.12em] text-slate-500">
                   Temporary Context
                 </div>
-                <h2 className="mt-1 text-sm font-semibold">{drawer.title}</h2>
+                <h2 className="mt-1 text-sm font-semibold">{drawer.value.title}</h2>
               </div>
               <button
                 type="button"
@@ -117,7 +152,7 @@ export function ShellDrawerProvider({
               </button>
             </header>
             <div className="min-h-0 flex-1 overflow-y-auto p-5">
-              {drawer.content}
+              {drawer.value.content}
             </div>
           </aside>
         </div>
