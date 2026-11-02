@@ -1,0 +1,27 @@
+{
+  "parent": "08c030f424cc84f37dbc3541f753400f6740553a",
+  "accepted_authorization": "02936c622cad36d21e3b46894b91f6255b3c4e25",
+  "accepted_modules_exact_SHA256": {
+    "api/src/staging-reporting/authorization-completeness.ts": "6a1fcbae62a569eba29b34c7bc436a76aa4f969c9ae8fbd0e50c3bade9b518d1",
+    "api/src/staging-reporting/page-session.ts": "4fea5a9fab14135c3b648df42a51cbfca1f46b84125d96366b0a9e68ecafddf9",
+    "ui/lib/identity/authorization-completeness.ts": "4e051fbfd7a81af415f662be7636511a3f41900ad53baa8975cf14620e27e5df",
+    "ui/lib/identity/staging-read-only-session.ts": "508985d2c206201d21c55b69c618fbdae9a044b99d3383ceb3a1d9ec7fe29085"
+  },
+  "pending_registry_correction": "08c030f424cc84f37dbc3541f753400f6740553a; exact singleton proof adapter retained in session.ts and authority.ts",
+  "disposition": {
+    "permission_truncation": "Master accepted WS022 offline PASS",
+    "registry_singleton": "WS022 disposition PENDING",
+    "composition": "focused integration evidence only; not blanket independent acceptance"
+  },
+  "gates": {
+    "REPORTING_AUTHORIZATION_SNAPSHOT_CONTRACT": "Disabled by default in source; deployed value not inspected or modified",
+    "REPORTING_PROFIT_SNAPSHOT_CONTRACT": "Disabled by default in source; deployed value not inspected or modified"
+  },
+  "Profit_preservation": "4 runtime files byte-identical to9d1cc0f",
+  "migrations_preserved": 224,
+  "focused_tests": {
+    "pass": 41,
+    "fail": 0,
+    "skip": 0
+  }
+}

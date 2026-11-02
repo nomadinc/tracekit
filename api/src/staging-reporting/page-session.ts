@@ -1,5 +1,6 @@
-import {completeRead,readProof} from './completeness.ts';
-import { ROLE_PERMISSIONS, PERMISSIONS, type Role, type Permission } from '../../../ui/lib/identity/permissions.ts';
+import { PERMISSIONS, ROLE_PERMISSIONS, type Role, type Permission } from '../../../ui/lib/identity/permissions.ts';
+import { completeAuthorizationRows } from './authorization-completeness.ts';
+import { AUTHORIZATION_CONTRACT, requireAuthorizationEvidence, type AuthorizationRead } from '../../../ui/lib/identity/authorization-completeness.ts';
 import { ReportingDenied, PROJECT } from './client.ts';
 
 export const SESSION_COLUMNS = {
@@ -14,8 +15,8 @@ export const SESSION_COLUMNS = {
 } as const;
 type Row = Record<string, unknown>;
 type Table = keyof typeof SESSION_COLUMNS;
-type Registry = { subject: string; application_user_id: string; organization_id: string; workspace_id: string; version: string; permissions: string[]; active: boolean; valid_until: string };
-type Env = { SESSION_READER_TOKEN?: string; REPORTING_PUBLISHABLE_KEY: string; REPORTING_ISSUER: string };
+export type Registry = { subject: string; application_user_id: string; organization_id: string; workspace_id: string; version: string; permissions: string[]; active: boolean; valid_until: string; authorizationRead: AuthorizationRead };
+type Env = { SESSION_READER_TOKEN?: string; REPORTING_PUBLISHABLE_KEY: string; REPORTING_ISSUER: string; REPORTING_AUTHORIZATION_SNAPSHOT_CONTRACT?: string };
 const readPermissions = ['organizations.view','offers.view','customers.view','customers.view_sensitive_data','orders.view','orders.view_financials','financials.view'];
 const id = (value: unknown): string => {
  if (typeof value !== 'string' || !/^[A-Za-z0-9_-]{1,160}$/.test(value)) throw new ReportingDenied();
@@ -38,28 +39,32 @@ function unique(rows: Row[], key = 'id') {
 // Separate credential, separate fixed projection: never use the reporting,
 // registry-administrator, service-role or PostgreSQL-owner credential here.
 export function createPageSessionReader(env: Env, transport: typeof fetch, now = () => Math.floor(Date.now()/1000)) {
- return async function read(table: Table, filters: Record<string, string>): Promise<Row[]> {
+ const evidence: AuthorizationRead[] = [];
+ const read = async function(table: Table, filters: Record<string, string>): Promise<Row[]> {
+  if (env.REPORTING_AUTHORIZATION_SNAPSHOT_CONTRACT !== AUTHORIZATION_CONTRACT) throw new ReportingDenied(503);
   if (!Object.prototype.hasOwnProperty.call(SESSION_COLUMNS,table)) throw new ReportingDenied(503);
   if (!env.SESSION_READER_TOKEN || !env.REPORTING_PUBLISHABLE_KEY.startsWith('sb_publishable_')) throw new ReportingDenied(503);
-  let expiry=0;
   try {
    const payload = JSON.parse(atob((env.SESSION_READER_TOKEN.split('.')[1] || '').replace(/-/g,'+').replace(/_/g,'/')));
    if (payload.role !== 'tk_stg_session_reader' || payload.iss !== env.REPORTING_ISSUER
     || payload.aud !== 'authenticated' || payload.purpose !== 'tracekit-staging-session-reader'
     || !Number.isSafeInteger(payload.exp) || !Number.isSafeInteger(payload.iat)
     || payload.exp <= now() || payload.iat > now() || payload.exp-payload.iat < 1 || payload.exp-payload.iat > 300) throw new ReportingDenied(503);
-   expiry=payload.exp;
   } catch { throw new ReportingDenied(503); }
   const url = new URL(`https://${PROJECT}.supabase.co/rest/v1/${table}`);
   url.searchParams.set('select', SESSION_COLUMNS[table]); url.searchParams.set('limit', '51');
-  const filterKey=table==='tracekit_users'?'workos_user_id':table==='tracekit_memberships'?'user_id':['tracekit_permission_overrides','tracekit_business_context_access'].includes(table)?'membership_id':'id';
-  if(Object.keys(filters).length!==1||!Object.hasOwn(filters,filterKey)||typeof filters[filterKey]!=='string'||!/^eq\.[A-Za-z0-9_-]{1,160}$|^in\.\([A-Za-z0-9_-]{1,160}(,[A-Za-z0-9_-]{1,160}){0,49}\)$/.test(filters[filterKey]))throw new ReportingDenied();
   for (const [key,value] of Object.entries(filters)) url.searchParams.set(key,value);
   url.searchParams.set('order', table === 'tracekit_business_context_access' ? 'membership_id.asc,business_context_id.asc' : 'id.asc');
   const response = await transport(url, { method:'GET', redirect:'error', cache:'no-store', signal:AbortSignal.timeout(5000),
-   headers:{ apikey:env.REPORTING_PUBLISHABLE_KEY, authorization:`Bearer ${env.SESSION_READER_TOKEN}`, 'accept-profile':'public',prefer:'count=exact' } });
-  const rows=await completeRead(response,table,'tk_stg_session_reader',50);if(expiry<=now())throw new ReportingDenied(503);return rows;
+   headers:{ apikey:env.REPORTING_PUBLISHABLE_KEY, authorization:`Bearer ${env.SESSION_READER_TOKEN}`, 'accept-profile':'public', prefer:'count=exact' } });
+  if (!response.ok || response.headers.get('x-tracekit-db-login') !== 'authenticator'
+   || response.headers.get('x-tracekit-db-session-authorization') !== 'authenticator'
+   || response.headers.get('x-tracekit-db-role') !== 'tk_stg_session_reader') throw new ReportingDenied(503);
+  const result = await completeAuthorizationRows(response,table);
+  evidence.push(result.evidence);
+  return result.rows;
  };
+ return Object.assign(read,{evidence});
 }
 
 export async function resolvePageSession(
@@ -68,12 +73,13 @@ export async function resolvePageSession(
  registry: (subject:string, organization:string, workspace:string) => Promise<Registry>, now: () => number,
 ) {
  id(subject); if (selected !== null) id(selected);
- const receipts:any[]=[];let collection=0;const checkedRead=async(table:Table,filters:Record<string,string>)=>{const rows=await read(table,filters);receipts.push({...readProof(rows,table),collection});return rows;};
+ const evidenceStart = read.evidence.length;
+ const registryEvidence: AuthorizationRead[] = [];
  const collect = async () => {
-  const users = unique(await checkedRead('tracekit_users',{workos_user_id:`eq.${subject}`}));
+  const users = unique(await read('tracekit_users',{workos_user_id:`eq.${subject}`}));
   if (users.length !== 1 || users[0].workos_user_id !== subject || users[0].status !== 'active') throw new ReportingDenied();
   const user = users[0], userId = id(user.id);
-  const memberships = unique(await checkedRead('tracekit_memberships',{user_id:`eq.${userId}`}));
+  const memberships = unique(await read('tracekit_memberships',{user_id:`eq.${userId}`}));
   if (memberships.some(m => m.user_id !== userId)) throw new ReportingDenied();
   const current = memberships.filter(m => m.status === 'active' && Number.isFinite(Date.parse(String(m.effective_from)))
    && Date.parse(String(m.effective_from)) <= now()*1000
@@ -81,17 +87,19 @@ export async function resolvePageSession(
    && m.organization_id !== null && m.account_id !== null);
   if (!current.length) throw new ReportingDenied();
   const list = (key:string) => `in.(${Array.from(new Set(current.map(m => id(m[key])))).join(',')})`;
-  const roles = unique(await checkedRead('tracekit_roles',{id:list('role_id')}));
-  const accounts = unique(await checkedRead('tracekit_accounts',{id:list('account_id')}));
-  const organizations = unique(await checkedRead('tracekit_organizations',{id:list('organization_id')}));
-  const overrides = unique(await checkedRead('tracekit_permission_overrides',{membership_id:list('id')}));
+  const roles = unique(await read('tracekit_roles',{id:list('role_id')}));
+  const accounts = unique(await read('tracekit_accounts',{id:list('account_id')}));
+  const organizations = unique(await read('tracekit_organizations',{id:list('organization_id')}));
+  const overrides = unique(await read('tracekit_permission_overrides',{membership_id:list('id')}));
+  const overrideKeys = overrides.map(o => JSON.stringify([o.membership_id,o.capability]));
+  if (new Set(overrideKeys).size !== overrides.length) throw new ReportingDenied();
   if (overrides.some(o => !current.some(m => m.id === o.membership_id))) throw new ReportingDenied();
-  const access = await checkedRead('tracekit_business_context_access',{membership_id:list('id')});
+  const access = await read('tracekit_business_context_access',{membership_id:list('id')});
   if (access.some(a => !current.some(m => m.id === a.membership_id && m.organization_id === a.organization_id))) throw new ReportingDenied();
   const activeAccess = access.filter(a => a.status === 'active');
   if (!activeAccess.length) throw new ReportingDenied();
   if (new Set(activeAccess.map(a => `${id(a.membership_id)}:${id(a.business_context_id)}`)).size !== activeAccess.length) throw new ReportingDenied();
-  const contexts = unique(await checkedRead('tracekit_business_contexts', {id:`in.(${Array.from(new Set(activeAccess.map(a => id(a.business_context_id)))).join(',')})` }));
+  const contexts = unique(await read('tracekit_business_contexts', {id:`in.(${Array.from(new Set(activeAccess.map(a => id(a.business_context_id)))).join(',')})` }));
   const entries = [];
   for (const m of current) {
    const account = exactly(accounts,'id',id(m.account_id)), organization = exactly(organizations,'id',id(m.organization_id));
@@ -100,19 +108,20 @@ export async function resolvePageSession(
    const role = exactly(roles,'id',id(m.role_id)).role_key as Role;
    if (!Object.prototype.hasOwnProperty.call(ROLE_PERMISSIONS,role) || ['platform-owner','platform-admin','support','billing','read-only-operations'].includes(role)) throw new ReportingDenied();
    const ownOverrides = overrides.filter(o => o.membership_id === m.id);
-   const overrideKeys=ownOverrides.map(o=>JSON.stringify([o.membership_id,o.organization_id,o.resource_type,o.resource_id,o.capability]));if(new Set(overrideKeys).size!==overrideKeys.length)throw new ReportingDenied();
    // Scoped overrides need an explicit resource contract; never widen them to a global grant.
-   if (ownOverrides.some(o => typeof o.capability!=='string'||!(PERMISSIONS as readonly string[]).includes(o.capability)||o.organization_id !== null && o.organization_id !== organization.id
+   if (ownOverrides.some(o => typeof o.capability !== 'string' || !PERMISSIONS.includes(o.capability as Permission) || o.organization_id !== null && o.organization_id !== organization.id
     || o.resource_type !== null || o.resource_id !== null || !['allow','deny'].includes(String(o.effect)))) throw new ReportingDenied();
    const effective = new Set<string>(ROLE_PERMISSIONS[role]);
    for (const o of ownOverrides) if (o.effect === 'allow') effective.add(String(o.capability));
    for (const o of ownOverrides) if (o.effect === 'deny') effective.delete(String(o.capability));
    let r: Registry;
-   r = await registry(subject,id(organization.id),id(organization.id));
-   receipts.push({...readProof(r,'current_memberships'),collection});
+   try { r = await registry(subject,id(organization.id),id(organization.id)); }
+   catch (error) { if (error instanceof ReportingDenied && error.status === 403) continue; throw error; }
    if (r.subject !== subject || r.application_user_id !== userId || r.organization_id !== organization.id
     || r.workspace_id !== organization.id || r.active !== true || !r.version || !Array.isArray(r.permissions)
     || !Number.isFinite(Date.parse(r.valid_until)) || Date.parse(r.valid_until) <= now()*1000) throw new ReportingDenied();
+   if (!r.authorizationRead || r.authorizationRead.source !== 'current_memberships' || r.authorizationRead.total !== 1 || r.authorizationRead.returned !== 1) throw new ReportingDenied(503);
+   registryEvidence.push(r.authorizationRead);
    const permissions = readPermissions.filter(p => effective.has(p) && r.permissions.includes(p)) as Permission[];
    if (!permissions.includes('customers.view')) continue;
    const businessContexts = activeAccess.filter(a => a.membership_id === m.id).map(a => {
@@ -126,11 +135,9 @@ export async function resolvePageSession(
   if (!entries.length || new Set(entries.map(e => e.organization.id)).size !== entries.length) throw new ReportingDenied();
   return {user,entries};
  };
- // Exact-count receipts establish bounded read completeness. Re-reading is only
- // an additional drift check, never evidence that a truncated set is complete.
- // Changes during bootstrap
+ // Re-read the complete protected graph and registry: changes during bootstrap
  // fail instead of serializing a mixed membership/account/permission snapshot.
- const first = await collect();collection=1;const second = await collect();
+ const first = await collect(), second = await collect();
  if (JSON.stringify(first) !== JSON.stringify(second)) throw new ReportingDenied();
  const {user,entries} = second;
  const chosen = selected ? entries.find(e => e.organization.id === selected) : entries[0];
@@ -138,7 +145,9 @@ export async function resolvePageSession(
  const {m,account,organization,role,permissions,r,businessContexts} = chosen;
  const issuedAt = now()*1000, expiresAt = Math.min(issuedAt+45_000,tokenExpires*1000,Date.parse(r.valid_until),m.effective_until===null?Infinity:Date.parse(String(m.effective_until)));
  if (expiresAt <= issuedAt) throw new ReportingDenied();
- return { authorityEvidence:{version:1,kind:'exact-count-authority-v1',readCount:receipts.length,reads:receipts},version:1, subject, membershipVersion:r.version, issuedAt, expiresAt, workspaceId:id(organization.id),
+ const authorizationEvidence = {version:1,contract:AUTHORIZATION_CONTRACT,scope:{subject,userId:id(user.id),organizationId:id(organization.id),membershipId:id(m.id),membershipVersion:r.version},reads:[...read.evidence.slice(evidenceStart),...registryEvidence]};
+ try {requireAuthorizationEvidence(authorizationEvidence,authorizationEvidence.scope);} catch {throw new ReportingDenied(503);}
+ return { authorizationEvidence, version:1, subject, membershipVersion:r.version, issuedAt, expiresAt, workspaceId:id(organization.id),
   user:{id:id(user.id),workosUserId:subject,primaryEmail:label(user.primary_email),displayName:label(user.display_name),status:'active'},
   account:{id:id(account.id),name:label(account.name),accountType:account.account_type,status:'active'},
   organization:{id:id(organization.id),accountId:id(account.id),name:label(organization.name),mark:label(organization.name).slice(0,2).toUpperCase(),status:'active'},

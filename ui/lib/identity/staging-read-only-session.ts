@@ -1,3 +1,4 @@
+import { requireAuthorizationEvidence } from "./authorization-completeness";
 import { randomUUID } from "node:crypto";
 import { ROLE_PERMISSIONS, type Permission, type Role } from "./permissions";
 import { serializeSessionForClient, type TraceKitSessionContext } from "./persistent-types";
@@ -56,18 +57,10 @@ function timestamp(value: unknown) {
   return value;
 }
 
-const AUTHORITY_TABLES=['tracekit_users','tracekit_memberships','tracekit_roles','tracekit_accounts','tracekit_organizations','tracekit_permission_overrides','tracekit_business_context_access','tracekit_business_contexts'];
-function requireCompleteAuthority(value:unknown){
- const e=object(value);if(e.version!==1||e.kind!=='exact-count-authority-v1'||!Array.isArray(e.reads)||e.reads.length<18||e.reads.length>116||e.readCount!==e.reads.length)throw new Error('incomplete_authority');
- for(const collection of [0,1]){const reads=e.reads.map(object).filter(r=>r.collection===collection);for(const table of AUTHORITY_TABLES)if(reads.filter(r=>r.table===table).length!==1)throw new Error('incomplete_authority');if(!reads.some(r=>r.table==='current_memberships'))throw new Error('incomplete_authority');}
- for(const raw of e.reads){const r=object(raw);if(![0,1].includes(r.collection as number)||![...AUTHORITY_TABLES,'current_memberships'].includes(r.table as string)||!Number.isSafeInteger(r.rowCount)||r.rowCount!==r.total||(r.rowCount as number)<0||(r.rowCount as number)>50||(r.table==='current_memberships'&&r.rowCount!==1))throw new Error('incomplete_authority');}
-}
-
 // The authority is responsible for verified WorkOS JWTs and live protected
 // registry reads. The UI has no database credential and accepts no browser roles.
 export function projectReadOnlySession(value: unknown, subject: string, now: number): TraceKitSessionContext {
   const data = object(value);
-  requireCompleteAuthority(data.authorityEvidence);
   const issuedAt = timestamp(data.issuedAt);
   const expiresAt = timestamp(data.expiresAt);
   if (data.version !== 1 || data.subject !== subject || !text(data.membershipVersion)
@@ -88,8 +81,10 @@ export function projectReadOnlySession(value: unknown, subject: string, now: num
     effectiveFrom: text(m.effectiveFrom), effectiveUntil: m.effectiveUntil === null ? null : text(m.effectiveUntil),
   };
   if (!isMembershipEffective(membership, now)) throw new Error("invalid_session");
+  requireAuthorizationEvidence(data.authorizationEvidence, { subject, userId, organizationId, membershipId: membership.id, membershipVersion: text(data.membershipVersion) });
   if (!Array.isArray(data.permissions) || data.permissions.length > READ_PERMISSIONS.length
     || data.permissions.some(p => typeof p !== "string" || !READ_PERMISSIONS.includes(p))) throw new Error("invalid_session");
+  if (new Set(data.permissions).size !== data.permissions.length) throw new Error("invalid_session");
   const permissions = Array.from(new Set(data.permissions)) as Permission[];
   if (!permissions.includes("customers.view")) throw new Error("invalid_session");
   if (!Array.isArray(data.businessContexts) || !data.businessContexts.length || data.businessContexts.length > 50) throw new Error("invalid_session");

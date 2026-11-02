@@ -1,0 +1,20 @@
+{
+  "parent": "08c030f424cc84f37dbc3541f753400f6740553a",
+  "accepted_donor": "02936c622cad36d21e3b46894b91f6255b3c4e25",
+  "files": {
+    "api/src/staging-reporting/authority.ts": "029165ca79374c015eb37bf2257935f3b9b3a85a52f8eb7a53499a951fb13c67",
+    "api/src/staging-reporting/authorization-completeness.ts": "6a1fcbae62a569eba29b34c7bc436a76aa4f969c9ae8fbd0e50c3bade9b518d1",
+    "api/src/staging-reporting/page-session.ts": "4fea5a9fab14135c3b648df42a51cbfca1f46b84125d96366b0a9e68ecafddf9",
+    "api/src/staging-reporting/permission-completeness.test.ts": "2dc1bbdbd4de0606233714179789bd9c7d305ab4d0cfc4cd3b2531ab0e9721b3",
+    "api/src/staging-reporting/session.test.ts": "660f7e2b0e4d9073e9cbb34c847f3cc0a36253894b82d61108c21364531527fe",
+    "api/src/staging-reporting/session.ts": "621552b65572fedb34403b5076a923eba5e25ee5fb3745775ac90e54c39e09d7",
+    "api/staging-reporting-review/ACCEPTED-AUTHORIZATION-BINDING.json": "8b9d2c5b2ebf0fa3710bc217e5595377497475ef6f02779453d039cc23b18aa7",
+    "api/staging-reporting-review/ACCEPTED-AUTHORIZATION-INTEGRATION.md": "7e87fdd5c8ff2a1d37beadac4b557db0af22c660f9d21d729e4d31326130f0ad",
+    "api/staging-reporting-review/SOURCE-HASHES.json": "f37ee70a097068f5970e468044d6f302710f192ffd8608127e94363166550cf8",
+    "api/tests/session-authority-fixture.ts": "c08ded8376d7e1a04b337607c8a1d2ce55d5e3dc3f4788d8043bcb19baabf6d1",
+    "docs/operations/evidence/ws001-staging-reporting-integration/accepted-authorization-integration-build.txt": "49ce9a01b0deac3b8d130bf66b0fe7076021a8314ddd75834b336b3f523f94a8",
+    "docs/operations/evidence/ws001-staging-reporting-integration/accepted-authorization-integration-tests.txt": "69824deade1b43c1aa808d82fc2e04dbcfbfe236adba101a7dcdde2e526b04e4",
+    "ui/lib/identity/authorization-completeness.ts": "4e051fbfd7a81af415f662be7636511a3f41900ad53baa8975cf14620e27e5df",
+    "ui/lib/identity/staging-read-only-session.ts": "508985d2c206201d21c55b69c618fbdae9a044b99d3383ceb3a1d9ec7fe29085"
+  }
+}
