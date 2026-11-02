@@ -23,7 +23,9 @@ function coreFailure(status:number){return new Error(`customer_repository_core_h
 async function get(path:string,scope?:ProductionCustomerScope){
   if(typeof window!=="undefined")return readJson(await fetch(path,{method:"GET",cache:"no-store",headers:{accept:"application/json"}}));
   if(!scope?.authenticated||!scope.organizationId)throw new Error("customer_repository_scope_unavailable");
-  if(process.env.VERCEL_ENV === "preview" || process.env.TRACEKIT_REPORTING_MODE !== undefined) { if(process.env.TRACEKIT_REPORTING_MODE !== "restricted-staging")throw coreFailure(503); const {restrictedStagingGet}=await import("../identity/staging-reporting-proxy");const incoming=new URL(path,"http://tracekit.internal");incoming.searchParams.set("workspace_id",scope.organizationId);const r=await restrictedStagingGet(incoming.pathname.replace(/^\/api\/customers/,"/v1/customers"),incoming.toString());if(r.status!==200)throw coreFailure(r.status);return r.body; }
+  if(process.env.VERCEL_ENV === "preview" || process.env.TRACEKIT_REPORTING_MODE !== undefined) {
+   throw coreFailure(503);
+ }
   const secret=coreSecret();if(!secret)throw new Error("customer_repository_core_auth_unavailable");
   const incoming=new URL(path,"http://tracekit.internal"),params=new URLSearchParams(incoming.searchParams);
   params.set("workspace_id",scope.organizationId);

@@ -21,6 +21,11 @@ import { persistentBusinessContextsWithDisplay } from "./business-context-resolu
 
 const DEVELOPMENT_REVIEW_HEADER = "x-tracekit-development-review";
 
+const restrictedBoundaryEnvironment = () => ({
+  VERCEL_ENV: process.env.VERCEL_ENV,
+  TRACEKIT_REPORTING_MODE: process.env.TRACEKIT_REPORTING_MODE,
+});
+
 export type ApplicationSessionResolution =
   | { kind: "development" }
   | { kind: "authenticated"; session: TraceKitSessionContext; clientSession: SafeClientSession; legacySession: IdentitySession }
@@ -34,13 +39,13 @@ function configured() {
 }
 
 export async function synchronizeWorkOSUser(identity: WorkOSIdentityInput) {
-  assertIdentityWritesAllowed(process.env);
+  assertIdentityWritesAllowed(restrictedBoundaryEnvironment());
   const repository = new SupabaseIdentityTenancyRepository();
   return repository.synchronizeUser(identity);
 }
 
 export async function recordAuthenticationSuccess(identity: WorkOSIdentityInput) {
-  if (restrictedIdentityBoundary(process.env)) return;
+  if (restrictedIdentityBoundary(restrictedBoundaryEnvironment())) return;
   const repository = new SupabaseIdentityTenancyRepository();
   const user = await repository.synchronizeUser(identity);
   await repository.recordAuditEvent({ actorUserId: user.id, authenticatedIdentityId: identity.id, accountId: null, organizationId: null, action: "authentication.sign_in.succeeded", result: "success", correlationId: randomUUID(), metadata: { provider: "workos" } });
@@ -48,7 +53,7 @@ export async function recordAuthenticationSuccess(identity: WorkOSIdentityInput)
 }
 
 export async function resolveAuthenticatedPersistentIdentity() {
-  if (restrictedIdentityBoundary(process.env)) return null;
+  if (restrictedIdentityBoundary(restrictedBoundaryEnvironment())) return null;
   if (!configured()) return null;
   let auth: Awaited<ReturnType<typeof withAuth>>;
   try {
@@ -70,7 +75,7 @@ export async function resolveAuthenticatedPersistentIdentity() {
 
 export async function resolveApplicationSession(): Promise<ApplicationSessionResolution> {
   // No privileged repository fallback while WS-021 read-only session enrollment is pending.
-  if (restrictedIdentityBoundary(process.env)) return resolveReadOnlyStagingSession({authenticate:withAuth,cookieJar:cookies,fetch});
+  if (restrictedIdentityBoundary(restrictedBoundaryEnvironment())) return resolveReadOnlyStagingSession({authenticate:withAuth,cookieJar:cookies,fetch});
   const requestHeaders = await headers();
   const requestedDevelopmentIdentity = requestHeaders.get(
     DEVELOPMENT_REVIEW_HEADER,
