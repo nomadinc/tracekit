@@ -111,6 +111,20 @@ export function ProfitSummaryPanel() {
 
   const reportCurrency = summary?.currency || undefined;
   const reportHasData = summary?.data_available === true;
+  const reportReady = authorized && reportHasData && Boolean(reportCurrency);
+
+  const costFields = [
+    summary?.processor_fees,
+    summary?.chargeback_fees,
+    summary?.bank_fees,
+    summary?.shipping_cost ?? summary?.shipping,
+    summary?.cogs,
+    summary?.affiliate_payout,
+    summary?.ad_spend,
+  ];
+
+  const missingRecordedCosts =
+    reportReady && costFields.some((value) => availableNumber(value) === null);
 
   const displayMoney = (value: unknown) =>
     reportHasData && reportCurrency
@@ -201,6 +215,25 @@ export function ProfitSummaryPanel() {
         accrued affiliate commissions. Differences may reflect source
         coverage, accounting definitions, or reporting periods.
       </div>
+
+      {authorized && loading ? (
+        <p role="status" className="mb-4 text-sm text-slate-500">
+          Loading financial evidence for the selected period…
+        </p>
+      ) : null}
+
+      {authorized && !loading && !error && !reportHasData ? (
+        <p role="status" className="mb-4 text-sm text-slate-500">
+          No qualified financial records are available for the selected period.
+        </p>
+      ) : null}
+
+      {reportReady && missingRecordedCosts ? (
+        <p role="status" className="mb-4 text-sm text-amber-700 dark:text-amber-300">
+          Some recorded cost categories are unavailable. Profit remains
+          operational and unreconciled; missing costs are not confirmed zero.
+        </p>
+      ) : null}
 
       {!authorized ? (
         <p role="status" className="mb-4 text-sm text-slate-500">
