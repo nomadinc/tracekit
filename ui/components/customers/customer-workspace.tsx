@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { AccessBoundary } from "@/components/identity/access-control";
 import { useIdentity } from "@/components/identity/identity-provider";
+import { customerWorkspaceContext } from "@/lib/identity/customer-workspace-context";
 import { productionCustomerRepository as customerRepository } from "@/lib/customers/production-repository";
 import { useShellDrawer } from "@/components/layout/shell-drawer";
 import {
@@ -38,9 +39,14 @@ const money = (v: number) =>
     maximumFractionDigits: 0,
   }).format(v);
 export function CustomerWorkspace() {
+  const { session } = useIdentity();
+  const context = customerWorkspaceContext(session);
+
   return (
     <AccessBoundary permission="customers.view" variants={["client", "agency"]}>
-      <CustomerWorkspaceContent />
+      {context.authorized ? (
+        <CustomerWorkspaceContent key={context.key} />
+      ) : null}
     </AccessBoundary>
   );
 }
@@ -180,6 +186,16 @@ function CustomerWorkspaceContent() {
     );
     return () => window.clearInterval(t);
   }, [replaying, snapshot]);
+  const mountedRef = React.useRef(false);
+
+  React.useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+      drawer.closeDrawer();
+    };
+  }, [drawer]);
+
   const inspect = async (id: string) => {
     if (!snapshot) return;
     const r = await customerRepository.loadDrawer(
@@ -187,7 +203,9 @@ function CustomerWorkspaceContent() {
       snapshot.customer.id,
       id,
     );
-    if (r) drawer.openDrawer(<CustomerDrawerContent record={r} />, r.title);
+    if (r && mountedRef.current) {
+      drawer.openDrawer(<CustomerDrawerContent record={r} />, r.title);
+    }
   };
   if (loading && !snapshot)
     return <State title="Loading Customer Workspace…" />;
