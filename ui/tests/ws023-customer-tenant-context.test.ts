@@ -102,14 +102,14 @@ test("financial permission changes invalidate customer context", () => {
 });
 
 test("Customer Workspace closes shared drawer on context unmount", () => {
-  assert.match(source, /return \(\) => \{[\s\S]*?mountedRef\.current = false;[\s\S]*?drawer\.closeDrawer\(\)/);
+  assert.match(source, /return \(\) => \{[\s\S]*?mountedRef\.current = false;[\s\S]*?revokeDrawerOwnerLease\(lease\);[\s\S]*?drawer\.closeDrawer\(drawerOwner\)/);
 });
 
 test("manual drawer request rejects late responses after unmount", () => {
-  assert.match(source, /if \(r && mountedRef\.current\)/);
+  assert.match(source, /ownerLeaseRef\.current === requestLease &&[\s\S]*?canOpenOwnedDrawer\(requestLease\)/);
 });
 
 test("deep-link drawer request has cleanup fencing", () => {
-  assert.match(source, /if \(on && r\)[\s\S]*?drawer\.openDrawer/);
+  assert.match(source, /on &&[\s\S]*?ownerLeaseRef\.current === requestLease &&[\s\S]*?canOpenOwnedDrawer\(requestLease\)[\s\S]*?drawer\.openDrawer/);
   assert.match(source, /return \(\) => \{[\s\S]*?on = false;/);
 });

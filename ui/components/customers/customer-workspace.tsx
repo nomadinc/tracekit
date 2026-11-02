@@ -16,6 +16,11 @@ import {
 import { AccessBoundary } from "@/components/identity/access-control";
 import { useIdentity } from "@/components/identity/identity-provider";
 import { customerWorkspaceContext } from "@/lib/identity/customer-workspace-context";
+import {
+  createDrawerOwnerLease,
+  revokeDrawerOwnerLease,
+  canOpenOwnedDrawer,
+} from "@/lib/identity/drawer-ownership";
 import { productionCustomerRepository as customerRepository } from "@/lib/customers/production-repository";
 import { useShellDrawer } from "@/components/layout/shell-drawer";
 import {
@@ -56,6 +61,11 @@ function CustomerWorkspaceContent() {
     drawer = useShellDrawer();
   const { session, organizations, setActiveOrganization, setActiveBusinessContext } =
     useIdentity();
+  const drawerOwner = React.useId();
+  const ownerLeaseRef = React.useRef(
+    createDrawerOwnerLease(drawerOwner)
+  );
+
   const activeOrganization = organizations.find((organization) => organization.id === session.activeOrganizationId) || organizations[0] || null;
   const scope = React.useMemo(() => ({ authenticated: session.authenticated, workspaceId: session.activeOrganizationId || "", organizationId: session.activeOrganizationId, businessContextId: session.activeBusinessContextId, session }), [session]);
   const requested = React.useMemo(
@@ -145,7 +155,7 @@ function CustomerWorkspaceContent() {
   React.useEffect(() => {
     setReplaying(false);
     setReplayIndex(0);
-    drawer.closeDrawer();
+    drawer.closeDrawer(drawerOwner);
   }, [normalized.customerId, drawer]);
   React.useEffect(() => {
     const id =
@@ -156,10 +166,19 @@ function CustomerWorkspaceContent() {
           ? `order:${normalized.orderId}`
           : null);
     if (!id || !snapshot) return;
+
+    const requestLease = ownerLeaseRef.current;
+    if (!canOpenOwnedDrawer(requestLease)) return;
+
     let on = true;
     customerRepository.loadDrawer(scope, snapshot.customer.id, id).then((r) => {
-      if (on && r)
-        drawer.openDrawer(<CustomerDrawerContent record={r} />, r.title, { onDismiss: () => router.push(withDevelopmentIdentity(customerDeepLinkHref({ ...normalized, drawer: null, drawerId: null, eventId: null, identifierRef: null, orderId: null }), session.identity.id), { scroll: false }) });
+      if (
+        on &&
+        r &&
+        ownerLeaseRef.current === requestLease &&
+        canOpenOwnedDrawer(requestLease)
+      )
+        drawer.openDrawer(<CustomerDrawerContent record={r} />, r.title, { owner: drawerOwner, lease: requestLease, onDismiss: () => router.push(withDevelopmentIdentity(customerDeepLinkHref({ ...normalized, drawer: null, drawerId: null, eventId: null, identifierRef: null, orderId: null }), session.identity.id), { scroll: false }) });
     });
     return () => {
       on = false;
@@ -189,22 +208,40 @@ function CustomerWorkspaceContent() {
   const mountedRef = React.useRef(false);
 
   React.useEffect(() => {
+    const lease = createDrawerOwnerLease(drawerOwner);
+    ownerLeaseRef.current = lease;
     mountedRef.current = true;
+
     return () => {
       mountedRef.current = false;
-      drawer.closeDrawer();
+      revokeDrawerOwnerLease(lease);
+      drawer.closeDrawer(drawerOwner);
     };
-  }, [drawer]);
+  }, [drawer, drawerOwner]);
 
   const inspect = async (id: string) => {
     if (!snapshot) return;
+
+    const requestLease = ownerLeaseRef.current;
+    if (!canOpenOwnedDrawer(requestLease)) return;
+
     const r = await customerRepository.loadDrawer(
       scope,
       snapshot.customer.id,
       id,
     );
-    if (r && mountedRef.current) {
-      drawer.openDrawer(<CustomerDrawerContent record={r} />, r.title);
+
+    if (
+      r &&
+      mountedRef.current &&
+      ownerLeaseRef.current === requestLease &&
+      canOpenOwnedDrawer(requestLease)
+    ) {
+      drawer.openDrawer(
+        <CustomerDrawerContent record={r} />,
+        r.title,
+        { owner: drawerOwner, lease: requestLease }
+      );
     }
   };
   if (loading && !snapshot)
