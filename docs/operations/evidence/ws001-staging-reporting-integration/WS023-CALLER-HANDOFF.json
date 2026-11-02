@@ -1,0 +1,31 @@
+{
+  "required_base": "e44b59c37873fd70d1a0154304edcdf8fd5eb684",
+  "requested_historical_commit": "734223e28c4633768283744af2873804d07dc43d",
+  "accepted_profit_source": "9d1cc0ff68b5f69ed4948aaa88b561b770e1885c",
+  "endpoint_implementation": "656536a5690b16731109fa352dc04f40a3db5aa1",
+  "caller_paths": {
+    "api/src/customer-explorer.ts": {
+      "historical_734_SHA256": "5fd8987c5c49e71a257879b463ce0d9ac0539f11cc3e0ba13dbe1a568a53c21d",
+      "current_SHA256": "5fd8987c5c49e71a257879b463ce0d9ac0539f11cc3e0ba13dbe1a568a53c21d"
+    },
+    "ui/lib/customers/production-repository.ts": {
+      "historical_734_SHA256": "4df0836fe675d92099093a537d80278cb091a7f8f194715524309948cd16ba01",
+      "current_SHA256": "4df0836fe675d92099093a537d80278cb091a7f8f194715524309948cd16ba01"
+    },
+    "ui/lib/identity/scoped-core-proxy.ts": {
+      "historical_734_SHA256": "fb9c07b33a6701a3bb09aff25b17477d825faaf78c3e42f843a958a64910c276",
+      "current_SHA256": "fb9c07b33a6701a3bb09aff25b17477d825faaf78c3e42f843a958a64910c276"
+    }
+  },
+  "warning": "734 is the requested historical caller source, not the final Profit candidate. Preserve accepted 9d1cc0f Profit files. The bundle final tip includes both.",
+  "additional_session_file": "ui/lib/identity/application-session.ts has a separate fail-closed page-session fence; do not confuse it with the original three caller paths. WS021 composition remains separate.",
+  "WS021_compatibility": "Exact cb22 validator unchanged; actual WS021 resolver consumes endpoint output in mocked integration test.",
+  "installed_authority": "Unverified read-only verifier credential, protected session_context projection/SELECT, JWT/role/RLS/custody remain gated. No activation.",
+  "focused_tests": {
+    "session": 13,
+    "existing_authority": 5,
+    "total_pass": 18,
+    "fail": 0,
+    "skip": 0
+  }
+}

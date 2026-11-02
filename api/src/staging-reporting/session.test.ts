@@ -25,3 +25,4 @@ test('WS021 resolver consumes real authority output without a competing session 
 
 test('expiry while waiting for registry read denies stale session issuance',async()=>{const f=await setup();f.duringRead(()=>f.time(ms/1000+121));assert.equal((await f.get()).status,403)});
 test('privileged or substituted database effective role rejects',async()=>{const f=await setup();f.responseRole('service_role');assert.equal((await f.get()).status,503)});
+test('fresh session reflects permission loss without cached or role-default authority',async()=>{const f=await setup();const before=await(await f.get()).json();assert.ok(before.permissions.includes('orders.view'));f.record.permissions=['customers.view'];f.context.permissions=['customers.view'];const after=await(await f.get()).json();assert.deepEqual(after.permissions,['customers.view']);assert.equal(f.calls.length,2);f.record.active=false;assert.equal((await f.get()).status,403)});

@@ -1,0 +1,36 @@
+(node:13) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./")); register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:13) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ issuer verifies WorkOS proof, reads only registry and returns bound short token (26.857068ms)
+✔ revoked membership prevents issuance (72.242276ms)
+✔ foreign registry substitution prevents issuance (28.229283ms)
+✔ invalid expiry fails closed (119.502386ms)
+✔ current membership version must match issued token (53.993959ms)
+(node:14) ExperimentalWarning: `--experimental-loader` may be removed in the future; instead use `register()`:
+--import 'data:text/javascript,import { register } from "node:module"; import { pathToFileURL } from "node:url"; register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./")); register("./api/src/staging-reporting/offline-loader.mjs", pathToFileURL("./"));'
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:14) ExperimentalWarning: stripTypeScriptTypes is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+✔ authorized session uses exact WS021 contract and GET-only protected registry read (32.215689ms)
+✔ signed wrong issuer/audience, expired token and malformed time claims reject before registry (33.153573ms)
+✔ invalid signature and missing bearer reject without any registry access (73.79974ms)
+✔ foreign tenant, application user, account and business-context substitutions reject (344.180038ms)
+✔ revoked membership, inactive user/account/organization and stale context version reject (299.54029ms)
+✔ missing or multiple current bindings reject rather than choosing a default (70.844238ms)
+✔ missing context, expiry and unverified protected email evidence reject (345.44767ms)
+✔ POST, mutation paths and browser tenant overrides cannot cause writes (39.274372ms)
+✔ missing issuer configuration or reporting credential never falls back (75.686751ms)
+✔ WS021 resolver consumes real authority output without a competing session model (26.920844ms)
+✔ expiry while waiting for registry read denies stale session issuance (19.4306ms)
+✔ privileged or substituted database effective role rejects (27.493899ms)
+✔ fresh session reflects permission loss without cached or role-default authority (54.429856ms)
+ℹ tests 18
+ℹ suites 0
+ℹ pass 18
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1815.0683
