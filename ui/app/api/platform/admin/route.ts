@@ -47,6 +47,12 @@ export async function POST(request: Request) {
     const accountId = String(body.accountId),
       organizationId =
         body.organizationId == null ? null : String(body.organizationId);
+    if (body.action === "prepare-context" && organizationId) {
+      requirePlatformAdmin(session, "organizations.manage");
+      await assertCanonicalPlatformMembership(session, "organizations.manage");
+      const contextId = await adminRpc(session, "ws021_prepare_client_context", { p_account: accountId, p_org: organizationId });
+      return NextResponse.json({ ok: true, contextId });
+    }
     if (
       ["role", "remove"].includes(String(body.action)) &&
       uuid(body.membershipId)

@@ -1,0 +1,726 @@
+{
+  "project": "uoeosoiegatlqtzemsfv",
+  "capture_time_utc": "2026-11-05T17:23:42.068Z",
+  "method": "read-only Supabase management SQL; not application credential authority verification",
+  "tables_owner": "postgres",
+  "existing_tables_rls": true,
+  "columns": [
+    {
+      "table_name": "tracekit_audit_events",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_name": "tracekit_audit_events",
+      "column_name": "actor_user_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_audit_events",
+      "column_name": "authenticated_identity_id",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_audit_events",
+      "column_name": "account_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_audit_events",
+      "column_name": "organization_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_audit_events",
+      "column_name": "action",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_audit_events",
+      "column_name": "target_type",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_audit_events",
+      "column_name": "target_id",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_audit_events",
+      "column_name": "result",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_audit_events",
+      "column_name": "permission_evaluated",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_audit_events",
+      "column_name": "correlation_id",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_audit_events",
+      "column_name": "ip_address",
+      "data_type": "inet",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_audit_events",
+      "column_name": "user_agent",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_audit_events",
+      "column_name": "metadata",
+      "data_type": "jsonb",
+      "is_nullable": "NO",
+      "column_default": "'{}'::jsonb"
+    },
+    {
+      "table_name": "tracekit_audit_events",
+      "column_name": "occurred_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "tracekit_business_contexts",
+      "column_name": "id",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_business_contexts",
+      "column_name": "account_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_business_contexts",
+      "column_name": "organization_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_business_contexts",
+      "column_name": "name",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_business_contexts",
+      "column_name": "status",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": "'active'::text"
+    },
+    {
+      "table_name": "tracekit_business_contexts",
+      "column_name": "fulfillment_type",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": "'unknown'::text"
+    },
+    {
+      "table_name": "tracekit_business_contexts",
+      "column_name": "metadata",
+      "data_type": "jsonb",
+      "is_nullable": "NO",
+      "column_default": "'{}'::jsonb"
+    },
+    {
+      "table_name": "tracekit_business_contexts",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "tracekit_business_contexts",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "tracekit_invitations",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_name": "tracekit_invitations",
+      "column_name": "inviter_user_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_invitations",
+      "column_name": "intended_email",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_invitations",
+      "column_name": "target_account_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_invitations",
+      "column_name": "target_organization_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_invitations",
+      "column_name": "requested_role_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_invitations",
+      "column_name": "workos_invitation_id",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_invitations",
+      "column_name": "status",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": "'pending'::text"
+    },
+    {
+      "table_name": "tracekit_invitations",
+      "column_name": "expires_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_invitations",
+      "column_name": "accepted_by_user_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_invitations",
+      "column_name": "accepted_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_invitations",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "tracekit_invitations",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "tracekit_invitations",
+      "column_name": "business_context_ids",
+      "data_type": "ARRAY",
+      "is_nullable": "NO",
+      "column_default": "'{}'::text[]"
+    },
+    {
+      "table_name": "tracekit_memberships",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_name": "tracekit_memberships",
+      "column_name": "user_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_memberships",
+      "column_name": "account_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_memberships",
+      "column_name": "organization_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_memberships",
+      "column_name": "role_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_memberships",
+      "column_name": "invitation_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_memberships",
+      "column_name": "status",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": "'active'::text"
+    },
+    {
+      "table_name": "tracekit_memberships",
+      "column_name": "effective_from",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "tracekit_memberships",
+      "column_name": "effective_until",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_memberships",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "tracekit_memberships",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "tracekit_permission_overrides",
+      "column_name": "id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": "gen_random_uuid()"
+    },
+    {
+      "table_name": "tracekit_permission_overrides",
+      "column_name": "membership_id",
+      "data_type": "uuid",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_permission_overrides",
+      "column_name": "capability",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_permission_overrides",
+      "column_name": "effect",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_permission_overrides",
+      "column_name": "organization_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_permission_overrides",
+      "column_name": "resource_type",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_permission_overrides",
+      "column_name": "resource_id",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_permission_overrides",
+      "column_name": "created_by_user_id",
+      "data_type": "uuid",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_permission_overrides",
+      "column_name": "reason",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "tracekit_permission_overrides",
+      "column_name": "created_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "tracekit_permission_overrides",
+      "column_name": "updated_at",
+      "data_type": "timestamp with time zone",
+      "is_nullable": "NO",
+      "column_default": "now()"
+    },
+    {
+      "table_name": "schema_migrations",
+      "column_name": "version",
+      "data_type": "text",
+      "is_nullable": "NO",
+      "column_default": null
+    },
+    {
+      "table_name": "schema_migrations",
+      "column_name": "statements",
+      "data_type": "ARRAY",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "schema_migrations",
+      "column_name": "name",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "schema_migrations",
+      "column_name": "created_by",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "schema_migrations",
+      "column_name": "idempotency_key",
+      "data_type": "text",
+      "is_nullable": "YES",
+      "column_default": null
+    },
+    {
+      "table_name": "schema_migrations",
+      "column_name": "rollback",
+      "data_type": "ARRAY",
+      "is_nullable": "YES",
+      "column_default": null
+    }
+  ],
+  "constraints": [
+    {
+      "table_name": "tracekit_audit_events",
+      "conname": "tracekit_audit_events_account_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (account_id) REFERENCES tracekit_accounts(id)"
+    },
+    {
+      "table_name": "tracekit_audit_events",
+      "conname": "tracekit_audit_events_actor_user_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (actor_user_id) REFERENCES tracekit_users(id)"
+    },
+    {
+      "table_name": "tracekit_audit_events",
+      "conname": "tracekit_audit_events_organization_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (organization_id) REFERENCES tracekit_organizations(id)"
+    },
+    {
+      "table_name": "tracekit_audit_events",
+      "conname": "tracekit_audit_events_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "tracekit_audit_events",
+      "conname": "tracekit_audit_events_result_check",
+      "contype": "c",
+      "definition": "CHECK ((result = ANY (ARRAY['success'::text, 'denied'::text, 'failure'::text])))"
+    },
+    {
+      "table_name": "tracekit_business_contexts",
+      "conname": "tracekit_business_contexts_fulfillment_check",
+      "contype": "c",
+      "definition": "CHECK ((fulfillment_type = ANY (ARRAY['unknown'::text, 'digital'::text, 'physical'::text, 'hybrid'::text])))"
+    },
+    {
+      "table_name": "tracekit_business_contexts",
+      "conname": "tracekit_business_contexts_metadata_safe_check",
+      "contype": "c",
+      "definition": "CHECK (financial_reconciliation_metadata_is_safe(metadata))"
+    },
+    {
+      "table_name": "tracekit_business_contexts",
+      "conname": "tracekit_business_contexts_organization_account_fk",
+      "contype": "f",
+      "definition": "FOREIGN KEY (organization_id, account_id) REFERENCES tracekit_organizations(id, owning_account_id)"
+    },
+    {
+      "table_name": "tracekit_business_contexts",
+      "conname": "tracekit_business_contexts_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "tracekit_business_contexts",
+      "conname": "tracekit_business_contexts_status_check",
+      "contype": "c",
+      "definition": "CHECK ((status = ANY (ARRAY['active'::text, 'disabled'::text, 'archived'::text])))"
+    },
+    {
+      "table_name": "tracekit_invitations",
+      "conname": "tracekit_invitations_accepted_by_user_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (accepted_by_user_id) REFERENCES tracekit_users(id)"
+    },
+    {
+      "table_name": "tracekit_invitations",
+      "conname": "tracekit_invitations_check",
+      "contype": "c",
+      "definition": "CHECK (((target_account_id IS NOT NULL) OR (target_organization_id IS NOT NULL)))"
+    },
+    {
+      "table_name": "tracekit_invitations",
+      "conname": "tracekit_invitations_inviter_user_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (inviter_user_id) REFERENCES tracekit_users(id)"
+    },
+    {
+      "table_name": "tracekit_invitations",
+      "conname": "tracekit_invitations_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "tracekit_invitations",
+      "conname": "tracekit_invitations_requested_role_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (requested_role_id) REFERENCES tracekit_roles(id)"
+    },
+    {
+      "table_name": "tracekit_invitations",
+      "conname": "tracekit_invitations_status_check",
+      "contype": "c",
+      "definition": "CHECK ((status = ANY (ARRAY['pending'::text, 'accepted'::text, 'expired'::text, 'revoked'::text])))"
+    },
+    {
+      "table_name": "tracekit_invitations",
+      "conname": "tracekit_invitations_target_account_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (target_account_id) REFERENCES tracekit_accounts(id)"
+    },
+    {
+      "table_name": "tracekit_invitations",
+      "conname": "tracekit_invitations_target_organization_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (target_organization_id) REFERENCES tracekit_organizations(id)"
+    },
+    {
+      "table_name": "tracekit_invitations",
+      "conname": "tracekit_invitations_workos_invitation_id_key",
+      "contype": "u",
+      "definition": "UNIQUE (workos_invitation_id)"
+    },
+    {
+      "table_name": "tracekit_memberships",
+      "conname": "tracekit_memberships_account_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (account_id) REFERENCES tracekit_accounts(id)"
+    },
+    {
+      "table_name": "tracekit_memberships",
+      "conname": "tracekit_memberships_check",
+      "contype": "c",
+      "definition": "CHECK ((num_nonnulls(account_id, organization_id) = 1))"
+    },
+    {
+      "table_name": "tracekit_memberships",
+      "conname": "tracekit_memberships_invitation_fk",
+      "contype": "f",
+      "definition": "FOREIGN KEY (invitation_id) REFERENCES tracekit_invitations(id)"
+    },
+    {
+      "table_name": "tracekit_memberships",
+      "conname": "tracekit_memberships_organization_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (organization_id) REFERENCES tracekit_organizations(id)"
+    },
+    {
+      "table_name": "tracekit_memberships",
+      "conname": "tracekit_memberships_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)"
+    },
+    {
+      "table_name": "tracekit_memberships",
+      "conname": "tracekit_memberships_role_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (role_id) REFERENCES tracekit_roles(id)"
+    },
+    {
+      "table_name": "tracekit_memberships",
+      "conname": "tracekit_memberships_status_check",
+      "contype": "c",
+      "definition": "CHECK ((status = ANY (ARRAY['invited'::text, 'active'::text, 'suspended'::text, 'removed'::text])))"
+    },
+    {
+      "table_name": "tracekit_memberships",
+      "conname": "tracekit_memberships_user_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (user_id) REFERENCES tracekit_users(id)"
+    },
+    {
+      "table_name": "tracekit_permission_overrides",
+      "conname": "tracekit_permission_overrides_created_by_user_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (created_by_user_id) REFERENCES tracekit_users(id)"
+    },
+    {
+      "table_name": "tracekit_permission_overrides",
+      "conname": "tracekit_permission_overrides_effect_check",
+      "contype": "c",
+      "definition": "CHECK ((effect = ANY (ARRAY['allow'::text, 'deny'::text])))"
+    },
+    {
+      "table_name": "tracekit_permission_overrides",
+      "conname": "tracekit_permission_overrides_membership_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (membership_id) REFERENCES tracekit_memberships(id)"
+    },
+    {
+      "table_name": "tracekit_permission_overrides",
+      "conname": "tracekit_permission_overrides_organization_id_fkey",
+      "contype": "f",
+      "definition": "FOREIGN KEY (organization_id) REFERENCES tracekit_organizations(id)"
+    },
+    {
+      "table_name": "tracekit_permission_overrides",
+      "conname": "tracekit_permission_overrides_pkey",
+      "contype": "p",
+      "definition": "PRIMARY KEY (id)"
+    }
+  ],
+  "functions": [
+    {
+      "proname": "tracekit_customer_invitation",
+      "arguments": "p_operation text, p_actor_id uuid, p_identity_id text, p_correlation_id text, p_invitation_id uuid, p_membership_id uuid, p_organization_id uuid, p_email text, p_context_ids text[], p_email_verified boolean",
+      "owner": "postgres",
+      "prosecdef": false,
+      "body_md5": "e5e6205166327912bbf84a17e6cb5a1b",
+      "service_execute": true,
+      "browser_execute": false
+    },
+    {
+      "proname": "tracekit_invitation_delivery",
+      "arguments": "p_operation text, p_actor_id uuid, p_identity_id text, p_correlation_id text, p_membership_id uuid, p_organization_id uuid, p_invitation_id uuid, p_email text, p_context_ids text[], p_attempt_id uuid, p_state text, p_provider_id text, p_provider_state text",
+      "owner": "postgres",
+      "prosecdef": false,
+      "body_md5": "c329ad0aad0be2a91522dcd35ad0ec39",
+      "service_execute": true,
+      "browser_execute": false
+    },
+    {
+      "proname": "ws021_assert_admin",
+      "arguments": "p_actor uuid, p_identity text, p_permission text",
+      "owner": "postgres",
+      "prosecdef": false,
+      "body_md5": "eacdd6b1150d0d64bf48b6620fd430bb",
+      "service_execute": true,
+      "browser_execute": false
+    }
+  ],
+  "writers": [
+    {
+      "state": {
+        "schedules": [
+          {
+            "id": "e1397dc0-1ff9-48c7-bcca-b9c03c304861",
+            "enabled": false,
+            "resource": "next29_orders",
+            "lease_owner": null,
+            "activation_state": "disabled"
+          },
+          {
+            "id": "cfca3725-eb31-43fb-b3f5-cca78730d0fe",
+            "enabled": false,
+            "resource": "next29_subscriptions",
+            "lease_owner": null,
+            "activation_state": "disabled"
+          },
+          {
+            "id": "13b1b66b-9f22-472c-8df0-6213debc0e4b",
+            "enabled": false,
+            "resource": "next29_disputes",
+            "lease_owner": null,
+            "activation_state": "disabled"
+          }
+        ],
+        "active_runs": 0,
+        "live_activations": 0,
+        "migration_installed": 0
+      }
+    }
+  ]
+}

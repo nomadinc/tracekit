@@ -7,6 +7,8 @@ import { authorizeCustomerInvitation } from "@/lib/identity/customer-invitation-
 import { resolveInvitationTargetAccess } from "@/lib/identity/invitation-target-access";
 import { requireResourceScope } from "@/lib/identity/authorization-gateway";
 import { SupabaseIdentityTenancyRepository } from "@/lib/identity/supabase-identity-repository";
+import { ACTIVE_ORGANIZATION_COOKIE, sealActiveOrganization } from "@/lib/identity/active-organization-cookie";
+import { ACTIVE_BUSINESS_CONTEXT_COOKIE } from "@/lib/identity/active-business-context-cookie";
 
 const unavailable = () => NextResponse.json({ error: "The requested resource is unavailable." }, { status: 404 });
 export async function POST(request: Request) {
@@ -22,21 +24,33 @@ export async function POST(request: Request) {
       const identity = await resolveAuthenticatedPersistentIdentity();
       if (!identity || identity.user.status !== "active") return unavailable();
       const result = await repository.customerInvitation({ p_operation: "accept", p_actor_id: identity.user.id, p_identity_id: identity.externalWorkosUserId, p_correlation_id: randomUUID(), p_invitation_id: body.invitationId, p_email_verified: identity.emailVerified });
-      return result.ok ? NextResponse.json({ ok: true, organizationId: result.organizationId }) : unavailable();
+      if (!result.ok || typeof result.organizationId !== "string") return unavailable();
+      const response = NextResponse.json({ ok: true, organizationId: result.organizationId });
+      response.cookies.delete(ACTIVE_BUSINESS_CONTEXT_COOKIE);
+      const maxAge = 60 * 60 * 24 * 30;
+      response.cookies.set(ACTIVE_ORGANIZATION_COOKIE, sealActiveOrganization({ userId: identity.user.id, organizationId: result.organizationId, expiresAt: Date.now() + maxAge * 1000 }), { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax", path: "/", maxAge });
+      return response;
     }
     const resolution = await resolveApplicationSession();
     if (resolution.kind !== "authenticated") return unavailable();
     const session = resolution.session;
     const base = { p_actor_id: session.user.id, p_identity_id: session.externalWorkosUserId, p_correlation_id: session.correlationId, p_membership_id: session.membership.id };
-    if (body.operation === "issue") {
+    if (body.operation === "issue" || body.operation === "issue-orders-only") {
       if (typeof body.organizationId !== "string" || typeof body.role !== "string" || typeof body.intendedEmail !== "string" || !Array.isArray(body.businessContextIds) || body.businessContextIds.some((id: unknown) => typeof id !== "string")) return unavailable();
       let input;
-      try { input = authorizeCustomerInvitation(await resolveInvitationTargetAccess(session, repository, body.organizationId), body); }
+      try {
+        const target = await resolveInvitationTargetAccess(session, repository, body.organizationId);
+        input = authorizeCustomerInvitation(target, body);
+        if (body.operation === "issue-orders-only") requireResourceScope(target, body.organizationId, "users.manage_permissions");
+      }
       catch {
         await repository.recordAuditEvent({ actorUserId: session.user.id, authenticatedIdentityId: session.externalWorkosUserId, accountId: session.activeAccount.id, organizationId: session.activeOrganization?.id || null, action: "invitation.issue", result: "denied", permissionEvaluated: "users.invite", correlationId: session.correlationId, metadata: { reason: "unavailable" } });
         return unavailable();
       }
-      const claim = await repository.invitationDelivery({ ...base, p_operation: "issue", p_invitation_id: randomUUID(), p_organization_id: input.organizationId, p_email: input.intendedEmail, p_context_ids: input.businessContextIds });
+      const parameters = { ...base, p_invitation_id: randomUUID(), p_organization_id: input.organizationId, p_email: input.intendedEmail, p_context_ids: input.businessContextIds };
+      const claim = body.operation === "issue-orders-only"
+        ? await repository.ordersOnlyInvitation(parameters)
+        : await repository.invitationDelivery({ ...parameters, p_operation: "issue" });
       if (!claim.ok) return unavailable();
       const delivery = await completeInvitationDelivery(claim, sendWorkOSInvitation, parameters => repository.invitationDelivery({ ...base, p_organization_id: input.organizationId, ...parameters }));
       return NextResponse.json({ ok: true, invitationId: claim.id, acceptancePath: `/invitations/${claim.id}`, role: input.role, delivery }, { status: delivery.sendAccepted ? 201 : 202 });

@@ -14,7 +14,7 @@ export function AdminForm({
   roles = [],
   currentRole,
 }: {
-  action: "create" | "role" | "remove";
+  action: "create" | "role" | "remove" | "prepare-context";
   accountId?: string;
   organizationId?: string | null;
   membershipId?: string;
@@ -114,6 +114,7 @@ export function AdminForm({
                 create: "Create client",
                 role: "Update role",
                 remove: "Remove access",
+                "prepare-context": "Set up workspace",
               }[action]}
       </button>
       {confirming ? (

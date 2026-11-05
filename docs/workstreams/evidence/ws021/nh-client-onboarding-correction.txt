@@ -1,0 +1,162 @@
+WS-021 — NH Discounts existing-client onboarding correction
+Date: November 5, 2026 Pacific
+STATUS: IMPLEMENTED / OFFLINE VERIFIED; production installation and customer acceptance pending.
+Production V1 HOLD.
+
+APPROVED CUSTOMER AND TENANT
+This latest request selects spongant@mac.com. anthony@nomadnetwork.io is separate and
+is not targeted by the correction or execution plan.
+Existing user: 92575f17-e049-4069-ab57-52c196994e6b.
+Stored WorkOS subject: user_01M4Y67KBET8XEQQGTR9Z9AK03.
+NH organization: ab757103-4ad9-4fd8-a3f1-3f5adaee9b03.
+Existing owning client account: 26a6eabb-2ddc-4b0d-8bf2-ce61c2ca700f.
+Existing Stem membership/context access is not removed or modified by this correction.
+No duplicate identity or replacement account/organization is proposed.
+
+ROOT CAUSES
+1. ws021_create_client in 20261007055158_ws021_platform_admin_provisioning.sql creates
+   an account and organization for a client but does not provision a Business Context.
+   No existing-client workspace repair action existed. NH's valid account/org ownership
+   therefore does not imply that its context was created. No account conversion is needed.
+2. client-read-only defaults include financials.view. The invitation workflow did not
+   expose membership-specific financial denials. Changing the shared role would alter
+   unrelated customers and is not the correction.
+3. Existing invitation acceptance redirected to / without selecting the accepted org.
+   A customer with a valid previous client membership/cookie could remain in that client.
+
+BOUNDED IMPLEMENTATION
+* Add an explicit Set up workspace action to the existing platform client detail page
+  only for an active client/org with no contexts and organizations.manage authority.
+* Server route and new ws021_prepare_client_context RPC independently verify canonical
+  platform administration and exact active client-account/organization ownership.
+  It locks the target, creates one deterministic first context only when none exists,
+  reuses an active context on repeat, and refuses inactive or conflicting contexts.
+  It inserts an audit event atomically. Account/org rows, connections and offers are
+  never rewritten. The NH context ID would be client-ab757103-4ad9-4fd8-a3f1-3f5adaee9b03;
+  this is a proposed deterministic identifier, NOT an already-created production row.
+* Add an opt-in Orders-only invitation control. Existing ordinary invitation behavior
+  is unchanged. Restriction requires users.invite AND users.manage_permissions plus
+  canonical platform-admin authority; server and RPC both enforce the checks.
+* A protected private-by-RLS invitation policy row is inserted in the same transaction
+  as the existing invitation/delivery claim. It cannot be removed via a browser API.
+* Existing verified-email invitation acceptance remains in use. A scoped membership
+  INSERT trigger adds two existing permission-override records, both deny, for exactly
+  financials.view and orders.view_financials on that invitation's NH membership.
+  Failure to persist either denial rolls back the entire acceptance transaction.
+  No period exists where an accepted restricted membership commits without its denials.
+  No shared role, other memberships, RLS policies or historical records are edited.
+* Only successful acceptance sets the signed active-organization cookie for the current
+  authenticated user and accepted org, then clears stale Business Context selection.
+  Cookie remains HttpOnly, SameSite=Lax, Secure in production. Failed acceptance sets none.
+
+SOURCE SCOPE
+Parent/base: 57eaec27b4b5022ec5ba5e81c0cdcb3182c150f3 (inspected production application).
+Isolated branch: ws021/nh-client-onboarding. Exact commit is in the package receipt.
+Files:
+  supabase/migrations/20261105162517_ws021_client_context_orders_only_onboarding.sql
+  ui/app/api/platform/admin/route.ts
+  ui/app/api/invitations/route.ts
+  ui/app/(app)/platform/clients/[accountId]/page.tsx
+  ui/components/platform/admin-actions.tsx
+  ui/components/platform/client-invitations.tsx
+  ui/lib/identity/supabase-identity-repository.ts
+  ui/tests/fixtures/ws021-onboarding.sql
+  ui/tests/ws021-client-onboarding.test.ts
+  this report
+No 29Next, financial ledger/report calculation, schedule, provider connection or
+unrelated tenant data changes. No runtime dependency/lockfile change.
+This isolated candidate does not overwrite or silently integrate WS-020 or the separately
+accepted c9d0de274dc520264c04078c10610e3b4b4bcff9 financial-page correction.
+
+OFFLINE VALIDATION
+71 tests PASS, zero failed/skipped (12 new focused cases plus retained invitation,
+platform admin, identity, scope and permission regressions). SQL tests run the actual
+three original provisioning/invitation/delivery migrations and the new additive SQL
+in disposable PostgreSQL/WASM (@electric-sql/pglite 0.5.15), with synthetic identities.
+They exercise actual constraints, roles, RLS/EXECUTE denial, invoker functions and trigger.
+No hosted database or real credential is used for mutation testing.
+
+Verified cases include idempotent workspace setup, preserved account/org rows, foreign
+ownership/non-admin rejection, inactive context preservation, current permission denial,
+verified-email/wrong-user rejection, foreign membership rejection, full transaction
+rollback on denial-write failure, no duplicate identity/membership, both scoped denials,
+ordinary invitation compatibility and protected policy access rejection.
+
+Database-produced membership/overrides feed the real permission resolver and scoped
+gateway. The actual unchanged customer-orders route is compiled/executed with only its
+transport/session boundary injected. It permits orders.view, removes gross_amount,
+injects canonical NH scope, rejects default/foreign/conflicting scope hints before
+transport, denies financial reporting, and rejects membership revocation on refresh.
+The actual updated invitation route is exercised for successful organization selection
+and zero cookie writes on denied acceptance.
+
+Application TypeScript PASS. Focused lint PASS. Full Next.js production build PASS,
+exit 0; existing WorkOS Edge, unrelated hook and chart-size warnings retained in log.
+Full test-inclusive tsc reports 62 diagnostics in unchanged existing tests; no diagnostics
+in the added test or changed application files. It is not reported as a full-suite
+TypeScript PASS. Initial test invocation from repository root failed an existing @/
+alias import; running from ui (its tsconfig root) passed. Initial unescaped UI apostrophe
+lint finding was corrected. Logs retain these qualifications.
+
+Reproduce:
+1. Fetch the bundle prerequisite 57eaec27b4b5022ec5ba5e81c0cdcb3182c150f3 and verify/import
+   the supplied incremental bundle; create a detached worktree at the receipt's commit.
+2. npm --prefix ui ci --ignore-scripts
+3. Install the test-only SQL runtime OUTSIDE the application:
+   npm install --prefix /tmp/ws021-onboarding-pg --no-save --ignore-scripts @electric-sql/pglite@0.5.15
+4. From ui:
+   WS021_PGLITE_MODULE=/tmp/ws021-onboarding-pg/node_modules/@electric-sql/pglite/dist/index.js node --import ./node_modules/tsx/dist/loader.mjs --test tests/ws021-client-onboarding.test.ts tests/ws020-scoped-core-gateway.test.ts tests/ws021-invitation-target-access.test.ts tests/ws020-invitation-policy.test.ts tests/platform-admin-recovery.test.ts tests/ws020-invitation-email-delivery.test.ts tests/persistent-identity.test.ts
+   ./node_modules/.bin/tsc --noEmit -p tsconfig.application.json
+   npm run build
+The local build supplies no application credentials, only the existing trusted CA/proxy
+needed to fetch fonts. TLS verification is enabled. Production role authority, hosted
+PostgREST concurrency and actual customer browser persistence are NOT certified by PGlite.
+
+PRODUCTION EXECUTION STATUS AND ORDER
+No migration, grant, trigger installation, deployment, email send, context creation,
+membership change or production enrollment was executed. The new controls are not live.
+The identity/email authorization already exists; it does not need to be requested again.
+Remaining execution boundary is installation of new schema/function/trigger controls and
+an application release, followed by current provider verification and customer acceptance.
+
+1. WS-022 focused review of only the new provisioning, restricted-invitation and cookie
+   delta. Do not reopen accepted connector development or the accepted financial fix.
+2. Obtain/confirm separate controlled production migration/application release execution
+   authority. The existing source-only preparation does not install new server RPC grants.
+   Install additive migration first; it performs no tenant backfill or enrollment.
+   No grants on existing application data objects or production role conversions.
+3. Integrate exact bounded changes into the then-current approved source, preserving
+   other accepted work. Build/release without changing environment or credentials.
+4. Through existing authenticated platform UI, open the exact NH account, Set up workspace,
+   select only the NH context, choose Orders-only and issue to spongant@mac.com.
+   Do not delete/recreate its identity to bypass WorkOS user_already_exists. Existing
+   delivery ambiguity handling remains; no blind resend after an unknown send outcome.
+5. Customer uses email sign-in at app.trace-kit.io and accepts the application invitation.
+   Current WorkOS emailVerified and matching subject/email are enforced by existing
+   acceptance. Do not use an administrator support session as customer evidence.
+6. Read back exact NH membership and two denies, verify independent NH landing, refresh
+   and re-login, Orders access/redaction and foreign-scope rejection. Prior authorized
+   Stem membership stays intact; it must not leak into an NH-scoped request.
+
+WS-001 READ-PATH HANDOFF
+NH Orders page /orders; customer API /api/customer-orders?limit=1 on app.trace-kit.io.
+Canonical NH organization/workspace ab757103-4ad9-4fd8-a3f1-3f5adaee9b03.
+29Next connection 92b02244-32b5-4ddf-aec4-fc7574848983; provider account
+0ac25a08-183c-4a12-a3ad-c08a013aa027 / memoryorb.
+Compare incoming order-only records after separately authorized WS-001 execution;
+do not invoke or activate the scheduler to certify enrollment. No Profit completion
+is implied and no financial fields are granted by this invitation profile.
+
+ROLLBACK
+Application UI/issuance may be rolled back through a separately approved release.
+Do NOT drop the policy table, acceptance trigger or persisted denial overrides while
+restricted invitations remain pending: old acceptance must still install both denials.
+Never undo financial restrictions or delete a context as an automatic rollback. Resolve
+pending invitations explicitly and review any later schema removal independently.
+
+CUSTOMER RESULTS
+Production enrollment: NOT EXECUTED, pending installation/release above.
+Independent customer login/session persistence: NOT RUN.
+Production customer Orders/redaction/foreign denial: NOT RUN; offline covered above.
+Existing spongant identity/Stem access preserved. anthony@nomadnetwork.io untouched.
+Production V1 remains HOLD.

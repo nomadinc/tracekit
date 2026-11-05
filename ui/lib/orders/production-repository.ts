@@ -1,3 +1,6 @@
+import { readJourneyPages } from "@/lib/reporting/journey-pages";
+import { observedAmount } from "@/lib/reporting/observed-money";
+import { exactRelatedOrder } from "@/lib/reporting/order-relationship";
 import type { OrderRepository } from "./repository";
 import type {
   OrderDeepLinkState, OrderDrawerRecord, OrderListFilter, OrderSearchResult,
@@ -18,7 +21,7 @@ async function readJson(res: Response) {
   const text = await res.text();
   let body: any = {};
   try { body = text ? JSON.parse(text) : {}; } catch { body = { message: text.slice(0, 300) }; }
-  if (!res.ok) throw new Error(body?.message || body?.error || `Order request failed (${res.status})`);
+  if (!res.ok || body?.ok === false) throw new Error(body?.message || body?.error || `Order request failed (${res.status})`);
   return body;
 }
 async function get(path: string) {
@@ -43,7 +46,12 @@ function status(v: unknown): OrderSummary["status"] {
 }
 function orderId(row: any) { return String(row?.platform_order_id || row?.order_id || row?.id || ""); }
 function summary(row: any, customer: any, scope: ProductionScope): OrderSummary {
+  if ((row?.organization_id !== undefined && row.organization_id !== scope.organizationId)
+    || (row?.workspace_id !== undefined && row.workspace_id !== scope.workspaceId)) {
+    throw new Error("Order scope is unavailable.");
+  }
   const id = orderId(row);
+  if (!id) throw new Error("Order identity is unavailable.");
   return {
     id,
     organizationId: scope.organizationId || "",
@@ -60,7 +68,8 @@ function summary(row: any, customer: any, scope: ProductionScope): OrderSummary 
     profitStatus: "Estimated",
     profit: null,
     revenue: num(row?.amount ?? row?.gross_amount),
-    revenueAvailable: row?.amount !== undefined || row?.gross_amount !== undefined,
+    revenueAvailable: observedAmount(row?.amount ?? row?.gross_amount) !== null,
+    currency: row?.currency || null,
     trackingHealth: "Unknown",
     shippingLoss: false, highFee: false, highAffiliate: false,
   };
@@ -68,7 +77,7 @@ function summary(row: any, customer: any, scope: ProductionScope): OrderSummary 
 async function customerDetail(scope: ProductionScope, customerId: string) {
   return get(`/api/customers/${encodeURIComponent(customerId)}?${qs(scope)}`);
 }
-function event(row: any, order: OrderSummary, credits: any[] = []): OrderTimelineEvent {
+function event(row: any, order: OrderSummary, sourceOrder: any, credits: any[] = []): OrderTimelineEvent {
   const tech = row?.technical_evidence || row?.technical || {};
   const id = String(row?.id || crypto.randomUUID());
   const eventType = String(row?.event_type || row?.activity_type || "").toLowerCase();
@@ -77,12 +86,7 @@ function event(row: any, order: OrderSummary, credits: any[] = []): OrderTimelin
   const attributed = matchingCredits.find((credit:any) => credit?.status === "attributed") || null;
   const affiliateId = row?.affiliate_id || attributed?.affiliate_id;
   const offerId = row?.offer_id || attributed?.offer_id;
-  const relationshipValues = [
-    row?.related_order_id, row?.order_id, row?.platform_order_id,
-    ...(Array.isArray(row?.relationships) ? row.relationships.flatMap((rel:any) => [rel?.id, rel?.label, rel?.record_id]) : []),
-    ...Object.values(tech),
-  ];
-  const explicitOrder = relationshipValues.some((v:any) => String(v || "").includes(order.number));
+  const explicitOrder = Boolean(exactRelatedOrder(row, [sourceOrder]));
   const baseLabel = String(row?.title || row?.event_type || row?.activity_type || "Evidence").replace(/_/g," ").replace(/\b\w/g,c=>c.toUpperCase());
   const label = eventType === "click" && source === "everflow" ? "Everflow Affiliate Click" : baseLabel;
   const sourceLabel = source ? (source === "commas" ? "Commas" : source === "everflow" ? "Everflow" : source) : "";
@@ -102,7 +106,7 @@ function event(row: any, order: OrderSummary, credits: any[] = []): OrderTimelin
     originalUrl: String(row?.url || row?.display_fields?.url || ""), referrer: "", destinationUrl: "",
     queryParameters: {}, identifiers, redirects: [], diagnostics: [],
     evidence: Object.entries(tech).filter(([,v])=>v !== null && v !== undefined && typeof v !== "object").slice(0,8).map(([k,v])=>`${k}: ${String(v)}`),
-    relationships: [{ type: "Order", id: order.id, label: order.number }],
+    relationships: explicitOrder ? [{ type: "Order", id: order.id, label: order.number }] : [],
   };
 }
 
@@ -123,7 +127,8 @@ export class ProductionOrderRepository {
     let rows: OrderSummary[] = [];
     while (offset !== null) {
       const page = await get(`/api/customer-orders?${qs(scope,{limit:100,offset})}`);
-      rows.push(...(page.orders || []).map((entry:any)=>summary(entry.order,entry.customer,scope)));
+      if (!Array.isArray(page.orders)) throw new Error("Order list is unavailable.");
+      rows.push(...page.orders.map((entry:any)=>summary(entry.order,entry.customer,scope)));
       if (page.next_offset !== null && (!Number.isInteger(page.next_offset) || page.next_offset <= offset)) throw new Error("Order pagination is unavailable.");
       offset = page.next_offset;
     }
@@ -146,10 +151,10 @@ export class ProductionOrderRepository {
     const o=summary(raw,detail.customer,scope);
     const journeys=Array.isArray(detail.journeys)?detail.journeys:[];
     let jd:any=null;
-    if(journeys[0]?.id) jd=await get(`/api/customers/${encodeURIComponent(o.customerId)}/journeys/${encodeURIComponent(journeys[0].id)}?${qs(scope,{limit:100})}`).catch(()=>null);
+    if(journeys[0]?.id) jd=await readJourneyPages((cursor) => get(`/api/customers/${encodeURIComponent(o.customerId)}/journeys/${encodeURIComponent(journeys[0].id)}?${qs(scope,{limit:100,cursor})}`));
     const rows=Array.isArray(jd?.events)?jd.events:Array.isArray(jd?.activity)?jd.activity:[];
     const credits=Array.isArray(jd?.attribution)?jd.attribution:[];
-    const timeline: OrderTimelineEvent[] = rows.map((r:any)=>event(r,o,credits));
+    const timeline: OrderTimelineEvent[] = rows.map((r:any)=>event(r,o,raw,credits));
     const credit=credits.find((c:any)=>c?.status==="attributed")||{};
     const affiliate=credit?.affiliate_id ? `Affiliate ${credit.affiliate_id}` : "Not observed";
     const offer=credit?.offer_id ? `Offer ${credit.offer_id}` : "Not observed";
@@ -157,12 +162,9 @@ export class ProductionOrderRepository {
     const attributedCredits = credits.filter((c:any)=>c?.status==="attributed");
     o.trackingHealth = attributedCredits.length && timeline.length ? "Healthy" : timeline.length ? "Incomplete" : "Unknown";
     const clickRow = rows.find((r:any)=>String(r?.event_type || r?.activity_type || "").toLowerCase()==="click");
-    const explicitPurchaseRow = rows.find((r:any)=>{
-      const type=String(r?.event_type || r?.activity_type || "").toLowerCase();
-      const tech=r?.technical_evidence || r?.technical || {};
-      const values=[r?.related_order_id,r?.order_id,r?.platform_order_id,...(Array.isArray(r?.relationships)?r.relationships.flatMap((rel:any)=>[rel?.id,rel?.label,rel?.record_id]):[]),...Object.values(tech)];
-      return type==="purchase" && values.some((v:any)=>String(v || "").includes(o.number));
-    });
+    const explicitPurchaseRow = rows.find((r:any) =>
+      String(r?.event_type || r?.activity_type || "").toLowerCase() === "purchase"
+      && exactRelatedOrder(r, [raw]));
     const clickTs=Date.parse(String(clickRow?.event_time || clickRow?.occurred_at || ""));
     const purchaseTs=Date.parse(String(explicitPurchaseRow?.event_time || explicitPurchaseRow?.occurred_at || ""));
     const deltaMs=Number.isFinite(clickTs)&&Number.isFinite(purchaseTs)&&purchaseTs>=clickTs ? purchaseTs-clickTs : null;
@@ -184,7 +186,9 @@ export class ProductionOrderRepository {
   async loadTimeline(scope: ProductionScope,id:string){return (await this.loadWorkspace(scope,id))?.timeline||[];}
   async loadDrawer(scope: ProductionScope,id:string,drawerId:string):Promise<OrderDrawerRecord|null>{
     const w=await this.loadWorkspace(scope,id); if(!w)return null;
-    const [kind,key]=drawerId.split(":",2);
+    const separator = drawerId.indexOf(":");
+    const kind = separator < 0 ? drawerId : drawerId.slice(0, separator);
+    const key = separator < 0 ? "" : drawerId.slice(separator + 1);
     if(kind==="event"||kind==="timeline-event"){
       const e=w.timeline.find(x=>x.id===key); if(!e)return null;
       return {id:drawerId,mode:"journey",title:e.label,question:"What happened, and what retained production evidence supports it?",summary:`${e.status} · ${e.confidence}`,status:e.status,facts:[{label:"Timestamp",value:e.timestamp},{label:"Evidence state",value:e.status}],originalUrl:e.originalUrl,identifiers:e.identifiers,diagnostics:e.diagnostics,evidence:e.evidence.length?e.evidence:["Retained Journey event"],relationships:e.relationships};

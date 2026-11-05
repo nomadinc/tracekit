@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import { formatObservedMoney } from "@/lib/reporting/observed-money";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
@@ -49,6 +50,9 @@ function OrderWorkspaceContent() {
   const activeOrganization = organizations.find((organization) => organization.id === session.activeOrganizationId) || organizations[0] || null;
   const scope = React.useMemo(() => ({ authenticated: session.authenticated, workspaceId: session.activeOrganizationId || "", organizationId: session.activeOrganizationId, businessContextId: session.activeBusinessContextId, session }), [session]);
   const requested = React.useMemo(() => parseOrderDeepLink(params), [params]);
+  const [loadFailed, setLoadFailed] = React.useState(false);
+  const [detailFailed, setDetailFailed] = React.useState(false);
+  const [detailLoading, setDetailLoading] = React.useState(false);
   const [orders, setOrders] = React.useState<OrderSummary[]>([]),
     [snap, setSnap] = React.useState<OrderWorkspaceSnapshot | null>(null),
     [filter, setFilter] = React.useState<OrderListFilter>({ state: "all" }),
@@ -71,6 +75,7 @@ function OrderWorkspaceContent() {
   React.useEffect(() => {
     let on = true;
     setLoading(true);
+    setLoadFailed(false);
     orderRepository
       .listOrders(scope, {
         ...filter,
@@ -78,7 +83,7 @@ function OrderWorkspaceContent() {
         customerId: requested.customerId,
       })
       .then((v) => on && setOrders(v))
-      .catch(() => on && setOrders([]))
+      .catch(() => { if (on) { setOrders([]); setSnap(null); setLoadFailed(true); } })
       .finally(() => on && setLoading(false));
     return () => {
       on = false;
@@ -110,13 +115,20 @@ function OrderWorkspaceContent() {
   ]);
   React.useEffect(() => {
     if (!normalized.orderId) {
+      setDetailLoading(false);
+      setDetailFailed(false);
       setSnap(null);
       return;
     }
     let on = true;
+    setDetailFailed(false);
+    setDetailLoading(true);
+    setSnap(null);
     orderRepository
       .loadWorkspace(scope, normalized.orderId)
-      .then((v) => on && setSnap(v));
+      .then((v) => on && setSnap(v))
+      .catch(() => { if (on) { setSnap(null); setDetailFailed(true); } })
+      .finally(() => { if (on) setDetailLoading(false); });
     return () => {
       on = false;
     };
@@ -170,7 +182,8 @@ function OrderWorkspaceContent() {
     const r = await orderRepository.loadDrawer(scope, snap.order.id, id);
     if (r) drawer.openDrawer(<OrderDrawerContent record={r} />, r.title);
   };
-  if (loading && !snap) return <State text="Loading Order Workspace…" />;
+  if ((loading || detailLoading) && !snap) return <State text="Loading Order Workspace…" />;
+  if (loadFailed || detailFailed) return <State text="Orders are unavailable. Refresh to try again." />;
   if (!orders.length && requested.orderId) {
     return <State text={`Order ${requested.orderId} could not be loaded from the production Order read path`} />;
   }
@@ -232,7 +245,7 @@ function OrderWorkspaceContent() {
           </div>
           <div className="mt-5 grid gap-4 border-t pt-4 sm:grid-cols-3 lg:grid-cols-6">
             {[
-              ["Revenue", snap.order.revenueAvailable === false ? "Unavailable" : `$${snap.order.revenue.toFixed(2)}`],
+              ["Revenue", snap.order.revenueAvailable === false ? "Unavailable" : formatObservedMoney(snap.order.revenue, snap.order.currency)],
               [
                 "Customer",
                 snap.order.sensitiveMasked

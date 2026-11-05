@@ -1,0 +1,42 @@
+{
+  "accepted_inputs": [
+    "95467bd0d69e79aa8093f0f814a92d5f33d0271d",
+    "1ba001e0baf30180aa4597ca5fb8828356ea7eb9",
+    "c9d0de274dc520264c04078c10610e3b4b4bcff9",
+    "94ddd791933d72753d7e538c64815a0dc59ada79"
+  ],
+  "parent": "57eaec27b4b5022ec5ba5e81c0cdcb3182c150f3",
+  "project": "tracekit",
+  "project_id": "prj_vHEklwWR4NABtKnmlasXrDNbudfH",
+  "team": "tracekit",
+  "environment": "Production",
+  "current_deployment": "dpl_AkSdKkdhnSPWn1kdK7fE8GQMAAuv",
+  "current_source": "57eaec27b4b5022ec5ba5e81c0cdcb3182c150f3",
+  "domain": "app.trace-kit.io",
+  "root_directory": "ui",
+  "node": "24.x",
+  "tested_node": "24.22.1",
+  "tested_npm": "11.9.0",
+  "build": "npm ci --ignore-scripts; npm run build",
+  "activation": "NOT AUTHORIZED",
+  "production_supabase_expected": "uoeosoiegatlqtzemsfv",
+  "effective_new_build_bindings": "UNKNOWN: accountable custodian attestation required",
+  "production_workos_client": "UNKNOWN: staging client must not be substituted",
+  "unchanged_paths": [
+    "ui/vercel.json",
+    "ui/middleware.ts",
+    "ui/package.json",
+    "ui/package-lock.json",
+    "api/",
+    "ui/lib/commerce/",
+    "ui/app/api/cron/"
+  ],
+  "tests": {
+    "focused_pass": 171,
+    "application_typecheck": "PASS",
+    "production_build": "PASS",
+    "focused_lint": "PASS",
+    "test_inclusive_typecheck": "63 diagnostics, including accepted cross-connection test optional-string diagnostic; not PASS"
+  },
+  "review": "WS-022 PENDING"
+}

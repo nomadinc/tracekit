@@ -1,3 +1,6 @@
+import { readJourneyPages } from "@/lib/reporting/journey-pages";
+import { observedAmount, formatObservedMoney } from "@/lib/reporting/observed-money";
+import { exactRelatedOrder } from "@/lib/reporting/order-relationship";
 import type { CustomerRepository } from "./repository";
 import type {
   CustomerDeepLinkState,
@@ -14,7 +17,7 @@ async function readJson(res: Response) {
   const text = await res.text();
   let body: any = {};
   try { body = text ? JSON.parse(text) : {}; } catch { body = { message: text.slice(0, 300) }; }
-  if (!res.ok) throw new Error(body?.message || body?.error || `Customer request failed (${res.status})`);
+  if (!res.ok || body?.ok === false) throw new Error(body?.message || body?.error || `Customer request failed (${res.status})`);
   return body;
 }
 function coreBase(){return String(process.env.TRACEKIT_API_BASE_URL||process.env.NEXT_PUBLIC_API_BASE_URL||process.env.NEXT_PUBLIC_API_BASE||"http://127.0.0.1:8787").replace(/\/+$/,"");}
@@ -83,11 +86,7 @@ function mapEvent(row: any, identity: any, credits: any[] = [], orders: any[] = 
   const eventType = String(row?.event_type || row?.activity_type || "").toLowerCase();
   const matchingCredits = credits.filter((credit: any) => String(credit?.touchpoint_event_id || "") === eventId || String(credit?.conversion_event_id || "") === eventId);
   const attributedCredit = matchingCredits.find((credit: any) => credit?.status === "attributed");
-  const relatedOrder = eventType === "purchase" ? orders.find((order: any) => {
-    const orderTime = Date.parse(String(order?.created_at || ""));
-    const eventTime = Date.parse(String(row?.event_time || row?.occurred_at || ""));
-    return Number.isFinite(orderTime) && Number.isFinite(eventTime) && Math.abs(orderTime - eventTime) <= 5000;
-  }) : null;
+  const relatedOrder = eventType === "purchase" ? exactRelatedOrder(row, orders) : null;
   const eventAmount = n(row?.amount);
   const sourceLabel = String(row?.source_platform || tech?.source_platform || "TraceKit");
   const affiliate = row?.affiliate_id || attributedCredit?.affiliate_id;
@@ -111,7 +110,7 @@ function mapEvent(row: any, identity: any, credits: any[] = [], orders: any[] = 
     domain: String(row?.source_platform || tech?.source_platform || "TraceKit"),
     role: String(row?.category || row?.event_type || row?.activity_type || "evidence"),
     status: row?.system_derived ? "Derived" : "Observed",
-    confidence: attributedCredit ? `Attributed${affiliate ? ` · Affiliate ${affiliate}` : ""}${offer ? ` · Offer ${offer}` : ""}` : relatedOrder ? `Commas · Order ${relatedOrder.order_id || relatedOrder.platform_order_id || ""}` : explanation?.reason_is_stored ? "Stored conclusion" : row?.system_derived ? "Derived from retained evidence" : "Observed evidence",
+    confidence: attributedCredit ? `Attributed${affiliate ? ` · Affiliate ${affiliate}` : ""}${offer ? ` · Offer ${offer}` : ""}` : relatedOrder ? `${relatedOrder.platform || "Commerce"} · Order ${relatedOrder.order_id || relatedOrder.platform_order_id || ""}` : explanation?.reason_is_stored ? "Stored conclusion" : row?.system_derived ? "Derived from retained evidence" : "Observed evidence",
     trackingHealth: "Unknown",
     trackingStatus: String(row?.system_derived ? "Derived" : "Observed"),
     originalUrl: String(display?.url || row?.url || ""),
@@ -134,12 +133,14 @@ function mapEvent(row: any, identity: any, credits: any[] = [], orders: any[] = 
   };
 }
 function orderRow(row: any) {
-  const id = String(row?.order_id || row?.platform_order_id || "");
+  const id = String(row?.platform_order_id || row?.order_id || "");
   return {
     id,
     number: String(row?.order_id || row?.platform_order_id || "Order"),
     date: when(row?.created_at),
     amount: n(row?.amount),
+    amountAvailable: observedAmount(row?.amount) !== null,
+    currency: row?.currency || null,
     profit: null,
     profitStatus: "Estimated" as const,
     profitAvailable: false,
@@ -154,8 +155,26 @@ function orderRow(row: any) {
 export class ProductionCustomerRepository implements CustomerRepository<ProductionCustomerScope> {
   async listCustomers(scope: ProductionCustomerScope, filter: CustomerListFilter = {}) {
     if (!scope.authenticated) return [];
-    const body = await get(`/api/customers?${qs(scope, { search: filter.query, limit: 50 })}`,scope);
-    let rows = (body.customers || []).map((row: any) => summary(row, scope));
+    let cursor: string | null = null;
+    const cursors = new Set<string>();
+    const customers = new Map<string, CustomerSummary>();
+    do {
+      const body = await get(`/api/customers?${qs(scope, { search: filter.query, limit: 50, cursor })}`,scope);
+      if (body.ok === false || !Array.isArray(body.customers)) throw new Error("Customer list is unavailable.");
+      for (const row of body.customers) {
+        const customer = summary(row, scope);
+        if (!customer.id) throw new Error("Customer list is unavailable.");
+        if (!customers.has(customer.id)) customers.set(customer.id, customer);
+      }
+      if (!body.has_more) break;
+      if (typeof body.next_cursor !== "string" || !body.next_cursor || cursors.has(body.next_cursor)) {
+        throw new Error("Customer pagination is unavailable.");
+      }
+      const nextCursor: string = body.next_cursor;
+      cursor = nextCursor;
+      cursors.add(nextCursor);
+    } while (cursor !== null);
+    let rows = Array.from(customers.values());
     if (filter.state === "repeat") rows = rows.filter((row: CustomerSummary) => row.repeat);
     return rows;
   }
@@ -172,7 +191,7 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
     const journeys = Array.isArray(detail.journeys) ? detail.journeys : [];
     const selectedJourney = journeys[0] || null;
     let journeyDetail: any = null;
-    if (selectedJourney?.id) journeyDetail = await get(`/api/customers/${encodeURIComponent(customerId)}/journeys/${encodeURIComponent(selectedJourney.id)}?${qs(scope, { limit: 100 })}`,scope);
+    if (selectedJourney?.id) journeyDetail = await readJourneyPages((cursor) => get(`/api/customers/${encodeURIComponent(customerId)}/journeys/${encodeURIComponent(selectedJourney.id)}?${qs(scope, { limit: 100, cursor })}`,scope));
     const listLike = {
       customer: detail.customer,
       last_activity_at: detail.summary?.last_seen_at,
@@ -200,6 +219,10 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
     return {
       customer,
       lifetimeRevenue: n(detail.summary?.lifetime_revenue),
+      lifetimeRevenueAvailable: observedAmount(detail.summary?.lifetime_revenue) !== null
+        && rawOrders.length > 0 && rawOrders.every((row: any) => row.currency && observedAmount(row.amount) !== null)
+        && new Set(rawOrders.map((row: any) => row.currency)).size === 1,
+      revenueCurrency: rawOrders[0]?.currency || null,
       customerSince: when(detail.summary?.first_seen_at),
       firstTouch: firstSource ? (firstCredit?.affiliate_id && !firstCredit?.source ? `Affiliate ${firstCredit.affiliate_id}${firstCredit.offer_id ? ` · Offer ${firstCredit.offer_id}` : ""}` : String(firstSource)) : "No retained attribution conclusion",
       lastPurchase: orders[0]?.date || "No linked purchase",
@@ -219,7 +242,9 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
   async loadDrawer(scope: ProductionCustomerScope, customerId: string, drawerId: string): Promise<CustomerDrawerRecord | null> {
     const snapshot = await this.loadWorkspace(scope, customerId);
     if (!snapshot) return null;
-    const [kind, key] = drawerId.split(":", 2);
+    const separator = drawerId.indexOf(":");
+    const kind = separator < 0 ? drawerId : drawerId.slice(0, separator);
+    const key = separator < 0 ? "" : drawerId.slice(separator + 1);
     if (kind === "event" || kind === "journey-event") {
       const event = snapshot.journey.find((row) => row.id === key);
       if (!event) return null;
@@ -247,7 +272,7 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
         id: drawerId, kind: "order", title: order.number,
         question: "Which commercial record is linked to this customer?",
         summary: `${order.status} · ${order.date}`,
-        facts: [{ label: "Amount", value: String(order.amount) }, { label: "Profit", value: "Not asserted in Customer Workspace" }],
+        facts: [{ label: "Amount", value: order.amountAvailable === false ? "Unavailable" : formatObservedMoney(order.amount, order.currency) }, { label: "Profit", value: "Not asserted in Customer Workspace" }],
         evidence: ["Linked by the production Customer Explorer commerce relationship."],
         relationships: [{ type: "Customer", id: customerId, label: snapshot.customer.name }, { type: "Order", id: order.id, label: order.number }],
       };

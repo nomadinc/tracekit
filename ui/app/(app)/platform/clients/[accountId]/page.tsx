@@ -126,7 +126,7 @@ export default async function ClientDetailPage({
               <h3 className="mb-1 text-lg font-semibold">Invitations</h3>
               <p className="mb-4 text-sm text-slate-400">Invite new users and review invitation history.</p>
               {writable && orgActive && group.organizationId && group.invitationContexts !== null ? (
-                <InviteClientUser organizationId={group.organizationId} contexts={group.invitationContexts} />
+                <InviteClientUser organizationId={group.organizationId} contexts={group.invitationContexts} canRestrictFinancials={session.effectivePermissions.includes("users.manage_permissions")} />
               ) : null}
               {group.invitations === null ? (
                 <p>Access required.</p>
@@ -158,6 +158,12 @@ export default async function ClientDetailPage({
                   <h3 className="mb-2 font-semibold">
                     Offer workspaces and offers
                   </h3>
+                  {writable && orgActive && group.contexts?.length === 0 && session.effectivePermissions.includes("organizations.manage") ? (
+                    <div className="mb-3 space-y-2">
+                      <p className="text-sm text-slate-400">Set up the first workspace for this client before inviting a customer.</p>
+                      <AdminForm action="prepare-context" accountId={accountId} organizationId={group.organizationId} />
+                    </div>
+                  ) : null}
                   {group.contexts === null ? (
                     <p>Access required.</p>
                   ) : (

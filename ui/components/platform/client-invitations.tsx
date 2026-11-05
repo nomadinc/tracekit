@@ -6,7 +6,7 @@ import { useRouter } from "next/navigation";
 type Context = { id: string; name: string };
 const fieldClass = "rounded-lg border border-white/15 bg-[#10131a] px-3 py-2 text-sm text-slate-100";
 
-export function InviteClientUser({ organizationId, contexts }: { organizationId: string; contexts: Context[] }) {
+export function InviteClientUser({ organizationId, contexts, canRestrictFinancials = false }: { organizationId: string; contexts: Context[]; canRestrictFinancials?: boolean }) {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState("");
@@ -21,7 +21,7 @@ export function InviteClientUser({ organizationId, contexts }: { organizationId:
       setBusy(true);
       setMessage("");
       try {
-        const response = await fetch("/api/invitations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operation: "issue", organizationId, role: "client-read-only", intendedEmail: String(data.get("email") || ""), businessContextIds }) });
+        const response = await fetch("/api/invitations", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ operation: data.get("ordersOnly") === "on" ? "issue-orders-only" : "issue", organizationId, role: "client-read-only", intendedEmail: String(data.get("email") || ""), businessContextIds }) });
         const result = await response.json();
         if (!response.ok || !result.ok) throw new Error();
         setMessage(result.delivery?.sendAccepted
@@ -41,6 +41,7 @@ export function InviteClientUser({ organizationId, contexts }: { organizationId:
         {contexts.map(context => <label key={context.id} className="flex items-center gap-2 text-sm"><input type="checkbox" name="businessContextIds" value={context.id} />{context.name}</label>)}
       </fieldset>
       {!contexts.length ? <p className="text-sm text-amber-200">No active offer workspace is available. Set up a workspace before inviting a customer.</p> : null}
+      {canRestrictFinancials ? <label className="flex items-center gap-2 text-sm"><input type="checkbox" name="ordersOnly" disabled={busy} />Orders-only access: hide financial reports and financial fields.</label> : null}
       <button disabled={busy || !contexts.length} className="tk-primary-action rounded-lg px-4 py-2 text-sm disabled:opacity-40">{busy ? "Creating invitation…" : "Send invitation"}</button>
       {message ? <p role="status" className="text-sm text-slate-300">{message}</p> : null}
     </form>

@@ -37,7 +37,6 @@ import {
   type FinancialWorkQueueItem,
 } from "@/lib/financial-reconciliation";
 
-const WORKSPACE_ID = "default";
 const EVENT_TYPES = ["all", "refund", "chargeback", "chargeback_fee", "chargeback_reversal", "chargeback_fee_reversal"];
 const STATES = ["all", "automatic", "manual", "ignored", "removed", "unmatched", "ambiguous"];
 const CONFIDENCE = ["all", "exact", "high", "medium", "conflict", "none"];
@@ -271,7 +270,7 @@ function Filters({ range, platform, account, eventType, state, confidence, needs
   }, [account, confidence, eventType, needsReview, platform, range.from, range.to, state]);
 
   function apply() {
-    const query = new URLSearchParams({ workspace_id: WORKSPACE_ID });
+    const query = new URLSearchParams();
     if (form.from) query.set("from", form.from);
     if (form.to) query.set("to", form.to);
     if (form.platform) query.set("platform", form.platform);
@@ -568,7 +567,6 @@ function DetailPanel({
       setSaving(true);
       setMessage(null);
       const response = await sameOriginPostJson<any>("/api/financial-reconciliation/matches", {
-        workspace_id: WORKSPACE_ID,
         financial_event_id: item.id,
         decision_type: decisionType,
         matched_platform_order_id: decisionType === "confirm_match" ? matchedPlatformOrderId : null,
@@ -754,7 +752,6 @@ export default function FinancialReconciliationClient() {
   React.useEffect(() => {
     let cancelled = false;
     const query = financialReconciliationQuery({
-      workspace_id: WORKSPACE_ID,
       from: range.from,
       to: range.to,
       platform,

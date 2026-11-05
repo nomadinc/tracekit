@@ -47,6 +47,9 @@ async function rest(path: string, init: RequestInit = {}) {
 const user = (row: Row): PersistentUser => ({ id: String(row.id), workosUserId: String(row.workos_user_id), primaryEmail: String(row.primary_email), displayName: String(row.display_name), avatarUrl: row.avatar_url ? String(row.avatar_url) : null, status: row.status as PersistentUser["status"] });
 
 export class SupabaseIdentityTenancyRepository implements IdentityTenancyRepository {
+  async ordersOnlyInvitation(input: Record<string, unknown>) {
+    return rest("rpc/ws021_issue_orders_only_invitation", { method: "POST", body: JSON.stringify(input) });
+  }
   async invitationDelivery(input: Record<string, unknown>) {
     return rest("rpc/tracekit_invitation_delivery", { method: "POST", body: JSON.stringify(input) });
   }

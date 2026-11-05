@@ -1,5 +1,6 @@
 "use client";
 import * as React from "react";
+import { formatObservedMoney } from "@/lib/reporting/observed-money";
 import { useRouter, useSearchParams } from "next/navigation";
 import {
   AlertTriangle,
@@ -84,6 +85,7 @@ function CustomerWorkspaceContent() {
   React.useEffect(() => {
     let on = true;
     setLoading(true);
+    setError(null);
     customerRepository
       .listCustomers(scope, { ...filter, offerId: requested.offerId })
       .then((v) => on && setCustomers(v))
@@ -129,9 +131,11 @@ function CustomerWorkspaceContent() {
       return;
     }
     let on = true;
+    setSnapshot(null);
     customerRepository
       .loadWorkspace(scope, normalized.customerId)
-      .then((v) => on && setSnapshot(v));
+      .then((v) => on && setSnapshot(v))
+      .catch(() => { if (on) { setSnapshot(null); setError("Customer details are unavailable. Refresh to try again."); } });
     return () => {
       on = false;
     };
@@ -261,7 +265,7 @@ function CustomerWorkspaceContent() {
           </div>
           <div className="mt-5 grid gap-4 border-t pt-4 sm:grid-cols-3 lg:grid-cols-6 dark:border-white/10">
             {[
-              ["Observed revenue", money(snapshot.lifetimeRevenue)],
+              ["Observed revenue", snapshot.lifetimeRevenueAvailable === false ? "Unavailable" : formatObservedMoney(snapshot.lifetimeRevenue, snapshot.revenueCurrency)],
               ["First observed", snapshot.customerSince],
               ["Attribution evidence", snapshot.firstTouch],
               ["Last linked purchase", snapshot.lastPurchase],
@@ -407,7 +411,7 @@ function CustomerWorkspaceContent() {
                   </span>
                 </span>
                 <span className="text-right text-xs">
-                  <strong>{money(o.amount)}</strong>
+                  <strong>{o.amountAvailable === false ? "Unavailable" : formatObservedMoney(o.amount, o.currency)}</strong>
                   <span className="block">
                     {o.profit === null ? "Profit not available" : money(o.profit)}
                   </span>
