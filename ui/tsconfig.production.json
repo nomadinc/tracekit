@@ -1,0 +1,23 @@
+{
+  "extends": "./tsconfig.application.json",
+  "include": [
+    "app/**/*.ts",
+    "app/**/*.tsx",
+    "components/**/*.ts",
+    "components/**/*.tsx",
+    "lib/**/*.ts",
+    "lib/**/*.tsx",
+    "middleware.ts",
+    "next-env.d.ts",
+    ".next/types/**/*.ts",
+    ".next-build/types/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "tests",
+    "scripts",
+    "sdk",
+    "lib/investigations/accufy-reference.ts",
+    "lib/investigations/oto2-selective-reference.ts"
+  ]
+}

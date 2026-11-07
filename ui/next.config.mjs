@@ -1,4 +1,6 @@
 const nextConfig = {
+  // Keep local operational/test diagnostics in tsconfig.json; check the deployed app here.
+  typescript: { tsconfigPath: "tsconfig.production.json" },
   distDir: process.env.NEXT_DIST_DIR || ".next",
   async headers() {
     const immutable = [
