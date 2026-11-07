@@ -292,7 +292,7 @@ export function CommandPaletteDialog({
       setLoading(true);
       try {
         const offerPromise = offerRepository.search(repositoryScope, trimmed);
-        const customerPromise = customerRepository.search(repositoryScope, trimmed);
+        const customerPromise = session.developmentOnly ? customerRepository.search(repositoryScope, trimmed) : Promise.resolve([]);
         const orderPromise = orderRepository.search(repositoryScope, trimmed);
         const res = await fetch(globalSearchQuery({ workspace_id: WORKSPACE_ID, q: trimmed, limit: SEARCH_LIMIT }), {
           cache: "no-store",
@@ -322,7 +322,7 @@ export function CommandPaletteDialog({
       controller.abort();
       window.clearTimeout(timeout);
     };
-  }, [open, query, repositoryScope]);
+  }, [open, query, repositoryScope, session.developmentOnly]);
 
   const visibleNavItems = React.useMemo(() => {
     const trimmed = query.trim().toLowerCase();
@@ -342,7 +342,7 @@ export function CommandPaletteDialog({
   }, [contextCommands, query]);
 
   const resultItems = React.useMemo(() => {
-    const items: PaletteItem[] = [...orderSearch.map(result => ({ id:`order-search:${result.id}`,group:"Orders and financial Evidence",title:result.title,subtitle:result.subtitle,meta:result.value,href:result.href,icon:ShoppingBag })),...customerSearch.map(result => ({ id: `customer-search:${result.id}`, group: "Customers and forensic Evidence", title: result.title, subtitle: result.subtitle, meta: result.value, href: result.href, icon: UserRound })),...offerSearch.map(result => ({ id: `offer-search:${result.id}`, group: "Offers and related Evidence", title: result.title, subtitle: result.subtitle, meta: result.value, href: result.href, icon: Search }))];
+    const items: PaletteItem[] = session.developmentOnly ? [...orderSearch.map(result => ({ id:`order-search:${result.id}`,group:"Orders and financial Evidence",title:result.title,subtitle:result.subtitle,meta:result.value,href:result.href,icon:ShoppingBag })),...customerSearch.map(result => ({ id: `customer-search:${result.id}`, group: "Customers and forensic Evidence", title: result.title, subtitle: result.subtitle, meta: result.value, href: result.href, icon: UserRound })),...offerSearch.map(result => ({ id: `offer-search:${result.id}`, group: "Offers and related Evidence", title: result.title, subtitle: result.subtitle, meta: result.value, href: result.href, icon: Search }))] : [];
     if (!search) return items;
     (Object.keys(search.groups) as Array<keyof GlobalSearchResponse["groups"]>).forEach((key) => {
       for (const result of search.groups[key] || []) {
@@ -350,7 +350,7 @@ export function CommandPaletteDialog({
       }
     });
     return items;
-  }, [customerSearch, offerSearch, orderSearch, search]);
+  }, [customerSearch, offerSearch, orderSearch, search, session.developmentOnly]);
 
   const items = query.trim().length < 2 ? [...visibleContextItems, ...visibleNavItems] : [...resultItems, ...visibleContextItems, ...visibleNavItems];
   const grouped = groupItems(items);

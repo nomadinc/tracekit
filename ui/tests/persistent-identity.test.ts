@@ -191,21 +191,18 @@ test("persistent Bullseye scope returns matching Workspace and search records on
   const offers = new MockOfferRepository();
   const customers = new MockCustomerRepository();
   const orders = new MockOrderRepository();
-  const mission = scopeMissionControlSnapshot(await new MockMissionControlRepository().getMissionControl(), scope);
-  assert.ok(mission);
+  await assert.rejects(new MockMissionControlRepository().getMissionControl(), /Mission Control data unavailable/);
 
-  assert.deepEqual((await offers.listOffers(scope)).map((item) => item.id), ["offer-bullseye"]);
+  assert.deepEqual(await offers.listOffers(scope), []);
   assert.deepEqual((await customers.listCustomers(scope)).map((item) => item.id), ["cust-123", "cust-124"]);
-  assert.deepEqual((await orders.listOrders(scope)).map((item) => item.id), ["ord-123", "ord-124", "ord-125", "ord-127", "ord-128"]);
-  assert.deepEqual(mission.businesses.map((item) => item.businessContextId), ["offer-bullseye"]);
-  assert.ok(mission.attention.every((item) => item.businessContextId === "offer-bullseye"));
+  assert.deepEqual(await orders.listOrders(scope), []);
 
   const searchResults = [
     ...(await offers.search(scope, "Bullseye")),
     ...(await customers.search(scope, "John")),
     ...(await orders.search(scope, "TK-10482")),
   ];
-  assert.ok(searchResults.length >= 3);
+  assert.equal(searchResults.length, (await customers.search(scope, "John")).length);
   assert.equal(searchResults.some((item) => item.href.includes("valuerx") || item.href.includes("cust-vrx") || item.href.includes("ord-vrx")), false);
   assert.equal(await offers.loadWorkspace(scope, "offer-valuerx-individual"), null);
   assert.equal(await customers.loadWorkspace(scope, "cust-vrx-1"), null);

@@ -20,7 +20,8 @@ export async function AuthenticatedMissionControl() {
     return <SessionState title="No TraceKit access" description="Your identity is verified, but no active TraceKit account membership is assigned." />;
 
   if (resolution.kind === "development") {
-    const snapshot = await missionControlRepository.getMissionControl();
+    const snapshot = await missionControlRepository.getMissionControl().catch(() => null);
+    if (!snapshot) return <AppShell><p role="status" className="p-6 text-sm text-slate-500">Mission Control data unavailable. No observed reporting snapshot is available.</p></AppShell>;
     return (
       <AppShell>
         <MissionControl snapshot={snapshot} portfolio={null} />

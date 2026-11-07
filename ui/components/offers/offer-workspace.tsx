@@ -494,9 +494,9 @@ function OfferWorkspaceContent() {
   if (!offers.length)
     return (
       <div className="rounded-xl border bg-white p-8 dark:border-white/10 dark:bg-ink">
-        <h2 className="font-semibold">No accessible Offers</h2>
+        <h2 className="font-semibold">Offer data unavailable</h2>
         <p className="mt-2 text-sm text-slate-500">
-          The active Organization has no Offers available to this identity.
+          No observed Offer reporting is available for this session.
         </p>
       </div>
     );

@@ -20,62 +20,24 @@ const scope = (
   organizationId: string | null = "org-bullseye",
 ) => resolveMockRepositoryScope({ authenticated: true, developmentOnly: true, identity: identity(id), activeOrganizationId: organizationId, activeBusinessContextId: organizationId === "org-bullseye" ? "offer-bullseye" : organizationId === "org-valuerx" ? "offer-valuerx-individual" : organizationId === "org-petes" ? "offer-petes" : null });
 
-test("mock Offer snapshots are scoped, serializable, and freshly cloned", async () => {
+test("unobserved Offers never produce metrics, trends, comparison or search records", async () => {
   const repository = new MockOfferRepository();
-  const offers = await repository.listOffers(scope());
-  assert.deepEqual(
-    offers.map((item) => item.organizationId),
-    ["org-bullseye", "org-bullseye"],
-  );
-  const first = await repository.loadWorkspace(scope(), offers[0].id);
-  assert.ok(first);
-  first.offer.name = "Changed";
-  const second = await repository.loadWorkspace(scope(), offers[0].id);
-  assert.notEqual(second?.offer.name, "Changed");
-  assert.doesNotThrow(() => JSON.stringify(second));
+  for (const current of [scope(), scope("client-read-only"), scope("agency-owner", "org-valuerx"), scope("platform-admin", null)]) {
+    assert.deepEqual(await repository.listOffers(current), []);
+    assert.equal(await repository.resolveOffer(current, "offer-bullseye"), null);
+    assert.equal(await repository.loadWorkspace(current, "offer-bullseye"), null);
+    assert.deepEqual(await repository.loadTrend(current, "offer-bullseye", 14, ["profit", "cpa"]), []);
+    assert.equal(await repository.loadComparison(current, ["offer-bullseye", "offer-valuerx-individual"]), null);
+    assert.equal(await repository.loadDrawer(current, "offer-bullseye", "profit-driver:actual-shipping-cost"), null);
+    assert.deepEqual(await repository.search(current, "Bullseye"), []);
+  }
 });
-
-test("Offer scope rejects inaccessible Offers and product-admin client rendering", async () => {
-  const repository = new MockOfferRepository();
-  assert.equal(
-    await repository.loadWorkspace(scope(), "offer-valuerx-individual"),
-    null,
-  );
-  assert.deepEqual(
-    await repository.listOffers(scope("platform-admin", null)),
-    [],
-  );
-  assert.equal(
-    await repository.resolveOffer(
-      scope("client-admin", null),
-      "offer-valuerx-individual",
-    ),
-    null,
-  );
-  assert.deepEqual(
-    await repository.resolveOffer(
-      scope("agency-owner", "org-valuerx"),
-      "offer-valuerx-individual",
-    ),
-    { organizationId: "org-valuerx", offerId: "offer-valuerx-individual" },
-  );
+test("missing Offer data clears unresolved object and drawer links", () => {
+  const state = normalizeOfferDeepLink(parseOfferDeepLink("?offer_id=missing&driver=missing&compare=1&compare_offer=missing"), [], null);
+  assert.equal(state.offerId, null);
+  assert.equal(state.driverId, null);
+  assert.equal(state.compare, false);
 });
-
-test("deep links parse and normalize invalid route state safely", async () => {
-  const repository = new MockOfferRepository();
-  const offers = await repository.listOffers(scope());
-  const snapshot = await repository.loadWorkspace(scope(), offers[0].id);
-  const parsed = parseOfferDeepLink(
-    "?offer_id=missing&focus=profit-drivers&driver=missing&event_id=missing&drawer=driver:missing&compare=1&compare_offer=missing",
-  );
-  const normalized = normalizeOfferDeepLink(parsed, offers, snapshot);
-  assert.equal(normalized.offerId, offers[0].id);
-  assert.equal(normalized.driverId, null);
-  assert.equal(normalized.eventId, null);
-  assert.equal(normalized.drawerId, null);
-  assert.equal(normalized.compare, false);
-});
-
 test("Mission Control Offer hrefs preserve identity and production focus", () => {
   const href = withDevelopmentIdentity(
     offerDeepLinkHref({
@@ -90,40 +52,4 @@ test("Mission Control Offer hrefs preserve identity and production focus", () =>
   assert.match(href, /dev_identity=client-admin/);
   assert.match(href, /driver=actual-shipping-cost/);
   assert.doesNotMatch(href, /concepts/);
-});
-
-test("Compare accepts two to four valid accessible Offers and derives its conclusion", async () => {
-  const repository = new MockOfferRepository();
-  const agencyScope = scope("agency-owner", "org-valuerx");
-  const comparison = await repository.loadComparison(agencyScope, [
-    "offer-valuerx-individual",
-    "offer-valuerx-family",
-    "offer-valuerx-individual",
-    "offer-bullseye",
-  ]);
-  assert.ok(comparison);
-  assert.equal(comparison.offers.length, 2);
-  assert.ok(comparison.conclusion.drivers.length);
-  assert.ok(comparison.conclusion.evidence.length);
-  assert.equal(
-    await repository.loadComparison(agencyScope, ["offer-valuerx-individual"]),
-    null,
-  );
-});
-
-test("trend selection and Offer search resolve through repository use cases", async () => {
-  const repository = new MockOfferRepository();
-  const trend = await repository.loadTrend(scope(), "offer-bullseye", 14, [
-    "profit",
-    "cpa",
-  ]);
-  assert.equal(trend.length, 14);
-  assert.ok(
-    trend.every(
-      (point) =>
-        typeof point.profit === "number" && typeof point.cpa === "number",
-    ),
-  );
-  const search = await repository.search(scope(), "Bullseye");
-  assert.ok(search.some((result) => result.href.startsWith("/offers?")));
 });

@@ -74,19 +74,8 @@ test("Mission Control and cross-Workspace builders select exact opaque objects",
     assert.match(href, /[?&]v=1(?:&|$)/);
 });
 
-test("Offer related Customer and Order records are canonical IDs", async () => {
-  const snapshot = await new MockOfferRepository().loadWorkspace(
-    clientScope,
-    "offer-bullseye",
-  );
-  assert.deepEqual(snapshot?.customerQuality.customerIds.slice(0, 2), [
-    "cust-123",
-    "cust-124",
-  ]);
-  assert.deepEqual(snapshot?.customerQuality.orderIds.slice(0, 2), [
-    "ord-123",
-    "ord-125",
-  ]);
+test("unobserved Offers do not invent related Customer or Order records", async () => {
+  assert.equal(await new MockOfferRepository().loadWorkspace(clientScope, "offer-bullseye"), null);
 });
 
 test("Customer related Order separates canonical ID from display number", async () => {
@@ -98,27 +87,8 @@ test("Customer related Order separates canonical ID from display number", async 
   assert.equal(snapshot?.orders[0].number, "TK-10482");
 });
 
-test("Order routes point back to exact production Customer and Offer", async () => {
-  const snapshot = await new MockOrderRepository().loadWorkspace(
-    clientScope,
-    "ord-123",
-  );
-  assert.equal(
-    parseCustomerDeepLink(
-      PRODUCTION_ROUTES.customers({
-        customerId: snapshot?.relatedCustomer.id,
-      }).split("?")[1],
-    ).customerId,
-    "cust-123",
-  );
-  assert.equal(
-    parseOfferDeepLink(
-      PRODUCTION_ROUTES.offers({ offerId: snapshot?.relatedOffer.id }).split(
-        "?",
-      )[1],
-    ).offerId,
-    "offer-bullseye",
-  );
+test("unobserved Orders cannot invent related Customer or Offer links", async () => {
+  assert.equal(await new MockOrderRepository().loadWorkspace(clientScope, "ord-123"), null);
 });
 
 test("Universal Search resolves production Offer, Customer, and Order contracts", async () => {
@@ -127,9 +97,9 @@ test("Universal Search resolves production Offer, Customer, and Order contracts"
     new MockCustomerRepository().search(clientScope, "John"),
     new MockOrderRepository().search(clientScope, "TK-10482"),
   ]);
-  assert.ok(offers.some((item) => item.href.startsWith("/offers?")));
+  assert.deepEqual(offers, []);
   assert.ok(customers.some((item) => item.href.startsWith("/customers?")));
-  assert.ok(orders.some((item) => item.href.startsWith("/orders?")));
+  assert.deepEqual(orders, []);
 });
 
 test("versioned deep links survive serialization and history-style reparsing", () => {
@@ -158,7 +128,7 @@ test("invalid object and Drawer IDs normalize without disclosure or exceptions",
       ),
       offers,
     ).offerId,
-    "offer-bullseye",
+    null,
   );
   assert.equal(
     normalizeCustomerDeepLink(
@@ -186,7 +156,7 @@ test("agency resolves an assigned active Organization while unscoped and direct-
   const orders = new MockOrderRepository();
   assert.deepEqual(
     await offers.resolveOffer(agencyValueRxScope, "offer-valuerx-individual"),
-    { organizationId: "org-valuerx", offerId: "offer-valuerx-individual" },
+    null,
   );
   assert.equal(
     await offers.resolveOffer(
@@ -208,8 +178,8 @@ test("agency resolves an assigned active Organization while unscoped and direct-
     null,
   );
   assert.equal(
-    (await orders.resolveOrder(agencyValueRxScope, "ord-vrx-1"))?.organizationId,
-    "org-valuerx",
+    await orders.resolveOrder(agencyValueRxScope, "ord-vrx-1"),
+    null,
   );
   assert.equal(
     await orders.resolveOrder(
@@ -250,9 +220,9 @@ test("canonical Drawer identifiers resolve through mock repositories", async () 
   const offer = await new MockOfferRepository().loadDrawer(clientScope, "offer-bullseye", "profit-driver:actual-shipping-cost");
   const customer = await new MockCustomerRepository().loadDrawer(clientScope, "cust-123", "journey-event:cust-123-evt-0");
   const order = await new MockOrderRepository().loadDrawer(clientScope, "ord-123", "processor-fee:processor-fees");
-  assert.equal(offer?.kind, "profit-driver");
+  assert.equal(offer, null);
   assert.equal(customer?.kind, "event");
-  assert.equal(order?.mode, "financial");
+  assert.equal(order, null);
 });
 
 test("Compare IDs are deduplicated, bounded, and versioned", () => {
@@ -303,11 +273,10 @@ test("opaque identifier references prevent sensitive raw values in generated URL
   const order = (
     await new MockOrderRepository().search(clientScope, "ef_ord_10482")
   ).find((item) => item.type.includes("Everflow"));
-  assert.ok(customer && order);
+  assert.ok(customer);
+  assert.equal(order, undefined);
   assert.doesNotMatch(customer.href, /ef_21a7f0ce98/);
-  assert.doesNotMatch(order.href, /ef_ord_10482/);
   assert.match(customer.href, /identifier_ref=everflow-/);
-  assert.match(order.href, /identifier_ref=ef-ord-/);
 });
 
 test("production core sources do not target concepts or legacy object detail routes", () => {
