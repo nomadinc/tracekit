@@ -191,7 +191,7 @@ export class TraceKitMcpReadService {
       return results.slice(0, limit);
     });
   }
-  inspectCommasTestDeliveryReadiness(){return this.audited("inspect_commas_test_delivery_readiness","customers.view","organization",this.session.activeOrganization!.id,async()=>inspectCommasTestDeliveryReadiness(this.session));}
+  inspectCommasTestDeliveryReadiness(){return this.audited("inspect_commas_test_delivery_readiness","actions.execute","organization",this.session.activeOrganization!.id,async()=>inspectCommasTestDeliveryReadiness(this.session));}
   inspectRemediationSignals(){return this.audited("inspect_remediation_signals","connectors.view","organization",this.session.activeOrganization!.id,async()=>inspectLiveRemediationSignals(this.session,this.runtimeContext.appOrigin));}
   inspectEverflowSyncRemediation(){return this.audited("inspect_everflow_sync_remediation","connectors.view","organization",this.session.activeOrganization!.id,async()=>inspectLiveEverflowSyncRemediation(this.session));}
   inspectShopifyWebhookRemediation(){return this.audited("inspect_shopify_webhook_remediation","connectors.view","organization",this.session.activeOrganization!.id,async()=>inspectLiveShopifyWebhookRemediation(this.session,this.runtimeContext.appOrigin));}

@@ -145,9 +145,9 @@ export const TRACEKIT_MCP_TOOLS = [
     annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
   },
   {
-    name:"tracekit.inspect_commas_test_delivery_readiness",title:"Inspect Commas test-delivery readiness",description:"Read-only diagnostic for the active Organization's bounded Commas test-delivery prerequisites. Reports only safe boundary states and counts; it does not expose credentials or subscription payloads, create an intent, confirm an action, or send a provider request.",
+    name:"tracekit.inspect_commas_test_delivery_readiness",title:"Inspect Commas test-delivery readiness",description:"Read-only diagnostic for the active Organization's bounded Commas test-delivery prerequisites. Reports only safe boundary states and counts; it does not expose credentials or subscription payloads, create an intent, confirm an action, or mutate provider state. Requires actions.execute and performs a credential-backed GET to the verified Commas provider origin. Mutation availability remains subject to the separate action policy.",
     inputSchema:{type:"object",properties:{},additionalProperties:false},
-    annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:false},
+    annotations:{readOnlyHint:true,destructiveHint:false,idempotentHint:true,openWorldHint:true},
   },
   {
     name:"tracekit.inspect_shopify_controlled_proof_readiness",title:"Inspect Shopify controlled proof readiness",description:"Read-only readiness inspection for the exact Stem Labs Shopify controlled create/read-back/delete/absence proof. Does not mutate Shopify.",
