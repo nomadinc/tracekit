@@ -1,3 +1,4 @@
+import React from "react";
 import type { MissionControlPortfolio, PortfolioMetric } from "@/lib/mission-control/production-portfolio";
 
 const money = new Intl.NumberFormat("en-US", {
@@ -7,7 +8,7 @@ const money = new Intl.NumberFormat("en-US", {
 });
 
 function display(metric: PortfolioMetric, format: "money" | "count") {
-  if (metric.value === null) return "Unavailable";
+  if (metric.state === "unavailable" || metric.value === null || !Number.isFinite(metric.value)) return "Unavailable";
   return format === "money" ? money.format(metric.value) : Math.round(metric.value).toLocaleString();
 }
 

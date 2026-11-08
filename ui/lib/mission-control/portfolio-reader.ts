@@ -1,7 +1,7 @@
 import type { TraceKitSessionContext } from "@/lib/identity/persistent-types";
 import { requireResourceScope } from "../identity/authorization-gateway";
 import { readConversionMetric } from "./conversion-metric";
-import { sumPortfolioRows } from "./portfolio-math";
+import { qualifyFinancialMetric } from "./financial-qualification";
 
 export type PortfolioMetric = {
   value: number | null;
@@ -71,8 +71,10 @@ export async function readMissionControlPortfolio(
     (total, row) => total + number(row.gross_amount),
     0,
   );
-  const refundAmount = Math.abs(sumPortfolioRows(refunds, "amount"));
-  const chargebackAmount = Math.abs(sumPortfolioRows(chargebacks, "amount"));
+  // Ledger presence (or absence) does not certify provider coverage. This
+  // adapter has no authoritative completeness contract; never infer one.
+  const refundMetric = qualifyFinancialMetric(refunds, "unknown", "refund");
+  const chargebackMetric = qualifyFinancialMetric(chargebacks, "unknown", "chargeback");
 
   return {
     generatedAt: new Date().toISOString(),
@@ -91,16 +93,8 @@ export async function readMissionControlPortfolio(
           "Qualified portfolio Profit is not asserted until the canonical profit projection confirms all required financial inputs.",
       },
       conversions,
-      refunds: {
-        value: refundAmount,
-        state: "available",
-        detail: `${refunds.length} append-only refund event${refunds.length === 1 ? "" : "s"}.`,
-      },
-      chargebacks: {
-        value: chargebackAmount,
-        state: "available",
-        detail: `${chargebacks.length} append-only chargeback event${chargebacks.length === 1 ? "" : "s"}; reversals remain separate.`,
-      },
+      refunds: refundMetric,
+      chargebacks: chargebackMetric,
     },
   };
 }
