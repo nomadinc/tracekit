@@ -1,8 +1,12 @@
 import { createHash } from "node:crypto";
-import type { Next29CanonicalExpansion } from "../../../api/src/connectors/next29/expansion.ts";
+import { expandNext29Order, type Next29CanonicalExpansion, type Next29CanonicalRefund } from "../../../api/src/connectors/next29/expansion.ts";
+import { SupabaseCommerceEvidenceStore } from "./supabase-evidence-store-core";
 
 type Row = Record<string, unknown>;
-export type FinancialRequest = (path: string, init?: RequestInit) => Promise<Row[]>;
+export type FinancialRequest = ((path: string, init?: RequestInit) => Promise<Row[]>) & {
+  // Injectable read-only storage transport; production uses the existing authorized evidence store.
+  readEvidence?: (input: {organizationId:string;storageReference:string}) => Promise<Uint8Array|null>;
+};
 export type Next29FinancialInput = {
   organizationId: string; connectionId: string; providerAccountId: string;
   canonicalOrderId: string; evidenceId: string; sourceMappingId: string;
@@ -29,16 +33,16 @@ async function lineage(request: FinancialRequest, input: Next29FinancialInput, a
   opaque(order.platform_order_id); opaque(order.provider_order_id);
   const providerScope = {organization_id:input.organizationId,connection_id:input.connectionId,provider_account_id:input.providerAccountId};
   const mapping = exactly(await request(`commerce_source_mappings?${filters({...providerScope,id:input.sourceMappingId,canonical_object_id:input.canonicalOrderId,canonical_object_type:"order",source_object_type:"next29_order",source_object_id:order.provider_order_id})}&select=id,organization_id,connection_id,provider_account_id,canonical_object_id,canonical_object_type,source_object_type,source_object_id,payload_hash&limit=2`));
-  const evidence = exactly(await request(`commerce_evidence_records?${filters({...providerScope,id:input.evidenceId,source_object_type:"next29_order",source_object_id:order.provider_order_id})}&deleted_at=is.null&select=id,organization_id,connection_id,provider_account_id,source_object_type,source_object_id,payload_hash,deleted_at&limit=2`));
+  const evidence = exactly(await request(`commerce_evidence_records?${filters({...providerScope,id:input.evidenceId,source_object_type:"next29_order",source_object_id:order.provider_order_id})}&deleted_at=is.null&select=id,organization_id,connection_id,provider_account_id,source_object_type,source_object_id,payload_hash,storage_reference,deleted_at&limit=2`));
   for (const row of [mapping,evidence]) for (const [key,value] of Object.entries(providerScope)) if (row[key] !== value) throw failure();
   if (mapping.id !== input.sourceMappingId || mapping.canonical_object_id !== input.canonicalOrderId || mapping.canonical_object_type !== "order" || mapping.source_object_type !== "next29_order" || evidence.id !== input.evidenceId || evidence.source_object_type !== "next29_order" || evidence.deleted_at || mapping.source_object_id !== order.provider_order_id || evidence.source_object_id !== order.provider_order_id || !/^[0-9a-f]{64}$/i.test(String(evidence.payload_hash)) || evidence.payload_hash !== mapping.payload_hash) throw failure();
-  return {identity,order};
+  return {identity,order,evidence};
 }
 
 /** No merge-upsert: both unique indexes must agree on an already scoped identity.
  * A single insert race may be reconciled by an exact read; no blind retry occurs.
  */
-async function persist(request: FinancialRequest, table: string, identity: Row, body: Row, validate: (row: Row) => void | Promise<void>) {
+async function persist(request: FinancialRequest, table: string, identity: Row, body: Row, validate: (row: Row) => void | Promise<void>, replay?: (row: Row) => {body:Row;guards:Row}|null) {
   const path = `${table}?${filters(identity)}`;
   const lookup = async () => {
     const rows = await request(`${path}&select=*&limit=2`);
@@ -58,12 +62,16 @@ async function persist(request: FinancialRequest, table: string, identity: Row, 
       if (!existing) throw failure(); // external-record collision, foreign scope, or legacy provenance
     }
   }
+  const plan = replay ? replay(existing) : {body,guards:{}};
+  if (plan === null) return; // immutable, already verified projection: no mutation is needed
   // platform_orders retains its legacy bigint PK; financial tables use UUIDs.
   if (typeof existing.id !== "string" && !(typeof existing.id === "number" && Number.isSafeInteger(existing.id) && existing.id > 0)) throw failure();
   opaque(String(existing.id));
   // Never update ownership/primary identity. Preserve historical scoped refund IDs.
-  const {id: _newId,...update} = body;
-  const updated = exactly(await request(`${path}&${eq("id",existing.id)}`,{method:"PATCH",body:JSON.stringify(update)}));
+  const {id: _newId,...update} = plan.body;
+  const patchPath = `${path}&${eq("id",existing.id)}${Object.keys(plan.guards).length ? `&${filters(plan.guards)}` : ""}`;
+  if (patchPath.length > 6000) throw failure(); // do not replace a bounded native CAS with an unguarded update
+  const updated = exactly(await request(patchPath,{method:"PATCH",body:JSON.stringify(update)}));
   if (updated.id !== existing.id) throw failure();
   await validate(updated);
 }
@@ -72,9 +80,47 @@ async function priorEvidence(request: FinancialRequest, input: Next29FinancialIn
   if (!uuid.test(String(evidenceId))) throw failure();
   if (evidenceId === input.evidenceId) return; // already verified with the current mapping
   const key = {id:evidenceId,organization_id:input.organizationId,connection_id:input.connectionId,provider_account_id:input.providerAccountId,source_object_type:"next29_order",source_object_id:order.provider_order_id};
-  const row = exactly(await request(`commerce_evidence_records?${filters(key)}&deleted_at=is.null&select=id,organization_id,connection_id,provider_account_id,source_object_type,source_object_id,deleted_at,payload_hash&limit=2`));
+  const row = exactly(await request(`commerce_evidence_records?${filters(key)}&deleted_at=is.null&select=id,organization_id,connection_id,provider_account_id,source_object_type,source_object_id,deleted_at,payload_hash,storage_reference&limit=2`));
   for (const [k,v] of Object.entries(key)) if (row[k] !== v) throw failure();
   if (row.deleted_at || !/^[0-9a-f]{64}$/i.test(String(row.payload_hash))) throw failure();
+  return row;
+}
+
+// Decimal equality without rounding database NUMERIC strings through JavaScript Number.
+function decimal(value: unknown): string|null {
+  if ((typeof value !== "string" && typeof value !== "number") || (typeof value === "number" && !Number.isFinite(value))) return null;
+  const m = /^([+-]?)(\d+)(?:\.(\d+))?(?:e([+-]?\d+))?$/i.exec(String(value));
+  if (!m) return null;
+  let digits = (m[2]+(m[3]||"")).replace(/^0+/,"");
+  if (!digits) return "0";
+  let exponent = Number(m[4]||0)-(m[3]||"").length;
+  if (!Number.isSafeInteger(exponent) || Math.abs(exponent)>1000) return null;
+  while (digits.endsWith("0")) { digits=digits.slice(0,-1); exponent++; }
+  return `${m[1]==="-"?"-":""}${digits}e${exponent}`;
+}
+function time(value: unknown) {
+  if (value instanceof Date && Number.isFinite(value.getTime())) return value.toISOString();
+  if (typeof value !== "string" || !Number.isFinite(Date.parse(value))) throw failure();
+  return new Date(value).toISOString();
+}
+function refundTuple(refund: Next29CanonicalRefund) {
+  const amount=decimal(refund.amount);
+  if (amount===null) throw failure();
+  return JSON.stringify([amount,refund.currency,time(refund.occurredAt),Array.from(new Set(refund.transactionIds)).sort()]);
+}
+async function retainedRefund(request: FinancialRequest, input: Next29FinancialInput, order: Row, evidence: Row, refundId: string) {
+  const reference = `commerce-evidence/${input.organizationId}/${input.connectionId}/${input.providerAccountId}/next29_order/${evidence.payload_hash}`;
+  if (evidence.storage_reference !== reference) throw failure();
+  const read = request.readEvidence ?? (args => new SupabaseCommerceEvidenceStore().getAuthorized(args));
+  const bytes = await read({organizationId:input.organizationId,storageReference:reference});
+  if (!bytes || bytes.byteLength>2_000_000 || createHash("sha256").update(bytes).digest("hex")!==evidence.payload_hash) throw failure();
+  let envelope:Row;
+  try { envelope=object(JSON.parse(new TextDecoder("utf-8",{fatal:true}).decode(bytes))); } catch { throw failure(); }
+  const payload=object(envelope.payload);
+  if (envelope.provider!=="next29" || envelope.resource!=="order" || envelope.sourceObjectId!==order.provider_order_id || String(payload.number??"")!==order.provider_order_id) throw failure();
+  const refunds=expandNext29Order(payload).refunds.filter(r=>r.providerRefundId===refundId);
+  if (refunds.length!==1) throw failure();
+  return refunds[0];
 }
 
 /** Protect the existing globally unique platform-order ID from cross-store reassignment. */
@@ -93,20 +139,25 @@ export function next29RefundId(input: Pick<Next29FinancialInput,"organizationId"
 
 export async function persistNext29Refunds(request: FinancialRequest, accountId: string, input: Next29FinancialInput) {
   if (!input.expansion.refunds.length) return;
-  const {identity,order} = await lineage(request,input,accountId);
+  const {identity,order,evidence} = await lineage(request,input,accountId);
   for (const refund of input.expansion.refunds) {
     opaque(refund.providerRefundId);
     if (!refund.occurredAt || !Number.isFinite(Date.parse(refund.occurredAt)) || refund.amount === null || !Number.isFinite(refund.amount) || !refund.currency || !/^[A-Z]{3}$/.test(refund.currency)) throw failure();
     for (const id of refund.transactionIds) opaque(id);
     const paymentIds = Array.from(new Set(refund.transactionIds));
+    const authoritative = await retainedRefund(request,input,order,evidence,refund.providerRefundId);
+    if (refundTuple(refund)!==refundTuple(authoritative)) throw failure();
     const key = {...identity,canonical_order_id:input.canonicalOrderId,provider_refund_id:refund.providerRefundId};
     const row = {...key,id:next29RefundId(input,refund.providerRefundId),evidence_id:input.evidenceId,source_mapping_id:input.sourceMappingId,provider_payment_id:paymentIds.length === 1 ? paymentIds[0] : null,amount:refund.amount,amount_gross:refund.amount,currency:refund.currency,occurred_at:refund.occurredAt};
     // The complete reference array remains in immutable source evidence; do not flatten it into a first-link guess.
     await persist(request,"commerce_refund_events",key,row,async existing => {
       if (!uuid.test(String(existing.id))) throw failure();
       for (const [k,v] of Object.entries({...key,source_mapping_id:input.sourceMappingId})) if (existing[k] !== v) throw failure();
-      await priorEvidence(request,input,order,existing.evidence_id);
-    });
+      const previous = await priorEvidence(request,input,order,existing.evidence_id);
+      const oldSource = previous ? await retainedRefund(request,input,order,previous,refund.providerRefundId) : authoritative;
+      if (refundTuple(oldSource)!==refundTuple(authoritative) || decimal(existing.amount)!==decimal(authoritative.amount) || decimal(existing.amount_gross)!==decimal(authoritative.amount) || existing.currency!==authoritative.currency || time(existing.occurred_at)!==time(authoritative.occurredAt) || existing.provider_payment_id!==(paymentIds.length===1?paymentIds[0]:null)) throw failure();
+      // No independent cross-version ordering rule exists here. Contradictions are not corrections.
+    },()=>null);
   }
 }
 
@@ -114,6 +165,9 @@ export async function persistNext29Payments(request: FinancialRequest, accountId
   if (!input.expansion.transactions.length) return;
   const {order} = await lineage(request,input,accountId);
   for (const tx of input.expansion.transactions) {
+    // The normalized Next29 contract supplies no fee/net observations. A new financial
+    // observation needs its own validated evidence/ordering contract, not an extra JS field.
+    for (const key of ["fee_amount","net_amount","feeAmount","netAmount","financialEvidence","financial_completeness"]) if (Object.prototype.hasOwnProperty.call(tx,key)) throw failure();
     opaque(tx.providerTransactionId);
     const eventType = tx.type || "transaction"; opaque(eventType);
     const key = {platform:"next29",account_id:accountId,workspace_id:input.organizationId,transaction_id:tx.providerTransactionId,event_type:eventType};
@@ -130,6 +184,20 @@ export async function persistNext29Payments(request: FinancialRequest, accountId
       if (raw.source_mapping_id !== input.sourceMappingId || !uuid.test(String(raw.evidence_id))) throw failure();
       await priorEvidence(request,input,order,raw.evidence_id);
       if (row.external_record_id !== tx.externalId || row.matched_platform_order_id !== order.platform_order_id) throw failure();
+    },existing => {
+      if (tx.amount!==null && existing.amount!==null && decimal(tx.amount)!==decimal(existing.amount)) throw failure();
+      if (tx.currency!==null && existing.currency!==null && tx.currency!==existing.currency) throw failure();
+      // Defaults belong to INSERT only. Preserve fee/net and enriched JSON (including
+      // its original financial provenance/completeness) verbatim on missing-evidence replay.
+      const {fee_amount:_fee,net_amount:_net,raw_json:_raw,...update}=body;
+      if (tx.amount===null) delete (update as Row).amount;
+      if (tx.currency===null) delete (update as Row).currency;
+      const guards:Row={};
+      for (const field of ["amount","currency","fee_amount","net_amount","raw_json"]) {
+        if (existing[field]===undefined) throw failure();
+        guards[field]=field==="raw_json" && existing[field]!==null ? JSON.stringify(existing[field]) : existing[field];
+      }
+      return {body:update,guards};
     });
   }
 }

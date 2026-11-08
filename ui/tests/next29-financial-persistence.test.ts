@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { after } from "node:test";
 import { PGlite } from "@electric-sql/pglite";
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import ts from "typescript";
 import * as writer from "../lib/commerce/next29-financial-persistence.ts";
@@ -11,21 +11,30 @@ import { persistNext29Payments, persistNext29Refunds, persistNext29Order, next29
 import { expandNext29Order } from "../../api/src/connectors/next29/expansion.ts";
 
 // Local PostgreSQL engine only: reproduce the two production payment unique indexes.
-async function fixture(t: {after(fn:()=>Promise<void>):void}) {
-  const db = new PGlite(); t.after(()=>db.close());
+// Reuse the WASM engine; reset every schema between sequential test cases.
+let sharedDatabase:PGlite|undefined;
+after(async()=>{await sharedDatabase?.close()});
+async function fixture(t: {after(fn:()=>Promise<void>):void}, refundReferences:string[] = []) {
+  const db = sharedDatabase ??= new PGlite();
+  await db.exec("drop table if exists payment_transactions,commerce_refund_events,commerce_evidence_records,commerce_source_mappings,platform_orders cascade");
   await db.exec(`
     create table platform_orders(id bigint generated always as identity primary key,platform text,platform_order_id text unique,provider_order_id text,order_id text,account_id uuid,organization_id uuid,workspace_id text,connection_id uuid,provider_account_id uuid,canonical_order_id uuid,source_mapping_id uuid,evidence_id uuid);
     create table commerce_source_mappings(id uuid primary key,organization_id uuid,connection_id uuid,provider_account_id uuid,canonical_object_id uuid,canonical_object_type text,source_object_type text,source_object_id text,payload_hash text);
-    create table commerce_evidence_records(id uuid primary key,organization_id uuid,connection_id uuid,provider_account_id uuid,source_object_type text,source_object_id text,payload_hash text,deleted_at timestamptz);
+    create table commerce_evidence_records(id uuid primary key,organization_id uuid,connection_id uuid,provider_account_id uuid,source_object_type text,source_object_id text,payload_hash text,storage_reference text,deleted_at timestamptz);
     create table commerce_refund_events(id uuid primary key,account_id uuid not null,organization_id uuid not null,connection_id uuid not null,provider_account_id uuid not null,canonical_order_id uuid not null,evidence_id uuid not null,source_mapping_id uuid not null,provider_refund_id text not null,provider_payment_id text,amount float8,amount_gross float8,currency text,occurred_at timestamptz not null,unique(connection_id,provider_account_id,provider_refund_id));
     create table payment_transactions(id uuid primary key default gen_random_uuid(),platform text,transaction_id text,event_type text,account_id text,workspace_id text,parent_transaction_id text,order_id text,status text,amount float8,currency text,payment_method text,processor text,transaction_ts timestamptz,external_record_id text,transaction_event_code text,transaction_updated_at timestamptz,matched_platform_order_id text,fee_amount float8 default 0,net_amount float8 default 0,raw_json jsonb,unique(platform,account_id,transaction_id,event_type),unique(platform,account_id,external_record_id));
   `);
   const input:Next29FinancialInput={organizationId:randomUUID(),connectionId:randomUUID(),providerAccountId:randomUUID(),canonicalOrderId:randomUUID(),evidenceId:randomUUID(),sourceMappingId:randomUUID(),expansion:expandNext29Order({transactions:[{id:"tx",type:"debit",status:"succeeded",amount:"10",currency:"USD",external_id:"capture",date_created:"2026-10-01T00:00:00Z"}],refunds:[{id:7,total_refund_amount:"1",report_values:{currency:"USD"},created_at:"2026-10-02T00:00:00Z",transactions:[]}]})};
+  input.expansion.refunds[0].transactionIds=refundReferences;
+  const envelope={provider:"next29",resource:"order",sourceObjectId:"order",payload:{number:"order",refunds:[{id:7,total_refund_amount:"1",report_values:{currency:"USD"},created_at:"2026-10-02T00:00:00Z",transactions:refundReferences.map(id=>({id}))}]}};
+  const bytes=new TextEncoder().encode(JSON.stringify(envelope));
+  const payloadHash=createHash("sha256").update(bytes).digest("hex");
+  const storageReference=`commerce-evidence/${input.organizationId}/${input.connectionId}/${input.providerAccountId}/next29_order/${payloadHash}`;
   const accountId=randomUUID();
   const scope={organization_id:input.organizationId,connection_id:input.connectionId,provider_account_id:input.providerAccountId};
   const order={...scope,account_id:accountId,canonical_order_id:input.canonicalOrderId,source_mapping_id:input.sourceMappingId,evidence_id:input.evidenceId,platform:"next29",platform_order_id:"next29:order",provider_order_id:"order",order_id:"order",workspace_id:input.organizationId};
-  const mapping={...scope,id:input.sourceMappingId,canonical_object_id:input.canonicalOrderId,canonical_object_type:"order",source_object_type:"next29_order",source_object_id:"order",payload_hash:"a".repeat(64)};
-  const evidence={...scope,id:input.evidenceId,source_object_type:"next29_order",source_object_id:"order",payload_hash:"a".repeat(64),deleted_at:null};
+  const mapping={...scope,id:input.sourceMappingId,canonical_object_id:input.canonicalOrderId,canonical_object_type:"order",source_object_type:"next29_order",source_object_id:"order",payload_hash:payloadHash};
+  const evidence={...scope,id:input.evidenceId,source_object_type:"next29_order",source_object_id:"order",payload_hash:payloadHash,storage_reference:storageReference,deleted_at:null};
   const traces:{path:string;method:string}[]=[];
   const request:FinancialRequest=async(path,init={})=>{
     traces.push({path,method:init.method||"GET"});
@@ -51,9 +60,11 @@ async function fixture(t: {after(fn:()=>Promise<void>):void}) {
       return (await db.query(`select * from ${ident(table)}${filter} limit ${Number(url.searchParams.get("limit")||100)}`,params)).rows as Record<string,unknown>[];
     }catch(error){throw Object.assign(new Error("Local constraint rejected write"),{databaseCode:(error as {code:string}).code});}
   };
+  const evidenceBlobs=new Map([[storageReference,bytes]]);
+  request.readEvidence=async args=>args.organizationId===input.organizationId ? evidenceBlobs.get(args.storageReference)?.slice() ?? null : null;
   async function insert(table:string,row:Record<string,unknown>){const keys=Object.keys(row);return db.query(`insert into ${table} (${keys.join(",")}) values (${keys.map((_,i)=>`$${i+1}`).join(",")}) returning *`,keys.map(k=>k==="raw_json"?JSON.stringify(row[k]):row[k]));}
   await insert("platform_orders",order);await insert("commerce_source_mappings",mapping);await insert("commerce_evidence_records",evidence);
-  return {db,input,accountId,request,traces,order,insert};
+  return {db,input,accountId,request,traces,order,insert,payloadHash,bytes,storageReference,evidenceBlobs};
 }
 
 test("before: retained numeric refund normalizes but old insert violates required ID/mapping",async t=>{
@@ -67,7 +78,7 @@ test("after: refund insert and concurrent replay produce one deterministic scope
   assert.equal(rows.length,1);assert.equal(rows[0].id,next29RefundId(f.input,"7"));assert.equal(rows[0].source_mapping_id,f.input.sourceMappingId);assert.equal(rows[0].provider_payment_id,null);
 });
 test("refund replay preserves an existing scoped ID and all multiple source references",async t=>{
-  const f=await fixture(t);f.input.expansion.refunds[0].transactionIds=["a","b"];
+  const f=await fixture(t,["a","b"]);
   await persistNext29Refunds(f.request,f.accountId,f.input);const existing=randomUUID();await f.db.query("update commerce_refund_events set id=$1",[existing]);
   await persistNext29Refunds(f.request,f.accountId,f.input);
   const row=(await f.db.query<any>("select * from commerce_refund_events")).rows[0];assert.equal(row.id,existing);assert.equal(row.provider_payment_id,null);assert.deepEqual(f.input.expansion.refunds[0].transactionIds,["a","b"]);
@@ -80,7 +91,7 @@ for(const field of ["organizationId","connectionId","providerAccountId","canonic
 test("missing evidence, changed evidence hash and invalid refund money/timestamp fail closed",async t=>{
   const f=await fixture(t);await f.db.exec("update commerce_evidence_records set payload_hash=repeat('b',64)");
   await assert.rejects(()=>persistNext29Refunds(f.request,f.accountId,f.input));
-  await f.db.exec("update commerce_evidence_records set payload_hash=repeat('a',64)");f.input.expansion.refunds[0].occurredAt=null;
+  await f.db.query("update commerce_evidence_records set payload_hash=$1",[f.payloadHash]);f.input.expansion.refunds[0].occurredAt=null;
   await assert.rejects(()=>persistNext29Refunds(f.request,f.accountId,f.input));f.input.expansion.refunds[0].occurredAt="2026-10-01T00:00:00Z";f.input.expansion.refunds[0].amount=null;
   await assert.rejects(()=>persistNext29Refunds(f.request,f.accountId,f.input));
 });
@@ -183,4 +194,78 @@ test("ambiguous order lookup and multiple affected rows are rejected",async t=>{
 test("explicit observed gross zero is retained while unobserved fee/net remain null",async t=>{
   const f=await fixture(t);f.input.expansion.transactions[0].amount=0;await persistNext29Payments(f.request,f.accountId,f.input);
   const row=(await f.db.query<any>("select * from payment_transactions")).rows[0];assert.equal(row.amount,0);assert.equal(row.fee_amount,null);assert.equal(row.net_amount,null);
+});
+
+for (const [fee,net] of [[2,8],[0,0]]) test(`SL-FIN-01 missing fee/net replay preserves observed ${fee}/${net} and full provenance`,async t=>{
+  const f=await fixture(t);await persistNext29Payments(f.request,f.accountId,f.input);
+  await f.db.query("update payment_transactions set fee_amount=$1,net_amount=$2,raw_json=raw_json || $3::jsonb",[fee,net,JSON.stringify({financial_completeness:{fee:"provider_observed",net:"provider_observed"},fee_provenance:{evidence:"accepted-enrichment",state:"observed"}})]);
+  const before=(await f.db.query<any>("select * from payment_transactions")).rows[0];
+  await persistNext29Payments(f.request,f.accountId,f.input);
+  const after=(await f.db.query<any>("select * from payment_transactions")).rows[0];
+  assert.equal(after.fee_amount,fee);assert.equal(after.net_amount,net);assert.deepEqual(after.raw_json,before.raw_json);
+});
+test("SL-FIN-01 insert defaults remain unavailable; replay does not promote historical defaults",async t=>{
+  const f=await fixture(t);await persistNext29Payments(f.request,f.accountId,f.input);await persistNext29Payments(f.request,f.accountId,f.input);
+  const row=(await f.db.query<any>("select * from payment_transactions")).rows[0];assert.equal(row.fee_amount,null);assert.equal(row.net_amount,null);assert.deepEqual(row.raw_json.financial_completeness,{fee:"unavailable",net:"unavailable"});
+});
+for(const metadataOnly of [false,true])test(`SL-FIN-01 concurrent enrichment blocks stale replay (${metadataOnly?"metadata":"amounts and metadata"})`,async t=>{
+  const f=await fixture(t);await persistNext29Payments(f.request,f.accountId,f.input);let changed=false;
+  const racing:FinancialRequest=async(path,init)=>{
+    if(init?.method==="PATCH" && !changed){changed=true;await f.db.exec(`update payment_transactions set ${metadataOnly?"":"fee_amount=0,net_amount=10,"}raw_json=jsonb_set(raw_json,'{financial_completeness}','{"fee":"provider_observed","net":"derived_complete","coverage_complete":true}'::jsonb)`);}
+    return f.request(path,init);
+  };
+  await assert.rejects(()=>persistNext29Payments(racing,f.accountId,f.input));
+  const row=(await f.db.query<any>("select * from payment_transactions")).rows[0];assert.equal(row.fee_amount,metadataOnly?null:0);assert.equal(row.net_amount,metadataOnly?null:10);assert.equal(row.raw_json.financial_completeness.net,"derived_complete");
+});
+test("SL-FIN-01 simultaneous stable replays preserve enriched financial evidence",async t=>{
+  const f=await fixture(t);await persistNext29Payments(f.request,f.accountId,f.input);await f.db.exec("update payment_transactions set fee_amount=2,net_amount=8,raw_json=jsonb_set(raw_json,'{financial_completeness}','{\"fee\":\"provider_observed\",\"net\":\"provider_observed\"}'::jsonb)");
+  await Promise.all([persistNext29Payments(f.request,f.accountId,f.input),persistNext29Payments(f.request,f.accountId,f.input)]);
+  const rows=(await f.db.query<any>("select * from payment_transactions")).rows;assert.equal(rows.length,1);assert.equal(rows[0].fee_amount,2);assert.equal(rows[0].net_amount,8);
+});
+test("SL-FIN-01 contradictory financial observations and gross changes require independent ordering authority",async t=>{
+  const f=await fixture(t);await persistNext29Payments(f.request,f.accountId,f.input);
+  const extra=structuredClone(f.input);Object.assign(extra.expansion.transactions[0],{fee_amount:99});await assert.rejects(()=>persistNext29Payments(f.request,f.accountId,extra));
+  const gross=structuredClone(f.input);gross.expansion.transactions[0].amount=99;await assert.rejects(()=>persistNext29Payments(f.request,f.accountId,gross));
+  const missing=structuredClone(f.input);missing.expansion.transactions[0].amount=null;missing.expansion.transactions[0].currency=null;await persistNext29Payments(f.request,f.accountId,missing);
+  assert.equal((await f.db.query<any>("select amount from payment_transactions")).rows[0].amount,10);
+});
+
+for(const field of ["amount","currency","occurredAt","transactionIds"] as const)test(`SL-FIN-02 identical evidence rejects contradictory refund ${field} before mutation`,async t=>{
+  const f=await fixture(t);await persistNext29Refunds(f.request,f.accountId,f.input);const contradictory=structuredClone(f.input);
+  Object.assign(contradictory.expansion.refunds[0],{[field]:field==="amount"?99:field==="currency"?"EUR":field==="occurredAt"?"2026-10-03T00:00:00Z":["invented"]});
+  await assert.rejects(()=>persistNext29Refunds(f.request,f.accountId,contradictory));
+  const row=(await f.db.query<any>("select * from commerce_refund_events")).rows[0];assert.equal(row.amount,1);assert.equal(row.currency,"USD");assert.equal(row.provider_payment_id,null);assert.equal(f.traces.filter(x=>x.method==="PATCH").length,0);
+});
+test("SL-FIN-02 multiple reference sets cannot silently change while singular projection is null",async t=>{
+  const f=await fixture(t,["a","b"]);await persistNext29Refunds(f.request,f.accountId,f.input);const changed=structuredClone(f.input);changed.expansion.refunds[0].transactionIds=["a","c"];
+  await assert.rejects(()=>persistNext29Refunds(f.request,f.accountId,changed));
+  const row=(await f.db.query<any>("select * from commerce_refund_events")).rows[0];assert.equal(row.amount,1);assert.equal(row.provider_payment_id,null);
+});
+test("SL-FIN-02 first projection cannot contradict verified retained amount",async t=>{
+  const f=await fixture(t);const changed=structuredClone(f.input);changed.expansion.refunds[0].amount=99;await assert.rejects(()=>persistNext29Refunds(f.request,f.accountId,changed));assert.equal((await f.db.query("select * from commerce_refund_events")).rows.length,0);
+});
+test("SL-FIN-02 byte-hash mismatch, missing blob and out-of-scope storage reference fail closed",async t=>{
+  const f=await fixture(t);f.evidenceBlobs.set(f.storageReference,new TextEncoder().encode("{}"));await assert.rejects(()=>persistNext29Refunds(f.request,f.accountId,f.input));
+  f.evidenceBlobs.clear();await assert.rejects(()=>persistNext29Refunds(f.request,f.accountId,f.input));f.evidenceBlobs.set(f.storageReference,f.bytes);
+  await f.db.exec("update commerce_evidence_records set storage_reference='commerce-evidence/foreign/object'");await assert.rejects(()=>persistNext29Refunds(f.request,f.accountId,f.input));assert.equal(f.traces.some(x=>x.method!=="GET"),false);
+});
+test("SL-FIN-02 concurrent contradictory same-evidence replay cannot overwrite the accepted projection",async t=>{
+  const f=await fixture(t);await persistNext29Refunds(f.request,f.accountId,f.input);const bad=structuredClone(f.input);bad.expansion.refunds[0].amount=99;
+  const results=await Promise.allSettled([persistNext29Refunds(f.request,f.accountId,f.input),persistNext29Refunds(f.request,f.accountId,bad)]);assert.equal(results.filter(x=>x.status==="fulfilled").length,1);assert.equal(results.filter(x=>x.status==="rejected").length,1);assert.equal((await f.db.query<any>("select amount from commerce_refund_events")).rows[0].amount,1);
+});
+test("SL-FIN-02 distinct valid evidence cannot authorize a 1 to 99 financial change without ordering",async t=>{
+  const f=await fixture(t);await persistNext29Refunds(f.request,f.accountId,f.input);
+  const envelope=JSON.parse(new TextDecoder().decode(f.bytes));envelope.payload.refunds[0].total_refund_amount="99";
+  const bytes=new TextEncoder().encode(JSON.stringify(envelope));const hash=createHash("sha256").update(bytes).digest("hex");const id=randomUUID();const reference=`commerce-evidence/${f.input.organizationId}/${f.input.connectionId}/${f.input.providerAccountId}/next29_order/${hash}`;f.evidenceBlobs.set(reference,bytes);
+  await f.insert("commerce_evidence_records",{id,organization_id:f.input.organizationId,connection_id:f.input.connectionId,provider_account_id:f.input.providerAccountId,source_object_type:"next29_order",source_object_id:"order",payload_hash:hash,storage_reference:reference,deleted_at:null});
+  await f.db.query("update platform_orders set evidence_id=$1",[id]);await f.db.query("update commerce_source_mappings set payload_hash=$1",[hash]);
+  const updated={...structuredClone(f.input),evidenceId:id};updated.expansion.refunds[0].amount=99;
+  await assert.rejects(()=>persistNext29Refunds(f.request,f.accountId,updated));const row=(await f.db.query<any>("select * from commerce_refund_events")).rows[0];assert.equal(row.amount,1);assert.equal(row.evidence_id,f.input.evidenceId);
+});
+test("SL-FIN-02 database NUMERIC contradictions are not rounded away or silently repaired",async t=>{
+  const f=await fixture(t);await f.db.exec("alter table commerce_refund_events alter column amount type numeric,alter column amount_gross type numeric");
+  await persistNext29Refunds(f.request,f.accountId,f.input);
+  await f.db.exec("update commerce_refund_events set amount=1.0000000000000000001");
+  await assert.rejects(()=>persistNext29Refunds(f.request,f.accountId,f.input));
+  assert.equal((await f.db.query<any>("select amount::text as amount from commerce_refund_events")).rows[0].amount,"1.0000000000000000001");
 });
