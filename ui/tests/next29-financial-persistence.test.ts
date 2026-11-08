@@ -14,7 +14,7 @@ import { expandNext29Order } from "../../api/src/connectors/next29/expansion.ts"
 // Reuse the WASM engine; reset every schema between sequential test cases.
 let sharedDatabase:PGlite|undefined;
 after(async()=>{await sharedDatabase?.close()});
-async function fixture(t: {after(fn:()=>Promise<void>):void}, refundReferences:string[] = []) {
+async function fixture(t: {after(fn:()=>Promise<void>):void}, refundReferences:string[] = [], refundAmount="1") {
   const db = sharedDatabase ??= new PGlite();
   await db.exec("drop table if exists payment_transactions,commerce_refund_events,commerce_evidence_records,commerce_source_mappings,platform_orders cascade");
   await db.exec(`
@@ -26,7 +26,8 @@ async function fixture(t: {after(fn:()=>Promise<void>):void}, refundReferences:s
   `);
   const input:Next29FinancialInput={organizationId:randomUUID(),connectionId:randomUUID(),providerAccountId:randomUUID(),canonicalOrderId:randomUUID(),evidenceId:randomUUID(),sourceMappingId:randomUUID(),expansion:expandNext29Order({transactions:[{id:"tx",type:"debit",status:"succeeded",amount:"10",currency:"USD",external_id:"capture",date_created:"2026-10-01T00:00:00Z"}],refunds:[{id:7,total_refund_amount:"1",report_values:{currency:"USD"},created_at:"2026-10-02T00:00:00Z",transactions:[]}]})};
   input.expansion.refunds[0].transactionIds=refundReferences;
-  const envelope={provider:"next29",resource:"order",sourceObjectId:"order",payload:{number:"order",refunds:[{id:7,total_refund_amount:"1",report_values:{currency:"USD"},created_at:"2026-10-02T00:00:00Z",transactions:refundReferences.map(id=>({id}))}]}};
+  input.expansion.refunds[0].amount=Number(refundAmount);
+  const envelope={provider:"next29",resource:"order",sourceObjectId:"order",payload:{number:"order",refunds:[{id:7,total_refund_amount:refundAmount,report_values:{currency:"USD"},created_at:"2026-10-02T00:00:00Z",transactions:refundReferences.map(id=>({id}))}]}};
   const bytes=new TextEncoder().encode(JSON.stringify(envelope));
   const payloadHash=createHash("sha256").update(bytes).digest("hex");
   const storageReference=`commerce-evidence/${input.organizationId}/${input.connectionId}/${input.providerAccountId}/next29_order/${payloadHash}`;
@@ -51,13 +52,21 @@ async function fixture(t: {after(fn:()=>Promise<void>):void}, refundReferences:s
       else{assert.ok(v.startsWith("eq."));params.push(v.slice(3));where.push(`${col}=$${params.length}`);}
     }
     const filter=where.length?` where ${where.join(" and ")}`:"";
+    const representation=(rows:Record<string,unknown>[])=>rows.map(row=>{
+      const result={...row};
+      for(const field of (url.searchParams.get("select")||"").split(",")){
+        const cast=/^([a-z_]+)::text$/.exec(field);
+        if(cast && result[cast[1]]!==null && result[cast[1]]!==undefined) result[cast[1]]=String(result[cast[1]]);
+      }
+      return result;
+    });
     try{
-      if(init.method==="POST")return (await insert(table,JSON.parse(String(init.body)))).rows as Record<string,unknown>[];
+      if(init.method==="POST")return representation((await insert(table,JSON.parse(String(init.body)))).rows as Record<string,unknown>[]);
       if(init.method==="PATCH"){
         const body=JSON.parse(String(init.body));const set=Object.entries(body).map(([k,v])=>{params.push(k==="raw_json"?JSON.stringify(v):v);return `${ident(k)}=$${params.length}`;}).join(",");
-        return (await db.query(`update ${ident(table)} set ${set}${filter} returning *`,params)).rows as Record<string,unknown>[];
+        return representation((await db.query(`update ${ident(table)} set ${set}${filter} returning *`,params)).rows as Record<string,unknown>[]);
       }
-      return (await db.query(`select * from ${ident(table)}${filter} limit ${Number(url.searchParams.get("limit")||100)}`,params)).rows as Record<string,unknown>[];
+      return representation((await db.query(`select * from ${ident(table)}${filter} limit ${Number(url.searchParams.get("limit")||100)}`,params)).rows as Record<string,unknown>[]);
     }catch(error){throw Object.assign(new Error("Local constraint rejected write"),{databaseCode:(error as {code:string}).code});}
   };
   const evidenceBlobs=new Map([[storageReference,bytes]]);
@@ -268,4 +277,35 @@ test("SL-FIN-02 database NUMERIC contradictions are not rounded away or silently
   await f.db.exec("update commerce_refund_events set amount=1.0000000000000000001");
   await assert.rejects(()=>persistNext29Refunds(f.request,f.accountId,f.input));
   assert.equal((await f.db.query<any>("select amount::text as amount from commerce_refund_events")).rows[0].amount,"1.0000000000000000001");
+});
+
+test("exact financial read contract rejects decoded JSON numbers instead of trusting their rounded value",async t=>{
+  const f=await fixture(t);await persistNext29Payments(f.request,f.accountId,f.input);
+  const lossy:FinancialRequest=async(path,init)=>{const rows=await f.request(path,init);return path.startsWith("payment_transactions?") && !init?.method ? rows.map(row=>({...row,amount:Number(row.amount)})):rows;};
+  await assert.rejects(()=>persistNext29Payments(lossy,f.accountId,f.input));assert.equal(f.traces.some(x=>x.method==="PATCH"),false);
+});
+for(const unsupported of ["NaN","Infinity",""," 0","0x10","1e2000"])test(`exact financial read rejects unsupported NUMERIC text ${JSON.stringify(unsupported)}`,async t=>{
+  const f=await fixture(t);await persistNext29Payments(f.request,f.accountId,f.input);
+  const invalid:FinancialRequest=async(path,init)=>{const rows=await f.request(path,init);return path.startsWith("payment_transactions?") && !init?.method ? rows.map(row=>({...row,fee_amount:unsupported})):rows;};
+  await assert.rejects(()=>persistNext29Payments(invalid,f.accountId,f.input));assert.equal(f.traces.some(x=>x.method==="PATCH"),false);
+});
+test("retained decimal strings that the existing normalizer would round are rejected before first projection",async t=>{
+  const f=await fixture(t,[],"1.0000000000000000001");await assert.rejects(()=>persistNext29Refunds(f.request,f.accountId,f.input));assert.equal((await f.db.query("select * from commerce_refund_events")).rows.length,0);
+});
+test("explicit decimal-string refund zero remains observed zero",async t=>{
+  const f=await fixture(t,[],"0.0000");await persistNext29Refunds(f.request,f.accountId,f.input);await persistNext29Refunds(f.request,f.accountId,f.input);const rows=(await f.db.query<any>("select * from commerce_refund_events")).rows;assert.equal(rows.length,1);assert.equal(rows[0].amount,0);
+});
+test("native-shaped high-precision fee/net snapshots replay exactly without overwriting observed evidence",async t=>{
+  const f=await fixture(t);await f.db.exec("alter table payment_transactions alter column fee_amount type numeric,alter column net_amount type numeric");await persistNext29Payments(f.request,f.accountId,f.input);await f.db.exec("update payment_transactions set fee_amount=1.0000000000000000001,net_amount=8.9999999999999999999");await persistNext29Payments(f.request,f.accountId,f.input);const row=(await f.db.query<any>("select fee_amount::text as fee,net_amount::text as net from payment_transactions")).rows[0];assert.equal(row.fee,"1.0000000000000000001");assert.equal(row.net,"8.9999999999999999999");
+});
+test("ambiguous numeric JSON refund source tokens are rejected rather than rounded",async t=>{
+  const f=await fixture(t);const bytes=new TextEncoder().encode(new TextDecoder().decode(f.bytes).replace('"total_refund_amount":"1"','"total_refund_amount":1.0000000000000000001'));
+  const hash=createHash("sha256").update(bytes).digest("hex");const reference=f.storageReference.replace(f.payloadHash,hash);f.evidenceBlobs.set(reference,bytes);
+  await f.db.query("update commerce_evidence_records set payload_hash=$1,storage_reference=$2",[hash,reference]);await f.db.query("update commerce_source_mappings set payload_hash=$1",[hash]);
+  await assert.rejects(()=>persistNext29Refunds(f.request,f.accountId,f.input));assert.equal((await f.db.query("select * from commerce_refund_events")).rows.length,0);
+});
+test("mutation acknowledgments with unsupported numeric representations are not accepted or automatically retried",async t=>{
+  const f=await fixture(t);let posts=0;
+  const invalid:FinancialRequest=async(path,init)=>{const rows=await f.request(path,init);if(init?.method==="POST"&&path.startsWith("payment_transactions")){posts++;return rows.map(row=>({...row,amount:Number(row.amount)}));}return rows;};
+  await assert.rejects(()=>persistNext29Payments(invalid,f.accountId,f.input));assert.equal(posts,1);assert.equal(f.traces.some(x=>x.method==="PATCH"),false);
 });

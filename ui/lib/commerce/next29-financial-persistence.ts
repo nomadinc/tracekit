@@ -24,6 +24,21 @@ function scope(input: Next29FinancialInput, accountId: string) {
 }
 function filters(fields: Row) { return Object.entries(fields).map(([k,v]) => v === null ? `${k}=is.null` : eq(k,v)).join("&"); }
 
+// Cast at PostgreSQL's output boundary, including mutation acknowledgments.
+// JSON numeric tokens have already lost precision by the time response.json() returns.
+function projection(table: string) {
+  if (table === "commerce_refund_events") return "id,account_id,organization_id,connection_id,provider_account_id,canonical_order_id,evidence_id,source_mapping_id,provider_refund_id,provider_payment_id,amount::text,amount_gross::text,currency,occurred_at";
+  if (table === "payment_transactions") return "id,platform,transaction_id,event_type,account_id,workspace_id,parent_transaction_id,order_id,status,amount::text,currency,payment_method,processor,transaction_ts,external_record_id,transaction_event_code,transaction_updated_at,matched_platform_order_id,fee_amount::text,net_amount::text,raw_json";
+  return "*";
+}
+function exactRepresentation(table: string, row: Row) {
+  const fields = table === "commerce_refund_events" ? ["amount","amount_gross"] : table === "payment_transactions" ? ["amount","fee_amount","net_amount"] : [];
+  for (const field of fields) {
+    const value=row[field];
+    if (value !== null && (typeof value !== "string" || decimal(value) === null)) throw failure();
+  }
+}
+
 async function lineage(request: FinancialRequest, input: Next29FinancialInput, accountId: string) {
   const identity = scope(input,accountId);
   const orderIdentity = {...identity,workspace_id:input.organizationId,canonical_order_id:input.canonicalOrderId,source_mapping_id:input.sourceMappingId,evidence_id:input.evidenceId};
@@ -44,17 +59,19 @@ async function lineage(request: FinancialRequest, input: Next29FinancialInput, a
  */
 async function persist(request: FinancialRequest, table: string, identity: Row, body: Row, validate: (row: Row) => void | Promise<void>, replay?: (row: Row) => {body:Row;guards:Row}|null) {
   const path = `${table}?${filters(identity)}`;
+  const select=projection(table);
+  const verify=async (row:Row)=>{exactRepresentation(table,row);await validate(row);};
   const lookup = async () => {
-    const rows = await request(`${path}&select=*&limit=2`);
+    const rows = await request(`${path}&select=${select}&limit=2`);
     if (rows.length > 1) throw failure();
-    if (rows[0]) await validate(rows[0]);
+    if (rows[0]) await verify(rows[0]);
     return rows[0];
   };
   let existing = await lookup();
   if (!existing) {
     try {
-      const inserted = exactly(await request(table,{method:"POST",body:JSON.stringify(body)}));
-      await validate(inserted);
+      const inserted = exactly(await request(`${table}?select=${select}`,{method:"POST",body:JSON.stringify(body)}));
+      await verify(inserted);
       return;
     } catch (error) {
       if (object(error).databaseCode !== "23505") throw error;
@@ -69,11 +86,11 @@ async function persist(request: FinancialRequest, table: string, identity: Row, 
   opaque(String(existing.id));
   // Never update ownership/primary identity. Preserve historical scoped refund IDs.
   const {id: _newId,...update} = plan.body;
-  const patchPath = `${path}&${eq("id",existing.id)}${Object.keys(plan.guards).length ? `&${filters(plan.guards)}` : ""}`;
+  const patchPath = `${path}&${eq("id",existing.id)}${Object.keys(plan.guards).length ? `&${filters(plan.guards)}` : ""}&select=${select}`;
   if (patchPath.length > 6000) throw failure(); // do not replace a bounded native CAS with an unguarded update
   const updated = exactly(await request(patchPath,{method:"PATCH",body:JSON.stringify(update)}));
   if (updated.id !== existing.id) throw failure();
-  await validate(updated);
+  await verify(updated);
 }
 
 async function priorEvidence(request: FinancialRequest, input: Next29FinancialInput, order: Row, evidenceId: unknown) {
@@ -120,6 +137,13 @@ async function retainedRefund(request: FinancialRequest, input: Next29FinancialI
   if (envelope.provider!=="next29" || envelope.resource!=="order" || envelope.sourceObjectId!==order.provider_order_id || String(payload.number??"")!==order.provider_order_id) throw failure();
   const refunds=expandNext29Order(payload).refunds.filter(r=>r.providerRefundId===refundId);
   if (refunds.length!==1) throw failure();
+  // The existing normalizer's Number contract must not silently round a retained
+  // decimal string. Unsupported source precision is a conflict, not a new amount.
+  const rawRefunds=Array.isArray(payload.refunds)?payload.refunds.filter(r=>String(object(r).id)===refundId):[];
+  if (rawRefunds.length!==1) throw failure();
+  const rawRefund=object(rawRefunds[0]);
+  const rawAmount=rawRefund.total_refund_amount ?? object(rawRefund.report_values).total_refund_amount;
+  if (typeof rawAmount !== "string" || decimal(rawAmount)===null || decimal(rawAmount)!==decimal(refunds[0].amount)) throw failure();
   return refunds[0];
 }
 
