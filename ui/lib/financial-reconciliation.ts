@@ -1,5 +1,7 @@
 export type FinancialReconciliationState = "automatic" | "manual" | "ignored" | "removed" | "unmatched" | "ambiguous";
 export type FinancialReconciliationConfidence = "exact" | "high" | "medium" | "conflict" | "none";
+import { qualifiedFinancialAmount } from "./reporting/financial-evidence";
+
 export type FinancialReconciliationLedgerType = "refund" | "chargeback" | "chargeback_fee" | "chargeback_reversal" | "chargeback_fee_reversal";
 
 export type FinancialReconciliationItem = {
@@ -53,6 +55,8 @@ export type FinancialReconciliationResponse = {
   partial: boolean;
   partial_reason: string | null;
   partial_sections: string[];
+  // Absence means coverage is unknown, not that empty event sets certify zero.
+  financial_coverage?: { state: "complete" | "incomplete" | "restricted"; currency: string | null };
   summary: {
     financial_events_reviewed: number;
     matched_events: number;
@@ -159,7 +163,7 @@ export type FinancialWorkQueueItem = {
 export type FinancialImpactRow = {
   type: FinancialReconciliationLedgerType;
   label: string;
-  amount: number;
+  amount: number | null;
   count: number;
   currency: string | null;
   mixed_currency: boolean;
@@ -597,7 +601,7 @@ export function financialImpactRows(data: FinancialReconciliationResponse): Fina
   return (Object.entries(data.summary.totals_by_type) as Array<[FinancialReconciliationLedgerType, any]>).map(([type, total]) => ({
     type,
     label: IMPACT_LABELS[type],
-    amount: n(total.amount),
+    amount: data.financial_coverage?.state === "restricted" || data.partial || data.financial_coverage?.state === "incomplete" || (!n(total.count) && data.financial_coverage?.state !== "complete") ? null : qualifiedFinancialAmount(total.amount, n(total.count) ? "provider_observed" : "derived_complete", data.financial_coverage?.state === "complete"),
     count: n(total.count),
     currency: total.currency || null,
     mixed_currency: Boolean(total.mixed_currency),
@@ -605,16 +609,21 @@ export function financialImpactRows(data: FinancialReconciliationResponse): Fina
 }
 
 export function netFinancialImpact(data: FinancialReconciliationResponse): FinancialNetImpact {
+  if (data.financial_coverage?.state === "restricted") return { amount:null,currency:null,mixed_currency:false,label:"Restricted" };
+  if (data.partial || data.financial_coverage?.state === "incomplete") return { amount:null,currency:null,mixed_currency:false,label:"Unavailable — financial evidence incomplete" };
   const rows = financialImpactRows(data).filter((row) => row.count > 0);
-  if (!rows.length) return { amount: 0, currency: null, mixed_currency: false, label: "No financial impact" };
+  if (!rows.length) return data.financial_coverage?.state === "complete" && /^[A-Z]{3}$/.test(data.financial_coverage.currency || "")
+    ? {amount:0,currency:data.financial_coverage.currency,mixed_currency:false,label:"No financial impact"}
+    : {amount:null,currency:null,mixed_currency:false,label:"Unavailable — source coverage unverified"};
+  if (rows.some(row => row.amount === null || !row.currency)) return {amount:null,currency:null,mixed_currency:false,label:"Unavailable"};
   if (rows.some((row) => row.mixed_currency)) return { amount: null, currency: null, mixed_currency: true, label: "Multiple currencies" };
   const currencies = Array.from(new Set(rows.map((row) => row.currency).filter(Boolean)));
   if (currencies.length > 1) return { amount: null, currency: null, mixed_currency: true, label: "Multiple currencies" };
   return {
-    amount: rows.reduce((sum, row) => sum + row.amount, 0),
+    amount: rows.reduce((sum, row) => sum + (row.amount as number), 0),
     currency: currencies[0] || rows[0]?.currency || null,
     mixed_currency: false,
-    label: "Net financial impact",
+    label: data.financial_coverage?.state === "complete" ? "Net financial impact" : "Observed financial impact — coverage unverified",
   };
 }
 

@@ -4,6 +4,7 @@ import { randomUUID } from "node:crypto";
 import { Next29Client } from "../../../api/src/connectors/next29/client.ts";
 import { next29OrderEvidence, persistNext29Evidence } from "../../../api/src/connectors/next29/evidence.ts";
 import { expandNext29Order, type Next29CanonicalExpansion } from "../../../api/src/connectors/next29/expansion.ts";
+import { persistNext29Order, persistNext29Payments, persistNext29Refunds, type Next29FinancialInput } from "./next29-financial-persistence";
 import { normalizeNext29Order } from "../../../api/src/connectors/next29/normalize.ts";
 import { createNext29HistoricalPersistence, next29PlatformOrderRow } from "../../../api/src/connectors/next29/repository.ts";
 import { createNext29WebhookIdempotency, next29WebhookReceiptInsert } from "../../../api/src/connectors/next29/webhook-repository.ts";
@@ -11,7 +12,7 @@ import { handleNext29Webhook, parseNext29Webhook, verifyNext29WebhookSignature }
 import type { Next29EvidenceSink } from "../../../api/src/connectors/next29/types.ts";
 import { decryptCommerceCredential, decodeCommerceCredentialKey } from "./credential-crypto";
 import { parseNext29ConnectionCredential } from "./next29-verifier";
-import { SupabaseCommerceControlRepository, commercePersistenceRequest } from "./supabase-control-repository";
+import { SupabaseCommerceControlRepository, commercePersistenceRequest, commercePersistenceRequest as rawCommercePersistenceRequest } from "./supabase-control-repository";
 import { SupabaseCommerceEvidenceStore } from "./supabase-evidence-store";
 
 const CANARY_ENVIRONMENTS = new Set(["preview", "staging"]);
@@ -351,12 +352,12 @@ function createOrderPersistence(context: CanaryContext) {
       const { metadata: _unsupportedMetadata, ...row } =
         next29PlatformOrderRow({ ...input, accountId: context.accountId });
 
-      await upsertComposite("platform_orders", "platform_order_id", row);
+      await persistNext29Order(rawCommercePersistenceRequest, row);
     },
     async upsertProducts(input: any) { await upsertProducts(context, input.evidenceId, input.expansion); },
     async upsertOrderLines(input: any) { await upsertOrderLines(context, input.canonicalOrderId, input.evidenceId, input.expansion); },
     async upsertCustomerIdentity(input: any) { await upsertCustomer(context, input.evidenceId, input.expansion); },
-    async upsertTransactions(input: any) { await upsertTransactions(context, input.canonicalOrderId, input.expansion); },
+    async upsertTransactions(input: Next29FinancialInput) { await persistNext29Payments(rawCommercePersistenceRequest, context.accountId, input); },
     async upsertTransactionRelationships(input: any) {
       for (const relationship of input.relationships || []) {
         await upsertComposite("commerce_transaction_relationship_evidence", "connection_id,provider_account_id,provider_transaction_id", {
@@ -375,7 +376,7 @@ function createOrderPersistence(context: CanaryContext) {
         });
       }
     },
-    async upsertRefunds(input: any) { await upsertRefunds(context, input.canonicalOrderId, input.evidenceId, input.expansion); },
+    async upsertRefunds(input: Next29FinancialInput) { await persistNext29Refunds(rawCommercePersistenceRequest, context.accountId, input); },
   };
   return createNext29HistoricalPersistence(client);
 }
@@ -418,7 +419,7 @@ async function upsertOrderLines(context: CanaryContext, canonicalOrderId: string
       account_id: context.accountId, organization_id: context.organizationId, connection_id: context.connectionId, provider_account_id: context.providerAccountId,
       canonical_order_id: canonicalOrderId, provider_product_id: providerProductUuid, evidence_id: evidenceId, source_line_key: line.sourceLineKey,
       quantity: line.quantity, unit_amount: line.unitAmount, gross_amount: line.grossAmount, currency: line.currency,
-      metadata: { provider: "next29", provider_product_id: line.providerProductId, provider_variant_id: line.providerVariantId, sku: line.sku, title: line.title, is_upsell: line.isUpsell, unit_cost: line.unitCost },
+      metadata: { provider: "next29", provider_product_id: line.providerProductId, provider_variant_id: line.providerVariantId, sku: line.sku, title: line.title, is_upsell: line.isUpsell, relationship_state: line.isUpsell ? "unresolved" : "not_applicable", unit_cost: line.unitCost },
     });
   }
 }
@@ -436,32 +437,6 @@ async function upsertCustomer(context: CanaryContext, evidenceId: string, expans
   } else {
     await commercePersistenceRequest(`people?id=eq.${encodeURIComponent(personId)}&organization_id=eq.${encodeURIComponent(context.organizationId)}`, { method: "PATCH", body: JSON.stringify({ display_name: customer.displayName, primary_email: customer.email, primary_phone: customer.phone, last_seen_at: now, updated_at: now }) });
   }
-}
-
-async function upsertTransactions(context: CanaryContext, canonicalOrderId: string, expansion: Next29CanonicalExpansion) {
-  const orderRows = await commercePersistenceRequest(`platform_orders?organization_id=eq.${encodeURIComponent(context.organizationId)}&canonical_order_id=eq.${encodeURIComponent(canonicalOrderId)}&select=order_id,platform_order_id&limit=1`);
-  const providerOrderId = orderRows[0]?.order_id ? String(orderRows[0].order_id) : null;
-  for (const tx of expansion.transactions) {
-    const body = {
-      platform: "next29", transaction_id: tx.providerTransactionId, event_type: tx.type || "transaction", account_id: context.accountId,
-      parent_transaction_id: tx.parentTransactionId, order_id: providerOrderId, status: tx.status, amount: tx.amount, currency: tx.currency,
-      payment_method: tx.paymentMethod, processor: tx.gatewayName, transaction_ts: tx.occurredAt,
-      external_record_id: tx.externalId, transaction_event_code: tx.type, transaction_updated_at: tx.occurredAt,
-      workspace_id: context.organizationId, matched_platform_order_id: orderRows[0]?.platform_order_id || null,
-      raw_json: { provider: "next29", network_transaction_id: tx.networkTransactionId, auth_code_present: Boolean(tx.authCode), is_disputed: tx.isDisputed, is_external: tx.isExternal, is_test: tx.isTest },
-    };
-    const existing = await commercePersistenceRequest(`payment_transactions?platform=eq.next29&transaction_id=eq.${encodeURIComponent(tx.providerTransactionId)}&select=id&limit=1`);
-    if (existing[0]?.id) await commercePersistenceRequest(`payment_transactions?id=eq.${encodeURIComponent(String(existing[0].id))}`, { method: "PATCH", body: JSON.stringify(body) });
-    else await commercePersistenceRequest("payment_transactions", { method: "POST", body: JSON.stringify(body) });
-  }
-}
-
-async function upsertRefunds(context: CanaryContext, canonicalOrderId: string, evidenceId: string, expansion: Next29CanonicalExpansion) {
-  for (const refund of expansion.refunds) await upsertComposite("commerce_refund_events", "connection_id,provider_account_id,provider_refund_id", {
-    account_id: context.accountId, organization_id: context.organizationId, connection_id: context.connectionId, provider_account_id: context.providerAccountId,
-    canonical_order_id: canonicalOrderId, evidence_id: evidenceId, source_mapping_id: null, provider_refund_id: refund.providerRefundId,
-    provider_payment_id: refund.transactionIds[0] || null, amount: refund.amount, amount_gross: refund.amount, occurred_at: refund.occurredAt, currency: refund.currency,
-  });
 }
 
 async function upsertComposite(table: string, conflictColumns: string, body: Row) {

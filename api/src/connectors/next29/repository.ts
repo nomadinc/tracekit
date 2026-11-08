@@ -10,6 +10,7 @@ export type Next29CommerceSourceMapping = {
 type ExpansionWriteInput = Next29HistoricalScope & {
   canonicalOrderId: string;
   evidenceId: string;
+  sourceMappingId: string;
   expansion: Next29CanonicalExpansion;
 };
 
@@ -95,6 +96,7 @@ export function createNext29HistoricalPersistence(client: Next29CommerceReposito
         providerAccountId: input.providerAccountId,
         canonicalOrderId: mapping.canonicalObjectId,
         evidenceId: evidence.evidenceId,
+        sourceMappingId: mapping.id,
         expansion,
       };
       if (client.upsertProducts) await client.upsertProducts(expansionInput);

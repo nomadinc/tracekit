@@ -7,6 +7,7 @@ import { createNext29HistoricalPersistence } from "../../../api/src/connectors/n
 import { createNext29SubscriptionPersistence, next29SubscriptionLineRows, next29SubscriptionOrderLinkRow, next29SubscriptionRow } from "../../../api/src/connectors/next29/subscription-repository.ts";
 import { createNext29DisputePersistence } from "../../../api/src/connectors/next29/dispute-repository.ts";
 import type { Next29CanonicalExpansion } from "../../../api/src/connectors/next29/expansion.ts";
+import { persistNext29Order, persistNext29Payments, persistNext29Refunds } from "./next29-financial-persistence";
 import type { Next29EvidenceSink } from "../../../api/src/connectors/next29/types.ts";
 import { parseNext29ConnectionCredential } from "./next29-verifier";
 import { createCommerceControlPlane } from "./server-control-plane";
@@ -120,7 +121,7 @@ function createPersistence(context: ValidationContext) {
     ...mappings.orders,
     async upsertPlatformOrder(input) {
       const row = input.normalized;
-      await upsert("platform_orders", "platform_order_id", {
+      await persistNext29Order(rawCommercePersistenceRequest, {
         platform: "next29",
         platform_order_id: row.platformOrderId,
         provider_order_id: row.sourceObjectId,
@@ -155,7 +156,7 @@ function createPersistence(context: ValidationContext) {
     async upsertProducts(input) { await upsertProducts(context, input.evidenceId, input.expansion); },
     async upsertOrderLines(input) { await upsertOrderLines(context, input.canonicalOrderId, input.evidenceId, input.expansion); },
     async upsertCustomerIdentity(input) { await upsertCustomer(context, input.evidenceId, input.expansion); },
-    async upsertTransactions(input) { await upsertTransactions(context, input.canonicalOrderId, input.expansion); },
+    async upsertTransactions(input) { await persistNext29Payments(rawCommercePersistenceRequest, context.accountId, input); },
     async upsertTransactionRelationships(input) {
       for (const relationship of input.relationships) {
         await upsertComposite("commerce_transaction_relationship_evidence", "connection_id,provider_account_id,provider_transaction_id", {
@@ -174,7 +175,7 @@ function createPersistence(context: ValidationContext) {
         });
       }
     },
-    async upsertRefunds(input) { await upsertRefunds(context, input.canonicalOrderId, input.evidenceId, input.expansion); },
+    async upsertRefunds(input) { await persistNext29Refunds(rawCommercePersistenceRequest, context.accountId, input); },
   });
 
   const subscriptions = createNext29SubscriptionPersistence({
@@ -393,7 +394,7 @@ async function upsertOrderLines(context: ValidationContext, canonicalOrderId: st
       account_id: context.accountId, organization_id: context.organizationId, connection_id: context.connectionId, provider_account_id: context.providerAccountId,
       canonical_order_id: canonicalOrderId, provider_product_id: providerProductUuid, evidence_id: evidenceId, source_line_key: line.sourceLineKey,
       quantity: line.quantity, unit_amount: line.unitAmount, gross_amount: line.grossAmount, currency: line.currency,
-      metadata: { provider: "next29", provider_product_id: line.providerProductId, provider_variant_id: line.providerVariantId, sku: line.sku, title: line.title, is_upsell: line.isUpsell, unit_cost: line.unitCost },
+      metadata: { provider: "next29", provider_product_id: line.providerProductId, provider_variant_id: line.providerVariantId, sku: line.sku, title: line.title, is_upsell: line.isUpsell, relationship_state: line.isUpsell ? "unresolved" : "not_applicable", unit_cost: line.unitCost },
     });
   }
 }
@@ -410,35 +411,6 @@ async function upsertCustomer(context: ValidationContext, evidenceId: string, ex
     await commercePersistenceRequest("person_source_identities", { method: "POST", body: JSON.stringify({ organization_id: context.organizationId, person_id: personId, connection_id: context.connectionId, provider_account_id: context.providerAccountId, source_type: "provider_customer_id", source_id: customer.providerCustomerId, confidence: 1, status: "observed", first_seen_at: now, last_seen_at: now, evidence_id: evidenceId, metadata: { provider: "next29" } }) });
   } else {
     await commercePersistenceRequest(`people?id=eq.${encodeURIComponent(personId)}&organization_id=eq.${encodeURIComponent(context.organizationId)}`, { method: "PATCH", body: JSON.stringify({ display_name: customer.displayName, primary_email: customer.email, primary_phone: customer.phone, last_seen_at: now, updated_at: now }) });
-  }
-}
-
-async function upsertTransactions(context: ValidationContext, canonicalOrderId: string, expansion: Next29CanonicalExpansion) {
-  const orderRows = await commercePersistenceRequest(`platform_orders?organization_id=eq.${encodeURIComponent(context.organizationId)}&canonical_order_id=eq.${encodeURIComponent(canonicalOrderId)}&select=order_id,platform_order_id&limit=1`);
-  const providerOrderId = orderRows[0]?.order_id ? String(orderRows[0].order_id) : null;
-  for (const tx of expansion.transactions) {
-    const body = {
-      platform: "next29", transaction_id: tx.providerTransactionId, event_type: tx.type || "transaction", account_id: context.accountId,
-      parent_transaction_id: tx.parentTransactionId, order_id: providerOrderId, status: tx.status, amount: tx.amount, currency: tx.currency,
-      payment_method: tx.paymentMethod, processor: tx.gatewayName, transaction_ts: tx.occurredAt,
-      external_record_id: tx.externalId, transaction_event_code: tx.type, transaction_updated_at: tx.occurredAt,
-      workspace_id: context.organizationId, matched_platform_order_id: orderRows[0]?.platform_order_id || null,
-      raw_json: { provider: "next29", network_transaction_id: tx.networkTransactionId, auth_code_present: Boolean(tx.authCode), is_disputed: tx.isDisputed, is_external: tx.isExternal, is_test: tx.isTest },
-    };
-    const existing = await commercePersistenceRequest(`payment_transactions?platform=eq.next29&transaction_id=eq.${encodeURIComponent(tx.providerTransactionId)}&select=id&limit=1`);
-    if (existing[0]?.id) await commercePersistenceRequest(`payment_transactions?id=eq.${encodeURIComponent(String(existing[0].id))}`, { method: "PATCH", body: JSON.stringify(body) });
-    else await commercePersistenceRequest("payment_transactions", { method: "POST", body: JSON.stringify(body) });
-  }
-}
-
-async function upsertRefunds(context: ValidationContext, canonicalOrderId: string, evidenceId: string, expansion: Next29CanonicalExpansion) {
-  for (const refund of expansion.refunds) {
-    await upsertComposite("commerce_refund_events", "connection_id,provider_account_id,provider_refund_id", {
-      account_id: context.accountId, organization_id: context.organizationId, connection_id: context.connectionId, provider_account_id: context.providerAccountId,
-      canonical_order_id: canonicalOrderId, evidence_id: evidenceId, source_mapping_id: null, provider_refund_id: refund.providerRefundId,
-      provider_payment_id: refund.transactionIds[0] || null, amount: refund.amount, amount_gross: refund.amount, occurred_at: refund.occurredAt,
-      currency: refund.currency,
-    });
   }
 }
 

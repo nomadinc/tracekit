@@ -482,7 +482,7 @@ function FinancialImpact({ data }: { data: FinancialReconciliationResponse }) {
         </div>
         <div className="rounded-lg border bg-slate-50 px-4 py-3 text-right dark:border-white/10 dark:bg-white/5">
           <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{net.label}</div>
-          <div className="mt-1 text-xl font-semibold">{net.mixed_currency ? "Multiple currencies" : money(net.amount || 0, net.currency)}</div>
+          <div className="mt-1 text-xl font-semibold">{net.label === "Restricted" ? "Restricted" : net.mixed_currency ? "Multiple currencies" : net.amount === null ? "Unavailable" : money(net.amount, net.currency)}</div>
         </div>
       </div>
       <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-5">
@@ -492,7 +492,7 @@ function FinancialImpact({ data }: { data: FinancialReconciliationResponse }) {
               <div className="text-xs font-semibold uppercase tracking-wide text-slate-500">{row.label}</div>
               <Banknote className="h-4 w-4 text-slate-400" />
             </div>
-            <div className="mt-2 text-lg font-semibold">{money(row.amount, row.currency, row.mixed_currency)}</div>
+            <div className="mt-2 text-lg font-semibold">{data.financial_coverage?.state === "restricted" ? "Restricted" : row.amount === null ? "Unavailable" : money(row.amount, row.currency, row.mixed_currency)}</div>
             <div className="mt-1 text-xs text-slate-500">{count(row.count)} event{row.count === 1 ? "" : "s"}</div>
           </div>
         ))}
