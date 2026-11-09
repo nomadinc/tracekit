@@ -68,6 +68,7 @@ jobs:
           psql -X -Atqc "select amount::text,fee_amount is null,net_amount is null from payment_transactions where transaction_id='2446'" | tee acceptance-logs/numeric-payment.txt
           grep -Fx '19.990000|t|t' acceptance-logs/numeric-payment.txt
           psql -X -Atqc "select indexname,indexdef from pg_indexes where tablename in ('platform_orders','payment_transactions') order by indexname" > acceptance-logs/indexes.txt
+          psql -X -v ON_ERROR_STOP=1 -f ui/tests/native/ws001a-negative.sql 2>&1 | tee acceptance-logs/native-negative.log
       - name: PostgREST 14.5 real HTTP GET and guarded PATCH
         shell: bash
         run: |
