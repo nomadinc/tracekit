@@ -42,6 +42,7 @@ jobs:
           set -euo pipefail
           mkdir -p acceptance-logs
           git rev-parse HEAD | tee acceptance-logs/commit.txt
+          git cat-file -e 6d56ec1bb30b9eb812515cfcb802408b25f521f3^{commit}
           git merge-base --is-ancestor 6d56ec1bb30b9eb812515cfcb802408b25f521f3 HEAD
           printf '%s  %s\n' \
             c5c3910540d02f74a5666bdc9f2d423ccfdb139850d50e101eb20d52a001e9ee ui/lib/commerce/next29-financial-persistence.ts \
@@ -84,7 +85,7 @@ jobs:
             sleep 1
           done
           docker logs ws001a-postgrest > acceptance-logs/postgrest-startup.log 2>&1
-          curl --fail-with-body -sS -i 'http://127.0.0.1:3000/platform_orders?provider_order_id=eq.102872&select=id,platform_order_id,amount::text,version' | tee acceptance-logs/http-get.txt
+          curl --fail-with-body -sS -i 'http://127.0.0.1:3000/platform_orders?provider_order_id=eq.102872&select=id,platform_order_id,amount,version' | tee acceptance-logs/http-get.txt
           curl --fail-with-body -sS -i -X PATCH \
             -H 'Content-Type: application/json' -H 'Prefer: return=representation' \
             --data '{"version":2}' \
