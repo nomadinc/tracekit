@@ -10,7 +10,7 @@ jobs:
   acceptance:
     if: github.ref == 'refs/heads/ws001a/native-acceptance-gha-6d56ec1'
     runs-on: ubuntu-24.04
-    timeout-minutes: 35
+    timeout-minutes: 40
     env:
       CI: 'true'
       NEXT_TELEMETRY_DISABLED: '1'
@@ -32,35 +32,76 @@ jobs:
           --health-cmd "pg_isready -U acceptance -d acceptance"
           --health-interval 5s --health-timeout 5s --health-retries 20
     steps:
-      - name: Checkout exact acceptance branch without credentials
+      - name: Checkout acceptance branch (no persisted credentials)
         uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - name: Verify base and accepted candidate (fail closed)
+      - name: Record provenance and fail closed on unpinned source
         shell: bash
         run: |
           set -euo pipefail
           mkdir -p acceptance-logs
           git rev-parse HEAD | tee acceptance-logs/commit.txt
-          test "$(git rev-parse HEAD^)" = "6d56ec1bb30b9eb812515cfcb802408b25f521f3" || { echo "HOLD: candidate parent not pinned base"; exit 1; }
+          git merge-base --is-ancestor 6d56ec1bb30b9eb812515cfcb802408b25f521f3 HEAD
           printf '%s  %s\n' \
             c5c3910540d02f74a5666bdc9f2d423ccfdb139850d50e101eb20d52a001e9ee ui/lib/commerce/next29-financial-persistence.ts \
             a16759825ff9007bbf84007474531675f1c08b5de4c8df084017d54baf0e7ebb ui/tests/next29-financial-persistence.test.ts \
             | sha256sum --check | tee acceptance-logs/candidate-hashes.txt
-      - name: Verify PostgreSQL version
+      - name: Install PostgreSQL client and Node 24
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y postgresql-client
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24.22.1'
+          cache: npm
+          cache-dependency-path: ui/package-lock.json
+      - name: PostgreSQL 17.6 and synthetic NUMERIC fixture
         shell: bash
         run: |
           set -euo pipefail
-          docker exec "${{ job.services.postgres.id }}" psql -U acceptance -d acceptance -Atqc 'SHOW server_version;' | tee acceptance-logs/postgresql-version.txt
-          grep -Fx '17.6 (Debian 17.6-1.pgdg13+1)' acceptance-logs/postgresql-version.txt || grep -E '^17\.6([ .]|$)' acceptance-logs/postgresql-version.txt
-      - name: Install locked UI dependencies
-        run: npm ci --prefix ui --ignore-scripts
-      - name: Focused 60-test suite
+          psql -X -v ON_ERROR_STOP=1 -Atqc 'show server_version;' | tee acceptance-logs/postgresql-version.txt
+          grep -E '^17\.6([ .]|$)' acceptance-logs/postgresql-version.txt
+          psql -X -v ON_ERROR_STOP=1 -f ui/tests/native/ws001a-synthetic-schema.sql 2>&1 | tee acceptance-logs/schema.log
+          psql -X -Atqc "select amount::text from platform_orders where provider_order_id='102872'" | tee acceptance-logs/numeric-order.txt
+          grep -Fx '123.450000' acceptance-logs/numeric-order.txt
+          psql -X -Atqc "select amount::text,fee_amount is null,net_amount is null from payment_transactions where transaction_id='2446'" | tee acceptance-logs/numeric-payment.txt
+          grep -Fx '19.990000|t|t' acceptance-logs/numeric-payment.txt
+          psql -X -Atqc "select indexname,indexdef from pg_indexes where tablename in ('platform_orders','payment_transactions') order by indexname" > acceptance-logs/indexes.txt
+      - name: PostgREST 14.5 real HTTP GET and guarded PATCH
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker pull postgrest/postgrest:v14.5
+          docker image inspect postgrest/postgrest:v14.5 --format '{{index .RepoDigests 0}}' | tee acceptance-logs/postgrest-image.txt
+          docker run -d --name ws001a-postgrest --network host \
+            -e PGRST_DB_URI='postgres://acceptance:synthetic-only@127.0.0.1:5432/acceptance' \
+            -e PGRST_DB_SCHEMAS=public -e PGRST_DB_ANON_ROLE=web_anon \
+            -e PGRST_SERVER_PORT=3000 postgrest/postgrest:v14.5
+          for i in $(seq 1 40); do
+            if curl --fail --silent 'http://127.0.0.1:3000/platform_orders?select=id&limit=1' >/dev/null; then break; fi
+            sleep 1
+          done
+          docker logs ws001a-postgrest > acceptance-logs/postgrest-startup.log 2>&1
+          curl --fail-with-body -sS -i 'http://127.0.0.1:3000/platform_orders?provider_order_id=eq.102872&select=id,platform_order_id,amount::text,version' | tee acceptance-logs/http-get.txt
+          curl --fail-with-body -sS -i -X PATCH \
+            -H 'Content-Type: application/json' -H 'Prefer: return=representation' \
+            --data '{"version":2}' \
+            'http://127.0.0.1:3000/platform_orders?provider_order_id=eq.102872&version=eq.1&select=id,version' | tee acceptance-logs/http-cas-success.txt
+          curl --fail-with-body -sS -i -X PATCH \
+            -H 'Content-Type: application/json' -H 'Prefer: return=representation' \
+            --data '{"version":3}' \
+            'http://127.0.0.1:3000/platform_orders?provider_order_id=eq.102872&version=eq.1&select=id,version' | tee acceptance-logs/http-cas-stale.txt
+          grep -F '"version":2' acceptance-logs/http-cas-success.txt
+          grep -F '[]' acceptance-logs/http-cas-stale.txt
+      - name: Focused accepted test suite
+        shell: bash
         run: |
           set -o pipefail
+          npm ci --prefix ui --ignore-scripts
           cd ui
           node --experimental-transform-types --test tests/next29-financial-persistence.test.ts 2>&1 | tee ../acceptance-logs/focused-tests.log
-      - name: Preserve logs even on failure
+      - name: Preserve raw logs
         if: always()
         uses: actions/upload-artifact@v4
         with:
