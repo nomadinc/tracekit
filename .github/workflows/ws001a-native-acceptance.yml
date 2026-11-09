@@ -1,0 +1,70 @@
+name: WS-001A isolated native acceptance
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: ws001a-native-${{ github.ref }}
+  cancel-in-progress: false
+jobs:
+  acceptance:
+    if: github.ref == 'refs/heads/ws001a/native-acceptance-gha-6d56ec1'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    env:
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+      PGHOST: 127.0.0.1
+      PGPORT: '5432'
+      PGUSER: acceptance
+      PGPASSWORD: synthetic-only
+      PGDATABASE: acceptance
+    services:
+      postgres:
+        image: postgres:17.6
+        env:
+          POSTGRES_USER: acceptance
+          POSTGRES_PASSWORD: synthetic-only
+          POSTGRES_DB: acceptance
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U acceptance -d acceptance"
+          --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+      - name: Checkout exact acceptance branch without credentials
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Verify base and accepted candidate (fail closed)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p acceptance-logs
+          git rev-parse HEAD | tee acceptance-logs/commit.txt
+          test "$(git rev-parse HEAD^)" = "6d56ec1bb30b9eb812515cfcb802408b25f521f3" || { echo "HOLD: candidate parent not pinned base"; exit 1; }
+          printf '%s  %s\n' \
+            c5c3910540d02f74a5666bdc9f2d423ccfdb139850d50e101eb20d52a001e9ee ui/lib/commerce/next29-financial-persistence.ts \
+            a16759825ff9007bbf84007474531675f1c08b5de4c8df084017d54baf0e7ebb ui/tests/next29-financial-persistence.test.ts \
+            | sha256sum --check | tee acceptance-logs/candidate-hashes.txt
+      - name: Verify PostgreSQL version
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker exec "${{ job.services.postgres.id }}" psql -U acceptance -d acceptance -Atqc 'SHOW server_version;' | tee acceptance-logs/postgresql-version.txt
+          grep -Fx '17.6 (Debian 17.6-1.pgdg13+1)' acceptance-logs/postgresql-version.txt || grep -E '^17\.6([ .]|$)' acceptance-logs/postgresql-version.txt
+      - name: Install locked UI dependencies
+        run: npm ci --prefix ui --ignore-scripts
+      - name: Focused 60-test suite
+        run: |
+          set -o pipefail
+          cd ui
+          node --experimental-transform-types --test tests/next29-financial-persistence.test.ts 2>&1 | tee ../acceptance-logs/focused-tests.log
+      - name: Preserve logs even on failure
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ws001a-native-logs
+          path: acceptance-logs/
+          if-no-files-found: warn
+          retention-days: 30
