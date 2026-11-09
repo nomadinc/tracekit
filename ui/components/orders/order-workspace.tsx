@@ -32,6 +32,7 @@ import type {
   OrderSummary,
   OrderWorkspaceSnapshot,
 } from "@/lib/orders/types";
+import { orderContextDrawer } from "@/lib/orders/context-drawer";
 import { OrderDrawerContent } from "./order-drawer-content";
 const cash = (v: number) => `${v >= 0 ? "+" : "-"}$${Math.abs(v).toFixed(2)}`;
 export function OrderWorkspace() {
@@ -64,6 +65,10 @@ function OrderWorkspaceContent() {
     () => normalizeOrderDeepLink(requested, orders, snap),
     [requested, orders, snap],
   );
+  const selectedOrderId = requested.orderId || normalized.orderId;
+  const selection = React.useMemo(() => ({ scope, selectedOrderId, requestedId: requested.orderId }), [scope, selectedOrderId, requested.orderId]);
+  const selectionRef = React.useRef(selection);
+  selectionRef.current = selection;
   const go = React.useCallback(
     (next: Partial<OrderDeepLinkState>) =>
       router.push(
@@ -114,7 +119,7 @@ function OrderWorkspaceContent() {
     setActiveOrganization,
   ]);
   React.useEffect(() => {
-    if (!normalized.orderId) {
+    if (!selectedOrderId) {
       setDetailLoading(false);
       setDetailFailed(false);
       setSnap(null);
@@ -125,19 +130,19 @@ function OrderWorkspaceContent() {
     setDetailLoading(true);
     setSnap(null);
     orderRepository
-      .loadWorkspace(scope, normalized.orderId)
+      .loadWorkspace(scope, selectedOrderId)
       .then((v) => on && setSnap(v))
       .catch(() => { if (on) { setSnap(null); setDetailFailed(true); } })
       .finally(() => { if (on) setDetailLoading(false); });
     return () => {
       on = false;
     };
-  }, [normalized.orderId, scope]);
-  React.useEffect(() => {
+  }, [selectedOrderId, scope]);
+  React.useLayoutEffect(() => {
     setReplaying(false);
     setReplayIndex(0);
     drawer.closeDrawer();
-  }, [normalized.orderId, drawer]);
+  }, [selectedOrderId, scope, drawer]);
   React.useEffect(() => {
     const id =
       normalized.drawerId ||
@@ -146,17 +151,25 @@ function OrderWorkspaceContent() {
         : normalized.eventId
           ? `event:${normalized.eventId}`
           : null);
-    if (!id || !snap) return;
+    drawer.closeDrawer();
+    if (!snap || snap.order.id !== selectedOrderId ||
+        snap.order.organizationId !== scope.organizationId ||
+        !requested.orderId || requested.orderId !== snap.order.id) return;
     let on = true;
-    orderRepository.loadDrawer(scope, snap.order.id, id).then((r) => {
-      if (on && r)
-        drawer.openDrawer(<OrderDrawerContent record={r} />, r.title, { onDismiss: () => router.push(withDevelopmentIdentity(orderDeepLinkHref({ ...normalized, drawer: null, drawerId: null, lineId: null, eventId: null, identifierRef: null }), session.identity.id), { scroll: false }) });
-    });
+    const context = orderContextDrawer(snap, id || "order:summary");
+    const result = context ? Promise.resolve(context) : orderRepository.loadDrawer(scope, snap.order.id, id!);
+    result.then((r) => {
+      if (on && selectionRef.current === selection && r)
+        drawer.openDrawer(<OrderDrawerContent record={r} />, r.title, { onDismiss: () => router.push(withDevelopmentIdentity(orderDeepLinkHref({ ...normalized, orderId: null, drawer: null, drawerId: null, lineId: null, eventId: null, identifierRef: null }), session.identity.id), { scroll: false }) });
+    }).catch(() => { if (on && selectionRef.current === selection) drawer.closeDrawer(); });
     return () => {
       on = false;
     };
   }, [
     drawer,
+    requested.orderId,
+    selectedOrderId,
+    selection,
     normalized.drawerId,
     normalized.eventId,
     normalized.lineId,
@@ -177,11 +190,14 @@ function OrderWorkspaceContent() {
     );
     return () => clearInterval(t);
   }, [replaying, snap]);
-  const inspect = async (id: string) => {
+  const inspect = (id: string) => {
     if (!snap) return;
-    const r = await orderRepository.loadDrawer(scope, snap.order.id, id);
-    if (r) drawer.openDrawer(<OrderDrawerContent record={r} />, r.title);
+    go({ orderId: snap.order.id, drawerId: id, drawer: null });
   };
+  if (snap && snap.order.organizationId !== scope.organizationId)
+    return <State text="Order is unavailable in the active workspace." />;
+  if (snap && snap.order.id !== selectedOrderId)
+    return <State text="Loading Order Workspace…" />;
   if ((loading || detailLoading) && !snap) return <State text="Loading Order Workspace…" />;
   if (loadFailed || detailFailed) return <State text="Orders are unavailable. Refresh to try again." />;
   if (!orders.length && requested.orderId) {
@@ -205,6 +221,7 @@ function OrderWorkspaceContent() {
             eventId: null,
             identifier: null,
             drawerId: null,
+            drawer: null,
             replay: false,
           });
           setListOpen(false);
@@ -371,7 +388,7 @@ function OrderWorkspaceContent() {
             {Object.entries(snap.attribution).map(([k, v]) => (
               <button
                 key={k}
-                onClick={() => inspect(`event:${snap.timeline[0].id}`)}
+                onClick={() => inspect("attribution:summary")}
                 className="rounded-lg border p-3 text-left"
               >
                 <span className="block text-[9px] uppercase text-slate-400">
