@@ -9,7 +9,7 @@ BEGIN
     VALUES ('next29','102872','102872','22222222-2222-4222-8222-222222222222','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbc','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbd','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbe','bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbf',1.000000);
     RAISE EXCEPTION 'FAIL: overlapping global order key accepted';
   EXCEPTION WHEN unique_violation THEN
-    IF CONSTRAINT_NAME = 'platform_orders_uq' THEN NULL; END IF;
+    NULL;
   END;
   IF (SELECT count(*) FROM platform_orders) <> before_count THEN RAISE EXCEPTION 'FAIL: collision changed order count'; END IF;
   IF (SELECT account_id::text FROM platform_orders WHERE platform_order_id='102872') <> '11111111-1111-4111-8111-111111111111'
