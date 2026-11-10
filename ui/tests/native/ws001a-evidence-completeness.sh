@@ -10,7 +10,7 @@ for f in \
  postgresql-host-uid.txt postgrest-host-uid.txt \
  node-version.txt npm-version.txt tsx-version.txt npm-locked-acquisition.txt \
  approved-apt.list role-permissions.txt role-authority.txt \
- bootstrap-login-revoked.txt bootstrap-login-disabled.txt bootstrap-login-denied.log \
+ bootstrap-login-revoked.txt bootstrap-login-disabled.txt bootstrap-login-denied.log restricted-set-role-denied.log \
  egress-firewall-rules.txt egress-probe-summary.txt egress-all-uids.txt \
  postgresql-version.txt postgrest-version.txt \
  postgresql-listener.txt postgrest-listener.txt loopback-reachability.txt \
@@ -58,9 +58,10 @@ test "$(stat -c '%u:%g:%a' acceptance-logs/runtime)" = "$(id -u):$(id -g):700"
 bash ui/tests/native/ws001a-artifact-integrity.sh verify > acceptance-logs/verified-provenance-final.txt
 grep -q 'PASS: protected' acceptance-logs/trusted-integrity-verification.log
 grep -q 'PASS: native UID cannot modify runner-owned provenance' acceptance-logs/artifact-permission-checks.txt
-grep -Fx 'acceptance_sql|f|f|f|f|t|t|t|t|t|f' acceptance-logs/role-permissions.txt
+grep -Fx 'acceptance_sql|acceptance_sql|f|f|f|f|t|t|t|t|t|f' acceptance-logs/role-permissions.txt
 grep -Fx 'false' acceptance-logs/bootstrap-login-disabled.txt
 grep -F 'not permitted to log in' acceptance-logs/bootstrap-login-denied.log
+grep -E 'permission denied|not permitted' acceptance-logs/restricted-set-role-denied.log
 grep -q 'PASS: native UID 25003 lacks capabilities, has no_new_privs, cannot sudo or connect to Docker socket, and cannot reach unrelated loopback' acceptance-logs/loopback-reachability.txt
 grep -Eq '^NoNewPrivs:[[:space:]]*1
 grep -q 'PASS: enforcement probes' acceptance-logs/egress-probe-summary.txt
