@@ -51,7 +51,18 @@ for uid in "$PG_UID" "$PGRST_UID" "$TEST_UID"; do
   set -e
   echo "runtime UID $uid external IPv4 exit=$code (must be nonzero)" |
     tee -a acceptance-logs/egress-all-uids.txt
-  [[ "$code" != 0 ]] || { echo "FAIL: runtime UID $uid has external egress"; exit 1; }
+  [[ "$code" != 0 ]] || { echo "FAIL: runtime UID $uid has external IPv4 egress"; exit 1; }
+  set +e
+  sudo setpriv --reuid="$uid" --regid="$uid" --clear-groups \
+    env -i PATH=/usr/bin:/bin HOME=/tmp \
+    curl --noproxy '*' --ipv6 --globoff --connect-timeout 2 --max-time 4 \
+    -fsS 'http://[2606:4700:4700::1111]/' \
+    > "acceptance-logs/egress-ipv6-uid-$uid.log" 2>&1
+  ipv6_code=$?
+  set -e
+  echo "runtime UID $uid external IPv6 exit=$ipv6_code (must be nonzero)" |
+    tee -a acceptance-logs/egress-all-uids.txt
+  [[ "$ipv6_code" != 0 ]] || { echo "FAIL: runtime UID $uid has external IPv6 egress"; exit 1; }
 done
 # Also test external name-resolution/TLS as the native application identity.
 set +e
