@@ -1,11 +1,15 @@
 import assert from "node:assert/strict";
 import { randomUUID, createHash } from "node:crypto";
-import { appendFileSync, writeFileSync } from "node:fs";
+import { appendFileSync, writeFileSync, mkdirSync } from "node:fs";
+import { resolve } from "node:path";
 import { expandNext29Order } from "../../../api/src/connectors/next29/expansion.ts";
 import { persistNext29Order, persistNext29Payments, type FinancialRequest } from "../../lib/commerce/next29-financial-persistence.ts";
 
 const base = "http://127.0.0.1:3000";
-const log = "acceptance-logs/actual-writer-http.jsonl";
+const root = process.env.GITHUB_WORKSPACE || process.cwd();
+const evidenceDir = resolve(root,"acceptance-logs");
+mkdirSync(evidenceDir,{recursive:true});
+const log = resolve(evidenceDir,"actual-writer-http.jsonl");
 const audit = (v:unknown) => appendFileSync(log,JSON.stringify(v)+"\n");
 const eq=(k:string,v:string)=>k+"=eq."+encodeURIComponent(v);
 const stemAccount="11111111-1111-4111-8111-111111111111";
@@ -89,7 +93,7 @@ assert.equal(payments.find((r:any)=>r.account_id===stemAccount).id,stemPaymentId
 assert.equal(payments.find((r:any)=>r.account_id===nh.account).raw_json.connection_id,nh.connection);
 const bad={...input(nh),connectionId:randomUUID()};
 await assert.rejects(()=>persistNext29Payments(request,nh.account,bad));
-writeFileSync("acceptance-logs/actual-writer-summary.json",JSON.stringify({
+writeFileSync(resolve(evidenceDir,"actual-writer-summary.json"),JSON.stringify({
  status:"PASS",stemOrderId:stemId,stemPaymentId,nhOrderId:nhAfter.id,
  nhPaymentId:payments.find((r:any)=>r.account_id===nh.account).id,
  orderCount:orders.length,paymentCount:payments.length,
