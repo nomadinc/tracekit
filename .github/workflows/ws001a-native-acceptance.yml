@@ -36,8 +36,6 @@ jobs:
       NEXT_TELEMETRY_DISABLED: '1'
       PGHOST: 127.0.0.1
       PGPORT: '5432'
-      PGUSER: fixture_admin
-      PGPASSWORD: synthetic-fixture-only
       PGDATABASE: acceptance
       POSTGRES_IMAGE: 'postgres@sha256:00bc86618629af00d2937fdc5a5d63db3ff8450acf52f0636ec813c7f4902929'
       POSTGREST_IMAGE: 'postgrest/postgrest@sha256:b574528fe109c8343c1247155734d03df8c34b462f342dca0ccc20244fc36ef9'
@@ -80,8 +78,11 @@ jobs:
           sudo useradd -u 25003 -g 25003 -M -s /usr/sbin/nologin ws001a-test
           sudo mkdir -p /tmp/ws001a-test
           sudo chown 25003:25003 /tmp/ws001a-test
-          # Sticky shared log directory: runner-owned pins stay unmodifiable by test UID.
-          sudo chmod 1777 acceptance-logs
+          # Runner owns trusted evidence; restricted test user writes only runtime/.
+          chmod 755 acceptance-logs
+          sudo install -d -o 25003 -g 25003 -m 700 acceptance-logs/runtime
+          test "$(stat -c '%u:%g:%a' acceptance-logs)" = "$(id -u):$(id -g):755"
+          test "$(stat -c '%u:%g:%a' acceptance-logs/runtime)" = '25003:25003:700'
           docker pull --platform linux/amd64 "$POSTGRES_IMAGE"
           docker pull --platform linux/amd64 "$POSTGREST_IMAGE"
           docker image inspect "$POSTGRES_IMAGE" --format '{{index .RepoDigests 0}}' | tee acceptance-logs/postgresql-image.txt
@@ -141,13 +142,28 @@ jobs:
           test "$(cat acceptance-logs/postgresql-host-uid.txt)" = "$(cat acceptance-logs/postgresql-image-uid.txt)"
           ss -ltn '( sport = :5432 )' | tee acceptance-logs/postgresql-listener.txt
           grep -F '127.0.0.1:5432' acceptance-logs/postgresql-listener.txt
-      - name: PostgreSQL 17.6 and synthetic NUMERIC fixture
+      - name: Synthetic fixture initialization by setup principal only
+        shell: bash
+        run: |
+          set -euo pipefail
+          env PGUSER=fixture_admin PGPASSWORD=synthetic-fixture-only \
+            psql -X -v ON_ERROR_STOP=1 -f ui/tests/native/ws001a-synthetic-schema.sql \
+            2>&1 | tee acceptance-logs/schema.log
+          # Effective privilege checks execute with the restricted test UID and SQL login.
+          sudo -u ws001a-test env -i HOME=/tmp/ws001a-test PATH="$PATH" \
+            PGHOST=127.0.0.1 PGPORT=5432 PGDATABASE=acceptance \
+            PGUSER=acceptance_sql PGPASSWORD=synthetic-test-only \
+            psql -X -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT current_user,rolsuper,rolcreatedb,rolcreaterole,has_schema_privilege(current_user,'public','CREATE'),has_table_privilege(current_user,'public.platform_orders','SELECT'),has_table_privilege(current_user,'public.platform_orders','INSERT'),has_table_privilege(current_user,'public.platform_orders','UPDATE'),has_table_privilege(current_user,'public.payment_transactions','INSERT'),has_sequence_privilege(current_user,'public.platform_orders_id_seq','USAGE'),pg_has_role(current_user,'fixture_admin','MEMBER') FROM pg_roles WHERE rolname=current_user" \
+            | tee acceptance-logs/role-permissions.txt
+          grep -Fx 'acceptance_sql|f|f|f|f|t|t|t|t|t|f' acceptance-logs/role-permissions.txt
+          bash ui/tests/native/ws001a-artifact-integrity.sh snapshot
+      - name: PostgreSQL 17.6 native tests with unprivileged acceptance_sql
         shell: bash
         run: |
           set -euo pipefail
           bash ui/tests/native/ws001a-contained-exec.sh psql -X -v ON_ERROR_STOP=1 -Atqc 'show server_version;' | tee acceptance-logs/postgresql-version.txt
           grep -E '^17\.6([ .]|$)' acceptance-logs/postgresql-version.txt
-          bash ui/tests/native/ws001a-contained-exec.sh psql -X -v ON_ERROR_STOP=1 -f ui/tests/native/ws001a-synthetic-schema.sql 2>&1 | tee acceptance-logs/schema.log
           bash ui/tests/native/ws001a-contained-exec.sh psql -X -Atqc "select amount::text from platform_orders where provider_order_id='102872'" | tee acceptance-logs/numeric-order.txt
           grep -Fx '123.450000' acceptance-logs/numeric-order.txt
           bash ui/tests/native/ws001a-contained-exec.sh psql -X -Atqc "select amount::text,fee_amount is null,net_amount is null from payment_transactions where transaction_id='2446'" | tee acceptance-logs/numeric-payment.txt
