@@ -10,7 +10,7 @@ test "$(stat -c '%u:%g:%a' acceptance-logs/runtime)" = "25003:25003:700"
 grep -Fq 'PASS: enforcement probes' acceptance-logs/egress-probe-summary.txt
 test "$(id -u)" != 0 || { echo "Must be invoked from the runner account" >&2; exit 2; }
 repo="$PWD"
-exec sudo -u ws001a-test -- env -i \
+exec sudo -u ws001a-test -- setpriv --no-new-privs env -i \
   HOME=/tmp/ws001a-test \
   PATH="$PATH" \
   CI=true \
