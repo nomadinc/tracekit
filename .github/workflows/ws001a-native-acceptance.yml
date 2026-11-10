@@ -69,8 +69,9 @@ jobs:
         run: |
           set -euo pipefail
           sudo apt-get update -qq
-          sudo apt-get install -y postgresql-client iptables curl
-          sudo useradd -u 25003 -M -s /usr/sbin/nologin ws001a-test
+          sudo apt-get install -y postgresql-client iptables curl iproute2 util-linux
+          sudo groupadd -g 25003 ws001a-test
+          sudo useradd -u 25003 -g 25003 -M -s /usr/sbin/nologin ws001a-test
           sudo mkdir -p /tmp/ws001a-test
           sudo chown 25003:25003 /tmp/ws001a-test
           sudo chown -R 25003:25003 acceptance-logs
