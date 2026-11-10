@@ -57,7 +57,7 @@ async function lineage(request: FinancialRequest, input: Next29FinancialInput, a
 /** No merge-upsert: both unique indexes must agree on an already scoped identity.
  * A single insert race may be reconciled by an exact read; no blind retry occurs.
  */
-async function persist(request: FinancialRequest, table: string, identity: Row, body: Row, validate: (row: Row) => void | Promise<void>, replay?: (row: Row) => {body:Row;guards:Row}|null) {
+async function persist(request: FinancialRequest, table: string, identity: Row, body: Row, validate: (row: Row) => void | Promise<void>, replay?: (row: Row) => {body:Row;guards:Row}|null, writeIdentity: Row = identity) {
   const path = `${table}?${filters(identity)}`;
   const select=projection(table);
   const verify=async (row:Row)=>{exactRepresentation(table,row);await validate(row);};
@@ -86,7 +86,7 @@ async function persist(request: FinancialRequest, table: string, identity: Row, 
   opaque(String(existing.id));
   // Never update ownership/primary identity. Preserve historical scoped refund IDs.
   const {id: _newId,...update} = plan.body;
-  const patchPath = `${path}&${eq("id",existing.id)}${Object.keys(plan.guards).length ? `&${filters(plan.guards)}` : ""}&select=${select}`;
+  const patchPath = `${table}?${filters(writeIdentity)}&${eq("id",existing.id)}${Object.keys(plan.guards).length ? `&${filters(plan.guards)}` : ""}&select=${select}`;
   if (patchPath.length > 6000) throw failure(); // do not replace a bounded native CAS with an unguarded update
   const updated = exactly(await request(patchPath,{method:"PATCH",body:JSON.stringify(update)}));
   if (updated.id !== existing.id) throw failure();
@@ -147,13 +147,33 @@ async function retainedRefund(request: FinancialRequest, input: Next29FinancialI
   return refunds[0];
 }
 
-/** Protect the existing globally unique platform-order ID from cross-store reassignment. */
+/** Keep existing scoped rows on their original platform key. New keys include
+ * provider scope because platform_orders_uq is global across Next29 stores.
+ */
 export async function persistNext29Order(request: FinancialRequest, body: Row) {
-  const key = Object.fromEntries(["platform","platform_order_id","account_id","organization_id","workspace_id","connection_id","provider_account_id","canonical_order_id"].map(k => { opaque(body[k]); return [k,body[k]]; }));
+  const key = Object.fromEntries(["platform","account_id","organization_id","workspace_id","connection_id","provider_account_id","provider_order_id"].map(k => { opaque(body[k]); return [k,body[k]]; }));
   if (body.platform !== "next29" || body.workspace_id !== body.organization_id) throw failure();
-  await persist(request,"platform_orders",key,body,row => {
-    for (const [k,v] of Object.entries(key)) if (row[k] !== v) throw failure();
-  });
+  for (const field of ["account_id","organization_id","connection_id","provider_account_id","canonical_order_id","source_mapping_id","evidence_id"]) {
+    if (!uuid.test(String(body[field]))) throw failure();
+  }
+  const stable = {canonical_order_id:body.canonical_order_id,source_mapping_id:body.source_mapping_id};
+  const mapping = {id:body.source_mapping_id,organization_id:body.organization_id,connection_id:body.connection_id,
+    provider_account_id:body.provider_account_id,canonical_object_type:"order",canonical_object_id:body.canonical_order_id,
+    source_object_type:"next29_order",source_object_id:body.provider_order_id};
+  const mapped = exactly(await request(`commerce_source_mappings?${filters(mapping)}&select=${Object.keys(mapping).join(",")}&limit=2`));
+  for (const [k,v] of Object.entries(mapping)) if (mapped[k] !== v) throw failure();
+
+  const digest = createHash("sha256").update(JSON.stringify([
+    body.account_id,body.organization_id,body.connection_id,body.provider_account_id,body.provider_order_id,
+  ])).digest("hex");
+  const insert = {...body,platform_order_id:`next29:scoped:${digest}`};
+  await persist(request,"platform_orders",key,insert,row => {
+    for (const [k,v] of Object.entries({...key,...stable})) if (row[k] !== v) throw failure();
+    opaque(row.platform_order_id);
+  },existing => {
+    const {platform_order_id:_legacyKey,...update} = body;
+    return {body:update,guards:{platform_order_id:existing.platform_order_id,evidence_id:existing.evidence_id}};
+  },{...key,...stable});
 }
 
 export function next29RefundId(input: Pick<Next29FinancialInput,"organizationId"|"connectionId"|"providerAccountId">, providerRefundId: string) {
@@ -194,20 +214,22 @@ export async function persistNext29Payments(request: FinancialRequest, accountId
     for (const key of ["fee_amount","net_amount","feeAmount","netAmount","financialEvidence","financial_completeness"]) if (Object.prototype.hasOwnProperty.call(tx,key)) throw failure();
     opaque(tx.providerTransactionId);
     const eventType = tx.type || "transaction"; opaque(eventType);
-    const key = {platform:"next29",account_id:accountId,workspace_id:input.organizationId,transaction_id:tx.providerTransactionId,event_type:eventType};
+    const eventKey = {platform:"next29",account_id:accountId,transaction_id:tx.providerTransactionId,event_type:eventType};
+    const key = {...eventKey,workspace_id:input.organizationId};
     const provenance = {organization_id:input.organizationId,connection_id:input.connectionId,provider_account_id:input.providerAccountId,canonical_order_id:input.canonicalOrderId};
     const guards = {...key,external_record_id:tx.externalId,matched_platform_order_id:order.platform_order_id,...Object.fromEntries(Object.entries({...provenance,source_mapping_id:input.sourceMappingId}).map(([k,v]) => [`raw_json->>${k}`,v]))};
     const body = {...key,parent_transaction_id:tx.parentTransactionId,order_id:order.order_id ?? order.provider_order_id,status:tx.status,amount:tx.amount,currency:tx.currency,payment_method:tx.paymentMethod,processor:tx.gatewayName,transaction_ts:tx.occurredAt,external_record_id:tx.externalId,transaction_event_code:tx.type,transaction_updated_at:tx.occurredAt,matched_platform_order_id:order.platform_order_id,
       fee_amount:null,net_amount:null,
       raw_json:{provider:"next29",...provenance,evidence_id:input.evidenceId,source_mapping_id:input.sourceMappingId,financial_completeness:{fee:"unavailable",net:"unavailable"},network_transaction_id:tx.networkTransactionId,auth_code_present:Boolean(tx.authCode),is_disputed:tx.isDisputed,is_external:tx.isExternal,is_test:tx.isTest}};
-    await persist(request,"payment_transactions",guards,body,async row => {
+    await persist(request,"payment_transactions",eventKey,body,async row => {
       if (!uuid.test(String(row.id))) throw failure();
       for (const [k,v] of Object.entries(key)) if (row[k] !== v) throw failure();
       const raw = object(row.raw_json);
       for (const [k,v] of Object.entries(provenance)) if (raw[k] !== v) throw failure();
       if (raw.source_mapping_id !== input.sourceMappingId || !uuid.test(String(raw.evidence_id))) throw failure();
       await priorEvidence(request,input,order,raw.evidence_id);
-      if (row.external_record_id !== tx.externalId || row.matched_platform_order_id !== order.platform_order_id) throw failure();
+      if (row.external_record_id !== tx.externalId || row.matched_platform_order_id !== order.platform_order_id ||
+          row.order_id !== body.order_id || row.parent_transaction_id !== tx.parentTransactionId) throw failure();
     },existing => {
       if (tx.amount!==null && existing.amount!==null && decimal(tx.amount)!==decimal(existing.amount)) throw failure();
       if (tx.currency!==null && existing.currency!==null && tx.currency!==existing.currency) throw failure();
@@ -217,11 +239,11 @@ export async function persistNext29Payments(request: FinancialRequest, accountId
       if (tx.amount===null) delete (update as Row).amount;
       if (tx.currency===null) delete (update as Row).currency;
       const guards:Row={};
-      for (const field of ["amount","currency","fee_amount","net_amount","raw_json"]) {
+      for (const field of ["amount","currency","fee_amount","net_amount","raw_json","order_id","parent_transaction_id"]) {
         if (existing[field]===undefined) throw failure();
         guards[field]=field==="raw_json" && existing[field]!==null ? JSON.stringify(existing[field]) : existing[field];
       }
       return {body:update,guards};
-    });
+    },guards);
   }
 }
