@@ -5,9 +5,9 @@ trap 'code=$?; echo "HOLD — mandatory evidence validation failed (exit $code)"
 missing=0
 for f in \
   commit.txt candidate-hashes.txt supply-chain.manifest \
-  postgresql-image.txt postgrest-image.txt postgresql-image-uid.txt \
+  postgresql-image.txt postgrest-image.txt postgresql-image-uid.txt postgresql-host-uid.txt postgrest-host-uid.txt \
   node-version.txt npm-version.txt tsx-version.txt npm-locked-acquisition.txt approved-apt.list \
-  egress-firewall-rules.txt egress-probe-summary.txt \
+  egress-firewall-rules.txt egress-probe-summary.txt egress-all-uids.txt \
   postgresql-version.txt postgrest-version.txt \
   postgresql-listener.txt postgrest-listener.txt role-authority.txt \
   schema.log indexes.txt native-negative.log native-concurrency.log \
