@@ -18,22 +18,13 @@ done
 bash ui/tests/native/ws001a-contained-exec.sh sh -c 'id -u; grep -E "^(CapEff|NoNewPrivs):" /proc/self/status' \
   | tee acceptance-logs/native-privilege-status.txt
 grep -Fx '25003' acceptance-logs/native-privilege-status.txt
-grep -Eq '^CapEff:[[:space:]]*0000000000000000
+grep -Eq '^CapEff:[[:space:]]*0000000000000000$' acceptance-logs/native-privilege-status.txt
+grep -Eq '^NoNewPrivs:[[:space:]]*1$' acceptance-logs/native-privilege-status.txt
 set +e
 sudo -u ws001a-test sudo -n true > acceptance-logs/privilege-escalation-denied.log 2>&1
 sudo_status=$?
 set -e
 test "$sudo_status" != 0
-echo "PASS: native UID 25003 lacks capabilities, has no_new_privs, cannot sudo or connect to Docker socket, and cannot reach unrelated loopback"
- acceptance-logs/native-privilege-status.txt
-grep -Eq '^NoNewPrivs:[[:space:]]*1
-set +e
-sudo -u ws001a-test sudo -n true > acceptance-logs/privilege-escalation-denied.log 2>&1
-sudo_status=$?
-set -e
-test "$sudo_status" != 0
-echo "PASS: native UID 25003 lacks effective capabilities and cannot sudo"
- acceptance-logs/native-privilege-status.txt
 
 # A live unrelated loopback listener must be reachable by the runner but denied
 # to the native identity. This tests policy, not merely a closed TCP port.
@@ -73,9 +64,4 @@ docker_probe=$?
 set -e
 test "$docker_probe" = 0
 grep -F 'DENIED Docker AF_UNIX connect:' acceptance-logs/docker-socket-connect-denied.txt
-set +e
-sudo -u ws001a-test sudo -n true > acceptance-logs/privilege-escalation-denied.log 2>&1
-sudo_status=$?
-set -e
-test "$sudo_status" != 0
-echo "PASS: native UID 25003 lacks effective capabilities and cannot sudo"
+echo 'PASS: native UID 25003 lacks capabilities, has no_new_privs, cannot sudo or connect to Docker socket, and cannot reach unrelated loopback'
