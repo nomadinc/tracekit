@@ -68,8 +68,14 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          sudo apt-get update -qq
-          sudo apt-get install -y postgresql-client iptables curl iproute2 util-linux
+          # APT ignores all runner/third-party source lists: only signed Ubuntu 24.04
+          # archive and security origins below are permitted for this preparation step.
+          cat > acceptance-logs/approved-apt.list <<'APT'
+          deb [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] http://archive.ubuntu.com/ubuntu noble noble-updates main universe
+          deb [signed-by=/usr/share/keyrings/ubuntu-archive-keyring.gpg] http://security.ubuntu.com/ubuntu noble-security main universe
+          APT
+          sudo apt-get -o Dir::Etc::sourcelist="$PWD/acceptance-logs/approved-apt.list" -o Dir::Etc::sourceparts=- update -qq
+          sudo apt-get -o Dir::Etc::sourcelist="$PWD/acceptance-logs/approved-apt.list" -o Dir::Etc::sourceparts=- install -y postgresql-client iptables curl iproute2 util-linux
           sudo groupadd -g 25003 ws001a-test
           sudo useradd -u 25003 -g 25003 -M -s /usr/sbin/nologin ws001a-test
           sudo mkdir -p /tmp/ws001a-test
