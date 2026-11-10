@@ -83,5 +83,11 @@ set -e
 } | tee acceptance-logs/egress-probe-summary.txt
 [[ "$ip_exit" != 0 && "$dns_exit" != 0 ]] || { echo "FAIL: isolated user has external egress"; exit 1; }
 
+{
+  echo '=== IPv4 native egress counters ==='
+  sudo iptables -w -L WS001A_EGRESS -v -n -x
+  echo '=== IPv6 native egress counters ==='
+  sudo ip6tables -w -L WS001A_EGRESS -v -n -x
+} | tee acceptance-logs/egress-rule-counters.txt
 # Docker socket connection is tested in the post-startup local-network proof.
 echo "PASS: enforcement probes, UID-scoped IPv4/IPv6 restrictions installed" | tee -a acceptance-logs/egress-probe-summary.txt
