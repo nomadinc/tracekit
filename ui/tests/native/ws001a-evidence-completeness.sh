@@ -75,6 +75,135 @@ grep -F 'DENIED Docker AF_UNIX connect:' acceptance-logs/docker-socket-connect-d
 ! grep -Fq 'FAIL: Docker socket connected' acceptance-logs/docker-socket-connect-denied.txt
 grep -Eq 'native UID denied \(exit [1-9][0-9]*\)' acceptance-logs/unrelated-loopback-proof.txt
 grep -q 'PASS: enforcement probes' acceptance-logs/egress-probe-summary.txt
+grep -Eq '^external IPv4 probe exit=[1-9][0-9]* \(must be nonzero\)
+grep -F 'PASS: IPv4 and IPv6 firewall REJECT counters incremented' acceptance-logs/egress-counter-validation.txt
+pg_uid="$(cat acceptance-logs/postgresql-image-uid.txt)"
+for uid in "$pg_uid" 25002 25003; do
+  grep -Eq "^runtime UID $uid external IPv4 exit=[1-9][0-9]* \(must be nonzero\)$" acceptance-logs/egress-all-uids.txt
+  grep -Eq "^runtime UID $uid external IPv6 exit=[1-9][0-9]* \(must be nonzero\)$" acceptance-logs/egress-all-uids.txt
+  test -s "acceptance-logs/egress-uid-$uid.log"
+  test -s "acceptance-logs/egress-ipv6-uid-$uid.log"
+done
+grep -F 'PASS: independent SQL snapshots confirm' acceptance-logs/independent-state-check.log
+grep -q 'WS001A ACTUAL WRITER HTTP TEST PASS' acceptance-logs/actual-writer-test.log
+grep -q 'PASS: separate psql session' acceptance-logs/native-concurrency.log
+grep -q '"status": "PASS"' acceptance-logs/runtime/actual-writer-summary.json
+grep -q '"status": "PASS"' acceptance-logs/http-cas-validated.json
+grep -q '^17[.]6' acceptance-logs/postgresql-version.txt
+grep -Eq '(^|[^[:digit:].])14[.]5([.]0)?([^[:digit:].]|$)' acceptance-logs/postgrest-version.txt
+echo 'PASS: mandatory native evidence complete, pending WS-022 independent acceptance' |
+  tee acceptance-logs/final-disposition.txt
+ acceptance-logs/native-privilege-status.txt
+grep -Eq '^CapEff:[[:space:]]*0000000000000000
+grep -F 'DENIED Docker AF_UNIX connect:' acceptance-logs/docker-socket-connect-denied.txt
+grep -F 'native UID denied' acceptance-logs/unrelated-loopback-proof.txt
+grep -q 'PASS: enforcement probes' acceptance-logs/egress-probe-summary.txt
+grep -F 'PASS: IPv4 and IPv6 firewall REJECT counters incremented' acceptance-logs/egress-counter-validation.txt
+pg_uid="$(cat acceptance-logs/postgresql-image-uid.txt)"
+for uid in "$pg_uid" 25002 25003; do
+  grep -q "runtime UID $uid external IPv4 exit=" acceptance-logs/egress-all-uids.txt
+  grep -q "runtime UID $uid external IPv6 exit=" acceptance-logs/egress-all-uids.txt
+  test -s "acceptance-logs/egress-uid-$uid.log"
+  test -s "acceptance-logs/egress-ipv6-uid-$uid.log"
+done
+grep -F 'PASS: independent SQL snapshots confirm' acceptance-logs/independent-state-check.log
+grep -q 'WS001A ACTUAL WRITER HTTP TEST PASS' acceptance-logs/actual-writer-test.log
+grep -q 'PASS: separate psql session' acceptance-logs/native-concurrency.log
+grep -q '"status": "PASS"' acceptance-logs/runtime/actual-writer-summary.json
+grep -q '"status": "PASS"' acceptance-logs/http-cas-validated.json
+grep -q '^17[.]6' acceptance-logs/postgresql-version.txt
+grep -Eq '(^|[^[:digit:].])14[.]5([.]0)?([^[:digit:].]|$)' acceptance-logs/postgrest-version.txt
+echo 'PASS: mandatory native evidence complete, pending WS-022 independent acceptance' |
+  tee acceptance-logs/final-disposition.txt
+ acceptance-logs/native-privilege-status.txt
+test "$(grep -c '^NoNewPrivs:' acceptance-logs/native-privilege-status.txt)" = 1
+test "$(grep -c '^CapEff:' acceptance-logs/native-privilege-status.txt)" = 1
+grep -F 'DENIED Docker AF_UNIX connect:' acceptance-logs/docker-socket-connect-denied.txt
+grep -F 'native UID denied' acceptance-logs/unrelated-loopback-proof.txt
+grep -q 'PASS: enforcement probes' acceptance-logs/egress-probe-summary.txt
+grep -F 'PASS: IPv4 and IPv6 firewall REJECT counters incremented' acceptance-logs/egress-counter-validation.txt
+pg_uid="$(cat acceptance-logs/postgresql-image-uid.txt)"
+for uid in "$pg_uid" 25002 25003; do
+  grep -q "runtime UID $uid external IPv4 exit=" acceptance-logs/egress-all-uids.txt
+  grep -q "runtime UID $uid external IPv6 exit=" acceptance-logs/egress-all-uids.txt
+  test -s "acceptance-logs/egress-uid-$uid.log"
+  test -s "acceptance-logs/egress-ipv6-uid-$uid.log"
+done
+grep -F 'PASS: independent SQL snapshots confirm' acceptance-logs/independent-state-check.log
+grep -q 'WS001A ACTUAL WRITER HTTP TEST PASS' acceptance-logs/actual-writer-test.log
+grep -q 'PASS: separate psql session' acceptance-logs/native-concurrency.log
+grep -q '"status": "PASS"' acceptance-logs/runtime/actual-writer-summary.json
+grep -q '"status": "PASS"' acceptance-logs/http-cas-validated.json
+grep -q '^17[.]6' acceptance-logs/postgresql-version.txt
+grep -Eq '(^|[^[:digit:].])14[.]5([.]0)?([^[:digit:].]|$)' acceptance-logs/postgrest-version.txt
+echo 'PASS: mandatory native evidence complete, pending WS-022 independent acceptance' |
+  tee acceptance-logs/final-disposition.txt
+ acceptance-logs/egress-probe-summary.txt
+grep -Eq '^external DNS/TLS probe exit=[1-9][0-9]* \(must be nonzero\)
+grep -F 'PASS: IPv4 and IPv6 firewall REJECT counters incremented' acceptance-logs/egress-counter-validation.txt
+pg_uid="$(cat acceptance-logs/postgresql-image-uid.txt)"
+for uid in "$pg_uid" 25002 25003; do
+  grep -q "runtime UID $uid external IPv4 exit=" acceptance-logs/egress-all-uids.txt
+  grep -q "runtime UID $uid external IPv6 exit=" acceptance-logs/egress-all-uids.txt
+  test -s "acceptance-logs/egress-uid-$uid.log"
+  test -s "acceptance-logs/egress-ipv6-uid-$uid.log"
+done
+grep -F 'PASS: independent SQL snapshots confirm' acceptance-logs/independent-state-check.log
+grep -q 'WS001A ACTUAL WRITER HTTP TEST PASS' acceptance-logs/actual-writer-test.log
+grep -q 'PASS: separate psql session' acceptance-logs/native-concurrency.log
+grep -q '"status": "PASS"' acceptance-logs/runtime/actual-writer-summary.json
+grep -q '"status": "PASS"' acceptance-logs/http-cas-validated.json
+grep -q '^17[.]6' acceptance-logs/postgresql-version.txt
+grep -Eq '(^|[^[:digit:].])14[.]5([.]0)?([^[:digit:].]|$)' acceptance-logs/postgrest-version.txt
+echo 'PASS: mandatory native evidence complete, pending WS-022 independent acceptance' |
+  tee acceptance-logs/final-disposition.txt
+ acceptance-logs/native-privilege-status.txt
+grep -Eq '^CapEff:[[:space:]]*0000000000000000
+grep -F 'DENIED Docker AF_UNIX connect:' acceptance-logs/docker-socket-connect-denied.txt
+grep -F 'native UID denied' acceptance-logs/unrelated-loopback-proof.txt
+grep -q 'PASS: enforcement probes' acceptance-logs/egress-probe-summary.txt
+grep -F 'PASS: IPv4 and IPv6 firewall REJECT counters incremented' acceptance-logs/egress-counter-validation.txt
+pg_uid="$(cat acceptance-logs/postgresql-image-uid.txt)"
+for uid in "$pg_uid" 25002 25003; do
+  grep -q "runtime UID $uid external IPv4 exit=" acceptance-logs/egress-all-uids.txt
+  grep -q "runtime UID $uid external IPv6 exit=" acceptance-logs/egress-all-uids.txt
+  test -s "acceptance-logs/egress-uid-$uid.log"
+  test -s "acceptance-logs/egress-ipv6-uid-$uid.log"
+done
+grep -F 'PASS: independent SQL snapshots confirm' acceptance-logs/independent-state-check.log
+grep -q 'WS001A ACTUAL WRITER HTTP TEST PASS' acceptance-logs/actual-writer-test.log
+grep -q 'PASS: separate psql session' acceptance-logs/native-concurrency.log
+grep -q '"status": "PASS"' acceptance-logs/runtime/actual-writer-summary.json
+grep -q '"status": "PASS"' acceptance-logs/http-cas-validated.json
+grep -q '^17[.]6' acceptance-logs/postgresql-version.txt
+grep -Eq '(^|[^[:digit:].])14[.]5([.]0)?([^[:digit:].]|$)' acceptance-logs/postgrest-version.txt
+echo 'PASS: mandatory native evidence complete, pending WS-022 independent acceptance' |
+  tee acceptance-logs/final-disposition.txt
+ acceptance-logs/native-privilege-status.txt
+test "$(grep -c '^NoNewPrivs:' acceptance-logs/native-privilege-status.txt)" = 1
+test "$(grep -c '^CapEff:' acceptance-logs/native-privilege-status.txt)" = 1
+grep -F 'DENIED Docker AF_UNIX connect:' acceptance-logs/docker-socket-connect-denied.txt
+grep -F 'native UID denied' acceptance-logs/unrelated-loopback-proof.txt
+grep -q 'PASS: enforcement probes' acceptance-logs/egress-probe-summary.txt
+grep -F 'PASS: IPv4 and IPv6 firewall REJECT counters incremented' acceptance-logs/egress-counter-validation.txt
+pg_uid="$(cat acceptance-logs/postgresql-image-uid.txt)"
+for uid in "$pg_uid" 25002 25003; do
+  grep -q "runtime UID $uid external IPv4 exit=" acceptance-logs/egress-all-uids.txt
+  grep -q "runtime UID $uid external IPv6 exit=" acceptance-logs/egress-all-uids.txt
+  test -s "acceptance-logs/egress-uid-$uid.log"
+  test -s "acceptance-logs/egress-ipv6-uid-$uid.log"
+done
+grep -F 'PASS: independent SQL snapshots confirm' acceptance-logs/independent-state-check.log
+grep -q 'WS001A ACTUAL WRITER HTTP TEST PASS' acceptance-logs/actual-writer-test.log
+grep -q 'PASS: separate psql session' acceptance-logs/native-concurrency.log
+grep -q '"status": "PASS"' acceptance-logs/runtime/actual-writer-summary.json
+grep -q '"status": "PASS"' acceptance-logs/http-cas-validated.json
+grep -q '^17[.]6' acceptance-logs/postgresql-version.txt
+grep -Eq '(^|[^[:digit:].])14[.]5([.]0)?([^[:digit:].]|$)' acceptance-logs/postgrest-version.txt
+echo 'PASS: mandatory native evidence complete, pending WS-022 independent acceptance' |
+  tee acceptance-logs/final-disposition.txt
+ acceptance-logs/egress-probe-summary.txt
+! grep -Eq 'exit=0([^0-9]|$)' acceptance-logs/egress-all-uids.txt acceptance-logs/egress-probe-summary.txt
 grep -F 'PASS: IPv4 and IPv6 firewall REJECT counters incremented' acceptance-logs/egress-counter-validation.txt
 pg_uid="$(cat acceptance-logs/postgresql-image-uid.txt)"
 for uid in "$pg_uid" 25002 25003; do
