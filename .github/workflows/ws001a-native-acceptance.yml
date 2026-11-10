@@ -74,6 +74,7 @@ jobs:
           sudo mkdir -p /tmp/ws001a-test
           sudo chown 25003:25003 /tmp/ws001a-test
           sudo chown -R 25003:25003 acceptance-logs
+          sudo chmod 1777 acceptance-logs # both runner (logs) and confined test UID (writer evidence)
           docker pull --platform linux/amd64 "$POSTGRES_IMAGE"
           docker pull --platform linux/amd64 "$POSTGREST_IMAGE"
           docker image inspect "$POSTGRES_IMAGE" --format '{{index .RepoDigests 0}}' | tee acceptance-logs/postgresql-image.txt
