@@ -6,7 +6,7 @@ CREATE TABLE platform_orders (
  organization_id uuid NOT NULL, connection_id uuid NOT NULL,
  provider_account_id uuid NOT NULL, canonical_order_id uuid NOT NULL,
  evidence_id uuid NOT NULL, version integer NOT NULL DEFAULT 1,
- amount numeric(20,6) NOT NULL
+ amount numeric(20,6)
 );
 CREATE UNIQUE INDEX platform_orders_uq ON platform_orders(platform,platform_order_id);
 CREATE UNIQUE INDEX platform_orders_platform_order_id_key ON platform_orders(platform_order_id);
