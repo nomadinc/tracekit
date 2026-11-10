@@ -29,6 +29,13 @@ if [[ "$mode" == snapshot ]]; then
   echo 'PASS: protected source hashes and provenance baseline captured'
 elif [[ "$mode" == verify ]]; then
   test "$(stat -c '%u:%a' "$baseline")" = "$(id -u):600"
+  # The trusted baseline must cover every expected protected file exactly once.
+  test "$(wc -l < "$baseline")" = "$(($(printf '%s\n' $protected | wc -l)+2))"
+  for name in $protected; do
+    test "$(grep -Fc "  $root/$name" "$baseline")" = 1
+  done
+  test "$(grep -Fc "  $root/blocked-provenance-tamper.log" "$baseline")" = 1
+  test "$(grep -Fc "  $root/artifact-permission-checks.txt" "$baseline")" = 1
   while read -r hash file; do
     test ! -L "$file"
     test "$(stat -c '%u:%a' "$file")" = "$(id -u):600"
