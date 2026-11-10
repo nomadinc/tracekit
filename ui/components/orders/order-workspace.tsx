@@ -200,7 +200,7 @@ function OrderWorkspaceContent() {
     return <State text="Loading Order Workspace…" />;
   if ((loading || detailLoading) && !snap) return <State text="Loading Order Workspace…" />;
   if (loadFailed || detailFailed) return <State text="Orders are unavailable. Refresh to try again." />;
-  if (!orders.length && requested.orderId) {
+  if (requested.orderId && !snap) {
     return <State text={`Order ${requested.orderId} could not be loaded from the production Order read path`} />;
   }
   if (!orders.length) return <State text="No accessible Orders" />;

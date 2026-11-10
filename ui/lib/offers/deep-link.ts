@@ -32,7 +32,7 @@ function validDrawer(target: OfferDrawerTarget | null, snapshot?: OfferWorkspace
 }
 
 export function normalizeOfferDeepLink(state: OfferDeepLinkState, offers: OfferSummary[], snapshot?: OfferWorkspaceSnapshot | null): OfferDeepLinkState {
-  const offerId = offers.some(offer => offer.id === state.offerId) ? state.offerId : offers[0]?.id || null;
+  const offerId = state.offerId || offers[0]?.id || null;
   const comparisonOfferIds = normalizedRepeatedIds(state.comparisonOfferIds).filter(id => offers.some(offer => offer.id === id));
   const drawer = validDrawer(state.drawer, snapshot);
   return {

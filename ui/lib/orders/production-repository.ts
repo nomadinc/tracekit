@@ -145,6 +145,7 @@ export class ProductionOrderRepository {
     const result = await get(`/api/customer-orders?${qs(scope,{order_id:id,limit:1})}`);
     const entry = result.orders?.[0];
     const raw:any=entry?.order;
+    if (!raw || orderId(raw) !== id) return null;
     let detail:any=raw ? {customer:entry.customer,orders:[raw],journeys:[]} : null;
     if (entry?.customer?.id) detail=await customerDetail(scope,entry.customer.id);
     if(!detail||!raw) return null;

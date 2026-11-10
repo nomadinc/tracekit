@@ -36,7 +36,7 @@ export function normalizeCustomerDeepLink(state: CustomerDeepLinkState, customer
   const drawer = validDrawer(state.drawer, snapshot);
   return {
     ...state,
-    customerId: customers.some(customer => customer.id === state.customerId) ? state.customerId : customers[0]?.id || null,
+    customerId: state.customerId || customers[0]?.id || null,
     eventId: snapshot?.journey.some(event => event.id === state.eventId) ? state.eventId : null,
     identifierRef: snapshot?.journey.some(event => event.identifiers.some(identifier => identifier.id === state.identifierRef)) ? state.identifierRef : null,
     orderId: snapshot?.orders.some(order => order.id === state.orderId) ? state.orderId : null,

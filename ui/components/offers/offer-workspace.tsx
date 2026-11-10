@@ -358,6 +358,8 @@ function OfferWorkspaceContent() {
     }
     let active = true;
     setLoading(true);
+    setSnapshot(null);
+    drawer.closeDrawer();
     offerRepository
       .loadWorkspace(scope, normalized.offerId)
       .then((value) => {
@@ -423,12 +425,16 @@ function OfferWorkspaceContent() {
           : normalized.eventId
             ? `event:${normalized.eventId}`
             : null);
-    if (!snapshot || !drawerId) return;
+    if (!snapshot || !drawerId ||
+        snapshot.offer.id !== normalized.offerId ||
+        snapshot.offer.organizationId !== session.activeOrganizationId) return;
     let active = true;
     offerRepository
       .loadDrawer(scope, snapshot.offer.id, drawerId)
       .then((record) => {
-        if (active && record)
+        if (active && record &&
+            snapshot.offer.id === normalized.offerId &&
+            snapshot.offer.organizationId === session.activeOrganizationId)
           drawer.openDrawer(
             <OfferDrawerContent record={record} />,
             record.title,
@@ -463,17 +469,13 @@ function OfferWorkspaceContent() {
     [normalized, router, session.identity.id],
   );
   const inspect = React.useCallback(
-    async (drawerId: string) => {
-      if (!snapshot) return;
-      const record = await offerRepository.loadDrawer(
-        scope,
-        snapshot.offer.id,
-        drawerId,
-      );
-      if (record)
-        drawer.openDrawer(<OfferDrawerContent record={record} />, record.title);
+    (drawerId: string) => {
+      if (!snapshot ||
+          snapshot.offer.id !== normalized.offerId ||
+          snapshot.offer.organizationId !== session.activeOrganizationId) return;
+      go({ offerId: snapshot.offer.id, drawerId, drawer: null });
     },
-    [drawer, scope, snapshot],
+    [go, normalized.offerId, session.activeOrganizationId, snapshot],
   );
   if (loading && !snapshot)
     return (
@@ -500,6 +502,19 @@ function OfferWorkspaceContent() {
         </p>
       </div>
     );
+  if (snapshot && (
+    snapshot.offer.id !== normalized.offerId ||
+    snapshot.offer.organizationId !== session.activeOrganizationId
+  )) return (
+    <div role="alert" className="rounded-xl border p-6">
+      Offer unavailable in the active workspace.
+    </div>
+  );
+  if (requested.offerId && !snapshot && !loading) return (
+    <div role="alert" className="rounded-xl border p-6">
+      Offer unavailable in the active workspace.
+    </div>
+  );
   if (!snapshot)
     return (
       <div className="rounded-xl border bg-white p-8 dark:border-white/10 dark:bg-ink">

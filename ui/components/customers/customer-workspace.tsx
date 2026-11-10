@@ -132,6 +132,7 @@ function CustomerWorkspaceContent() {
     }
     let on = true;
     setSnapshot(null);
+    drawer.closeDrawer();
     customerRepository
       .loadWorkspace(scope, normalized.customerId)
       .then((v) => on && setSnapshot(v))
@@ -153,10 +154,14 @@ function CustomerWorkspaceContent() {
         : normalized.orderId
           ? `order:${normalized.orderId}`
           : null);
-    if (!id || !snapshot) return;
+    if (!id || !snapshot ||
+        snapshot.customer.id !== normalized.customerId ||
+        snapshot.customer.organizationId !== scope.organizationId) return;
     let on = true;
     customerRepository.loadDrawer(scope, snapshot.customer.id, id).then((r) => {
-      if (on && r)
+      if (on && r &&
+          snapshot.customer.id === normalized.customerId &&
+          snapshot.customer.organizationId === scope.organizationId)
         drawer.openDrawer(<CustomerDrawerContent record={r} />, r.title, { onDismiss: () => router.push(withDevelopmentIdentity(customerDeepLinkHref({ ...normalized, drawer: null, drawerId: null, eventId: null, identifierRef: null, orderId: null }), session.identity.id), { scroll: false }) });
     });
     return () => {
@@ -184,14 +189,11 @@ function CustomerWorkspaceContent() {
     );
     return () => window.clearInterval(t);
   }, [replaying, snapshot]);
-  const inspect = async (id: string) => {
-    if (!snapshot) return;
-    const r = await customerRepository.loadDrawer(
-      scope,
-      snapshot.customer.id,
-      id,
-    );
-    if (r) drawer.openDrawer(<CustomerDrawerContent record={r} />, r.title);
+  const inspect = (id: string) => {
+    if (!snapshot ||
+        snapshot.customer.id !== normalized.customerId ||
+        snapshot.customer.organizationId !== scope.organizationId) return;
+    go({ customerId: snapshot.customer.id, drawerId: id, drawer: null });
   };
   if (loading && !snapshot)
     return <State title="Loading Customer Workspace…" />;
@@ -199,6 +201,12 @@ function CustomerWorkspaceContent() {
     return <State title="Customer Workspace unavailable" detail={error} />;
   if (!customers.length && !String(filter.query || "").trim())
     return <State title="No customers available" detail="There are no customers available in the current workspace." />;
+  if (snapshot && (
+    snapshot.customer.id !== normalized.customerId ||
+    snapshot.customer.organizationId !== scope.organizationId
+  )) return <State title="Customer unavailable in the active workspace" />;
+  if (requested.customerId && !snapshot)
+    return <State title="Customer unavailable in the active workspace" />;
   if (!snapshot && customers.length) return <State title="Customer not found" />;
   const active = snapshot?.journey[replayIndex] || null;
   return (

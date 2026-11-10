@@ -188,6 +188,7 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
   async loadWorkspace(scope: ProductionCustomerScope, customerId: string): Promise<CustomerWorkspaceSnapshot | null> {
     if (!scope.authenticated || !customerId) return null;
     const detail = await get(`/api/customers/${encodeURIComponent(customerId)}?${qs(scope)}`,scope);
+    if (String(detail.customer?.id || "") !== customerId) return null;
     const journeys = Array.isArray(detail.journeys) ? detail.journeys : [];
     const selectedJourney = journeys[0] || null;
     let journeyDetail: any = null;

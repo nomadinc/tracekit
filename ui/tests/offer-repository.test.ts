@@ -34,7 +34,7 @@ test("unobserved Offers never produce metrics, trends, comparison or search reco
 });
 test("missing Offer data clears unresolved object and drawer links", () => {
   const state = normalizeOfferDeepLink(parseOfferDeepLink("?offer_id=missing&driver=missing&compare=1&compare_offer=missing"), [], null);
-  assert.equal(state.offerId, null);
+  assert.equal(state.offerId, "missing");
   assert.equal(state.driverId, null);
   assert.equal(state.compare, false);
 });

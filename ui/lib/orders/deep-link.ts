@@ -37,7 +37,7 @@ export function normalizeOrderDeepLink(state: OrderDeepLinkState, list: OrderSum
   const drawer = validDrawer(state.drawer, snapshot);
   return {
     ...state,
-    orderId: list.some(order => order.id === state.orderId) ? state.orderId : list[0]?.id || null,
+    orderId: state.orderId || list[0]?.id || null,
     lineId: snapshot?.ledger.some(line => line.id === state.lineId) ? state.lineId : null,
     attributionId: state.attributionId === "summary" ? state.attributionId : null,
     eventId: snapshot?.timeline.some(event => event.id === state.eventId) ? state.eventId : null,
