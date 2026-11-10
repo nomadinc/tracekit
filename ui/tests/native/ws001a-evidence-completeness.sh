@@ -27,7 +27,7 @@ for f in \
  http-cas-validated.json http-cas-db-final.txt \
  http-validator-selftest.log http-cas-validation.log \
  runtime/actual-writer-http.jsonl runtime/actual-writer-summary.json \
- actual-writer-test.log focused-tests.log \
+ actual-writer-test.log focused-tests.log independent-state-check.log \
  postgresql-service.log postgrest-startup.log postgrest-shutdown.log \
  roles-final-snapshot.txt orders-final-snapshot.txt payments-final-snapshot.txt \
  artifact-permission-checks.txt blocked-provenance-tamper.log \
@@ -72,6 +72,7 @@ for uid in "$pg_uid" 25002 25003; do
   test -s "acceptance-logs/egress-uid-$uid.log"
   test -s "acceptance-logs/egress-ipv6-uid-$uid.log"
 done
+grep -F 'PASS: independent SQL snapshots confirm' acceptance-logs/independent-state-check.log
 grep -q 'WS001A ACTUAL WRITER HTTP TEST PASS' acceptance-logs/actual-writer-test.log
 grep -q 'PASS: separate psql session' acceptance-logs/native-concurrency.log
 grep -q '"status": "PASS"' acceptance-logs/runtime/actual-writer-summary.json
