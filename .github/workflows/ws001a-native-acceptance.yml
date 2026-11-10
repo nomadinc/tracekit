@@ -95,7 +95,21 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          npm ci --prefix ui --ignore-scripts
+          python3 - <<'PY' | tee acceptance-logs/npm-locked-acquisition.txt
+          import json,hashlib
+          from urllib.parse import urlsplit
+          path='ui/package-lock.json'
+          data=open(path,'rb').read()
+          lock=json.loads(data)
+          urls=[v['resolved'] for v in lock.get('packages',{}).values() if isinstance(v,dict) and isinstance(v.get('resolved'),str)]
+          origins=sorted({urlsplit(url).netloc for url in urls if url.startswith(('http://','https://'))})
+          assert origins==['registry.npmjs.org'],f'unapproved npm acquisition origins: {origins!r}'
+          assert all(url.startswith('https://registry.npmjs.org/') for url in urls if url.startswith(('http://','https://')))
+          print('APPROVED npm registry: https://registry.npmjs.org/')
+          print('locked dependency archives:',len(urls))
+          print('package-lock SHA256:',hashlib.sha256(data).hexdigest())
+          PY
+          npm ci --prefix ui --ignore-scripts --registry=https://registry.npmjs.org/
           test -x ui/node_modules/.bin/tsx
           ui/node_modules/.bin/tsx --version | tee acceptance-logs/tsx-version.txt
           node --version | tee acceptance-logs/node-version.txt
