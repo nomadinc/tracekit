@@ -14,6 +14,8 @@ for f in \
  egress-firewall-rules.txt egress-probe-summary.txt egress-all-uids.txt \
  postgresql-version.txt postgrest-version.txt \
  postgresql-listener.txt postgrest-listener.txt loopback-reachability.txt \
+ native-privilege-status.txt unrelated-loopback-proof.txt unrelated-loopback-denied.log \
+ docker-socket-connect-denied.txt \
  postgresql-netns-proof.txt postgrest-netns-proof.txt \
  schema.log indexes.txt native-negative.log native-concurrency.log \
  runtime/concurrent-order-a.log runtime/concurrent-order-b.log \
@@ -55,7 +57,45 @@ grep -q 'PASS: native UID cannot modify runner-owned provenance' acceptance-logs
 grep -Fx 'acceptance_sql|f|f|f|f|t|t|t|t|t|f' acceptance-logs/role-permissions.txt
 grep -Fx 'false' acceptance-logs/bootstrap-login-disabled.txt
 grep -F 'not permitted to log in' acceptance-logs/bootstrap-login-denied.log
-grep -q 'PASS: native UID 25003 lacks effective capabilities and cannot sudo' acceptance-logs/loopback-reachability.txt
+grep -q 'PASS: native UID 25003 lacks capabilities, has no_new_privs, cannot sudo or connect to Docker socket, and cannot reach unrelated loopback' acceptance-logs/loopback-reachability.txt
+grep -Eq '^NoNewPrivs:[[:space:]]*1
+grep -q 'PASS: enforcement probes' acceptance-logs/egress-probe-summary.txt
+pg_uid="$(cat acceptance-logs/postgresql-image-uid.txt)"
+for uid in "$pg_uid" 25002 25003; do
+  grep -q "runtime UID $uid external IPv4 exit=" acceptance-logs/egress-all-uids.txt
+  grep -q "runtime UID $uid external IPv6 exit=" acceptance-logs/egress-all-uids.txt
+  test -s "acceptance-logs/egress-uid-$uid.log"
+  test -s "acceptance-logs/egress-ipv6-uid-$uid.log"
+done
+grep -q 'WS001A ACTUAL WRITER HTTP TEST PASS' acceptance-logs/actual-writer-test.log
+grep -q 'PASS: separate psql session' acceptance-logs/native-concurrency.log
+grep -q '"status": "PASS"' acceptance-logs/runtime/actual-writer-summary.json
+grep -q '"status": "PASS"' acceptance-logs/http-cas-validated.json
+grep -q '^17[.]6' acceptance-logs/postgresql-version.txt
+grep -Eq '(^|[^[:digit:].])14[.]5([.]0)?([^[:digit:].]|$)' acceptance-logs/postgrest-version.txt
+echo 'PASS: mandatory native evidence complete, pending WS-022 independent acceptance' |
+  tee acceptance-logs/final-disposition.txt
+ acceptance-logs/native-privilege-status.txt
+grep -Eq '^CapEff:[[:space:]]*0000000000000000
+grep -q 'PASS: enforcement probes' acceptance-logs/egress-probe-summary.txt
+pg_uid="$(cat acceptance-logs/postgresql-image-uid.txt)"
+for uid in "$pg_uid" 25002 25003; do
+  grep -q "runtime UID $uid external IPv4 exit=" acceptance-logs/egress-all-uids.txt
+  grep -q "runtime UID $uid external IPv6 exit=" acceptance-logs/egress-all-uids.txt
+  test -s "acceptance-logs/egress-uid-$uid.log"
+  test -s "acceptance-logs/egress-ipv6-uid-$uid.log"
+done
+grep -q 'WS001A ACTUAL WRITER HTTP TEST PASS' acceptance-logs/actual-writer-test.log
+grep -q 'PASS: separate psql session' acceptance-logs/native-concurrency.log
+grep -q '"status": "PASS"' acceptance-logs/runtime/actual-writer-summary.json
+grep -q '"status": "PASS"' acceptance-logs/http-cas-validated.json
+grep -q '^17[.]6' acceptance-logs/postgresql-version.txt
+grep -Eq '(^|[^[:digit:].])14[.]5([.]0)?([^[:digit:].]|$)' acceptance-logs/postgrest-version.txt
+echo 'PASS: mandatory native evidence complete, pending WS-022 independent acceptance' |
+  tee acceptance-logs/final-disposition.txt
+ acceptance-logs/native-privilege-status.txt
+grep -F 'DENIED Docker AF_UNIX connect:' acceptance-logs/docker-socket-connect-denied.txt
+grep -F 'native UID denied' acceptance-logs/unrelated-loopback-proof.txt
 grep -q 'PASS: enforcement probes' acceptance-logs/egress-probe-summary.txt
 pg_uid="$(cat acceptance-logs/postgresql-image-uid.txt)"
 for uid in "$pg_uid" 25002 25003; do
