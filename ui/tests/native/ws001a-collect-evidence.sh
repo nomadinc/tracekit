@@ -15,15 +15,6 @@ if [[ -f ui/tests/native/ws001a-artifact-integrity.sh ]]; then
 else
   echo 'HOLD: missing protected-provenance verifier' > acceptance-logs/trusted-integrity-verification.log
 fi
-if [[ -d acceptance-logs/runtime ]]; then
-  sudo find acceptance-logs/runtime -mindepth 1 -printf '%u:%g:%m %y %p\n'     > acceptance-logs/runtime-file-ownership.txt 2>&1
-  sudo find acceptance-logs/runtime -type l -print     > acceptance-logs/runtime-symlinks.txt 2>&1
-  if [[ ! -s acceptance-logs/runtime-symlinks.txt ]]; then
-    sudo chown -R "$(id -u):$(id -g)" acceptance-logs/runtime
-    sudo find acceptance-logs/runtime -type f -exec chmod 600 '{}' +
-    chmod 700 acceptance-logs/runtime
-  fi
-fi
 if command -v docker >/dev/null 2>&1; then
   docker ps -a --no-trunc > acceptance-logs/docker-ps.txt 2>&1
   docker logs --timestamps ws001a-postgres > acceptance-logs/postgresql-service.log 2>&1
@@ -63,6 +54,15 @@ if command -v docker >/dev/null 2>&1; then
   docker stop --time 5 ws001a-postgres > acceptance-logs/postgresql-stop.txt 2>&1
   docker logs --timestamps ws001a-postgrest > acceptance-logs/postgrest-shutdown.log 2>&1
   docker logs --timestamps ws001a-postgres > acceptance-logs/postgresql-service.log 2>&1
+fi
+if [[ -d acceptance-logs/runtime ]]; then
+  sudo find acceptance-logs/runtime -mindepth 1 -printf '%u:%g:%m %y %p\n'     > acceptance-logs/runtime-file-ownership.txt 2>&1
+  sudo find acceptance-logs/runtime -type l -print     > acceptance-logs/runtime-symlinks.txt 2>&1
+  if [[ ! -s acceptance-logs/runtime-symlinks.txt ]]; then
+    sudo chown -R "$(id -u):$(id -g)" acceptance-logs/runtime
+    sudo find acceptance-logs/runtime -type f -exec chmod 600 '{}' +
+    chmod 700 acceptance-logs/runtime
+  fi
 fi
 find acceptance-logs -type f -printf '%P\n' | sort > acceptance-logs/artifact-inventory.txt 2>&1
 find acceptance-logs -type f ! -name 'file-sha256.txt' -print0 |
