@@ -32,7 +32,13 @@ INSERT INTO platform_orders(platform,platform_order_id,provider_order_id,account
 VALUES ('next29','102872','102872','11111111-1111-4111-8111-111111111111','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaac','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaad','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaae',123.450000);
 INSERT INTO payment_transactions(platform,account_id,transaction_id,event_type,external_record_id,organization_id,connection_id,provider_account_id,amount,fee_amount,net_amount)
 VALUES ('next29','11111111-1111-4111-8111-111111111111','2446','debit','2446-stem','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab','aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaac',19.990000,NULL,NULL);
+-- Fixture setup is performed as fixture_admin, a disposable Postgres bootstrap role.
+-- The HTTP runtime uses only postgrest_login, which is NOT a superuser or owner.
+-- web_anon has scoped test-table grants but no database-enforced tenant RLS.
 CREATE ROLE web_anon NOLOGIN;
+CREATE ROLE postgrest_login LOGIN NOINHERIT PASSWORD 'synthetic-api-only';
+GRANT web_anon TO postgrest_login;
+GRANT CONNECT ON DATABASE acceptance TO postgrest_login;
 GRANT USAGE ON SCHEMA public TO web_anon;
 GRANT SELECT,UPDATE ON platform_orders,payment_transactions TO web_anon;
 
