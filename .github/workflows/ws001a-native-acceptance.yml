@@ -151,6 +151,12 @@ jobs:
           env PGUSER=fixture_admin PGPASSWORD=synthetic-fixture-only \
             psql -X -v ON_ERROR_STOP=1 -f ui/tests/native/ws001a-synthetic-schema.sql \
             2>&1 | tee acceptance-logs/schema.log
+          # Disable the bootstrap superuser LOGIN before any native SQL/Node test.
+          # Its synthetic password may be visible in workflow source; NOLOGIN is
+          # the PostgreSQL-enforced boundary rather than env scrubbing alone.
+          env PGUSER=fixture_admin PGPASSWORD=synthetic-fixture-only \
+            psql -X -v ON_ERROR_STOP=1 -c 'ALTER ROLE fixture_admin NOLOGIN' \
+            2>&1 | tee acceptance-logs/bootstrap-login-revoked.txt
           # Effective privilege checks execute with the restricted test UID and SQL login.
           sudo -u ws001a-test env -i HOME=/tmp/ws001a-test PATH="$PATH" \
             PGHOST=127.0.0.1 PGPORT=5432 PGDATABASE=acceptance \
@@ -159,6 +165,13 @@ jobs:
             "SELECT current_user,rolsuper,rolcreatedb,rolcreaterole,has_schema_privilege(current_user,'public','CREATE'),has_table_privilege(current_user,'public.platform_orders','SELECT'),has_table_privilege(current_user,'public.platform_orders','INSERT'),has_table_privilege(current_user,'public.platform_orders','UPDATE'),has_table_privilege(current_user,'public.payment_transactions','INSERT'),has_sequence_privilege(current_user,'public.platform_orders_id_seq','USAGE'),pg_has_role(current_user,'fixture_admin','MEMBER') FROM pg_roles WHERE rolname=current_user" \
             | tee acceptance-logs/role-permissions.txt
           grep -Fx 'acceptance_sql|f|f|f|f|t|t|t|t|t|f' acceptance-logs/role-permissions.txt
+          sudo -u ws001a-test env -i HOME=/tmp/ws001a-test PATH="$PATH" \
+            PGHOST=127.0.0.1 PGPORT=5432 PGDATABASE=acceptance \
+            PGUSER=acceptance_sql PGPASSWORD=synthetic-test-only \
+            psql -X -v ON_ERROR_STOP=1 -Atqc \
+            "SELECT rolcanlogin::text FROM pg_roles WHERE rolname='fixture_admin'" \
+            | tee acceptance-logs/bootstrap-login-disabled.txt
+          grep -Fx 'false' acceptance-logs/bootstrap-login-disabled.txt
           bash ui/tests/native/ws001a-artifact-integrity.sh snapshot
       - name: PostgreSQL 17.6 native tests with unprivileged acceptance_sql
         shell: bash
