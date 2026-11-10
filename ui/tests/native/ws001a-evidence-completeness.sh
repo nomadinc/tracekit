@@ -33,6 +33,7 @@ for f in \
  artifact-permission-checks.txt blocked-provenance-tamper.log \
  .trusted-provenance.sha256 trusted-integrity-verification.log \
  runtime-file-ownership.txt privilege-escalation-denied.log \
+ runtime-original-sha256.txt runtime-copy-sha256.txt runtime-copy-integrity.txt \
  artifact-inventory.txt file-sha256.txt
 do
   if [[ ! -s "acceptance-logs/$f" ]]; then
@@ -46,6 +47,9 @@ if [[ "$missing" -ne 0 ]]; then
 fi
 test -f acceptance-logs/runtime-symlinks.txt
 test ! -s acceptance-logs/runtime-symlinks.txt
+test -f acceptance-logs/runtime-special-files.txt
+test ! -s acceptance-logs/runtime-special-files.txt
+grep -Fx 'PASS: restricted raw evidence copied, digest matched, collector owns sealed copy' acceptance-logs/runtime-copy-integrity.txt
 # Raw writer and SQL session evidence must originate from the restricted test UID.
 for filename in actual-writer-http.jsonl actual-writer-summary.json concurrent-order-a.log concurrent-payment-a.log; do
   grep -E "^ws001a-test:ws001a-test:[0-7]+ f acceptance-logs/runtime/$filename" acceptance-logs/runtime-file-ownership.txt
