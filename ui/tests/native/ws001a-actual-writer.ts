@@ -7,7 +7,7 @@ import { persistNext29Order, persistNext29Payments, type FinancialRequest } from
 
 const base = "http://127.0.0.1:3000";
 const root = process.env.GITHUB_WORKSPACE || process.cwd();
-const evidenceDir = resolve(root,"acceptance-logs");
+const evidenceDir = resolve(root,"acceptance-logs","runtime");
 mkdirSync(evidenceDir,{recursive:true});
 const log = resolve(evidenceDir,"actual-writer-http.jsonl");
 const audit = (v:unknown) => appendFileSync(log,JSON.stringify(v)+"\n");
