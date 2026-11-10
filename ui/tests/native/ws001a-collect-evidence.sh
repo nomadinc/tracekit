@@ -1,0 +1,49 @@
+#!/usr/bin/env bash
+# Always-run best-effort collection. Must never block the following artifact upload.
+set +e
+mkdir -p acceptance-logs
+{
+  date -u +"%Y-%m-%dT%H:%M:%SZ"
+  echo "GITHUB_SHA=$GITHUB_SHA"
+  echo "GITHUB_REF=$GITHUB_REF"
+  echo "GITHUB_RUN_ID=$GITHUB_RUN_ID"
+  echo "GITHUB_RUN_ATTEMPT=$GITHUB_RUN_ATTEMPT"
+  echo "UID=$(id -u)"
+} > acceptance-logs/runner-context.txt
+if command -v docker >/dev/null 2>&1; then
+  docker ps -a --no-trunc > acceptance-logs/docker-ps.txt 2>&1
+  docker logs --timestamps ws001a-postgres > acceptance-logs/postgresql-service.log 2>&1
+  docker logs --timestamps ws001a-postgrest > acceptance-logs/postgrest-shutdown.log 2>&1
+  docker inspect ws001a-postgres > acceptance-logs/postgresql-container-inspect.json 2>&1
+  docker inspect ws001a-postgrest > acceptance-logs/postgrest-container-inspect.json 2>&1
+  if [[ -n "$POSTGRES_IMAGE" ]]; then
+    docker image inspect "$POSTGRES_IMAGE" --format '{{.RepoDigests}} {{.Os}}/{{.Architecture}}' > acceptance-logs/postgresql-image-final.txt 2>&1
+  fi
+  if [[ -n "$POSTGREST_IMAGE" ]]; then
+    docker image inspect "$POSTGREST_IMAGE" --format '{{.RepoDigests}} {{.Os}}/{{.Architecture}}' > acceptance-logs/postgrest-image-final.txt 2>&1
+  fi
+fi
+if command -v psql >/dev/null 2>&1 && command -v pg_isready >/dev/null 2>&1 && pg_isready -h 127.0.0.1 -p 5432 >/dev/null 2>&1; then
+  if [[ -f ui/tests/native/ws001a-contained-exec.sh && -f acceptance-logs/egress-probe-summary.txt ]]; then
+    bash ui/tests/native/ws001a-contained-exec.sh psql -X -v ON_ERROR_STOP=1 -Atqc \
+      "SELECT table_name FROM information_schema.tables WHERE table_schema='public' ORDER BY table_name" \
+      > acceptance-logs/fixture-tables.txt 2>&1
+    bash ui/tests/native/ws001a-contained-exec.sh psql -X -v ON_ERROR_STOP=1 -Atqc \
+      "SELECT id,platform,platform_order_id,provider_order_id,account_id,organization_id,connection_id,provider_account_id,canonical_order_id,amount::text FROM platform_orders ORDER BY id" \
+      > acceptance-logs/orders-final-snapshot.txt 2>&1
+    bash ui/tests/native/ws001a-contained-exec.sh psql -X -v ON_ERROR_STOP=1 -Atqc \
+      "SELECT id,platform,transaction_id,event_type,account_id,amount::text,fee_amount::text,net_amount::text,raw_json::text FROM payment_transactions ORDER BY transaction_id,account_id" \
+      > acceptance-logs/payments-final-snapshot.txt 2>&1
+    bash ui/tests/native/ws001a-contained-exec.sh psql -X -v ON_ERROR_STOP=1 -Atqc \
+      "SELECT rolname,rolsuper,rolcanlogin,rolinherit FROM pg_roles WHERE rolname IN ('fixture_admin','postgrest_login','web_anon') ORDER BY rolname" \
+      > acceptance-logs/roles-final-snapshot.txt 2>&1
+  fi
+fi
+if command -v iptables >/dev/null 2>&1; then
+  sudo iptables -S OUTPUT > acceptance-logs/ipv4-output-final.txt 2>&1
+  sudo ip6tables -S OUTPUT > acceptance-logs/ipv6-output-final.txt 2>&1
+fi
+find acceptance-logs -maxdepth 1 -type f -printf '%f\n' | sort > acceptance-logs/artifact-inventory.txt 2>&1
+find acceptance-logs -maxdepth 1 -type f ! -name 'file-sha256.txt' -print0 |
+  sort -z | xargs -0 -r sha256sum > acceptance-logs/file-sha256.txt 2>&1
+exit 0
