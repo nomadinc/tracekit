@@ -71,6 +71,7 @@ jobs:
           grep -Fx '19.990000|t|t' acceptance-logs/numeric-payment.txt
           psql -X -Atqc "select indexname,indexdef from pg_indexes where tablename in ('platform_orders','payment_transactions') order by indexname" > acceptance-logs/indexes.txt
           psql -X -v ON_ERROR_STOP=1 -f ui/tests/native/ws001a-negative.sql 2>&1 | tee acceptance-logs/native-negative.log
+          bash ui/tests/native/ws001a-concurrency.sh 2>&1 | tee acceptance-logs/native-concurrency.log
       - name: PostgREST 14.5 real HTTP GET and guarded PATCH
         shell: bash
         run: |
@@ -86,6 +87,8 @@ jobs:
             sleep 1
           done
           docker logs ws001a-postgrest > acceptance-logs/postgrest-startup.log 2>&1
+          docker exec ws001a-postgrest postgrest --version 2>&1 | tee acceptance-logs/postgrest-version.txt
+          grep -E '14\\.5' acceptance-logs/postgrest-version.txt
           curl --fail-with-body -sS -i 'http://127.0.0.1:3000/platform_orders?provider_order_id=eq.102872&select=id,platform_order_id,amount,version' | tee acceptance-logs/http-get.txt
           curl --fail-with-body -sS -i -X PATCH \
             -H 'Content-Type: application/json' -H 'Prefer: return=representation' \
@@ -97,6 +100,12 @@ jobs:
             'http://127.0.0.1:3000/platform_orders?provider_order_id=eq.102872&version=eq.1&select=id,version' | tee acceptance-logs/http-cas-stale.txt
           grep -F '"version":2' acceptance-logs/http-cas-success.txt
           grep -F '[]' acceptance-logs/http-cas-stale.txt
+      - name: Execute unchanged persistence writer against real PostgREST
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd ui
+          ./node_modules/.bin/tsx tests/native/ws001a-actual-writer.ts 2>&1 | tee ../acceptance-logs/actual-writer-test.log
       - name: Focused accepted test suite
         shell: bash
         run: |
