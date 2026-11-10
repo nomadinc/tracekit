@@ -172,6 +172,18 @@ jobs:
             "SELECT rolcanlogin::text FROM pg_roles WHERE rolname='fixture_admin'" \
             | tee acceptance-logs/bootstrap-login-disabled.txt
           grep -Fx 'false' acceptance-logs/bootstrap-login-disabled.txt
+          # Negative login proof using the still-known synthetic bootstrap password.
+          # Application processes must not be able to use fixture_admin afterward.
+          set +e
+          sudo -u ws001a-test env -i HOME=/tmp/ws001a-test PATH="$PATH" \
+            PGHOST=127.0.0.1 PGPORT=5432 PGDATABASE=acceptance \
+            PGUSER=fixture_admin PGPASSWORD=synthetic-fixture-only \
+            psql -X -v ON_ERROR_STOP=1 -Atqc 'select current_user' \
+            > acceptance-logs/bootstrap-login-denied.log 2>&1
+          bootstrap_status=$?
+          set -e
+          test "$bootstrap_status" != 0
+          grep -F 'not permitted to log in' acceptance-logs/bootstrap-login-denied.log
           bash ui/tests/native/ws001a-artifact-integrity.sh snapshot
       - name: PostgreSQL 17.6 native tests with unprivileged acceptance_sql
         shell: bash
