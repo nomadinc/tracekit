@@ -140,7 +140,7 @@ jobs:
           pg_pid="$(docker inspect ws001a-postgres --format '{{.State.Pid}}')"
           awk '/^Uid:/ {print $2}' "/proc/$pg_pid/status" | tee acceptance-logs/postgresql-host-uid.txt
           test "$(cat acceptance-logs/postgresql-host-uid.txt)" = "$(cat acceptance-logs/postgresql-image-uid.txt)"
-          test "$(readlink "/proc/$pg_pid/ns/net")" = "$(readlink /proc/self/ns/net")"
+          test "$(readlink "/proc/$pg_pid/ns/net")" = "$(readlink /proc/self/ns/net)"
           echo 'PASS: PostgreSQL process shares locked-down host netns' | tee acceptance-logs/postgresql-netns-proof.txt
           ss -ltn '( sport = :5432 )' | tee acceptance-logs/postgresql-listener.txt
           grep -F '127.0.0.1:5432' acceptance-logs/postgresql-listener.txt
@@ -226,7 +226,7 @@ jobs:
           pgrst_pid="$(docker inspect ws001a-postgrest --format '{{.State.Pid}}')"
           awk '/^Uid:/ {print $2}' "/proc/$pgrst_pid/status" | tee acceptance-logs/postgrest-host-uid.txt
           test "$(cat acceptance-logs/postgrest-host-uid.txt)" = 25002
-          test "$(readlink "/proc/$pgrst_pid/ns/net")" = "$(readlink /proc/self/ns/net")"
+          test "$(readlink "/proc/$pgrst_pid/ns/net")" = "$(readlink /proc/self/ns/net)"
           echo 'PASS: PostgREST process shares locked-down host netns' | tee acceptance-logs/postgrest-netns-proof.txt
           ss -ltn '( sport = :3000 )' | tee acceptance-logs/postgrest-listener.txt
           grep -F '127.0.0.1:3000' acceptance-logs/postgrest-listener.txt
