@@ -292,5 +292,6 @@ jobs:
         with:
           name: ws001a-native-logs
           path: acceptance-logs/
-          if-no-files-found: warn
+          if-no-files-found: error
+          include-hidden-files: true # preserve protected .trusted-provenance.sha256
           retention-days: 30
