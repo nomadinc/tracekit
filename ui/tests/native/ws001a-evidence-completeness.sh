@@ -11,7 +11,7 @@ for f in \
  node-version.txt npm-version.txt tsx-version.txt npm-locked-acquisition.txt \
  approved-apt.list role-permissions.txt role-authority.txt \
  bootstrap-login-revoked.txt bootstrap-login-disabled.txt bootstrap-login-denied.log restricted-set-role-denied.log \
- egress-firewall-rules.txt egress-probe-summary.txt egress-all-uids.txt egress-rule-counters.txt \
+ egress-firewall-rules.txt egress-probe-summary.txt egress-all-uids.txt egress-rule-counters.txt egress-counter-validation.txt \
  postgresql-version.txt postgrest-version.txt \
  postgresql-listener.txt postgrest-listener.txt loopback-reachability.txt \
  native-privilege-status.txt unrelated-loopback-proof.txt unrelated-loopback-denied.log \
@@ -65,6 +65,7 @@ grep -E 'permission denied|not permitted' acceptance-logs/restricted-set-role-de
 grep -q 'PASS: native UID 25003 lacks capabilities, has no_new_privs, cannot sudo or connect to Docker socket, and cannot reach unrelated loopback' acceptance-logs/loopback-reachability.txt
 grep -Eq '^NoNewPrivs:[[:space:]]*1
 grep -q 'PASS: enforcement probes' acceptance-logs/egress-probe-summary.txt
+grep -F 'PASS: IPv4 and IPv6 firewall REJECT counters incremented' acceptance-logs/egress-counter-validation.txt
 pg_uid="$(cat acceptance-logs/postgresql-image-uid.txt)"
 for uid in "$pg_uid" 25002 25003; do
   grep -q "runtime UID $uid external IPv4 exit=" acceptance-logs/egress-all-uids.txt
