@@ -58,6 +58,13 @@ jobs:
           node-version: '24.22.1'
           cache: npm
           cache-dependency-path: ui/package-lock.json
+      - name: Install locked application dependencies and verify tsx
+        shell: bash
+        run: |
+          set -euo pipefail
+          npm ci --prefix ui --ignore-scripts
+          test -x ui/node_modules/.bin/tsx
+          ui/node_modules/.bin/tsx --version | tee acceptance-logs/tsx-version.txt
       - name: PostgreSQL 17.6 and synthetic NUMERIC fixture
         shell: bash
         run: |
@@ -88,7 +95,7 @@ jobs:
           done
           docker logs ws001a-postgrest > acceptance-logs/postgrest-startup.log 2>&1
           docker exec ws001a-postgrest postgrest --version 2>&1 | tee acceptance-logs/postgrest-version.txt
-          grep -E '14\\.5' acceptance-logs/postgrest-version.txt
+          grep -F '14.5' acceptance-logs/postgrest-version.txt
           curl --fail-with-body -sS -i 'http://127.0.0.1:3000/platform_orders?provider_order_id=eq.102872&account_id=eq.11111111-1111-4111-8111-111111111111&organization_id=eq.aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa&connection_id=eq.aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab&provider_account_id=eq.aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaac&select=id,platform_order_id,amount,version' | tee acceptance-logs/http-get.txt
           curl --fail-with-body -sS -i -X PATCH \
             -H 'Content-Type: application/json' -H 'Prefer: return=representation,count=exact' \
@@ -98,7 +105,12 @@ jobs:
             -H 'Content-Type: application/json' -H 'Prefer: return=representation,count=exact' \
             --data '{"version":3}' \
             'http://127.0.0.1:3000/platform_orders?provider_order_id=eq.102872&account_id=eq.11111111-1111-4111-8111-111111111111&organization_id=eq.aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa&connection_id=eq.aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab&provider_account_id=eq.aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaac&version=eq.1&select=id,version' | tee acceptance-logs/http-cas-stale.txt
-          grep -F '"amount":123.450000' acceptance-logs/http-get.txt
+          python3 - <<'PY'
+          import json,decimal
+          raw=open('acceptance-logs/http-get.txt').read().split('\\r\\n\\r\\n',1)[-1].split('\\n\\n',1)[-1]
+          rows=json.loads(raw,parse_float=decimal.Decimal)
+          assert len(rows)==1 and rows[0]['amount']==decimal.Decimal('123.450000'),rows
+          PY
           grep -F '"version":2' acceptance-logs/http-cas-success.txt
           grep -E -i 'content-range: 0-0/1' acceptance-logs/http-cas-success.txt
           grep -F '[]' acceptance-logs/http-cas-stale.txt
@@ -107,13 +119,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          cd ui
-          ./node_modules/.bin/tsx tests/native/ws001a-actual-writer.ts 2>&1 | tee ../acceptance-logs/actual-writer-test.log
+          ui/node_modules/.bin/tsx ui/tests/native/ws001a-actual-writer.ts 2>&1 | tee acceptance-logs/actual-writer-test.log
       - name: Focused accepted test suite
         shell: bash
         run: |
           set -o pipefail
-          npm ci --prefix ui --ignore-scripts
           cd ui
           node --experimental-transform-types --test tests/next29-financial-persistence.test.ts 2>&1 | tee ../acceptance-logs/focused-tests.log
       - name: Preserve raw logs
