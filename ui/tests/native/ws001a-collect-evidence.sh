@@ -13,7 +13,7 @@ mkdir -p acceptance-logs
 if command -v docker >/dev/null 2>&1; then
   docker ps -a --no-trunc > acceptance-logs/docker-ps.txt 2>&1
   docker logs --timestamps ws001a-postgres > acceptance-logs/postgresql-service.log 2>&1
-  docker logs --timestamps ws001a-postgrest > acceptance-logs/postgrest-shutdown.log 2>&1
+  docker logs --timestamps ws001a-postgrest > acceptance-logs/postgrest-runtime.log 2>&1
   docker inspect ws001a-postgres > acceptance-logs/postgresql-container-inspect.json 2>&1
   docker inspect ws001a-postgrest > acceptance-logs/postgrest-container-inspect.json 2>&1
   if [[ -n "$POSTGRES_IMAGE" ]]; then
@@ -42,6 +42,13 @@ fi
 if command -v iptables >/dev/null 2>&1; then
   sudo iptables -S OUTPUT > acceptance-logs/ipv4-output-final.txt 2>&1
   sudo ip6tables -S OUTPUT > acceptance-logs/ipv6-output-final.txt 2>&1
+fi
+# Preserve actual shutdown diagnostics after all final SQL snapshots are collected.
+if command -v docker >/dev/null 2>&1; then
+  docker stop --time 5 ws001a-postgrest > acceptance-logs/postgrest-stop.txt 2>&1
+  docker stop --time 5 ws001a-postgres > acceptance-logs/postgresql-stop.txt 2>&1
+  docker logs --timestamps ws001a-postgrest > acceptance-logs/postgrest-shutdown.log 2>&1
+  docker logs --timestamps ws001a-postgres > acceptance-logs/postgresql-service.log 2>&1
 fi
 find acceptance-logs -maxdepth 1 -type f -printf '%f\n' | sort > acceptance-logs/artifact-inventory.txt 2>&1
 find acceptance-logs -maxdepth 1 -type f ! -name 'file-sha256.txt' -print0 |
