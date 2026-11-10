@@ -34,7 +34,7 @@ elif [[ "$mode" == verify ]]; then
     test "$(stat -c '%u:%a' "$file")" = "$(id -u):600"
   done < "$baseline"
   sha256sum --check --status "$baseline"
-  echo 'PASS: runner-owned provenance is unchanged'
+  echo 'PASS: protected runner-owned provenance is unchanged'
 else
   exit 2
 fi
