@@ -288,6 +288,11 @@ jobs:
             mkdir -p acceptance-logs
             echo 'HOLD: checkout or collector source was unavailable' > acceptance-logs/collector-unavailable.txt
           fi
+      - name: Validate collected SQL snapshots
+        if: always()
+        shell: bash
+        run: |
+          python3 ui/tests/native/ws001a-independent-state-check.py 2>&1 | tee acceptance-logs/independent-state-check.log
       - name: Fail closed on missing mandatory acceptance evidence
         if: always()
         shell: bash
