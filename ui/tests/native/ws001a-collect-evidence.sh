@@ -64,7 +64,7 @@ if command -v docker >/dev/null 2>&1; then
   docker logs --timestamps ws001a-postgrest > acceptance-logs/postgrest-shutdown.log 2>&1
   docker logs --timestamps ws001a-postgres > acceptance-logs/postgresql-service.log 2>&1
 fi
-find acceptance-logs -maxdepth 1 -type f -printf '%f\n' | sort > acceptance-logs/artifact-inventory.txt 2>&1
-find acceptance-logs -maxdepth 1 -type f ! -name 'file-sha256.txt' -print0 |
+find acceptance-logs -type f -printf '%P\n' | sort > acceptance-logs/artifact-inventory.txt 2>&1
+find acceptance-logs -type f ! -name 'file-sha256.txt' -print0 |
   sort -z | xargs -0 -r sha256sum > acceptance-logs/file-sha256.txt 2>&1
 exit 0
