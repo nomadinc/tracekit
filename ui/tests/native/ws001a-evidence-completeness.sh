@@ -9,21 +9,24 @@ for f in \
   node-version.txt npm-version.txt tsx-version.txt npm-locked-acquisition.txt approved-apt.list \
   egress-firewall-rules.txt egress-probe-summary.txt egress-all-uids.txt \
   postgresql-version.txt postgrest-version.txt \
-  postgresql-listener.txt postgrest-listener.txt role-authority.txt \
+  postgresql-listener.txt postgrest-listener.txt role-authority.txt role-permissions.txt \
   schema.log indexes.txt native-negative.log native-concurrency.log \
-  concurrent-order-a.log concurrent-order-b.log \
-  concurrent-payment-a.log concurrent-payment-b.log \
-  concurrency-summary.txt concurrency-rollback.log \
-  concurrent-order-survivor.txt concurrent-payment-survivor.txt \
+  runtime/concurrent-order-a.log runtime/concurrent-order-b.log \
+  runtime/concurrent-payment-a.log runtime/concurrent-payment-b.log \
+  runtime/concurrency-summary.txt runtime/concurrency-rollback.log \
+  runtime/concurrent-order-survivor.txt runtime/concurrent-payment-survivor.txt \
   numeric-order.txt numeric-payment.txt \
   http-get.txt http-cas-success.txt http-cas-stale.txt \
   http-cas-validated.json http-cas-db-final.txt \
   http-validator-selftest.log http-cas-validation.log \
-  actual-writer-http.jsonl actual-writer-summary.json actual-writer-test.log \
+  runtime/actual-writer-http.jsonl runtime/actual-writer-summary.json actual-writer-test.log \
   focused-tests.log postgresql-service.log postgrest-startup.log \
   postgrest-shutdown.log roles-final-snapshot.txt \
   orders-final-snapshot.txt payments-final-snapshot.txt \
-  artifact-inventory.txt file-sha256.txt
+  artifact-inventory.txt file-sha256.txt \ 
+  artifact-permission-checks.txt blocked-provenance-tamper.log \ 
+  .trusted-provenance.sha256 trusted-integrity-verification.log \ 
+  runtime-file-ownership.txt loopback-reachability.txt privilege-escalation-denied.log
 do
   if [[ ! -s "acceptance-logs/$f" ]]; then
     echo "MISSING $f" | tee -a acceptance-logs/mandatory-evidence-missing.txt
@@ -35,9 +38,34 @@ if [[ "$missing" != 0 ]]; then
   exit 1
 fi
 grep -q 'PASS: enforcement probes' acceptance-logs/egress-probe-summary.txt
+grep -q 'PASS: protected' acceptance-logs/trusted-integrity-verification.log
+grep -q 'PASS: native UID cannot modify runner-owned provenance' acceptance-logs/artifact-permission-checks.txt
+grep -q '^acceptance_sql|f|f|f|f|t|t|t|t|t|f
 grep -q 'WS001A ACTUAL WRITER HTTP TEST PASS' acceptance-logs/actual-writer-test.log
 grep -q 'PASS: separate psql session' acceptance-logs/native-concurrency.log
-grep -q '"status": "PASS"' acceptance-logs/actual-writer-summary.json
+grep -q '"status": "PASS"' acceptance-logs/runtime/actual-writer-summary.json
+grep -q '"status": "PASS"' acceptance-logs/http-cas-validated.json
+grep -q '^17[.]6' acceptance-logs/postgresql-version.txt
+grep -Eq '(^|[^[:digit:].])14[.]5([.]0)?([^[:digit:].]|$)' acceptance-logs/postgrest-version.txt
+echo 'PASS — mandatory evidence present; independent reviewer still required' |
+  tee acceptance-logs/final-disposition.txt
+ acceptance-logs/role-permissions.txt
+grep -q 'PASS: native UID 25003 lacks effective capabilities and cannot sudo' acceptance-logs/loopback-reachability.txt
+test -f acceptance-logs/runtime-symlinks.txt
+test ! -s acceptance-logs/runtime-symlinks.txt
+test "$(stat -c '%u:%g:%a' acceptance-logs/runtime)" = "$(id -u):$(id -g):700"
+bash ui/tests/native/ws001a-artifact-integrity.sh verify > acceptance-logs/verified-provenance-final.txt
+test -s acceptance-logs/verified-provenance-final.txt
+pg_uid="$(cat acceptance-logs/postgresql-image-uid.txt)"
+for uid in "$pg_uid" 25002 25003; do
+  grep -q "runtime UID $uid external IPv4 exit=" acceptance-logs/egress-all-uids.txt
+  grep -q "runtime UID $uid external IPv6 exit=" acceptance-logs/egress-all-uids.txt
+  test -s "acceptance-logs/egress-uid-$uid.log"
+  test -s "acceptance-logs/egress-ipv6-uid-$uid.log"
+done
+grep -q 'WS001A ACTUAL WRITER HTTP TEST PASS' acceptance-logs/actual-writer-test.log
+grep -q 'PASS: separate psql session' acceptance-logs/native-concurrency.log
+grep -q '"status": "PASS"' acceptance-logs/runtime/actual-writer-summary.json
 grep -q '"status": "PASS"' acceptance-logs/http-cas-validated.json
 grep -q '^17[.]6' acceptance-logs/postgresql-version.txt
 grep -Eq '(^|[^[:digit:].])14[.]5([.]0)?([^[:digit:].]|$)' acceptance-logs/postgrest-version.txt
