@@ -50,6 +50,13 @@ test ! -s acceptance-logs/runtime-symlinks.txt
 test -f acceptance-logs/runtime-special-files.txt
 test ! -s acceptance-logs/runtime-special-files.txt
 grep -Fx 'PASS: restricted raw evidence copied, digest matched, collector owns sealed copy' acceptance-logs/runtime-copy-integrity.txt
+# Check actual sealed files against both trusted collector digest manifests.
+# A PASS marker alone cannot validate a copy whose bytes have changed.
+test -s acceptance-logs/runtime-original-sha256.txt
+test -s acceptance-logs/runtime-copy-sha256.txt
+sed 's@acceptance-logs/runtime-copy/@acceptance-logs/runtime/@' acceptance-logs/runtime-copy-sha256.txt \
+  | cmp -s - acceptance-logs/runtime-original-sha256.txt
+sha256sum --check --status acceptance-logs/runtime-original-sha256.txt
 # Raw writer and SQL session evidence must originate from the restricted test UID.
 for filename in actual-writer-http.jsonl actual-writer-summary.json concurrent-order-a.log concurrent-payment-a.log; do
   grep -E "^ws001a-test:ws001a-test:[0-7]+ f acceptance-logs/runtime/$filename" acceptance-logs/runtime-file-ownership.txt
@@ -58,8 +65,8 @@ test "$(stat -c '%u:%g:%a' acceptance-logs/runtime)" = "$(id -u):$(id -g):700"
 bash ui/tests/native/ws001a-artifact-integrity.sh verify > acceptance-logs/verified-provenance-final.txt
 grep -q 'PASS: protected' acceptance-logs/trusted-integrity-verification.log
 grep -q 'PASS: native UID cannot modify runner-owned provenance' acceptance-logs/artifact-permission-checks.txt
-grep -Fx 'acceptance_sql|acceptance_sql|f|f|f|f|t|t|t|t|t|f' acceptance-logs/role-permissions.txt
-grep -Fx 'false' acceptance-logs/bootstrap-login-disabled.txt
+test "$(cat acceptance-logs/role-permissions.txt)" = 'acceptance_sql|acceptance_sql|f|f|f|f|t|t|t|t|t|f'
+test "$(cat acceptance-logs/bootstrap-login-disabled.txt)" = 'false'
 grep -F 'not permitted to log in' acceptance-logs/bootstrap-login-denied.log
 grep -E 'permission denied|not permitted' acceptance-logs/restricted-set-role-denied.log
 grep -q 'PASS: native UID 25003 lacks capabilities, has no_new_privs, cannot sudo or connect to Docker socket, and cannot reach unrelated loopback' acceptance-logs/loopback-reachability.txt
