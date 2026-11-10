@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 mkdir -p acceptance-logs
+trap 'code=$?; echo "HOLD — mandatory evidence validation failed (exit $code)" > acceptance-logs/final-disposition.txt' ERR
 missing=0
 for f in \
   commit.txt candidate-hashes.txt supply-chain.manifest \
