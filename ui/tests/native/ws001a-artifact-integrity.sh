@@ -3,7 +3,7 @@ set -euo pipefail
 mode="$1"
 root=acceptance-logs
 baseline="$root/.trusted-provenance.sha256"
-protected="commit.txt candidate-hashes.txt supply-chain.manifest approved-apt.list postgresql-image.txt postgrest-image.txt postgresql-image-uid.txt contained-test-uid.txt npm-locked-acquisition.txt node-version.txt npm-version.txt tsx-version.txt postgresql-host-uid.txt postgresql-listener.txt egress-firewall-rules.txt egress-probe-summary.txt egress-all-uids.txt schema.log role-permissions.txt"
+protected="commit.txt candidate-hashes.txt supply-chain.manifest approved-apt.list postgresql-image.txt postgrest-image.txt postgresql-image-uid.txt contained-test-uid.txt npm-locked-acquisition.txt node-version.txt npm-version.txt tsx-version.txt postgresql-host-uid.txt postgresql-listener.txt egress-firewall-rules.txt egress-probe-summary.txt egress-all-uids.txt schema.log role-permissions.txt bootstrap-login-revoked.txt bootstrap-login-disabled.txt"
 test "$(stat -c '%u:%g:%a' "$root")" = "$(id -u):$(id -g):755"
 if [[ "$mode" == snapshot ]]; then
   test "$(stat -c '%u:%g:%a' "$root/runtime")" = '25003:25003:700'
