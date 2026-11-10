@@ -194,6 +194,7 @@ jobs:
           grep -F '127.0.0.1:3000' acceptance-logs/postgrest-listener.txt
           bash ui/tests/native/ws001a-contained-exec.sh psql -X -Atqc "SELECT rolname,rolsuper,rolcanlogin,rolinherit FROM pg_roles WHERE rolname IN ('fixture_admin','postgrest_login','web_anon') ORDER BY rolname" | tee acceptance-logs/role-authority.txt
           grep -F 'postgrest_login|f|t|f' acceptance-logs/role-authority.txt
+          bash ui/tests/native/ws001a-local-network-proof.sh 2>&1 | tee acceptance-logs/loopback-reachability.txt
           docker exec ws001a-postgrest postgrest --version 2>&1 | tee acceptance-logs/postgrest-version.txt
           grep -E '(^|[^[:digit:].])14[.]5([.]0)?([^[:digit:].]|$)' acceptance-logs/postgrest-version.txt
           bash ui/tests/native/ws001a-contained-exec.sh curl --fail-with-body -sS -i 'http://127.0.0.1:3000/platform_orders?provider_order_id=eq.102872&account_id=eq.11111111-1111-4111-8111-111111111111&organization_id=eq.aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa&connection_id=eq.aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab&provider_account_id=eq.aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaac&select=id,platform_order_id,amount,version' | tee acceptance-logs/http-get.txt
@@ -207,9 +208,9 @@ jobs:
             'http://127.0.0.1:3000/platform_orders?provider_order_id=eq.102872&account_id=eq.11111111-1111-4111-8111-111111111111&organization_id=eq.aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa&connection_id=eq.aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab&provider_account_id=eq.aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaac&version=eq.1&select=id,version' | tee acceptance-logs/http-cas-stale.txt
           # Validate the raw HTTP status, JSON representation and optional Content-Range
           # together; a missing header alone must not invalidate a zero-row result.
-          bash ui/tests/native/ws001a-contained-exec.sh python3 ui/tests/native/ws001a-http-cas-assert.py --self-test \
+          python3 ui/tests/native/ws001a-http-cas-assert.py --self-test \
             2>&1 | tee acceptance-logs/http-validator-selftest.log
-          bash ui/tests/native/ws001a-contained-exec.sh python3 ui/tests/native/ws001a-http-cas-assert.py \
+          python3 ui/tests/native/ws001a-http-cas-assert.py \
             --get acceptance-logs/http-get.txt \
             --success acceptance-logs/http-cas-success.txt \
             --stale acceptance-logs/http-cas-stale.txt \
