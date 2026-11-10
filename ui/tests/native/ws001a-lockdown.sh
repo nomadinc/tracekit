@@ -36,7 +36,12 @@ done
 
 # Test all three runtime UIDs (PostgreSQL, PostgREST, native application).
 # setpriv executes the probe with the same effective UID as each runtime process.
+test -x /usr/bin/curl
+test -x /usr/bin/setpriv
 for uid in "$PG_UID" "$PGRST_UID" "$TEST_UID"; do
+  observed="$(sudo setpriv --reuid="$uid" --regid="$uid" --clear-groups id -u)"
+  [[ "$observed" == "$uid" ]] || { echo "FAIL: wrong probe UID $observed expected $uid"; exit 1; }
+  echo "probe identity $uid verified" | tee -a acceptance-logs/egress-all-uids.txt
   set +e
   sudo setpriv --reuid="$uid" --regid="$uid" --clear-groups \
     env -i PATH=/usr/bin:/bin HOME=/tmp \
