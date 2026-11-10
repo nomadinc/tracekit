@@ -7,7 +7,7 @@ run_order() {
 }
 run_payment() {
  local id="$1"
- psql -X -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -c "BEGIN; INSERT INTO payment_transactions(platform,account_id,transaction_id,event_type,external_record_id,amount) VALUES ('next29','11111111-1111-4111-8111-111111111111','2446-concurrent','debit','2446-concurrent',1.000000); SELECT pg_sleep(1); COMMIT;" > "acceptance-logs/runtime/concurrent-payment-$id.log" 2>&1
+ psql -X -v ON_ERROR_STOP=1 -v VERBOSITY=verbose -c "BEGIN; INSERT INTO payment_transactions(platform,account_id,transaction_id,event_type,external_record_id,amount) VALUES ('next29','11111111-1111-4111-8111-111111111111','2446-concurrent','debit','2446-concurrent-$id',1.000000); SELECT pg_sleep(1); COMMIT;" > "acceptance-logs/runtime/concurrent-payment-$id.log" 2>&1
 }
 set +e
 run_order a & pa=$!
@@ -27,12 +27,14 @@ echo "order exit codes $oa $ob; payment exit codes $fa $fb" | tee acceptance-log
 psql -X -Atqc "SELECT id,account_id,platform_order_id FROM platform_orders WHERE platform_order_id='ws001a-concurrent'" | tee acceptance-logs/runtime/concurrent-order-survivor.txt
 psql -X -Atqc "SELECT id,account_id,transaction_id,amount::text FROM payment_transactions WHERE transaction_id='2446-concurrent'" | tee acceptance-logs/runtime/concurrent-payment-survivor.txt
 # psql -v ON_ERROR_STOP=1 returns exit code 3 for a SQL statement error.
-# The rejected transaction must report the expected unique index, not a different SQL failure.
+# PostgreSQL may select either intact global platform-order index for the same
+# duplicate key. Payment external-record IDs differ, so only the event UID index
+# can reject the second payment. Both rejections must report SQLSTATE 23505.
 if [[ "$oa" == 3 ]]; then
-  grep -F 'platform_orders_uq' acceptance-logs/runtime/concurrent-order-a.log
+  grep -E 'platform_orders_uq|platform_orders_platform_order_id_key' acceptance-logs/runtime/concurrent-order-a.log
   grep -F '23505' acceptance-logs/runtime/concurrent-order-a.log
 else
-  grep -F 'platform_orders_uq' acceptance-logs/runtime/concurrent-order-b.log
+  grep -E 'platform_orders_uq|platform_orders_platform_order_id_key' acceptance-logs/runtime/concurrent-order-b.log
   grep -F '23505' acceptance-logs/runtime/concurrent-order-b.log
 fi
 if [[ "$fa" == 3 ]]; then
