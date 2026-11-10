@@ -56,12 +56,36 @@ if command -v docker >/dev/null 2>&1; then
   docker logs --timestamps ws001a-postgres > acceptance-logs/postgresql-service.log 2>&1
 fi
 if [[ -d acceptance-logs/runtime ]]; then
-  sudo find acceptance-logs/runtime -mindepth 1 -printf '%u:%g:%m %y %p\n'     > acceptance-logs/runtime-file-ownership.txt 2>&1
-  sudo find acceptance-logs/runtime -type l -print     > acceptance-logs/runtime-symlinks.txt 2>&1
-  if [[ ! -s acceptance-logs/runtime-symlinks.txt ]]; then
-    sudo chown -R "$(id -u):$(id -g)" acceptance-logs/runtime
-    sudo find acceptance-logs/runtime -type f -exec chmod 600 '{}' +
-    chmod 700 acceptance-logs/runtime
+  sudo find acceptance-logs/runtime -mindepth 1 -printf '%u:%g:%m %y %p\n' \
+    > acceptance-logs/runtime-file-ownership.txt 2>&1
+  sudo find acceptance-logs/runtime -type l -print \
+    > acceptance-logs/runtime-symlinks.txt 2>&1
+  sudo find acceptance-logs/runtime -mindepth 1 ! -type f ! -type d -print \
+    > acceptance-logs/runtime-special-files.txt 2>&1
+  if [[ ! -s acceptance-logs/runtime-symlinks.txt && ! -s acceptance-logs/runtime-special-files.txt ]]; then
+    # Trusted collector snapshots untrusted files, never accepts a native PASS
+    # sentinel as sole evidence. Keep original raw directory outside artifact tree.
+    sudo mkdir -p acceptance-logs/runtime-copy
+    sudo cp -a acceptance-logs/runtime/. acceptance-logs/runtime-copy/
+    sudo find acceptance-logs/runtime -type f -print0 |
+      sudo xargs -0 -r sha256sum > acceptance-logs/runtime-original-sha256.txt
+    sudo find acceptance-logs/runtime-copy -type f -print0 |
+      sudo xargs -0 -r sha256sum > acceptance-logs/runtime-copy-sha256.txt
+    sed 's@acceptance-logs/runtime-copy/@acceptance-logs/runtime/@' \
+      acceptance-logs/runtime-copy-sha256.txt |
+      cmp -s - acceptance-logs/runtime-original-sha256.txt
+    copy_verified=$?
+    echo "runtime original/copy digest compare exit=$copy_verified" \
+      > acceptance-logs/runtime-copy-integrity.txt
+    if [[ "$copy_verified" == 0 ]]; then
+      sudo mv acceptance-logs/runtime /tmp/ws001a-native-original-runtime
+      sudo mv acceptance-logs/runtime-copy acceptance-logs/runtime
+      sudo chown -R "$(id -u):$(id -g)" acceptance-logs/runtime
+      sudo find acceptance-logs/runtime -type f -exec chmod 600 '{}' +
+      chmod 700 acceptance-logs/runtime
+      echo 'PASS: restricted raw evidence copied, digest matched, collector owns sealed copy' \
+        >> acceptance-logs/runtime-copy-integrity.txt
+    fi
   fi
 fi
 find acceptance-logs -type f -printf '%P\n' | sort > acceptance-logs/artifact-inventory.txt 2>&1
