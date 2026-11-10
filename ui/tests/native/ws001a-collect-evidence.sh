@@ -40,7 +40,7 @@ if command -v psql >/dev/null 2>&1 && command -v pg_isready >/dev/null 2>&1 && p
       "SELECT id,platform,transaction_id,event_type,account_id,amount::text,fee_amount::text,net_amount::text,raw_json::text FROM payment_transactions ORDER BY transaction_id,account_id" \
       > acceptance-logs/payments-final-snapshot.txt 2>&1
     bash ui/tests/native/ws001a-contained-exec.sh psql -X -v ON_ERROR_STOP=1 -Atqc \
-      "SELECT rolname,rolsuper,rolcanlogin,rolinherit FROM pg_roles WHERE rolname IN ('fixture_admin','postgrest_login','web_anon') ORDER BY rolname" \
+      "SELECT rolname,rolsuper,rolcanlogin,rolinherit FROM pg_roles WHERE rolname IN ('fixture_admin','acceptance_sql','postgrest_login','web_anon') ORDER BY rolname" \
       > acceptance-logs/roles-final-snapshot.txt 2>&1
   fi
 fi
