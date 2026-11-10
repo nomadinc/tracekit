@@ -12,11 +12,13 @@ for uid in "$PG_UID" "$PGRST_UID" "$TEST_UID"; do
 done
 sudo iptables -w -N WS001A_EGRESS || true
 sudo iptables -w -F WS001A_EGRESS
-sudo iptables -w -A WS001A_EGRESS -d 127.0.0.0/8 -j ACCEPT
+sudo iptables -w -A WS001A_EGRESS -o lo -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+sudo iptables -w -A WS001A_EGRESS -o lo -d 127.0.0.1/32 -p tcp -m multiport --dports 5432,3000 -j ACCEPT
 sudo iptables -w -A WS001A_EGRESS -j REJECT
 sudo ip6tables -w -N WS001A_EGRESS || true
 sudo ip6tables -w -F WS001A_EGRESS
-sudo ip6tables -w -A WS001A_EGRESS -d ::1/128 -j ACCEPT
+sudo ip6tables -w -A WS001A_EGRESS -o lo -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+# No IPv6 native service is required. All new IPv6 connections are denied.
 sudo ip6tables -w -A WS001A_EGRESS -j REJECT
 for uid in "$PG_UID" "$PGRST_UID" "$TEST_UID"; do
   sudo iptables -w -C OUTPUT -m owner --uid-owner "$uid" -j WS001A_EGRESS 2>/dev/null ||
@@ -81,9 +83,5 @@ set -e
 } | tee acceptance-logs/egress-probe-summary.txt
 [[ "$ip_exit" != 0 && "$dns_exit" != 0 ]] || { echo "FAIL: isolated user has external egress"; exit 1; }
 
-# No source under test runs as runner/sudo. Docker socket must be inaccessible.
-if sudo -u ws001a-test test -r /var/run/docker.sock; then
-  echo "FAIL: test user can read Docker socket"
-  exit 1
-fi
-echo "PASS: enforcement probes, blocked Docker socket, isolated UIDs" | tee -a acceptance-logs/egress-probe-summary.txt
+# Docker socket connection is tested in the post-startup local-network proof.
+echo "PASS: enforcement probes, UID-scoped IPv4/IPv6 restrictions installed" | tee -a acceptance-logs/egress-probe-summary.txt
