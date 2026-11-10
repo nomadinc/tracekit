@@ -209,8 +209,10 @@ jobs:
           echo 'PASS: PostgREST process shares locked-down host netns' | tee acceptance-logs/postgrest-netns-proof.txt
           ss -ltn '( sport = :3000 )' | tee acceptance-logs/postgrest-listener.txt
           grep -F '127.0.0.1:3000' acceptance-logs/postgrest-listener.txt
-          bash ui/tests/native/ws001a-contained-exec.sh psql -X -Atqc "SELECT rolname,rolsuper,rolcanlogin,rolinherit FROM pg_roles WHERE rolname IN ('fixture_admin','postgrest_login','web_anon') ORDER BY rolname" | tee acceptance-logs/role-authority.txt
+          bash ui/tests/native/ws001a-contained-exec.sh psql -X -Atqc "SELECT rolname,rolsuper,rolcanlogin,rolinherit FROM pg_roles WHERE rolname IN ('fixture_admin','acceptance_sql','postgrest_login','web_anon') ORDER BY rolname" | tee acceptance-logs/role-authority.txt
           grep -F 'postgrest_login|f|t|f' acceptance-logs/role-authority.txt
+          grep -F 'fixture_admin|t|f|' acceptance-logs/role-authority.txt
+          grep -F 'acceptance_sql|f|t|f' acceptance-logs/role-authority.txt
           bash ui/tests/native/ws001a-local-network-proof.sh 2>&1 | tee acceptance-logs/loopback-reachability.txt
           docker exec ws001a-postgrest postgrest --version 2>&1 | tee acceptance-logs/postgrest-version.txt
           grep -E '(^|[^[:digit:].])14[.]5([.]0)?([^[:digit:].]|$)' acceptance-logs/postgrest-version.txt
