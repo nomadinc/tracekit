@@ -14,7 +14,7 @@ The synthetic database has three distinct SQL authorities:
 | Role | Superuser | Usage | Privileges |
 | --- | --- | --- | --- |
 | `fixture_admin` | Yes, disposable database bootstrap only | Initializes schema/records/roles in a dedicated preparation step | Fixture DDL/setup; never passed to contained SQL or Node |
-| `acceptance_sql` | No (`NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT`) | Native independent-session SQL, rollback, snapshot and assertion queries | `CONNECT` on acceptance DB, `USAGE` on public schema, `SELECT/INSERT/UPDATE` on five synthetic tables, `USAGE/SELECT` on the synthetic platform-orders ID sequence; no schema `CREATE`, no role membership in `fixture_admin` |
+| `acceptance_sql` | No (`NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION NOINHERIT`) | Native independent-session SQL, rollback, snapshot and assertion queries | `CONNECT` on acceptance DB, `USAGE` on public schema, `SELECT` on five synthetic tables, `INSERT/UPDATE` only on synthetic platform orders and payment transactions, `USAGE/SELECT` on the synthetic platform-orders ID sequence; no schema `CREATE`, no role membership in `fixture_admin` |
 | `postgrest_login` | No (`LOGIN NOINHERIT`) | PostgREST HTTP connection only | Membership in synthetic `web_anon`, no fixture DDL or database ownership |
 | `web_anon` | No (`NOLOGIN`) | PostgREST effective test-only HTTP role | `SELECT/INSERT/UPDATE` synthetic tables and platform-order sequence; not tenant-level SQL authorization |
 
