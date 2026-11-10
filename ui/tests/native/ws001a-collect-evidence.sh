@@ -68,9 +68,9 @@ if [[ -d acceptance-logs/runtime ]]; then
     sudo mkdir -p acceptance-logs/runtime-copy
     sudo cp -a acceptance-logs/runtime/. acceptance-logs/runtime-copy/
     sudo find acceptance-logs/runtime -type f -print0 |
-      sudo xargs -0 -r sha256sum > acceptance-logs/runtime-original-sha256.txt
+      sort -z | sudo xargs -0 -r sha256sum > acceptance-logs/runtime-original-sha256.txt
     sudo find acceptance-logs/runtime-copy -type f -print0 |
-      sudo xargs -0 -r sha256sum > acceptance-logs/runtime-copy-sha256.txt
+      sort -z | sudo xargs -0 -r sha256sum > acceptance-logs/runtime-copy-sha256.txt
     sed 's@acceptance-logs/runtime-copy/@acceptance-logs/runtime/@' \
       acceptance-logs/runtime-copy-sha256.txt |
       cmp -s - acceptance-logs/runtime-original-sha256.txt
