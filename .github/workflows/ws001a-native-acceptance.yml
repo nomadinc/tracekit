@@ -136,6 +136,9 @@ jobs:
           done
           pg_isready -h 127.0.0.1 -p 5432 -U fixture_admin -d acceptance
           test "$(docker exec ws001a-postgres id -u postgres)" = "$(cat acceptance-logs/postgresql-image-uid.txt)"
+          pg_pid="$(docker inspect ws001a-postgres --format '{{.State.Pid}}')"
+          awk '/^Uid:/ {print $2}' "/proc/$pg_pid/status" | tee acceptance-logs/postgresql-host-uid.txt
+          test "$(cat acceptance-logs/postgresql-host-uid.txt)" = "$(cat acceptance-logs/postgresql-image-uid.txt)"
           ss -ltn '( sport = :5432 )' | tee acceptance-logs/postgresql-listener.txt
           grep -F '127.0.0.1:5432' acceptance-logs/postgresql-listener.txt
       - name: PostgreSQL 17.6 and synthetic NUMERIC fixture
@@ -168,6 +171,9 @@ jobs:
           done
           docker logs ws001a-postgrest > acceptance-logs/postgrest-startup.log 2>&1
           test "$(docker exec ws001a-postgrest id -u)" = 25002
+          pgrst_pid="$(docker inspect ws001a-postgrest --format '{{.State.Pid}}')"
+          awk '/^Uid:/ {print $2}' "/proc/$pgrst_pid/status" | tee acceptance-logs/postgrest-host-uid.txt
+          test "$(cat acceptance-logs/postgrest-host-uid.txt)" = 25002
           ss -ltn '( sport = :3000 )' | tee acceptance-logs/postgrest-listener.txt
           grep -F '127.0.0.1:3000' acceptance-logs/postgrest-listener.txt
           bash ui/tests/native/ws001a-contained-exec.sh psql -X -Atqc "SELECT rolname,rolsuper,rolcanlogin,rolinherit FROM pg_roles WHERE rolname IN ('fixture_admin','postgrest_login','web_anon') ORDER BY rolname" | tee acceptance-logs/role-authority.txt
