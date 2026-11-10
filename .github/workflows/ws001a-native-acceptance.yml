@@ -89,17 +89,20 @@ jobs:
           docker logs ws001a-postgrest > acceptance-logs/postgrest-startup.log 2>&1
           docker exec ws001a-postgrest postgrest --version 2>&1 | tee acceptance-logs/postgrest-version.txt
           grep -E '14\\.5' acceptance-logs/postgrest-version.txt
-          curl --fail-with-body -sS -i 'http://127.0.0.1:3000/platform_orders?provider_order_id=eq.102872&select=id,platform_order_id,amount,version' | tee acceptance-logs/http-get.txt
+          curl --fail-with-body -sS -i 'http://127.0.0.1:3000/platform_orders?provider_order_id=eq.102872&account_id=eq.11111111-1111-4111-8111-111111111111&organization_id=eq.aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa&connection_id=eq.aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab&provider_account_id=eq.aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaac&select=id,platform_order_id,amount,version' | tee acceptance-logs/http-get.txt
           curl --fail-with-body -sS -i -X PATCH \
-            -H 'Content-Type: application/json' -H 'Prefer: return=representation' \
+            -H 'Content-Type: application/json' -H 'Prefer: return=representation,count=exact' \
             --data '{"version":2}' \
-            'http://127.0.0.1:3000/platform_orders?provider_order_id=eq.102872&version=eq.1&select=id,version' | tee acceptance-logs/http-cas-success.txt
+            'http://127.0.0.1:3000/platform_orders?provider_order_id=eq.102872&account_id=eq.11111111-1111-4111-8111-111111111111&organization_id=eq.aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa&connection_id=eq.aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab&provider_account_id=eq.aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaac&version=eq.1&select=id,version' | tee acceptance-logs/http-cas-success.txt
           curl --fail-with-body -sS -i -X PATCH \
-            -H 'Content-Type: application/json' -H 'Prefer: return=representation' \
+            -H 'Content-Type: application/json' -H 'Prefer: return=representation,count=exact' \
             --data '{"version":3}' \
-            'http://127.0.0.1:3000/platform_orders?provider_order_id=eq.102872&version=eq.1&select=id,version' | tee acceptance-logs/http-cas-stale.txt
+            'http://127.0.0.1:3000/platform_orders?provider_order_id=eq.102872&account_id=eq.11111111-1111-4111-8111-111111111111&organization_id=eq.aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa&connection_id=eq.aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaab&provider_account_id=eq.aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaac&version=eq.1&select=id,version' | tee acceptance-logs/http-cas-stale.txt
+          grep -F '"amount":123.450000' acceptance-logs/http-get.txt
           grep -F '"version":2' acceptance-logs/http-cas-success.txt
+          grep -E -i 'content-range: 0-0/1' acceptance-logs/http-cas-success.txt
           grep -F '[]' acceptance-logs/http-cas-stale.txt
+          grep -E -i 'content-range: (\\*/0|0-0/0)' acceptance-logs/http-cas-stale.txt
       - name: Execute unchanged persistence writer against real PostgREST
         shell: bash
         run: |
