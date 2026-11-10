@@ -89,5 +89,13 @@ set -e
   echo '=== IPv6 native egress counters ==='
   sudo ip6tables -w -L WS001A_EGRESS -v -n -x
 } | tee acceptance-logs/egress-rule-counters.txt
+# A failed curl alone can mean no route, not firewall enforcement. Require
+# attributable rejected packets for both IP families before accepting isolation.
+sudo iptables -w -L WS001A_EGRESS -v -n -x |
+  awk '$3=="REJECT" && $1+0>0 {hit=1} END {exit !hit}'
+sudo ip6tables -w -L WS001A_EGRESS -v -n -x |
+  awk '$3=="REJECT" && $1+0>0 {hit=1} END {exit !hit}'
+echo 'PASS: IPv4 and IPv6 firewall REJECT counters incremented' |
+  tee acceptance-logs/egress-counter-validation.txt
 # Docker socket connection is tested in the post-startup local-network proof.
 echo "PASS: enforcement probes, UID-scoped IPv4/IPv6 restrictions installed" | tee -a acceptance-logs/egress-probe-summary.txt
