@@ -46,7 +46,8 @@ test -f acceptance-logs/runtime-symlinks.txt
 test ! -s acceptance-logs/runtime-symlinks.txt
 # Raw writer and SQL session evidence must originate from the restricted test UID.
 for filename in actual-writer-http.jsonl actual-writer-summary.json concurrent-order-a.log concurrent-payment-a.log; do
-  grep -E '^ws001a-test:ws001a-test:[0-7]+ f acceptance-logs/runtime/'"$filename"'
+  grep -E "^ws001a-test:ws001a-test:[0-7]+ f acceptance-logs/runtime/$filename" acceptance-logs/runtime-file-ownership.txt
+done
 test "$(stat -c '%u:%g:%a' acceptance-logs/runtime)" = "$(id -u):$(id -g):700"
 bash ui/tests/native/ws001a-artifact-integrity.sh verify > acceptance-logs/verified-provenance-final.txt
 grep -q 'PASS: protected' acceptance-logs/trusted-integrity-verification.log
