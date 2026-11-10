@@ -13,6 +13,7 @@ for f in \
  egress-firewall-rules.txt egress-probe-summary.txt egress-all-uids.txt \
  postgresql-version.txt postgrest-version.txt \
  postgresql-listener.txt postgrest-listener.txt loopback-reachability.txt \
+ postgresql-netns-proof.txt postgrest-netns-proof.txt \
  schema.log indexes.txt native-negative.log native-concurrency.log \
  runtime/concurrent-order-a.log runtime/concurrent-order-b.log \
  runtime/concurrent-payment-a.log runtime/concurrent-payment-b.log \
