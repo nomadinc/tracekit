@@ -11,7 +11,7 @@ for f in \
  node-version.txt npm-version.txt tsx-version.txt npm-locked-acquisition.txt \
  approved-apt.list role-permissions.txt role-authority.txt \
  bootstrap-login-revoked.txt bootstrap-login-disabled.txt bootstrap-login-denied.log restricted-set-role-denied.log \
- egress-firewall-rules.txt egress-probe-summary.txt egress-all-uids.txt \
+ egress-firewall-rules.txt egress-probe-summary.txt egress-all-uids.txt egress-rule-counters.txt \
  postgresql-version.txt postgrest-version.txt \
  postgresql-listener.txt postgrest-listener.txt loopback-reachability.txt \
  native-privilege-status.txt unrelated-loopback-proof.txt unrelated-loopback-denied.log \
