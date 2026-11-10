@@ -16,7 +16,7 @@ for uid in "$pg_uid" 25002 25003; do
 done
 test "$(sudo -u ws001a-test sh -c "awk '/^CapEff:/ {print \$2}' /proc/self/status")" = '0000000000000000'
 set +e
-sudo -u ws001a-test sudo -n true > acceptance-logs/runtime/privilege-escalation-denied.log 2>&1
+sudo -u ws001a-test sudo -n true > acceptance-logs/privilege-escalation-denied.log 2>&1
 sudo_status=$?
 set -e
 test "$sudo_status" != 0
