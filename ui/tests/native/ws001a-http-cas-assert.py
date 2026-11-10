@@ -46,13 +46,13 @@ def parse_rows(body, *, allow_empty=False):
     return rows
 
 
-def check_range(headers, expected):
+def check_range(headers, expected, *, allow_unknown=False):
     value = headers.get("content-range")
     if value is None:
         return "absent (optional; row count verified from representation and database)"
     if not re.fullmatch(r"(?:\d+-\d+/(?:\d+|\*)|\*/(?:\d+|\*))", value):
         raise AssertionError("Invalid Content-Range: " + value)
-    if expected == 1 and value != "0-0/1":
+    if expected == 1 and value != "0-0/1" and not (allow_unknown and value == "0-0/*"):
         raise AssertionError("Content-Range contradicts one affected row: " + value)
     if expected == 0 and value not in ("*/0", "0-0/0"):
         raise AssertionError("Content-Range contradicts zero affected rows: " + value)
@@ -74,7 +74,7 @@ def validate(get_raw, success_raw, stale_raw):
             or before.get("version") != 1
             or before.get("amount") != decimal.Decimal("123.450000")):
         raise AssertionError("Unexpected scoped GET identity, version, or NUMERIC")
-    get_range = check_range(get_headers, 1)
+    get_range = check_range(get_headers, 1, allow_unknown=True)
 
     success_status, success_headers, success_body = parse_http(success_raw)
     if success_status != 200:
@@ -129,6 +129,11 @@ class ValidatorTests(unittest.TestCase):
 
     def test_optional_content_range_absent(self):
         self.assertEqual(validate(*self.fixture(ranges=False))["successful_patch"]["affected_rows"], 1)
+
+    def test_get_content_range_unknown_total(self):
+        get, success, stale = self.fixture()
+        get = get.replace(b"Content-Range: 0-0/1", b"Content-Range: 0-0/*")
+        self.assertEqual(validate(get, success, stale)["get"]["content_range"], "0-0/*")
 
     def test_zero_204_optional_header(self):
         self.assertEqual(validate(*self.fixture(stale_status=204, ranges=False))["stale_patch"]["status"], 204)
