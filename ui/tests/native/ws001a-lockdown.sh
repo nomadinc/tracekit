@@ -34,7 +34,21 @@ done
   echo "PG_UID=$PG_UID PGRST_UID=$PGRST_UID TEST_UID=$TEST_UID"
 } | tee acceptance-logs/egress-firewall-rules.txt
 
-# Test both IP and DNS egress using the unprivileged test identity; require failure.
+# Test all three runtime UIDs (PostgreSQL, PostgREST, native application).
+# setpriv executes the probe with the same effective UID as each runtime process.
+for uid in "$PG_UID" "$PGRST_UID" "$TEST_UID"; do
+  set +e
+  sudo setpriv --reuid="$uid" --regid="$uid" --clear-groups \
+    env -i PATH=/usr/bin:/bin HOME=/tmp \
+    curl --noproxy '*' --connect-timeout 2 --max-time 4 -fsS http://1.1.1.1/ \
+    > "acceptance-logs/egress-uid-$uid.log" 2>&1
+  code=$?
+  set -e
+  echo "runtime UID $uid external IPv4 exit=$code (must be nonzero)" |
+    tee -a acceptance-logs/egress-all-uids.txt
+  [[ "$code" != 0 ]] || { echo "FAIL: runtime UID $uid has external egress"; exit 1; }
+done
+# Also test external name-resolution/TLS as the native application identity.
 set +e
 sudo -u ws001a-test env -i HOME=/tmp/ws001a-test PATH=/usr/bin:/bin \
   curl --noproxy '*' --connect-timeout 2 --max-time 4 -fsS http://1.1.1.1/ \
