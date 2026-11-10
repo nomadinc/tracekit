@@ -1,0 +1,15 @@
+name: WS-001A isolated native acceptance
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  registration-only:
+    if: github.ref == 'refs/heads/ws001a/native-acceptance-gha-6d56ec1'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Registration guard
+        run: |
+          echo "This is the manual-only registration stub."
+          echo "Native acceptance must execute from the dedicated acceptance branch."
+          exit 1
