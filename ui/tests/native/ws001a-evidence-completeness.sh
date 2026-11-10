@@ -87,8 +87,25 @@ done
 grep -F 'PASS: independent SQL snapshots confirm' acceptance-logs/independent-state-check.log
 grep -q 'WS001A ACTUAL WRITER HTTP TEST PASS' acceptance-logs/actual-writer-test.log
 grep -q 'PASS: separate psql session' acceptance-logs/native-concurrency.log
-grep -q '"status": "PASS"' acceptance-logs/runtime/actual-writer-summary.json
-grep -q '"status": "PASS"' acceptance-logs/http-cas-validated.json
+# Re-evaluate the original raw HTTP and independently reconcile recorded CAS JSON.
+python3 - <<'PY_VALIDATE_CAS'
+import json,runpy
+from pathlib import Path
+root=Path('acceptance-logs')
+validator=runpy.run_path('ui/tests/native/ws001a-http-cas-assert.py',run_name='ws001a-offline-reverify')['validate']
+actual=validator(*((root/name).read_bytes() for name in ('http-get.txt','http-cas-success.txt','http-cas-stale.txt')))
+recorded=json.loads((root/'http-cas-validated.json').read_text())
+assert actual==recorded, f'FAIL: raw HTTP CAS != recorded summary: actual={actual!r} recorded={recorded!r}'
+raw_state=(root/'http-cas-db-final.txt').read_text().splitlines()
+assert raw_state==[f"{actual['original_order_id']}|2|123.450000"],f'FAIL: persisted CAS state mismatch: {raw_state!r}'
+summary=json.loads((root/'runtime/actual-writer-summary.json').read_text())
+assert summary.get('status')=='PASS',f'FAIL: writer status {summary.get("status")!r}'
+assert summary.get('orderCount')==2 and summary.get('paymentCount')==2,'FAIL: unexpected commerce row counts'
+print('PASS: raw HTTP CAS, exact DB readback and writer summary cross-checked')
+PY_VALIDATE_CAS
+# Re-run the trusted SQL snapshot validator, not a PASS string from any source.
+python3 ui/tests/native/ws001a-independent-state-check.py > acceptance-logs/evidence-independent-state-recheck.log
+cmp -s acceptance-logs/evidence-independent-state-recheck.log acceptance-logs/independent-state-check.log
 grep -q '^17[.]6' acceptance-logs/postgresql-version.txt
 grep -Eq '(^|[^[:digit:].])14[.]5([.]0)?([^[:digit:].]|$)' acceptance-logs/postgrest-version.txt
 echo 'PASS: mandatory native evidence complete, pending WS-022 independent acceptance' |
