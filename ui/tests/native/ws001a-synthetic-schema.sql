@@ -73,8 +73,9 @@ CREATE ROLE acceptance_sql LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE
   NOREPLICATION NOINHERIT PASSWORD 'synthetic-test-only';
 GRANT CONNECT ON DATABASE acceptance TO acceptance_sql;
 GRANT USAGE ON SCHEMA public TO acceptance_sql;
-GRANT SELECT,INSERT,UPDATE ON
+GRANT SELECT ON
   platform_orders,payment_transactions,commerce_source_mappings,
   commerce_evidence_records,commerce_refund_events TO acceptance_sql;
+GRANT INSERT,UPDATE ON platform_orders,payment_transactions TO acceptance_sql;
 GRANT USAGE,SELECT ON SEQUENCE platform_orders_id_seq TO acceptance_sql;
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
