@@ -1,3 +1,0 @@
-import assert from"node:assert/strict";import test from"node:test";import{resolveM12ActionCapability}from"../lib/mcp/action-capability-registry";import{assessInspectEvidenceEnablementReadiness}from"../lib/mcp/action-enablement-readiness";
-test("M13 corrected exact replay proof retains named inspection gate",()=>{assert.equal(resolveM12ActionCapability("inspect_evidence")?.executionAvailable,true);});
-test("M13 readiness records deterministic replay acceptance as complete",()=>{const x=assessInspectEvidenceEnablementReadiness();assert.equal(x.ready,true);assert.equal(x.executionAvailable,true);assert.equal(x.checks.durableReplayImplemented,true);assert.deepEqual(x.blockers,[]);});

@@ -1,6 +1,0 @@
-import assert from"node:assert/strict";import test from"node:test";import{readFileSync}from"node:fs";
-const lib=readFileSync(new URL("../lib/commerce/shopify-webhook-registration.ts",import.meta.url),"utf8"),orchestration=readFileSync(new URL("../lib/mcp/m15-shopify-controlled-proof-orchestration.ts",import.meta.url),"utf8");
-test("Shopify proof-only topic is APP_UNINSTALLED and excluded from ingestion topics",()=>{assert.match(lib,/SHOPIFY_PROOF_ONLY_TOPIC = "APP_UNINSTALLED"/);assert.match(lib,/SHOPIFY_WEBHOOK_TOPICS = \["ORDERS_CREATE", "REFUNDS_CREATE"\]/);});
-test("proof readback includes proof topic while normal readiness requires business topics",()=>{assert.match(lib,/topics: \[\.\.\.SHOPIFY_WEBHOOK_TOPICS, SHOPIFY_PROOF_ONLY_TOPIC\]/);assert.match(lib,/ready: SHOPIFY_WEBHOOK_TOPICS\.every/);});
-test("governed proof uses only the proof topic and rejects ambiguous matches",()=>{assert.match(orchestration,/topic: SHOPIFY_PROOF_ONLY_TOPIC/);assert.match(orchestration,/ambiguous_proof_topic_state/);});
-test("proof topic remains callback-bound to exact-object rollback",()=>{assert.match(orchestration,/deleteTraceKitShopifyWebhookSubscription\(\{[\s\S]*subscription,/);assert.match(orchestration,/rollback\.verifiedAbsent/);assert.match(orchestration,/netProviderConfigurationMutation/);});

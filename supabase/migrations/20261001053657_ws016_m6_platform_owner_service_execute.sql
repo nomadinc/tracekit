@@ -1,2 +1,0 @@
-grant execute on function public.ensure_tracekit_platform_owner(uuid,text,text) to service_role;
-revoke execute on function public.ensure_tracekit_platform_owner(uuid,text,text) from anon,authenticated;
