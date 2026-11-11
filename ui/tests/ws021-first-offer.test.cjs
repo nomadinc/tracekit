@@ -48,7 +48,7 @@ for(const [name,change] of [
  ['existing equivalent offer',`insert into canonical_offers values('00000000-0000-4000-8000-000000000009','${account}','${org}','stem-labs-8f6bb14b','Stem Labs — 20 Treatments (5)','active')`],
  ['audit failure',`alter table tracekit_audit_events add constraint fail_audit check(false)`],
 ])test(name+' rejects and leaves no mapping/step',async()=>{const d=await db();try{await d.exec(change);await assert.rejects(call(d));assert.equal((await d.query('select count(*)::int n from commerce_product_mapping_decisions')).rows[0].n,0);assert.equal((await d.query('select count(*)::int n from offer_steps')).rows[0].n,0);if(name!=='existing equivalent offer')assert.equal((await d.query('select count(*)::int n from canonical_offers')).rows[0].n,0);}finally{await d.close();}});
-async function routeHarness(session,result={ok:true,offerId:'offer',mappingId:'decision',replayed:false}) {
+async function routeHarness(session,result=[{ok:true,offerId:'offer',mappingId:'decision',replayed:false}]) {
  let calls=[];
  const built=await esbuild.build({entryPoints:[path.join(__dirname,'../app/api/commerce/product-mappings/approved-stem-offer/route.ts')],bundle:true,write:false,platform:'node',format:'cjs',plugins:[{name:'mock-io',setup(b){
  b.onResolve({filter:/^next\/server$/},()=>({path:'next',namespace:'mock'}));
@@ -94,3 +94,13 @@ test('anonymous runtime cannot execute the bounded catalog action',async()=>{con
  await d.exec('set role anon');await assert.rejects(call(d),e=>e.code==='42501');await d.exec('reset role');
  assert.equal((await d.query('select count(*)::int n from canonical_offers')).rows[0].n,0);
  }finally{await d.close();}});
+
+test('actual API accepts normalized idempotent RPC response without redispatch',async()=>{
+ const h=await routeHarness(session(),[{ok:true,offerId:'offer',mappingId:'decision',replayed:true}]);
+ const r=await h.POST(req());assert.equal(r.status,200);assert.equal(h.calls.length,1);assert.equal(r.body.replayed,true);
+});
+for(const result of [[],[{}],[{ok:true,offerId:'offer',mappingId:'decision'},{ok:true,offerId:'other',mappingId:'other'}]]){
+ test('actual API rejects malformed or multiple RPC rows without retry',async()=>{
+ const h=await routeHarness(session(),result);const r=await h.POST(req());assert.equal(r.status,502);assert.equal(h.calls.length,1);
+ });
+}
