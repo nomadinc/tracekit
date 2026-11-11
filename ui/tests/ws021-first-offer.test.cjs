@@ -104,3 +104,17 @@ for(const result of [[],[{}],[{ok:true,offerId:'offer',mappingId:'decision'},{ok
  const h=await routeHarness(session(),result);const r=await h.POST(req());assert.equal(r.status,502);assert.equal(h.calls.length,1);
  });
 }
+
+for (const [label,fields] of [
+ ['string false',{replayed:'false'}],
+ ['null',{replayed:null}],
+ ['number one',{replayed:1}],
+ ['missing',{}],
+]) {
+ test('actual API rejects '+label+' replayed without false success or retry',async()=>{
+  const h=await routeHarness(session(),[{ok:true,offerId:'offer',mappingId:'decision',...fields}]);
+  const r=await h.POST(req());
+  assert.equal(r.status,502);assert.equal(r.body.ok,false);
+  assert.equal(r.body.code,'mapping_result_unavailable');assert.equal(h.calls.length,1);
+ });
+}

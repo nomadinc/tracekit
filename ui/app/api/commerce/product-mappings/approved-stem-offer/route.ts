@@ -26,7 +26,8 @@ export async function POST(request: Request) {
       body: JSON.stringify({ p_actor_id: resolution.session.user.id, p_correlation_id: requestId }),
     }) as { ok?: boolean; offerId?: string; mappingId?: string; replayed?: boolean }[];
     const result = rows.length === 1 ? rows[0] : undefined;
-    if (!result || result.ok !== true || typeof result.offerId !== "string" || typeof result.mappingId !== "string")
+    if (!result || result.ok !== true || typeof result.offerId !== "string" || typeof result.mappingId !== "string" ||
+        typeof result.replayed !== "boolean")
       return reply({ ok: false, code: "mapping_result_unavailable" }, 502);
     return reply({ ...result }, result.replayed ? 200 : 201);
   } catch (error) {
