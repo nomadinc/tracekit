@@ -71,7 +71,7 @@ function summary(row: any, scope: ProductionCustomerScope): CustomerSummary {
     journeyPreview: `${Number(row?.journey_count || 0)} journey(s) · ${Number(row?.order_count || 0)} order(s) · ${source}`,
   };
 }
-function mapEvent(row: any, identity: any, credits: any[] = [], orders: any[] = []): CustomerJourneyEvent {
+function mapEvent(row: any, identity: any, credits: any[] = [], orders: any[] = [], organizationId = ""): CustomerJourneyEvent {
   const tech = row?.technical_evidence || row?.technical || {};
   const display = row?.display_fields || {};
   const explanation = row?.explanation || {};
@@ -86,8 +86,11 @@ function mapEvent(row: any, identity: any, credits: any[] = [], orders: any[] = 
   const eventType = String(row?.event_type || row?.activity_type || "").toLowerCase();
   const matchingCredits = credits.filter((credit: any) => String(credit?.touchpoint_event_id || "") === eventId || String(credit?.conversion_event_id || "") === eventId);
   const attributedCredit = matchingCredits.find((credit: any) => credit?.status === "attributed");
-  const relatedOrder = eventType === "purchase" ? exactRelatedOrder(row, orders) : null;
-  const commerce = Array.isArray(row.commerce) && row.commerce.length === 1 ? row.commerce[0] : relatedOrder;
+  const hasCoreProof = Object.prototype.hasOwnProperty.call(row, "commerce");
+  const proof = Array.isArray(row.commerce) && row.commerce.length === 1 ? row.commerce[0] : null;
+  const ownedProof = proof && proof.organization_id === organizationId && proof.workspace_id === organizationId ? proof : null;
+  const relatedOrder = eventType === "purchase" ? exactRelatedOrder(row, hasCoreProof ? ownedProof ? [ownedProof] : [] : orders) : null;
+  const commerce = relatedOrder;
   const unavailable = (v: unknown) => v === null || v === undefined || v === "" ? "Unavailable" : String(v);
   const money = (v: unknown) => observedAmount(v) === null ? "Unavailable" : formatObservedMoney(Number(v), commerce?.currency);
   const commerceFacts = eventType === "purchase" ? [
@@ -139,7 +142,6 @@ function mapEvent(row: any, identity: any, credits: any[] = [], orders: any[] = 
     redirects: [],
     diagnostics: [],
     relationships: [
-      ...(row?.related_order_id ? [{ type: "Order", id: String(row.related_order_id), label: String(row.related_order_id) }] : []),
       ...(relatedOrder ? [{ type: "Order", id: String(relatedOrder.platform_order_id || relatedOrder.order_id), label: String(relatedOrder.order_id || relatedOrder.platform_order_id) }] : []),
       ...((row.journey_id || tech?.journey_id) ? [{ type: "Journey", id: String(row.journey_id || tech.journey_id), label: String(row.journey_id || tech.journey_id) }] : []),
     ],
@@ -228,7 +230,7 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
     const orders = rawOrders.map(orderRow);
     const acquisition = detail.customer_360?.acquisition || {};
     const attribution = Array.isArray(journeyDetail?.attribution) ? journeyDetail.attribution : [];
-    const story = timeline.length ? timeline.map((row: any) => mapEvent(row, journeyDetail?.identity_context, attribution, rawOrders)) : activity.map((row: any) => mapEvent(row, journeyDetail?.identity_context, attribution, rawOrders));
+    const story = timeline.length ? timeline.map((row: any) => mapEvent(row, journeyDetail?.identity_context, attribution, rawOrders, scope.organizationId || "")) : activity.map((row: any) => mapEvent(row, journeyDetail?.identity_context, attribution, rawOrders, scope.organizationId || ""));
     const firstCredit = attribution.find((credit: any) => credit?.status === "attributed" && credit?.model === "first_touch") || attribution.find((credit: any) => credit?.status === "attributed");
     const firstSource = acquisition?.first_attributed_source?.source || acquisition?.first_attributed_source?.affiliate_id || firstCredit?.source || firstCredit?.affiliate_id;
     const attributedOffer = firstCredit?.offer_id ? String(firstCredit.offer_id) : "";
