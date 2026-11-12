@@ -458,13 +458,13 @@ function commissionsIntentionallyDisabled(commissions: HealthSnapshot["commissio
     || cleanText(commissions.policy_status) === "disabled";
 }
 
-function jobRuntimeMetadata(job: HealthSnapshot["platform_processing"]["jobs"][number] | null | undefined) {
+function jobRuntimeMetadata(job: NonNullable<HealthSnapshot["platform_processing"]["jobs"]>[number] | null | undefined) {
   const progress = job?.progress && typeof job.progress === "object" ? job.progress : {};
   const metadata = progress.metadata && typeof progress.metadata === "object" ? progress.metadata : {};
   return { progress, metadata };
 }
 
-function taskCountsForBackfillJob(snapshot: HealthSnapshot, job: HealthSnapshot["platform_processing"]["jobs"][number] | null | undefined, connectorIds: string[]) {
+function taskCountsForBackfillJob(snapshot: HealthSnapshot, job: NonNullable<HealthSnapshot["platform_processing"]["jobs"]>[number] | null | undefined, connectorIds: string[]) {
   const jobId = cleanText(job?.id);
   const tasks = (snapshot.platform_processing.tasks || []).filter((task) => {
     if (jobId && cleanText(task.job_id) === jobId) return true;

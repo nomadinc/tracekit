@@ -2,12 +2,13 @@ import type { IdentityTenancyRepository, AuditEventInput, FirstAdminBootstrapInp
 import { redactAuditMetadata } from "./persistent-repository";
 import type { PermissionOverride, PersistentAccount, PersistentAgency, PersistentMembership, PersistentUser, WorkOSIdentityInput } from "./persistent-types";
 import type { Role } from "./permissions";
+import { supabaseServerSecret } from "./supabase-server-secret";
 
 type Row = Record<string, unknown>;
 
 function configuration() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const key = supabaseServerSecret();
   if (!url || !key) throw new Error("Persistent identity storage is unavailable.");
   return { url, key };
 }
@@ -19,11 +20,7 @@ async function rest(path: string, init: RequestInit = {}) {
     "Content-Type": "application/json",
     Prefer: "return=representation",
   };
-  // Supabase's newer secret keys authenticate via `apikey` and are not JWTs.
-  // Sending one as a Bearer token makes PostgREST attempt JWT validation and
-  // can turn an otherwise valid service request into a 401. Legacy JWT
-  // service-role keys still require the Bearer header.
-  if (!key.startsWith("sb_secret_")) headers.Authorization = `Bearer ${key}`;
+  // Modern secret keys authenticate through apikey, never as JWT Bearer tokens.
   let response: Response | null = null;
   for (let attempt = 0; attempt < 2; attempt += 1) {
     try {

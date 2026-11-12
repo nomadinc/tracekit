@@ -36,6 +36,7 @@
     "verify:intelligence-production-v1": "tsx scripts/verify-production-v1-acceptance.ts"
   },
   "dependencies": {
+    "@supabase/supabase-js": "2.81.1",
     "@workos-inc/authkit-nextjs": "^4.3.1",
     "date-fns": "^4.1.0",
     "exceljs": "^4.4.0",

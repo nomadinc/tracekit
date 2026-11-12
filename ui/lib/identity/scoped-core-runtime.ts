@@ -61,6 +61,9 @@ async function scopedCoreGet(
   // Browser-supplied workspace_id is never forwarded.
   for (const key of TENANT_HINT_KEYS) params.delete(key);
   params.set("workspace_id", scope.workspaceId);
+  if (params.getAll("business_context_id").some(value => value !== scope.session.activeBusinessContextId)) return unavailable();
+  params.delete("business_context_id");
+  if (scope.session.activeBusinessContextId) params.set("business_context_id", scope.session.activeBusinessContextId);
   const query = params.toString();
 
   const secret = dependencies.adminSecret();

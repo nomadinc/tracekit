@@ -32,7 +32,9 @@ test("unobserved Orders never produce identities, captures, financial drawers or
     assert.equal(await repository.loadDrawer(current, "ord-123", "processor-fee:processor-fees"), null);
     assert.deepEqual(await repository.search(current, "ef_ord_10482"), []);
     const state = await repository.resolveDeepLink(current, parseOrderDeepLink("?order_id=ord-123&line=missing&drawer_kind=processor-fee&drawer_id=missing"));
-    assert.equal(state.orderId, null);
+    // Preserve the explicit unresolved ID so the UI can report unavailable.
+    // The repository must still return no record or financial evidence.
+    assert.equal(state.orderId, "ord-123");
     assert.equal(state.drawer, null);
   }
 });

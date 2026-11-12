@@ -63,8 +63,10 @@ export function projectCustomerWorkspace(session: TraceKitSessionContext, input:
   const output = structuredClone(input);
   output.customer = projectCustomerSummary(session, output.customer);
   if (!session.effectivePermissions.includes("orders.view_financials") || !canAccessFinancialData(session)) {
-    output.lifetimeRevenue = 0;
-    output.orders = output.orders.map((order) => ({ ...order, amount: 0, profit: null, profitAvailable: false }));
+    // Keep the existing MCP financial restriction without manufacturing a zero
+    // that the observed-commerce projection could serialize as a real amount.
+    const restricted = { ...output, lifetimeRevenue: null, orders: output.orders.map(({ amount: _amount, ...order }) => ({ ...order, profit: null, profitAvailable: false })) };
+    return projectCoreCustomerRead({ ...restricted, financialDetailsAvailable: false }, session);
   }
   return projectCoreCustomerRead({ ...output, financialDetailsAvailable: session.effectivePermissions.includes("orders.view_financials") && canAccessFinancialData(session) }, session);
 }

@@ -6,6 +6,8 @@ const scope: any = { authenticated: true, workspaceId: "tenant", organizationId:
 const orderA = { organization_id: "tenant", workspace_id: "tenant", platform: "shopify", connection_id: "connection-a", provider_account_id: "account-a", platform_order_id: "shopify:connection-a:account-a:101", order_id: "101", gross_amount: 42, currency: "USD" };
 const orderB = { ...orderA, connection_id: "connection-b", provider_account_id: "account-b", platform_order_id: "shopify:connection-b:account-b:101" };
 
+// The Core response now carries an explicit, server-verified Journey reference.
+// These caller tests still inject conflicting events to verify defense in depth.
 async function workspace(purchase: Record<string, unknown>, selectedOrder = orderA) {
   const previousFetch = globalThis.fetch;
   globalThis.fetch = async (input) => {
@@ -13,10 +15,10 @@ async function workspace(purchase: Record<string, unknown>, selectedOrder = orde
     assert.equal(url.searchParams.get("workspace_id"), "tenant");
     if (url.pathname === "/api/customer-orders") {
       assert.equal(url.searchParams.get("order_id"), selectedOrder.platform_order_id);
-      return Response.json({ orders: [{ order: selectedOrder, customer: { id: "customer" } }], next_offset: null });
+      return Response.json({ orders: [{ order: { ...selectedOrder, canonical_journey_id: "journey" }, customer: { id: "customer" } }], next_offset: null });
     }
     if (!url.pathname.includes("/journeys/")) return Response.json({ customer: { id: "customer" }, journeys: [{ id: "journey" }], orders: [orderA, orderB] });
-    return Response.json({ events: [
+    return Response.json({ journey: { id: "journey" }, events: [
       { id: "click", event_type: "click", event_time: "2026-11-04T12:00:00Z" },
       { id: "purchase", event_type: "purchase", event_time: "2026-11-04T12:01:00Z", source_platform: "shopify", order_id: "101", ...purchase },
     ], page: { has_more: false } });

@@ -1,0 +1,42 @@
+WS-023 acceptance runtime
+
+The normal Core implementation is customer-explorer.ts. Its new projection is
+shared by the read-only preview entry point; there is no alternate repository,
+fixture, financial RPC or browser-side privileged database client.
+
+The preview entry point accepts GET on the Customer list,
+Customer detail, exact Customer Journey and customer-orders endpoints, behind
+existing Core secret authentication, restricted to the Stem Labs organization.
+Its database transport permits GET only, to the pinned Supabase origin and an
+explicit read-table allowlist. Existing platform consumers require a callback
+on uploaded versions: queue/scheduled callbacks immediately throw, never
+acknowledge messages, and never execute work. No production deployment occurs.
+
+Upload ONLY an inactive Worker version (never wrangler deploy):
+  npx wrangler versions upload --config wrangler.ws023-readonly-preview.toml \
+    --tag ws023-commerce-readonly --message 'WS023 isolated read-only acceptance'
+
+Use the resulting immutable version URL as TRACEKIT_API_BASE_URL in a Vercel
+Preview deployment. Keep ordinary WorkOS authentication and tenant authorization.
+Do not alias the preview to production or change the active Worker deployment.
+Record active deployment identity before and after the upload.
+
+The reference Order is unassigned to a Business Context. Organization-scoped
+unassigned commerce remains visible without inventing an attribution context;
+assigned Orders must match the authenticated active context. Client context hints
+cannot override the server's active context.
+
+Observed commerce amount fields are a narrow customer-read projection. Profit,
+costs, fees, commission and raw payload access retain their prior restrictions.
+Missing amounts and missing acquisition identifiers are not reconstructed.
+
+Rollback: stop using the Vercel preview. No database migration or production
+rollback is required because this procedure changes no production traffic/data.
+Production promotion requires independent review and separate authorization.
+
+Vercel-only alternative (does not change any Worker URL settings):
+Deploy Preview with TRACEKIT_WS023_READONLY_CORE_PREVIEW=enabled. The scoped
+proxy selects the deployment's own /api/ws023-core endpoint explicitly. That
+endpoint is 404 outside VERCEL_ENV=preview and uses the same Core handler and
+GET-only transport. It requires the existing protected Supabase and Core auth
+bindings; it cannot fall back to another backend or another database.

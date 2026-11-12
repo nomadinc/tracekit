@@ -32,6 +32,7 @@ import type {
   OrderSummary,
   OrderWorkspaceSnapshot,
 } from "@/lib/orders/types";
+import { orderContextDrawer } from "@/lib/orders/context-drawer";
 import { OrderDrawerContent } from "./order-drawer-content";
 const cash = (v: number) => `${v >= 0 ? "+" : "-"}$${Math.abs(v).toFixed(2)}`;
 export function OrderWorkspace() {
@@ -64,6 +65,10 @@ function OrderWorkspaceContent() {
     () => normalizeOrderDeepLink(requested, orders, snap),
     [requested, orders, snap],
   );
+  const selectedOrderId = requested.orderId || normalized.orderId;
+  const selection = React.useMemo(() => ({ scope, selectedOrderId, requestedId: requested.orderId }), [scope, selectedOrderId, requested.orderId]);
+  const selectionRef = React.useRef(selection);
+  selectionRef.current = selection;
   const go = React.useCallback(
     (next: Partial<OrderDeepLinkState>) =>
       router.push(
@@ -114,7 +119,7 @@ function OrderWorkspaceContent() {
     setActiveOrganization,
   ]);
   React.useEffect(() => {
-    if (!normalized.orderId) {
+    if (!selectedOrderId) {
       setDetailLoading(false);
       setDetailFailed(false);
       setSnap(null);
@@ -125,19 +130,19 @@ function OrderWorkspaceContent() {
     setDetailLoading(true);
     setSnap(null);
     orderRepository
-      .loadWorkspace(scope, normalized.orderId)
+      .loadWorkspace(scope, selectedOrderId)
       .then((v) => on && setSnap(v))
       .catch(() => { if (on) { setSnap(null); setDetailFailed(true); } })
       .finally(() => { if (on) setDetailLoading(false); });
     return () => {
       on = false;
     };
-  }, [normalized.orderId, scope]);
-  React.useEffect(() => {
+  }, [selectedOrderId, scope]);
+  React.useLayoutEffect(() => {
     setReplaying(false);
     setReplayIndex(0);
     drawer.closeDrawer();
-  }, [normalized.orderId, drawer]);
+  }, [selectedOrderId, scope, drawer]);
   React.useEffect(() => {
     const id =
       normalized.drawerId ||
@@ -146,17 +151,25 @@ function OrderWorkspaceContent() {
         : normalized.eventId
           ? `event:${normalized.eventId}`
           : null);
-    if (!id || !snap) return;
+    drawer.closeDrawer();
+    if (!snap || snap.order.id !== selectedOrderId ||
+        snap.order.organizationId !== scope.organizationId ||
+        !requested.orderId || requested.orderId !== snap.order.id) return;
     let on = true;
-    orderRepository.loadDrawer(scope, snap.order.id, id).then((r) => {
-      if (on && r)
-        drawer.openDrawer(<OrderDrawerContent record={r} />, r.title, { onDismiss: () => router.push(withDevelopmentIdentity(orderDeepLinkHref({ ...normalized, drawer: null, drawerId: null, lineId: null, eventId: null, identifierRef: null }), session.identity.id), { scroll: false }) });
-    });
+    const context = orderContextDrawer(snap, id || "order:summary");
+    const result = context ? Promise.resolve(context) : orderRepository.loadDrawer(scope, snap.order.id, id!);
+    result.then((r) => {
+      if (on && selectionRef.current === selection && r)
+        drawer.openDrawer(<OrderDrawerContent record={r} />, r.title, { onDismiss: () => router.push(withDevelopmentIdentity(orderDeepLinkHref({ ...normalized, orderId: null, drawer: null, drawerId: null, lineId: null, eventId: null, identifierRef: null }), session.identity.id), { scroll: false }) });
+    }).catch(() => { if (on && selectionRef.current === selection) drawer.closeDrawer(); });
     return () => {
       on = false;
     };
   }, [
     drawer,
+    requested.orderId,
+    selectedOrderId,
+    selection,
     normalized.drawerId,
     normalized.eventId,
     normalized.lineId,
@@ -177,14 +190,17 @@ function OrderWorkspaceContent() {
     );
     return () => clearInterval(t);
   }, [replaying, snap]);
-  const inspect = async (id: string) => {
+  const inspect = (id: string) => {
     if (!snap) return;
-    const r = await orderRepository.loadDrawer(scope, snap.order.id, id);
-    if (r) drawer.openDrawer(<OrderDrawerContent record={r} />, r.title);
+    go({ orderId: snap.order.id, drawerId: id, drawer: null });
   };
+  if (snap && snap.order.organizationId !== scope.organizationId)
+    return <State text="Order is unavailable in the active workspace." />;
+  if (snap && snap.order.id !== selectedOrderId)
+    return <State text="Loading Order Workspace…" />;
   if ((loading || detailLoading) && !snap) return <State text="Loading Order Workspace…" />;
   if (loadFailed || detailFailed) return <State text="Orders are unavailable. Refresh to try again." />;
-  if (!orders.length && requested.orderId) {
+  if (requested.orderId && !snap) {
     return <State text={`Order ${requested.orderId} could not be loaded from the production Order read path`} />;
   }
   if (!orders.length) return <State text="No accessible Orders" />;
@@ -205,6 +221,7 @@ function OrderWorkspaceContent() {
             eventId: null,
             identifier: null,
             drawerId: null,
+            drawer: null,
             replay: false,
           });
           setListOpen(false);
@@ -245,6 +262,8 @@ function OrderWorkspaceContent() {
           </div>
           <div className="mt-5 grid gap-4 border-t pt-4 sm:grid-cols-3 lg:grid-cols-6">
             {[
+              ["Provider", snap.order.provider || "Unavailable"],
+              ["Observed at", snap.order.date],
               ["Revenue", snap.order.revenueAvailable === false ? "Unavailable" : formatObservedMoney(snap.order.revenue, snap.order.currency)],
               [
                 "Customer",
@@ -264,6 +283,29 @@ function OrderWorkspaceContent() {
             ))}
           </div>
         </header>
+        {snap.relatedOrders ? <section className="m-5 rounded-xl border p-5"><h2 className="font-semibold">Related Orders</h2>{snap.relatedOrders.length ? snap.relatedOrders.map(related=><p key={`${related.id}-${related.kind}`} className="mt-2 text-sm"><a className="underline" href={`/orders?v=1&order_id=${encodeURIComponent(related.id)}`}>{related.kind}: {related.number}</a> · Evidence: {related.evidence || "Unavailable"}</p>) : <p className="mt-2 text-sm">No deterministically linked related Orders were returned.</p>}</section> : null}
+        {snap.observedTotals ? <section className="m-5 rounded-xl border p-5"><h2 className="font-semibold">Order totals</h2><dl className="mt-3 grid gap-2 text-sm">{Object.entries({Subtotal:snap.observedTotals.subtotal,Tax:snap.observedTotals.tax,Shipping:snap.observedTotals.shipping,Discounts:snap.observedTotals.discounts,"Gross total":snap.observedTotals.gross}).map(([label,value])=><div key={label} className="flex justify-between"><dt>{label}</dt><dd>{value === null ? "Unavailable" : formatObservedMoney(value,snap.observedTotals!.currency)}</dd></div>)}</dl></section> : null}
+        {snap.observedReferences ? <section className="m-5 rounded-xl border p-5"><h2 className="font-semibold">Transactions and acquisition evidence</h2><p className="mt-2">Payment status: {snap.order.status}</p>{Object.entries(snap.observedReferences).map(([label,value])=><p key={label} className="mt-2 text-xs">{label}: {value || "Unavailable"}</p>)}<p className="mt-2 text-xs">Acquisition: {snap.attribution.trafficSource === "Not observed" ? "Unmatched" : snap.attribution.trafficSource}</p></section> : null}
+        <section className="m-5 rounded-xl border p-5">
+          <h2 className="font-semibold">Purchased Products</h2>
+          {snap.observedLines?.length ? (
+            <div className="mt-3 space-y-3">
+              {snap.observedLines.map((line) => (
+                <div key={line.id} className="rounded-lg border p-3 text-xs">
+                  <strong>{line.name || "Product name unavailable"}</strong>
+                  <p className="mt-1 text-slate-400">SKU: {line.sku || "Unavailable"} · Product: {line.providerProductId || "Unavailable"} · Variant: {line.providerVariantId || "Unavailable"}</p>
+                  <p className="mt-1">Quantity: {line.quantity ?? "Unavailable"} · Unit: {line.unitAmount === null ? "Unavailable" : formatObservedMoney(line.unitAmount, line.currency)} · Total: {line.grossAmount === null ? "Unavailable" : formatObservedMoney(line.grossAmount, line.currency)}</p>
+                  <p className="mt-1 text-slate-500">Evidence: {line.evidenceId || "Unavailable"}</p>
+                </div>
+              ))}
+            </div>
+          ) : <p className="mt-2 text-sm text-slate-400">Product line-item evidence is not available from the authorized Order API.</p>}
+          <div className="mt-4 border-t pt-3 text-xs">
+            <p>Canonical Order: {snap.canonicalOrderId || "Unavailable"}</p>
+            {snap.canonicalJourneyId ? <a className="underline" href={`/customers?v=1&customer_id=${encodeURIComponent(snap.order.customerId)}&journey_id=${encodeURIComponent(snap.canonicalJourneyId)}&focus=journey`}>Canonical Journey: {snap.canonicalJourneyId}</a> : <p>Canonical Journey: Not verified</p>}
+            {snap.relatedCustomer.id ? <p><a className="underline" href={`/customers?v=1&customer_id=${encodeURIComponent(snap.relatedCustomer.id)}`}>Customer: {snap.relatedCustomer.name}</a></p> : null}
+          </div>
+        </section>
         {!snap.ledger.length ? (
           <section className="m-5 rounded-xl border p-6">
             <h2 className="font-semibold">Profit details not available</h2>
@@ -371,7 +413,7 @@ function OrderWorkspaceContent() {
             {Object.entries(snap.attribution).map(([k, v]) => (
               <button
                 key={k}
-                onClick={() => inspect(`event:${snap.timeline[0].id}`)}
+                onClick={() => inspect("attribution:summary")}
                 className="rounded-lg border p-3 text-left"
               >
                 <span className="block text-[9px] uppercase text-slate-400">

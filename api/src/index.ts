@@ -17029,7 +17029,7 @@ async function router(req: Request, env: Env): Promise<Response> {
     try {
       const workspaceId = identityWorkspace(url.searchParams.get("workspace_id"));
       if (!url.searchParams.get("workspace_id")) return json({ error: "Workspace required." }, 400);
-      const result = await listCustomerOrders(getSupabase(env), { workspace_id: workspaceId, offset: Number(url.searchParams.get("offset") || 0), limit: Number(url.searchParams.get("limit") || 50), order_id: url.searchParams.get("order_id") || undefined, person_id: url.searchParams.get("person_id") || undefined });
+      const result = await listCustomerOrders(getSupabase(env), { workspace_id: workspaceId, offset: Number(url.searchParams.get("offset") || 0), limit: Number(url.searchParams.get("limit") || 50), business_context_id: url.searchParams.get("business_context_id"), order_id: url.searchParams.get("order_id") || undefined, person_id: url.searchParams.get("person_id") || undefined });
       return json(result);
     } catch { return json({ error: "Customer order evidence is unavailable." }, 503); }
   }
@@ -17054,6 +17054,8 @@ async function router(req: Request, env: Env): Promise<Response> {
       const result = await getCustomerDetail(getSupabase(env), {
         workspace_id: workspaceId,
         person_id: customerExplorerRoute.person_id,
+        business_context_id: url.searchParams.get("business_context_id"),
+        journey_id: url.searchParams.get("journey_id"),
       });
       return json(result);
     } catch (e: any) {
@@ -17072,6 +17074,7 @@ async function router(req: Request, env: Env): Promise<Response> {
         limit: url.searchParams.get("limit"),
         cursor: url.searchParams.get("cursor"),
       });
+      params.business_context_id = url.searchParams.get("business_context_id");
       const result = await getCustomerJourneyDetail(getSupabase(env), params);
       return json(result);
     } catch (e: any) {

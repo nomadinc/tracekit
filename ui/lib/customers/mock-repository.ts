@@ -528,7 +528,7 @@ export class MockCustomerRepository implements CustomerRepository {
         question: "What happened in this Order?",
         summary: `${o.status} · ${o.profitStatus}`,
         facts: [
-          { label: "Revenue", value: `$${o.amount.toLocaleString()}` },
+          { label: "Revenue", value: o.amount === null ? "Unavailable" : `$${o.amount.toLocaleString()}` },
           {
             label: "Profit",
             value:

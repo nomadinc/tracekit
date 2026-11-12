@@ -26,7 +26,7 @@ test("private read gateway denies unauthenticated, inactive, and foreign scope b
 });
 test("read gateway injects canonical tenant, retains pagination and projects restricted details",async()=>{
  const x=proxy();const result:any=await x.gateway.scopedCoreGet("/v1/customer-orders","https://ui.example.test/api/customer-orders?offset=17","orders.view",projectCoreCustomerRead);
- assert.equal(result.status,200);assert.deepEqual(result.body,{orders:[{id:"o"}]});
+ assert.equal(result.status,200);assert.deepEqual(result.body,{orders:[{id:"o",gross_amount:0}]});
  const url=new URL(x.calls[0].url);assert.equal(url.searchParams.get("workspace_id"),"stem");assert.equal(url.searchParams.get("offset"),"17");
  assert.equal(x.calls[0].init.headers["x-tk-secret"],"synthetic-local-test");
 });
@@ -48,4 +48,11 @@ test("chargeback financial scope rejects read-only roles, expired membership and
  assert.equal(authorizedDetailedFinancialOrganization(privileged,url),"stem");
  assert.equal(authorizedDetailedFinancialOrganization(privileged,url+"?workspace_id=stem&workspace_id=foreign"),null);
  assert.equal(authorizedDetailedFinancialOrganization({...privileged,membership:{...privileged.membership!,effectiveUntil:"2020-01-02T00:00:00Z"}},url),null);
+});
+test("active Business Context is server-bound and conflicting duplicate hints fail closed",async()=>{
+ const identity={...session(),activeBusinessContextId:"active"};const x=proxy({kind:"authenticated",session:identity});
+ assert.equal((await x.gateway.scopedCoreGet("/v1/customer-orders","https://ui.example.test/api/customer-orders?business_context_id=active&business_context_id=foreign","orders.view")).status,404);
+ assert.equal(x.calls.length,0);
+ assert.equal((await x.gateway.scopedCoreGet("/v1/customer-orders","https://ui.example.test/api/customer-orders","orders.view")).status,200);
+ assert.equal(new URL(x.calls[0].url).searchParams.get("business_context_id"),"active");
 });

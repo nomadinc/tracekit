@@ -44,7 +44,7 @@ const when = (value: unknown) => {
 };
 const eventName = (value: unknown) => String(value || "event").replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 const qs = (scope: ProductionCustomerScope, extra: Record<string, unknown> = {}) => {
-  const params = new URLSearchParams({ workspace_id: scope.workspaceId });
+  const params = new URLSearchParams({ workspace_id: scope.workspaceId, ...(scope.businessContextId ? { business_context_id: scope.businessContextId } : {}), ...(scope.journeyId ? { journey_id: scope.journeyId } : {}) });
   for (const [key, value] of Object.entries(extra)) if (value !== null && value !== undefined && value !== "") params.set(key, String(value));
   return params.toString();
 };
@@ -71,7 +71,7 @@ function summary(row: any, scope: ProductionCustomerScope): CustomerSummary {
     journeyPreview: `${Number(row?.journey_count || 0)} journey(s) · ${Number(row?.order_count || 0)} order(s) · ${source}`,
   };
 }
-function mapEvent(row: any, identity: any, credits: any[] = [], orders: any[] = []): CustomerJourneyEvent {
+function mapEvent(row: any, identity: any, credits: any[] = [], orders: any[] = [], organizationId = ""): CustomerJourneyEvent {
   const tech = row?.technical_evidence || row?.technical || {};
   const display = row?.display_fields || {};
   const explanation = row?.explanation || {};
@@ -86,15 +86,35 @@ function mapEvent(row: any, identity: any, credits: any[] = [], orders: any[] = 
   const eventType = String(row?.event_type || row?.activity_type || "").toLowerCase();
   const matchingCredits = credits.filter((credit: any) => String(credit?.touchpoint_event_id || "") === eventId || String(credit?.conversion_event_id || "") === eventId);
   const attributedCredit = matchingCredits.find((credit: any) => credit?.status === "attributed");
-  const relatedOrder = eventType === "purchase" ? exactRelatedOrder(row, orders) : null;
-  const eventAmount = n(row?.amount);
+  const hasCoreProof = Object.prototype.hasOwnProperty.call(row, "commerce");
+  const proof = Array.isArray(row.commerce) && row.commerce.length === 1 ? row.commerce[0] : null;
+  const ownedProof = proof && proof.organization_id === organizationId && proof.workspace_id === organizationId ? proof : null;
+  const relatedOrder = eventType === "purchase" ? exactRelatedOrder(row, hasCoreProof ? ownedProof ? [ownedProof] : [] : orders) : null;
+  const commerce = relatedOrder;
+  const unavailable = (v: unknown) => v === null || v === undefined || v === "" ? "Unavailable" : String(v);
+  const money = (v: unknown) => observedAmount(v) === null ? "Unavailable" : formatObservedMoney(Number(v), commerce?.currency);
+  const commerceFacts = eventType === "purchase" ? [
+    {label:"Canonical event",value:unavailable(row.id)}, {label:"Canonical Journey",value:unavailable(row.journey_id)},
+    {label:"Canonical Order",value:unavailable(commerce?.canonical_order_id)}, {label:"Provider Order",value:unavailable(commerce?.platform_order_id)},
+    {label:"Purchase amount",value:money(commerce?.amount ?? row.amount)}, {label:"Payment status",value:unavailable(commerce?.status)},
+    {label:"Payment reference",value:unavailable(commerce?.payment_reference)}, {label:"Transaction",value:unavailable(commerce?.transaction_id)},
+    {label:"TKID",value:unavailable(commerce?.tkid)}, {label:"Everflow transaction",value:unavailable(commerce?.everflow_transaction_id)},
+    {label:"Source evidence",value:unavailable(commerce?.evidence_id)}, {label:"Acquisition",value:attributedCredit ? "Attributed" : "Unmatched"},
+    ...(commerce?.order_lines || []).flatMap((line: any) => [
+      {label:"Product",value:unavailable(line.product_name)}, {label:"SKU",value:unavailable(line.sku)},
+      {label:"Product / variant",value:`${unavailable(line.provider_product_id)} / ${unavailable(line.provider_variant_id)}`},
+      {label:"Quantity",value:unavailable(line.quantity)}, {label:"Unit price",value:money(line.unit_amount)}, {label:"Line total",value:money(line.gross_amount)},
+      {label:"Canonical line",value:unavailable(line.id)}, {label:"Line evidence",value:unavailable(line.evidence_id)},
+    ]),
+  ] : [];
+  const eventAmount = observedAmount(commerce?.amount ?? row?.amount);
   const sourceLabel = String(row?.source_platform || tech?.source_platform || "TraceKit");
   const affiliate = row?.affiliate_id || attributedCredit?.affiliate_id;
   const offer = row?.offer_id || attributedCredit?.offer_id;
   const name = eventType === "click"
     ? `${sourceLabel === "everflow" ? "Everflow " : ""}Affiliate Click`
     : eventType === "purchase"
-      ? `Purchase${eventAmount ? ` · ${eventAmount.toFixed(0)}` : ""}`
+      ? `Purchase${eventAmount !== null ? ` · ${formatObservedMoney(eventAmount, row?.currency)}` : ""}`
       : String(row?.title || eventName(eventType));
   const identifiers = Array.isArray(identity?.identifiers) ? identity.identifiers.map((i: any) => ({
     id: String(i.id || i.type || "identifier"),
@@ -104,6 +124,7 @@ function mapEvent(row: any, identity: any, credits: any[] = [], orders: any[] = 
     eventId: String(row?.id || ""),
   })) : [];
   return {
+    commerceFacts,
     id: eventId,
     name,
     timestamp: when(row?.occurred_at || row?.event_time),
@@ -121,9 +142,8 @@ function mapEvent(row: any, identity: any, credits: any[] = [], orders: any[] = 
     redirects: [],
     diagnostics: [],
     relationships: [
-      ...(row?.related_order_id ? [{ type: "Order", id: String(row.related_order_id), label: String(row.related_order_id) }] : []),
       ...(relatedOrder ? [{ type: "Order", id: String(relatedOrder.platform_order_id || relatedOrder.order_id), label: String(relatedOrder.order_id || relatedOrder.platform_order_id) }] : []),
-      ...(tech?.journey_id ? [{ type: "Journey", id: String(tech.journey_id), label: String(tech.journey_id) }] : []),
+      ...((row.journey_id || tech?.journey_id) ? [{ type: "Journey", id: String(row.journey_id || tech.journey_id), label: String(row.journey_id || tech.journey_id) }] : []),
     ],
     explanation: {
       conclusion: String(row?.summary || row?.title || "Evidence recorded."),
@@ -138,7 +158,7 @@ function orderRow(row: any) {
     id,
     number: String(row?.order_id || row?.platform_order_id || "Order"),
     date: when(row?.created_at),
-    amount: n(row?.amount),
+    amount: observedAmount(row?.amount),
     amountAvailable: observedAmount(row?.amount) !== null,
     currency: row?.currency || null,
     profit: null,
@@ -188,8 +208,10 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
   async loadWorkspace(scope: ProductionCustomerScope, customerId: string): Promise<CustomerWorkspaceSnapshot | null> {
     if (!scope.authenticated || !customerId) return null;
     const detail = await get(`/api/customers/${encodeURIComponent(customerId)}?${qs(scope)}`,scope);
+    if (String(detail.customer?.id || "") !== customerId) return null;
     const journeys = Array.isArray(detail.journeys) ? detail.journeys : [];
-    const selectedJourney = journeys[0] || null;
+    const selectedJourney = detail.canonical_journey_id ? {id:detail.canonical_journey_id} : null;
+    if (scope.journeyId && selectedJourney?.id !== scope.journeyId) throw new Error("Journey is unavailable.");
     let journeyDetail: any = null;
     if (selectedJourney?.id) journeyDetail = await readJourneyPages((cursor) => get(`/api/customers/${encodeURIComponent(customerId)}/journeys/${encodeURIComponent(selectedJourney.id)}?${qs(scope, { limit: 100, cursor })}`,scope));
     const listLike = {
@@ -208,7 +230,7 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
     const orders = rawOrders.map(orderRow);
     const acquisition = detail.customer_360?.acquisition || {};
     const attribution = Array.isArray(journeyDetail?.attribution) ? journeyDetail.attribution : [];
-    const story = timeline.length ? timeline.map((row: any) => mapEvent(row, journeyDetail?.identity_context, attribution, rawOrders)) : activity.map((row: any) => mapEvent(row, journeyDetail?.identity_context, attribution, rawOrders));
+    const story = timeline.length ? timeline.map((row: any) => mapEvent(row, journeyDetail?.identity_context, attribution, rawOrders, scope.organizationId || "")) : activity.map((row: any) => mapEvent(row, journeyDetail?.identity_context, attribution, rawOrders, scope.organizationId || ""));
     const firstCredit = attribution.find((credit: any) => credit?.status === "attributed" && credit?.model === "first_touch") || attribution.find((credit: any) => credit?.status === "attributed");
     const firstSource = acquisition?.first_attributed_source?.source || acquisition?.first_attributed_source?.affiliate_id || firstCredit?.source || firstCredit?.affiliate_id;
     const attributedOffer = firstCredit?.offer_id ? String(firstCredit.offer_id) : "";
@@ -218,15 +240,16 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
     }));
     return {
       customer,
-      lifetimeRevenue: n(detail.summary?.lifetime_revenue),
+      lifetimeRevenue: observedAmount(detail.summary?.lifetime_revenue),
       lifetimeRevenueAvailable: observedAmount(detail.summary?.lifetime_revenue) !== null
         && rawOrders.length > 0 && rawOrders.every((row: any) => row.currency && observedAmount(row.amount) !== null)
         && new Set(rawOrders.map((row: any) => row.currency)).size === 1,
-      revenueCurrency: rawOrders[0]?.currency || null,
+      revenueCurrency: detail.summary?.revenue_currency || null,
       customerSince: when(detail.summary?.first_seen_at),
       firstTouch: firstSource ? (firstCredit?.affiliate_id && !firstCredit?.source ? `Affiliate ${firstCredit.affiliate_id}${firstCredit.offer_id ? ` · Offer ${firstCredit.offer_id}` : ""}` : String(firstSource)) : "No retained attribution conclusion",
       lastPurchase: orders[0]?.date || "No linked purchase",
       journeyId: String(selectedJourney?.id || "No canonical journey"),
+      availableJourneys: journeys.map((journey: any) => ({id:String(journey.id),label:when(journey.started_at)})),
       journey: story,
       orders: enrichedOrders,
       offers: attributedOffer ? [{ id: attributedOffer, name: `Offer ${attributedOffer}`, firstTouch: firstCredit?.affiliate_id ? `Affiliate ${firstCredit.affiliate_id}` : "Attributed Journey" }] : [],
@@ -250,9 +273,11 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
       if (!event) return null;
       return {
         id: drawerId, kind: "event", title: event.name,
+        links: event.relationships.flatMap((relationship) => relationship.type === "Order" ? [{label:"Open Order",href:`/orders?v=1&order_id=${encodeURIComponent(relationship.id)}`}] : relationship.type === "Journey" ? [{label:"Open canonical Journey",href:`/customers?v=1&customer_id=${encodeURIComponent(customerId)}&journey_id=${encodeURIComponent(relationship.id)}&focus=journey`}] : []),
         question: "What happened, and what retained production evidence supports it?",
         summary: event.explanation.conclusion,
         facts: [
+          ...(event.commerceFacts || []),
           { label: "Timestamp", value: event.timestamp },
           { label: "Evidence state", value: event.status },
           { label: "Source", value: event.domain },
