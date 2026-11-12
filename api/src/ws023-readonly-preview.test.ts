@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { createPreviewHandler,previewDatabaseFetch } from './ws023-readonly-preview';
+import { createPreviewHandler,previewDatabaseFetch,rejectPreviewBackgroundWork } from './ws023-readonly-preview';
 const env:any={TK_SECRET_KEY:'synthetic-only'};
 test('preview denies unauthenticated, foreign organization, non-read routes and mutations before any database access',async()=>{
  let calls=0;const handler=createPreviewHandler(()=>{calls++;throw new Error('unexpected database access')});
@@ -16,3 +16,5 @@ test('database transport permits only GET on exact read tables and pinned origin
  await assert.rejects(read('https://db.supabase.co/rest/v1/commerce_order_lines',{method:'POST',body:'{}'}),/denied/);
  assert.equal(calls,1);
 });
+
+test("background callbacks cannot acknowledge queues or perform scheduled work",async()=>{await assert.rejects(rejectPreviewBackgroundWork(),/cannot process background/);});

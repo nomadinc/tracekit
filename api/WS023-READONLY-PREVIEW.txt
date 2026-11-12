@@ -4,11 +4,13 @@ The normal Core implementation is customer-explorer.ts. Its new projection is
 shared by the read-only preview entry point; there is no alternate repository,
 fixture, financial RPC or browser-side privileged database client.
 
-The preview entry point exports only fetch. It accepts GET on the Customer list,
+The preview entry point accepts GET on the Customer list,
 Customer detail, exact Customer Journey and customer-orders endpoints, behind
 existing Core secret authentication, restricted to the Stem Labs organization.
 Its database transport permits GET only, to the pinned Supabase origin and an
-explicit read-table allowlist. No scheduled/queue handler is exported.
+explicit read-table allowlist. Existing platform consumers require a callback
+on uploaded versions: queue/scheduled callbacks immediately throw, never
+acknowledge messages, and never execute work. No production deployment occurs.
 
 Upload ONLY an inactive Worker version (never wrangler deploy):
   npx wrangler versions upload --config wrangler.ws023-readonly-preview.toml \
