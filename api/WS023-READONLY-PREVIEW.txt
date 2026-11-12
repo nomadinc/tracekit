@@ -33,3 +33,10 @@ Missing amounts and missing acquisition identifiers are not reconstructed.
 Rollback: stop using the Vercel preview. No database migration or production
 rollback is required because this procedure changes no production traffic/data.
 Production promotion requires independent review and separate authorization.
+
+Vercel-only alternative (does not change any Worker URL settings):
+Deploy Preview with TRACEKIT_WS023_READONLY_CORE_PREVIEW=enabled. The scoped
+proxy selects the deployment's own /api/ws023-core endpoint explicitly. That
+endpoint is 404 outside VERCEL_ENV=preview and uses the same Core handler and
+GET-only transport. It requires the existing protected Supabase and Core auth
+bindings; it cannot fall back to another backend or another database.
