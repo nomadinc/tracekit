@@ -38,6 +38,11 @@ const money = (v: number) =>
     currency: "USD",
     maximumFractionDigits: 0,
   }).format(v);
+type CustomerSnapshotOrigin = {
+  organizationId: string | null;
+  businessContextId: string | null;
+  customerId: string | null;
+};
 export function CustomerWorkspace() {
   return (
     <AccessBoundary permission="customers.view" variants={["client", "agency"]}>
@@ -52,24 +57,44 @@ function CustomerWorkspaceContent() {
   const { session, organizations, setActiveOrganization, setActiveBusinessContext } =
     useIdentity();
   const activeOrganization = organizations.find((organization) => organization.id === session.activeOrganizationId) || organizations[0] || null;
-  const scope = React.useMemo(() => ({ authenticated: session.authenticated, workspaceId: session.activeOrganizationId || "", organizationId: session.activeOrganizationId, businessContextId: session.activeBusinessContextId, journeyId: params.get("journey_id"), session }), [session, params]);
+  const scope = React.useMemo(() => ({ authenticated: session.authenticated, workspaceId: session.activeOrganizationId || "", organizationId: session.activeOrganizationId, businessContextId: session.activeBusinessContextId, journeyId: params.get("journey_id"), session }), [session, params, session.activeOrganizationId, session.activeBusinessContextId]);
   const requested = React.useMemo(
     () => parseCustomerDeepLink(params),
     [params],
   );
-  const [customers, setCustomers] = React.useState<CustomerSummary[]>([]),
-    [snapshot, setSnapshot] = React.useState<CustomerWorkspaceSnapshot | null>(
+  const [customerList, setCustomerList] = React.useState<{ scope: typeof scope; value: CustomerSummary[] } | null>(null),
+    [loadedSnapshot, setLoadedSnapshot] = React.useState<{ origin: CustomerSnapshotOrigin; value: CustomerWorkspaceSnapshot | null } | null>(
       null,
     ),
     [filter, setFilter] = React.useState<CustomerListFilter>({ state: "all" }),
     [loading, setLoading] = React.useState(true),
-    [error, setError] = React.useState<string | null>(null),
+    [loadError, setError] = React.useState<{ scope: typeof scope; message: string } | null>(null),
     [listOpen, setListOpen] = React.useState(false),
     [replaying, setReplaying] = React.useState(false),
     [replayIndex, setReplayIndex] = React.useState(0);
+  const currentScope = React.useRef(scope);
+  currentScope.current = scope;
+  const customers = customerList?.scope === scope ? customerList.value : [];
+  const error = loadError?.scope === scope ? loadError.message : null;
+  const invalidCustomerId = params.has("customer_id") && !requested.customerId;
+  const selectedCustomerId = invalidCustomerId ? null : requested.customerId || customers[0]?.id || null;
+  // Object identity is the request generation, not just a reusable scope string.
+  // A -> B -> A must obtain a new owner even when the canonical IDs match again.
+  const origin = React.useMemo<CustomerSnapshotOrigin>(() => ({
+    organizationId: scope.organizationId,
+    businessContextId: scope.businessContextId,
+    customerId: selectedCustomerId,
+  }), [scope, selectedCustomerId]);
+  const currentOrigin = React.useRef(origin);
+  currentOrigin.current = origin;
+  const ownsSnapshot = loadedSnapshot?.origin === origin &&
+    loadedSnapshot.origin.organizationId === scope.organizationId &&
+    loadedSnapshot.origin.businessContextId === scope.businessContextId &&
+    loadedSnapshot.origin.customerId === selectedCustomerId;
+  const snapshot = ownsSnapshot ? loadedSnapshot.value : null;
   const normalized = React.useMemo(
-    () => normalizeCustomerDeepLink(requested, customers, snapshot),
-    [requested, customers, snapshot],
+    () => ({ ...normalizeCustomerDeepLink(requested, customers, snapshot), customerId: selectedCustomerId }),
+    [requested, customers, snapshot, selectedCustomerId],
   );
   const go = React.useCallback(
     (next: Partial<CustomerDeepLinkState>) =>
@@ -88,13 +113,13 @@ function CustomerWorkspaceContent() {
     setError(null);
     customerRepository
       .listCustomers(scope, { ...filter, offerId: requested.offerId })
-      .then((v) => on && setCustomers(v))
+      .then((v) => on && currentScope.current === scope && setCustomerList({ scope, value: v }))
       .catch(
         (e) =>
-          on &&
-          setError(e instanceof Error ? e.message : "Repository unavailable"),
+          on && currentScope.current === scope &&
+          setError({ scope, message: e instanceof Error ? e.message : "Repository unavailable" }),
       )
-      .finally(() => on && setLoading(false));
+      .finally(() => on && currentScope.current === scope && setLoading(false));
     return () => {
       on = false;
     };
@@ -109,7 +134,7 @@ function CustomerWorkspaceContent() {
     customerRepository
       .resolveCustomer(scope, requested.customerId)
       .then((r) => {
-        if (!on || !r) return;
+        if (!on || currentScope.current !== scope || !r) return;
         if (session.developmentOnly && r.organizationId && r.organizationId !== session.activeOrganizationId)
           setActiveOrganization(r.organizationId);
         if (r.businessContextId && r.businessContextId !== session.activeBusinessContextId) setActiveBusinessContext(r.businessContextId);
@@ -126,21 +151,21 @@ function CustomerWorkspaceContent() {
     setActiveOrganization,
   ]);
   React.useEffect(() => {
-    if (!normalized.customerId) {
-      setSnapshot(null);
+    if (!origin.customerId) {
+      setLoadedSnapshot(null);
       return;
     }
     let on = true;
-    setSnapshot(null);
+    setLoadedSnapshot(null);
     drawer.closeDrawer();
     customerRepository
-      .loadWorkspace(scope, normalized.customerId)
-      .then((v) => on && setSnapshot(v))
-      .catch(() => { if (on) { setSnapshot(null); setError("Customer details are unavailable. Refresh to try again."); } });
+      .loadWorkspace(scope, origin.customerId)
+      .then((v) => on && currentOrigin.current === origin && setLoadedSnapshot({ origin, value: v }))
+      .catch(() => { if (on && currentOrigin.current === origin) { setLoadedSnapshot({ origin, value: null }); setError({ scope, message: "Customer details are unavailable. Refresh to try again." }); } });
     return () => {
       on = false;
     };
-  }, [normalized.customerId, scope]);
+  }, [origin, scope, drawer]);
   React.useEffect(() => {
     setReplaying(false);
     setReplayIndex(0);
@@ -159,7 +184,7 @@ function CustomerWorkspaceContent() {
         snapshot.customer.organizationId !== scope.organizationId) return;
     let on = true;
     customerRepository.loadDrawer(scope, snapshot.customer.id, id).then((r) => {
-      if (on && r &&
+      if (on && currentOrigin.current === origin && r &&
           snapshot.customer.id === normalized.customerId &&
           snapshot.customer.organizationId === scope.organizationId)
         drawer.openDrawer(<CustomerDrawerContent record={r} />, r.title, { onDismiss: () => router.push(withDevelopmentIdentity(customerDeepLinkHref({ ...normalized, drawer: null, drawerId: null, eventId: null, identifierRef: null, orderId: null }), session.identity.id), { scroll: false }) });
@@ -177,6 +202,7 @@ function CustomerWorkspaceContent() {
     session.identity.id,
     scope,
     snapshot,
+    origin,
   ]);
   React.useEffect(() => {
     if (!replaying || !snapshot) return;
@@ -195,10 +221,12 @@ function CustomerWorkspaceContent() {
         snapshot.customer.organizationId !== scope.organizationId) return;
     go({ customerId: snapshot.customer.id, drawerId: id, drawer: null });
   };
-  if (loading && !snapshot)
-    return <State title="Loading Customer Workspace…" />;
+  if (invalidCustomerId)
+    return <State title="Customer unavailable in the active workspace" />;
   if (error)
     return <State title="Customer Workspace unavailable" detail={error} />;
+  if (customerList?.scope !== scope || (selectedCustomerId && !ownsSnapshot) || (loading && !snapshot))
+    return <State title="Loading Customer Workspace…" />;
   if (!customers.length && !String(filter.query || "").trim())
     return <State title="No customers available" detail="There are no customers available in the current workspace." />;
   if (snapshot && (
