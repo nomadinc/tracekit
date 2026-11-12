@@ -26,7 +26,7 @@ async function setup() {
   })(req, mod, mod.exports);
   function Probe() { context = mod.exports.useIdentity(); return React.createElement("p", null, "OLD_PRIVATE_WORKSPACE"); }
   await Renderer.act(async () => { root = Renderer.create(React.createElement(mod.exports.IdentityProvider, { initialSession: initial, persistentOrganizations: [{id:"stem"},{id:"nh"}], persistentBusinessContexts: [{id:"stem-context",organizationId:"stem"},{id:"client-nh",organizationId:"nh"}] }, React.createElement(Probe))); });
-  return { initial, requests, pending, get context() { return context; }, get reloads() { return reloads; }, get normalizations() { return normalizations; }, text: () => JSON.stringify(root.toJSON()), act: fn => Renderer.act(async () => { fn(); await Promise.resolve(); }), hydrate: next => Renderer.act(async () => { root.unmount(); root = Renderer.create(React.createElement(mod.exports.IdentityProvider, { initialSession: next, persistentOrganizations: [{id:"nh"}], persistentBusinessContexts: [{id:"client-nh",organizationId:"nh"}] }, React.createElement(Probe))); }), dispose: () => Renderer.act(() => root.unmount()) };
+  return { initial, requests, pending, get context() { return context; }, get reloads() { return reloads; }, get normalizations() { return normalizations; }, text: () => JSON.stringify(root.toJSON()), refresh: () => Renderer.act(() => root.root.findByType("button").props.onClick()), act: fn => Renderer.act(async () => { fn(); await Promise.resolve(); }), hydrate: next => Renderer.act(async () => { root.unmount(); root = Renderer.create(React.createElement(mod.exports.IdentityProvider, { initialSession: next, persistentOrganizations: [{id:"nh"}], persistentBusinessContexts: [{id:"client-nh",organizationId:"nh"}] }, React.createElement(Probe))); }), dispose: () => Renderer.act(() => root.unmount()) };
 }
 for (const kind of ["organization", "business-context"]) {
   test("authorized " + kind + " switch fences old UI and reloads authoritative session without optimistic state", async () => {
@@ -41,14 +41,15 @@ for (const kind of ["organization", "business-context"]) {
     assert.equal(h.reloads, 1); assert.equal(h.context.session, h.initial); assert.equal(h.normalizations, 0);
     assert.ok(!h.text().includes("OLD_PRIVATE_WORKSPACE")); h.dispose();
   });
-  test("denied " + kind + " switch never commits optimistic scope and supports safe retry", async () => {
+  test("denied " + kind + " switch never commits optimistic scope and requires authoritative refresh", async () => {
     const h = await setup();
     await h.act(() => kind === "organization" ? h.context.setActiveOrganization("foreign") : h.context.setActiveBusinessContext("foreign"));
     await h.act(() => h.pending[0].resolve({ok:false,status:403,json:()=>{throw Error("SECRET BODY");}}));
     assert.equal(h.reloads,0); assert.equal(h.context.session,h.initial); assert.equal(h.normalizations,0);
     assert.ok(h.text().includes("Unable to confirm workspace switch")); assert.ok(!h.text().includes("SECRET"));
-    await h.act(() => h.context.setActiveOrganization("nh")); assert.equal(h.requests.length,2);
-    assert.ok(!h.text().includes("Unable to confirm workspace switch")); h.dispose();
+    assert.ok(!h.text().includes("OLD_PRIVATE_WORKSPACE"));
+    await h.act(() => h.context.setActiveOrganization("nh")); assert.equal(h.requests.length,1);
+    h.refresh(); assert.equal(h.reloads,1); h.dispose();
   });
 }
 test("network failure remains sanitized and preserves server-derived authority", async () => {
@@ -69,4 +70,16 @@ test("fresh server session replaces membership, permissions, organization and co
   assert.deepEqual(h.context.session.effectivePermissions,["orders.view","customers.view"]);
   assert.ok(!h.context.session.effectivePermissions.includes("financials.view"));
   assert.equal(h.normalizations,0);h.dispose();
+});
+
+test("lost response after a server cookie commit never restores old tenant children", async () => {
+  const h=await setup(); let serverCookieOrganization="stem";
+  await h.act(()=>h.context.setActiveOrganization("nh"));
+  serverCookieOrganization="nh"; // The server committed before transport failed.
+  await h.act(()=>h.pending[0].reject(Error("response lost after Set-Cookie")));
+  assert.equal(serverCookieOrganization,"nh");
+  assert.equal(h.context.session.activeOrganizationId,"stem");
+  assert.ok(!h.text().includes("OLD_PRIVATE_WORKSPACE"));
+  assert.ok(h.text().includes("Unable to confirm workspace switch"));
+  assert.equal(h.reloads,0); h.refresh(); assert.equal(h.reloads,1);h.dispose();
 });
