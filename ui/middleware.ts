@@ -1,3 +1,4 @@
+import { ws023CorePreviewPath } from "@/lib/identity/ws023-preview-policy";
 import { authkitMiddleware } from "@workos-inc/authkit-nextjs";
 import { NextResponse, type NextFetchEvent, type NextRequest } from "next/server";
 import { shouldBlockLegacyRealDataProxy } from "@/lib/identity/route-security";
@@ -6,6 +7,7 @@ import { developmentIdentityById } from "@/lib/identity/development-state";
 export const DEVELOPMENT_REVIEW_HEADER = "x-tracekit-development-review";
 
 export default function middleware(request: NextRequest, event: NextFetchEvent) {
+  if (ws023CorePreviewPath(request.nextUrl.pathname)) return NextResponse.next();
   const localDevelopment = process.env.NODE_ENV !== "production" && process.env.TRACEKIT_IDENTITY_MODE === "development" && process.env.TRACEKIT_ENABLE_DEV_IDENTITIES === "true";
   const hasWorkOSSession = request.cookies.has(process.env.WORKOS_COOKIE_NAME || "wos-session");
   const requestedDevelopmentIdentity = request.nextUrl.searchParams.get("dev_identity");

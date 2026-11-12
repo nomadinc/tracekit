@@ -69,7 +69,7 @@ function summary(row: any, customer: any, scope: ProductionScope): OrderSummary 
     status: status(row?.status_norm || row?.status),
     profitStatus: "Estimated",
     profit: null,
-    revenue: num(row?.amount ?? row?.gross_amount),
+    revenue: observedAmount(row?.amount ?? row?.gross_amount),
     revenueAvailable: observedAmount(row?.amount ?? row?.gross_amount) !== null,
     currency: row?.currency || null,
     trackingHealth: "Unknown",

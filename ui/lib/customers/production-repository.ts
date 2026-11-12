@@ -156,7 +156,7 @@ function orderRow(row: any) {
     id,
     number: String(row?.order_id || row?.platform_order_id || "Order"),
     date: when(row?.created_at),
-    amount: n(row?.amount),
+    amount: observedAmount(row?.amount),
     amountAvailable: observedAmount(row?.amount) !== null,
     currency: row?.currency || null,
     profit: null,
@@ -238,7 +238,7 @@ export class ProductionCustomerRepository implements CustomerRepository<Producti
     }));
     return {
       customer,
-      lifetimeRevenue: n(detail.summary?.lifetime_revenue),
+      lifetimeRevenue: observedAmount(detail.summary?.lifetime_revenue),
       lifetimeRevenueAvailable: observedAmount(detail.summary?.lifetime_revenue) !== null
         && rawOrders.length > 0 && rawOrders.every((row: any) => row.currency && observedAmount(row.amount) !== null)
         && new Set(rawOrders.map((row: any) => row.currency)).size === 1,

@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { ws023CorePreviewPath } from '../lib/identity/ws023-preview-policy';
 import { GET } from '../app/api/ws023-core/[...readPath]/route';
 test('shared Core preview is unavailable in production and rejects missing or foreign database bindings before transport',async()=>{
  const keys=['VERCEL_ENV','TRACEKIT_WS023_READONLY_CORE_PREVIEW','NEXT_PUBLIC_SUPABASE_URL','SUPABASE_SERVICE_ROLE_KEY'] as const;
@@ -34,4 +35,12 @@ test('preview entry executes the real Supabase client with exact read filters an
   const res=await GET(new Request(`https://preview.vercel.app/api/ws023-core/v1/customer-orders?workspace_id=${org}&order_id=next29%3A103104&limit=1`,{headers:{'x-tk-secret':'synthetic-core-only'}}));
   assert.equal(res.status,200);const body:any=await res.json();assert.equal(body.orders[0].order.canonical_journey_id,journey);assert.equal(body.order_lines[0].product_name,'20 Treatments (5)');assert.equal(body.order_lines[0].unit_amount,116.99);assert.ok(calls.length>=5);
  }finally{globalThis.fetch=original;for(const key of keys){if(saved[key]===undefined)delete process.env[key];else process.env[key]=saved[key];}}
+});
+
+test('Core middleware exemption is limited to the explicitly enabled Preview path',()=>{
+ const enabled={VERCEL_ENV:'preview',TRACEKIT_WS023_READONLY_CORE_PREVIEW:'enabled'};
+ assert.equal(ws023CorePreviewPath('/api/ws023-core/v1/customer-orders',enabled),true);
+ for(const pathname of ['/api/customer-orders','/api/customers/person','/api/ws023-core-other/v1/customer-orders','/orders'])assert.equal(ws023CorePreviewPath(pathname,enabled),false);
+ assert.equal(ws023CorePreviewPath('/api/ws023-core/v1/customer-orders',{...enabled,VERCEL_ENV:'production'}),false);
+ assert.equal(ws023CorePreviewPath('/api/ws023-core/v1/customer-orders',{...enabled,TRACEKIT_WS023_READONLY_CORE_PREVIEW:'disabled'}),false);
 });

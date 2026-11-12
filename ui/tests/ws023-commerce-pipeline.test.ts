@@ -33,5 +33,14 @@ test('Core → customer-read projection → Order, Customer and Purchase adapter
   const inspector=await productionCustomerRepository.loadDrawer(scope,person,`event:${eventId}`);assert.ok(inspector);assert.ok(inspector.facts.some(f=>f.label==='Canonical Order'&&f.value===canonical));assert.ok(inspector.facts.some(f=>f.label==='Product'&&f.value==='20 Treatments (5)'));assert.ok(inspector.facts.some(f=>f.label==='Payment reference'&&f.value==='Unavailable'));assert.ok(inspector.facts.some(f=>f.label==='Acquisition'&&f.value==='Unmatched'));assert.ok(inspector.links?.some(link=>link.href.includes(journey)));
   await assert.rejects(productionCustomerRepository.loadWorkspace({...scope,journeyId:'unavailable'},person));
   assert.equal(await repo.loadWorkspace(scope,'next29:foreign'),null);
+  const originalAmount = order.gross_amount;
+  (order as any).gross_amount = null;
+  try {
+    const missingOrder = await repo.loadWorkspace(scope,'next29:103104');
+    const missingCustomer = await productionCustomerRepository.loadWorkspace(scope,person);
+    assert.equal(missingOrder?.order.revenue,null);assert.equal(missingOrder?.order.revenueAvailable,false);
+    assert.equal(missingCustomer?.lifetimeRevenue,null);assert.equal(missingCustomer?.orders[0].amount,null);
+  } finally { order.gross_amount = originalAmount; }
+
  }finally{globalThis.fetch=originalFetch;(globalThis as any).window=originalWindow;}
 });
