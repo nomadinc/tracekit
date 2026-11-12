@@ -194,6 +194,7 @@ export async function resolveApplicationSession(): Promise<ApplicationSessionRes
         // compatibility is resolved separately from the authorized Business Context.
         organizationIds: effectiveOrganizations.map((organization) => organization.id),
         grants: activePermissions.filter((permission) => !ROLE_PERMISSIONS[activeOrganizationMembership.role].includes(permission as never)),
+        denials: activeOverrides.filter((override) => override.effect === "deny").map((override) => override.capability),
       },
     },
     activeOrganizationId: activeOrganization?.id || null,
