@@ -281,6 +281,25 @@ function OrderWorkspaceContent() {
             ))}
           </div>
         </header>
+        <section className="m-5 rounded-xl border p-5">
+          <h2 className="font-semibold">Purchased Products</h2>
+          {snap.observedLines?.length ? (
+            <div className="mt-3 space-y-3">
+              {snap.observedLines.map((line) => (
+                <div key={line.id} className="rounded-lg border p-3 text-xs">
+                  <strong>{line.name || "Product name unavailable"}</strong>
+                  <p className="mt-1 text-slate-400">SKU: {line.sku || "Unavailable"} · Product: {line.providerProductId || "Unavailable"} · Variant: {line.providerVariantId || "Unavailable"}</p>
+                  <p className="mt-1">Quantity: {line.quantity ?? "Unavailable"} · Unit: {line.unitAmount === null ? "Unavailable" : formatObservedMoney(line.unitAmount, line.currency)} · Total: {line.grossAmount === null ? "Unavailable" : formatObservedMoney(line.grossAmount, line.currency)}</p>
+                  <p className="mt-1 text-slate-500">Evidence: {line.evidenceId || "Unavailable"}</p>
+                </div>
+              ))}
+            </div>
+          ) : <p className="mt-2 text-sm text-slate-400">Product line-item evidence is not available from the authorized Order API.</p>}
+          <div className="mt-4 border-t pt-3 text-xs">
+            <p>Canonical Order: {snap.canonicalOrderId || "Unavailable"}</p>
+            <p>Canonical Journey: {snap.canonicalJourneyId || "Not verified"}</p>
+          </div>
+        </section>
         {!snap.ledger.length ? (
           <section className="m-5 rounded-xl border p-6">
             <h2 className="font-semibold">Profit details not available</h2>
