@@ -1,0 +1,11 @@
+.git
+.vercel
+**/node_modules
+**/.next
+**/.next-build
+**/.wrangler
+**/*.tsbuildinfo
+**/.env
+**/.env.*
+**/.dev.vars
+**/.dev.vars.*
