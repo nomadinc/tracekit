@@ -1,12 +1,13 @@
 import "server-only";
 import type { AuditHistoryRecord } from "./audit-history";
 import { supabaseAuthHeaders } from "@/lib/commerce/supabase-auth";
+import { supabaseServerSecret } from "./supabase-server-secret";
 
 type Row = Record<string, unknown>;
 
 function configuration() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const key = supabaseServerSecret();
   if (!url || !key) throw new Error("Audit history storage is unavailable.");
   return { url, key };
 }
