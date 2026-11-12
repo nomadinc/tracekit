@@ -3,13 +3,18 @@ import { addDrawerTarget, addVersion, isOpaqueId, parseDrawerTarget, parseVersio
 import type { OrderDeepLinkState, OrderSummary, OrderWorkspaceSnapshot } from "./types";
 
 const FOCUS = new Set(["ledger", "attribution", "timeline", "tracking"] as const);
+const UUID = "[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}";
+const SHOPIFY_ORDER_ID = new RegExp(`^(?:shopify:${UUID}:${UUID}:)?gid://shopify/Order/[1-9][0-9]{0,19}$`);
+function isOrderId(value: string | null | undefined): value is string {
+  return isOpaqueId(value) || Boolean(value && SHOPIFY_ORDER_ID.test(value));
+}
 
 export function parseOrderDeepLink(value: URLSearchParams | string): OrderDeepLinkState {
   const params = typeof value === "string" ? new URLSearchParams(value.startsWith("?") ? value.slice(1) : value) : value;
   const focus = params.get("focus");
   return {
     version: parseVersion(params),
-    orderId: isOpaqueId(params.get("order_id")) ? params.get("order_id") : null,
+    orderId: isOrderId(params.get("order_id")) ? params.get("order_id") : null,
     focus: focus && FOCUS.has(focus as never) ? focus as OrderDeepLinkState["focus"] : null,
     lineId: isOpaqueId(params.get("line")) ? params.get("line") : null,
     attributionId: isOpaqueId(params.get("attribution")) ? params.get("attribution") : null,
@@ -63,7 +68,7 @@ function legacyDrawer(value: string | null | undefined): OrderDrawerTarget | nul
 export function orderDeepLinkHref(state: Partial<OrderDeepLinkState> = {}, _developmentIdentityId?: string) {
   const params = new URLSearchParams();
   addVersion(params);
-  if (state.orderId && isOpaqueId(state.orderId)) params.set("order_id", state.orderId);
+  if (state.orderId && isOrderId(state.orderId)) params.set("order_id", state.orderId);
   if (state.focus && FOCUS.has(state.focus)) params.set("focus", state.focus);
   if (state.lineId && isOpaqueId(state.lineId)) params.set("line", state.lineId);
   if (state.attributionId && isOpaqueId(state.attributionId)) params.set("attribution", state.attributionId);
