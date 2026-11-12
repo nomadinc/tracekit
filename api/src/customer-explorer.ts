@@ -1,3 +1,4 @@
+import { COMMERCE_ORDER_FIELDS, commercialTotals, orderEvidence, scopedOrder, customerOrderJourneys, relatedCommerceOrders } from "./commerce-customer-evidence";
 import { cleanText } from "./identity-normalization.ts";
 import { normalizeJourneyMetadata, normalizeJourneyTimestamp } from "./journey-events.ts";
 import { aggregateJourneyAttributionEvidence, JOURNEY_EVIDENCE_MAX_EVENTS } from "./journey-attribution-evidence.ts";
@@ -116,6 +117,7 @@ const JOURNEY_EVENT_SELECT = [
 ].join(",");
 
 const PLATFORM_ORDER_SELECT = [
+  COMMERCE_ORDER_FIELDS,
   "workspace_id",
   "person_id:resolved_person_id",
   "source_person_id:person_id",
@@ -254,6 +256,7 @@ export type CustomerJourneyDetailParams = {
   journey_id: string;
   limit: number;
   cursor: JourneyEventCursor | null;
+  business_context_id?: string | null;
 };
 
 type ActivityCategory = "marketing" | "customer_action" | "identity" | "commerce" | "attribution" | "commission" | "system" | "exception";
@@ -563,6 +566,13 @@ function compactOrder(row: any) {
         ? raw.products
         : [];
   return {
+    canonical_order_id: row.canonical_order_id || null,
+    organization_id: row.organization_id || null, workspace_id: row.workspace_id || null,
+    connection_id: row.connection_id || null, provider_account_id: row.provider_account_id || null,
+    canonical_journey_id: row.canonical_journey_id || null,
+    order_lines: row.order_lines || [],
+    product_subtotal: row.product_subtotal ?? null, tax_amount: row.tax_amount ?? null, shipping_amount: row.shipping_amount ?? null,
+    payment_reference: row.payment_reference ?? null, tkid: row.tkid ?? null, everflow_transaction_id: row.everflow_transaction_id ?? null, evidence_id: row.evidence_id ?? null,
     platform: row.platform || null,
     platform_order_id: row.platform_order_id || null,
     order_id: row.order_id || null,
@@ -1614,14 +1624,14 @@ export async function listCustomers(supabase: any, params: CustomerListParams) {
 
 async function getPersonOrThrow(supabase: any, workspaceId: string, personId: string) {
   const person = await supabaseMaybeSingle(
-    supabase.from("people").select(PEOPLE_SELECT).eq("workspace_id", workspaceId).eq("id", personId),
+    supabase.from("people").select(PEOPLE_SELECT).eq("workspace_id", workspaceId).eq("organization_id", workspaceId).eq("id", personId),
     "Customer lookup",
   );
   if (!person) throw Object.assign(new Error("Customer not found."), { status: 404, code: "not_found" });
   return person;
 }
 
-export async function getCustomerDetail(supabase: any, args: { workspace_id: string; person_id: string }) {
+export async function getCustomerDetail(supabase: any, args: { workspace_id: string; person_id: string; business_context_id?: string | null; journey_id?: string | null }) {
   const person = await getPersonOrThrow(supabase, args.workspace_id, args.person_id);
   const [identifiers, identityEvents, journeys, orders, credits, commissions, workItems] = await Promise.all([
     supabaseRows(
@@ -1655,13 +1665,24 @@ export async function getCustomerDetail(supabase: any, args: { workspace_id: str
       resolved_limit: 5,
     }).catch(() => ({ open: [], recent_resolved: [] })),
   ]);
+  const visibleOrders = orders.filter((order: any) => scopedOrder(order, args.workspace_id, args.business_context_id));
+  const orderJourneys = await customerOrderJourneys(supabase, args.workspace_id, args.person_id, visibleOrders);
+  for (const order of visibleOrders) order.canonical_journey_id = orderJourneys.get(order.canonical_order_id) || null;
+  if (args.journey_id) {
+    const requested = await supabaseMaybeSingle(supabase.from("journeys").select(JOURNEY_SELECT).eq("workspace_id", args.workspace_id).eq("person_id", args.person_id).eq("id", args.journey_id), "Requested Customer Journey lookup");
+    if (!requested) throw Object.assign(new Error("Journey not found."), { status: 404 });
+    if (!journeys.some((journey: any) => journey.id === requested.id)) journeys.push(requested);
+  }
+  const journeyIds = [...new Set(visibleOrders.map((order: any) => order.canonical_journey_id).filter(Boolean))];
+  const canonicalJourneyId = args.journey_id || (journeyIds.length === 1 ? journeyIds[0] : null);
+  const totals = commercialTotals(visibleOrders);
   const compactIdentifiers = identifiers.map(compactIdentifier);
   const compactJourneys = journeys.map(compactJourney);
-  const compactOrders = orders.map(compactOrder);
+  const compactOrders = visibleOrders.map(compactOrder);
   const compactCredits = credits.map((credit: any) => compactAttributionCredit(credit));
   const compactCommissions = commissions.map(compactCommission);
-  const sourceSystems = uniqueSourceSystems(identifiers, orders);
-  const customer360 = buildCustomer360({ person, identifiers, identityEvents, journeys, orders, credits, commissions });
+  const sourceSystems = uniqueSourceSystems(identifiers, visibleOrders);
+  const customer360 = buildCustomer360({ person, identifiers, identityEvents, journeys, orders: visibleOrders, credits, commissions });
   return {
     ok: true,
     workspace_id: args.workspace_id,
@@ -1669,6 +1690,7 @@ export async function getCustomerDetail(supabase: any, args: { workspace_id: str
     identifiers: compactIdentifiers,
     identity_events: identityEvents.map(compactIdentityEvent),
     journeys: compactJourneys,
+    canonical_journey_id: canonicalJourneyId,
     orders: compactOrders,
     attribution: compactCredits,
     commissions: compactCommissions,
@@ -1694,8 +1716,9 @@ export async function getCustomerDetail(supabase: any, args: { workspace_id: str
       first_seen_at: person.first_seen_at || person.created_at || null,
       last_seen_at: latestTimestamp(person.last_seen_at, person.updated_at, ...journeys.map((journey: any) => journey.ended_at), ...orders.map((order: any) => order.order_ts)),
       total_journeys: journeys.length,
-      total_orders: orders.length,
-      lifetime_revenue: orderRevenue(orders).toFixed(2),
+      total_orders: totals.count,
+      lifetime_revenue: orders.length >= 500 ? null : totals.amount,
+      revenue_currency: totals.currency,
       attributed_revenue: sumCreditAmount(credits.filter((credit: any) => cleanText(credit.status) === "attributed")).toFixed(2),
       source_systems: sourceSystems,
       identity_link_count: identifiers.length,
@@ -1710,6 +1733,7 @@ async function loadJourneyEvents(supabase: any, params: CustomerJourneyDetailPar
     .select(JOURNEY_EVENT_SELECT)
     .eq("workspace_id", params.workspace_id)
     .eq("journey_id", params.journey_id)
+    .eq("person_id", params.person_id)
     .order("event_time", { ascending: true })
     .order("id", { ascending: true })
     .limit(params.limit + 1);
@@ -1765,8 +1789,9 @@ export async function getCustomerJourneyDetail(supabase: any, params: CustomerJo
     .eq("organization_id", params.workspace_id).eq("resolved_person_id", params.person_id)
     .order("order_ts", { ascending: true })
     .limit(100);
-  if (journey.started_at) orderQuery = orderQuery.gte("order_ts", journey.started_at);
-  if (journey.ended_at) orderQuery = orderQuery.lte("order_ts", journey.ended_at);
+  // Only persisted purchase identifiers establish membership in a Journey.
+  const canonicalIds = page.filter((event: any) => event.event_type === "purchase" && /^[a-f0-9-]{36}$/i.test(event.source_record_id || "")).map((event: any) => event.source_record_id);
+  orderQuery = orderQuery.in("canonical_order_id", canonicalIds.length ? canonicalIds : ["00000000-0000-0000-0000-000000000000"]);
 
   const [identifiers, identityEvents, allCredits, commissions, orders] = await Promise.all([
     supabaseRows(
@@ -1784,14 +1809,16 @@ export async function getCustomerJourneyDetail(supabase: any, params: CustomerJo
     ),
     supabaseRows(orderQuery, "Customer journey order lookup"),
   ]);
+  const verifiedOrders = orders.filter((order: any) => scopedOrder(order, params.workspace_id, params.business_context_id) && page.some((event: any) => event.event_type === "purchase" && event.source_record_id === order.canonical_order_id && event.platform_order_id === order.platform_order_id));
+  for (const order of verifiedOrders) { const evidence = await orderEvidence(supabase, params.workspace_id, order); order.order_lines = evidence.lines; order.canonical_journey_id = evidence.journey_id; }
   const eventById = mapBy(page, (row: any) => cleanText(row.id));
   const creditsByEvent = groupBy(allCredits, (row: any) => cleanText(row.conversion_event_id || row.touchpoint_event_id));
   const commissionsByConversion = groupBy(commissions, (row: any) => cleanText(row.conversion_event_id));
-  const timeline = page.map((event: any) => compactTimelineEvent(
-    event,
-    creditsByEvent.get(cleanText(event.id)) || [],
-    commissionsByConversion.get(cleanText(event.id)) || [],
-  ));
+  const timeline = page.map((event: any) => ({
+    ...compactTimelineEvent(event, creditsByEvent.get(cleanText(event.id)) || [], commissionsByConversion.get(cleanText(event.id)) || []),
+    journey_id: params.journey_id,
+    commerce: verifiedOrders.filter((order: any) => event.event_type === "purchase" && event.source_record_id === order.canonical_order_id && event.platform_order_id === order.platform_order_id).map(compactOrder),
+  }));
   const touchpointById = new Map<string, any>();
   for (const event of page) touchpointById.set(cleanText(event.id), event);
   const touchpoints = page
@@ -1801,7 +1828,7 @@ export async function getCustomerJourneyDetail(supabase: any, params: CustomerJo
       eligible_for_attribution: allCredits.some((credit: any) => cleanText(credit.touchpoint_event_id) === cleanText(event.id)),
       eligibility_reason: allCredits.some((credit: any) => cleanText(credit.touchpoint_event_id) === cleanText(event.id)) ? "Used by Attribution Engine" : "No stored attribution credit",
     }));
-  const activity = buildJourneyActivity({ events: page, identityEvents, orders, credits: allCredits, commissions });
+  const activity = buildJourneyActivity({ events: page, identityEvents, orders: verifiedOrders, credits: allCredits, commissions });
   const last = page[page.length - 1] || null;
   const attributionEvidence = aggregateJourneyAttributionEvidence(
     evidenceRows.slice(0, JOURNEY_EVIDENCE_MAX_EVENTS),
@@ -1821,7 +1848,7 @@ export async function getCustomerJourneyDetail(supabase: any, params: CustomerJo
     activity,
     activity_summary: buildJourneyActivitySummary(journey, activity, allCredits, commissions),
     touchpoints,
-    orders: orders.map(compactOrder),
+    orders: verifiedOrders.map(compactOrder),
     attribution: allCredits.map((credit: any) => compactAttributionCredit(credit, eventById)),
     attribution_explanations: buildAttributionExplanations(allCredits, eventById),
     commissions: commissions.map(compactCommission),
@@ -1844,16 +1871,24 @@ export async function getCustomerJourneyDetail(supabase: any, params: CustomerJo
 
 // Commerce evidence belongs to a tenant even while person resolution is pending.
 // Do not manufacture people or attach orders using name/email similarity.
-export async function listCustomerOrders(supabase: any, args: { workspace_id: string; offset: number; limit: number; order_id?: string; person_id?: string }) {
+export async function listCustomerOrders(supabase: any, args: { workspace_id: string; offset: number; limit: number; order_id?: string; person_id?: string; business_context_id?: string | null }) {
   const limit = Math.max(1, Math.min(100, Math.floor(args.limit || 50)));
   const offset = Math.max(0, Math.floor(args.offset || 0));
-  let query = supabase.from("tracekit_customer_order_read_model")
-    .select("workspace_id,organization_id,person_id,resolved_person_id,identity_resolution,platform,platform_order_id,order_id,order_ts,status,status_norm,gross_amount,currency,evidence_id")
+  let query = supabase.from("tracekit_customer_order_read_model").select(COMMERCE_ORDER_FIELDS)
     .eq("workspace_id", args.workspace_id).eq("organization_id", args.workspace_id);
-  if (args.order_id) query = query.eq("platform_order_id", args.order_id);
+  if (args.order_id) query = query.eq(/^[a-f0-9-]{36}$/i.test(args.order_id) ? "canonical_order_id" : "platform_order_id", args.order_id);
   if (args.person_id) query = query.eq("resolved_person_id", args.person_id);
+  if (args.business_context_id && !/^[a-zA-Z0-9_-]+$/.test(args.business_context_id)) throw new Error("Invalid Business Context.");
+  if (args.business_context_id) query = query.or(`business_context_id.is.null,business_context_id.eq.${args.business_context_id}`);
   const { data, error } = await query.order("order_ts", { ascending: false }).order("platform_order_id", { ascending: false }).range(offset, offset + limit);
   if (error) throw new Error("Customer order evidence is unavailable.");
-  const rows = (data || []).slice(0, limit);
-  return { ok: true, orders: rows.map((order: any) => ({ order, customer: order.resolved_person_id ? { id: order.resolved_person_id } : null, identity_state: order.identity_resolution || "unresolved" })), next_offset: (data || []).length > limit ? offset + limit : null };
+  if (args.order_id && (data || []).length > 1) throw new Error("Ambiguous Order identity.");
+  const rows = (data || []).slice(0, limit).filter((order: any) => scopedOrder(order, args.workspace_id, args.business_context_id));
+  if (args.order_id && rows.length > 1) throw new Error("Ambiguous Order identity.");
+  const orders = await Promise.all(rows.map(async (order: any) => {
+    const evidence = args.order_id ? await orderEvidence(supabase, args.workspace_id, order) : { lines: [], journey_id: null };
+    const related = args.order_id ? await relatedCommerceOrders(supabase, args.workspace_id, order, args.business_context_id) : [];
+    return { order: { ...order, canonical_journey_id: evidence.journey_id, related_orders: related }, customer: order.resolved_person_id ? { id: order.resolved_person_id } : null, identity_state: order.identity_resolution || "unresolved", order_lines: evidence.lines };
+  }));
+  return { ok: true, orders, order_lines: args.order_id ? orders[0]?.order_lines || [] : [], next_offset: (data || []).length > limit ? offset + limit : null };
 }

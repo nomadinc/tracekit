@@ -1,8 +1,18 @@
 // Only retained, exact identifiers can establish an Order relationship.
 // Time proximity and substring matches are not identity evidence.
 export function exactRelatedOrder(event: any, orders: any[]): any | null {
-  const evidence = [event, event?.technical_evidence, event?.technical].filter(Boolean);
   const text = (value: unknown) => typeof value === "string" ? value.trim() : typeof value === "number" && Number.isFinite(value) ? String(value) : "";
+  let proof: any = null;
+  if (event && Object.prototype.hasOwnProperty.call(event, "commerce")) {
+    // An explicit Core proof (including an empty/unresolved result) outranks
+    // legacy provider-key matching. Never turn negative proof into a fallback.
+    if (!Array.isArray(event.commerce) || event.commerce.length !== 1) return null;
+    proof = event.commerce[0];
+    if (!text(proof?.canonical_order_id)
+      || text(event.source_record_id) !== text(proof.canonical_order_id)
+      || text(event.platform_order_id) !== text(proof.platform_order_id)) return null;
+  }
+  const evidence = [event, event?.technical_evidence, event?.technical, proof].filter(Boolean);
   const values = (rows: any[], key: string) => Array.from(new Set(rows.map((row) => text(row?.[key])).filter(Boolean)));
   // Persisted provider keys encode provider:connection:provider-account:object-id.
   // Older/short keys cannot supply the missing scope needed for number fallback.

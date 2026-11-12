@@ -69,7 +69,7 @@ test("deep links normalize invalid event, identifier, Order, and Drawer state", 
     list,
     snap,
   );
-  assert.equal(state.customerId, "cust-123");
+  assert.equal(state.customerId, "missing");
   assert.equal(state.eventId, null);
   assert.equal(state.identifierRef, null);
   assert.equal(state.orderId, null);

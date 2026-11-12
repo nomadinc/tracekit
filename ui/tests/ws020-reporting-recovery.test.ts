@@ -130,7 +130,7 @@ test("Customer Journey consumes later canonical event pages without duplicating 
     assert.equal(snapshot?.journey[119].id, "e119");
   }, (url) => {
     assert.equal(url.searchParams.get("workspace_id"), "tenant");
-    if (!url.pathname.includes("/journeys/")) return Response.json({ customer: { id: "c1" }, orders: [], journeys: [{ id: "j1" }] });
+    if (!url.pathname.includes("/journeys/")) return Response.json({ customer: { id: "c1" }, canonical_journey_id: "j1", orders: [], journeys: [{ id: "j1" }] });
     const offset = url.searchParams.has("cursor") ? 100 : 0;
     return Response.json({ events: Array.from({ length: offset ? 20 : 100 }, (_, i) => ({ id: `e${offset + i}`, event_type: "click" })), activity: [{ id: "derived" }], page: { has_more: offset === 0, next_cursor: "opaque/next?" } });
   });
@@ -156,5 +156,13 @@ test("Customer Journey renders same-time purchase evidence without inventing an 
     assert.doesNotMatch(workspace?.journey[0].confidence || "", /Order 101/);
   }, (url) => url.pathname.includes("/journeys/")
     ? Response.json({ events: [{ id: "e1", event_type: "purchase", event_time: "2026-11-01T00:00:00Z" }], page: { has_more: false } })
-    : Response.json({ customer: { id: "c1" }, journeys: [{ id: "j1" }], orders: [{ platform: "next29", platform_order_id: "next29:a:101", order_id: "101", created_at: "2026-11-01T00:00:00Z" }] }));
+    : Response.json({ customer: { id: "c1" }, canonical_journey_id: "j1", journeys: [{ id: "j1" }], orders: [{ platform: "next29", platform_order_id: "next29:a:101", order_id: "101", created_at: "2026-11-01T00:00:00Z" }] }));
+});
+
+test("unverified Journey list is never used as an implicit first-record fallback",async()=>{
+ let journeyRequests=0;
+ await withResponses(async()=>{
+  const snapshot=await new ProductionCustomerRepository().loadWorkspace(scope,"c1");
+  assert.deepEqual(snapshot?.journey,[]);assert.equal(snapshot?.journeyId,"No canonical journey");assert.equal(journeyRequests,0);
+ },url=>{if(url.pathname.includes("/journeys/"))journeyRequests++;return Response.json({customer:{id:"c1"},journeys:[{id:"unrelated-first"},{id:"other"}],orders:[]});});
 });

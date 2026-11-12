@@ -35,10 +35,20 @@ async function getOrder(platformOrderId: string) {
   return res.json();
 }
 
-async function getOrderProfit(order: any): Promise<{
+async function getOrderProfit(order: any, requestedPlatformOrderId: string): Promise<{
   profit: OrderProfitResponse | null;
   error: string | null;
 }> {
+  const isNext29 = String(order?.platform ?? "").trim().toLowerCase() === "next29"
+    || [requestedPlatformOrderId, order?.platform_order_id].some(
+      (key) => typeof key === "string" && /^next29:/i.test(key.trim()),
+    );
+  if (isNext29) {
+    // This endpoint only accepts a workspace and bare order number, with an
+    // optional connector. It cannot verify a Next29 canonical order or store.
+    return { profit: null, error: "Profit is unavailable for this 29Next order until its scope can be verified." };
+  }
+
   const orderId = String(order?.order_id || "").trim();
   if (!orderId) return { profit: null, error: null };
 
@@ -405,7 +415,7 @@ export default async function OrderDetailPage({
   }
 
   const timeline = buildOrderTimeline(order);
-  const profitState = await getOrderProfit(order);
+  const profitState = await getOrderProfit(order, platformOrderId);
   const profit = profitState.profit;
   const rollup = profit?.rollup || null;
   const ledgerRows = sortLedgerRows(profit?.ledger_rows || []);

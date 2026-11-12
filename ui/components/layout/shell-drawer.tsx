@@ -25,68 +25,45 @@ export function ShellDrawerProvider({
 }) {
   const pathname = usePathname();
   const { session } = useIdentity();
+  const ownerKey = JSON.stringify([pathname, session.identity.id, session.activeOrganizationId, session.activeBusinessContextId]);
   const [drawer, setDrawer] = React.useState<{
     title: string;
+    ownerKey: string;
     content: React.ReactNode;
     onDismiss?: () => void;
   } | null>(null);
   const dismissDrawer = React.useCallback(() => {
-    drawer?.onDismiss?.();
+    if (drawer?.ownerKey === ownerKey) drawer.onDismiss?.();
     setDrawer(null);
-  }, [drawer]);
-  const previousRef = React.useRef({
-    pathname,
-    identityId: session.identity.id,
-    organizationId: session.activeOrganizationId,
-    businessContextId: session.activeBusinessContextId,
-  });
+  }, [drawer, ownerKey]);
   React.useEffect(() => {
-    const next = {
-      pathname,
-      identityId: session.identity.id,
-      organizationId: session.activeOrganizationId,
-      businessContextId: session.activeBusinessContextId,
-    };
-    const previous = previousRef.current;
-    if (
-      drawer &&
-      (previous.pathname !== next.pathname ||
-        previous.identityId !== next.identityId ||
-        previous.organizationId !== next.organizationId ||
-        previous.businessContextId !== next.businessContextId)
-    )
-      setDrawer(null);
-    previousRef.current = next;
-  }, [
-    drawer,
-    pathname,
-    session.activeBusinessContextId,
-    session.activeOrganizationId,
-    session.identity.id,
-  ]);
+    // Rendering is already scoped below. Clear only stale state, never a new
+    // drawer opened by a child during the same scope transition.
+    setDrawer(current => current && current.ownerKey !== ownerKey ? null : current);
+  }, [ownerKey]);
   React.useEffect(() => {
-    if (!drawer) return;
+    if (!drawer || drawer.ownerKey !== ownerKey) return;
     function onKeyDown(event: KeyboardEvent) {
       if (event.key === "Escape") dismissDrawer();
     }
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [dismissDrawer, drawer]);
+  }, [dismissDrawer, drawer, ownerKey]);
   const value = React.useMemo(
     () => ({
       openDrawer: (
         content: React.ReactNode,
         title: string,
         options?: { onDismiss?: () => void },
-      ) => setDrawer({ content, title, onDismiss: options?.onDismiss }),
+      ) => setDrawer({ content, title, ownerKey, onDismiss: options?.onDismiss }),
       closeDrawer: () => setDrawer(null),
     }),
-    [],
+    [ownerKey],
   );
   return (
     <ShellDrawerContext.Provider value={value}>
       {children}
-      {drawer ? (
+      {drawer && drawer.ownerKey === ownerKey ? (
         <div className="fixed inset-0 z-50" role="presentation">
           <button
             type="button"

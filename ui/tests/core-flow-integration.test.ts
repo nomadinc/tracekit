@@ -128,7 +128,7 @@ test("invalid object and Drawer IDs normalize without disclosure or exceptions",
       ),
       offers,
     ).offerId,
-    null,
+    "offer-secret",
   );
   assert.equal(
     normalizeCustomerDeepLink(

@@ -24,3 +24,7 @@ test("order read failure is unavailable and route is GET-only",async()=>{
  assert.equal(matchCustomerExplorerRoute("GET","/v1/customer-orders")?.kind,"customer_orders");
  assert.equal(matchCustomerExplorerRoute("POST","/v1/customer-orders")?.kind,"method_not_allowed");
 });
+test("detail limit cannot conceal an ambiguous provider identity",async()=>{
+ const row={workspace_id:"tenant",organization_id:"tenant",platform_order_id:"next29:103104"};
+ await assert.rejects(listCustomerOrders(store([row,{...row}]),{workspace_id:"tenant",offset:0,limit:1,order_id:"next29:103104"}),/Ambiguous/);
+});

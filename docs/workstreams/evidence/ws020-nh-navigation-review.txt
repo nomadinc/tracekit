@@ -1,0 +1,73 @@
+WS-020 NH navigation/read-model bounded integration
+
+Base: 675e50ab3cf4225b7fe0d399983de75a2ad6b113
+Donor: d3c5659d7d183125c5b9bf1b883a50e1dab60278
+Common ancestor: 6d56ec1bb30b9eb812515cfcb802408b25f521f3
+Source inventory: ws020-nh-navigation-source-inventory.json, 42 allowlisted files.
+This is a selective donor delta, not a merge of all 74 differing files.
+Every allowlisted file is byte-identical to the donor; no conflict resolution
+or new product behavior was silently inserted. Two evidence files describe it.
+
+Dependency closure:
+- Customer/Order/Offer workspaces preserve explicit IDs, exact canonical Journey
+  links, owned async responses, and first-render scope fences. Shell drawer is
+  owned by route/user/organization/context before passive cleanup effects.
+- Order context drawer and observed-lines adapter depend on nullable commerce
+  types and exact Core Order/connection/account/organization evidence.
+- UI customer-orders route uses the shared closed commerce projection. It
+  permits observed purchase amounts but denies costs/profit/fees/credits and
+  raw/private/contact fields according to existing permissions.
+- scoped-core-runtime rejects conflicting Business Context hints, injects the
+  authorized server context and tenant, and preserves server authorization.
+- Core customer-explorer needs commerce-customer-evidence and three router
+  parameter-forwarding changes to serve exact Order lines/Journeys, reject
+  ambiguity, and retain tenant-owned unresolved Orders without guessed people.
+- Mock null handling and governed MCP redaction follow the nullable types; MCP
+  restricted amounts become unavailable rather than an invented zero.
+- Tests are the donor native/mounted regression closure for these contracts.
+
+Deliberately excluded and unchanged from baseline:
+Invitation routes/diagnostics/telemetry, Mission Control coverage/finance logic,
+all manifests/locks, dependency installs/upgrades, preview handlers/auth/proxy
+origin overrides/middleware/config, modern secret selection, Stem Offer/TKID
+SQL/routes/activation, health/background Worker entrypoint changes.
+No migrations, production data changes, enrollment, provider actions or rollout.
+Shared provider/session corrections remain separate commits coordinated by master.
+
+Validation on this exact selective candidate:
+131 UI native regressions PASS (repository runner).
+17 mounted Customer/Order/Shell lifecycle tests PASS, React 18.3.1 tooling.
+36 Core/customer-explorer/order/attribution boundary native tests PASS.
+UI application-only TypeScript PASS.
+API Wrangler deploy --dry-run PASS; no upload.
+Strict API TypeScript FAIL: baseline and candidate both 146 diagnostics.
+Normalized diagnostic multisets (file/message excluding checkout prefix and
+line/column shifts) have zero added/removed entries. Existing target/library,
+nullability and Cloudflare/DOM type conflicts remain; this does not waive them.
+UI production build PASS, exit 0 (Next 15.5.23), seven nonfatal hook warnings.
+No hooks lint suppression or source cleanup was applied. Customer explicit
+canonical-ID dependencies are intentional for reused session-object mutation
+coverage; warning cleanup must preserve the mounted first-commit guarantees.
+Git diff --check PASS.
+
+Review limits and acceptance:
+Source tests use fixtures, not customer authentication. Browser host unavailable;
+actual NH customer screenshots, logout/login, server foreign-tenant denial and
+invalid-ID UI acceptance remain unproven. Master reports all 19 NH projected
+Orders lack person/context links and 103104 is absent. This code never infers
+those missing associations; Customer/Journey remains unavailable until source
+identity evidence supports it. Foreign denial must target an unassigned tenant;
+the customer's authorized Stem membership must not be treated as foreign.
+WS-001 must reconcile the shared Core read-model delta before integration.
+Independent WS-022 review and master-approved release sequence remain required.
+Rollback: revert this bounded integration commit; no schema rollback applies.
+
+Reproduction commands (existing locked dependencies required):
+UI: npm test -- core-flow-integration.test.ts customer-repository.test.ts offer-repository.test.ts order-repository.test.ts ws020-core-read-projection.test.ts ws020-cross-connection-order.test.ts ws020-reporting-recovery.test.ts ws020-scoped-core-gateway.test.ts ws023-commerce-pipeline.test.ts ws023-commerce-projection.test.ts ws023-cross-workspace-deeplinks.test.ts ws023-observed-lines.test.ts ws023-shopify-order-deep-link.test.ts identity-authorization.test.ts persistent-identity.test.ts m13-mcp-customer-organization-scope.test.ts m13-server-customer-read-origin.test.ts m13-direct-core-customer-read.test.ts journey-attribution-evidence.test.ts
+Mounted from root: WS023_TEST_TOOLING=/private/tmp/ws023-lifecycle-tooling node --test ui/tests/ws023-customer-lifecycle.test.cjs ui/tests/ws023-orders-drawer-lifecycle.test.cjs ui/tests/ws023-shell-drawer-scope.test.cjs
+API: node --import tsx --test src/customer-explorer.test.ts src/ws020-core-read-boundary.test.ts src/journey-attribution-evidence.test.ts src/ws020-customer-orders.test.ts src/ws023-commerce-evidence.test.ts
+UI build: NEXT_TELEMETRY_DISABLED=1 npm run build
+API compile: WRANGLER_SEND_METRICS=false node node_modules/wrangler/bin/wrangler.js deploy --dry-run --outdir <isolated-local-output>
+UI app types used external config extending ui/tsconfig.json, downlevelIteration
+true, incremental false, excluding tests/scripts/node_modules; no tracked config
+was changed. Strict API comparison used original api/tsconfig.json unchanged.

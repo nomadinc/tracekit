@@ -5,12 +5,12 @@ import { ROLE_PERMISSIONS } from "../lib/identity/permissions";
 import type { TraceKitSessionContext } from "../lib/identity/persistent-types";
 
 function session(permissions: readonly string[]) { return { effectivePermissions: [...permissions] } as TraceKitSessionContext; }
-test("client-read-only can read commerce identifiers but cannot read nested financial or sensitive details", () => {
+test("client-read-only can read observed commerce but cannot read restricted financial or sensitive details", () => {
   const permissions = ROLE_PERMISSIONS["client-read-only"];
   assert.ok(permissions.includes("financials.view"));
   assert.ok(permissions.includes("connectors.view"));
   assert.ok(!permissions.includes("orders.view_financials"));
-  assert.deepEqual(projectCoreCustomerRead({ customer_id: "person", email: "private@example.test", orders: [{ order_id: "order", gross_amount: 12, status: "COMPLETED", raw_json: { secret: "provider" } }], journey: { phone: "123", revenue: 12, identifiers: ["private@example.test"] } }, session(permissions)), { customer_id: "person", orders: [{ order_id: "order", status: "COMPLETED" }], journey: {} });
+  assert.deepEqual(projectCoreCustomerRead({ customer_id: "person", email: "private@example.test", orders: [{ order_id: "order", gross_amount: 12, status: "COMPLETED", raw_json: { secret: "provider" } }], journey: { phone: "123", revenue: 12, identifiers: ["private@example.test"] } }, session(permissions)), { customer_id: "person", orders: [{ order_id: "order", gross_amount: 12, status: "COMPLETED" }], journey: {} });
 });
 test("detailed financial access requires both permissions and still excludes raw provider payloads", () => {
   const body = { gross_amount: 0, email: "private@example.test", raw_json: { email: "private@example.test" } };
