@@ -1,0 +1,9 @@
+# Upload ONLY as an inactive version; never deploy this preview entry point.
+# Existing secret bindings remain encrypted on Cloudflare. No secret is copied.
+name = "tracekit-api"
+account_id = "d1517c73e346286969b2ca57d7af7abf"
+main = "src/ws023-readonly-preview.ts"
+compatibility_date = "2024-06-20"
+compatibility_flags = ["nodejs_compat"]
+[vars]
+SUPABASE_URL = "https://uoeosoiegatlqtzemsfv.supabase.co"

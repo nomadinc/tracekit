@@ -9,6 +9,7 @@ export function parseCustomerDeepLink(value: URLSearchParams | string): Customer
   const focus = params.get("focus");
   return {
     version: parseVersion(params),
+    journeyId: isOpaqueId(params.get("journey_id")) ? params.get("journey_id") : null,
     customerId: isOpaqueId(params.get("customer_id")) ? params.get("customer_id") : null,
     focus: focus && FOCUS.has(focus as never) ? focus as CustomerDeepLinkState["focus"] : null,
     eventId: isOpaqueId(params.get("event_id")) ? params.get("event_id") : null,
@@ -60,6 +61,7 @@ function legacyDrawer(value: string | null | undefined): CustomerDrawerTarget | 
 export function customerDeepLinkHref(state: Partial<CustomerDeepLinkState> = {}, _developmentIdentityId?: string) {
   const params = new URLSearchParams();
   addVersion(params);
+  if (state.journeyId && isOpaqueId(state.journeyId)) params.set("journey_id", state.journeyId);
   if (state.customerId && isOpaqueId(state.customerId)) params.set("customer_id", state.customerId);
   if (state.focus && FOCUS.has(state.focus)) params.set("focus", state.focus);
   if (state.eventId && isOpaqueId(state.eventId)) params.set("event_id", state.eventId);

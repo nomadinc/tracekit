@@ -29,7 +29,7 @@ async function get(path: string) {
   return readJson(await fetch(path, { method: "GET", cache: "no-store", headers: { accept: "application/json" } }));
 }
 const qs = (scope: ProductionScope, extra: Record<string, unknown> = {}) => {
-  const p = new URLSearchParams({ workspace_id: scope.workspaceId });
+  const p = new URLSearchParams({ workspace_id: scope.workspaceId, ...(scope.businessContextId ? { business_context_id: scope.businessContextId } : {}) });
   for (const [k,v] of Object.entries(extra)) if (v !== null && v !== undefined && v !== "") p.set(k, String(v));
   return p.toString();
 };
@@ -55,6 +55,7 @@ function summary(row: any, customer: any, scope: ProductionScope): OrderSummary 
   if (!id) throw new Error("Order identity is unavailable.");
   return {
     id,
+    provider: String(row.platform || "Unavailable"),
     organizationId: scope.organizationId || "",
     offerId: String(row?.everflow_offer_id || row?.offer_id || ""),
     customerId: String(customer?.id || ""),
@@ -139,21 +140,22 @@ export class ProductionOrderRepository {
   }
   async resolveOrder(scope: ProductionScope, id: string) {
     const rows = await this.listOrders(scope,{});
-    const r = rows.find(x=>x.id===id || x.number===id);
+    const matches = rows.filter(x=>x.id===id);
+    const r = matches.length === 1 ? matches[0] : null;
     return r ? { organizationId:r.organizationId, businessContextId:r.offerId || scope.businessContextId || "", orderId:r.id } : null;
   }
   async loadWorkspace(scope: ProductionScope, id: string): Promise<OrderWorkspaceSnapshot|null> {
     const result = await get(`/api/customer-orders?${qs(scope,{order_id:id,limit:1})}`);
     const entry = result.orders?.[0];
     const raw:any=entry?.order;
-    if (!raw || orderId(raw) !== id) return null;
+    if (!raw || (orderId(raw) !== id && raw.canonical_order_id !== id)) return null;
     let detail:any=raw ? {customer:entry.customer,orders:[raw],journeys:[]} : null;
     if (entry?.customer?.id) detail=await customerDetail(scope,entry.customer.id);
     if(!detail||!raw) return null;
     const o=summary(raw,detail.customer,scope);
-    const journeys=Array.isArray(detail.journeys)?detail.journeys:[];
+    const journeyId = raw.canonical_journey_id || null;
     let jd:any=null;
-    if(journeys[0]?.id) jd=await readJourneyPages((cursor) => get(`/api/customers/${encodeURIComponent(o.customerId)}/journeys/${encodeURIComponent(journeys[0].id)}?${qs(scope,{limit:100,cursor})}`));
+    if(journeyId) jd=await readJourneyPages((cursor) => get(`/api/customers/${encodeURIComponent(o.customerId)}/journeys/${encodeURIComponent(journeyId)}?${qs(scope,{limit:100,cursor})}`));
     const rows=Array.isArray(jd?.events)?jd.events:Array.isArray(jd?.activity)?jd.activity:[];
     const credits=Array.isArray(jd?.attribution)?jd.attribution:[];
     const timeline: OrderTimelineEvent[] = rows.map((r:any)=>event(r,o,raw,credits));
@@ -177,11 +179,10 @@ export class ProductionOrderRepository {
       // Absent projection means unavailable; never infer from order totals.
       observedLines: observedOrderLines(result.order_lines, String(raw.canonical_order_id || ""), scope.organizationId || ""),
       canonicalOrderId: String(raw.canonical_order_id || "") || null,
-      // A Journey is canonical only if its retained event identifies this exact canonical order.
-      canonicalJourneyId: String(raw.canonical_order_id || "") && rows.some((r:any) =>
-        String(r?.source_record_id || r?.technical_evidence?.canonical_order_id || r?.metadata?.canonical_order_id || "") === String(raw.canonical_order_id)
-        && String(r?.platform_order_id || "") === String(raw.platform_order_id || "")
-      ) ? String(journeys[0]?.id || "") || null : null,
+      canonicalJourneyId: jd?.journey?.id === journeyId ? journeyId : null,
+      observedTotals: { subtotal: observedAmount(raw.product_subtotal), tax: observedAmount(raw.tax_amount), shipping: observedAmount(raw.shipping_amount), discounts: null, gross: observedAmount(raw.gross_amount), currency: raw.currency || null },
+      relatedOrders: (raw.related_orders || []).map((related: any) => ({id:related.platform_order_id,number:related.order_id || related.platform_order_id,kind:related.relationship_type,evidence:related.evidence_id})),
+      observedReferences: { payment: raw.payment_reference ?? null, transaction: raw.transaction_id ?? null, tkid: raw.tkid ?? null, everflow: raw.everflow_transaction_id ?? null, evidence: raw.evidence_id ?? null },
       commercial:{mainProduct:"Not available from current Order read model",orderBumps:[],upsells:[],shippingCharged:0,taxCollected:0,discounts:0,quantity:0},
       ledger:[],
       shipping:{charged:0,actual:0,packaging:0,margin:0},

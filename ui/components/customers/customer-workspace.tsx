@@ -52,7 +52,7 @@ function CustomerWorkspaceContent() {
   const { session, organizations, setActiveOrganization, setActiveBusinessContext } =
     useIdentity();
   const activeOrganization = organizations.find((organization) => organization.id === session.activeOrganizationId) || organizations[0] || null;
-  const scope = React.useMemo(() => ({ authenticated: session.authenticated, workspaceId: session.activeOrganizationId || "", organizationId: session.activeOrganizationId, businessContextId: session.activeBusinessContextId, session }), [session]);
+  const scope = React.useMemo(() => ({ authenticated: session.authenticated, workspaceId: session.activeOrganizationId || "", organizationId: session.activeOrganizationId, businessContextId: session.activeBusinessContextId, journeyId: params.get("journey_id"), session }), [session, params]);
   const requested = React.useMemo(
     () => parseCustomerDeepLink(params),
     [params],
@@ -287,6 +287,7 @@ function CustomerWorkspaceContent() {
             ))}
           </div>
         </header>
+        {snapshot.availableJourneys?.length ? <nav aria-label="Canonical Journeys" className="mx-5 my-3 flex flex-wrap gap-3 text-xs">{snapshot.availableJourneys.map(journey=><a key={journey.id} className="underline" aria-current={journey.id===snapshot.journeyId ? "page" : undefined} href={customerDeepLinkHref({customerId:snapshot.customer.id,journeyId:journey.id,focus:"journey"})}>Journey {journey.id} · {journey.label}</a>)}</nav> : null}
         <section className="border-b p-5 dark:border-white/10">
           <div className="flex flex-wrap justify-between gap-3">
             <div>

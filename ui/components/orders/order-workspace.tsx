@@ -262,6 +262,8 @@ function OrderWorkspaceContent() {
           </div>
           <div className="mt-5 grid gap-4 border-t pt-4 sm:grid-cols-3 lg:grid-cols-6">
             {[
+              ["Provider", snap.order.provider || "Unavailable"],
+              ["Observed at", snap.order.date],
               ["Revenue", snap.order.revenueAvailable === false ? "Unavailable" : formatObservedMoney(snap.order.revenue, snap.order.currency)],
               [
                 "Customer",
@@ -281,6 +283,9 @@ function OrderWorkspaceContent() {
             ))}
           </div>
         </header>
+        {snap.relatedOrders ? <section className="m-5 rounded-xl border p-5"><h2 className="font-semibold">Related Orders</h2>{snap.relatedOrders.length ? snap.relatedOrders.map(related=><p key={`${related.id}-${related.kind}`} className="mt-2 text-sm"><a className="underline" href={`/orders?v=1&order_id=${encodeURIComponent(related.id)}`}>{related.kind}: {related.number}</a> · Evidence: {related.evidence || "Unavailable"}</p>) : <p className="mt-2 text-sm">No deterministically linked related Orders were returned.</p>}</section> : null}
+        {snap.observedTotals ? <section className="m-5 rounded-xl border p-5"><h2 className="font-semibold">Order totals</h2><dl className="mt-3 grid gap-2 text-sm">{Object.entries({Subtotal:snap.observedTotals.subtotal,Tax:snap.observedTotals.tax,Shipping:snap.observedTotals.shipping,Discounts:snap.observedTotals.discounts,"Gross total":snap.observedTotals.gross}).map(([label,value])=><div key={label} className="flex justify-between"><dt>{label}</dt><dd>{value === null ? "Unavailable" : formatObservedMoney(value,snap.observedTotals!.currency)}</dd></div>)}</dl></section> : null}
+        {snap.observedReferences ? <section className="m-5 rounded-xl border p-5"><h2 className="font-semibold">Transactions and acquisition evidence</h2><p className="mt-2">Payment status: {snap.order.status}</p>{Object.entries(snap.observedReferences).map(([label,value])=><p key={label} className="mt-2 text-xs">{label}: {value || "Unavailable"}</p>)}<p className="mt-2 text-xs">Acquisition: {snap.attribution.trafficSource === "Not observed" ? "Unmatched" : snap.attribution.trafficSource}</p></section> : null}
         <section className="m-5 rounded-xl border p-5">
           <h2 className="font-semibold">Purchased Products</h2>
           {snap.observedLines?.length ? (
@@ -297,7 +302,8 @@ function OrderWorkspaceContent() {
           ) : <p className="mt-2 text-sm text-slate-400">Product line-item evidence is not available from the authorized Order API.</p>}
           <div className="mt-4 border-t pt-3 text-xs">
             <p>Canonical Order: {snap.canonicalOrderId || "Unavailable"}</p>
-            <p>Canonical Journey: {snap.canonicalJourneyId || "Not verified"}</p>
+            {snap.canonicalJourneyId ? <a className="underline" href={`/customers?v=1&customer_id=${encodeURIComponent(snap.order.customerId)}&journey_id=${encodeURIComponent(snap.canonicalJourneyId)}&focus=journey`}>Canonical Journey: {snap.canonicalJourneyId}</a> : <p>Canonical Journey: Not verified</p>}
+            {snap.relatedCustomer.id ? <p><a className="underline" href={`/customers?v=1&customer_id=${encodeURIComponent(snap.relatedCustomer.id)}`}>Customer: {snap.relatedCustomer.name}</a></p> : null}
           </div>
         </section>
         {!snap.ledger.length ? (
