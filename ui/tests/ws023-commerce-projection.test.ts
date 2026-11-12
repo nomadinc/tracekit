@@ -4,6 +4,15 @@ import { projectCoreCustomerRead } from '../lib/identity/core-read-projection';
 import { observedOrderLines } from '../lib/orders/observed-lines';
 import { parseCustomerDeepLink,customerDeepLinkHref } from '../lib/customers/deep-link';
 import { ROLE_PERMISSIONS } from '../lib/identity/permissions';
+import { formatObservedMoney } from '../lib/reporting/observed-money';
+test('customer commerce summary keeps its currency through customer-read serialization',()=>{
+ for(const currency of ['USD','CAD']){
+  const body:any=projectCoreCustomerRead({summary:{lifetime_revenue:116.99,revenue_currency:currency,attributed_revenue:9,profit_currency:currency}},{effectivePermissions:ROLE_PERMISSIONS['client-read-only']} as any);
+  assert.equal(body.summary.revenue_currency,currency);
+  assert.notEqual(formatObservedMoney(body.summary.lifetime_revenue,body.summary.revenue_currency||null),'Unavailable');
+  assert.equal('attributed_revenue' in body.summary,false);assert.equal('profit_currency' in body.summary,false);
+ }
+});
 test('customer read retains canonical commercial amounts and nulls without extending financial authority',()=>{
  const session:any={effectivePermissions:ROLE_PERMISSIONS['client-read-only']};
  const body:any=projectCoreCustomerRead({orders:[{amount:116.99,product_subtotal:116.99,tax_amount:0,shipping_amount:null,net_profit:42,payment_reference:null,raw_json:{email:'secret@example.test'},order_lines:[{gross_amount:116.99,unit_amount:116.99,sku:null}]}],summary:{lifetime_revenue:116.99,attributed_revenue:4}},session);
