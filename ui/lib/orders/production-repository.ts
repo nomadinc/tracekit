@@ -1,4 +1,5 @@
 import { readJourneyPages } from "@/lib/reporting/journey-pages";
+import { observedOrderLines } from "./observed-lines";
 import { observedAmount } from "@/lib/reporting/observed-money";
 import { exactRelatedOrder } from "@/lib/reporting/order-relationship";
 import type { OrderRepository } from "./repository";
@@ -172,6 +173,15 @@ export class ProductionOrderRepository {
     const clickPurchaseDelta=deltaMs===null ? "Not calculated" : `${Math.floor(deltaMs/60000)}m ${Math.floor((deltaMs%60000)/1000)}s`;
     return {
       order:o,
+      // Core must project these from canonical commerce_order_lines with tenant checks.
+      // Absent projection means unavailable; never infer from order totals.
+      observedLines: observedOrderLines(result.order_lines, String(raw.canonical_order_id || ""), scope.organizationId || ""),
+      canonicalOrderId: String(raw.canonical_order_id || "") || null,
+      // A Journey is canonical only if its retained event identifies this exact canonical order.
+      canonicalJourneyId: String(raw.canonical_order_id || "") && rows.some((r:any) =>
+        String(r?.source_record_id || r?.technical_evidence?.canonical_order_id || r?.metadata?.canonical_order_id || "") === String(raw.canonical_order_id)
+        && String(r?.platform_order_id || "") === String(raw.platform_order_id || "")
+      ) ? String(journeys[0]?.id || "") || null : null,
       commercial:{mainProduct:"Not available from current Order read model",orderBumps:[],upsells:[],shippingCharged:0,taxCollected:0,discounts:0,quantity:0},
       ledger:[],
       shipping:{charged:0,actual:0,packaging:0,margin:0},
