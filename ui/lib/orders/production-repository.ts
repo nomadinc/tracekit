@@ -159,11 +159,13 @@ export class ProductionOrderRepository {
     const rows=Array.isArray(jd?.events)?jd.events:Array.isArray(jd?.activity)?jd.activity:[];
     const credits=Array.isArray(jd?.attribution)?jd.attribution:[];
     const timeline: OrderTimelineEvent[] = rows.map((r:any)=>event(r,o,raw,credits));
-    const credit=credits.find((c:any)=>c?.status==="attributed")||{};
+    const purchaseIds = new Set(rows.filter((row:any) => String(row.event_type || row.activity_type || "").toLowerCase() === "purchase" && exactRelatedOrder(row,[raw])).map((row:any) => row.id));
+    const orderCredits = credits.filter((credit:any) => purchaseIds.has(credit.conversion_event_id));
+    const credit=orderCredits.find((c:any)=>c?.status==="attributed")||{};
     const affiliate=credit?.affiliate_id ? `Affiliate ${credit.affiliate_id}` : "Not observed";
     const offer=credit?.offer_id ? `Offer ${credit.offer_id}` : "Not observed";
     const trafficSource=String(credit?.source || credit?.medium || "").trim() || "Not observed";
-    const attributedCredits = credits.filter((c:any)=>c?.status==="attributed");
+    const attributedCredits = orderCredits.filter((c:any)=>c?.status==="attributed");
     o.trackingHealth = attributedCredits.length && timeline.length ? "Healthy" : timeline.length ? "Incomplete" : "Unknown";
     const clickRow = rows.find((r:any)=>String(r?.event_type || r?.activity_type || "").toLowerCase()==="click");
     const explicitPurchaseRow = rows.find((r:any) =>
