@@ -82,7 +82,7 @@ test('direct Preview transport retains customer, Core, tenant and read-only boun
   const readCalls=calls.length;
   for(const resolution of [{kind:'unauthenticated'},{kind:'authenticated',session:{...session,effectivePermissions:[]}}])assert.equal((await gateway(resolution).scopedCoreGet('/v1/customer-orders','https://transport-test.vercel.app/api/customer-orders','orders.view')).status,404);
   for(const query of ['workspace_id=foreign','business_context_id=foreign','business_context_id=active&business_context_id=foreign'])assert.equal((await gateway().scopedCoreGet('/v1/customer-orders',`https://transport-test.vercel.app/api/customer-orders?${query}`,'orders.view')).status,404);
-  for(const headers of [{},{'x-tk-secret':'invalid'}])assert.equal((await previewCoreFetch(path,{headers})).status,401);
+  for(const headers of [new Headers(),new Headers({'x-tk-secret':'invalid'})])assert.equal((await previewCoreFetch(path,{headers})).status,401);
   assert.equal((await previewCoreFetch(`${base}/v1/customer-orders?workspace_id=foreign`,{headers:{'x-tk-secret':'synthetic-core-only'}})).status,404);
   assert.equal((await previewCoreFetch(`${base}/v1/customers/not-a-uuid/journeys/not-a-uuid?workspace_id=${org}`,{headers:{'x-tk-secret':'synthetic-core-only'}})).status,404);
   for(const method of ['POST','PUT','PATCH','DELETE'])assert.equal((await previewCoreFetch(path,{method,headers:{'x-tk-secret':'synthetic-core-only'}})).status,405);

@@ -1,4 +1,5 @@
 import "server-only";
+import { supabaseServerSecret } from "../identity/supabase-server-secret";
 import type { Activation, CommerceConnection, CommerceControlRepository, CredentialVersion, ProviderAccount, SourceMapping, SyncCheckpoint, SyncRun } from "./control-plane";
 
 type Row = Record<string, unknown>;
@@ -12,7 +13,7 @@ export class CommercePersistenceError extends Error {
 
 function configuration() {
   const url = process.env.NEXT_PUBLIC_SUPABASE_URL?.replace(/\/$/, "");
-  const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  const key = supabaseServerSecret();
   if (!url || !key) throw new Error("Commerce persistence is unavailable.");
   return { url, key };
 }
@@ -20,7 +21,6 @@ function configuration() {
 export async function commercePersistenceRequest(path: string, init: RequestInit = {}) {
   const { url, key } = configuration();
   const headers: Record<string, string> = { apikey: key, "Content-Type": "application/json", Prefer: "return=representation" };
-  if (!key.startsWith("sb_secret_")) headers.Authorization = `Bearer ${key}`;
   const response = await fetch(`${url}/rest/v1/${path}`, { ...init, cache: "no-store", headers: { ...headers, ...init.headers } });
   if (!response.ok) {
     const payload = await response.json().catch(() => ({})) as Record<string, unknown>;
@@ -43,7 +43,6 @@ export async function commercePersistenceCount(path: string) {
     cache: "no-store",
     headers: {
       apikey: key,
-      Authorization: `Bearer ${key}`,
       Accept: "application/json",
       Prefer: "count=exact",
     },
