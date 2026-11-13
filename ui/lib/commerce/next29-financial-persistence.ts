@@ -1,3 +1,4 @@
+import { next29OrderWriteIdentity } from "./next29-order-identity";
 import { createHash } from "node:crypto";
 import { expandNext29Order, type Next29CanonicalExpansion, type Next29CanonicalRefund } from "../../../api/src/connectors/next29/expansion.ts";
 import { SupabaseCommerceEvidenceStore } from "./supabase-evidence-store-core";
@@ -149,8 +150,13 @@ async function retainedRefund(request: FinancialRequest, input: Next29FinancialI
 
 /** Protect the existing globally unique platform-order ID from cross-store reassignment. */
 export async function persistNext29Order(request: FinancialRequest, body: Row) {
-  const key = Object.fromEntries(["platform","platform_order_id","account_id","organization_id","workspace_id","connection_id","provider_account_id","canonical_order_id"].map(k => { opaque(body[k]); return [k,body[k]]; }));
+  for (const field of ["platform","platform_order_id","provider_order_id","account_id","organization_id","workspace_id","connection_id","provider_account_id","canonical_order_id"]) opaque(body[field]);
   if (body.platform !== "next29" || body.workspace_id !== body.organization_id) throw failure();
+  body = { ...body, platform_order_id: await next29OrderWriteIdentity(request, {
+    organizationId: body.organization_id as string, accountId: body.account_id as string,
+    connectionId: body.connection_id as string, providerAccountId: body.provider_account_id as string,
+  }, body.provider_order_id as string, body.canonical_order_id as string) };
+  const key = Object.fromEntries(["platform","platform_order_id","account_id","organization_id","workspace_id","connection_id","provider_account_id","canonical_order_id"].map(k => [k,body[k]]));
   await persist(request,"platform_orders",key,body,row => {
     for (const [k,v] of Object.entries(key)) if (row[k] !== v) throw failure();
   });

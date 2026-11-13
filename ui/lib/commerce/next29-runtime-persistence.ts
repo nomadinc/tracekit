@@ -1,6 +1,6 @@
 import "server-only";
 
-import { randomUUID } from "node:crypto";
+import { randomUUID, createHash } from "node:crypto";
 import type { Next29Client } from "../../../api/src/connectors/next29/client.ts";
 import { createNext29HistoricalPersistence } from "../../../api/src/connectors/next29/repository.ts";
 import { createNext29SubscriptionPersistence, next29SubscriptionLineRows, next29SubscriptionOrderLinkRow, next29SubscriptionRow } from "../../../api/src/connectors/next29/subscription-repository.ts";
@@ -21,7 +21,7 @@ async function commercePersistenceRequest(path: string, init: RequestInit = {}) 
   } catch (error) {
     if (error instanceof CommercePersistenceError) {
       const target = String(path || "unknown").split("?")[0].replace(/[^a-z0-9_\/-]/gi, "_").slice(0, 120);
-      throw new Error(`29Next runtime persistence failed · target ${target} · status ${error.status} · code ${error.databaseCode}`);
+      throw new Error(`29Next runtime persistence failed · target ${target} · status ${error.status} · code ${error.databaseCode}`, {cause:error});
     }
     throw error;
   }
@@ -319,13 +319,25 @@ async function upsertOrderLines(context: Next29RuntimeContext, canonicalOrderId:
 async function upsertCustomer(context: Next29RuntimeContext, evidenceId: string, expansion: Next29CanonicalExpansion) {
   const customer = expansion.customer;
   if (!customer) return;
-  const existing = await commercePersistenceRequest(`person_source_identities?organization_id=eq.${encodeURIComponent(context.organizationId)}&connection_id=eq.${encodeURIComponent(context.connectionId)}&provider_account_id=eq.${encodeURIComponent(context.providerAccountId)}&source_type=eq.provider_customer_id&source_id=eq.${encodeURIComponent(customer.providerCustomerId)}&select=person_id&limit=1`);
+  const existing = await commercePersistenceRequest(`person_source_identities?organization_id=eq.${encodeURIComponent(context.organizationId)}&connection_id=eq.${encodeURIComponent(context.connectionId)}&provider_account_id=eq.${encodeURIComponent(context.providerAccountId)}&source_type=eq.provider_customer_id&source_id=eq.${encodeURIComponent(customer.providerCustomerId)}&select=person_id&limit=2`);
+  if (existing.length > 1) throw new Error("Ambiguous customer identity");
   let personId = existing[0]?.person_id ? String(existing[0].person_id) : null;
   const now = new Date().toISOString();
   if (!personId) {
-    personId = randomUUID();
-    await commercePersistenceRequest("people", { method: "POST", body: JSON.stringify({ id: personId, workspace_id: context.organizationId, organization_id: context.organizationId, status: "active", display_name: customer.displayName, primary_email: customer.email, primary_phone: customer.phone, first_seen_at: now, last_seen_at: now, metadata: { provider: "next29" } }) });
-    await commercePersistenceRequest("person_source_identities", { method: "POST", body: JSON.stringify({ organization_id: context.organizationId, person_id: personId, connection_id: context.connectionId, provider_account_id: context.providerAccountId, source_type: "provider_customer_id", source_id: customer.providerCustomerId, confidence: 1, status: "observed", first_seen_at: now, last_seen_at: now, evidence_id: evidenceId, metadata: { provider: "next29" } }) });
+    personId = stableId([context.organizationId,context.connectionId,context.providerAccountId,"customer",customer.providerCustomerId]);
+    await commercePersistenceRequest("people?on_conflict=id", { method: "POST", headers: { Prefer: "resolution=ignore-duplicates,return=representation" }, body: JSON.stringify({ id: personId, workspace_id: context.organizationId, organization_id: context.organizationId, status: "active", display_name: customer.displayName, primary_email: customer.email, primary_phone: customer.phone, first_seen_at: now, last_seen_at: now, metadata: { provider: "next29" } }) });
+    try { await commercePersistenceRequest("person_source_identities", { method: "POST", body: JSON.stringify({ organization_id: context.organizationId, person_id: personId, connection_id: context.connectionId, provider_account_id: context.providerAccountId, source_type: "provider_customer_id", source_id: customer.providerCustomerId, confidence: 1, status: "observed", first_seen_at: now, last_seen_at: now, evidence_id: evidenceId, metadata: { provider: "next29" } }) });
+    } catch(error) {
+      const cause = error instanceof Error ? error.cause : undefined;
+      if (!(cause instanceof CommercePersistenceError) || cause.databaseCode !== "23505") throw error;
+      // Unique conflict is not a retry authorization. Resolve the scoped winner once.
+    }
+    const winners = await commercePersistenceRequest(`person_source_identities?organization_id=eq.${encodeURIComponent(context.organizationId)}&connection_id=eq.${encodeURIComponent(context.connectionId)}&provider_account_id=eq.${encodeURIComponent(context.providerAccountId)}&source_type=eq.provider_customer_id&source_id=eq.${encodeURIComponent(customer.providerCustomerId)}&select=person_id,organization_id,connection_id,provider_account_id,source_type,source_id&limit=2`);
+    const winner = winners[0];
+    if (winners.length !== 1 || !winner.person_id || winner.organization_id !== context.organizationId || winner.connection_id !== context.connectionId || winner.provider_account_id !== context.providerAccountId || winner.source_type !== "provider_customer_id" || winner.source_id !== customer.providerCustomerId) throw new Error("Customer identity winner unavailable; reconcile without replay");
+    const people = await commercePersistenceRequest(`people?id=eq.${encodeURIComponent(String(winner.person_id))}&organization_id=eq.${encodeURIComponent(context.organizationId)}&workspace_id=eq.${encodeURIComponent(context.organizationId)}&select=id,organization_id,workspace_id,status&limit=2`);
+    if (people.length !== 1 || people[0].id !== winner.person_id || people[0].organization_id !== context.organizationId || people[0].workspace_id !== context.organizationId || people[0].status !== "active") throw new Error("Customer identity owner conflict; reconcile without replay");
+    // Preserve a concurrent winner's existing canonical person ID. Never merge/replace it.
   } else {
     await commercePersistenceRequest(`people?id=eq.${encodeURIComponent(personId)}&organization_id=eq.${encodeURIComponent(context.organizationId)}`, { method: "PATCH", body: JSON.stringify({ display_name: customer.displayName, primary_email: customer.email, primary_phone: customer.phone, last_seen_at: now, updated_at: now }) });
   }
@@ -350,3 +362,8 @@ async function upsertComposite(table: string, conflictColumns: string, body: Row
 
 function text(value: unknown) { const result = String(value ?? "").trim(); return result || null; }
 function safeError(value: unknown) { return String(value ?? "29Next live validation failed").replace(/Bearer\s+[^\s]+/gi, "Bearer <redacted>").slice(0, 400); }
+
+function stableId(parts: string[]) {
+  const h = createHash("sha256").update(JSON.stringify(["next29-order-only-v1",...parts])).digest("hex");
+  return `${h.slice(0,8)}-${h.slice(8,12)}-8${h.slice(13,16)}-a${h.slice(17,20)}-${h.slice(20,32)}`;
+}

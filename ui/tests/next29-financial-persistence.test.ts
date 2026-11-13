@@ -18,7 +18,7 @@ async function fixture(t: {after(fn:()=>Promise<void>):void}, refundReferences:s
   const db = sharedDatabase ??= new PGlite();
   await db.exec("drop table if exists payment_transactions,commerce_refund_events,commerce_evidence_records,commerce_source_mappings,platform_orders cascade");
   await db.exec(`
-    create table platform_orders(id bigint generated always as identity primary key,platform text,platform_order_id text unique,provider_order_id text,order_id text,account_id uuid,organization_id uuid,workspace_id text,connection_id uuid,provider_account_id uuid,canonical_order_id uuid,source_mapping_id uuid,evidence_id uuid);
+    create table platform_orders(id bigint generated always as identity primary key,platform text,platform_order_id text unique,provider_order_id text,order_id text,account_id uuid,organization_id uuid,workspace_id text,connection_id uuid,provider_account_id uuid,canonical_order_id uuid,source_mapping_id uuid,evidence_id uuid,unique(connection_id,provider_account_id,provider_order_id));
     create table commerce_source_mappings(id uuid primary key,organization_id uuid,connection_id uuid,provider_account_id uuid,canonical_object_id uuid,canonical_object_type text,source_object_type text,source_object_id text,payload_hash text);
     create table commerce_evidence_records(id uuid primary key,organization_id uuid,connection_id uuid,provider_account_id uuid,source_object_type text,source_object_id text,payload_hash text,storage_reference text,deleted_at timestamptz);
     create table commerce_refund_events(id uuid primary key,account_id uuid not null,organization_id uuid not null,connection_id uuid not null,provider_account_id uuid not null,canonical_order_id uuid not null,evidence_id uuid not null,source_mapping_id uuid not null,provider_refund_id text not null,provider_payment_id text,amount float8,amount_gross float8,currency text,occurred_at timestamptz not null,unique(connection_id,provider_account_id,provider_refund_id));
@@ -134,6 +134,18 @@ test("scoped PATCH requires exactly one acknowledged row",async t=>{
 test("global platform-order collision cannot reassign another tenant's order",async t=>{
   const f=await fixture(t);const changed={...f.order,organization_id:randomUUID(),workspace_id:randomUUID()};changed.workspace_id=changed.organization_id;
   await assert.rejects(()=>persistNext29Order(f.request,changed));assert.equal((await f.db.query<any>("select organization_id from platform_orders")).rows[0].organization_id,f.input.organizationId);
+});
+test("Stem and NH overlapping 103104 coexist without foreign lookup or reassignment",async t=>{
+  const f=await fixture(t);await f.db.query("update platform_orders set provider_order_id='103104',platform_order_id='next29:103104'");
+  const stem=(await f.db.query<any>("select * from platform_orders")).rows[0];
+  const org=randomUUID(), connection=randomUUID(), provider=randomUUID(), canonical=randomUUID();
+  const nh={...f.order,organization_id:org,workspace_id:org,connection_id:connection,provider_account_id:provider,canonical_order_id:canonical,provider_order_id:"103104",platform_order_id:"next29:103104"};
+  f.traces.length=0;await persistNext29Order(f.request,nh);
+  const rows=(await f.db.query<any>("select * from platform_orders order by id")).rows;
+  assert.equal(rows.length,2);assert.deepEqual(rows[0],stem);
+  assert.equal(rows[1].platform_order_id,`next29:${org}:${connection}:${provider}:103104`);
+  for(const trace of f.traces.filter(x=>x.method==='GET'))assert.ok(trace.path.includes(`organization_id=eq.${org}`));
+  await persistNext29Order(f.request,nh);assert.equal((await f.db.query("select * from platform_orders")).rows.length,2);
 });
 test("legitimate order replay preserves the existing legacy bigint primary key",async t=>{
   const f=await fixture(t);await persistNext29Order(f.request,f.order);const rows=(await f.db.query<any>("select id from platform_orders")).rows;assert.equal(rows.length,1);assert.equal(String(rows[0].id),"1");
