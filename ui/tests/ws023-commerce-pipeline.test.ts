@@ -14,7 +14,7 @@ function database(){
 test('Core → customer-read projection → Order, Customer and Purchase adapters agree on the exact purchase',async()=>{
  const originalFetch=globalThis.fetch, originalWindow=(globalThis as any).window;
  (globalThis as any).window={};
- const db=database();const session:any={effectivePermissions:ROLE_PERMISSIONS['client-read-only']};
+ const db=database();const session:any={effectivePermissions:ROLE_PERMISSIONS['client-read-only'].filter(permission=>!new Set<string>(['financials.view','orders.view_financials']).has(permission))};
  globalThis.fetch=async(input:any)=>{
   const url=new URL(String(input),'https://preview.example.test');const parts=url.pathname.split('/').filter(Boolean);let body:any;
   try {
@@ -26,10 +26,10 @@ test('Core → customer-read projection → Order, Customer and Purchase adapter
  };
  const scope:any={authenticated:true,workspaceId:org,organizationId:org,businessContextId:null,session:{}};
  try{
-  const repo=new ProductionOrderRepository();const list=await repo.listOrders(scope,{});assert.equal(list.length,1);assert.equal(list[0].revenue,116.99);
-  const detail=await repo.loadWorkspace(scope,'next29:103104');assert.equal(detail?.canonicalOrderId,canonical);assert.equal(detail?.canonicalJourneyId,journey);assert.equal(detail?.order.revenue,116.99);assert.equal(detail?.observedTotals?.tax,0);assert.equal(detail?.observedTotals?.shipping,null);assert.equal(detail?.order.profit,null);assert.equal(detail?.attribution.trafficSource,'Not observed');assert.equal(detail?.order.trackingHealth,'Incomplete');
+  const repo=new ProductionOrderRepository();const list=await repo.listOrders(scope,{});assert.equal(list.length,1);assert.equal(list[0].revenue,null);
+  const detail=await repo.loadWorkspace(scope,'next29:103104');assert.equal(detail?.canonicalOrderId,canonical);assert.equal(detail?.canonicalJourneyId,journey);assert.equal(detail?.order.revenue,null);assert.equal(detail?.observedTotals?.tax,null);assert.equal(detail?.observedTotals?.shipping,null);assert.equal(detail?.order.profit,null);assert.equal(detail?.attribution.trafficSource,'Not observed');assert.equal(detail?.order.trackingHealth,'Incomplete');
   assert.equal(detail?.observedLines?.[0].name,'20 Treatments (5)');assert.equal(detail?.observedLines?.[0].providerVariantId,'9');assert.equal(detail?.observedLines?.[0].sku,null);
-  const customer=await productionCustomerRepository.loadWorkspace(scope,person);assert.equal(customer?.lifetimeRevenue,116.99);assert.equal(customer?.lifetimeRevenueAvailable,true);assert.equal(customer?.journeyId,journey);assert.equal(customer?.orders.length,1);
+  const customer=await productionCustomerRepository.loadWorkspace(scope,person);assert.equal(customer?.lifetimeRevenue,null);assert.equal(customer?.lifetimeRevenueAvailable,false);assert.equal(customer?.journeyId,journey);assert.equal(customer?.orders.length,1);
   const inspector=await productionCustomerRepository.loadDrawer(scope,person,`event:${eventId}`);assert.ok(inspector);assert.ok(inspector.facts.some(f=>f.label==='Canonical Order'&&f.value===canonical));assert.ok(inspector.facts.some(f=>f.label==='Product'&&f.value==='20 Treatments (5)'));assert.ok(inspector.facts.some(f=>f.label==='Payment reference'&&f.value==='Unavailable'));assert.ok(inspector.facts.some(f=>f.label==='Acquisition'&&f.value==='Unmatched'));assert.ok(inspector.links?.some(link=>link.href.includes(journey)));
   await assert.rejects(productionCustomerRepository.loadWorkspace({...scope,journeyId:'unavailable'},person));
   assert.equal(await repo.loadWorkspace(scope,'next29:foreign'),null);

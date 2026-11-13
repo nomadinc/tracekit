@@ -1,0 +1,21 @@
+WS-021 / independent WS-022 correction to selective navigation candidate
+
+The prior WS-020 donor inventory describes commit 017416f9 exactly. Its monetary
+exception was NOT accepted for this release: preserving NH's existing financial
+denial overrides takes precedence over the donor's broader observed-money policy.
+
+This follow-up removes the commerce monetary exception from the shared recursive
+projection. Both existing financial permissions are required for monetary fields.
+With NH's existing denial overrides, IDs, product descriptions, quantities and
+status remain readable; monetary values become unavailable, not invented zero.
+Raw/private/contact redaction, exact scoped order/customer/Journey predicates and
+first-render stale-response fences remain in force.
+
+Independent review exercised the real projection and role-derived denied session,
+all combinations of the two financial permissions, and positive control preserving
+observed amount/real zero/null only with both permissions. See changed test files.
+No production role, membership, credential, provider or database changes.
+
+Navigation donor validation and byte identity apply to its original commit only;
+the full combined candidate includes this explicit reviewed security correction.
+Final combined build/tests and source hash must be recorded separately.

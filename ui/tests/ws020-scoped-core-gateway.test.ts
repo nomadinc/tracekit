@@ -26,7 +26,7 @@ test("private read gateway denies unauthenticated, inactive, and foreign scope b
 });
 test("read gateway injects canonical tenant, retains pagination and projects restricted details",async()=>{
  const x=proxy();const result:any=await x.gateway.scopedCoreGet("/v1/customer-orders","https://ui.example.test/api/customer-orders?offset=17","orders.view",projectCoreCustomerRead);
- assert.equal(result.status,200);assert.deepEqual(result.body,{orders:[{id:"o",gross_amount:0}]});
+ assert.equal(result.status,200);assert.deepEqual(result.body,{orders:[{id:"o"}]});
  const url=new URL(x.calls[0].url);assert.equal(url.searchParams.get("workspace_id"),"stem");assert.equal(url.searchParams.get("offset"),"17");
  assert.equal(x.calls[0].init.headers["x-tk-secret"],"synthetic-local-test");
 });
