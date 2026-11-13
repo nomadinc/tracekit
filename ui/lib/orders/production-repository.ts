@@ -1,4 +1,5 @@
 import { readJourneyPages } from "@/lib/reporting/journey-pages";
+import { purchaseEvidenceDrawer } from "./context-drawer";
 import { observedOrderLines } from "./observed-lines";
 import { observedAmount } from "@/lib/reporting/observed-money";
 import { exactRelatedOrder } from "@/lib/reporting/order-relationship";
@@ -102,6 +103,7 @@ function event(row: any, order: OrderSummary, sourceOrder: any, credits: any[] =
     row?.offer_id ? { id: `${id}:offer`, type: "Offer ID", value: String(row.offer_id), eventId: id } : null,
   ].filter(Boolean) as any[];
   return {
+    ...(eventType === "purchase" && explicitOrder ? { purchaseEvidence: { acquisition: attributed ? "Attributed" as const : "Unmatched" as const, provider: sourceLabel || order.provider || "Unavailable", observedAt: String(row?.event_time || row?.occurred_at || "Unavailable") } } : {}),
     id, label, timestamp: when(row?.event_time || row?.occurred_at), context, attributionContext,
     status: /refund|chargeback/i.test(label) ? "Negative" : "Observed",
     confidence: row?.system_derived ? "Derived from retained evidence" : "Observed evidence",
@@ -205,6 +207,7 @@ export class ProductionOrderRepository {
     const key = separator < 0 ? "" : drawerId.slice(separator + 1);
     if(kind==="event"||kind==="timeline-event"){
       const e=w.timeline.find(x=>x.id===key); if(!e)return null;
+      if (e.purchaseEvidence) return purchaseEvidenceDrawer(w, e, drawerId);
       return {id:drawerId,mode:"journey",title:e.label,question:"What happened, and what retained production evidence supports it?",summary:`${e.status} · ${e.confidence}`,status:e.status,facts:[{label:"Timestamp",value:e.timestamp},{label:"Evidence state",value:e.status}],originalUrl:e.originalUrl,identifiers:e.identifiers,diagnostics:e.diagnostics,evidence:e.evidence.length?e.evidence:["Retained Journey event"],relationships:e.relationships};
     }
     return null;
