@@ -23,7 +23,6 @@ function setup(initialContext=null){
   if(id.includes('shell-drawer'))return {useShellDrawer:()=>drawer};
   if(id.includes('production-repository'))return {productionCustomerRepository:repo};
   if(id.includes('development-state'))return {withDevelopmentIdentity:x=>x};
-  if(id.includes('production-routes'))return {PRODUCTION_ROUTES:{}};
   if(id.includes('customer-drawer-content'))return {CustomerDrawerContent:({record})=>React.createElement('div',null,record.title)};
   if(id.startsWith('@/'))return load(path.join(ui,id.slice(2))+'.ts');if(id.startsWith('.'))return load(path.resolve(path.dirname(file),id)+'.ts');return require(id);
  };
@@ -31,7 +30,7 @@ function setup(initialContext=null){
  vm.runInNewContext('(function(require,module,exports){'+js+'\n})',{console,setInterval,clearInterval,URLSearchParams})(req,mod,mod.exports);return mod.exports;}
  const Component=load(process.env.WS023_CUSTOMER_BASELINE||path.join(ui,'components/customers/customer-workspace.tsx')).CustomerWorkspace;
  async function flush(fn=noop){await Renderer.act(async()=>{fn();await Promise.resolve();await Promise.resolve()})}
- return {repo,pending,commits,get open(){return open},get tree(){return tree},flush,mount:()=>flush(()=>{tree=Renderer.create(React.createElement(Component))}),navigate:q=>flush(()=>{params=new URLSearchParams(q);tree.update(React.createElement(Component))}),scope:org=>flush(()=>{session={...session,activeOrganizationId:org};tree.update(React.createElement(Component))}),context:context=>flush(()=>{session={...session,activeBusinessContextId:context};tree.update(React.createElement(Component))}),contextInPlace:context=>flush(()=>{session.activeBusinessContextId=context;tree.update(React.createElement(Component))}),dispose:()=>flush(()=>tree.unmount())};
+ return {repo,pending,commits,pushes,get query(){return params.toString()},get open(){return open},get tree(){return tree},flush,mount:()=>flush(()=>{tree=Renderer.create(React.createElement(Component))}),navigate:q=>flush(()=>{params=new URLSearchParams(q);tree.update(React.createElement(Component))}),scope:org=>flush(()=>{session={...session,activeOrganizationId:org};tree.update(React.createElement(Component))}),context:context=>flush(()=>{session={...session,activeBusinessContextId:context};tree.update(React.createElement(Component))}),contextInPlace:context=>flush(()=>{session.activeBusinessContextId=context;tree.update(React.createElement(Component))}),dispose:()=>flush(()=>tree.unmount())};
 }
 test('Customer inspector rejects a late response after customer or workspace changes',async()=>{
  const h=setup();await h.mount();const late=h.pending.get('stem:A');assert.ok(late);
@@ -137,4 +136,33 @@ test('canonical context identity invalidates state even if the session object re
  const start=h.commits.length;await h.contextInPlace('context-b');noPrivate(firstCommit(h,start,'context-b'),'A');
  const current=requests.find(r=>r.scope.businessContextId==='context-b');assert.ok(current);
  await h.flush(()=>current.resolve(privateFixture('B')));assert.ok(JSON.stringify(h.tree.toJSON()).includes('PRIVATE_B_CUSTOMER'));await h.dispose();
+});
+
+// Exact NH production reproduction: a syntactically valid but absent UUID.
+test('NH nonexistent UUID remains selected and never substitutes a real customer',async()=>{
+ const h=setup('nh-context');// setup begins with the existing scoped fixture
+ await h.mount();const missing='00000000-0000-0000-0000-000000000000',calls=[];
+ h.repo.loadWorkspace=async(scope,id)=>{calls.push({scope,id});return null};
+ await h.navigate('v=1&customer_id='+missing);
+ assert.equal(calls.length,1);assert.equal(calls[0].id,missing);
+ const output=JSON.stringify(h.tree.toJSON());
+ assert.ok(output.includes('Customer unavailable in the active workspace'));
+ assert.equal(output.includes('Scoped A'),false);assert.equal(output.includes('Related Orders'),false);
+ assert.equal(new URLSearchParams(h.query).get('customer_id'),missing);
+ assert.equal(h.pushes.length,0,'not-found must not rewrite the requested ID');await h.dispose();
+});
+test('NH related Order 103533 keeps the existing context and exact scoped locator',async()=>{
+ const h=setup('nh-context');const snapshots=[];
+ h.repo.loadWorkspace=async(scope,id)=>{
+  snapshots.push(scope);const value=fixture(id,scope.organizationId);
+  value.orders=[{id:'next29:92b02244-32b5-4ddf-aec4-fc7574848983:0ac25a08-183c-4a12-a3ad-c08a013aa027:103533',number:'103533',date:'Observed',amount:null,amountAvailable:false,currency:'USD',profit:null,status:'Paid',offerId:'',offerName:'Unavailable',trackingHealth:'Incomplete'}];return value;
+ };
+ await h.mount();await h.scope('nh');
+ const button=h.tree.root.findAllByType('button').find(b=>b.findAllByType('strong').some(s=>s.children.includes('103533')));
+ assert.ok(button);await h.flush(()=>button.props.onClick());
+ const target=new URL(h.pushes.at(-1),'https://tracekit.test');
+ assert.equal(target.pathname,'/customers');assert.equal(target.searchParams.get('customer_id'),'A');
+ assert.equal(target.searchParams.get('order_id'),'next29:92b02244-32b5-4ddf-aec4-fc7574848983:0ac25a08-183c-4a12-a3ad-c08a013aa027:103533');
+ assert.equal(snapshots.at(-1).organizationId,'nh');assert.equal(snapshots.at(-1).businessContextId,'nh-context');
+ assert.ok(!JSON.stringify(h.tree.toJSON()).includes('Select Organization'));await h.dispose();
 });

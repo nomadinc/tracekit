@@ -1,6 +1,7 @@
 "use client";
 
 import * as React from "react";
+import { useRouter } from "next/navigation";
 import { accessibleBusinessContexts, accessibleOrganizations, normalizeSession, shellVariant } from "@/lib/identity/authorization";
 import { developmentIdentityById, developmentSessionFor, resolveDevelopmentIdentity, resolveDevelopmentIdentityRequest, withDevelopmentIdentity } from "@/lib/identity/development-state";
 import { DEVELOPMENT_IDENTITY_STORAGE_KEY } from "@/lib/identity/session";
@@ -22,6 +23,7 @@ const defaultSession = developmentSessionFor(defaultIdentity);
 const IdentityContext = React.createContext<IdentityContextValue | null>(null);
 
 export function IdentityProvider({ children, initialSession, persistentOrganizations = [], persistentBusinessContexts = [] }: { children: React.ReactNode; initialSession?: IdentitySession; persistentOrganizations?: Organization[]; persistentBusinessContexts?: BusinessContext[] }) {
+  const router = useRouter();
   const initialization = identityProviderInitialization(initialSession);
   const persistent = initialization.persistent;
   const initializeDevelopment = initialization.initializeDevelopment;
@@ -68,21 +70,30 @@ export function IdentityProvider({ children, initialSession, persistentOrganizat
     if (persistent) {
       void fetch("/api/session/organization", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ organizationId }) })
         .then((response) => { if (!response.ok) throw new Error("Organization switch denied"); return response.json(); })
-        .then(() => setSession((current) => ({ ...current, activeOrganizationId: organizationId, activeBusinessContextId: null })));
+        .then(() => {
+          setSession((current) => ({ ...current, activeOrganizationId: organizationId, activeBusinessContextId: null }));
+          router.refresh();
+        });
       return;
     }
     setSession((current) => normalizeSession({ ...current, activeOrganizationId: organizationId, activeBusinessContextId: null }));
-  }, [persistent]);
+  }, [persistent, router]);
 
   const setActiveBusinessContext = React.useCallback((contextId: string) => {
     if (persistent) {
+      const context = persistentBusinessContexts.find((candidate) => candidate.id === contextId && candidate.organizationId === session.activeOrganizationId);
+      if (!context) return;
       void fetch("/api/session/business-context", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ businessContextId: contextId }) })
         .then((response) => { if (!response.ok) throw new Error("Business context switch denied"); return response.json(); })
-        .then(() => setSession((current) => normalizeSession({ ...current, activeBusinessContextId: contextId })));
+        .then(() => {
+          // Persistent UUIDs must never pass through the mock catalog normalizer.
+          setSession((current) => current.activeOrganizationId === context.organizationId ? { ...current, activeBusinessContextId: contextId } : current);
+          router.refresh();
+        });
       return;
     }
     setSession((current) => normalizeSession({ ...current, activeBusinessContextId: contextId }));
-  }, [persistent]);
+  }, [persistent, persistentBusinessContexts, session.activeOrganizationId, router]);
 
   const organizations = React.useMemo(() => persistent ? persistentOrganizations : accessibleOrganizations(session.identity), [persistent, persistentOrganizations, session.identity]);
   const businessContexts = React.useMemo(() => persistent ? persistentBusinessContexts.filter((context) => context.organizationId === session.activeOrganizationId) : accessibleBusinessContexts(session.identity, session.activeOrganizationId), [persistent, persistentBusinessContexts, session.identity, session.activeOrganizationId]);
