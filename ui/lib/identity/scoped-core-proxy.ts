@@ -1,6 +1,7 @@
 import "server-only";
 import { createScopedCoreProxy } from "./scoped-core-runtime";
 import { traceKitCoreAdminSecret } from "@/lib/core/admin-credential";
+import { previewCoreFetch } from "./preview-core-transport";
 
 import { resolveApplicationSession } from "@/lib/identity/application-session";
 
@@ -22,6 +23,6 @@ function adminSecret() {
   return traceKitCoreAdminSecret();
 }
 
-const proxy = createScopedCoreProxy({ resolveSession: resolveApplicationSession, apiBaseUrl, adminSecret, fetch: (...args) => fetch(...args) });
+const proxy = createScopedCoreProxy({ resolveSession: resolveApplicationSession, apiBaseUrl, adminSecret, fetch: previewCoreFetch });
 export const scopedCoreGet = proxy.scopedCoreGet;
 export const scopedCorePost = proxy.scopedCorePost;
