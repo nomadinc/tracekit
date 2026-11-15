@@ -36,12 +36,13 @@ function unavailable() {
   return { status: 404, body: { error: "The requested resource is unavailable." } };
 }
 
-async function authorizedScope(permission: Permission | readonly Permission[]) {
+async function authorizedScope(permission: Permission | readonly Permission[], onDenied?: (session?: TraceKitSessionContext) => void) {
   const resolution = await dependencies.resolveSession();
-  if (resolution.kind !== "authenticated" || !resolution.session?.activeOrganization) return null;
+  if (resolution.kind !== "authenticated" || !resolution.session?.activeOrganization) { onDenied?.(resolution.session); return null; }
   try {
     for (const capability of (typeof permission === "string" ? [permission] : permission)) requireResourceScope(resolution.session, resolution.session.activeOrganization.id, capability);
   } catch {
+    onDenied?.(resolution.session);
     return null;
   }
   return { session: resolution.session, workspaceId: resolution.session.activeOrganization.id };
@@ -75,8 +76,8 @@ async function scopedCoreGet(
         organizationId: session?.activeOrganization?.id || null, businessContextId: session?.activeBusinessContextId || null, stage, upstreamStatus });
     } catch { /* Observability must never alter authorization or response. */ }
   };
-  const scope = await authorizedScope(permission);
-  if (!scope) { record("session_scope", null); return unavailable(); }
+  const scope = await authorizedScope(permission, deniedSession => record("session_scope", null, deniedSession));
+  if (!scope) return unavailable();
 
   const params = new URLSearchParams(incoming.searchParams);
   if (!queryMatchesScope(params, scope.workspaceId)) { record("tenant_hint_mismatch", null, scope.session); return unavailable(); }
