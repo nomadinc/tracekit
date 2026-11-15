@@ -145,7 +145,7 @@ test("Offers page retains Product Mapping Review and guarded mapping mutations",
     new URL("../app/api/commerce/product-mappings/route.ts", import.meta.url),
     "utf8",
   );
-  assert.match(page, /<CommerceProductMappingReview \/>/);
+  assert.match(page, /<CommerceProductMappingSection \/>/);
   assert.match(review, /permission="offers\.manage"/);
   assert.match(mappingRoute, /requirePermission\(r\.session,"offers\.manage"\)/);
   assert.match(mappingRoute, /sameOrigin\(request\)/);

@@ -2,7 +2,7 @@
 
 import * as React from "react";
 import { X } from "lucide-react";
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { useIdentity } from "@/components/identity/identity-provider";
 
 type ShellDrawerContextValue = {
@@ -24,46 +24,29 @@ export function ShellDrawerProvider({
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
+  const params = useSearchParams();
+  const selection = params.toString();
   const { session } = useIdentity();
-  const [drawer, setDrawer] = React.useState<{
+  // Object identity is a generation: A -> B -> A cannot revive an old drawer.
+  const owner = React.useMemo(() => ({ pathname, selection,
+    authenticated: session.authenticated, identityId: session.identity.id,
+    organizationId: session.activeOrganizationId, businessContextId: session.activeBusinessContextId,
+  }), [pathname, selection, session.authenticated,
+    session.identity.id, session.activeOrganizationId, session.activeBusinessContextId]);
+  const currentOwner = React.useRef(owner);
+  currentOwner.current = owner;
+  const [storedDrawer, setDrawer] = React.useState<{
+    owner: typeof owner;
     title: string;
     content: React.ReactNode;
     onDismiss?: () => void;
   } | null>(null);
+  const drawer = storedDrawer?.owner === owner ? storedDrawer : null;
   const dismissDrawer = React.useCallback(() => {
+    if (currentOwner.current !== owner) return;
     drawer?.onDismiss?.();
     setDrawer(null);
-  }, [drawer]);
-  const previousRef = React.useRef({
-    pathname,
-    identityId: session.identity.id,
-    organizationId: session.activeOrganizationId,
-    businessContextId: session.activeBusinessContextId,
-  });
-  React.useEffect(() => {
-    const next = {
-      pathname,
-      identityId: session.identity.id,
-      organizationId: session.activeOrganizationId,
-      businessContextId: session.activeBusinessContextId,
-    };
-    const previous = previousRef.current;
-    if (
-      drawer &&
-      (previous.pathname !== next.pathname ||
-        previous.identityId !== next.identityId ||
-        previous.organizationId !== next.organizationId ||
-        previous.businessContextId !== next.businessContextId)
-    )
-      setDrawer(null);
-    previousRef.current = next;
-  }, [
-    drawer,
-    pathname,
-    session.activeBusinessContextId,
-    session.activeOrganizationId,
-    session.identity.id,
-  ]);
+  }, [drawer, owner]);
   React.useEffect(() => {
     if (!drawer) return;
     function onKeyDown(event: KeyboardEvent) {
@@ -78,10 +61,13 @@ export function ShellDrawerProvider({
         content: React.ReactNode,
         title: string,
         options?: { onDismiss?: () => void },
-      ) => setDrawer({ content, title, onDismiss: options?.onDismiss }),
-      closeDrawer: () => setDrawer(null),
+      ) => {
+        if (currentOwner.current === owner)
+          setDrawer({ owner, content, title, onDismiss: options?.onDismiss });
+      },
+      closeDrawer: () => { if (currentOwner.current === owner) setDrawer(null); },
     }),
-    [],
+    [owner],
   );
   return (
     <ShellDrawerContext.Provider value={value}>

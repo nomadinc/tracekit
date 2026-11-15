@@ -35,9 +35,14 @@ import type {
 import { OrderDrawerContent } from "./order-drawer-content";
 const cash = (v: number) => `${v >= 0 ? "+" : "-"}$${Math.abs(v).toFixed(2)}`;
 export function OrderWorkspace() {
+  const { session } = useIdentity();
+  const params = useSearchParams();
+  const owner = JSON.stringify([session.authenticated, session.identity.id,
+    session.activeOrganizationId, session.activeBusinessContextId,
+    params.get("order_id")]);
   return (
     <AccessBoundary permission="orders.view" variants={["client", "agency"]}>
-      <OrderWorkspaceContent />
+      <OrderWorkspaceContent key={owner} />
     </AccessBoundary>
   );
 }
@@ -48,7 +53,17 @@ function OrderWorkspaceContent() {
   const { session, organizations, setActiveOrganization, setActiveBusinessContext } =
     useIdentity();
   const activeOrganization = organizations.find((organization) => organization.id === session.activeOrganizationId) || organizations[0] || null;
-  const scope = React.useMemo(() => ({ authenticated: session.authenticated, workspaceId: session.activeOrganizationId || "", organizationId: session.activeOrganizationId, businessContextId: session.activeBusinessContextId, session }), [session]);
+  const { authenticated, activeOrganizationId, activeBusinessContextId } = session;
+  const scope = React.useMemo(() => ({
+    authenticated, workspaceId: activeOrganizationId || "",
+    organizationId: activeOrganizationId, businessContextId: activeBusinessContextId, session,
+  }), [session, authenticated, activeOrganizationId, activeBusinessContextId]);
+  const mounted = React.useRef(true);
+  const inspectionRequest = React.useRef(0);
+  React.useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   const requested = React.useMemo(() => parseOrderDeepLink(params), [params]);
   const [loadFailed, setLoadFailed] = React.useState(false);
   const [detailFailed, setDetailFailed] = React.useState(false);
@@ -60,9 +75,12 @@ function OrderWorkspaceContent() {
     [listOpen, setListOpen] = React.useState(false),
     [replaying, setReplaying] = React.useState(false),
     [replayIndex, setReplayIndex] = React.useState(0);
+  const invalidRequestedId = params.has("order_id") && !requested.orderId;
   const normalized = React.useMemo(
-    () => normalizeOrderDeepLink(requested, orders, snap),
-    [requested, orders, snap],
+    () => invalidRequestedId
+      ? { ...normalizeOrderDeepLink(requested, orders, snap), orderId: null }
+      : normalizeOrderDeepLink(requested, orders, snap),
+    [requested, orders, snap, invalidRequestedId],
   );
   const go = React.useCallback(
     (next: Partial<OrderDeepLinkState>) =>
@@ -128,7 +146,7 @@ function OrderWorkspaceContent() {
     setSnap(null);
     orderRepository
       .loadWorkspace(scope, normalized.orderId)
-      .then((v) => on && setSnap(v))
+      .then((v) => { if (on) setSnap(v?.order.organizationId === scope.organizationId && v.order.id === normalized.orderId ? v : null); })
       .catch(() => { if (on) { setSnap(null); setDetailFailed(true); } })
       .finally(() => { if (on) setDetailLoading(false); });
     return () => {
@@ -148,12 +166,13 @@ function OrderWorkspaceContent() {
         : normalized.eventId
           ? `event:${normalized.eventId}`
           : null);
+    const request = ++inspectionRequest.current;
     if (!id || !snap) return;
     let on = true;
     orderRepository.loadDrawer(scope, snap.order.id, id).then((r) => {
-      if (on && r)
+      if (on && mounted.current && request === inspectionRequest.current && r)
         drawer.openDrawer(<OrderDrawerContent record={r} />, r.title, { onDismiss: () => router.push(withDevelopmentIdentity(orderDeepLinkHref({ ...normalized, drawer: null, drawerId: null, lineId: null, eventId: null, identifierRef: null }), session.identity.id), { scroll: false }) });
-    });
+    }).catch(() => { /* A failed inspector must not open stale or fabricated content. */ });
     return () => {
       on = false;
     };
@@ -181,9 +200,17 @@ function OrderWorkspaceContent() {
   }, [replaying, snap]);
   const inspect = async (id: string) => {
     if (!snap) return;
-    const r = await orderRepository.loadDrawer(scope, snap.order.id, id);
-    if (r) drawer.openDrawer(<OrderDrawerContent record={r} />, r.title);
+    const request = ++inspectionRequest.current;
+    drawer.closeDrawer();
+    try {
+      const r = await orderRepository.loadDrawer(scope, snap.order.id, id);
+      if (mounted.current && request === inspectionRequest.current && r)
+        drawer.openDrawer(<OrderDrawerContent record={r} />, r.title);
+    } catch {
+      // A failed inspector cannot revive earlier evidence.
+    }
   };
+  if (invalidRequestedId) return <State text="Order unavailable in the active workspace" />;
   if ((loading || detailLoading) && !snap) return <State text="Loading Order Workspace…" />;
   if (loadFailed || detailFailed) return <State text="Orders are unavailable. Refresh to try again." />;
   if (!orders.length && requested.orderId) {
@@ -373,7 +400,8 @@ function OrderWorkspaceContent() {
             {Object.entries(snap.attribution).map(([k, v]) => (
               <button
                 key={k}
-                onClick={() => inspect(`event:${snap.timeline[0].id}`)}
+                disabled={!snap.timeline.length}
+                onClick={() => { if (snap.timeline[0]) void inspect(`event:${snap.timeline[0].id}`); }}
                 className="rounded-lg border p-3 text-left"
               >
                 <span className="block text-[9px] uppercase text-slate-400">
@@ -445,7 +473,8 @@ function OrderWorkspaceContent() {
                 <SkipForward className="h-4 w-4" />
               </button>
               <button
-                onClick={() => inspect(`event:${active.id}`)}
+                disabled={!active}
+                onClick={() => { if (active) void inspect(`event:${active.id}`); }}
                 className="rounded-lg border px-3 text-xs"
               >
                 Inspect active

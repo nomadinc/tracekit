@@ -39,9 +39,14 @@ const money = (v: number) =>
     maximumFractionDigits: 0,
   }).format(v);
 export function CustomerWorkspace() {
+  const { session } = useIdentity();
+  const params = useSearchParams();
+  const owner = JSON.stringify([session.authenticated, session.identity.id,
+    session.activeOrganizationId, session.activeBusinessContextId,
+    params.get("customer_id")]);
   return (
     <AccessBoundary permission="customers.view" variants={["client", "agency"]}>
-      <CustomerWorkspaceContent />
+      <CustomerWorkspaceContent key={owner} />
     </AccessBoundary>
   );
 }
@@ -52,7 +57,17 @@ function CustomerWorkspaceContent() {
   const { session, organizations, setActiveOrganization, setActiveBusinessContext } =
     useIdentity();
   const activeOrganization = organizations.find((organization) => organization.id === session.activeOrganizationId) || organizations[0] || null;
-  const scope = React.useMemo(() => ({ authenticated: session.authenticated, workspaceId: session.activeOrganizationId || "", organizationId: session.activeOrganizationId, businessContextId: session.activeBusinessContextId, session }), [session]);
+  const { authenticated, activeOrganizationId, activeBusinessContextId } = session;
+  const scope = React.useMemo(() => ({
+    authenticated, workspaceId: activeOrganizationId || "",
+    organizationId: activeOrganizationId, businessContextId: activeBusinessContextId, session,
+  }), [session, authenticated, activeOrganizationId, activeBusinessContextId]);
+  const mounted = React.useRef(true);
+  const inspectionRequest = React.useRef(0);
+  React.useEffect(() => {
+    mounted.current = true;
+    return () => { mounted.current = false; };
+  }, []);
   const requested = React.useMemo(
     () => parseCustomerDeepLink(params),
     [params],
@@ -82,9 +97,12 @@ function CustomerWorkspaceContent() {
   const visibleSnapshot = ownedSnapshot?.owner === snapshotOwner &&
     ownedSnapshot.value?.customer.id === (requested.customerId || ownedSnapshot.value?.customer.id) &&
     ownedSnapshot.value?.customer.organizationId === scope.organizationId;
+  const invalidRequestedId = params.has("customer_id") && !requested.customerId;
   const normalized = React.useMemo(
-    () => normalizeCustomerDeepLink(requested, customers, snapshot),
-    [requested, customers, snapshot],
+    () => invalidRequestedId
+      ? { ...normalizeCustomerDeepLink(requested, customers, snapshot), customerId: null }
+      : normalizeCustomerDeepLink(requested, customers, snapshot),
+    [requested, customers, snapshot, invalidRequestedId],
   );
   const go = React.useCallback(
     (next: Partial<CustomerDeepLinkState>) =>
@@ -170,12 +188,13 @@ function CustomerWorkspaceContent() {
         : normalized.orderId
           ? `order:${normalized.orderId}`
           : null);
-    if (!id || !snapshot) return;
+    const request = ++inspectionRequest.current;
+    if (!id || !snapshot || !visibleSnapshot) return;
     let on = true;
     customerRepository.loadDrawer(scope, snapshot.customer.id, id).then((r) => {
-      if (on && r)
+      if (on && mounted.current && request === inspectionRequest.current && r)
         drawer.openDrawer(<CustomerDrawerContent record={r} />, r.title, { onDismiss: () => router.push(withDevelopmentIdentity(customerDeepLinkHref({ ...normalized, drawer: null, drawerId: null, eventId: null, identifierRef: null, orderId: null }), session.identity.id), { scroll: false }) });
-    });
+    }).catch(() => { /* A failed inspector must not open stale or fabricated content. */ });
     return () => {
       on = false;
     };
@@ -189,6 +208,7 @@ function CustomerWorkspaceContent() {
     session.identity.id,
     scope,
     snapshot,
+    visibleSnapshot,
   ]);
   React.useEffect(() => {
     if (!replaying || !snapshot) return;
@@ -203,13 +223,17 @@ function CustomerWorkspaceContent() {
   }, [replaying, snapshot]);
   const inspect = async (id: string) => {
     if (!snapshot) return;
-    const r = await customerRepository.loadDrawer(
-      scope,
-      snapshot.customer.id,
-      id,
-    );
-    if (r) drawer.openDrawer(<CustomerDrawerContent record={r} />, r.title);
+    const request = ++inspectionRequest.current;
+    drawer.closeDrawer();
+    try {
+      const r = await customerRepository.loadDrawer(scope, snapshot.customer.id, id);
+      if (mounted.current && request === inspectionRequest.current && r)
+        drawer.openDrawer(<CustomerDrawerContent record={r} />, r.title);
+    } catch {
+      // A failed inspector cannot revive earlier evidence.
+    }
   };
+  if (invalidRequestedId) return <State title="Customer unavailable in the active workspace" />;
   if (!loading && requested.customerId && !customers.some(customer => customer.id === requested.customerId))
     return <State title="Customer unavailable in the active workspace" />;
   if (snapshot && !visibleSnapshot)
