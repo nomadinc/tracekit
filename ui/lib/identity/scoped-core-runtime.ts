@@ -3,11 +3,22 @@ import type { Permission } from "./permissions";
 import type { TraceKitSessionContext } from "./persistent-types";
 import { ACTOR_HINT_KEYS, callerHintsMatch, TENANT_HINT_KEYS } from "./operational-tenant-boundary";
 
+export type CustomerReadDiagnostic = {
+  correlationId: string;
+  route: string;
+  deploymentId: string | null;
+  organizationId: string | null;
+  businessContextId: string | null;
+  stage: "session_scope" | "tenant_hint_mismatch" | "business_context_mismatch" | "core_transport" | "core_upstream_status" | "projection_failure";
+  upstreamStatus: number | null;
+};
+
 type Dependencies = {
   resolveSession: () => Promise<{ kind: string; session?: TraceKitSessionContext }>;
   apiBaseUrl: () => string;
   adminSecret: () => string;
   fetch: typeof fetch;
+  customerReadDiagnostic?: (event: CustomerReadDiagnostic) => void;
 };
 // The production adapter supplies authenticated persistent identity. Test
 // dependencies exercise the same permission, tenant and transport boundary.
@@ -51,17 +62,29 @@ async function scopedCoreGet(
   permission: Permission | readonly Permission[],
   project?: (body: any, session: TraceKitSessionContext) => unknown,
 ) {
-  const scope = await authorizedScope(permission);
-  if (!scope) return unavailable();
-
   const incoming = new URL(requestUrl);
+  // Diagnostics are restricted to Customer List and Customer Detail. No query,
+  // path identifiers, headers, or upstream payloads are recorded.
+  const customerRoute = /^\\/api\\/customers(?:\\/[^/]+)?$/.test(incoming.pathname);
+  const correlationId = crypto.randomUUID();
+  const deploymentId = process.env.VERCEL_DEPLOYMENT_ID || process.env.VERCEL_GIT_COMMIT_SHA || null;
+  const record = (stage: CustomerReadDiagnostic["stage"], upstreamStatus: number | null, session?: TraceKitSessionContext) => {
+    if (!customerRoute) return;
+    try {
+      dependencies.customerReadDiagnostic?.({ correlationId, route: incoming.pathname === "/api/customers" ? "/api/customers" : "/api/customers/:customerId", deploymentId,
+        organizationId: session?.activeOrganization?.id || null, businessContextId: session?.activeBusinessContextId || null, stage, upstreamStatus });
+    } catch { /* Observability must never alter authorization or response. */ }
+  };
+  const scope = await authorizedScope(permission);
+  if (!scope) { record("session_scope", null); return unavailable(); }
+
   const params = new URLSearchParams(incoming.searchParams);
-  if (!queryMatchesScope(params, scope.workspaceId)) return unavailable();
+  if (!queryMatchesScope(params, scope.workspaceId)) { record("tenant_hint_mismatch", null, scope.session); return unavailable(); }
   // Tenant scope is authoritative from the authenticated TraceKit session.
   // Browser-supplied workspace_id is never forwarded.
   for (const key of TENANT_HINT_KEYS) params.delete(key);
   params.set("workspace_id", scope.workspaceId);
-  if (params.getAll("business_context_id").some(value => value !== scope.session.activeBusinessContextId)) return unavailable();
+  if (params.getAll("business_context_id").some(value => value !== scope.session.activeBusinessContextId)) { record("business_context_mismatch", null, scope.session); return unavailable(); }
   params.delete("business_context_id");
   if (scope.session.activeBusinessContextId) params.set("business_context_id", scope.session.activeBusinessContextId);
   const query = params.toString();
@@ -77,10 +100,11 @@ async function scopedCoreGet(
     cache: "no-store",
     headers: { accept: "application/json", "x-tk-secret": secret },
   });
-  } catch { return { status: 503, body: { error: "The requested data is unavailable." } }; }
-  if (!res.ok) return { status: res.status, body: { error: "The requested resource is unavailable." } };
+  } catch { record("core_transport", null, scope.session); return { status: 503, body: { error: "The requested data is unavailable." } }; }
+  if (!res.ok) { record("core_upstream_status", res.status, scope.session); return { status: res.status, body: { error: "The requested resource is unavailable." } }; }
   const body = await readJsonSafe(res);
-  return { status: res.status, body: res.ok && project ? project(body, scope.session) : body };
+  try { return { status: res.status, body: project ? project(body, scope.session) : body }; }
+  catch { record("projection_failure", res.status, scope.session); return { status: 503, body: { error: "The requested data is unavailable." } }; }
 }
 
 async function scopedCorePost(
