@@ -2,6 +2,8 @@
 
 import * as React from "react";
 import { AlertTriangle, CheckCircle2, RefreshCw, ShieldCheck } from "lucide-react";
+import { useIdentity } from "@/components/identity/identity-provider";
+import { authorize, authorizeShellVariant } from "@/lib/identity/authorization";
 import { AccessBoundary } from "@/components/identity/access-control";
 import { useShellDrawer } from "@/components/layout/shell-drawer";
 
@@ -52,6 +54,23 @@ function bulkGroups(products: Product[], steps: CatalogRow[]): BulkGroup[] {
     group.products.push(product); group.revenue += product.grossRevenue; groups.set(key, group);
   }
   return Array.from(groups.values()).sort((a, b) => b.revenue - a.revenue);
+}
+
+/** Hide the entire administrative surface, including its denial/development copy. */
+export function CommerceProductMappingSection() {
+  const { session } = useIdentity();
+  if (!authorize(session.identity, "offers.manage", session.activeOrganizationId).allowed ||
+      !authorizeShellVariant(session.identity, ["client", "agency"]).allowed) return null;
+  return <section className="border-t border-white/10 pt-8">
+    <div className="mb-4">
+      <p className="text-[10px] font-semibold uppercase tracking-[.16em] text-slate-500">Operations setup</p>
+      <h2 className="mt-1 text-lg font-semibold">Commerce product mapping</h2>
+      <p className="mt-1 max-w-3xl text-xs leading-5 text-slate-500">
+        Administrative mapping tools connect provider products to canonical Offer structure. They support data quality and reconciliation; they are not Offer performance reporting.
+      </p>
+    </div>
+    <CommerceProductMappingReview />
+  </section>;
 }
 
 export function CommerceProductMappingReview() { return <AccessBoundary permission="offers.manage" variants={["client", "agency"]}><ReviewContent /></AccessBoundary>; }

@@ -1,4 +1,7 @@
+"use client";
+
 import Link from "next/link";
+import { useIdentity } from "@/components/identity/identity-provider";
 import type { BusinessContext, Organization } from "@/lib/identity/types";
 import type { MissionControlPortfolio } from "@/lib/mission-control/production-portfolio";
 import { PortfolioKpis } from "./portfolio-kpis";
@@ -8,6 +11,16 @@ export function PersistentMissionControl({ organization, context, portfolio }: {
   context: BusinessContext;
   portfolio: MissionControlPortfolio | null;
 }) {
+  const { session } = useIdentity();
+  const ownsSnapshot = session.authenticated &&
+    session.activeOrganizationId === organization.id &&
+    session.activeBusinessContextId === context.id &&
+    context.organizationId === organization.id &&
+    (!portfolio || portfolio.organizationId === organization.id);
+  // The selector changes before refreshed server children arrive. Fence at render,
+  // rather than in an effect, so no old-client totals enter the new-scope commit.
+  if (!ownsSnapshot)
+    return <p role="status" className="p-6 text-sm text-slate-500">Loading Mission Control for the active workspace…</p>;
   return <div className="space-y-6 p-6">
     <header><p className="tk-label">{organization.name}</p><h2 className="mt-2 text-xl font-semibold">{context.name} · Mission Control</h2>
       <p className="mt-2 text-sm text-slate-500">Portfolio totals cover the active Client Organization. Offer performance requires canonical Offer mappings.</p></header>

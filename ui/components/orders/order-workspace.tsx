@@ -90,6 +90,8 @@ function OrderWorkspaceContent() {
     };
   }, [filter, requested.customerId, requested.offerId, scope]);
   React.useEffect(() => {
+    // R1: persistent customer links are selectors, never scope authority.
+    if (!session.developmentOnly) return;
     if (!requested.orderId || orders.some((o) => o.id === requested.orderId))
       return;
     let on = true;
@@ -99,7 +101,7 @@ function OrderWorkspaceContent() {
         if (!on || !r) return;
         if (session.developmentOnly && r.organizationId && r.organizationId !== scope.organizationId)
           setActiveOrganization(r.organizationId);
-        if (r.businessContextId) setActiveBusinessContext(r.businessContextId);
+        if (r.businessContextId && r.businessContextId !== scope.businessContextId) setActiveBusinessContext(r.businessContextId);
       });
     return () => {
       on = false;

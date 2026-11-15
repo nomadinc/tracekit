@@ -67,6 +67,21 @@ function CustomerWorkspaceContent() {
     [listOpen, setListOpen] = React.useState(false),
     [replaying, setReplaying] = React.useState(false),
     [replayIndex, setReplayIndex] = React.useState(0);
+  // R1 render-time owner fence: never paint a prior customer or tenant while
+  // a new authenticated scope/record selection is resolving.
+  const snapshotOwner = React.useMemo(() => ({
+    organizationId: scope.organizationId,
+    businessContextId: scope.businessContextId,
+    customerId: requested.customerId,
+  }), [scope.organizationId, scope.businessContextId, requested.customerId]);
+  const [ownedSnapshot, setOwnedSnapshot] = React.useState<{
+    owner: typeof snapshotOwner; value: CustomerWorkspaceSnapshot | null;
+  } | null>(null);
+  const ownerRef = React.useRef(snapshotOwner);
+  ownerRef.current = snapshotOwner;
+  const visibleSnapshot = ownedSnapshot?.owner === snapshotOwner &&
+    ownedSnapshot.value?.customer.id === (requested.customerId || ownedSnapshot.value?.customer.id) &&
+    ownedSnapshot.value?.customer.organizationId === scope.organizationId;
   const normalized = React.useMemo(
     () => normalizeCustomerDeepLink(requested, customers, snapshot),
     [requested, customers, snapshot],
@@ -100,6 +115,8 @@ function CustomerWorkspaceContent() {
     };
   }, [filter, requested.offerId, scope]);
   React.useEffect(() => {
+    // R1: do not resolve a record URL into a persistent scope mutation.
+    if (!session.developmentOnly) return;
     if (
       !requested.customerId ||
       customers.some((c) => c.id === requested.customerId)
@@ -134,12 +151,12 @@ function CustomerWorkspaceContent() {
     setSnapshot(null);
     customerRepository
       .loadWorkspace(scope, normalized.customerId)
-      .then((v) => on && setSnapshot(v))
+      .then((v) => { if (on && ownerRef.current === snapshotOwner) { setSnapshot(v); setOwnedSnapshot({ owner: snapshotOwner, value: v }); } })
       .catch(() => { if (on) { setSnapshot(null); setError("Customer details are unavailable. Refresh to try again."); } });
     return () => {
       on = false;
     };
-  }, [normalized.customerId, scope]);
+  }, [normalized.customerId, scope, snapshotOwner]);
   React.useEffect(() => {
     setReplaying(false);
     setReplayIndex(0);
@@ -193,6 +210,10 @@ function CustomerWorkspaceContent() {
     );
     if (r) drawer.openDrawer(<CustomerDrawerContent record={r} />, r.title);
   };
+  if (!loading && requested.customerId && !customers.some(customer => customer.id === requested.customerId))
+    return <State title="Customer unavailable in the active workspace" />;
+  if (snapshot && !visibleSnapshot)
+    return <State title="Loading Customer Workspace…" />;
   if (loading && !snapshot)
     return <State title="Loading Customer Workspace…" />;
   if (error)
