@@ -23,6 +23,13 @@ function adminSecret() {
   return traceKitCoreAdminSecret();
 }
 
-const proxy = createScopedCoreProxy({ resolveSession: resolveApplicationSession, apiBaseUrl, adminSecret, fetch: previewCoreFetch });
+// Explicit opt-in. Never enable on production without a separate approval.
+// Only a fixed, allowlisted diagnostic schema reaches restricted server logs.
+const customerReadDiagnostic = process.env.TRACEKIT_CUSTOMER_READ_DIAGNOSTICS === "enabled"
+  ? (event: import("./scoped-core-runtime").CustomerReadDiagnostic) => {
+      console.info("tracekit_customer_read_boundary", JSON.stringify(event));
+    }
+  : undefined;
+const proxy = createScopedCoreProxy({ resolveSession: resolveApplicationSession, apiBaseUrl, adminSecret, fetch: previewCoreFetch, customerReadDiagnostic });
 export const scopedCoreGet = proxy.scopedCoreGet;
 export const scopedCorePost = proxy.scopedCorePost;
