@@ -33,11 +33,18 @@ function validDrawer(target: CustomerDrawerTarget | null, snapshot?: CustomerWor
   return null;
 }
 
+// An explicit customer_id is authoritative even if malformed or absent from the
+// current list. Only list navigation without a customer_id may select a default.
+export function selectCustomerDetailId(rawCustomerId: string | null, parsedCustomerId: string | null, customers: readonly Pick<CustomerSummary, "id">[]): string | null {
+  if (rawCustomerId !== null) return parsedCustomerId;
+  return customers[0]?.id || null;
+}
+
 export function normalizeCustomerDeepLink(state: CustomerDeepLinkState, customers: CustomerSummary[], snapshot?: CustomerWorkspaceSnapshot | null): CustomerDeepLinkState {
   const drawer = validDrawer(state.drawer, snapshot);
   return {
     ...state,
-    customerId: state.customerId || customers[0]?.id || null,
+    customerId: state.customerId,
     eventId: snapshot?.journey.some(event => event.id === state.eventId) ? state.eventId : null,
     identifierRef: snapshot?.journey.some(event => event.identifiers.some(identifier => identifier.id === state.identifierRef)) ? state.identifierRef : null,
     orderId: snapshot?.orders.some(order => order.id === state.orderId) ? state.orderId : null,
