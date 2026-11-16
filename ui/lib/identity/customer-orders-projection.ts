@@ -37,6 +37,15 @@ const object = (value: unknown): JsonRecord | null =>
   value !== null && typeof value === "object" && !Array.isArray(value) ? value as JsonRecord : null;
 const nullableString = (value: unknown): string | null => typeof value === "string" ? value : null;
 const requiredString = (value: unknown): string | null => typeof value === "string" && value.length > 0 ? value : null;
+// Retained categorical values must not be treated as unrestricted narratives.
+const currencyCode = (value: unknown): string | null =>
+  typeof value === "string" && /^(?:USD|EUR|GBP|CAD|AUD|NZD|JPY|CHF|SEK|NOK|DKK|PLN|CZK|HUF|RON|BGN|TRY|ILS|AED|SAR|INR|CNY|HKD|SGD|TWD|KRW|THB|MYR|IDR|PHP|VND|ZAR|BRL|MXN|ARS|CLP|COP|PEN|UYU|CRC|GTQ|DOP|EGP|NGN|KES|GHS|MAD|PKR|BDT|LKR|NPR|RUB|UAH|ISK|BHD|KWD|OMR|QAR|JOD|BMD|BSD|BBD|JMD|TTD|XCD|XOF|XAF|XPF)$/.test(value) ? value : null;
+const platformCode = (value: unknown): string | null =>
+  typeof value === "string" && /^[a-z][a-z0-9_-]{0,63}$/.test(value) ? value : null;
+const evidenceIdentifier = (value: unknown): string | null =>
+  typeof value === "string" && /^[A-Za-z0-9][A-Za-z0-9._:-]{0,159}$/.test(value) ? value : null;
+const timestamp = (value: unknown): string | null =>
+  typeof value === "string" && /^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}(?:\\.\\d{1,9})?(?:Z|[+-]\\d{2}:\\d{2})$/.test(value) && Number.isFinite(Date.parse(value)) ? value : null;
 const statusValue = (value: unknown): string | null => {
   if (value === null || value === undefined) return null;
   if (typeof value !== "string") return null;
@@ -72,9 +81,10 @@ export function projectCustomerOrders(body: unknown, session: TraceKitSessionCon
     const entry = object(item), original = object(entry?.order);
     if (!original || original.workspace_id !== org || original.organization_id !== org)
       throw new Error("Customer Orders scope unavailable.");
-    const platformOrderId = requiredString(original.platform_order_id);
+    const platformOrderId = evidenceIdentifier(original.platform_order_id);
     if (!platformOrderId) throw new Error("Customer Orders identity unavailable.");
-    const resolved = nullableString(original.resolved_person_id);
+    const resolved = original.resolved_person_id == null ? null : evidenceIdentifier(original.resolved_person_id);
+    if (original.resolved_person_id != null && !resolved) throw new Error("Customer Orders identity unavailable.");
     const customer = object(entry?.customer);
     // Exact relationship only: never synthesize or accept a conflicting customer.
     if (customer && (!resolved || customer.id !== resolved)) throw new Error("Customer Orders relationship unavailable.");
@@ -92,20 +102,29 @@ export function projectCustomerOrders(body: unknown, session: TraceKitSessionCon
       (connection && connection !== segments[1]) ||
       (providerAccount && providerAccount !== segments[2])
     )) throw new Error("Customer Orders identity scope unavailable.");
+    const platform = original.platform == null ? null : platformCode(original.platform);
+    if (original.platform != null && !platform) throw new Error("Customer Orders provider unavailable.");
+    const person = original.person_id == null ? null : evidenceIdentifier(original.person_id);
+    const orderId = original.order_id == null ? null : evidenceIdentifier(original.order_id);
+    const evidenceId = original.evidence_id == null ? null : evidenceIdentifier(original.evidence_id);
+    if ((original.person_id != null && !person) ||
+        (original.order_id != null && !orderId) ||
+        (original.evidence_id != null && !evidenceId))
+      throw new Error("Customer Orders identity unavailable.");
     const order: ProjectedOrder = {
       workspace_id: org,
       organization_id: org,
-      person_id: nullableString(original.person_id),
+      person_id: person,
       resolved_person_id: resolved,
       identity_resolution: identityState(original.identity_resolution),
-      platform: nullableString(original.platform),
+      platform,
       platform_order_id: platformOrderId,
-      order_id: nullableString(original.order_id),
-      order_ts: nullableString(original.order_ts),
+      order_id: orderId,
+      order_ts: timestamp(original.order_ts),
       status: statusValue(original.status),
       status_norm: statusValue(original.status_norm),
-      currency: nullableString(original.currency),
-      evidence_id: nullableString(original.evidence_id),
+      currency: currencyCode(original.currency),
+      evidence_id: evidenceId,
     };
     if (canonical) order.canonical_order_id = canonical;
     if (connection) order.connection_id = connection;
