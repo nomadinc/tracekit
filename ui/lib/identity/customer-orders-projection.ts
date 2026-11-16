@@ -36,7 +36,7 @@ const nullableString = (value: unknown): string | null => typeof value === "stri
 const requiredString = (value: unknown): string | null => typeof value === "string" && value.length > 0 ? value : null;
 const money = (value: unknown): number | string | null | undefined =>
   value === null ? null : typeof value === "number" && Number.isFinite(value) ? value
-    : typeof value === "string" && /^-?\\d+(?:\\.\\d+)?$/.test(value) ? value : undefined;
+    : typeof value === "string" && /^-?\d+(?:\.\d+)?$/.test(value) ? value : undefined;
 
 export function projectCustomerOrders(body: unknown, session: TraceKitSessionContext): ProjectedCustomerOrders {
   const source = object(body);
