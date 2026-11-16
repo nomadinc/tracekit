@@ -18,7 +18,7 @@ function adminSecret() {
   return traceKitCoreAdminSecret();
 }
 
-const customerReadDiagnostic = customerReadDiagnosticsEnabled()
+const customerReadDiagnostic = customerReadDiagnosticsEnabled(process.env)
   ? (event: CustomerReadDiagnostic) => { console.info("tracekit_customer_read_boundary", JSON.stringify(event)); }
   : undefined;
 const proxy = createScopedCoreProxy({ resolveSession: resolveApplicationSession, apiBaseUrl, adminSecret, fetch: (...args) => fetch(...args), customerReadDiagnostic });
