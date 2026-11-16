@@ -32,6 +32,12 @@ test("actual GET denies financial narratives in every categorical field under al
   for (const permissions of [[], ["financials.view"], ["orders.view_financials"], ["financials.view", "orders.view_financials"]]) {
     for (const field of ["currency", "platform", "status", "status_norm", "identity_resolution"]) {
       const h = handler(permissions, fixture({ [field]: "Refund $987.65" }));
+      if (field === "platform") {
+        // Provider identity is required. Invalid source identity must fail closed,
+        // rather than fabricate a provider or return a contaminated Order.
+        await assert.rejects(() => get(h), /Customer Orders provider unavailable/);
+        continue;
+      }
       const response = await get(h), json = JSON.stringify(await response.json());
       assert.equal(response.status, 200);
       assert.ok(!json.includes("$987.65"), field + " leaked");
