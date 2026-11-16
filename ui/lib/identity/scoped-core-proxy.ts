@@ -18,7 +18,10 @@ function adminSecret() {
   return traceKitCoreAdminSecret();
 }
 
-const customerReadDiagnostic = customerReadDiagnosticsEnabled(process.env)
+const customerReadDiagnostic = customerReadDiagnosticsEnabled({
+  VERCEL_ENV: process.env.VERCEL_ENV,
+  TRACEKIT_CUSTOMER_READ_DIAGNOSTICS: process.env.TRACEKIT_CUSTOMER_READ_DIAGNOSTICS,
+})
   ? (event: CustomerReadDiagnostic) => { console.info("tracekit_customer_read_boundary", JSON.stringify(event)); }
   : undefined;
 const proxy = createScopedCoreProxy({ resolveSession: resolveApplicationSession, apiBaseUrl, adminSecret, fetch: (...args) => fetch(...args), customerReadDiagnostic });
