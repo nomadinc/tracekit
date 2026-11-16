@@ -22,6 +22,7 @@ import {
   customerDeepLinkHref,
   normalizeCustomerDeepLink,
   parseCustomerDeepLink,
+  selectCustomerDetailId,
 } from "@/lib/customers/deep-link";
 import { withDevelopmentIdentity } from "@/lib/identity/development-state";
 import { PRODUCTION_ROUTES } from "@/lib/navigation/production-routes";
@@ -77,7 +78,7 @@ function CustomerWorkspaceContent() {
   const customers = customerList?.scope === scope ? customerList.value : [];
   const error = loadError?.scope === scope ? loadError.message : null;
   const invalidCustomerId = params.has("customer_id") && !requested.customerId;
-  const selectedCustomerId = invalidCustomerId ? null : requested.customerId || customers[0]?.id || null;
+  const selectedCustomerId = selectCustomerDetailId(params.get("customer_id"), requested.customerId, customers);
   // Object identity is the request generation, not just a reusable scope string.
   // A -> B -> A must obtain a new owner even when the canonical IDs match again.
   const origin = React.useMemo<CustomerSnapshotOrigin>(() => ({
