@@ -1,5 +1,6 @@
 import "server-only";
 import { createScopedCoreProxy, type CustomerReadDiagnostic } from "./scoped-core-runtime";
+import { customerReadDiagnosticsEnabled } from "./customer-read-diagnostic-policy";
 import { traceKitCoreAdminSecret } from "@/lib/core/admin-credential";
 
 import { resolveApplicationSession } from "@/lib/identity/application-session";
@@ -15,10 +16,6 @@ function apiBaseUrl() {
 
 function adminSecret() {
   return traceKitCoreAdminSecret();
-}
-
-export function customerReadDiagnosticsEnabled(env: Pick<NodeJS.ProcessEnv, "VERCEL_ENV" | "TRACEKIT_CUSTOMER_READ_DIAGNOSTICS"> = process.env): boolean {
-  return env.VERCEL_ENV === "preview" && env.TRACEKIT_CUSTOMER_READ_DIAGNOSTICS === "enabled";
 }
 
 const customerReadDiagnostic = customerReadDiagnosticsEnabled()
