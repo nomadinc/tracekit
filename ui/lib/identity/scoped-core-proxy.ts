@@ -1,5 +1,5 @@
 import "server-only";
-import { createScopedCoreProxy } from "./scoped-core-runtime";
+import { createScopedCoreProxy, type CustomerReadDiagnostic } from "./scoped-core-runtime";
 import { traceKitCoreAdminSecret } from "@/lib/core/admin-credential";
 
 import { resolveApplicationSession } from "@/lib/identity/application-session";
@@ -17,6 +17,13 @@ function adminSecret() {
   return traceKitCoreAdminSecret();
 }
 
-const proxy = createScopedCoreProxy({ resolveSession: resolveApplicationSession, apiBaseUrl, adminSecret, fetch: (...args) => fetch(...args) });
+export function customerReadDiagnosticsEnabled(env: Pick<NodeJS.ProcessEnv, "VERCEL_ENV" | "TRACEKIT_CUSTOMER_READ_DIAGNOSTICS"> = process.env): boolean {
+  return env.VERCEL_ENV === "preview" && env.TRACEKIT_CUSTOMER_READ_DIAGNOSTICS === "enabled";
+}
+
+const customerReadDiagnostic = customerReadDiagnosticsEnabled()
+  ? (event: CustomerReadDiagnostic) => { console.info("tracekit_customer_read_boundary", JSON.stringify(event)); }
+  : undefined;
+const proxy = createScopedCoreProxy({ resolveSession: resolveApplicationSession, apiBaseUrl, adminSecret, fetch: (...args) => fetch(...args), customerReadDiagnostic });
 export const scopedCoreGet = proxy.scopedCoreGet;
 export const scopedCorePost = proxy.scopedCorePost;
