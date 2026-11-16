@@ -1,3 +1,4 @@
+import { exactRelatedOrder } from "../lib/reporting/order-relationship";
 import assert from "node:assert/strict";
 import test from "node:test";
 import { projectCustomerOrders } from "../lib/identity/customer-orders-projection";
@@ -72,4 +73,48 @@ test("unknown provider fields and top-level monetary aliases are never serialize
   assert.ok(!json.includes("total_amount"));
   assert.ok(!json.includes("order_lines"));
   assert.deepEqual(Object.keys(result), ["ok", "orders", "next_offset"]);
+});
+
+test("F1 rejects monetary narratives in every copied categorical field for denied sessions", () => {
+  const contaminated = source(nh, "next29:103533", {
+    status: "Refund $987.65", status_norm: "Paid 99 USD",
+    identity_resolution: "Matched $43.00", platform: "next29",
+  });
+  contaminated.orders[0].identity_state = "Matched $200";
+  const body = projectCustomerOrders(contaminated, session(nh, ["orders.view"]));
+  const json = JSON.stringify(body);
+  assert.ok(!json.includes("$987.65"));
+  assert.ok(!json.includes("99 USD"));
+  assert.ok(!json.includes("$43.00"));
+  assert.ok(!json.includes("$200"));
+  assert.equal(body.orders[0].order.status, null);
+  assert.equal(body.orders[0].order.status_norm, null);
+  assert.equal(body.orders[0].identity_state, null);
+});
+test("F1 preserves legitimate categorical status and never substitutes identifiers", () => {
+  const result = projectCustomerOrders(source(stem, "next29:103104", { status: "refunded", status_norm: "completed" }), session(stem, []));
+  assert.equal(result.orders[0].order.status, "refunded");
+  assert.equal(result.orders[0].order.status_norm, "completed");
+  assert.equal(result.orders[0].order.platform_order_id, "next29:103104");
+});
+test("F2 preserves canonical Order ID for deterministic purchase relationship", () => {
+  const canonical = "a7afdca4-6b1d-4cef-9a44-03feed38388e";
+  const result = projectCustomerOrders(source(nh, "next29:103533", { canonical_order_id: canonical }), session(nh, []));
+  const order = result.orders[0].order;
+  assert.equal(order.canonical_order_id, canonical);
+  const event = { event_type: "purchase", canonical_order_id: canonical, platform_order_id: "next29:103533", workspace_id: nh, organization_id: nh };
+  assert.equal(exactRelatedOrder(event, [order]), order);
+  const purchase = new Date("2026-11-13T01:03:10.984Z").getTime();
+  const orderTime = new Date(order.order_ts!).getTime();
+  assert.equal((orderTime - purchase) / 1000, 60);
+});
+test("F2 rejects malformed canonical and conflicting provider-qualified scope", () => {
+  assert.throws(() => projectCustomerOrders(source(nh, "next29:103533", { canonical_order_id: "not valid" }), session(nh, [])), /identity unavailable/);
+  assert.throws(() => projectCustomerOrders(source(nh, "next29:conn1:acct1:103533", { connection_id: "conn2", provider_account_id: "acct1" }), session(nh, [])), /identity scope unavailable/);
+});
+test("F2 retains explicit provider account and connection scope without leaking unknown fields", () => {
+  const result = projectCustomerOrders(source(nh, "next29:conn1:acct1:103533", { connection_id: "conn1", provider_account_id: "acct1" }), session(nh, []));
+  assert.equal(result.orders[0].order.connection_id, "conn1");
+  assert.equal(result.orders[0].order.provider_account_id, "acct1");
+  assert.ok(!JSON.stringify(result).includes("processor_fee"));
 });
