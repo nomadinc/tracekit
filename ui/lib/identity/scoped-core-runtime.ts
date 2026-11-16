@@ -3,11 +3,27 @@ import type { Permission } from "./permissions";
 import type { TraceKitSessionContext } from "./persistent-types";
 import { ACTOR_HINT_KEYS, callerHintsMatch, TENANT_HINT_KEYS } from "./operational-tenant-boundary";
 
+export type CustomerReadDiagnostic = Readonly<{
+  correlationId: string;
+  route: "/api/customers" | "/api/customers/:customerId";
+  deploymentId: string | null;
+  organizationId: string | null;
+  businessContextId: string | null;
+  stage: "session_scope" | "tenant_hint_mismatch" | "business_context_mismatch" | "core_transport" | "core_upstream_status" | "projection_failure";
+  upstreamStatus: number | null;
+}>;
+
+export function customerDiagnosticRoute(pathname: string): CustomerReadDiagnostic["route"] | null {
+  if (pathname === "/api/customers") return "/api/customers";
+  return /^\/api\/customers\/[^/]+$/.test(pathname) ? "/api/customers/:customerId" : null;
+}
+
 type Dependencies = {
   resolveSession: () => Promise<{ kind: string; session?: TraceKitSessionContext }>;
   apiBaseUrl: () => string;
   adminSecret: () => string;
   fetch: typeof fetch;
+  customerReadDiagnostic?: (event: CustomerReadDiagnostic) => void;
 };
 // The production adapter supplies authenticated persistent identity. Test
 // dependencies exercise the same permission, tenant and transport boundary.
@@ -25,12 +41,13 @@ function unavailable() {
   return { status: 404, body: { error: "The requested resource is unavailable." } };
 }
 
-async function authorizedScope(permission: Permission | readonly Permission[]) {
+async function authorizedScope(permission: Permission | readonly Permission[], onDenied?: (session?: TraceKitSessionContext) => void) {
   const resolution = await dependencies.resolveSession();
-  if (resolution.kind !== "authenticated" || !resolution.session?.activeOrganization) return null;
+  if (resolution.kind !== "authenticated" || !resolution.session?.activeOrganization) { onDenied?.(resolution.session); return null; }
   try {
     for (const capability of (typeof permission === "string" ? [permission] : permission)) requireResourceScope(resolution.session, resolution.session.activeOrganization.id, capability);
   } catch {
+    onDenied?.(resolution.session);
     return null;
   }
   return { session: resolution.session, workspaceId: resolution.session.activeOrganization.id };
@@ -51,12 +68,25 @@ async function scopedCoreGet(
   permission: Permission | readonly Permission[],
   project?: (body: any, session: TraceKitSessionContext) => unknown,
 ) {
-  const scope = await authorizedScope(permission);
+  const incoming = new URL(requestUrl);
+  const route = customerDiagnosticRoute(incoming.pathname);
+  const correlationId = route && dependencies.customerReadDiagnostic ? crypto.randomUUID() : null;
+  const report = (stage: CustomerReadDiagnostic["stage"], upstreamStatus: number | null, session?: TraceKitSessionContext) => {
+    if (!route || !correlationId) return;
+    const event: CustomerReadDiagnostic = {
+      correlationId, route,
+      deploymentId: process.env.VERCEL_DEPLOYMENT_ID || process.env.VERCEL_GIT_COMMIT_SHA || null,
+      organizationId: session?.activeOrganization?.id || null,
+      businessContextId: session?.activeBusinessContextId || null,
+      stage, upstreamStatus,
+    };
+    try { dependencies.customerReadDiagnostic?.(event); } catch { /* logging must never affect request behavior */ }
+  };
+  const scope = await authorizedScope(permission, session => report("session_scope", null, session));
   if (!scope) return unavailable();
 
-  const incoming = new URL(requestUrl);
   const params = new URLSearchParams(incoming.searchParams);
-  if (!queryMatchesScope(params, scope.workspaceId)) return unavailable();
+  if (!queryMatchesScope(params, scope.workspaceId)) { report("tenant_hint_mismatch", null, scope.session); return unavailable(); }
   // Tenant scope is authoritative from the authenticated TraceKit session.
   // Browser-supplied workspace_id is never forwarded.
   for (const key of TENANT_HINT_KEYS) params.delete(key);
@@ -74,10 +104,12 @@ async function scopedCoreGet(
     cache: "no-store",
     headers: { accept: "application/json", "x-tk-secret": secret },
   });
-  } catch { return { status: 503, body: { error: "The requested data is unavailable." } }; }
-  if (!res.ok) return { status: res.status, body: { error: "The requested resource is unavailable." } };
+  } catch { report("core_transport", null, scope.session); return { status: 503, body: { error: "The requested data is unavailable." } }; }
+  if (!res.ok) { report("core_upstream_status", res.status, scope.session); return { status: res.status, body: { error: "The requested resource is unavailable." } }; }
   const body = await readJsonSafe(res);
-  return { status: res.status, body: res.ok && project ? project(body, scope.session) : body };
+  if (!project) return { status: res.status, body };
+  try { return { status: res.status, body: project(body, scope.session) }; }
+  catch (error) { report("projection_failure", res.status, scope.session); throw error; }
 }
 
 async function scopedCorePost(
